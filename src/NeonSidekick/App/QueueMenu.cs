@@ -7,7 +7,7 @@ namespace NeonSidekick.App;
 /// <summary>
 /// The <c>/queue</c> screen (2026-09-18): one row per message waiting in the <see cref="MessageQueue"/>
 /// (its number, then its label — a paste as <c>[Pasted text +N lines]</c>), Enter or a double-click removes the highlighted one and shows the
-/// list again, the <see cref="ClearAllButton"/> on the title row (a click, or <see cref="ClearAllKey"/>;
+/// list again (Delete too since 2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>: the same question, the same stale-row check), the <see cref="ClearAllButton"/> on the title row (a click, or <see cref="ClearAllKey"/>;
 /// 2026-09-21, the user's ask, the folder pane's collapse-all shape) drops every one and closes
 /// with the transcript's dropped notice — what <c>/queue clear</c> prints —, ESC / Ctrl+C / the <c>×</c> back out. A list in the bottom pane (<see cref="MenuPane"/>,
 /// the removal notice on its status line above the re-shown rows), the <see cref="MemoryMenu"/>
@@ -209,6 +209,7 @@ internal sealed class QueueMenu
                 {
                     Buttons = buttons,
                     Footer = (_, row) => row < shownEntries.Count ? Footer(shownEntries[row], row, shownEntries.Count) : null,   // the whole message (2026-10-07)
+                    Removes = true,   // Delete: Enter's removal below (2026-10-16, the user's ask), its pick carrying no button
                 };
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { Row: var row })

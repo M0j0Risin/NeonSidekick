@@ -69,8 +69,8 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/queue [clear]` | Lists the messages queued during a reply, to remove, clear or send them; `clear` drops them all. |
 | `/queue mode automatic\|manual\|off` | Sets *Queue mode*: queued messages go when the reply ends, wait for **➤ send**, or aren't kept. |
 | `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
-| `/prompts` | Your saved prompts, kept per profile (`prompts.json`) and never shown to the model; Enter puts one on the draft line, the old draft going to the input history. |
-| `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Puts prompt *n* on the draft line, saves the rest of the line (a pasted block too), or removes prompt *n*. |
+| `/prompts` | Your saved prompts, kept per profile (`prompts.json`) and never shown to the model; Enter sends one as if typed (queued while a reply runs), `d` puts it on the draft line instead, the old draft going to the input history. |
+| `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Sends prompt *n* as if typed, saves the rest of the line (a pasted block too), or removes prompt *n*. |
 | `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes (headless: without asking). |
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). |

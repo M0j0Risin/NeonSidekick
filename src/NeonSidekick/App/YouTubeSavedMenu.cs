@@ -94,6 +94,7 @@ internal sealed class YouTubeSavedMenu
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count) ?? YouTubeText.SavedCaption(listed.Count),
                     Footer = (_, row) => row < shown.Count ? YouTubeText.SavedFooter(listed[shown[row]], _zone) : null,
                     Moves = filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
+                    Removes = shown.Count > 0,     // Delete removes a filtered row too (2026-10-16, the user's ask)
                 };
                 MenuPick? picked;
                 using (var stale = new CancellationTokenSource())

@@ -1114,8 +1114,9 @@ async function sendText(text, opts) {
 
 // ── The sheet: saved prompts, memories, the message history (later on 2026-10-15; three tabs since 2026-10-16, the user's ask) ──
 // 📣 at the box's left, and bare /prompts sent from the page, open the sheet as a footer panel, on the tab used last (bare /prompts on Prompts);
-// each tab is read from the app as it shows. 📣 Prompts: a tap on a row puts the prompt on the draft (ahead of what's there, with Undo), its ➤
-// sends it at once, as typed (a command meets the page's command rules), its 🗑️ deletes it; ⇪ saves the draft as one. 💾 Memory: the profile's
+// each tab is read from the app as it shows. 📣 Prompts: a tap on a row sends the prompt at once, as typed (a command meets the page's command
+// rules; 2026-10-16, the user's ask), its ✎ puts it on the draft (ahead of what's there, with Undo; the tap's until then, ➤ sending), its 🗑️
+// deletes it; ⇪ saves the draft as one. 💾 Memory: the profile's
 // memories, a turned-off one marked, each with its 🗑️; ⇪ saves the draft as one (refused while Memory mode is off, which the tab says). 🕘
 // History: the message history, newest first, a row and its ➤ as a prompt's; clear all empties it. A 🗑️ or clear all is two taps, the
 // picture 🗑️'s way: the first arms it for 3 s, the second acts; Esc disarms first. ⇪ keeps the draft. One footer panel at a time: the sheet,
@@ -1223,36 +1224,36 @@ function renderSheet(tab, sheet) {
   };
 }
 
-// A row whose text fills the draft and whose ➤ sends it: a saved prompt's, a history line's.
-function sendableRow(text, number, extra) {
+// A row of the sheet: a saved prompt's, a history line's. A history line's text fills the draft and its ➤ sends it. A saved prompt's
+// (tapSends, 2026-10-16, the user's ask) is the other way round: a tap on its text sends it, as typed (a command meets the page's command
+// rules, refused with sendText's own message), and its ✎ puts it on the draft ahead of what's there, with Undo.
+function sendableRow(text, number, extra, tapSends) {
   const row = el('div', 'prompt-row');
-  const fill = el('button', 'prompt-text');
-  fill.type = 'button';
-  fill.title = text;
-  if (number) fill.appendChild(el('span', 'num', String(number)));
-  fill.appendChild(document.createTextNode(text));
-  fill.setAttribute('aria-label', (number ? number + ' ' : '') + text);
-  fill.addEventListener('click', () => {
-    closePrompts(true);
-    takeDraft(text);
-    draft.focus();
-  });
-  const go = el('button', 'prompt-send', '➤');
-  go.type = 'button';
-  go.setAttribute('aria-label', words.promptsSend || 'Send this prompt');
-  go.title = words.promptsSend || 'Send this prompt';
-  go.addEventListener('click', () => {
-    closePrompts(false);
-    sendText(text, { fromDraft: false });
-  });
-  row.appendChild(fill);
+  const send = () => { closePrompts(false); sendText(text, { fromDraft: false }); };
+  const fill = () => { closePrompts(true); takeDraft(text); draft.focus(); };
+  const tap = el('button', 'prompt-text');
+  tap.type = 'button';
+  tap.title = text;
+  if (number) tap.appendChild(el('span', 'num', String(number)));
+  tap.appendChild(document.createTextNode(text));
+  const named = (number ? number + ' ' : '') + text;
+  tap.setAttribute('aria-label', tapSends ? (words.promptsSend || 'Send this prompt') + ': ' + named : named);
+  if (tapSends) tap.title = (words.promptsSend || 'Send this prompt') + ': ' + text;
+  tap.addEventListener('click', tapSends ? send : fill);
+  const other = tapSends ? el('button', 'prompt-draft', '✎') : el('button', 'prompt-send', '➤');
+  other.type = 'button';
+  const otherLabel = tapSends ? (words.promptsToDraft || 'Put on the message line') : (words.promptsSend || 'Send this prompt');
+  other.setAttribute('aria-label', otherLabel);
+  other.title = otherLabel;
+  other.addEventListener('click', tapSends ? fill : send);
+  row.appendChild(tap);
   if (extra) row.appendChild(extra);
-  row.appendChild(go);
+  row.appendChild(other);
   return { row, text: text.toLowerCase() };
 }
 
 function promptRows(sheet) {
-  return (sheet.items || []).map(item => sendableRow(item.text, item.number, rowDelete(() => sheetChange('/api/prompts/delete', { id: item.id }))));
+  return (sheet.items || []).map(item => sendableRow(item.text, item.number, rowDelete(() => sheetChange('/api/prompts/delete', { id: item.id })), true));
 }
 
 function memoryRows(sheet) {
@@ -1367,7 +1368,7 @@ document.addEventListener('keydown', ev => {
   closePrompts(false);
 });
 
-// A text a command put on the draft (/prompts <n>, /rewind): ahead of what was there, with an undo.
+// A text for the draft (/rewind, a saved prompt's ✎; /prompts <n> until 2026-10-16, which sends now): ahead of what was there, with an undo.
 function takeDraft(text) {
   const before = draft.value;
   draft.value = before ? text + '\n' + before : text;

@@ -267,6 +267,58 @@ public sealed partial class ChatScreenTests
         Assert.Single(SavedLinks().List());
     }
 
+    /// <summary>Delete with a filter typed removes the filtered link, after a yes, and the filter stays (2026-10-16, the user's ask).</summary>
+    [Fact]
+    public async Task BrowserLinks_ThePane_DeleteWithAFilter_RemovesTheFilteredLink_AndKeepsTheFilter()
+    {
+        _browserWindow = new FakeBrowserWindow();
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 160;
+        _geometry = new ScreenGeometry(() => null);
+        var links = SavedLinks();
+        links.Add("https://a.example/", "A", out _);
+        links.Add("https://b.example/", "B", out _);
+        PushLine("/browser list");
+        _console.Input.PushKey(new ConsoleKeyInfo('B', ConsoleKey.B, true, false, false));   // the filter: B alone
+        _console.Input.PushKey(Keys.Delete);                                                  // asked
+        _console.Input.PushKey(Keys.Down);                                                    // Yes
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);                                                  // the filter cleared
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(["https://a.example/"], SavedLinks().List().Select(l => l.Url));
+        Assert.Contains(BrowserLinkText.RemovePrompt(new BrowserLink("https://b.example/", "B", default)), output);
+        Assert.Contains(Spectre.Console.Markup.Remove(MenuFilter.NoMatchRow("B")), output);   // the filter kept, nothing left under it
+    }
+
+    /// <summary>On <c>/youtube list</c> too (2026-10-16): Delete with a filter typed removes the filtered video after a yes.</summary>
+    [Fact]
+    public async Task YouTube_TheSavedPane_DeleteWithAFilter_RemovesTheFilteredVideo()
+    {
+        YouTubeFixture(key: false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        var library = new YouTubeLibrary(_settings.ProfileDirectory);
+        library.Add("aqz-KE-bpKQ", "Big Buck Bunny", "Blender");
+        library.Add("jNQXAC9IVRw", "Me at the zoo", "jawed");
+        PushLine("/youtube list");
+        _console.Input.PushKey(new ConsoleKeyInfo('M', ConsoleKey.M, true, false, false));   // the filter: the zoo alone ("Me at the zoo")
+        _console.Input.PushKey(Keys.Delete);
+        _console.Input.PushKey(Keys.Down);                                                    // Yes
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(["aqz-KE-bpKQ"], new YouTubeLibrary(_settings.ProfileDirectory).List().Select(v => v.Id));
+        Assert.Contains(YouTubeText.RemovePrompt(new YouTubeSaved { Id = "jNQXAC9IVRw", Title = "Me at the zoo" }), output);
+    }
+
     /// <summary><c>/youtube list</c> reorders as the saved links do (later on 2026-10-13, the user's ask): Shift+↓ moves the highlighted video.</summary>
     [Fact]
     public async Task YouTube_TheSavedPane_ShiftDown_MovesAVideo()

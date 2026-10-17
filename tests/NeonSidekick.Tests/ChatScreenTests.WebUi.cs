@@ -544,9 +544,11 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task ASavedPrompt_FromThePage_GoesToThePagesDraft_NotThePcsRow()
+    public async Task ASavedPrompt_FromThePage_IsSent()
     {
+        // 2026-10-16, the user's ask: /prompts <n> sends the prompt (it went on the page's draft until then), as the page's own line.
         _settings.Update(d => { d.TtsOutput = false; d.WebUiCommands = true; });
+        _chat.EnqueueText("Why did the chicken…");
         WebEventHub.Subscription? page = null;
         var input = WebSteps(
             _ =>
@@ -568,8 +570,9 @@ public partial class ChatScreenTests
             }
         }
 
-        Assert.Equal(["tell me a joke"], drafts);
-        Assert.Empty(_chat.Requests);
+        Assert.Empty(drafts);
+        Assert.Single(_chat.Requests);
+        Assert.Equal("tell me a joke", UserText(_chat.Requests[0]));
         page.Dispose();
     }
 

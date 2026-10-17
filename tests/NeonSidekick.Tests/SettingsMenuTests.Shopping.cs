@@ -50,6 +50,29 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>Delete on a store is remove, asked (2026-10-16, the user's ask): No keeps it, Yes removes it; on the add row it adds nothing.</summary>
+    [Fact]
+    public async Task OnThePane_TheStoresManager_DeleteAsks_ThenRemoves_AndIsNothingOnTheAddRow()
+    {
+        using var holder = new ShoppingStoreHolder(() => _settings.ProfileDirectory);
+        var list = new ShoppingList(holder.Current);
+        list.AddStore("Costco");
+        list.AddStore("H-E-B");
+        var (menu, pane) = PaneMenu();
+        menu.Shopping = list;
+
+        Push(Keys.Home, Keys.Delete);                            // the add row: nothing, no name asked
+        Push(Keys.Down, Keys.Delete, Keys.Enter);                // Costco: No (the cursor starts on it)
+        Push(Keys.Delete, Keys.Down, Keys.Enter);                // Costco again: Yes
+        Push(Keys.Escape);
+
+        Assert.True(await menu.ManageShoppingStoresAsync(CancellationToken.None));
+
+        Assert.Equal(["H-E-B"], list.Store.Stores().Select(s => s.Name));
+        Assert.Contains(ChatScreen.KeptNotice, Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_TheListRow_OpensTheChecklist_AndLeavesThePaneOpenForItsHost()
     {

@@ -310,10 +310,11 @@ internal sealed partial class ChatScreen
         // A line typed on the live row, which empties itself once the hook takes it (KeySource.FeedAsync); a chord carries a line too but
         // is never emptied, and a clicked word has none. /prompts puts a prompt on that row, so it must know (2026-10-13).
         bool typed = !line.Chord && line.Line is not null;
-        if (command == SlashCommand.Prompts && PromptsCommand.Fills(args))
+        if (command == SlashCommand.Prompts && PromptsCommand.Sends(args))
         {
-            // /prompts <n> (2026-10-13): on the watcher, ahead of the policy and the load, so the fill lands before the row would empty.
-            return FillFromNumberMidTurn(args, typed);
+            // /prompts <n> (2026-10-13): on the watcher, ahead of the policy and the load; since 2026-10-16 (the user's ask) the prompt is
+            // queued as a typed line would be, where it filled the draft before the row would empty.
+            return SendFromNumberMidTurn(args);
         }
 
         bool load = LoadRunning;
@@ -385,8 +386,9 @@ internal sealed partial class ChatScreen
                     _promptsRowIsCommand = false;
                 }
 
-                // A prompt picked on /prompts' pane (2026-10-13), reached by its own line or by a switch from another pane: on the draft
-                // now, the hook answering "kept" for a typed line so the live row does not empty itself over it.
+                // A prompt picked on /prompts' pane (2026-10-13), reached by its own line or by a switch from another pane: queued now
+                // (2026-10-16, the user's ask), or with to draft on the draft, the hook answering "kept" for a typed line so the live row
+                // does not empty itself over it.
                 bool taken = TakePromptPick(typed);
                 // An event's ask on /eventlog's pane (2026-10-15): the draft after the pane phase, as a prompt's.
                 taken = TakeEventLogDraft(typed) && taken;
@@ -411,10 +413,16 @@ internal sealed partial class ChatScreen
     /// (2026-09-24) a line is always queued whatever the mode says: the chat takes it between two
     /// replies as the user's interjection. A blank line, or one with no live row behind it, stays where it was.
     /// </summary>
-    private bool QueueLine(KeySource.WatchedLine line)
+    private bool QueueLine(KeySource.WatchedLine line) => line.Line is { } submitted && QueueLine(submitted);
+
+    /// <summary>
+    /// <see cref="QueueLine(KeySource.WatchedLine)"/> for a line with no watched events behind it (2026-10-16: a saved prompt sent under a
+    /// reply, <see cref="SendPrompt"/>): queued, pending or an interjection by the same rules; false for a blank line.
+    /// </summary>
+    private bool QueueLine(SubmittedLine submitted)
     {
-        string label = line.Label.Trim();
-        if (line.Line is not { } submitted || label.Length == 0)
+        string label = submitted.Label.Trim();
+        if (label.Length == 0)
         {
             return false;
         }
@@ -662,7 +670,8 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Prompts:
                 // /prompts and list --clear (2026-10-13): the pane or the question on the watcher; a pick is only kept (_promptPick), the
-                // hook putting it on the draft after this phase (OnMidTurnLineAsync), and no draft editor runs here.
+                // hook queueing it after this phase (2026-10-16; to draft puts it on the draft there; OnMidTurnLineAsync), and no draft
+                // editor runs here.
                 await HandlePromptsAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
             case SlashCommand.Docker:

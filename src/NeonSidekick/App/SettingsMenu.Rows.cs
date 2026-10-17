@@ -16,7 +16,8 @@ internal sealed partial class SettingsMenu
     /// the rest wanted the same look): Anthropic's Claude Code (the executable both read), Claude Code server, <c>/claude</c>
     /// command and Anthropic API; Embedded, Docker, OpenAI, TTS, STT, Sessions and Advisors in runs of their own, a few rows moved
     /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the bar rows under
-    /// Screen. Pinned.
+    /// Screen. Web UI's three runs (2026-10-16, the user's ask): Server, then Guardrails and Tabs, "The page" split into what the
+    /// page may do and which tabs it shows. Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
@@ -97,7 +98,8 @@ internal sealed partial class SettingsMenu
             [SettingsTab.WebUi] =
             [
                 (SettingsField.WebUi, "Server"),
-                (SettingsField.WebUiChatControls, "The page"),
+                (SettingsField.WebUiCommands, "Guardrails"),
+                (SettingsField.WebUiProfileTheme, "Tabs"),
             ],
             [SettingsTab.Advisors] =
             [

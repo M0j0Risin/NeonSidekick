@@ -1115,13 +1115,13 @@ public enum SettingsField
     /// <summary>An edit row: the home's <c>eventlog.json</c> in the editor. The EventLog menu (2026-10-15).</summary>
     EventLogComputersGlobal,
 
-    /// <summary>A toggle: whether the Web UI's Home tab may act (<see cref="Settings.AppSettingsData.WebUiHomeControls"/>). The Web UI tab under <see cref="WebUiConnectionDetails"/> (2026-10-15); read at each request.</summary>
+    /// <summary>A toggle: whether the Web UI's Home tab may act (<see cref="Settings.AppSettingsData.WebUiHomeControls"/>). The Web UI tab's Tabs run under <see cref="WebUiChatControls"/> (2026-10-15; under <see cref="WebUiConnectionDetails"/> until 2026-10-16); read at each request.</summary>
     WebUiHomeControls,
 
-    /// <summary>A toggle: whether the Web UI's pages wear the profile's theme (<see cref="Settings.AppSettingsData.WebUiProfileTheme"/>). The Web UI tab under <see cref="WebUiShoppingControls"/> (2026-10-15); read at each request.</summary>
+    /// <summary>A toggle: whether the Web UI's pages wear the profile's theme (<see cref="Settings.AppSettingsData.WebUiProfileTheme"/>). The Web UI tab's Tabs run, first, under <see cref="WebUiConnectionDetails"/> (2026-10-15; last until 2026-10-16, the user's ask); read at each request.</summary>
     WebUiProfileTheme,
 
-    /// <summary>A toggle: whether the Web UI has its Chat tab (<see cref="Settings.AppSettingsData.WebUiChatControls"/>). The Web UI tab's page section, first (later on 2026-10-15); read at each request.</summary>
+    /// <summary>A toggle: whether the Web UI has its Chat tab (<see cref="Settings.AppSettingsData.WebUiChatControls"/>). The Web UI tab's Tabs run under <see cref="WebUiProfileTheme"/> (later on 2026-10-15; the page section's first until 2026-10-16); read at each request.</summary>
     WebUiChatControls,
 
     /// <summary>A toggle: whether the Web UI has its Shopping tab (<see cref="Settings.AppSettingsData.WebUiShoppingControls"/>). The Web UI tab under <see cref="WebUiHomeControls"/> (later on 2026-10-15); read at each request.</summary>
@@ -1242,7 +1242,7 @@ public enum SettingsTab
     /// <summary>The <c>/botchat</c> rows (2026-09-25, the user's ask: a Botchat tab on <c>/settings</c>): third, under Client after Sessions, since 2026-10-10 (the user's order); after Sessions on the root strip until then (a Claude tab followed it on 2026-09-27 until later that day, when its rows moved to <c>/tools</c>' ClaudeCode tab, the user's call; <c>/claude</c>'s four came back to the Anthropic tab on 2026-10-10).</summary>
     BotChat,
 
-    /// <summary>The Web UI's rows (2026-10-14, the user's ask: a Web UI tab under Client, after Botchat): the switch, the port and the reach.</summary>
+    /// <summary>The Web UI's rows (2026-10-14, the user's ask: a Web UI tab under Client, after Botchat) in three runs since 2026-10-16 (the user's ask): Server (the switch, the port and the reach), Guardrails (commands, connection details) and Tabs (the theme and each tab's switch).</summary>
     WebUi,
 
     /// <summary>
@@ -1665,7 +1665,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiChatControls, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls, SettingsField.WebUiProfileTheme],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
@@ -4590,6 +4590,25 @@ internal sealed partial class SettingsMenu
         }
 
         return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1) : null;
+    }
+
+    /// <summary>
+    /// <see cref="PickAsync"/> for a list whose rows can be removed (2026-10-16, the user's ask: Delete removes the highlighted row on every
+    /// list that removes one): the page as <see cref="MenuPage.Removes"/>, with <paramref name="buttons"/> on its title row when given; the row
+    /// (the cursor's for a button or Delete), the button pressed (−1 for none) and whether it was Delete, which the caller sends to its own
+    /// remove, skipping a row that is no item (an add row). The two wrappers above drop <see cref="MenuPick.Remove"/>, so a Delete on an add
+    /// row would come back as Enter on it. Without the pane (the Spectre prompt) there are no buttons and no Delete.
+    /// </summary>
+    private async Task<(int Row, int Button, bool Remove)?> PickListAsync(MenuPage page, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuButton>? buttons = null)
+    {
+        if (_pane.Enabled)
+        {
+            return await _pane.PickAsync(page with { Buttons = buttons ?? page.Buttons, Removes = true }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
+                ? (picked.Row, picked.Button, picked.Remove)
+                : null;
+        }
+
+        return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1, false) : null;
     }
 
     /// <summary>
@@ -8121,7 +8140,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiConnectionDetails => on ? "the page's dropdown shows the % and * connections' notes" : "the page's dropdown names the connections alone",
         SettingsField.WebUiHomeControls => on ? "the Home tab toggles, runs scenes, asks Assist and plays the video" : "there is no Home tab",
         SettingsField.WebUiChatControls => on ? "the page has its Chat tab" : "there is no Chat tab; / goes to the first tab that is on",
-        SettingsField.WebUiShoppingControls => on ? "the Shopping tab ticks lines and changes the store" : "there is no Shopping tab",
+        SettingsField.WebUiShoppingControls => on ? "the Shopping tab adds, ticks, changes and removes lines, picks the store" : "there is no Shopping tab",
         SettingsField.WebUiYouTubeControls => on ? "the YouTube tab plays videos and keeps the saved list" : "there is no YouTube tab; webui-window plays in the video window",
         SettingsField.WebUiProfileTheme => on ? "the pages wear the profile's theme" : "the pages keep their own look",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
@@ -8733,7 +8752,8 @@ internal sealed partial class SettingsMenu
     /// title row carries <see cref="CommandPolicyButtons"/>: since later on 2026-10-13 one button stepping <c>Shell command policy</c> off → ask →
     /// yolo → off, <c>off</c> and <c>ask</c> saved at once, <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane
     /// (not <see cref="ConfirmAsync"/>, which closes it), a no moving on to <c>off</c> (<see cref="YoloDeclinedNotice"/>) so the cycle never
-    /// sticks; the save shows on the list's status line. It works on the empty list too.
+    /// sticks; the save shows on the list's status line. It works on the empty list too. Delete removes the highlighted prefix as Enter does,
+    /// after the same yes (2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>), a filtered row too.
     /// </summary>
     internal async Task<bool> EditAllowedCommandsAsync(CancellationToken cancellationToken)
     {
@@ -8757,7 +8777,7 @@ internal sealed partial class SettingsMenu
             string policy = _settings.Current.ShellCommandPolicy;
             int start = Math.Max(0, shown.IndexOf(cursor));
             MenuPick? pick = _pane.Enabled
-                ? await _pane.PickAsync(page with { Buttons = CommandPolicyButtons(policy) }, start, cancellationToken).ConfigureAwait(false)
+                ? await _pane.PickAsync(page with { Buttons = CommandPolicyButtons(policy), Removes = shown.Count > 0 && allowed.Count > 0 }, start, cancellationToken).ConfigureAwait(false)
                 : await PickAsync(page, start, cancellationToken).ConfigureAwait(false) is { } plain ? new MenuPick(0, plain) : null;
             if (pick?.Filter is { } typed)
             {
@@ -8833,7 +8853,8 @@ internal sealed partial class SettingsMenu
     /// nothing saved); Enter on a string removes it (<see cref="ForbiddenRemovedNotice"/>). The list is shown again until ESC. The
     /// <c>EditAllowedCommandsAsync</c> shape, opened from the Shell tab's row and the police page's strings button. On the pane the title
     /// row carries <see cref="RestoreForbiddenButton"/> (2026-10-08, the user's ask): the list back to the defaults after a yes, or
-    /// <see cref="ForbiddenAlreadyDefaultsNotice"/> and nothing asked when it already is. True when anything changed.
+    /// <see cref="ForbiddenAlreadyDefaultsNotice"/> and nothing asked when it already is. Delete on a string is Enter's remove (2026-10-16, the
+    /// user's ask); on the add row nothing. True when anything changed.
     /// </summary>
     internal async Task<bool> EditForbiddenStringsAsync(CancellationToken cancellationToken)
     {
@@ -8846,7 +8867,7 @@ internal sealed partial class SettingsMenu
             IReadOnlyList<string> rows = [Markup.Escape(AddForbiddenRow), .. forbidden.Select(Markup.Escape)];
             // Each string whole under the list (2026-10-07, the user's ask: a long one was cut at the edge).
             var page = new MenuPage(Crumb(title), rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= forbidden.Count ? new MenuFooter(forbidden[row - 1], ForbiddenStringNote) : null };
-            if (await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
+            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
             {
                 if (!changed)
                 {
@@ -8861,6 +8882,12 @@ internal sealed partial class SettingsMenu
                 cursor = pick.Row;
                 changed |= await RestoreForbiddenDefaultsAsync(forbidden, cancellationToken).ConfigureAwait(false);
                 continue;
+            }
+
+            if (pick.Remove && pick.Row == 0)
+            {
+                cursor = 0;
+                continue;   // Delete on the add row: nothing to remove
             }
 
             int index = pick.Row;

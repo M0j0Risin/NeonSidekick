@@ -8,19 +8,22 @@ namespace NeonSidekick.App;
 /// <c>/prompts</c> (2026-10-13, the user's ask: messages sent often, kept like the saved links and picked onto the draft line): the
 /// profile's saved prompts (<see cref="SavedPrompts"/>) on a <see cref="MenuPage"/>, a numbered row each (its first line,
 /// <see cref="SavedPromptText.PaneRow"/>), the highlighted one's text in the footer, typing filters (Shift for a letter a button has).
-/// Enter or a double-click closes the pane and returns the prompt: the screen puts it on the draft line, at once at the idle line and after
-/// the pane phase under a reply, where the live row would otherwise empty itself over it. The buttons (<see cref="Buttons"/>, a click or
-/// the key): add (typed on the input row, one line), save draft (the chat draft as it stands, line breaks kept and pictures dropped; the
-/// screen hands it in), edit (a one-line prompt on the input row, a longer one in the draft editor, which closes the pane around its wait
-/// and opens it again on the same prompt), remove (after a yes) and clear all (after a yes, then the pane closes with its answer on the
-/// transcript). The order is the user's: <see cref="MenuPage.Moves"/> while nothing is typed; Delete removes. An empty list shows one dim
-/// row under the same buttons, so add and save draft work on it. <c>BrowserLinksMenu</c>'s shape throughout.
+/// Enter or a double-click closes the pane and returns the prompt to send (2026-10-16, the user's ask: a pick is sent as if typed, queued
+/// under a reply; it went on the draft line until then); a single click only moves the highlight. The buttons (<see cref="Buttons"/>, a
+/// click or the key): to draft (the old pick, the prompt on the draft line to edit first, <see cref="SavedPromptPick.ToDraft"/>), add
+/// (typed on the input row, one line), save draft (the chat draft as it stands, line breaks kept and pictures dropped; the screen hands it
+/// in), edit (a one-line prompt on the input row, a longer one in the draft editor, which closes the pane around its wait and opens it
+/// again on the same prompt), remove (after a yes; <c>r</c> since 2026-10-16) and clear all (after a yes, then the pane closes with its
+/// answer on the transcript). The order is the user's: <see cref="MenuPage.Moves"/> while nothing is typed; Delete removes, while a filter
+/// shows part of the list too (<see cref="MenuPage.Removes"/>, 2026-10-16). An empty list shows one dim row under the same buttons, so add
+/// and save draft work on it. <c>BrowserLinksMenu</c>'s shape throughout.
 /// </summary>
 internal sealed class SavedPromptsMenu
 {
-    /// <summary>The page's buttons in the order drawn: add, save draft, edit, remove, clear all.</summary>
+    /// <summary>The page's buttons in the order drawn: to draft (2026-10-16), add, save draft, edit, remove, clear all.</summary>
     public static readonly IReadOnlyList<MenuButton> Buttons =
     [
+        new(SavedPromptText.ToDraftButton, SavedPromptText.ToDraftKey),
         new(SavedPromptText.AddButton, SavedPromptText.AddKey),
         new(SavedPromptText.SaveDraftButton, SavedPromptText.SaveDraftKey),
         new(SavedPromptText.EditButton, SavedPromptText.EditKey),
@@ -28,11 +31,12 @@ internal sealed class SavedPromptsMenu
         new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey),
     ];
 
-    private const int Add = 0;
-    private const int SaveDraft = 1;
-    private const int Edit = 2;
-    private const int Remove = 3;
-    private const int ClearAll = 4;
+    private const int ToDraft = 0;
+    private const int Add = 1;
+    private const int SaveDraft = 2;
+    private const int Edit = 3;
+    private const int Remove = 4;
+    private const int ClearAll = 5;
 
     private const string ErrorPrefix = "Error: ";
 
@@ -76,8 +80,14 @@ internal sealed class SavedPromptsMenu
     /// <summary>What the draft editor's round trip came back with: the text written (null: unchanged or blank), or the line to show instead.</summary>
     public sealed record EditorResult(string? Text, string? Answer = null);
 
-    /// <summary>Shows the list until ESC (null) or a pick (the prompt, the pane closed).</summary>
-    public async Task<SavedPrompt?> ShowAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// A pick off the pane (2026-10-16): <see cref="Prompt"/> to send (Enter or a double-click), or with <see cref="ToDraft"/> to put on the
+    /// draft line (the to-draft button, <c>d</c>).
+    /// </summary>
+    public sealed record SavedPromptPick(SavedPrompt Prompt, bool ToDraft);
+
+    /// <summary>Shows the list until Esc (null) or a pick (the prompt and what to do with it, the pane closed).</summary>
+    public async Task<SavedPromptPick?> ShowAsync(CancellationToken cancellationToken)
     {
         string? on = null;      // the prompt the cursor follows, by id
         int stood = 0;          // the row it stood on, for when that prompt is gone
@@ -100,9 +110,10 @@ internal sealed class SavedPromptsMenu
                 {
                     Buttons = Buttons,
                     Filter = empty ? null : filter,
-                    Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, prompts.Count) ?? SavedPromptText.Caption(prompts.Count),
+                    Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, prompts.Count) ?? SavedPromptText.PaneCaption(prompts.Count),
                     Footer = (_, row) => !empty && row < shown.Count ? SavedPromptText.Footer(prompts[shown[row]], _zone) : null,
                     Moves = !empty && filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
+                    Removes = !empty && shown.Count > 0,     // Delete removes a filtered row too (2026-10-16, the user's ask)
                 };
                 if (answer is not null)
                 {
@@ -177,6 +188,11 @@ internal sealed class SavedPromptsMenu
                     continue;   // the empty list's row, the no-match row
                 }
 
+                if (pick.Button == ToDraft)
+                {
+                    return new SavedPromptPick(prompt, ToDraft: true);
+                }
+
                 if (pick.Move != 0)
                 {
                     // A move: silent, the row going with the cursor.
@@ -203,7 +219,7 @@ internal sealed class SavedPromptsMenu
                 }
                 else
                 {
-                    return prompt;   // Enter or a double-click: to the draft line
+                    return new SavedPromptPick(prompt, ToDraft: false);   // Enter or a double-click: sent (2026-10-16; to the draft line until then)
                 }
             }
         }

@@ -9666,6 +9666,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>Delete on the allowed commands is Enter's remove (2026-10-16, the user's ask): asked, a filtered row too, the filter kept.</summary>
+    [Fact]
+    public async Task ShellAllowed_DeleteRemovesAfterAYes_AFilteredRowToo()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ShellCommandAllowed = ["git push", "dotnet build", "git status"]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 100;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        StepsWhenIdle(
+            Line("/tools shell allowed"),
+            Key(Keys.Char('g')),                                   // the filter: the two git prefixes, the cursor on git push
+            Key(Keys.Delete),                                      // git push asked about
+            Key(Keys.Down),                                        // Yes: removed
+            Key(Keys.Enter),
+            Key(Keys.Escape),                                      // the filter cleared
+            Key(Keys.Escape),                                      // the pane closed
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.RemovePrefixQuestion("git push"), output);
+        Assert.Contains("  · " + SettingsMenu.PrefixRemovedNotice("git push") + "\n", output);
+        Assert.Equal(["dotnet build", "git status"], _settings.Current.ShellCommandAllowed.Order());
+        Assert.Empty(_chat.Requests);
+    }
+
     /// <summary>A word after /tools shell that is neither page is its own usage error; the old words are unknown commands (2026-10-09).</summary>
     [Fact]
     public async Task ToolsShell_AnUnknownWord_IsItsUsageError_AndTheOldWordsAreUnknown()

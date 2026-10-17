@@ -11,7 +11,8 @@ namespace NeonSidekick.App;
 /// add lines (typed, or the recently bought, <see cref="AddAsync"/>), place the highlighted one (<see cref="PlaceAsync"/>), rename it,
 /// remove it, tick (or untick) every line, clear the ticked lines and open the stores' manager; + and - change its quantity. Nothing
 /// asks: a line removed is added again, a bought one is ticked. The list is read again after every act (the model may change it
-/// meanwhile), the cursor kept on the same line. An empty list shows its one dim row with the same bar, so add works on it. The
+/// meanwhile), the cursor kept on the same line. An empty list shows its one dim row with the same bar, so add works on it. Delete is
+/// remove (2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>), unasked as remove is; on the add page it forgets a bought line. The
 /// <see cref="YouTubeSavedMenu"/> shape; without the pane the screen prints the list instead.
 /// </summary>
 internal sealed class ShoppingMenu
@@ -178,6 +179,7 @@ internal sealed class ShoppingMenu
                     Headings = headings,
                     SpaceToggles = true,
                     Caption = ShoppingText.PaneCaption(view.Groups.Sum(g => g.Items.Count), view.Ticked.Count, guesses),
+                    Removes = items.Any(i => i is not null),   // Delete is remove (2026-10-16); a heading is never a stop
                 };
                 MenuPick? picked;
                 using (var stale = new CancellationTokenSource())
@@ -207,7 +209,7 @@ internal sealed class ShoppingMenu
                 }
 
                 on = item?.Id ?? on;
-                switch (pick.Button)
+                switch (pick.Remove ? Remove : pick.Button)   // Delete is remove, before a no-button pick ticks
                 {
                     case Add:
                         await AddAsync(cancellationToken).ConfigureAwait(false);
@@ -290,6 +292,7 @@ internal sealed class ShoppingMenu
                 Buttons = AddButtons,
                 Filter = filter,
                 Caption = bought.Count == 0 ? ShoppingText.NothingBoughtYet : ShoppingText.BoughtCaption(bought.Count),
+                Removes = shown.Count > 0,   // Delete forgets a bought line (2026-10-16); the new-item row is skipped below
             };
             if (await _pane.PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } pick)
             {
@@ -305,7 +308,7 @@ internal sealed class ShoppingMenu
 
             cursor = pick.Row;
             var line = pick.Row > 0 && pick.Row - 1 < shown.Count ? bought[shown[pick.Row - 1]] : null;
-            if (pick.Button == 0)
+            if (pick.Button == 0 || pick.Remove)
             {
                 if (line is not null)
                 {

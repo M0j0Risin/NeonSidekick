@@ -521,7 +521,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly List<string> _drafts = [];
 
     /// <summary>
-    /// A text for the page's draft (later on 2026-10-14: <c>/prompts &lt;n&gt;</c>, <c>/rewind</c> from the page): sent to the pages connected
+    /// A text for the page's draft (later on 2026-10-14: <c>/rewind</c> from the page, and <c>/prompts &lt;n&gt;</c> until 2026-10-16, which sends now): sent to the pages connected
     /// now, or held until the next one connects, which takes it with its snapshot — delivered once either way.
     /// </summary>
     public void Draft(string text)
@@ -696,7 +696,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply Answer(WebAnswerRequest request, IPAddress? remote) => Asks.Answer(request, remote);
 
-    public WebShopping Shopping() => _shopping() is { } list ? WebShoppingView.Of(list) : new WebShopping("", ShoppingText.Unavailable, [], ShoppingText.TickedHeading, [], ShoppingText.GuessMark, WebUiAssets.Current);
+    public WebShopping Shopping() => _shopping() is { } list ? WebShoppingView.Of(list) : WebShoppingView.Unavailable();
 
     public WebReply Check(WebCheckRequest request, IPAddress? remote)
     {
@@ -734,6 +734,157 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         }
 
         return reply;
+    }
+
+    // ── The Shopping tab's list controls (2026-10-16, the user's ask) ─────────
+    // Each over WebShoppingView's helper, as Check and UseStore: on a change, a WebUi log line with the address, the home bar's 🛒 told, and a
+    // flash on the PC's hint row; a repeat (nothing changed) does none of them. No list at all answers as the unavailable one does.
+
+    public WebBought? ShopBought() => _shopping() is { } list ? WebShoppingView.Bought(list, _time.LocalTimeZone) : null;
+
+    public WebReply ShopAdd(WebTextBody request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.Add(list, request.Text, out var added);
+        if (reply.Outcome == WebOutcome.Ok && added.Count > 0)
+        {
+            ShopChanged(WebUiText.AddedLogLine(added, remote), WebUiText.AddedFlash(added));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopReAdd(WebShopId request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.ReAdd(list, request.Id, out string? added);
+        if (reply.Outcome == WebOutcome.Ok && added is not null)
+        {
+            ShopChanged(WebUiText.AddedLogLine([added], remote), WebUiText.AddedFlash([added]));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopForget(WebShopId request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.Forget(list, request.Id, out string? name);
+        if (reply.Outcome == WebOutcome.Ok && name is not null)
+        {
+            ShopChanged(WebUiText.ForgotLogLine(name, remote), WebUiText.ForgotFlash(name));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopQuantity(WebShopQuantity request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.Quantity(list, request.Id, request.Qty, out string? line);
+        if (reply.Outcome == WebOutcome.Ok && line is not null)
+        {
+            ShopChanged(WebUiText.QuantityLogLine(line, remote), WebUiText.QuantityFlash(line));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopRename(WebShopRename request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.Rename(list, request.Id, request.Name, out string? from, out string? to);
+        if (reply.Outcome == WebOutcome.Ok && from is not null && to is not null)
+        {
+            ShopChanged(WebUiText.RenamedLogLine(from, to, remote), WebUiText.RenamedFlash(from, to));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopRemove(WebShopId request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.Remove(list, request.Id, out string? line);
+        if (reply.Outcome == WebOutcome.Ok && line is not null)
+        {
+            ShopChanged(WebUiText.RemovedLogLine(line, remote), WebUiText.RemovedFlash(line));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopCheckAll(WebShopCheckAll request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.CheckAll(list, request.On, out int changed);
+        if (reply.Outcome == WebOutcome.Ok && changed > 0)
+        {
+            ShopChanged(WebUiText.CheckedAllLogLine(changed, request.On, remote), WebUiText.CheckedAllFlash(changed, request.On));
+        }
+
+        return reply;
+    }
+
+    public WebReply ShopClearTicked(IPAddress? remote)
+    {
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.ClearTicked(list, out int cleared);
+        if (reply.Outcome == WebOutcome.Ok && cleared > 0)
+        {
+            ShopChanged(WebUiText.ClearedLogLine(cleared, remote), WebUiText.ClearedFlash(cleared));
+        }
+
+        return reply;
+    }
+
+    /// <summary>No list at all (a build or profile without one): the unavailable list's refusal.</summary>
+    private static readonly WebReply NoList = new(WebOutcome.Refused, ShoppingText.Unavailable);
+
+    private void ShopChanged(string logLine, string flash)
+    {
+        DiagnosticLog.Info(Category, logLine);
+        _shoppingChanged();
+        FlashPc(flash);
     }
 
     // ── Publishing ────────────────────────────────────────────────────────────

@@ -210,6 +210,27 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>Delete on a match word removes it after a yes (2026-10-16, the user's ask); on the add row it is nothing, no word asked.</summary>
+    [Fact]
+    public async Task OnThePane_TheMatchWords_DeleteRemovesAfterAYes_AndIsNothingOnTheAddRow()
+    {
+        _settings.Update(d => d.DockerServerMatchWords = ["tgi", "vllm"]);
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Docker);
+        Down(2);
+        Push(Keys.Enter);                                  // the list, on its add row
+        Push(Keys.Delete);                                 // nothing
+        Push(Keys.Down, Keys.Delete, Keys.Down, Keys.Enter);   // tgi removed (Yes)
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["vllm"], _settings.Current.DockerServerMatchWords);
+        Assert.Contains(SettingsMenu.RemoveDockerWordQuestion("tgi"), Output);
+        Assert.Contains("  · Docker server match words: tgi removed\n", Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public void TheMatchWords_Wording()
     {

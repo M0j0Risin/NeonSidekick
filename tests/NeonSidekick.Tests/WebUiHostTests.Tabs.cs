@@ -65,6 +65,7 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/entry/4", WebTab.Chat)]
     [InlineData("/api/picture/0123456789abcdef0123456789abcdef/1/thumb", WebTab.Chat)]
     [InlineData("/api/shopping", WebTab.Shopping)]
+    [InlineData("/api/shopping/bought", WebTab.Shopping)]   // the 🕘 sheet (2026-10-16)
     [InlineData("/api/home", WebTab.Home)]
     [InlineData("/api/home/sheet?ref=x", WebTab.Home)]
     public async Task AReadOfATabThatIsOff_Is404_WithTabOff_AndItsSentence(string path, WebTab tab)
@@ -93,6 +94,14 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/history/clear", "{}", WebTab.Chat)]
     [InlineData("/api/shopping/check", "{\"id\":1,\"on\":true}", WebTab.Shopping)]
     [InlineData("/api/shopping/store", "{\"id\":1}", WebTab.Shopping)]
+    [InlineData("/api/shopping/add", "{\"text\":\"milk\"}", WebTab.Shopping)]   // the list's own controls (2026-10-16)
+    [InlineData("/api/shopping/readd", "{\"id\":1}", WebTab.Shopping)]
+    [InlineData("/api/shopping/forget", "{\"id\":1}", WebTab.Shopping)]
+    [InlineData("/api/shopping/quantity", "{\"id\":1,\"qty\":2}", WebTab.Shopping)]
+    [InlineData("/api/shopping/rename", "{\"id\":1,\"name\":\"x\"}", WebTab.Shopping)]
+    [InlineData("/api/shopping/remove", "{\"id\":1}", WebTab.Shopping)]
+    [InlineData("/api/shopping/checkall", "{\"on\":true}", WebTab.Shopping)]
+    [InlineData("/api/shopping/clear", "{}", WebTab.Shopping)]
     [InlineData("/api/home/tap", "{\"ref\":\"x\"}", WebTab.Home)]
     public async Task APostToATabThatIsOff_Is404_AndNeverReachesTheBackend(string path, string json, WebTab tab)
     {
@@ -110,6 +119,7 @@ public sealed partial class WebUiHostTests
         Assert.Empty(_backend.StripPicks);
         Assert.Empty(_backend.Checks);
         Assert.Empty(_backend.Stores);
+        Assert.Empty(_backend.ShopCalls);
         Assert.Empty(_backend.PromptsSaved);
         Assert.Empty(_backend.PromptsDeleted);
         Assert.Empty(_backend.MemoriesSaved);
@@ -323,6 +333,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/picture/r/1/full", WebTab.Chat)]
     [InlineData("/api/shopping", WebTab.Shopping)]
     [InlineData("/api/shopping/store", WebTab.Shopping)]
+    [InlineData("/api/shopping/bought", WebTab.Shopping)]
+    [InlineData("/api/shopping/checkall", WebTab.Shopping)]
     [InlineData("/api/shoppingx", null)]
     [InlineData("/api/home", WebTab.Home)]
     [InlineData("/api/home/video", WebTab.Home)]

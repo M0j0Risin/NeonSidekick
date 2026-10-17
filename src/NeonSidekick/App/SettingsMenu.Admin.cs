@@ -181,8 +181,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// A host list (2026-10-15, the plan's item 36: the forbidden strings' typed-list page): <see cref="AddHostRow"/> on top, each entry under it;
-    /// a typed entry is read by <see cref="HostRules.Parse"/> and a bad CIDR or glob refused on entry; Enter on an entry removes it after a yes.
-    /// True when anything changed.
+    /// a typed entry is read by <see cref="HostRules.Parse"/> and a bad CIDR or glob refused on entry; Enter on an entry removes it after a yes,
+    /// and Delete too (2026-10-16, the user's ask; on the add row nothing). True when anything changed.
     /// </summary>
     private async Task<bool> EditHostListAsync(SettingsField field, Func<AppSettingsData, List<string>> get, Action<AppSettingsData, List<string>> set, CancellationToken cancellationToken)
     {
@@ -194,7 +194,7 @@ internal sealed partial class SettingsMenu
             var hosts = get(_settings.Current);
             IReadOnlyList<string> rows = [Markup.Escape(AddHostRow), .. hosts.Select(Markup.Escape)];
             var page = new MenuPage(Crumb(title), rows, HostListKeys);
-            if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
+            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
             {
                 if (!changed)
                 {
@@ -205,6 +205,11 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = index;
+            if (pick.Remove && index == 0)
+            {
+                continue;   // Delete on the add row: nothing to remove
+            }
+
             if (index > 0)
             {
                 string entry = hosts[index - 1];

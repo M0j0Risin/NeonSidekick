@@ -346,6 +346,53 @@ public class QueueMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Delete removes the highlighted message as Enter does (2026-10-16, the user's ask): asked first, No keeps it, Yes removes it.</summary>
+    [Fact]
+    public async Task OnThePane_DeleteAsks_ThenRemovesTheHighlightedMessage()
+    {
+        Seed("one", "two", "three");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Delete, Keys.Enter,      // two: No (the cursor starts on it)
+            Keys.Delete, Keys.Down, Keys.Enter,       // two again: Yes
+            Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(QueueMenu.RemovePrompt("two"), _console.Output);
+        Assert.Contains(ChatScreen.KeptNotice, _console.Output);
+        Assert.Contains("(⏳ removed: two)", _console.Output);
+        Assert.Equal(new[] { "one", "three" }, Labels());
+        pane.Dispose();
+    }
+
+    /// <summary>Delete on a row the loop sent meanwhile (2026-10-16): Enter's stale-row check, no question, the list shown again.</summary>
+    [Fact]
+    public async Task OnThePane_DeleteOnARowTheLoopSentMeanwhile_ShowsTheListAgain()
+    {
+        Seed("one", "two");
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            if (waits++ == 0)
+            {
+                Assert.True(_queue.TryDequeue(out _));
+                input.Push(Keys.Delete);
+            }
+            else
+            {
+                input.Push(Keys.Escape);
+            }
+        };
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(QueueMenu.RemovePrompt("two"), _console.Output);
+        Assert.Contains("\n▸ " + Row(0, "two") + "\n", _console.Output);
+        Assert.Equal(new[] { "two" }, Labels());
+        pane.Dispose();
+    }
+
     /// <summary>The title row with the send button (2026-10-05): the label, then send and clear all as dim tabs.</summary>
     private const string SendStrip = QueueMenu.Title + " │ ➤ send · ⊠ clear all ";
 

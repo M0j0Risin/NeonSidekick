@@ -5,8 +5,8 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The page's saved prompts (later on 2026-10-15, the user's ask) in headless Edge: 📣 opens the sheet numbered as at the PC, a tap fills the
-/// draft with Undo, ➤ sends the prompt and leaves the draft, an empty list says so, the filter past eight, Esc and Back close it, bare
+/// The page's saved prompts (later on 2026-10-15, the user's ask) in headless Edge: 📣 opens the sheet numbered as at the PC, a tap sends the
+/// prompt and leaves the draft (2026-10-16, the user's ask; ➤ did until then), ✎ fills the draft with Undo (the tap's until then), an empty list says so, the filter past eight, Esc and Back close it, bare
 /// <c>/prompts</c> sent opens it, the drawer and the sheet swap without leaving a stale entry, a picture tapped under it, a reload, focus, a 320 px
 /// row with ■, the floating buttons under it, and a refusal's Send as a message sending the prompt.
 /// </summary>
@@ -30,7 +30,7 @@ public sealed partial class WebUiPageTests
     }
 
     [WindowsFact]
-    public async Task ThePromptsButton_OpensTheSheet_NumberedAsAtThePc_ATapFillsTheDraft_WithUndo()
+    public async Task ThePromptsButton_OpensTheSheet_NumberedAsAtThePc_ATapSendsThePrompt_AndLeavesTheDraft()
     {
         if (await PromptsPageAsync(prompts: ["Summarize this.", "Review the diff"]) is not { } page)
         {
@@ -41,17 +41,17 @@ public sealed partial class WebUiPageTests
         await OpenSheetAsync(page);
         Assert.Equal("1Summarize this.", await page.TextAsync("document.querySelector('.prompt-text').textContent"));
         Assert.Equal("prompt-text", await page.TextAsync("document.activeElement.className"));   // focus on the first row
+        Assert.StartsWith(WebUiText.PromptsSend, await page.TextAsync("document.querySelector('.prompt-text').getAttribute('aria-label')"));
 
         await page.EvalAsync("document.querySelectorAll('.prompt-text')[1].click()");
-        await page.WaitAsync(SheetHidden + " && document.getElementById('draft').value === 'Review the diff\\nmine'", "the prompt on the draft");
-        Assert.Equal("draft", await page.TextAsync("document.activeElement.id"));
-        await page.EvalAsync("[...document.querySelectorAll('#message button')].find(b => b.textContent === '" + WebUiText.Undo + "').click()");
-        await page.WaitAsync("document.getElementById('draft').value === 'mine'", "undone");
-        Assert.Empty(_backend.Sent);
+        await page.WaitAsync(SheetHidden, "closed by the send");
+        Assert.True(SpinWait.SpinUntil(() => !_backend.Sent.IsEmpty, TimeSpan.FromSeconds(5)));
+        Assert.Equal("Review the diff", Assert.Single(_backend.Sent).Text);
+        Assert.Equal("mine", await page.TextAsync("document.getElementById('draft').value"));
     }
 
     [WindowsFact]
-    public async Task ARowsSend_PostsThePrompt_AndLeavesTheDraft_AndEscClosesTheSheet_FocusBackOnTheButton()
+    public async Task ARowsPencil_FillsTheDraft_WithUndo_SendsNothing_AndEscClosesTheSheet_FocusBackOnTheButton()
     {
         if (await PromptsPageAsync(prompts: ["Summarize this."]) is not { } page)
         {
@@ -60,11 +60,13 @@ public sealed partial class WebUiPageTests
 
         await page.EvalAsync("document.getElementById('draft').value = 'mine'");
         await OpenSheetAsync(page);
-        await page.EvalAsync("document.querySelector('.prompt-send').click()");
-        await page.WaitAsync(SheetHidden, "closed by the send");
-        Assert.True(SpinWait.SpinUntil(() => !_backend.Sent.IsEmpty, TimeSpan.FromSeconds(5)));
-        Assert.Equal("Summarize this.", Assert.Single(_backend.Sent).Text);
-        Assert.Equal("mine", await page.TextAsync("document.getElementById('draft').value"));
+        Assert.Equal(WebUiText.PromptsToDraft, await page.TextAsync("document.querySelector('.prompt-draft').getAttribute('aria-label')"));
+        await page.EvalAsync("document.querySelector('.prompt-draft').click()");
+        await page.WaitAsync(SheetHidden + " && document.getElementById('draft').value === 'Summarize this.\\nmine'", "the prompt on the draft");
+        Assert.Equal("draft", await page.TextAsync("document.activeElement.id"));
+        await page.EvalAsync("[...document.querySelectorAll('#message button')].find(b => b.textContent === '" + WebUiText.Undo + "').click()");
+        await page.WaitAsync("document.getElementById('draft').value === 'mine'", "undone");
+        Assert.Empty(_backend.Sent);
 
         await OpenSheetAsync(page);
         await page.EvalAsync("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
@@ -107,7 +109,7 @@ public sealed partial class WebUiPageTests
 
         _backend.Reply = new WebReply(WebOutcome.Refused, "Unknown command: /nope", AsText: true);
         await page.EvalAsync("document.getElementById('draft').value = 'typed since'");
-        await page.EvalAsync("document.querySelector('.prompt-send').click()");
+        await page.EvalAsync("document.querySelector('.prompt-text').click()");   // the /nope row's tap sends it (2026-10-16; its ➤ until then)
         await page.WaitAsync("[...document.querySelectorAll('#message button')].some(b => b.textContent === '" + WebUiText.SendAsMessage + "')", "the refusal");
         _backend.Reply = WebReply.Ok;
         await page.EvalAsync("[...document.querySelectorAll('#message button')].find(b => b.textContent === '" + WebUiText.SendAsMessage + "').click()");

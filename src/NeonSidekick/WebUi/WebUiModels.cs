@@ -430,7 +430,7 @@ public sealed record WebUsageRow(string Label, string Value);
 public sealed record WebWords(string PictureGone, string PictureTooLarge, string OpenOriginal, string SendAsMessage = "", string UseLine = "", string DraftFilled = "", string Undo = "", string Working = "", string Close = "", string NoReply = "", string ThinkingLive = "", string Gone = "",
     string ClearDraft = "", string DraftCleared = "", string ExpandAll = "", string CollapseAll = "", string ToTop = "", string ToBottom = "", string StripButton = "", string StripOne = "", string StripMany = "", string CloseStrip = "",
     string Live = "", string LiveLabel = "", string DeletePicture = "", string DeleteArmed = "",
-    string PromptsButton = "", string PromptsNone = "", string PromptsSend = "", string Filter = "", string ClosePrompts = "",
+    string PromptsButton = "", string PromptsNone = "", string PromptsSend = "", string PromptsToDraft = "", string Filter = "", string ClosePrompts = "",
     string PromptsTab = "", string MemoryTab = "", string HistoryTab = "", string MemoryNone = "", string HistoryNone = "", string SaveDraft = "",
     string DraftEmpty = "", string DeleteRow = "", string DeleteRowArmed = "", string ClearAll = "", string ClearAllArmed = "", string MemoryOff = "",
     string MemoryModeOff = "");
@@ -460,7 +460,14 @@ public sealed record WebHistory(IReadOnlyList<string> Lines);
 public sealed record WebAsks(IReadOnlyList<WebAskView> Asks);
 
 /// <summary>A shopping line: its id, its text (<c>ShoppingText.Line</c> without the note), the note, a guessed place, ticked.</summary>
-public sealed record WebShopItem(long Id, string Text, string Note, bool Guess, bool Checked);
+public sealed record WebShopItem(long Id, string Text, string Note, bool Guess, bool Checked)
+{
+    /// <summary>The line's name alone (2026-10-16, the line's sheet: its title and the rename box).</summary>
+    public string? Name { get; init; }
+
+    /// <summary>The line's quantity (2026-10-16, the sheet's − qty +).</summary>
+    public int Qty { get; init; }
+}
 
 /// <summary>A heading of the list and its lines.</summary>
 public sealed record WebShopGroup(string Heading, IReadOnlyList<WebShopItem> Items);
@@ -480,10 +487,91 @@ public sealed record WebShopping(string Header, string? Note, IReadOnlyList<WebS
 
     /// <summary>The picker's label.</summary>
     public string? StoreLabel { get; init; }
+
+    /// <summary>
+    /// The list can be changed (2026-10-16, the list's own controls): false on the unavailable list, when the page hides the add row, 🕘, ☑ and ⊠
+    /// and every post is refused. An empty but available list is writable: an empty list is when adding matters most.
+    /// </summary>
+    public bool Writable { get; init; }
+
+    /// <summary>A line is still open (2026-10-16): the page offers ☑ all, else ☐ none.</summary>
+    public bool AnyOpen { get; init; }
+
+    /// <summary>The page's words for the list's controls (2026-10-16), the page having none of its own.</summary>
+    public WebShopWords? Words { get; init; }
 }
 
 /// <summary>A store the page's picker offers (2026-10-15): its id and its name.</summary>
 public sealed record WebShopStore(long Id, string Name);
+
+/// <summary>
+/// The Shopping tab's words for the list's controls (2026-10-16, <see cref="WebUiText.ShopWords"/>): the add box's placeholder and its ⊕, the
+/// 🕘 past items and their sheet (title, filter, no-match line with <c>{0}</c> the filter, the forget 🗑️ and its armed words), ☑ all / ☐ none,
+/// ⊠ clear ticked and its armed form, a row's › (<c>{0}</c> the line's name), the line's sheet (− and + quantity labels, the quantity's
+/// name, rename and Save, the remove 🗑️ and its armed form), the sheets' close, and the sentence for a line gone while its sheet was open
+/// (<see cref="WebUiText.NoSuchItem"/>). <c>ShoppingText</c>'s button words where they exist, the
+/// spacing that Windows Terminal's two-cell glyphs need collapsed.
+/// </summary>
+public sealed record WebShopWords(
+    string AddPlaceholder,
+    string Add,
+    string Past,
+    string PastTitle,
+    string Filter,
+    string NoMatch,
+    string Forget,
+    string ForgetArmed,
+    string TickAll,
+    string UntickAll,
+    string Clear,
+    string ClearArmed,
+    string Options,
+    string Less,
+    string More,
+    string Quantity,
+    string Rename,
+    string Save,
+    string Remove,
+    string RemoveArmed,
+    string Close,
+    string Gone);
+
+/// <summary>
+/// What was bought before and is not on the list now (2026-10-16, the 🕘 sheet), the most often first, and the caption the PC's add page
+/// shows over them (or its sentence for none).
+/// </summary>
+public sealed record WebBought(IReadOnlyList<WebBoughtItem> Items, string Caption);
+
+/// <summary>A past item: its id, its row as the PC's add page reads it (name, last quantity, how often, when last), its name and last quantity.</summary>
+public sealed record WebBoughtItem(long Id, string Text, string Name, int Qty);
+
+/// <summary>A line or a past item named by its id (2026-10-16): re-add, forget, remove.</summary>
+public sealed class WebShopId
+{
+    public long Id { get; set; }
+}
+
+/// <summary>A line's quantity, absolute (2026-10-16: the page's −/+ taps post once they stop; a repeat changes nothing).</summary>
+public sealed class WebShopQuantity
+{
+    public long Id { get; set; }
+
+    public int Qty { get; set; }
+}
+
+/// <summary>A line renamed (2026-10-16).</summary>
+public sealed class WebShopRename
+{
+    public long Id { get; set; }
+
+    public string? Name { get; set; }
+}
+
+/// <summary>Every line ticked (<see cref="On"/>) or unticked (2026-10-16), explicit.</summary>
+public sealed class WebShopCheckAll
+{
+    public bool On { get; set; }
+}
 
 /// <summary>A sign-in pasted on the page (2026-10-15): the whole link or the bare token.</summary>
 public sealed class WebSignInRequest
@@ -643,6 +731,13 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebHistory))]
 [JsonSerializable(typeof(WebAsks))]
 [JsonSerializable(typeof(WebShopping))]
+[JsonSerializable(typeof(WebShopWords))]
+[JsonSerializable(typeof(WebBought))]
+[JsonSerializable(typeof(WebBoughtItem))]
+[JsonSerializable(typeof(WebShopId))]
+[JsonSerializable(typeof(WebShopQuantity))]
+[JsonSerializable(typeof(WebShopRename))]
+[JsonSerializable(typeof(WebShopCheckAll))]
 [JsonSerializable(typeof(WebVideoHello))]
 [JsonSerializable(typeof(WebVideoWords))]
 [JsonSerializable(typeof(WebVideoSeen))]

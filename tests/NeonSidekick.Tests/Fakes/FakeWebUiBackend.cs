@@ -71,6 +71,47 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return Reply;
     }
 
+    /// <summary>
+    /// The Shopping tab's list controls (2026-10-16): every call as <c>verb args</c> (<c>add 2 milk</c>, <c>quantity 7 3</c>, <c>checkall True</c>,
+    /// <c>clear</c>…), answered with <see cref="ShopReply"/> or else <see cref="Reply"/>. <see cref="OnShop"/> lets a page test change
+    /// <see cref="List"/> as the real list would.
+    /// </summary>
+    public ConcurrentQueue<string> ShopCalls { get; } = new();
+
+    public WebReply? ShopReply { get; set; }
+
+    public Action<string>? OnShop { get; set; }
+
+    /// <summary>The past items the 🕘 sheet lists; null answers the read with a 404.</summary>
+    public WebBought? BoughtList { get; set; } = new([], "Nothing yet.");
+
+    public WebBought? ShopBought() => BoughtList;
+
+    private WebReply Shop(string call)
+    {
+        ShopCalls.Enqueue(call);
+        OnShop?.Invoke(call);
+        return ShopReply ?? Reply;
+    }
+
+    public WebReply ShopAdd(WebTextBody request, IPAddress? remote) => Shop("add " + request.Text);
+
+    public WebReply ShopReAdd(WebShopId request, IPAddress? remote) => Shop("readd " + Num(request.Id));
+
+    public WebReply ShopForget(WebShopId request, IPAddress? remote) => Shop("forget " + Num(request.Id));
+
+    public WebReply ShopQuantity(WebShopQuantity request, IPAddress? remote) => Shop("quantity " + Num(request.Id) + " " + Num(request.Qty));
+
+    public WebReply ShopRename(WebShopRename request, IPAddress? remote) => Shop("rename " + Num(request.Id) + " " + request.Name);
+
+    public WebReply ShopRemove(WebShopId request, IPAddress? remote) => Shop("remove " + Num(request.Id));
+
+    public WebReply ShopCheckAll(WebShopCheckAll request, IPAddress? remote) => Shop("checkall " + request.On);
+
+    public WebReply ShopClearTicked(IPAddress? remote) => Shop("clear");
+
+    private static string Num(long n) => n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public string PictureRun { get; set; } = "0123456789abcdef0123456789abcdef";
 
     /// <summary>The pictures the transcript holds, by id.</summary>

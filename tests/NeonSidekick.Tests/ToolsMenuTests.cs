@@ -2551,6 +2551,46 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Delete on a forbidden string is Enter's remove (2026-10-16, the user's ask), asked; on the add row it is nothing, no slot opened.</summary>
+    [Fact]
+    public async Task OnThePane_TheForbiddenStrings_DeleteRemovesAfterAYes_AndIsNothingOnTheAddRow()
+    {
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = ["Format", "rm -rf"]);
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.ShellTabTitle));
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // under Shell police: the list, on its add row
+        Push(Keys.Delete);                                   // nothing
+        Push(Keys.Down, Keys.Delete, Keys.Down, Keys.Enter); // Format removed (Yes)
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["rm -rf"], _settings.Current.ShellPoliceForbiddenStrings);
+        Assert.Contains(SettingsMenu.RemoveForbiddenQuestion("Format"), Output);
+        Assert.Contains("  · Shell police forbidden strings: Format removed\n", Output);
+        pane.Dispose();
+    }
+
+    /// <summary>Delete on a network host is Enter's remove (2026-10-16, the user's ask), asked; on the add row it is nothing, no slot opened.</summary>
+    [Fact]
+    public async Task OnThePane_TheNetworkHostList_DeleteRemovesAfterAYes_AndIsNothingOnTheAddRow()
+    {
+        _settings.Update(d => d.NetworkAllowedHosts = ["example.com", "10.0.0.0/8"]);
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab("Network"));
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the allowed hosts: the list, on its add row
+        Push(Keys.Delete);                                              // nothing
+        Push(Keys.Down, Keys.Delete, Keys.Down, Keys.Enter);            // example.com removed (Yes)
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["10.0.0.0/8"], _settings.Current.NetworkAllowedHosts);
+        Assert.Contains(SettingsMenu.RemoveHostQuestion(SettingsField.NetworkAllowedHosts, "example.com"), Output);
+        Assert.Contains(SettingsMenu.HostRemovedNotice(SettingsField.NetworkAllowedHosts, "example.com"), Output);
+        pane.Dispose();
+    }
+
     /// <summary>The forbidden-strings list's title row on the pane: the crumb, then its restore-defaults button (2026-10-08).</summary>
     private static string ForbiddenListTitle => ToolsText.Label + " › Shell police forbidden strings │ " + SettingsMenu.RestoreForbiddenButton + " ";
 

@@ -213,7 +213,77 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
         Assert.True(_backend.Checks.TryDequeue(out var c) && c.Id == 7 && c.On);
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Contains("\"tickedHeading\":\"Ticked\"", await list.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-        Assert.Equal("no-store", list.Headers.CacheControl?.ToString());
+        Assert.Equal("no-cache", list.Headers.CacheControl?.ToString());   // tagged since 2026-10-16: revalidated, never stored blind
+    }
+
+    [Fact]
+    public async Task TheShoppingList_IsTagged_AndAnUnchangedOneIsA304()
+    {
+        using var first = await _client.SendAsync(Get("/api/shopping"));
+        var etag = first.Headers.ETag;
+        Assert.NotNull(etag);
+
+        using var again = Get("/api/shopping");
+        again.Headers.IfNoneMatch.Add(etag);
+        using var same = await _client.SendAsync(again);
+        Assert.Equal(HttpStatusCode.NotModified, same.StatusCode);
+        Assert.Empty(await same.Content.ReadAsByteArrayAsync());
+
+        _backend.List = _backend.List with { Header = "Shopping list: 1 item to get." };
+        using var changedAsk = Get("/api/shopping");
+        changedAsk.Headers.IfNoneMatch.Add(etag);
+        using var changed = await _client.SendAsync(changedAsk);
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        Assert.Contains("1 item to get", await changed.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheListsControls_ReachTheBackend_AndThePastItemsAreRead()
+    {
+        (string Path, string Json, string Call)[] posts =
+        [
+            ("/api/shopping/add", "{\"text\":\"2 milk, eggs\"}", "add 2 milk, eggs"),
+            ("/api/shopping/readd", "{\"id\":4}", "readd 4"),
+            ("/api/shopping/forget", "{\"id\":5}", "forget 5"),
+            ("/api/shopping/quantity", "{\"id\":7,\"qty\":3}", "quantity 7 3"),
+            ("/api/shopping/rename", "{\"id\":7,\"name\":\"Oat milk\"}", "rename 7 Oat milk"),
+            ("/api/shopping/remove", "{\"id\":7}", "remove 7"),
+            ("/api/shopping/checkall", "{\"on\":true}", "checkall True"),
+            ("/api/shopping/clear", "", "clear"),
+        ];
+        foreach (var (path, json, call) in posts)
+        {
+            using var ok = await _client.SendAsync(Post(path, json));
+            Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+            Assert.True(_backend.ShopCalls.TryDequeue(out string? got));
+            Assert.Equal(call, got);
+        }
+
+        _backend.ShopReply = new WebReply(WebOutcome.NotFound, WebUiText.NoSuchItem);
+        using var gone = await _client.SendAsync(Post("/api/shopping/remove", "{\"id\":8}"));
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        Assert.Contains(WebUiText.NoSuchItem, await gone.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        _backend.ShopReply = new WebReply(WebOutcome.Refused, WebUiText.NothingToAdd);
+        using var refused = await _client.SendAsync(Post("/api/shopping/add", "{\"text\":\" \"}"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+        Assert.Contains(WebUiText.NothingToAdd, await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        using var forged = await _client.SendAsync(Post("/api/shopping/clear", "{}", csrf: false));
+        Assert.Equal(HttpStatusCode.Forbidden, forged.StatusCode);
+        using var bad = await _client.SendAsync(Post("/api/shopping/quantity", "{not json"));
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal(2, _backend.ShopCalls.Count);
+
+        _backend.BoughtList = new WebBought([new WebBoughtItem(4, "Bread ×2 · once · last Oct 16", "Bread", 2)], "1 line bought before and not on the list");
+        using var bought = await _client.SendAsync(Get("/api/shopping/bought"));
+        Assert.Equal(HttpStatusCode.OK, bought.StatusCode);
+        Assert.Equal("no-store", bought.Headers.CacheControl?.ToString());
+        var read = System.Text.Json.JsonSerializer.Deserialize(await bought.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebBought)!;
+        Assert.Equal(("Bread", 2, 4L), (read.Items[0].Name, read.Items[0].Qty, read.Items[0].Id));
+
+        _backend.BoughtList = null;
+        using var none = await _client.SendAsync(Get("/api/shopping/bought"));
+        Assert.Equal(HttpStatusCode.NotFound, none.StatusCode);
     }
 
     [Fact]

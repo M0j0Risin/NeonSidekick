@@ -438,9 +438,12 @@ public partial class SidekickAppTests : IDisposable
 
         string output = await Headless("hello\n\nworld\n");
 
-        Assert.Contains(SidekickApp.VersionLine, output);
-        Assert.Contains(SidekickApp.HeadlessHint, output);
-        Assert.Contains("LLM: http://127.0.0.1:1234/v1 model=llama (probed http://127.0.0.1:1234/v1)", output);
+        // The start (2026-10-16, the user's ask): the version, "Headless mode" and then the LLM line, no instructions. Not "starts with": a
+        // setup diagnostic may come first, and one may print during the connect, between the mode line and the LLM line.
+        string head = SidekickApp.VersionLine + Environment.NewLine + SidekickApp.HeadlessModeLine + Environment.NewLine;
+        Assert.Contains(head, output);
+        string llm = "LLM: http://127.0.0.1:1234/v1 model=llama (probed http://127.0.0.1:1234/v1)";
+        Assert.True(output.IndexOf(llm, StringComparison.Ordinal) > output.IndexOf(head, StringComparison.Ordinal));
         Assert.Contains("Neon: Hello", output);
         Assert.Contains("Neon: World", output);
         Assert.Equal(2, output.Split("Neon:").Length - 1); // the blank line produced no reply

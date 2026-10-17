@@ -13,8 +13,8 @@ public enum PromptsVerb
     /// <summary>The saved prompts' pane (printed without one).</summary>
     Pane,
 
-    /// <summary>Saved prompt <see cref="PromptsCommandLine.Number"/> put on the draft line.</summary>
-    Fill,
+    /// <summary>Saved prompt <see cref="PromptsCommandLine.Number"/> sent as if typed (2026-10-16, the user's ask; <c>Fill</c>, put on the draft line, until then).</summary>
+    Send,
 
     /// <summary><see cref="PromptsCommandLine.Text"/> saved.</summary>
     Save,
@@ -34,7 +34,7 @@ public sealed record PromptsCommandLine(PromptsVerb Verb, int? Number = null, st
 
 /// <summary>
 /// <c>/prompts</c>' words (2026-10-13, the user's ask: the saved prompts, <c>/browser</c>'s saved-link verbs as the model), pure: the bare
-/// word opens the pane, <c>&lt;n&gt;</c> puts that prompt on the draft line, <c>save &lt;text&gt;</c> (the rest of the line whole, line
+/// word opens the pane, <c>&lt;n&gt;</c> sends that prompt (2026-10-16; it went on the draft line until then), <c>save &lt;text&gt;</c> (the rest of the line whole, line
 /// breaks and a pasted block too), <c>remove &lt;n&gt;</c>, <c>list [--clear]</c>.
 /// </summary>
 public static class PromptsCommand
@@ -93,7 +93,7 @@ public static class PromptsCommand
 
         if (text.All(char.IsAsciiDigit))
         {
-            return new PromptsCommandLine(PromptsVerb.Fill, int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out int number) ? number : int.MaxValue, text);
+            return new PromptsCommandLine(PromptsVerb.Send, int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out int number) ? number : int.MaxValue, text);
         }
 
         return Error(SavedPromptText.Usage);
@@ -103,10 +103,11 @@ public static class PromptsCommand
     public static bool IsPane(string? args) => Parse(args).Verb is PromptsVerb.Pane or PromptsVerb.ClearList;
 
     /// <summary>
-    /// Whether the line puts a prompt on the draft by its number (<c>/prompts &lt;n&gt;</c>): under a reply it runs on the watcher ahead of
-    /// the policy, so its fill lands before the live row would empty itself (<c>ChatScreen.OnMidTurnLineAsync</c>).
+    /// Whether the line sends a prompt by its number (<c>/prompts &lt;n&gt;</c>): under a reply it runs on the watcher ahead of the policy and
+    /// queues the prompt as a typed line would be (<c>ChatScreen.OnMidTurnLineAsync</c>; 2026-10-16, it filled the draft and was <c>Fills</c>
+    /// until then).
     /// </summary>
-    public static bool Fills(string? args) => Parse(args).Verb == PromptsVerb.Fill;
+    public static bool Sends(string? args) => Parse(args).Verb == PromptsVerb.Send;
 
     /// <summary>
     /// Whether a line holding a paste is <c>/prompts save</c> all the same (the user's pick, 2026-10-13): its expanded text parses as
@@ -162,7 +163,7 @@ public static class PromptsCommand
                 return [SavedPromptText.Refusal(outcome) ?? (cleared == 0 ? SavedPromptText.NoneSaved : SavedPromptText.Cleared(cleared))];
             }
 
-            case PromptsVerb.Fill:
+            case PromptsVerb.Send:
                 return prompts.Resolve(line.Text) is { } prompt
                     ? [SavedPromptText.HeadlessPrompt(line.Number!.Value, prompt)]
                     : [SavedPromptText.NotSaved(line.Text, prompts.List().Count)];

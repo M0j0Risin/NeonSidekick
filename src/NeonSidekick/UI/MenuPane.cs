@@ -75,6 +75,9 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// <summary>The tab's <see cref="MenuPage.Moves"/> (2026-10-12): its rows are an order the move keys change.</summary>
     public bool Moves { get; init; }
 
+    /// <summary>The tab's <see cref="MenuPage.Removes"/> (2026-10-16, the user's ask): Delete removes its cursor's row, with no move keys.</summary>
+    public bool Removes { get; init; }
+
     /// <summary>
     /// The tab's <see cref="MenuPage.Sides"/> (later on 2026-10-13, the home bar's On the bar tab pinned left, center or right): Shift/Alt+←/→
     /// pin the cursor's row there, while the bare arrows still step the tabs.
@@ -254,9 +257,17 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// Alt+Home/End (and Shift+Home/End) <see cref="int.MinValue"/> or <see cref="int.MaxValue"/> (to the top, to the bottom),
     /// Delete one with <see cref="MenuPick.Remove"/>. Shift is there beside Alt because Windows Terminal binds Alt+arrows to
     /// moving between panes and Terminal.app sends Option+↑ as a bare ESC first. Taken from the tab on a tabbed page. False (every
-    /// other page): the keys are what they were.
+    /// other page): the keys are what they were. A page that removes rows but keeps no order sets <see cref="Removes"/> instead.
     /// </summary>
     public bool Moves { get; init; }
+
+    /// <summary>
+    /// Delete removes the cursor's row (2026-10-16, the user's ask: the queue pane first, then every list that removes one): Delete returns a
+    /// <see cref="MenuPick"/> with <see cref="MenuPick.Remove"/>, as on a <see cref="Moves"/> page, while Shift/Alt+arrows stay what they were;
+    /// the host does what its own remove does, asking where that asks, and skips a row that is no item. Before the filter's edit, which reads
+    /// Backspace alone, so Delete never edits a typed filter. Taken from the tab on a tabbed page. False: Delete is what it was.
+    /// </summary>
+    public bool Removes { get; init; }
 
     /// <summary>
     /// The rows are an order in two groups, pinned left and pinned right (2026-10-13, the user's ask: the hint bar's and the tool
@@ -282,7 +293,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
         var shown = tabs[tab].Shown;
-        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Sides = shown.Sides };
+        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Removes = shown.Removes, Sides = shown.Sides };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -1027,9 +1038,10 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Toggle: true, Sub: page.Sub);
                 }
 
-                if (page.Moves && count > 0 && MoveOf(k) is { } move)
+                if (count > 0 && MoveOf(k) is { } move && (page.Moves || (page.Removes && move == 0)))
                 {
                     // An order the user changes (2026-10-12, the home bar's picker): the host moves or removes the row and shows the page again.
+                    // A Removes page (2026-10-16) takes Delete alone.
                     _status.Clear();
                     return move == 0
                         ? new MenuPick(page.Tab, _cursor, Sub: page.Sub, Remove: true)
@@ -1213,7 +1225,7 @@ public sealed class MenuPane : INoticeSink
 
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
         var shown = tabs[tab].Shown;
-        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Sides = shown.Sides };
+        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Removes = shown.Removes, Sides = shown.Sides };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;

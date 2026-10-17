@@ -270,7 +270,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A text for the draft line (later on 2026-10-14): from the PC, <paramref name="pc"/> as ever (the row's draft); from the page, the page's
-    /// draft — a <c>draft</c> event it puts ahead of what it has, with an undo, held until a page takes it.
+    /// draft — a <c>draft</c> event it puts ahead of what it has, with an undo, held until a page takes it. <c>/rewind</c>'s alone since
+    /// 2026-10-16, when <c>/prompts &lt;n&gt;</c> came to send its prompt.
     /// </summary>
     private void ToDraft(string text, Action pc)
     {

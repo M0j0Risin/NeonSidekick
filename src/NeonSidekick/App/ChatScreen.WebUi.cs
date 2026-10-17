@@ -708,8 +708,17 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        string label = line.Text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
-        return new SubmittedLine(line.Text, line.Text.TrimEnd(), [], label) { FromWeb = true, AsText = line.AsText, Remote = line.Remote };
+        return WebLine(line.Text, line.AsText, line.Remote);
+    }
+
+    /// <summary>
+    /// A page's line from its text alone (2026-10-16, out of <see cref="TakeWebLine"/> for a saved prompt the page's <c>/prompts &lt;n&gt;</c>
+    /// sends): never through the PC's paste store, its label one row, routed back to the page when withdrawn.
+    /// </summary>
+    private static SubmittedLine WebLine(string text, bool asText, System.Net.IPAddress? remote)
+    {
+        string label = text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
+        return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote };
     }
 
     /// <summary>A message from the page, withdrawn before the model answered: back to the page's draft.</summary>

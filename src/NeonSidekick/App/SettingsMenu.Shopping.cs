@@ -36,7 +36,8 @@ internal sealed partial class SettingsMenu
     /// The first row adds a store (its name typed on the input row; its reference folder made); Enter on a store makes it the one the list
     /// walks through. The buttons rename the highlighted store (its folders follow the name, <see cref="ShoppingList.RenameStore"/>), remove it after a yes (its layout and cached
     /// pictures go, its reference documents stay), open its reference folder, and read its documents again. The band under a store says
-    /// what its layout holds. Without the pane there are no buttons: the add row and Enter still work. True when anything changed.
+    /// what its layout holds. Delete is remove (2026-10-16, the user's ask), asked as ever; on the add row nothing. Without the pane there
+    /// are no buttons: the add row and Enter still work. True when anything changed.
     /// </summary>
     public async Task<bool> ManageShoppingStoresAsync(CancellationToken cancellationToken)
     {
@@ -59,14 +60,20 @@ internal sealed partial class SettingsMenu
             {
                 Footer = (_, row) => row > 0 && row <= stores.Count ? StoreFooter(store, stores[row - 1]) : null,
             };
-            if (await PickChecklistAsync(page, cursor, cancellationToken, StoreButtons).ConfigureAwait(false) is not { } pick)
+            if (await PickListAsync(page, cursor, cancellationToken, StoreButtons).ConfigureAwait(false) is not { } pick)
             {
                 return changed;
             }
 
             var shop = pick.Row > 0 && pick.Row <= stores.Count ? stores[pick.Row - 1] : null;
             on = shop?.Id ?? on;
-            if (pick.Button < 0 && shop is null)
+            if (pick.Remove && shop is null)
+            {
+                on = null;   // Delete on the add row: nothing to remove, the cursor left there
+                continue;
+            }
+
+            if (pick.Button < 0 && !pick.Remove && shop is null)
             {
                 // The add row: a name typed under the list.
                 if (await TypeStoreNameAsync(page, 0, "", cancellationToken).ConfigureAwait(false) is { } name)
@@ -85,7 +92,7 @@ internal sealed partial class SettingsMenu
                 continue;   // a button on the add row: nothing to act on
             }
 
-            switch (pick.Button)
+            switch (pick.Remove ? RemoveStoreIndex : pick.Button)   // Delete is remove, before a no-button pick shops there
             {
                 case < 0:
                     Say(list.UseStore(shop));

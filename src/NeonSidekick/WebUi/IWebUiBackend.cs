@@ -80,6 +80,35 @@ public interface IWebUiBackend
     /// <summary>The store the shopping list is walked through, picked on the page (2026-10-15).</summary>
     WebReply UseStore(WebStoreRequest request, IPAddress? remote);
 
+    // The Shopping tab's list controls (2026-10-16, the user's ask): defaults that find nothing, for a backend without a list.
+
+    /// <summary>What was bought before and is not on the list now, for the 🕘 sheet; null where there is no list (a 404).</summary>
+    WebBought? ShopBought() => null;
+
+    /// <summary>The add box's items on the list (<c>2 milk, eggs</c>).</summary>
+    WebReply ShopAdd(WebTextBody request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A past item added again at its last quantity.</summary>
+    WebReply ShopReAdd(WebShopId request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A past item forgotten, the page's two taps having been the yes.</summary>
+    WebReply ShopForget(WebShopId request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A line's quantity, absolute, floored at 1.</summary>
+    WebReply ShopQuantity(WebShopQuantity request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A line renamed (a name another line has merges the two, as at the PC).</summary>
+    WebReply ShopRename(WebShopRename request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>A line removed, the page's two taps having been the yes.</summary>
+    WebReply ShopRemove(WebShopId request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>Every line ticked or unticked, explicit.</summary>
+    WebReply ShopCheckAll(WebShopCheckAll request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The ticked lines cleared, the page's two taps having been the yes.</summary>
+    WebReply ShopClearTicked(IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>
     /// This run's tag in every picture's address (2026-10-14): 128 random bits made once per process, so an address from another run of the app
     /// (a phone's old tab, a cached page) names nothing.

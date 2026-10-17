@@ -21,7 +21,11 @@ internal sealed partial class SettingsMenu
     /// adds one; Enter renames or removes (after a yes; its locations and facts keep their places with no section). <b>Facts</b>: every
     /// placement, filtered by typing; Enter moves it (the user's from then on), changes its kind or removes it. <b>Guesses</b>: the
     /// model's guesses with the lines each places now, the tab it opens on while there are any; Enter keeps one (the user's), moves it or
-    /// removes it. Tabbed pages carry no buttons, so a row's actions are a page of their own (<c>/skills</c> › a skill's shape).
+    /// removes it. Tabbed pages carry no buttons, so a row's actions are a page of their own (<c>/skills</c> › a skill's shape). Delete on a
+    /// row goes straight to its tab's remove (2026-10-16, the user's ask, <see cref="MenuTab.Removes"/>), skipping that page: an aisle or a
+    /// section after a yes, a fact or a guess at once, as their own removes; an add row or a dim row is nothing. On Aisles, Shift+↑/↓ move
+    /// the highlighted aisle one place along the walk and Shift+Home/End to its start or end (2026-10-16, the user's ask, the app's move
+    /// keys, <see cref="MenuTab.Moves"/>), the cursor going with it and the new place said on the status line.
     /// </summary>
     public async Task EditStoreLayoutAsync(ShopStore shop, CancellationToken cancellationToken)
     {
@@ -61,15 +65,16 @@ internal sealed partial class SettingsMenu
                 : [Theme.DimMarkup(ShoppingText.NoGuessesRow)];
             var tabs = new MenuTab[]
             {
-                new(ShoppingText.AislesTab, aisleRows) { Hint = ShoppingText.LayoutKeys },
-                new(ShoppingText.SectionsTab, sectionRows) { Hint = ShoppingText.LayoutKeys },
+                new(ShoppingText.AislesTab, aisleRows) { Hint = ShoppingText.AislesKeys, Moves = locations.Count > 0 },   // Moves takes Delete too
+                new(ShoppingText.SectionsTab, sectionRows) { Hint = ShoppingText.LayoutKeys, Removes = sections.Count > 0 },
                 new(ShoppingText.FactsTab, factRows)
                 {
                     Hint = MenuFilter.Hint(ShoppingText.FactsKeys, filter),
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shownFacts.Count, facts.Count),
+                    Removes = shownFacts.Count > 0,
                 },
-                new(ShoppingText.GuessesTitle(guesses.Count), guessRows) { Hint = ShoppingText.LayoutKeys },
+                new(ShoppingText.GuessesTitle(guesses.Count), guessRows) { Hint = ShoppingText.LayoutKeys, Removes = guesses.Count > 0 },
             };
             var page = MenuPage.Tabbed(Crumb(ShoppingText.LayoutTitle(shop)), tabs, tab, ShoppingText.LayoutKeys) with { TabCursors = [locations.Count > 0 ? 1 : 0, sections.Count > 0 ? 1 : 0, 0, 0] };
             if (await _pane.PickAsync(page, cursor < 0 ? (page.TabCursors![tab]) : cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
@@ -84,6 +89,62 @@ internal sealed partial class SettingsMenu
             {
                 filter = typed;
                 cursor = -1;
+                continue;
+            }
+
+            if (pick.Move != 0)
+            {
+                // Shift+↑/↓, Shift+Home/End on Aisles (2026-10-16, the user's ask): the aisle along the walk, the cursor going with it.
+                if (tab == AislesTabIndex && pick.Row > 0 && pick.Row - 1 < locations.Count)
+                {
+                    var moving = locations[pick.Row - 1];
+                    Say(list.MoveLocation(shop, moving, pick.Move));
+                    int now = store.Locations(shop.Id).ToList().FindIndex(l => l.Id == moving.Id);
+                    cursor = now >= 0 ? now + 1 : cursor;
+                }
+
+                continue;
+            }
+
+            if (pick.Remove)
+            {
+                // Delete (2026-10-16): the tab's own remove, its action page skipped; the add rows and the dim rows are nothing.
+                switch (tab)
+                {
+                    case AislesTabIndex when pick.Row > 0 && pick.Row - 1 < locations.Count:
+                    {
+                        var location = locations[pick.Row - 1];
+                        if (await ConfirmAsync(ShoppingText.RemoveLocationPrompt(location, facts.Count(f => f.LocationId == location.Id)), cancellationToken, close: false).ConfigureAwait(false))
+                        {
+                            Say(list.RemoveLocation(shop, location));
+                        }
+                        else
+                        {
+                            Sink.Notice(ChatScreen.KeptNotice);
+                        }
+
+                        break;
+                    }
+
+                    case SectionsTabIndex when pick.Row > 0 && pick.Row - 1 < sections.Count:
+                    {
+                        var section = sections[pick.Row - 1];
+                        if (await ConfirmAsync(ShoppingText.RemoveSectionPrompt(section), cancellationToken, close: false).ConfigureAwait(false))
+                        {
+                            Say(list.RemoveSection(shop, section));
+                        }
+
+                        break;
+                    }
+
+                    case FactsTabIndex when pick.Row < shownFacts.Count:
+                        Say(list.RemoveFact(shop, shownFacts[pick.Row]));
+                        break;
+                    case GuessesTabIndex when pick.Row < guesses.Count:
+                        Say(list.RemoveFact(shop, guesses[pick.Row]));
+                        break;
+                }
+
                 continue;
             }
 

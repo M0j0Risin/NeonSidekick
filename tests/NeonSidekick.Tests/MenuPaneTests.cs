@@ -500,6 +500,64 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// A <see cref="MenuPage.Removes"/> page (2026-10-16, the user's ask: Delete on every list that removes a row): Delete returns a
+    /// <see cref="MenuPick.Remove"/> for the cursor's row, while Shift+↓ stays the arrow it was (no move); a page without it ignores Delete.
+    /// </summary>
+    [Fact]
+    public async Task ARemovesPage_DeleteRemovesTheCursorsRow_ShiftArrowsMoveNothing()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var page = Page("one", "two", "three") with { Removes = true };
+        Assert.False(page.Moves);
+
+        Push(Keys.Down, Keys.Delete);
+        Assert.Equal(new MenuPick(0, 1, Remove: true), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        var shiftDown = new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, shift: true, alt: false, control: false);
+        Push(shiftDown, Keys.Enter);
+        var picked = (await menu.PickAsync(page, 0, CancellationToken.None))!.Value;
+        Assert.Equal((0, false), (picked.Move, picked.Remove));
+
+        Push(Keys.Delete, Keys.Enter);   // no Removes: Delete is nothing, Enter picks
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Page("one", "two"), 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    /// <summary>A tab's <see cref="MenuTab.Removes"/> is taken by the tabbed page (2026-10-16): Delete removes on that tab, and is nothing on the next.</summary>
+    [Fact]
+    public async Task ARemovesTab_DeleteRemovesOnThatTabAlone()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var page = MenuPage.Tabbed("Layout", [new MenuTab("Aisles", ["a", "b"]) { Removes = true }, new MenuTab("Other", ["c"])], 0, "h");
+        Assert.True(page.Removes);
+
+        Push(Keys.Down, Keys.Delete);
+        Assert.Equal(new MenuPick(0, 1, Remove: true), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        Push(Keys.Right, Keys.Delete, Keys.Enter);
+        Assert.Equal(new MenuPick(1, 0), await menu.PickAsync(page, 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    /// <summary>Delete with a filter typed (2026-10-16) removes the filtered row the cursor is on; the filter is left alone (its edit reads Backspace).</summary>
+    [Fact]
+    public async Task ARemovesPage_WithAFilterTyped_DeleteRemoves_AndLeavesTheFilter()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPage("Saved", ["two", "three"], "h") { Filter = "t", Removes = true };
+        var host = new MenuPane(pane, _keys);
+
+        Push(Keys.Down, Keys.Delete);
+        Assert.Equal(new MenuPick(0, 1, Remove: true), await host.PickAsync(menu, 0, CancellationToken.None));
+        host.Close();
+    }
+
     [Fact]
     public void TabBodyRows_IsTheTallestTabsCaptionAndRows_NoneForAOneListPage()
     {

@@ -24,7 +24,7 @@ public sealed class PromptsCommandTests : IDisposable
     [Theory]
     [InlineData("", PromptsVerb.Pane)]
     [InlineData("  ", PromptsVerb.Pane)]
-    [InlineData("3", PromptsVerb.Fill)]
+    [InlineData("3", PromptsVerb.Send)]
     [InlineData("save Summarize this.", PromptsVerb.Save)]
     [InlineData("SAVE x", PromptsVerb.Save)]
     [InlineData("remove 2", PromptsVerb.Remove)]
@@ -56,16 +56,16 @@ public sealed class PromptsCommandTests : IDisposable
     }
 
     [Fact]
-    public void IsPane_AndFills()
+    public void IsPane_AndSends()
     {
         Assert.True(PromptsCommand.IsPane(""));
         Assert.True(PromptsCommand.IsPane("list --clear"));
         Assert.False(PromptsCommand.IsPane("list"));
         Assert.False(PromptsCommand.IsPane("2"));
         Assert.False(PromptsCommand.IsPane("save x"));
-        Assert.True(PromptsCommand.Fills("2"));
-        Assert.False(PromptsCommand.Fills(""));
-        Assert.False(PromptsCommand.Fills("save 2"));
+        Assert.True(PromptsCommand.Sends("2"));
+        Assert.False(PromptsCommand.Sends(""));
+        Assert.False(PromptsCommand.Sends("save 2"));
     }
 
     [Fact]

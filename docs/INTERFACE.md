@@ -80,13 +80,13 @@ A list opens over the input line as you type `/` at the start, a command's argum
 
 ### Pane keys
 
-In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key letters act at once.
+In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key letters act at once. On a list whose rows can be removed, Delete removes the highlighted one as that list's own remove does, asking where it asks (the Docker server match words, the Network host lists and the *Advisor list* too).
 
 | Pane | Keys |
 |---|---|
 | **Conversation** | |
-| `/memory` | Enter: edit, disable/enable, forget (asks) · `a` add · `m` *Memory mode* |
-| `/queue` | Enter removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
+| `/memory` | Enter: edit, disable/enable, forget (asks) · Delete forgets (asks) · `a` add · `m` *Memory mode* |
+| `/queue` | Enter or Delete removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc or a double-click outside done |
@@ -98,14 +98,14 @@ In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key lette
 | `/ad` card | Columns under a dim header row, the long ones cut to the pane · a double-click on a row (a member, a result, a group, the manager or owner) opens that object's card, Esc goes back to the one before · `c` copy (the whole card, nothing cut) · `a` ask · on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them · Shift+letter starts a find |
 | `/youtube list` | Enter plays |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
-| `/prompts` | Enter puts the prompt on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) |
+| `/prompts` | Enter sends the prompt (queued while a reply runs) · `d` puts it on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) · `r` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | `/browser list` | Enter opens in the [Browser window](#the-browser-window) · `a` add · `n` name · `e` address |
-| `/youtube list`, `/prompts`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
+| `/youtube list`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | **Tools and safety** | |
 | `/tools shell` | `c` the allowed commands · `p` the police |
-| `/tools shell allowed` | Enter removes (asks) · `p` steps *Shell command policy* (yolo asks; a no goes on to off) · type to filter |
+| `/tools shell allowed` | Enter or Delete removes (asks) · `p` steps *Shell command policy* (yolo asks; a no goes on to off) · type to filter |
 | `/tools shell police` | `s` the forbidden strings |
-| *Shell police forbidden strings* | top row adds · Enter removes (asks) · `r` restore defaults (asks) |
+| *Shell police forbidden strings* | top row adds · Enter or Delete removes (asks) · `r` restore defaults (asks) |
 | `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows only) |
 | `/tools files` · `image` · `obsidian` · `advisors` · `print` | `b` *File browser/tree mode* · `e` *Image edit mode* · `v` *Obsidian vault* · `a` *Advisor list* · `p` *Print default printer* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
@@ -119,12 +119,12 @@ In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key lette
 | `/docker` | Enter opens · `r` refresh · `l` LLM servers only · type to filter |
 | **Skills** | |
 | `/skills` › a skill | Enter on a row: move (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
-| `/skills` › a skill › `revert` | Enter puts the version back · `d` removes it (asks) · `c` clear all (asks) |
+| `/skills` › a skill › `revert` | Enter puts the version back · `d` or Delete removes it (asks) · `c` clear all (asks) |
 | **Shopping** | |
-| `/shopping` | Enter or Space ticks · `i` add · `p` place at an aisle or section · `n` rename · `r` remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |
-| Its add page (`i`) | Enter on the first row types new items · Enter on a past item adds it · `x` forgets it · type to filter |
-| *Shopping stores* (`s`) | Enter shops there (the first row adds one) · `l` layout · `n` rename · `r` remove (asks) · `f` its folder · `i` reindex |
-| A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes |
+| `/shopping` | Enter or Space ticks · `i` add · `p` place at an aisle or section · `n` rename · `r` or Delete remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |
+| Its add page (`i`) | Enter on the first row types new items · Enter on a past item adds it · `x` or Delete forgets it · type to filter |
+| *Shopping stores* (`s`) | Enter shops there (the first row adds one) · `l` layout · `n` rename · `r` or Delete remove (asks) · `f` its folder · `i` reindex |
+| A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Delete removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to its start or end |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
 | `/toolbar edit`, `/perfbar edit`, *Status bar* | see [Bar checklists](#bar-checklists) |
@@ -448,7 +448,7 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
 * **Chat off:** the phone has no transcript, no message line, and can't answer the PC's questions (they're the Chat tab's); they open on the PC as always. The Chat badge goes with it. The PC is unchanged.
 * **The pages:** in one fixed dark style. The page's own draft line stays in the browser; it never shows what you type at the PC, nor the PC what you type there. Sent messages share one history, though: a line sent from the page joins the profile's message history as you send it, so ↑ brings it back at the PC too, and ↑/↓ on the page step through the history as at the PC (on a draft of several rows, from its first or last row). A draft you clear at the PC with Esc never reaches the page. Enter sends on a desktop; on a phone it adds a line (tap ➤ to send). Stop (■) shows while a reply runs. A ✕ inside the message box while it holds text clears it; *Undo* under it puts the text back, unless you've typed since, and ↑ brings it back too.
 * **Prompts, memory and history:** 📣 at the message box's left opens a sheet with three tabs, on the one you used last (`/prompts` sent from the page opens it on Prompts). Each tab is read fresh as it opens.
-  * **📣 Prompts:** the profile's saved prompts, numbered as at the PC. A tap on one puts it on the message line ahead of what's there, with *Undo*; its ➤ sends it at once, as if typed, and leaves the message line alone. ⇪ saves the message line as a new prompt and leaves it there.
+  * **📣 Prompts:** the profile's saved prompts, numbered as at the PC. A tap on one sends it at once, as if typed (queued while a reply runs), and leaves the message line alone; its ✎ puts it on the message line ahead of what's there, with *Undo*. ⇪ saves the message line as a new prompt and leaves it there.
   * **💾 Memory:** the profile's memories, a turned-off one marked *off*. ⇪ saves the message line as a memory, as `/remember` does; with *Memory mode* off the tab says so and saving is refused.
   * **🕘 History:** the message history, newest first. A tap puts a line on the message line, ➤ sends it. *Clear all* empties it, stored and at the PC, as `/msgclear` does.
   * **Deleting:** a prompt's or a memory's 🗑️, and *Clear all*, take two taps: the first turns it red for 3 seconds, the second acts. Esc takes the red back first.
@@ -464,11 +464,16 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
 * **Messages from the page:** sent from the idle line, after anything queued at the PC. During a reply they wait (counted in the status bar's Queued, not listed in `/queue`), and they're sent as the reply ends even under *Queue mode* `manual`; a held queue (*Queue cancel mode* `hold`) holds them too. `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty` drops them and puts the text back on the page; `/queue clear` leaves them. Slash commands run only with *Web UI commands* on (see Commands from the page). At most 20 wait at once; a message holds up to 48 KB.
 * **Stop on the page:** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or `/loop`'s wait and each pass's reply, and stops speech. Before the reply's first word it takes the message back to the page, as Esc does at the PC. It never stops a model loading (Ctrl+C at the PC) or your editor under `/draft`.
 * **Questions:** a command's approval, `ask_user`, an allow (the camera, the screen, a database write), a yes/no (Docker, Home Assistant, a print, the shopping list's clear, an advisor), the plan's approval and a reflection's skill show at the PC and on the page at once, in the PC's own words; the first answer wins, and the PC says when the page answered. The page shows a command or a statement whole. Not on the page: Close gaps (the plan's), the bot check, the camera's shutter. While the PC waits on one of those, the page says "waiting for an answer at the PC".
-* **Shopping:** the list in the active store's aisle order, as the model reads it; a tap ticks or unticks a line. With two or more stores a *Store* picker sits over the list: a pick makes that store the active one, as `/shopping store <name>` does, and the list is reordered for it at once. The page re-reads the list (and the store) every five seconds while it's open, and the PC's open `/shopping` pane follows a store or a tick made from the page within a second. A tick or a store picked on the page flashes on the PC's hint row (📱).
-* **The dropdown:** as at the PC, typing completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands and their words. Only the commands and words the page may run are offered. ↑/↓ move, Tab or Enter take one, Esc closes it, or tap a row; Enter sends only while it's closed. `@` and the path words list the working directory only while *File tools* is on. *Web UI connection details* off names the `%` and `*` connections without their server and database.
+* **Shopping:** the list in the active store's aisle order, as the model reads it; a tap ticks or unticks a line. With two or more stores a *Store* picker sits over the list: a pick makes that store the active one, as `/shopping store <name>` does, and the list is reordered for it at once. The page re-reads the list (and the store) every five seconds while it's open.
+  * **Adding:** the *Add items* box over the list takes what `/shopping add` does (commas between items, a quantity before or after: `2 milk, eggs`); Enter or ⊕ adds them, at most 100 at once. 🕘 opens the past items, what was bought before and isn't on the list now (the PC's add page): a tap adds one again at its last quantity, and 🗑️ forgets it. With more than eight, a filter box sits over them.
+  * **A line's sheet:** the › at a row's end, or a long-press on the row, opens it: − and + change the quantity (posted once the taps stop), a rename box with Save (a name another line has merges the two, as at the PC), and 🗑️ removes the line. Back, ✕, Esc or a tap outside closes it.
+  * **The whole list:** ☑ all ticks every line (☐ none unticks them once all are ticked), and ⊠ clear ticked takes the ticked lines off (they're remembered as bought). Remove, forget and clear take two taps (the first turns the button red for 3 seconds).
+  * **At the PC only:** placing a line, the stores beyond the picker (adding, renaming, removing), the layout editor, a store's folder and its reindex, and clearing the whole list.
+  * **The PC follows:** every change made on the page flashes on the PC's hint row (📱), and the PC's open `/shopping` pane follows it within a second.
+* **The dropdown:** as at the PC, typing completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands and their words. Only the commands and words the page may run are offered. ↑/↓ move, Tab or Enter take one, Esc closes it, or tap a row; Enter sends only while it's closed. `@` and the path words list the working directory only while *File tools* is on. The `%` and `*` connections show by name; *Web UI connection details* adds their server and database.
 * **A new version:** after an upgrade the page reloads itself once, its draft kept, so a phone left open runs the new page. A page opened before this version doesn't; reload it by hand once.
 * **The Chat badge:** on Home, Shopping and YouTube, the Chat link shows a dot while a reply runs and a count while a question waits for you (or the PC waits on an answer), and the tab's title shows `(n)`. An Android phone vibrates once on a new question; an iPhone can't (Safari has no vibration), so the badge and the title carry it there.
-* **The PC sees the phone:** a ticked line, a store, a tile, a room's switch, a device's row, a scene, a question for Assist, the video remote, a YouTube tab's Play here or its Resume, a saved video played, moved, removed or saved, or the saved list cleared flashes on the PC's hint row for a moment (📱 Kitchen light: toggle), even over a reply's spinner. Nothing goes in the transcript.
+* **The PC sees the phone:** a line added, ticked, changed or removed, a past item forgotten, a store, a tile, a room's switch, a device's row, a scene, a question for Assist, the video remote, a YouTube tab's Play here or its Resume, a saved video played, moved, removed or saved, or the saved list cleared flashes on the PC's hint row for a moment (📱 Kitchen light: toggle), even over a reply's spinner. Nothing goes in the transcript.
 * **Too fast:** taps (5 a second, bursts of 15; the sheet's saves, deletes and *Clear all*, and the saved videos' plays, moves, removes, saves and *Clear all* count as taps), Ask the house (one every 2 seconds), pasted sign-ins (5 a minute) and the YouTube tab's player reports and in-view notes (10 a second, bursts of 30) are counted per address; past that the page says to slow down and doesn't try again by itself.
 * **A reconnect:** a finished thinking block comes back as its summary alone, and a folded diff of more than 200 rows as its fold; either is read when you open it, or says it's no longer available if the chat let it go.
 * **Add to Home Screen:** the page has a manifest and icons, so a phone installs it as an app that opens full screen on Chat. An app added from Safari keeps cookies of its own and opens no link: paste the sign-in link (or its token) on its sign-in page; the page reloads signed in where it was. No notifications: they need HTTPS, and the page is plain HTTP.
@@ -530,7 +535,7 @@ With *Web UI commands* on (off by default; `/settings` › Client › Web UI), t
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |
 
 * **`/loop`:** a loop of messages runs as at the PC; a looped `/imagine` runs, a looped `/read` is refused (it is the PC's). Stop ends a pass or the wait between two, and with it the loop. A line `/loop` can't read gets the PC's own error. Bare `/shopping` points at the Shopping tab, or at *Web UI shopping controls* while the tab is off; `/youtube list` likewise points at the YouTube tab's saved videos, or at *Web UI YouTube controls*.
-* **What differs from the PC:** `/ha` and `/docker` ask before a change (they act unasked at the PC); `/msgclear` asks its yes on the page and the PC at once; `/ha` runs a read or a safe service (*Home Assistant safe services*) without asking. A bare `/docker` lists the containers. `/prompts <n>` and `/rewind` put the text on the page's draft, ahead of what's there, with *Undo*; a rewound message's pictures, PDFs and pasted blocks come back on the PC's line only. `/test` clears the chat first, as at the PC.
+* **What differs from the PC:** `/ha` and `/docker` ask before a change (they act unasked at the PC); `/msgclear` asks its yes on the page and the PC at once; `/ha` runs a read or a safe service (*Home Assistant safe services*) without asking. A bare `/docker` lists the containers. `/rewind` puts the text on the page's draft, ahead of what's there, with *Undo* (`/prompts <n>` sends the prompt); a rewound message's pictures, PDFs and pasted blocks come back on the PC's line only. `/test` clears the chat first, as at the PC.
 * **Refused when it runs:** `/model <id>` and `/reasoning` while connecting would mean scanning for a server (no *LLM URL*, the scan on), or `/model <id>` naming an embedded model not installed: those pickers are the PC's. The settings are checked again as the line runs, so one switched off meanwhile is refused there, with an error line.
 * **Stop:** the page's Stop ends `/claude` too. A model loading after `/model` or `/reasoning` can't be stopped from the page (Ctrl+C at the PC).
 * **An unknown command:** the page offers *Send as a message* (a path like `/home/me` goes to the model as typed), and for `//tools` *Use /tools*.

@@ -965,9 +965,9 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebUiConnectionDetails,  // later on 2026-10-14: the % and * notes in the page's dropdown
                 SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer,   // 2026-10-15: the event logs
                 SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal,
-                SettingsField.WebUiHomeControls,       // 2026-10-15, under the connection details: the Home tab acts
-                SettingsField.WebUiProfileTheme,       // 2026-10-15: the pages wear the profile's theme
-                SettingsField.WebUiChatControls,       // later on 2026-10-15: the Chat tab only while on (the page section's first row)
+                SettingsField.WebUiHomeControls,       // 2026-10-15, the Tabs run under the chat controls since 2026-10-16: the Home tab acts
+                SettingsField.WebUiProfileTheme,       // 2026-10-15: the pages wear the profile's theme (the Tabs run's first since 2026-10-16)
+                SettingsField.WebUiChatControls,       // later on 2026-10-15: the Chat tab only while on (the Tabs run, under the theme)
                 SettingsField.WebUiShoppingControls,   // later on 2026-10-15: the Shopping tab only while on
                 SettingsField.TimerTools,              // later on 2026-10-15: the timer tools' switch (/tools › Core › Timers)
                 SettingsField.FileDeletesToRecycleBin, // later on 2026-10-15: deletes to the Recycle bin (/tools › Files › File, second)
@@ -3408,8 +3408,9 @@ public partial class SettingsMenuTests : IDisposable
         // Each tab under the strip, padded to its own column (26, 32, 19, 26), the whole tab in view, nothing of another tab on it.
         // Every tab headed since later on 2026-10-10 (the user's ask), Sessions' save thinking up in the Saving run.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
-        // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under one heading; the page's two rows under another (later that day).
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               lan\n" + MenuLayout.Heading("The page", 120) + "\n  Web UI chat controls       on\n  Web UI commands            off\n  Web UI connection details  on\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI YouTube controls    off\n  Web UI profile theme       on\n", 120);
+        // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under Server; since 2026-10-16 (the user's ask) what the
+        // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then.
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               lan\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI YouTube controls    off\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM plan gap passes       5 passes\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
@@ -5369,6 +5370,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Read aloud", "Voices"], SettingsMenu.TabSections[SettingsTab.Tts].Select(s => s.Title));
         Assert.Equal(["Listening", "Wake word", "Interruptions"], SettingsMenu.TabSections[SettingsTab.Stt].Select(s => s.Title));
         Assert.Equal(["Saving", "Titles", "Search tool"], SettingsMenu.TabSections[SettingsTab.Sessions].Select(s => s.Title));
+        Assert.Equal(["Server", "Guardrails", "Tabs"], SettingsMenu.TabSections[SettingsTab.WebUi].Select(s => s.Title));   // 2026-10-16, the user's ask
         Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));
         Assert.Equal(Enum.GetValues<SettingsTab>(), SettingsMenu.TabSections.Keys.Order());   // every tab headed
         Assert.All(SettingsMenu.TabSections, tab => Assert.Equal(SettingsMenu.TabFields[(int)tab.Key][0], tab.Value[0].First));   // each opens on a heading

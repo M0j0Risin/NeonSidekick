@@ -3310,11 +3310,11 @@ public sealed class AppSettingsData
     public bool WebUiCommands { get; set; }
 
     /// <summary>
-    /// Whether the Web UI's dropdown shows the <c>%</c> and <c>*</c> connections' notes in full (later on 2026-10-14, the user's call: on by default):
+    /// Whether the Web UI's dropdown shows the <c>%</c> and <c>*</c> connections' notes in full (later on 2026-10-14; off by default since 2026-10-16, the user's call, on from 2026-10-14):
     /// off, it lists their names alone. The dropdown only: the chat shows whatever the model says. The Chat tab's alone (<see cref="WebUiChatControls"/>).
     /// Read at each request. No variable.
     /// </summary>
-    public bool WebUiConnectionDetails { get; set; } = true;
+    public bool WebUiConnectionDetails { get; set; }
 
     /// <summary>
     /// Whether the Web UI has its Home tab (2026-10-15, the user's call: off by default): on, the tab shows the home bar's tiles, and they

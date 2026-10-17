@@ -106,6 +106,33 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>
+    /// Delete on an advisor goes straight to the Remove question (2026-10-16, the user's ask), skipping the change-role/remove page; on the
+    /// add row it is nothing (no profile picker).
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheAdvisorList_DeleteAsksToRemove_AndIsNothingOnTheAddRow()
+    {
+        Profiles.Create(_dir, "dba", new AppSettingsData());
+        Profiles.Create(_dir, "ux", new AppSettingsData());
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "architect"), new AdvisorEntry("ux", "designer")]);
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Advisors);
+        Down(1);
+        Push(Keys.Enter);                       // the list: + Add an advisor…
+        Push(Keys.Delete);                      // nothing
+        Push(Keys.Down, Keys.Delete);           // dba: the Remove question at once
+        Push(Keys.Char('y'), Keys.Enter);       // yes
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([new AdvisorEntry("ux", "designer")], _settings.Current.AdvisorList);
+        Assert.Contains(SettingsMenu.RemoveAdvisorQuestion("dba"), Output);
+        Assert.Contains(SettingsMenu.AdvisorRemovedNotice("dba"), Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_TheAdvisorList_SaysWhenNoProfileIsLeft_AndMarksAMissingOne()
     {

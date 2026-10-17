@@ -917,7 +917,8 @@ internal sealed class SkillsMenu
     /// <para>Since 2026-10-07 (the user's pick) the title row's <see cref="VersionButtons"/> forget kept versions: <c>d</c> the highlighted
     /// one, <c>c</c> every one, each after a yes with No on the cursor (<see cref="SkillRecords.ForgetVersions"/>; the text in place and the
     /// skill's record stay). The list shows again after a removal, and goes when nothing is left; a removal counts as a change (the
-    /// Offered tab's version moves).</para>
+    /// Offered tab's version moves). Delete is <c>d</c> (2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>), handled before Enter's
+    /// put back, so it never restores a version.</para>
     /// </summary>
     private async Task<bool> PickVersionAsync(Skill skill, CancellationToken cancellationToken)
     {
@@ -949,15 +950,16 @@ internal sealed class SkillsMenu
             {
                 Caption = SkillRecordText.VersionsCaptionAt(kept + 1),
                 Buttons = _forget is null ? null : VersionButtons,
+                Removes = _forget is not null,
             };
             if (await _pane.PickAsync(page, at, cancellationToken).ConfigureAwait(false) is not { Row: var picked } pick || picked >= versions.Count)
             {
                 return forgot;
             }
 
-            if (pick.Button >= 0 && _forget is not null)
+            if ((pick.Button >= 0 || pick.Remove) && _forget is not null)
             {
-                bool all = VersionButtons[pick.Button].Key == QueueMenu.ClearAllKey;
+                bool all = !pick.Remove && VersionButtons[pick.Button].Key == QueueMenu.ClearAllKey;
                 string label = SkillsText.VersionLabel(numbers[picked]);
                 string question = all ? SkillRecordText.ClearVersionsQuestion(skill.Name, versions.Count) : SkillRecordText.RemoveVersionQuestion(skill.Name, label);
                 var asking = new MenuPage(question, SettingsMenu.ConfirmRows, SettingsMenu.ConfirmKeys)

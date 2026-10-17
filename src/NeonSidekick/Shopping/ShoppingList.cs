@@ -387,18 +387,33 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     /// A location moved one place up or down the walk: every location of the store numbered 1..n in the walk as it stands with the two
     /// swapped, so the order is the user's from then on. The answer as a sentence; nothing to do at an end.
     /// </summary>
-    public string MoveLocation(ShopStore shop, ShopLocation location, bool up)
+    public string MoveLocation(ShopStore shop, ShopLocation location, bool up) => MoveLocation(shop, location, up ? -1 : 1);
+
+    /// <summary>
+    /// A location moved <paramref name="by"/> places along the walk (2026-10-16, the user's ask: the layout's Aisles tab moves a row with
+    /// Shift+↑/↓, Shift+Home/End): −1 or +1 one step, <see cref="int.MinValue"/> to the walk's start, <see cref="int.MaxValue"/> to its end
+    /// (<c>MenuPane.MoveOf</c>'s values), the whole walk numbered from then on. At the end it would leave, <see cref="ShoppingText.WalkEnd"/>.
+    /// The answer as a sentence.
+    /// </summary>
+    public string MoveLocation(ShopStore shop, ShopLocation location, int by)
     {
         var store = _store();
         var walk = store.Locations(shop.Id).ToList();
         int at = walk.FindIndex(l => l.Id == location.Id);
-        int to = at + (up ? -1 : 1);
-        if (at < 0 || to < 0 || to >= walk.Count)
+        int to = by switch
         {
-            return ShoppingText.WalkEnd(location, up);
+            int.MinValue => 0,
+            int.MaxValue => walk.Count - 1,
+            _ => at + by,
+        };
+        if (at < 0 || to < 0 || to >= walk.Count || to == at)
+        {
+            return ShoppingText.WalkEnd(location, up: by < 0);
         }
 
-        (walk[at], walk[to]) = (walk[to], walk[at]);
+        var moving = walk[at];
+        walk.RemoveAt(at);
+        walk.Insert(to, moving);
         for (int i = 0; i < walk.Count; i++)
         {
             if (!store.SetWalk(walk[i].Id, i + 1) && walk[i].Walk != i + 1)

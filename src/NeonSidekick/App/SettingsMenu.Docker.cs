@@ -202,7 +202,8 @@ internal sealed partial class SettingsMenu
     /// The <c>Docker server match words</c> list (2026-10-10, the user's ask), <see cref="EditForbiddenStringsAsync"/>'s twin:
     /// <see cref="AddDockerWordRow"/> on top, then each word (<see cref="DockerServerWords.Sorted"/>). Enter on the top row opens the
     /// input slot under it (without the pane, the prompt line) and a typed word is saved at once (<see cref="DockerWordAddedNotice"/>,
-    /// or <see cref="DockerWordDuplicateNotice"/> and nothing saved); Enter on a word removes it after a yes. On the pane the title
+    /// or <see cref="DockerWordDuplicateNotice"/> and nothing saved); Enter on a word removes it after a yes, Delete too (2026-10-16, the
+    /// user's ask; on the add row nothing). On the pane the title
     /// row carries the forbidden list's restore button: the known engines back after a yes, or
     /// <see cref="DockerWordsAlreadyDefaultsNotice"/> and nothing asked when the list already is them. True when anything changed.
     /// </summary>
@@ -216,7 +217,7 @@ internal sealed partial class SettingsMenu
             var words = DockerServerWords.Sorted(_settings.Current.DockerServerMatchWords);
             IReadOnlyList<string> rows = [Markup.Escape(AddDockerWordRow), .. words.Select(Markup.Escape)];
             var page = new MenuPage(Crumb(title), rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= words.Count ? new MenuFooter(words[row - 1], DockerWordNote) : null };
-            if (await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
+            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
             {
                 if (!changed)
                 {
@@ -227,6 +228,11 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
+            if (pick.Remove && pick.Row == 0)
+            {
+                continue;   // Delete on the add row: nothing to remove
+            }
+
             if (pick.Button >= 0)
             {
                 changed |= await RestoreDockerWordsAsync(words, cancellationToken).ConfigureAwait(false);

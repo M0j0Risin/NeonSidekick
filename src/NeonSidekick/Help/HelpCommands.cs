@@ -316,15 +316,15 @@ public static class HelpCommands
         ]),
         new("/prompts",
         [
-            new("/prompts", "Open your saved prompts, the messages you send often; Enter or a double-click puts one on the draft line in place of what is there. The old draft goes to the history, so Up brings it back. `a` adds one, `s` saves the draft as one, `e` edits (a prompt of several lines in your draft editor), `d` removes and `c` clears the list (each removal after a yes); Shift+↑↓ and Shift+Home/End move a prompt. Type to filter. The toolbar's 📣 and Ctrl+Alt+W open it, keeping the draft for `s`. Works while a reply runs."),
-            new("/prompts <n>", "Put saved prompt n, its number in `/prompts`, on the draft line. Headless, it is printed."),
+            new("/prompts", "Open your saved prompts, the messages you send often; Enter or a double-click sends one, or queues it while a reply runs. `d` puts one on the draft line instead, in place of what is there; the old draft goes to the history, so Up brings it back. `a` adds one, `s` saves the draft as one, `e` edits (a prompt of several lines in your draft editor), `r` or Delete removes and `c` clears the list (each removal after a yes); Shift+↑↓ and Shift+Home/End move a prompt. Type to filter. The toolbar's 📣 and Ctrl+Alt+W open it, keeping the draft for `s`. Works while a reply runs."),
+            new("/prompts <n>", "Send saved prompt n, its number in `/prompts`, as if typed; while a reply runs it is queued. Headless, it is printed."),
             new("/prompts save <text>", "Save the rest of the line as a prompt, a pasted block of several lines too."),
             new("/prompts list [--clear]", "Print the saved prompts, numbered; `--clear` takes them all off the list, after a yes (headless: without asking)."),
             new("/prompts remove <n>", "Take saved prompt n off the list."),
         ]),
         new("/queue",
         [
-            new("/queue [clear]", "List and prune the messages queued during a reply; **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, when it ends). The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
+            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, when it ends). The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
             new("/queue mode automatic|manual|off", "Set *Queue mode*: `automatic` queues what you send during a reply and sends it when the reply ends, `manual` queues every message for **➤ send**, `off` keeps no list. Works while a reply runs."),
             new("/queue cancel hold|drain|empty", "Set *Queue cancel mode*, what a canceled reply does to the queue: `hold` keeps it until your next message has run, `drain` sends the next one at once, `empty` drops them all. Works while a reply runs."),
         ]),

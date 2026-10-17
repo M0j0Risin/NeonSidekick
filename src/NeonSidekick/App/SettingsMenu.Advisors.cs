@@ -194,7 +194,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// <c>Advisor list</c> (2026-10-10, the forbidden strings' shape): <see cref="AddAdvisorRow"/> over one row per advisor. The add
     /// row picks a profile (the home's, less the loaded one, the temporary ones and those already listed) and then asks its role;
-    /// an entry's Enter offers <see cref="AdvisorEntryRows"/> — a new role, or its removal after a yes. Until ESC. True when anything changed.
+    /// an entry's Enter offers <see cref="AdvisorEntryRows"/> — a new role, or its removal after a yes; Delete goes straight to that removal
+    /// (2026-10-16, the user's ask; on the add row nothing). Until ESC. True when anything changed.
     /// </summary>
     internal async Task<bool> EditAdvisorListAsync(CancellationToken cancellationToken)
     {
@@ -214,7 +215,7 @@ internal sealed partial class SettingsMenu
                 return AdvisorRow(e, exists, width, facts, roleWidth, AdvisorMark(e), exists ? ProfileAvatar(e.Profile) : "");
             })];
             var page = new MenuPage(Crumb(title), rows, AdvisorListKeys);
-            if (await PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } index)
+            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
             {
                 if (!changed)
                 {
@@ -227,13 +228,17 @@ internal sealed partial class SettingsMenu
             cursor = index;
             if (index == 0)
             {
-                changed |= await AddAdvisorAsync(entries, cancellationToken).ConfigureAwait(false);
+                if (!pick.Remove)   // Delete on the add row: nothing to remove
+                {
+                    changed |= await AddAdvisorAsync(entries, cancellationToken).ConfigureAwait(false);
+                }
+
                 continue;
             }
 
             var entry = entries[index - 1];
             var choice = new MenuPage(Crumb(title + " › " + entry.Profile), AdvisorEntryRows.Select(Markup.Escape).ToList(), PickKeys);
-            switch (await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false))
+            switch (pick.Remove ? 1 : await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false))   // Delete is the removal, asked as ever
             {
                 case 0:
                     if (await ReadAdvisorRoleAsync(page, entry.Profile, entry.Role, cancellationToken).ConfigureAwait(false) is { } role && role != entry.Role)

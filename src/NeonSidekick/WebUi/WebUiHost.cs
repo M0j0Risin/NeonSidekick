@@ -353,7 +353,21 @@ public sealed class WebUiHost : IWebUiHost
                         await YouTubeEventsAsync(context, video).ConfigureAwait(false);
                         return;
                     case "/api/shopping":
-                        await JsonAsync(context, StatusCodes.Status200OK, _backend.Shopping(), WebUiJsonContext.Default.WebShopping).ConfigureAwait(false);
+                        // Tagged since 2026-10-16: the page reads it every 5 s with the full body, and most reads change nothing.
+                        await TaggedJsonAsync(context, _backend.Shopping(), WebUiJsonContext.Default.WebShopping).ConfigureAwait(false);
+                        return;
+                    case ShopBoughtPath:
+                        // The 🕘 sheet's past items (2026-10-16): read each time it opens and after each change in it.
+                        if (_backend.ShopBought() is { } bought)
+                        {
+                            response.Headers.CacheControl = "no-store";
+                            await JsonAsync(context, StatusCodes.Status200OK, bought, WebUiJsonContext.Default.WebBought).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            response.StatusCode = StatusCodes.Status404NotFound;
+                        }
+
                         return;
                     case "/api/prompts":
                         // The saved prompts sheet (later on 2026-10-15): read each time it opens.
@@ -435,6 +449,14 @@ public sealed class WebUiHost : IWebUiHost
                     "/api/answer" => await ReadAsync(context, WebUiJsonContext.Default.WebAnswerRequest).ConfigureAwait(false) is { } answer ? _backend.Answer(answer, remote) : null,
                     "/api/shopping/check" => await ReadAsync(context, WebUiJsonContext.Default.WebCheckRequest).ConfigureAwait(false) is { } check ? _backend.Check(check, remote) : null,
                     "/api/shopping/store" => await ReadAsync(context, WebUiJsonContext.Default.WebStoreRequest).ConfigureAwait(false) is { } store ? _backend.UseStore(store, remote) : null,
+                    ShopAddPath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } items ? _backend.ShopAdd(items, remote) : null,
+                    ShopReAddPath => await ReadAsync(context, WebUiJsonContext.Default.WebShopId).ConfigureAwait(false) is { } again ? _backend.ShopReAdd(again, remote) : null,
+                    ShopForgetPath => await ReadAsync(context, WebUiJsonContext.Default.WebShopId).ConfigureAwait(false) is { } past ? _backend.ShopForget(past, remote) : null,
+                    ShopQuantityPath => await ReadAsync(context, WebUiJsonContext.Default.WebShopQuantity).ConfigureAwait(false) is { } qty ? _backend.ShopQuantity(qty, remote) : null,
+                    ShopRenamePath => await ReadAsync(context, WebUiJsonContext.Default.WebShopRename).ConfigureAwait(false) is { } rename ? _backend.ShopRename(rename, remote) : null,
+                    ShopRemovePath => await ReadAsync(context, WebUiJsonContext.Default.WebShopId).ConfigureAwait(false) is { } line ? _backend.ShopRemove(line, remote) : null,
+                    ShopCheckAllPath => await ReadAsync(context, WebUiJsonContext.Default.WebShopCheckAll).ConfigureAwait(false) is { } all ? _backend.ShopCheckAll(all, remote) : null,
+                    ShopClearPath => _backend.ShopClearTicked(remote),   // the body is not read, as Stop's
                     "/api/strip/select" => await ReadAsync(context, WebUiJsonContext.Default.WebStripSelect).ConfigureAwait(false) is { } pick ? _backend.SelectStripPicture(pick, remote) : null,
                     PictureDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebPictureDelete).ConfigureAwait(false) is { } gone ? _backend.DeletePicture(gone, remote) : null,
                     PromptSavePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } prompt ? _backend.SavePrompt(prompt, remote) : null,
@@ -649,6 +671,33 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The 🕘 tab's clear all (2026-10-16).</summary>
     public const string HistoryClearPath = "/api/history/clear";
+
+    /// <summary>The Shopping tab's 🕘 sheet (2026-10-16): what was bought before and is not on the list now.</summary>
+    public const string ShopBoughtPath = "/api/shopping/bought";
+
+    /// <summary>The add box (2026-10-16): <c>{text}</c>; the eight posts below are in the <see cref="WebRateBucket.Act"/> bucket, as a tick.</summary>
+    public const string ShopAddPath = "/api/shopping/add";
+
+    /// <summary>A past item added again (2026-10-16): <c>{id}</c>.</summary>
+    public const string ShopReAddPath = "/api/shopping/readd";
+
+    /// <summary>A past item forgotten (2026-10-16): <c>{id}</c>.</summary>
+    public const string ShopForgetPath = "/api/shopping/forget";
+
+    /// <summary>A line's quantity (2026-10-16): <c>{id, qty}</c>.</summary>
+    public const string ShopQuantityPath = "/api/shopping/quantity";
+
+    /// <summary>A line renamed (2026-10-16): <c>{id, name}</c>.</summary>
+    public const string ShopRenamePath = "/api/shopping/rename";
+
+    /// <summary>A line removed (2026-10-16): <c>{id}</c>.</summary>
+    public const string ShopRemovePath = "/api/shopping/remove";
+
+    /// <summary>Every line ticked or unticked (2026-10-16): <c>{on}</c>.</summary>
+    public const string ShopCheckAllPath = "/api/shopping/checkall";
+
+    /// <summary>The ticked lines cleared (2026-10-16); the body is not read.</summary>
+    public const string ShopClearPath = "/api/shopping/clear";
 
     /// <summary>The YouTube tab's event stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, per page, apart from Chat's.</summary>
     public const string YouTubeEventsPath = "/api/youtube/events";

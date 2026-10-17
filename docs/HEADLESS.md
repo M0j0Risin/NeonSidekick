@@ -36,7 +36,7 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 
 ```
 NeonSidekick 0.5.2
-Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /help <words> looks something up in the app's manual; /rewind [n] goes back n messages; /exit or EOF exits.
+Headless mode
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: The capital of France is Paris.
 You: Neon: 
@@ -46,7 +46,7 @@ Here is what I found…
 You:
 ```
 
-- The first lines are the version, the help line and the server (or `LLM: no server …` and what to do), then a line on the MCP servers if any are set up.
+- The first lines are the version, `Headless mode` and the server (or `LLM: no server …` and what to do), then a line on the MCP servers if any are set up.
 - `You: ` is printed before each line is read, even from a pipe, so a reply often starts `You: Neon: `.
 - `[tool]` lines trace tool calls and their results, which may run over several lines. A conversation's opening calls (clock, working directory, memory) print before `Neon: `.
 - `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking is never printed.

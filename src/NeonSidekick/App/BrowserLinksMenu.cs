@@ -89,6 +89,7 @@ internal sealed class BrowserLinksMenu
                     Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, links.Count) ?? BrowserLinkText.Caption(links.Count),
                     Footer = (_, row) => !empty && row < shown.Count ? BrowserLinkText.Footer(links[shown[row]], _zone) : null,
                     Moves = !empty && filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
+                    Removes = !empty && shown.Count > 0,     // Delete removes a filtered row too (2026-10-16, the user's ask)
                 };
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {

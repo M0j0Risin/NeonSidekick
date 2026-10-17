@@ -23,8 +23,41 @@
 <main>
   <label class="store-pick hidden" id="store"><span></span><select></select></label>
   <p class="shop-header" id="header"></p>
+  <div class="shop-add hidden" id="add">
+    <input type="text" class="shop-input" id="add-text" autocomplete="off" enterkeyhint="done">
+    <button type="button" class="primary shop-go" id="add-go" disabled>⊕</button>
+    <button type="button" class="shop-past" id="past">🕘</button>
+  </div>
+  <div class="shop-bulk hidden" id="bulk">
+    <button type="button" class="shop-all" id="tick-all"></button>
+    <button type="button" class="shop-clear hidden" id="clear"></button>
+  </div>
   <div id="list"></div>
   <div class="banner message hidden" id="message"></div>
 </main>
+<div class="sheet-back hidden" id="sheet-back">
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-bar"><h2 id="sheet-title"></h2><button type="button" id="sheet-close" title="Close" aria-label="Close">✕</button></div>
+    <p class="shop-note hidden" id="sheet-note"></p>
+    <div class="hidden" id="line-body">
+      <div class="shop-qty">
+        <button type="button" id="qty-less">−</button>
+        <span class="shop-qty-value" id="qty" aria-live="polite"></span>
+        <button type="button" id="qty-more">+</button>
+      </div>
+      <div class="shop-rename">
+        <input type="text" class="shop-input" id="rename-text" autocomplete="off" enterkeyhint="done">
+        <button type="button" id="rename-save" disabled></button>
+      </div>
+      <div class="sheet-actions"><button type="button" class="shop-remove" id="remove"></button></div>
+    </div>
+    <div class="hidden" id="past-body">
+      <p class="shop-note" id="past-caption"></p>
+      <input type="search" class="shop-input shop-filter hidden" id="past-filter" autocomplete="off">
+      <div class="shop-past-list" id="past-list"></div>
+      <p class="shop-note hidden" id="past-none"></p>
+    </div>
+  </section>
+</div>
 </body>
 </html>

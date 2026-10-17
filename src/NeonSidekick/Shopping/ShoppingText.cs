@@ -495,6 +495,9 @@ public static class ShoppingText
 
     /// <summary>The editor's hint row (the Facts tab adds typing to filter). Pinned.</summary>
     public const string LayoutKeys = "Enter = change the row (the first row adds) · ←/→ tabs · Esc = back";
+
+    /// <summary>The layout's Aisles tab hint (2026-10-16, the user's ask): <see cref="LayoutKeys"/> with Shift+↑↓ moving an aisle along the walk.</summary>
+    public const string AislesKeys = "Enter = change the row (the first row adds) · Shift+↑↓ = move in the walk · ←/→ tabs · Esc = back";
     public const string FactsKeys = "Enter = change the fact · ←/→ tabs · Esc = back";
 
     public const string AddLocationRow = "+ add an aisle or zone…";

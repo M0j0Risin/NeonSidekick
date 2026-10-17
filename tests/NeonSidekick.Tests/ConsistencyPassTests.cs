@@ -40,7 +40,7 @@ public class ConsistencyPassTests
         SettingsMenu.WebToggleKeys, SettingsMenu.WebToggleOpenKeys, SettingsMenu.CameraToggleKeys, SettingsMenu.ChangedKeys, SettingsMenu.ProfileKeys,
         SettingsMenu.ThemeKeepKeys, SettingsMenu.ThemePickKeys, EmbeddedModelFilter.Keys, EmbeddedModelFilter.CatalogKeys,
         CameraText.AllowHint, CameraMenu.AllowHintWithView, YouTubeText.SavedKeys, MenuPane.EmptyKeys,
-        SavedPromptText.PaneKeys, BrowserLinkText.PaneKeys, ShoppingText.PaneKeys, ShoppingText.StoresKeys,   // 2026-10-16, the 120-column pass
+        SavedPromptText.PaneKeys, BrowserLinkText.PaneKeys, ShoppingText.PaneKeys, ShoppingText.StoresKeys, ShoppingText.LayoutKeys, ShoppingText.AislesKeys,   // 2026-10-16, the 120-column pass
         MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, "", letteredButtons: true), TasksMenu.Keys, ServicesMenu.Keys, EventLogMenu.Keys, HomeBarText.BarHint,
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)

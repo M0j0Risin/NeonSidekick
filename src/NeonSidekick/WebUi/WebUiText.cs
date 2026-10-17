@@ -384,8 +384,11 @@ public static class WebUiText
     /// <summary>The sheet's prompts tab with nothing saved (2026-10-16: the page saves them too).</summary>
     public const string PromptsNone = "No saved prompts yet. ⇪ saves the draft as one.";
 
-    /// <summary>A row's ➤.</summary>
+    /// <summary>A history row's ➤, and a saved prompt's tap since 2026-10-16 (its label, before the prompt).</summary>
     public const string PromptsSend = "Send this prompt";
+
+    /// <summary>A saved prompt's ✎ (2026-10-16, the user's ask, when a tap came to send): the prompt on the message line, ahead of what's there.</summary>
+    public const string PromptsToDraft = "Put on the message line";
 
     /// <summary>A long list's filter.</summary>
     public const string Filter = "Filter";
@@ -503,7 +506,7 @@ public static class WebUiText
     /// <summary>The page's own words, sent with every snapshot.</summary>
     public static readonly WebWords Words = new(PictureGone, PictureTooLarge, OpenOriginal, SendAsMessage, UseLine, DraftFilled, Undo, Working, CloseChoice,
         UI.TranscriptRenderer.NoReplyText, UI.ThinkingFoldText.LiveBare, EntryGone,
-        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel, DeletePicture, DeleteArmed, PromptsButton, PromptsNone, PromptsSend, Filter, ClosePrompts,
+        ClearDraft, DraftCleared, ExpandAll, CollapseAll, ToTop, ToBottom, StripButton, StripOne, StripMany, CloseStrip, Live, LiveLabel, DeletePicture, DeleteArmed, PromptsButton, PromptsNone, PromptsSend, PromptsToDraft, Filter, ClosePrompts,
         PromptsTab, MemoryTab, HistoryTab, MemoryNone, HistoryNone, SaveDraft, DraftEmpty, DeleteRow, DeleteRowArmed, ClearAll, ClearAllArmed, MemoryOff,
         MemoryModeOff);
 
@@ -518,6 +521,74 @@ public static class WebUiText
 
     /// <summary>A store picked on the page, flashed on the PC's hint row (2026-10-15).</summary>
     public static string StoreFlash(string name) => Glyph + "store: " + name;
+
+    // ── The Shopping tab's list controls (2026-10-16) ────────────────────────
+
+    /// <summary>
+    /// The Shopping tab's words for the list's controls (2026-10-16, the user's ask), sent with the list: <see cref="Shopping.ShoppingText"/>'s
+    /// button words where they exist, their double spaces (there for Windows Terminal's two-cell ☑ and ☐) collapsed, since a page would show the gap.
+    /// </summary>
+    public static WebShopWords ShopWords { get; } = new(
+        AddPlaceholder: "Add items: 2 milk, eggs",
+        Add: Collapsed(Shopping.ShoppingText.AddButton),
+        Past: "🕘 past items",
+        PastTitle: "Bought before",
+        Filter: "Filter the past items",
+        NoMatch: UI.MenuFilter.NoMatchLine("{0}"),
+        Forget: "Forget",
+        ForgetArmed: "Tap again to forget",
+        TickAll: Collapsed(Shopping.ShoppingText.TickAllButton),
+        UntickAll: Collapsed(Shopping.ShoppingText.UntickAllButton),
+        Clear: Collapsed(Shopping.ShoppingText.ClearButton) + " ticked",
+        ClearArmed: "Tap again to clear the ticked lines",
+        Options: "{0}: options",
+        Less: Collapsed(Shopping.ShoppingText.LessButton),
+        More: Collapsed(Shopping.ShoppingText.MoreButton),
+        Quantity: "Quantity",
+        Rename: Collapsed(Shopping.ShoppingText.RenameButton),
+        Save: "Save",
+        Remove: "🗑️ remove",
+        RemoveArmed: "Tap again to remove",
+        Close: "Close",
+        Gone: NoSuchItem);
+
+    /// <summary>A button word with its runs of spaces made one.</summary>
+    internal static string Collapsed(string text) => string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>The add box posted with no item in it (2026-10-16; the page keeps ⊕ disabled while it is blank).</summary>
+    public const string NothingToAdd = "Type an item to add: commas between several, a quantity before or after (2 milk, eggs).";
+
+    /// <summary>One add with more than <paramref name="max"/> items, refused whole (2026-10-16).</summary>
+    public static string TooManyToAdd(int max) => "Too many at once: add at most " + max.ToString(CultureInfo.InvariantCulture) + " items in one go.";
+
+    /// <summary>A past item gone meanwhile (2026-10-16): re-added already, forgotten, or put back on the list from the PC.</summary>
+    public const string NoSuchPastItem = "That item is no longer among the past items.";
+
+    /// <summary>Lines added from the page, flashed on the PC's hint row (2026-10-16): the first three, then how many more.</summary>
+    public static string AddedFlash(IReadOnlyList<string> lines) => Glyph + "added: " + FirstFew(lines);
+
+    /// <summary>A past item forgotten from the page, flashed on the PC's hint row (2026-10-16).</summary>
+    public static string ForgotFlash(string name) => Glyph + "forgot: " + name;
+
+    /// <summary>A line's quantity changed from the page, flashed on the PC's hint row (2026-10-16): the line as it now reads.</summary>
+    public static string QuantityFlash(string line) => Glyph + "quantity: " + line;
+
+    /// <summary>A line renamed from the page, flashed on the PC's hint row (2026-10-16).</summary>
+    public static string RenamedFlash(string from, string to) => Glyph + "renamed: " + from + " → " + to;
+
+    /// <summary>A line removed from the page, flashed on the PC's hint row (2026-10-16).</summary>
+    public static string RemovedFlash(string line) => Glyph + "removed: " + line;
+
+    /// <summary>Every line ticked or unticked from the page, flashed on the PC's hint row (2026-10-16).</summary>
+    public static string CheckedAllFlash(int count, bool on) => Glyph + (on ? "ticked all: " : "unticked all: ") + Lines(count);
+
+    /// <summary>The ticked lines cleared from the page, flashed on the PC's hint row (2026-10-16).</summary>
+    public static string ClearedFlash(int count) => Glyph + "cleared the ticked: " + Lines(count);
+
+    private static string FirstFew(IReadOnlyList<string> lines) =>
+        string.Join(", ", lines.Take(3)) + (lines.Count > 3 ? " and " + (lines.Count - 3).ToString(CultureInfo.InvariantCulture) + " more" : "");
+
+    private static string Lines(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " line" : " lines");
 
     // ── The Home tab (2026-10-15) ─────────────────────────────────────────────
 
@@ -759,6 +830,30 @@ public static class WebUiText
     /// <summary>A shopping line ticked from the phone (audit).</summary>
     public static string CheckedLogLine(string line, bool on, IPAddress? remote) =>
         "Web UI " + (on ? "ticked" : "unticked") + " \"" + line + "\" from " + Where(remote) + ".";
+
+    /// <summary>Lines added from the phone, typed or a past item again (audit, 2026-10-16): every line as it now reads.</summary>
+    public static string AddedLogLine(IReadOnlyList<string> lines, IPAddress? remote) =>
+        "Web UI added " + string.Join(", ", lines.Select(l => "\"" + l + "\"")) + " to the shopping list from " + Where(remote) + ".";
+
+    /// <summary>A past item forgotten from the phone (audit, 2026-10-16).</summary>
+    public static string ForgotLogLine(string name, IPAddress? remote) => "Web UI forgot the past item \"" + name + "\" from " + Where(remote) + ".";
+
+    /// <summary>A line's quantity changed from the phone (audit, 2026-10-16): the line as it now reads.</summary>
+    public static string QuantityLogLine(string line, IPAddress? remote) => "Web UI set the quantity: \"" + line + "\" from " + Where(remote) + ".";
+
+    /// <summary>A line renamed from the phone (audit, 2026-10-16); a merge into another line reads the same.</summary>
+    public static string RenamedLogLine(string from, string to, IPAddress? remote) =>
+        "Web UI renamed \"" + from + "\" to \"" + to + "\" on the shopping list from " + Where(remote) + ".";
+
+    /// <summary>A line removed from the phone (audit, 2026-10-16).</summary>
+    public static string RemovedLogLine(string line, IPAddress? remote) => "Web UI removed \"" + line + "\" from the shopping list from " + Where(remote) + ".";
+
+    /// <summary>Every line ticked or unticked from the phone (audit, 2026-10-16), only when some changed.</summary>
+    public static string CheckedAllLogLine(int count, bool on, IPAddress? remote) =>
+        "Web UI " + (on ? "ticked" : "unticked") + " every line (" + Lines(count) + ") from " + Where(remote) + ".";
+
+    /// <summary>The ticked lines cleared from the phone (audit, 2026-10-16), only when some went.</summary>
+    public static string ClearedLogLine(int count, IPAddress? remote) => "Web UI cleared the ticked lines (" + Lines(count) + ") from " + Where(remote) + ".";
 
     /// <summary>An address past a rate limit, once a minute at most (2026-10-15).</summary>
     public static string RateLimitedLogLine(IPAddress? remote, WebRateBucket bucket) =>

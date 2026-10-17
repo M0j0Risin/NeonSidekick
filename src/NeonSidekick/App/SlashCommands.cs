@@ -459,7 +459,7 @@ public static class SlashCommands
             new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
             new("/print", "print a file or the last reply"),
             new("/profile", "switch or manage profiles"),
-            new("/prompts", "saved prompts for the draft line"),
+            new("/prompts", "saved prompts to send"),
             new("/queue", "manage the queued messages"),
             new("/reasoning", "pick or set the reasoning effort"),
             new("/remember", "add a memory"),

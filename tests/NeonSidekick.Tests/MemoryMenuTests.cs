@@ -230,6 +230,29 @@ public class MemoryMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// Delete goes straight to the forget question (2026-10-16, the user's ask), skipping Enter's edit/disable/forget choice: No keeps the
+    /// memory, Yes forgets it.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_DeleteAsksToForget_SkippingTheChoice()
+    {
+        Seed("one", "two", "three");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Delete, Keys.Enter,      // two: No (the cursor starts on it)
+            Keys.Delete, Keys.Down, Keys.Enter,       // two again: Yes
+            Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.RemovePrompt("two"), _console.Output);
+        Assert.Contains(ChatScreen.KeptNotice, _console.Output);
+        Assert.Contains("(💾 removed: two)", _console.Output);
+        Assert.DoesNotContain(MemoryMenu.ForgetWord.PadRight(9), _console.Output);   // the choice never drawn
+        Assert.Equal(new[] { "one", "three" }, new MemoryStore(_dir).Snapshot());
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_RemovingTheLastRow_ClosesThePane_ThenTheEmptyNoticeGoesToTheTranscript()
     {

@@ -192,7 +192,7 @@ public class AppSettingsTests : IDisposable
         WebUiPort = 9100,
         WebUiReach = "local",
         WebUiCommands = true,
-        WebUiConnectionDetails = false,
+        WebUiConnectionDetails = true,
         WebUiHomeControls = true,
         WebUiChatControls = false,
         WebUiShoppingControls = true,

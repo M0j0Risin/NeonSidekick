@@ -357,6 +357,32 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("Enter = put back · d = remove · c = clear all · Esc = back", SkillsMenu.VersionsKeys);
     }
 
+    /// <summary>
+    /// Delete on the revert list is its d (2026-10-16, the user's ask): the highlighted version removed after a yes, No keeping it, and it
+    /// never puts a version back (Enter's put back is never asked).
+    /// </summary>
+    [Fact]
+    public async Task RevertList_Delete_RemovesTheHighlightedVersion_NeverRestores()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var kept = ForgettableVersions(File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)));
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list, the cursor on v2 (the newest not current)
+        Push(Keys.Delete, Keys.Enter);                               // No: kept
+        Push(Keys.Delete, Keys.Down, Keys.Enter);                    // Yes
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillRecordText.RemoveVersionQuestion("haiku", "v2"), Output);
+        Assert.Contains(ChatScreen.KeptNotice, Output);
+        Assert.Contains(SkillRecordText.VersionRemovedNotice("haiku", "v2"), Output);
+        Assert.DoesNotContain(SkillRecordText.PutBackQuestion("haiku", "v2"), Output);
+        Assert.Equal([3L, 1L], kept.Select(r => r.Id));
+        Assert.Empty(_restored);
+    }
+
     /// <summary>The revert list's c (2026-10-07): every kept version removed after a yes; the list goes, with no "nothing kept" notice after it.</summary>
     [Fact]
     public async Task RevertList_C_ClearsEveryVersion_AfterAYes()

@@ -481,6 +481,43 @@ public sealed class ShoppingCommandTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Delete on the list is remove (2026-10-16, the user's ask), unasked as <c>r</c> is, never a tick.</summary>
+    [Fact]
+    public async Task ThePane_DeleteRemovesTheHighlightedLine_Unasked()
+    {
+        await Run("add Bread, Eggs");
+        var (menu, pane, input) = PaneWithInput();
+        input.Push(Keys.Delete);                // Bread removed
+        input.Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([("Eggs", false)], _list.Store.Items().Select(i => (i.Name, i.Checked)));
+        pane.Dispose();
+    }
+
+    /// <summary>On the add page Delete forgets a bought line, as <c>x</c> does (2026-10-16); on the new-item row it is nothing, nothing added.</summary>
+    [Fact]
+    public async Task ThePane_AddPage_DeleteForgetsABoughtLine_AndIsNothingOnTheNewItemRow()
+    {
+        await Run("add Milk, Bread");
+        await Run("check milk");
+        await Run("check bread");
+        await Run("clear");
+        Assert.Equal(2, _list.Bought().Count);
+        var (menu, pane, input) = PaneWithInput();
+        input.Push(Keys.Char('i'));             // the add page, the cursor on the first bought line
+        input.Push(Keys.Delete);                // forgotten
+        input.Push(Keys.Up, Keys.Delete);       // the new-item row: nothing
+        input.Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Single(_list.Bought());
+        Assert.Empty(_list.Store.Items());
+        pane.Dispose();
+    }
+
     [Fact]
     public void ThePanesRows_AreHeadingsOverLines_TheTickedLastAndDim()
     {

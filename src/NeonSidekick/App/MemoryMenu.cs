@@ -35,6 +35,9 @@ namespace NeonSidekick.App;
 /// offered to the model (<see cref="MemoryEntry.Disabled"/>) — or <b>enable</b> it again, or <b>forget</b> it with the confirmation as
 /// before. The title row's <see cref="AddButton"/> (a) types a new memory there (<see cref="MemoryStore.Add"/>, <c>/remember</c>'s
 /// outcomes). Edit and add need the input row (the screen's), so a console without one has the choice without them.</para>
+///
+/// <para>Delete (2026-10-16, the user's ask: every list that removes a row) goes straight to the forget question, skipping the choice
+/// (<see cref="MenuPage.Removes"/> while there are rows).</para>
 /// </summary>
 internal sealed class MemoryMenu
 {
@@ -258,7 +261,7 @@ internal sealed class MemoryMenu
                     list = entries.Count > 0
                         ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? hint : WithoutAdd(hint)) { Footer = (_, row) => Footer(shown, row) }
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutAdd(hint));
-                    list = list with { Buttons = Buttons(mode, add) };
+                    list = list with { Buttons = Buttons(mode, add), Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: ModeIndex } pressed)
                     {
@@ -274,7 +277,7 @@ internal sealed class MemoryMenu
                     list = entries.Count > 0
                         ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? Keys : PlainKeys);
-                    list = list with { Buttons = add ? [new MenuButton(AddButton, AddKey)] : null };
+                    list = list with { Buttons = add ? [new MenuButton(AddButton, AddKey)] : null, Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: >= 0 } adding)
                     {
@@ -311,7 +314,8 @@ internal sealed class MemoryMenu
                 string text = entry.Text;
                 try
                 {
-                    switch (await ChooseAsync(entry, cancellationToken).ConfigureAwait(false))
+                    // Delete is forget, asked as ever; Enter offers the choice first.
+                    switch (pick.Value.Remove ? RowAction.Forget : await ChooseAsync(entry, cancellationToken).ConfigureAwait(false))
                     {
                         case RowAction.Edit:
                             await EditAsync(list, row, text, cancellationToken).ConfigureAwait(false);

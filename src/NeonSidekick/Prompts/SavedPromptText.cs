@@ -17,6 +17,13 @@ public static class SavedPromptText
     /// <summary>The pane's title: the toolbar item's 📣, as <c>⭐ Saved links</c> is the saved links'.</summary>
     public const string PaneTitle = "📣 Saved prompts";
 
+    /// <summary>
+    /// The first button (2026-10-16, the user's ask and pick, when Enter came to send a prompt): the old pick, the prompt on the draft line to
+    /// edit first. This pane's alone, the queue pane has none.
+    /// </summary>
+    public const string ToDraftButton = "↧ to draft";
+    public const char ToDraftKey = 'd';
+
     public const string AddButton = "⊕ add";
     public const char AddKey = 'a';
     public const string SaveDraftButton = "⇪ save draft";
@@ -24,15 +31,19 @@ public static class SavedPromptText
     public const string EditButton = "✎ edit";
     public const char EditKey = 'e';
 
-    /// <summary>The remove button: the lists' <c>✖  remove</c> (two spaces: Windows Terminal draws ✖ two cells wide).</summary>
+    /// <summary>
+    /// The remove button: the lists' <c>✖  remove</c> (two spaces: Windows Terminal draws ✖ two cells wide). Its key is <c>r</c> since
+    /// 2026-10-16 (<c>d</c> until then, the other lists' letter; <c>d</c> went to <see cref="ToDraftKey"/>); Delete still removes.
+    /// </summary>
     public const string RemoveButton = YouTube.YouTubeText.RemoveButton;
-    public const char RemoveKey = 'd';
+    public const char RemoveKey = 'r';
 
     /// <summary>
     /// The pane's hint row while nothing is typed. Shift+↑↓ moves a prompt but has no room here (2026-10-16, the user's ask: every hint
-    /// fits a 120-column window; INTERFACE.md's pane keys name it).
+    /// fits a 120-column window; INTERFACE.md's pane keys name it). Enter sends since later on 2026-10-16, <c>d</c> puts a prompt on the
+    /// draft and <c>r</c> removes; add and clear left the hint for the room, their buttons on the strip saying them.
     /// </summary>
-    public const string PaneKeys = "Enter = use · a = add · s = save draft · e = edit · d = remove · c = clear · " + MenuFilter.TypeOrShiftAndCloseKeys;
+    public const string PaneKeys = "Enter = send · d = to draft · s = save draft · e = edit · r = remove · " + MenuFilter.TypeOrShiftAndCloseKeys;
 
     /// <summary>The one dim row of an empty list, under the same buttons, so add and save draft work on it.</summary>
     public const string EmptyRow = "No saved prompts yet: a adds one, and s saves the draft.";
@@ -40,9 +51,12 @@ public static class SavedPromptText
     /// <summary>No saved prompts, on the transcript (a printed list, a clear of none).</summary>
     public const string NoneSaved = "No saved prompts yet: /prompts save <text> adds one, and the /prompts pane saves the draft.";
 
-    /// <summary>The count over the pane's rows and the printed list.</summary>
-    public static string Caption(int count) =>
-        $"{Prompts(count)}; Enter puts one on the draft line.";
+    /// <summary>The count over the printed list (<c>/prompts list</c>, the pane off, headless): the count alone (2026-10-16; it named Enter too, a key nobody there can press).</summary>
+    public static string Caption(int count) => Prompts(count);
+
+    /// <summary>The count over the pane's rows, with what Enter and <c>d</c> do (2026-10-16, the user's ask: Enter sends).</summary>
+    public static string PaneCaption(int count) =>
+        $"{Prompts(count)}; Enter sends one, d puts it on the draft line.";
 
     /// <summary>The widest a row's first line is drawn before it is cut with an ellipsis; the footer shows more.</summary>
     public const int RowWidth = 100;
@@ -181,7 +195,7 @@ public static class SavedPromptText
     };
 
     /// <summary><c>/prompts</c>' usage.</summary>
-    public const string Usage = "Usage: /prompts · /prompts <n> puts a prompt on the draft line · /prompts save <text> · /prompts remove <n> · /prompts list [--clear]";
+    public const string Usage = "Usage: /prompts · /prompts <n> sends a prompt · /prompts save <text> · /prompts remove <n> · /prompts list [--clear]";
 
     /// <summary>The pane's add or edit with no input row to type on.</summary>
     public const string NeedsInput = "Typing a prompt needs the input row: /prompts save <text> adds one.";

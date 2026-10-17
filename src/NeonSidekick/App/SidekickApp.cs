@@ -30,8 +30,12 @@ public sealed class SidekickApp
 {
     public const string Name = "NeonSidekick";
 
-    /// <summary>The second line of headless output.</summary>
-    public const string HeadlessHint = "Headless mode. Type a message; /clear or /new forgets the conversation; /compact [focus] shrinks it; /plan <requirement> plans before doing (/plan approve [--fresh] | cancel | show | save [name] | open [name] | gaps [model|advisor|any]); /skills add <source> [--global|--profile] [--yes] installs a skill; /claude <message> asks Claude Code; /help <words> looks something up in the app's manual; /rewind [n] goes back n messages; /exit or EOF exits.";
+    /// <summary>
+    /// The second line of headless output. The one-line command list it was until 2026-10-16 is gone (the user's ask: "It's gotten pretty
+    /// jumbled at the top. Let's just get rid of all the instructional text since that's available in help"): the commands live in
+    /// HEADLESS.md and <c>/help &lt;words&gt;</c>. Pinned.
+    /// </summary>
+    public const string HeadlessModeLine = "Headless mode";
 
     /// <summary>Printed once when discovery under <paramref name="scope"/> found nothing. Pinned by tests; shared with the chat screen.</summary>
     public static string HeadlessNoServerLine(ScanScope scope) => LlmSession.HeadlessNoServerLine(scope);
@@ -897,7 +901,7 @@ public sealed class SidekickApp
         try
         {
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
-            await HeadlessLineAsync(HeadlessHint).ConfigureAwait(false);
+            await HeadlessLineAsync(HeadlessModeLine).ConfigureAwait(false);
 
             // A chosen Docker container (2026-10-02) takes minutes to load: each step of its switch is a notice, said once.
             Action<string>? phase = Docker.DockerEndpoint.Chosen(EffectiveSettings) ? HeadlessDockerPhase : null;
