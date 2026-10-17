@@ -58,6 +58,17 @@ public sealed class UncWriteTool : UncTool
             return FileText.PathRequired(PathArgument);
         }
 
+        // A missing content is not "" (2026-10-17, the toki-pona session: read as empty it replaced a whole file with nothing).
+        if (!ToolArguments.Has(arguments, ContentArgument))
+        {
+            return FileText.ContentRequired(UncPatchTool.ToolName, WriteFileTool.SentEdit(arguments));
+        }
+
+        if (WriteFileTool.StubSent(arguments, ContentArgument) is { } stub)
+        {
+            return stub;
+        }
+
         string content = ToolArguments.ReadString(arguments, ContentArgument);
         string action = mode == WriteMode.Append ? "appended to" : mode == WriteMode.Overwrite ? "wrote over" : "wrote";
         // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult), kept only when the write was done.

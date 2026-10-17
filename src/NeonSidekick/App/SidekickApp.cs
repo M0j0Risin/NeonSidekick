@@ -791,6 +791,8 @@ public sealed class SidekickApp
         // The profile's images folder (2026-10-09): ComfyUI's pictures go there, and the picture tools reach it by full path.
         var images = BuildImagesDirectory();
         files.ImagesFolder = () => images.Root;
+        // A refused path in a skill folder names load_skill (2026-10-17), while the skills are offered.
+        files.SkillFolders = () => { var e = EffectiveSettings; return SkillRoots.For(_settings, _externalSkills).ReadFolders(e.AgentSkills, e.ExternalSkills); };
         // read_pdf (2026-10-14, the PDF plan): headless too, through the web tools' browser.
         var pdfReading = new Pdf.PdfReading(_web.Browser, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath));
         // pdf_edit (2026-10-14, the PDF plan's phase 4b): headless too, pdf-lib in the same browser.

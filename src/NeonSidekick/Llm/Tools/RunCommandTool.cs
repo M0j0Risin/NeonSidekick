@@ -222,7 +222,7 @@ public sealed class RunCommandTool : AIFunction
         }
         else
         {
-            if (_files.Resolve(workdirText, forWrite: false, out workdir) is FileOutcome.OutsideRoot or FileOutcome.InImagesFolder)
+            if (_files.Resolve(workdirText, forWrite: false, out workdir) is FileOutcome.OutsideRoot or FileOutcome.InImagesFolder or FileOutcome.InSkillFolder)
             {
                 return ShellText.WorkdirOutside(workdirText);
             }

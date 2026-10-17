@@ -153,10 +153,10 @@ Settings every server reads, whatever its kind.
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
 | LLM auto compact (%) | How full the context may get before the next message compacts it first (1–100; 0 is off). | 90 |
-| LLM compact mode | What `/compact` does: `summary` folds older turns into a summary the model writes; `prune` swaps their bulky tool results for stubs. | `summary` |
+| LLM compact mode | What `/compact` does: `summary` folds older turns into a summary the model writes; `prune` swaps their bulky tool results and long call arguments (a written file's text, a skill's body) for stubs. | `summary` |
 | LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows the summary (or the pruned results) and how many messages were kept. | off |
-| LLM tool compact mode | What happens when one turn's tool calls fill the context to the auto-compact share: `compact` (prune, then summarize), `prune`, `stop` the turn, or `off` (no check). | `compact` |
+| LLM tool compact mode | What happens when one turn's tool calls fill the context to the auto-compact share: `compact` (prune, then summarize), `prune` (the turn's earlier results and long call arguments; never the last step's call), `stop` the turn, or `off` (no check). | `compact` |
 | LLM max images | The most pictures one request carries, an attached PDF counting as one (0–500; 0 is no cap). Past it the oldest leave the conversation, and `view_image` can show one again; a PDF that drops out keeps its text in the conversation. | 20 |
 | LLM max images (MB) | The most megabytes of pictures and attached PDFs one request carries (0–1000; 0 is no cap), and what one message may attach. Past it the oldest leave. | 24 |
 | LLM fun verbs | The thinking spinner shows a random verb in place of `thinking` / `writing`. | off |

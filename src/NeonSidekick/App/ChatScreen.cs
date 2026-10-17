@@ -1344,6 +1344,8 @@ internal sealed partial class ChatScreen
         string external = externalSkills ?? SkillRoots.DefaultExternalDirectory();
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, external);
         _catalog = new SkillCatalog(roots);
+        // A refused path in a skill folder names load_skill (2026-10-17), while the skills are offered.
+        _files.SkillFolders = () => { var e = _effective(); return roots().ReadFolders(e.AgentSkills, e.ExternalSkills); };
         _skillRecords = new SkillRecords(new SkillRecordStore(_settings.StorageDirectory), roots, _time);
         _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(_time), _skillRecords);
         _project = new ProjectFile(() => _files.Root);
@@ -3614,6 +3616,20 @@ internal sealed partial class ChatScreen
     /// <summary>Under the line when a pass is queued behind the reflection running. Pinned.</summary>
     public const string LearnSessionsQueuedNotice = "(" + LearnGlyph + "learning from the sessions follows the one running)";
 
+    /// <summary>
+    /// <c>No reflection: 3 tool calls, 0 errors (below 4 calls, no recovered error).</c> — the Debug line when the trigger skips one, with its
+    /// real reason (2026-10-17, the toki-pona session's log: a turn that wrote a skill itself was logged as "below 4 calls" after 14 of them):
+    /// the turn wrote a skill, Skills auto learn is off, or the tally is short. Pinned.
+    /// </summary>
+    public static string NoReflectionLogLine(TurnTrace tally, int minCalls, bool autoLearn)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+        string reason = !autoLearn ? "; Skills auto learn is off."
+            : tally.WroteSkill ? "; the turn wrote a skill itself."
+            : " (below " + minCalls.ToString(CultureInfo.InvariantCulture) + " calls, no recovered error).";
+        return "No reflection: " + tally + reason;
+    }
+
     /// <summary><c>No reflection: cooling down (docker-deploy updated 12 minutes ago; 18 minutes to go).</c> — the Debug line when the cooldown skips one; <c>; the turns loaded it</c> before the close under <c>last-written-skill</c>. Pinned.</summary>
     public static string CooldownLogLine(ReflectionMark mark, TimeSpan age, TimeSpan remaining, bool loaded = false)
     {
@@ -3782,7 +3798,7 @@ internal sealed partial class ChatScreen
         int minCalls = ReflectionMinToolCalls.Resolve(effective);
         if (!forced && (!effective.ReflectionAutoLearn || !SkillLearner.ShouldLearn(tally, minCalls)))
         {
-            DiagnosticLog.Debug(SkillCatalog.Category, "No reflection: " + tally + (effective.ReflectionAutoLearn ? " (below " + minCalls.ToString(CultureInfo.InvariantCulture) + " calls, no recovered error)." : "; Skills auto learn is off."));
+            DiagnosticLog.Debug(SkillCatalog.Category, NoReflectionLogLine(tally, minCalls, effective.ReflectionAutoLearn));
             return;
         }
 

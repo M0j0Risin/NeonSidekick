@@ -125,11 +125,32 @@ public static class SkillText
     /// <param name="create">Whether the tool offers create (2026-10-16): a reflection under <c>Reflection mode</c> <c>update-only</c> is never told it. Pinned.</param>
     public static string BadAction(string raw, bool files = false, bool create = true) => (files, create) switch
     {
-        (true, true) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction}, {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}",
-        (false, true) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.CreateAction} or {SkillEditorTool.UpdateAction}",
-        (true, false) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}",
-        (false, false) => $"Error: '{raw.Trim()}' is not an action; use {SkillEditorTool.UpdateAction}",
+        (true, true) => $"Error: '{Echo(raw)}' is not an action; use {SkillEditorTool.CreateAction}, {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}",
+        (false, true) => $"Error: '{Echo(raw)}' is not an action; use {SkillEditorTool.CreateAction} or {SkillEditorTool.UpdateAction}",
+        (true, false) => $"Error: '{Echo(raw)}' is not an action; use {SkillEditorTool.UpdateAction}, {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}",
+        (false, false) => $"Error: '{Echo(raw)}' is not an action; use {SkillEditorTool.UpdateAction}",
     };
+
+    /// <summary>The longest <see cref="Echo"/> keeps, in characters, the ellipsis among them.</summary>
+    public const int EchoChars = 40;
+
+    /// <summary>
+    /// A word the model sent, as a refusal repeats it (2026-10-17, the toki-pona session: an <c>action</c> that had swallowed a whole
+    /// 1.6 KB file through a leaked <c>&lt;/parameter=content&gt;</c> came back whole in the refusal): its first line, trimmed, cut to
+    /// <see cref="EchoChars"/> with an ellipsis.
+    /// </summary>
+    public static string Echo(string raw)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        string line = raw.Trim();
+        int newline = line.IndexOfAny(['\r', '\n']);
+        if (newline >= 0)
+        {
+            line = line[..newline].TrimEnd();
+        }
+
+        return line.Length <= EchoChars ? line : line[..(EchoChars - 1)] + "…";
+    }
 
     /// <summary>
     /// A create from a reflection under <c>Reflection mode</c> <c>update-only</c> (2026-10-16): refused before any ask or write; its schema
@@ -142,13 +163,23 @@ public static class SkillText
     public static string MissingUpdateOnly(string name) =>
         $"Error: there is no skill '{name}'; this reflection only updates a listed skill — pick one from the list or answer nothing";
 
+    /// <summary>
+    /// <c>write_file</c> with no <c>content</c> at all (2026-10-17, the toki-pona session: sent with old_text and new_text instead, it was read
+    /// as <c>""</c> and emptied a 27 KB vocabulary file). <paramref name="sentEdit"/> points at <c>edit_file</c>. Pinned.
+    /// </summary>
+    public static string NoContent(bool sentEdit) =>
+        $"Error: {SkillEditorTool.ContentArgument} is required: the whole file (\"\" for an empty one)" + (sentEdit ? $"; to change part of it use action {SkillEditorTool.EditFileAction}" : "");
+
+    /// <summary><c>edit_file</c> with no <c>new_text</c> at all (2026-10-17): read as <c>""</c> it removed old_text. Pinned.</summary>
+    public static string NoNewText => $"Error: {SkillEditorTool.NewTextArgument} is required: the text to put in place of old_text (\"\" removes it)";
+
     /// <summary>A file action with no <c>path</c> (2026-09-27).</summary>
     public static string NoPath => $"Error: {SkillEditorTool.PathArgument} is empty; name the file, relative to the skill folder (data/mapping.json)";
 
     /// <summary>A file action that named the SKILL.md, the app's sidecar or a folder the skill never keeps (2026-09-27).</summary>
     public static string ProtectedFile(string name, string relative) =>
         string.Equals(Path.GetFileName(relative.TrimEnd('/', '\\')), SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase)
-            ? $"Error: '{relative}' is the skill itself; change skill '{name}' with action {SkillEditorTool.UpdateAction} (description, instructions)"
+            ? $"Error: '{relative}' is the skill itself; change skill '{name}' with action {SkillEditorTool.UpdateAction} (description, instructions), or {SkillEditorTool.EditFileAction} for part of its instructions"
             : $"Error: '{relative}' in skill '{name}' is the app's, not the skill's; pick another path";
 
     /// <summary>A file action's outcome (2026-09-27): <c>skill 'x' (profile): </c> and the file tools' own sentence — <c>FileText.Wrote</c> / <c>FileText.Edited</c>, or their refusal.</summary>

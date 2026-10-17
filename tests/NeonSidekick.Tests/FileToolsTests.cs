@@ -4,6 +4,7 @@ using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
+using NeonSidekick.Skills;
 using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
@@ -403,6 +404,73 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal("replaced 2 occurrences of old_text in indent.txt (lines 1, 2; now 2 lines, 2 words)" + FileText.LineTrimmedNote, await Invoke(patch, ("path", "indent.txt"), ("old_text", "    a"), ("new_text", "b"), ("replace_all", Json("true"))));
         Assert.Equal("  b\n b\n", File.ReadAllText(Path.Combine(_root, "indent.txt")));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
+    }
+
+    /// <summary>
+    /// A path in a skill folder (2026-10-17, the toki-pona session: read_file and file_info on a skill's file by its full path were told only
+    /// "outside the working directory") names load_skill while the skills are offered; with them off, or outside every root, it is the
+    /// plain refusal.
+    /// </summary>
+    [Fact]
+    public async Task APathInASkillFolder_NamesLoadSkill_WhileSkillsAreOffered()
+    {
+        var roots = new SkillRoots(Path.Combine(_dir, "profile", "skills"), Path.Combine(_dir, "skills"), Path.Combine(_dir, ".agents", "skills"));
+        bool agentSkills = true;
+        _files.SkillFolders = () => roots.ReadFolders(agentSkills, externalSkills: false);
+        string vocab = Path.Combine(roots.Profile, "toki-pona", "references", "vocabulary.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(vocab)!);
+        File.WriteAllText(vocab, "a: [ah 94]");
+
+        Assert.Equal(FileOutcome.InSkillFolder, _files.Resolve(vocab, forWrite: false, out _));
+        Assert.Equal(FileText.InSkillFolder(vocab), await Invoke(Tool<ReadFileTool>(), ("path", vocab), ("max_lines", Json("10"))));
+        Assert.Equal(FileText.InSkillFolder(vocab), await Invoke(Tool<FileInfoTool>(), ("path", vocab)));
+        Assert.Equal(
+            "Error: '" + vocab + "' is a skill's file, outside the working directory; read it with load_skill (name: the skill's folder name, file: the path inside that folder) and change it with skill_editor",
+            FileText.InSkillFolder(vocab));
+        // The external root only with External skills; elsewhere outside, and with the skills off, the plain refusal.
+        string external = Path.Combine(roots.External, "x", "SKILL.md");
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(external, forWrite: false, out _));
+        Assert.Equal(FileOutcome.OutsideRoot, _files.Resolve(Path.Combine(_dir, "elsewhere.txt"), forWrite: false, out _));
+        agentSkills = false;
+        Assert.Equal(FileText.OutsideRoot(vocab), await Invoke(Tool<ReadFileTool>(), ("path", vocab)));
+        Assert.Equal(["p", "g", "e"], new SkillRoots("p", "g", "e").ReadFolders(true, true));
+        Assert.Equal(["p"], new SkillRoots("p", "g", "e", GlobalOn: false).ReadFolders(true, false));
+    }
+
+    /// <summary>
+    /// A missing content or new_text is refused, never read as "" (2026-10-17, the toki-pona session: a write sent with old_text and new_text
+    /// in place of content emptied a 27 KB file the model had written, through the seen-file overwrite). An explicit "" still writes.
+    /// </summary>
+    [Fact]
+    public async Task AMissingContentOrNewText_IsRefused_AnEmptyOneIsNot()
+    {
+        var write = Tool<WriteFileTool>();
+        Assert.StartsWith("wrote vocab.txt", await Invoke(write, ("path", "vocab.txt"), ("content", "toki: talk\npona: good")), StringComparison.Ordinal);
+        // The session's shape: the file is one the model wrote (seen), so a write without a mode would replace it.
+        Assert.Equal(FileText.ContentRequired("patch_file", sentEdit: true), await Invoke(write, ("path", "vocab.txt"), ("old_text", "toki: talk"), ("new_text", "toki: talk, language")));
+        Assert.Equal(FileText.ContentRequired("patch_file", sentEdit: false), await Invoke(write, ("path", "vocab.txt"), ("mode", "overwrite")));
+        Assert.Equal(FileText.ContentRequired("patch_file", sentEdit: false), await Invoke(write, ("path", "vocab.txt"), ("content", Json("null")), ("mode", "append")));
+        Assert.Equal("toki: talk\npona: good", File.ReadAllText(Path.Combine(_root, "vocab.txt")));
+        Assert.Equal("Error: content is required: the whole text to write (\"\" for an empty file); to change part of a file use patch_file", FileText.ContentRequired("patch_file", sentEdit: true));
+        Assert.Equal("Error: content is required: the whole text to write (\"\" for an empty file)", FileText.ContentRequired("patch_file", sentEdit: false));
+        // An explicit "" is an empty file.
+        Assert.StartsWith("wrote empty.txt", await Invoke(write, ("path", "empty.txt"), ("content", "")), StringComparison.Ordinal);
+        Assert.Equal("", File.ReadAllText(Path.Combine(_root, "empty.txt")));
+
+        var patch = Tool<PatchFileTool>();
+        Assert.Equal(FileText.NewTextRequired, await Invoke(patch, ("path", "vocab.txt"), ("old_text", "pona: good")));
+        Assert.Equal("toki: talk\npona: good", File.ReadAllText(Path.Combine(_root, "vocab.txt")));
+        Assert.Equal("Error: new_text is required: the text to put in place of old_text (\"\" removes it)", FileText.NewTextRequired);
+        // An explicit "" removes old_text.
+        Assert.StartsWith("edited vocab.txt", await Invoke(patch, ("path", "vocab.txt"), ("old_text", "\npona: good"), ("new_text", "")), StringComparison.Ordinal);
+        Assert.Equal("toki: talk", File.ReadAllText(Path.Combine(_root, "vocab.txt")));
+
+        // A pruned stub copied back from the history is no text (2026-10-17, call arguments pruned): refused before any write.
+        string stub = NeonSidekick.Llm.ConversationCompactor.PrunedArgumentStub(27_610);
+        Assert.Equal(FileText.PrunedStubSent("content"), await Invoke(write, ("path", "vocab.txt"), ("content", stub), ("mode", "overwrite")));
+        Assert.Equal(FileText.PrunedStubSent("new_text"), await Invoke(patch, ("path", "vocab.txt"), ("old_text", "toki: talk"), ("new_text", stub)));
+        Assert.Equal("toki: talk", File.ReadAllText(Path.Combine(_root, "vocab.txt")));
+        Assert.Equal("Error: content is a pruned stub, not the text; read the file again (or load_skill) and send the whole text", FileText.PrunedStubSent("content"));
     }
 
     [WindowsFact]

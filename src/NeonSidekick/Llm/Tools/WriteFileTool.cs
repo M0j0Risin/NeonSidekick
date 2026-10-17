@@ -119,6 +119,18 @@ public sealed class WriteFileTool : FileTool
             return new ValueTask<object?>(refused);
         }
 
+        // A missing content is not "" (2026-10-17, the toki-pona session): read as empty, a write with old_text/new_text instead replaced a
+        // 27 KB file with nothing — and with the seen-file overwrite below, without any mode.
+        if (!ToolArguments.Has(arguments, ContentArgument))
+        {
+            return new ValueTask<object?>(FileText.ContentRequired(PatchFileTool.ToolName, SentEdit(arguments)));
+        }
+
+        if (StubSent(arguments, ContentArgument) is { } stub)
+        {
+            return new ValueTask<object?>(stub);
+        }
+
         // No mode on a file the model read whole, wrote or patched this session and that is unchanged since (2026-10-10, the user's call: a run
         // retried twice, each a whole request, for files it had just read or made): it is replaced, as mode overwrite would. A file it
         // never saw, or one changed since, is still refused; an explicit create still never replaces.
@@ -136,6 +148,17 @@ public sealed class WriteFileTool : FileTool
 
         return new ValueTask<object?>(ToolDiffResult.Of(text, diff));
     }
+
+    /// <summary>
+    /// The refusal of a write whose <paramref name="argument"/> is a pruned stub copied back from the history (2026-10-17,
+    /// <see cref="Llm.ConversationCompactor.IsPrunedStub"/>); null for real text. The write tools share it.
+    /// </summary>
+    public static string? StubSent(AIFunctionArguments arguments, string argument) =>
+        Llm.ConversationCompactor.IsPrunedStub(ToolArguments.ReadString(arguments, argument)) ? FileText.PrunedStubSent(argument) : null;
+
+    /// <summary>Whether a call sent an edit's arguments (<c>old_text</c> or <c>new_text</c>) in place of a write's <c>content</c> (2026-10-17).</summary>
+    public static bool SentEdit(AIFunctionArguments arguments) =>
+        ToolArguments.Has(arguments, PatchFileTool.OldTextArgument) || ToolArguments.Has(arguments, PatchFileTool.NewTextArgument);
 }
 
 /// <summary>What <c>write_file</c> does with a file that is there: refuses (<see cref="Create"/>), replaces it, or adds to its end.</summary>

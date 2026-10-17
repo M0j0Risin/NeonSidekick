@@ -45,7 +45,7 @@ public class CompactTypeTests
         }
 
         Assert.Equal("summarize the older turns into one message, keep the recent ones", CompactType.Describe("summary"));
-        Assert.Equal("stub the bulky tool results in the older turns, keep every turn", CompactType.Describe("prune"));
+        Assert.Equal("stub the bulky tool results and call arguments in the older turns, keep every turn", CompactType.Describe("prune"));
         Assert.Equal("", CompactType.Describe("both"));
     }
 

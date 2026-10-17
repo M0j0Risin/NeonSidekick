@@ -23530,6 +23530,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("No stored session to learn from yet.", ChatScreen.LearnNoSessionsError);
         Assert.Equal("/learn sessions takes a count from 1 to 20 or the text to search for.", ChatScreen.LearnSessionsCountError);
         Assert.Equal("(🧠 learning from the sessions follows the one running)", ChatScreen.LearnSessionsQueuedNotice);
+        // The trigger's skip line names its real reason (2026-10-17): a turn that wrote a skill was logged as "below 4 calls" after 14.
+        var short_ = new TurnTrace();
+        Assert.Equal("No reflection: " + short_ + " (below 4 calls, no recovered error).", ChatScreen.NoReflectionLogLine(short_, 4, autoLearn: true));
+        Assert.Equal("No reflection: " + short_ + "; Skills auto learn is off.", ChatScreen.NoReflectionLogLine(short_, 4, autoLearn: false));
+        var wrote = new TurnTrace();
+        wrote.Observe(new TurnEvent.ToolCall(SkillEditorTool.ToolName, "c1", "{}"));
+        wrote.Observe(new TurnEvent.ToolResult(SkillEditorTool.ToolName, "c1", "created skill 'x' (profile, 10 bytes)"));
+        Assert.True(wrote.WroteSkill);
+        Assert.Equal("No reflection: " + wrote + "; the turn wrote a skill itself.", ChatScreen.NoReflectionLogLine(wrote, 4, autoLearn: true));
         Assert.Equal("No reflection: cooling down (docker-deploy updated 12 minutes ago; 18 minutes to go).", ChatScreen.CooldownLogLine(new ReflectionMark(DateTimeOffset.UnixEpoch, "docker-deploy", "updated"), TimeSpan.FromMinutes(12.5), TimeSpan.FromMinutes(17.5)));
         Assert.Equal("No reflection: cooling down (docker-deploy updated 2 minutes ago; 3 minutes to go; the turns loaded it).", ChatScreen.CooldownLogLine(new ReflectionMark(DateTimeOffset.UnixEpoch, "docker-deploy", "updated"), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(3), loaded: true));
         Assert.Equal("Reflection inside the cooldown: docker-deploy updated 2 minutes ago, 3 errors followed its load.", ChatScreen.CooldownErrorLogLine(new ReflectionMark(DateTimeOffset.UnixEpoch, "docker-deploy", "updated"), TimeSpan.FromMinutes(2.5), 3));

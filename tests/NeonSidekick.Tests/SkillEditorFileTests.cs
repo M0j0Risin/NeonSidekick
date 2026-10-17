@@ -110,6 +110,79 @@ public class SkillEditorFileTests : IDisposable
         Assert.Equal("Error: 'maybe' is not true or false for 'replace_all'", await Invoke(("action", "edit_file"), ("name", "emojese"), ("path", "mapping.json"), ("old_text", "a"), ("new_text", "b"), ("replace_all", "maybe")));
     }
 
+    /// <summary>
+    /// The toki-pona session's call (2026-10-17): write_file with path, old_text and new_text and no content emptied a 27 KB vocabulary file.
+    /// A missing content (or an edit's missing new_text) is refused now, pointing at edit_file; the file is untouched.
+    /// </summary>
+    [Fact]
+    public async Task AMissingContentOrNewText_IsRefused_TheFileUntouched()
+    {
+        string folder = Put(_roots.Profile, "toki-pona");
+        string vocab = Path.Combine(folder, "references", "vocabulary.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(vocab)!);
+        File.WriteAllText(vocab, "# Use the highest-weight gloss as the default meaning.\na: [ah 94]\n");
+
+        string answer = await Invoke(("action", "write_file"), ("name", "toki-pona"), ("old_text", "# Use the highest-weight gloss as the default meaning."),
+            ("new_text", "# Use the highest-weight gloss as the default meaning.\n\n## Number values"), ("path", "references/vocabulary.txt"));
+        Assert.Equal(SkillText.NoContent(sentEdit: true), answer);
+        Assert.Equal("Error: content is required: the whole file (\"\" for an empty one); to change part of it use action edit_file", answer);
+        Assert.Equal("Error: content is required: the whole file (\"\" for an empty one)", await Invoke(("action", "write_file"), ("name", "toki-pona"), ("path", "references/vocabulary.txt")));
+        Assert.Equal("Error: new_text is required: the text to put in place of old_text (\"\" removes it)", await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "references/vocabulary.txt"), ("old_text", "a: [ah 94]")));
+        Assert.Equal("# Use the highest-weight gloss as the default meaning.\na: [ah 94]\n", File.ReadAllText(vocab));
+        Assert.Null(_tool.LastResult);
+
+        // An explicit "" is still an empty file.
+        Assert.StartsWith("skill 'toki-pona' (profile): wrote empty.txt", await Invoke(("action", "write_file"), ("name", "toki-pona"), ("path", "empty.txt"), ("content", "")), StringComparison.Ordinal);
+
+        // A pruned stub copied back from the history is no text (2026-10-17): refused for a file's content, an edit's new_text and an update's instructions.
+        string stub = ConversationCompactor.PrunedArgumentStub(27_610);
+        Assert.Equal(Files.FileText.PrunedStubSent("content"), await Invoke(("action", "write_file"), ("name", "toki-pona"), ("path", "references/vocabulary.txt"), ("content", stub)));
+        Assert.Equal(Files.FileText.PrunedStubSent("new_text"), await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "references/vocabulary.txt"), ("old_text", "a: [ah 94]"), ("new_text", stub)));
+        Assert.Equal(Files.FileText.PrunedStubSent("instructions"), await Invoke(("action", "update"), ("name", "toki-pona"), ("instructions", stub)));
+        Assert.Equal("# Use the highest-weight gloss as the default meaning.\na: [ah 94]\n", File.ReadAllText(vocab));
+    }
+
+    /// <summary>
+    /// edit_file on the SKILL.md itself (2026-10-17, the toki-pona session: a one-line change was refused and the whole 10 KB body resent
+    /// through update): part of the body, the frontmatter kept, an Updated result with the replaced text as its revision.
+    /// </summary>
+    [Fact]
+    public async Task EditFile_OnTheSkillMd_ChangesPartOfTheBody_ThroughUpdatesRules()
+    {
+        string folder = Put(_roots.Profile, "toki-pona");
+        string skillMd = Path.Combine(folder, SkillCatalog.FileName);
+        File.WriteAllText(skillMd, SkillFrontmatter.Write("toki-pona", "Speaks toki pona.", ["license: MIT"], "# Speaking Toki Pona\n\nEstablished words: majuna, soko.\n\nUse li after a subject."));
+        string before = File.ReadAllText(skillMd);
+
+        string answer = await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "SKILL.md"), ("old_text", "majuna, soko."), ("new_text", "majuna, soko, epiku."));
+        Assert.StartsWith("updated skill 'toki-pona' (profile, ", answer, StringComparison.Ordinal);
+        Assert.Equal(SkillEditOutcome.Updated, _tool.LastResult!.Outcome);
+        Assert.Equal(before, _tool.LastResult.Previous);
+        Assert.True(_tool.LastResult.Existed);
+        Assert.Equal(SkillFrontmatter.Write("toki-pona", "Speaks toki pona.", ["license: MIT"], "# Speaking Toki Pona\n\nEstablished words: majuna, soko, epiku.\n\nUse li after a subject."), File.ReadAllText(skillMd));
+
+        // The frontmatter is out of reach: its text is not in the body the edit searches.
+        string notFound = await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "./skill.md"), ("old_text", "description: Speaks toki pona."), ("new_text", "description: x"));
+        Assert.Equal("Error: skill 'toki-pona' (profile): " + Files.FileText.EditNotFound("SKILL.md")["Error: ".Length..], notFound);
+        Assert.Equal(SkillEditOutcome.FileRefused, _tool.LastResult!.Outcome);
+        // An edit that leaves no instructions is refused as an empty body.
+        Assert.Equal("Error: instructions is empty; write the steps the skill follows",
+            await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "SKILL.md"), ("old_text", "# Speaking Toki Pona\n\nEstablished words: majuna, soko, epiku.\n\nUse li after a subject."), ("new_text", "")));
+        Assert.Contains("epiku", File.ReadAllText(skillMd), StringComparison.Ordinal);
+
+        // A SKILL.md in a subfolder is a supporting file, edited as one.
+        Directory.CreateDirectory(Path.Combine(folder, "sub"));
+        File.WriteAllText(Path.Combine(folder, "sub", "SKILL.md"), "notes: old");
+        Assert.StartsWith("skill 'toki-pona' (profile): edited sub", await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "sub/SKILL.md"), ("old_text", "old"), ("new_text", "new")), StringComparison.Ordinal);
+        Assert.True(SkillEditorTool.IsSkillMd(" .\\SKILL.md "));
+        Assert.False(SkillEditorTool.IsSkillMd("sub/SKILL.md"));
+
+        // A locked skill refuses it as it refuses update.
+        File.WriteAllText(Path.Combine(folder, SkillLock.FileName), "");
+        Assert.StartsWith("Error: ", await Invoke(("action", "edit_file"), ("name", "toki-pona"), ("path", "SKILL.md"), ("old_text", "epiku"), ("new_text", "x")), StringComparison.Ordinal);
+        Assert.Equal(SkillEditOutcome.Locked, _tool.LastResult!.Outcome);
+    }
+
     [Theory]
     [InlineData("SKILL.md", true)]
     [InlineData("skill.md", true)]
@@ -126,7 +199,7 @@ public class SkillEditorFileTests : IDisposable
 
         Assert.Equal(SkillEditOutcome.ProtectedFile, _tool.LastResult!.Outcome);
         Assert.Equal(skillMd
-            ? $"Error: '{path}' is the skill itself; change skill 'emojese' with action update (description, instructions)"
+            ? $"Error: '{path}' is the skill itself; change skill 'emojese' with action update (description, instructions), or edit_file for part of its instructions"
             : $"Error: '{path}' in skill 'emojese' is the app's, not the skill's; pick another path", answer);
         Assert.Equal(before, File.ReadAllText(Path.Combine(folder, SkillCatalog.FileName)));
         Assert.False(File.Exists(Path.Combine(folder, SkillProvenance.FileName)));

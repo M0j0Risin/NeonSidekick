@@ -228,6 +228,24 @@ public sealed class WebFetcher
     }
 
     /// <summary>
+    /// <paramref name="url"/> without its fragment, the key a page is known by (2026-10-17, the toki-pona session: <c>#n</c> then
+    /// <c>#epiku</c> on one page downloaded it twice): the page cache's and the search referers'. A fragment never reaches the server.
+    /// </summary>
+    public static string PageKey(Uri url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        return url.Fragment.Length == 0 ? url.AbsoluteUri : url.GetComponents(UriComponents.AbsoluteUri & ~UriComponents.Fragment, UriFormat.UriEscaped);
+    }
+
+    /// <summary>The fragment of <paramref name="url"/>, unescaped and without its <c>#</c>; null when it has none (2026-10-17).</summary>
+    public static string? FragmentOf(Uri url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        string fragment = url.Fragment.TrimStart('#');
+        return fragment.Length == 0 ? null : Uri.UnescapeDataString(fragment);
+    }
+
+    /// <summary>
     /// What the model typed as a URL: an absolute http(s) URL as is, a bare <c>example.com/page</c>
     /// with <c>https://</c> put in front; null for anything else (a path, another scheme, blank).
     /// </summary>

@@ -17,7 +17,7 @@ public enum ToolCompactMode
     /// </summary>
     Compact,
 
-    /// <summary>This turn's older tool results (every iteration's but the last) become stubs and the loop carries on.</summary>
+    /// <summary>This turn's older tool results and long call arguments (every iteration's but the last; the arguments since 2026-10-17) become stubs and the loop carries on.</summary>
     Prune,
 
     /// <summary>The turn ends with an error notice; the results so far stay in the history.</summary>
@@ -79,7 +79,7 @@ public static class ToolCompactType
     public static string Describe(string name) => name switch
     {
         "compact" => "prune, then summarize if the turn is still over the share",
-        "prune" => "stub this turn's older tool results and carry on",
+        "prune" => "stub this turn's older tool results and call arguments and carry on",
         "stop" => "end the turn with a notice; /compact or /clear first",
         "off" => "no check; the server's own limit answers",
         _ => "",

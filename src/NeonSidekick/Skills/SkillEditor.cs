@@ -409,6 +409,94 @@ public static class SkillEditor
         });
     }
 
+    /// <summary>
+    /// <c>skill_editor</c>'s <c>edit_file</c> on the SKILL.md itself (2026-10-17, the toki-pona session: a one-line change was refused and
+    /// the model resent the whole 10 KB body through <c>update</c>): <paramref name="oldText"/> → <paramref name="newText"/> in the body alone
+    /// — the text <c>load_skill</c> serves, <see cref="SkillFrontmatter.TryParse"/>'s, so the frontmatter and its <c>name:</c> are out of
+    /// reach — by <c>patch_file</c>'s fuzzy match, then written through <see cref="Update"/>, whose checks, caps, frontmatter rewrite and
+    /// revision are the edit's: the result is <see cref="SkillEditOutcome.Updated"/>. A match that replaced nothing is
+    /// <see cref="SkillEditOutcome.FileRefused"/> with the file tools' sentence (path <c>SKILL.md</c>); a body the edit leaves blank is
+    /// <see cref="SkillEditOutcome.EmptyInstructions"/>.
+    /// </summary>
+    public static SkillEditResult EditBody(SkillRoots roots, SkillScope scope, string name, string oldText, string newText, bool replaceAll, bool external)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(oldText);
+        ArgumentNullException.ThrowIfNull(newText);
+        name = name.Trim();
+        scope = Visible(roots, scope);
+        if (!SkillFrontmatter.IsValidName(name))
+        {
+            return new SkillEditResult(SkillEditOutcome.BadName, name, scope);
+        }
+
+        if (!File.Exists(Path.Combine(roots.Of(scope), name, SkillCatalog.FileName)))
+        {
+            switch (Find(roots, name, external))
+            {
+                case SkillScope.External:
+                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+                case { } found:
+                    scope = found;
+                    break;
+                default:
+                    return new SkillEditResult(SkillEditOutcome.Missing, name, scope);
+            }
+        }
+
+        string directory = Path.Combine(roots.Of(scope), name);
+        if (SkillLock.IsLocked(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, name, scope);
+        }
+
+        if (SkillDisable.IsDisabled(directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Disabled, name, scope);
+        }
+
+        // edit_file's own refusals first, in EditText's order.
+        string needle = WorkingDirectory.NormalizeNewlines(oldText);
+        string replacement = WorkingDirectory.NormalizeNewlines(newText);
+        EditResult? refused = oldText.Trim().Length == 0 ? new EditResult(FileOutcome.Empty, SkillCatalog.FileName, 0, 0)
+            : newText.Length > WorkingDirectory.MaxWriteChars ? new EditResult(FileOutcome.TooLong, SkillCatalog.FileName, 0, 0)
+            : string.Equals(needle, replacement, StringComparison.Ordinal) ? new EditResult(FileOutcome.Same, SkillCatalog.FileName, 0, 0)
+            : null;
+        if (refused is not null)
+        {
+            return BodyRefused(refused, name, scope);
+        }
+
+        string text;
+        try
+        {
+            text = WorkingDirectory.Decode(File.ReadAllBytes(Path.Combine(directory, SkillCatalog.FileName)), out _);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new SkillEditResult(SkillEditOutcome.Failed, name, scope, Detail: ex.Message);
+        }
+
+        if (!SkillFrontmatter.TryParse(text, out _, out string body, out string? problem))
+        {
+            return new SkillEditResult(SkillEditOutcome.Unparseable, name, scope, Detail: problem ?? "");
+        }
+
+        var match = FuzzyMatch.Replace(WorkingDirectory.NormalizeNewlines(body), needle, replacement, replaceAll);
+        if (WorkingDirectory.EditRefusal(match, SkillCatalog.FileName) is { } missed)
+        {
+            return BodyRefused(missed, name, scope);
+        }
+
+        return match.Content.Trim().Length == 0
+            ? new SkillEditResult(SkillEditOutcome.EmptyInstructions, name, scope)
+            : Update(roots, scope, name, null, match.Content, external);
+    }
+
+    private static SkillEditResult BodyRefused(EditResult refused, string name, SkillScope scope) =>
+        new(SkillEditOutcome.FileRefused, name, scope, Detail: FileText.Edited(refused), Path: SkillCatalog.FileName);
+
     /// <summary>The skill's folder found as <see cref="Update"/> finds it, the path checked, then <paramref name="act"/> over a <see cref="WorkingDirectory"/> rooted there.</summary>
     private static SkillEditResult InFile(SkillRoots roots, SkillScope scope, string name, string path, bool external, TimeProvider time, Func<WorkingDirectory, string, (string Name, SkillScope Scope), SkillEditResult> act)
     {

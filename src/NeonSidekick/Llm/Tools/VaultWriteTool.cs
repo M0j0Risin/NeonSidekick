@@ -69,6 +69,17 @@ public sealed class VaultWriteTool : VaultTool
             return new ValueTask<object?>(refused);
         }
 
+        // A missing content is not "" (2026-10-17, the toki-pona session's write_file: read as empty it replaced a whole file with nothing).
+        if (!ToolArguments.Has(arguments, ContentArgument))
+        {
+            return new ValueTask<object?>(ObsidianText.Required(ContentArgument));
+        }
+
+        if (WriteFileTool.StubSent(arguments, ContentArgument) is { } stub)
+        {
+            return new ValueTask<object?>(stub);
+        }
+
         string content = ToolArguments.ReadString(arguments, ContentArgument);
         string heading = ToolArguments.ReadString(arguments, VaultReadTool.HeadingArgument);
         return OffThread(() => Vault.Write(note, content, mode, heading), cancellationToken);

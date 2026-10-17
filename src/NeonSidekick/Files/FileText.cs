@@ -47,6 +47,24 @@ public static class FileText
     public static string BadChoice(string argument, string raw, string choices) => $"Error: '{raw.Trim()}' is not one of {choices} for '{argument}'";
     /// <summary>A required path argument left out (2026-09-18: a `write_file` with `content` alone was told `'' is a folder`). Pinned.</summary>
     public static string PathRequired(string argument) => $"Error: {argument} is required: the file or folder, relative to the working directory";
+
+    /// <summary>
+    /// A write with no <c>content</c> at all (2026-10-17, the toki-pona session: <c>write_file</c> sent with <c>old_text</c> and <c>new_text</c>
+    /// and no <c>content</c> replaced a 27 KB file with nothing). <paramref name="sentEdit"/>, when old_text or new_text came instead, points
+    /// at <paramref name="patchTool"/>. Pinned.
+    /// </summary>
+    public static string ContentRequired(string patchTool, bool sentEdit) =>
+        "Error: content is required: the whole text to write (\"\" for an empty file)" + (sentEdit ? "; to change part of a file use " + patchTool : "");
+
+    /// <summary>
+    /// A write whose <paramref name="argument"/> is a pruned stub copied back from the history (2026-10-17, with call arguments pruned:
+    /// <c>Llm.ConversationCompactor.IsPrunedStub</c>) — it would replace the text with the stub. Pinned.
+    /// </summary>
+    public static string PrunedStubSent(string argument) =>
+        $"Error: {argument} is a pruned stub, not the text; read the file again (or load_skill) and send the whole text";
+
+    /// <summary>An edit with no <c>new_text</c> at all (2026-10-17): read as <c>""</c>, it removed old_text. Pinned.</summary>
+    public const string NewTextRequired = "Error: new_text is required: the text to put in place of old_text (\"\" removes it)";
     public static readonly string TooLong =
         "Error: the content is over " + WorkingDirectory.MaxWriteChars.ToString("N0", CultureInfo.InvariantCulture) + " characters; write it in parts";
 
@@ -76,6 +94,13 @@ public static class FileText
     /// descriptions, which name the folder (or a saved picture's full path) only on the tools that reach it. Pinned.
     /// </summary>
     public static string InImagesFolder(string path) => $"Error: '{path}' is in the user's images folder, outside the working directory, and this tool cannot reach it; the tools that can say so in their descriptions (a full path in the user's images folder, or a saved picture's full path)";
+
+    /// <summary>
+    /// A path refused as outside that lies in a skill folder (<see cref="FileOutcome.InSkillFolder"/>, 2026-10-17, the toki-pona session: the
+    /// model found <c>load_skill</c> on its third try). It names no parts: the path itself shows the skill. Pinned.
+    /// </summary>
+    public static string InSkillFolder(string path) =>
+        $"Error: '{path}' is a skill's file, outside the working directory; read it with load_skill (name: the skill's folder name, file: the path inside that folder) and change it with skill_editor";
 
     /// <summary><c>open</c> on a file in the images folder that is no picture (code review, 2026-10-11): the shell would run it. Pinned.</summary>
     public static string OpenImagesFolderNotPicture(string path) => $"Error: '{path}' is not a picture: in the user's images folder open shows only pictures and folders";
@@ -256,6 +281,7 @@ public static class FileText
             FileOutcome.GitProtected => GitProtected(path),
             FileOutcome.DatabaseProtected => DatabaseProtected(path),
             FileOutcome.InImagesFolder => InImagesFolder(path),
+            FileOutcome.InSkillFolder => InSkillFolder(path),
             _ => CouldNot(verb, path, detail),
         };
 

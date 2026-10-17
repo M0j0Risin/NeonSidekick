@@ -64,4 +64,30 @@ public sealed record SkillRoots(string Profile, string Global, string External, 
 
     /// <summary>Whether <paramref name="scope"/> is the global root while this profile has it switched off (2026-10-13).</summary>
     public bool Hides(SkillScope scope) => !Reads(scope);
+
+    /// <summary>
+    /// The roots <c>load_skill</c> reads from, for the working directory's refusal of a skill's file (2026-10-17,
+    /// <see cref="Files.WorkingDirectory.SkillFolders"/>): none while <paramref name="agentSkills"/> is off, the global root only while
+    /// <see cref="GlobalOn"/>, the external one only with <paramref name="externalSkills"/> — the sentence never names a tool not offered.
+    /// </summary>
+    public IReadOnlyList<string> ReadFolders(bool agentSkills, bool externalSkills)
+    {
+        if (!agentSkills)
+        {
+            return [];
+        }
+
+        var folders = new List<string>(3) { Profile };
+        if (GlobalOn)
+        {
+            folders.Add(Global);
+        }
+
+        if (externalSkills)
+        {
+            folders.Add(External);
+        }
+
+        return folders;
+    }
 }

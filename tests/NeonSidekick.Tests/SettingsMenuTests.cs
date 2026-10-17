@@ -1022,7 +1022,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("compact", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, data, _settings.ProfileDirectory));
         Assert.Equal("compact [#9A8BB8]prune, then summarize if the turn is still over the share[/]", SettingsMenu.ToolCompactTypeLabel("compact"));
         Assert.Equal("stop", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, new AppSettingsData { LlmToolCompactType = "stop" }, _settings.ProfileDirectory));
-        Assert.Equal("prune   [#9A8BB8]stub this turn's older tool results and carry on[/]", SettingsMenu.ToolCompactTypeLabel("prune"));
+        Assert.Equal("prune   [#9A8BB8]stub this turn's older tool results and call arguments and carry on[/]", SettingsMenu.ToolCompactTypeLabel("prune"));
         Assert.Equal("stop    [#9A8BB8]end the turn with a notice; /compact or /clear first[/]", SettingsMenu.ToolCompactTypeLabel("stop"));
         Assert.Equal("off     [#9A8BB8]no check; the server's own limit answers[/]", SettingsMenu.ToolCompactTypeLabel("off"));
         // The turn-loop rows: on the LLM tab, no reconnect — the tools a toggle whose flip clears the conversation, the cap typed.
@@ -1061,7 +1061,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("50", SettingsMenu.EditableValue(SettingsField.LlmMaxTurns, new AppSettingsData { LlmMaxTurns = 50 }));
         Assert.Equal("must be auto (0) or 1 to 500 turns", SettingsMenu.LlmMaxTurnsRangeError);
         Assert.Equal("summary [#9A8BB8]summarize the older turns into one message, keep the recent ones[/]", SettingsMenu.CompactTypeLabel("summary"));
-        Assert.Equal("prune   [#9A8BB8]stub the bulky tool results in the older turns, keep every turn[/]", SettingsMenu.CompactTypeLabel("prune"));
+        Assert.Equal("prune   [#9A8BB8]stub the bulky tool results and call arguments in the older turns, keep every turn[/]", SettingsMenu.CompactTypeLabel("prune"));
         // The context length: an LLM row (a reconnect), typed, 0 for the server's own figure.
         Assert.True(SettingsMenu.IsLlmField(SettingsField.LlmContextLength));
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmContextLength));

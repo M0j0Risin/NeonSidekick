@@ -34,7 +34,7 @@ public sealed class WebFetchTool : AIFunction
         {
           "type": "object",
           "properties": {
-            "url": { "type": "string", "description": "The page's address (http or https)." },
+            "url": { "type": "string", "description": "The page's address (http or https). A #anchor starts the text at that part of the page." },
             "offset": { "type": "integer", "description": "Where to continue a long page, in characters: the number the previous result's header named. Leave it out to start at the top." }
           },
           "required": ["url"]
@@ -62,7 +62,15 @@ public sealed class WebFetchTool : AIFunction
     public override JsonElement JsonSchema => Schema;
 
     /// <summary>The window of a fetched page from <paramref name="offset"/>, under its header. Pure; pinned.</summary>
-    public static string Format(FetchResult page, int offset)
+    public static string Format(FetchResult page, int offset) => Format(page, offset, fragment: null);
+
+    /// <summary>
+    /// <see cref="Format(FetchResult, int)"/> starting at <paramref name="fragment"/> (2026-10-17, the toki-pona session: <c>#n</c> and
+    /// <c>#epiku</c> on one page both read from its top), the URL's fragment when no offset was given: the page's anchor of that id
+    /// (exact, then ignoring case) is where the window starts, named in the header; one the page lacks reads from the top and says so.
+    /// A text answer or a PDF has no anchors and ignores it. Pure.
+    /// </summary>
+    public static string Format(FetchResult page, int offset, string? fragment)
     {
         ArgumentNullException.ThrowIfNull(page);
         if (!page.Ok)
@@ -72,6 +80,7 @@ public sealed class WebFetchTool : AIFunction
 
         string title = page.Page?.Title ?? "";
         string text = page.Page?.Markdown ?? page.Text;
+        string url = WithoutFragment(page.FinalUrl);
         int total = text.Length;
         if (offset < 0)
         {
@@ -80,7 +89,22 @@ public sealed class WebFetchTool : AIFunction
 
         if (total == 0)
         {
-            return WebText.EmptyPage(title, page.FinalUrl, page.Engine);
+            return WebText.EmptyPage(title, url, page.Engine);
+        }
+
+        string? anchor = null;
+        bool missing = false;
+        if (fragment is { Length: > 0 } && page.Page is { } html && page.Engine != WebText.PdfEngine)
+        {
+            anchor = fragment;
+            if (FindAnchor(html.Anchors, fragment) is { } at)
+            {
+                offset = Math.Min(at, total - 1);
+            }
+            else
+            {
+                missing = true;
+            }
         }
 
         if (offset >= total)
@@ -89,9 +113,36 @@ public sealed class WebFetchTool : AIFunction
         }
 
         int end = Math.Min(total, offset + MaxChars);
-        string header = WebText.FetchHeader(title, page.FinalUrl, offset + 1, end, total, page.Engine, end < total ? end : null);
+        string header = WebText.FetchHeader(title, url, offset + 1, end, total, page.Engine, end < total ? end : null, anchor, missing);
         return header + "\n\n" + text[offset..end];
     }
+
+    private static int? FindAnchor(IReadOnlyDictionary<string, int>? anchors, string id)
+    {
+        if (anchors is null)
+        {
+            return null;
+        }
+
+        if (anchors.TryGetValue(id, out int exact))
+        {
+            return exact;
+        }
+
+        foreach (var (key, at) in anchors)
+        {
+            if (string.Equals(key, id, StringComparison.OrdinalIgnoreCase))
+            {
+                return at;
+            }
+        }
+
+        return null;
+    }
+
+    // The header names the page, not the fragment one fetch of it carried (a cached page keeps the first fetch's).
+    private static string WithoutFragment(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.Fragment.Length > 0 ? WebFetcher.PageKey(parsed) : url;
 
     /// <summary>The fetch itself, apart from the argument reading: the result text the model reads.</summary>
     public async Task<string> FetchAsync(string url, int? offset, CancellationToken cancellationToken)
@@ -114,7 +165,8 @@ public sealed class WebFetchTool : AIFunction
             return WebText.NegativeOffset;
         }
 
-        string key = parsed.AbsoluteUri;
+        // The page without its fragment (2026-10-17): another fragment of a page fetched a moment ago is the same download.
+        string key = WebFetcher.PageKey(parsed);
         var page = _web.Pages.TryGet(key);
         if (page is null)
         {
@@ -129,7 +181,8 @@ public sealed class WebFetchTool : AIFunction
             _web.Pages.Put(key, page);
         }
 
-        return Format(page, from);
+        // An offset given wins over the fragment.
+        return Format(page, from, offset is null ? WebFetcher.FragmentOf(parsed) : null);
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

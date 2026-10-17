@@ -56,7 +56,7 @@ public static class CompactionText
     private static string Line(ConversationCompactor.Result result, string head)
     {
         string glyph = result.Summarised ? CompactGlyph : Assistant.PruneGlyph;
-        string pruned = UsageText.Plural(result.Pruned, "tool result", "tool results") + " pruned";
+        string pruned = (result.ArgumentsPruned == 0 ? UsageText.Plural(result.Pruned, "tool result", "tool results") : Assistant.PrunedWords(result.Pruned, result.ArgumentsPruned)) + " pruned";
         string body;
         if (!result.Summarised)
         {
@@ -70,7 +70,7 @@ public static class CompactionText
                 body += " · " + UsageText.CompactNumber(usage.Input) + " → " + UsageText.CompactNumber(usage.Output) + " tokens";
             }
 
-            if (result.Pruned > 0)
+            if (result.Pruned + result.ArgumentsPruned > 0)
             {
                 body += " · " + pruned;
             }
@@ -108,7 +108,7 @@ public static class CompactionText
         ArgumentNullException.ThrowIfNull(entry);
         string body = entry.Pictures > 0
             ? UsageText.Plural(entry.Pictures, "picture", "pictures") + " from " + entry.Tool
-            : entry.Tool + " · " + UsageText.Plural(entry.Characters, "character", "characters");
+            : (entry.Argument is { } argument ? entry.Tool + " " + argument : entry.Tool) + " · " + UsageText.Plural(entry.Characters, "character", "characters");
         return "(" + Assistant.PruneGlyph + body + ")";
     }
 

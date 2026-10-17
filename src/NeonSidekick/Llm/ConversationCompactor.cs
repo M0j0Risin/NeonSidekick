@@ -6,7 +6,7 @@ namespace NeonSidekick.Llm;
 /// <summary>
 /// <c>/compact</c>: shrinks what the model re-reads on every request without forgetting it the way
 /// <c>/clear</c> does. Two modes (<see cref="CompactMode"/>): the older turns become one summary
-/// message written by the model itself, or their bulky tool results become one-line stubs. Either
+/// message written by the model itself, or their bulky tool results and long call arguments (2026-10-17) become one-line stubs. Either
 /// way the most recent turns (the setting <c>LLM compact keep recent</c>) stay word for word.
 ///
 /// <para>Pure statics over the message list plus one orchestration (<see cref="RunAsync"/>) that
@@ -22,10 +22,35 @@ namespace NeonSidekick.Llm;
 /// its result. The summary turn then ages out at <see cref="ConversationHistory.MaxTurns"/> like any
 /// other.</para>
 /// </summary>
-public static class ConversationCompactor
+public static partial class ConversationCompactor
 {
     /// <summary>A tool result longer than this (characters) is stubbed by <see cref="Prune"/>; shorter ones are left, a stub would not be smaller.</summary>
     public const int PruneThreshold = 200;
+
+    /// <summary>
+    /// A call's string argument longer than this (characters) is stubbed wherever a result would be (2026-10-17, the toki-pona
+    /// session: two 27 KB <c>write_file</c> bodies filled the context while their results were pruned); a name, a path, a query stays.
+    /// </summary>
+    public const int ArgumentPruneThreshold = 2_000;
+
+    /// <summary>
+    /// The tools whose arguments are never stubbed (2026-10-17): <c>present_plan</c>'s <c>markdown</c> is the plan an approved plan is
+    /// carried out from in this conversation. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> KeepsArguments = [Tools.PresentPlanTool.ToolName];
+
+    /// <summary>The stub a pruned argument becomes: <c>(a 27,610-character argument, pruned by /compact)</c> (2026-10-17). Pinned.</summary>
+    public static string PrunedArgumentStub(int length) =>
+        "(a " + length.ToString("N0", CultureInfo.InvariantCulture) + "-character argument, pruned by /compact)";
+
+    /// <summary>
+    /// Whether <paramref name="text"/> is a pruned stub, a result's or an argument's (2026-10-17): a small model that copied one back
+    /// as a write's content would replace a file with it. The write tools refuse it.
+    /// </summary>
+    public static bool IsPrunedStub(string? text) => text is not null && StubPattern().IsMatch(text);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\(a [\d,]+-character (?:result|argument), pruned by /compact\)\s*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex StubPattern();
 
     /// <summary>The summariser's system prompt. Pinned.</summary>
     public const string SummaryInstruction =
@@ -70,14 +95,18 @@ public static class ConversationCompactor
 
         /// <summary>How many messages at the end were protected: the recent turns (<see cref="Plan.Recent"/>) kept in place — verbatim by hand, their older results stubbed under the automatic compact.</summary>
         public int RecentKept { get; init; }
+
+        /// <summary>How many long call arguments were stubbed besides the results (2026-10-17, <see cref="ArgumentPruneThreshold"/>); <see cref="Entries"/> lists them with their argument named.</summary>
+        public int ArgumentsPruned { get; init; }
     }
 
     /// <summary>
     /// One stubbed result (2026-09-21): the tool that produced it (<see cref="UnknownTool"/> when no
     /// call in the history carries its id) and its length in characters, or — for a carrier's
-    /// pictures — <c>view_image</c> with <paramref name="Pictures"/> above zero and no length.
+    /// pictures — <c>view_image</c> with <paramref name="Pictures"/> above zero and no length. <paramref name="Argument"/> (2026-10-17)
+    /// names a stubbed call argument (<c>content</c>) instead of a result, its tool the call's.
     /// </summary>
-    public sealed record PrunedEntry(string Tool, int Characters, int Pictures = 0);
+    public sealed record PrunedEntry(string Tool, int Characters, int Pictures = 0, string? Argument = null);
 
     /// <summary>The tool name an entry carries when the result's call is not in the history (a hand-built list). Pinned.</summary>
     public const string UnknownTool = "tool";
@@ -343,7 +372,7 @@ public static class ConversationCompactor
     {
         ArgumentNullException.ThrowIfNull(plan);
         var messages = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
-        int pruned = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older), dropThinking: true, userPictures: true);
+        var (pruned, _) = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older), dropThinking: true, userPictures: true);
         messages.AddRange(plan.Recent);
         return (messages, pruned);
     }
@@ -383,7 +412,7 @@ public static class ConversationCompactor
             result.Add(messages[i]);
         }
 
-        int pruned = StubBeforeLastIteration(messages, start, result, protectSkills, entries, entries is null ? null : CallNames(messages));
+        var (pruned, _) = StubBeforeLastIteration(messages, start, result, protectSkills, entries, entries is null ? null : CallNames(messages));
         return (result, pruned);
     }
 
@@ -392,7 +421,7 @@ public static class ConversationCompactor
     /// the tool results and carriers before the last iteration stubbed: the last <see cref="ChatRole.Tool"/>
     /// message at or after <paramref name="from"/> and what follows it are copied. Returns the count stubbed.
     /// </summary>
-    private static int StubBeforeLastIteration(IReadOnlyList<ChatMessage> messages, int from, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries = null, IReadOnlyDictionary<string, string>? names = null)
+    private static (int Results, int Arguments) StubBeforeLastIteration(IReadOnlyList<ChatMessage> messages, int from, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries = null, IReadOnlyDictionary<string, string>? names = null)
     {
         int keep = from;
         for (int i = messages.Count - 1; i >= from; i--)
@@ -404,7 +433,19 @@ public static class ConversationCompactor
             }
         }
 
-        int pruned = Stub(messages, from, keep, into, protectSkills, entries, names);
+        // The last iteration's calls are the ones being answered (2026-10-17): their arguments are never stubbed — nor, with them, the
+        // Anthropic API's signed thinking, which rides that message and must go back unedited.
+        int lastCalls = int.MaxValue;
+        for (int i = messages.Count - 1; i >= from; i--)
+        {
+            if (messages[i].Role == ChatRole.Assistant && messages[i].Contents.OfType<FunctionCallContent>().Any(c => !Assistant.IsOpeningCallId(c.CallId)))
+            {
+                lastCalls = i;
+                break;
+            }
+        }
+
+        var pruned = Stub(messages, from, keep, into, protectSkills, entries, names, keepCallsFrom: lastCalls);
         for (int i = keep; i < messages.Count; i++)
         {
             into.Add(messages[i]);
@@ -423,9 +464,10 @@ public static class ConversationCompactor
     /// With <paramref name="userPictures"/> (the older turns' prune, 2026-10-03) a user message's own pictures go too, each
     /// <see cref="PictureBudget.LeftOut"/>, counted; never in the turn in flight, whose pictures the user just gave.
     /// </summary>
-    private static int Stub(IReadOnlyList<ChatMessage> messages, int from, int to, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries, IReadOnlyDictionary<string, string>? names, bool dropThinking = false, bool userPictures = false)
+    private static (int Results, int Arguments) Stub(IReadOnlyList<ChatMessage> messages, int from, int to, List<ChatMessage> into, bool protectSkills, List<PrunedEntry>? entries, IReadOnlyDictionary<string, string>? names, bool dropThinking = false, bool userPictures = false, int keepCallsFrom = int.MaxValue)
     {
         int pruned = 0;
+        int arguments = 0;
         for (int index = from; index < to; index++)
         {
             var message = messages[index];
@@ -463,12 +505,31 @@ public static class ConversationCompactor
                 continue;
             }
 
-            if (dropThinking && message.Role == ChatRole.Assistant && message.Contents.Any(c => c is TextReasoningContent))
+            if (message.Role == ChatRole.Assistant)
             {
-                var thoughtless = message.Clone();
-                thoughtless.Contents = message.Contents.Where(c => c is not TextReasoningContent).ToList();
-                into.Add(thoughtless);
-                continue;
+                // One clone for both (2026-10-17): the older turns' thinking dropped, and before the last iteration the calls' long
+                // string arguments stubbed as their results are.
+                IList<AIContent> contents = message.Contents;
+                bool thinking = dropThinking && contents.Any(c => c is TextReasoningContent);
+                if (thinking)
+                {
+                    contents = contents.Where(c => c is not TextReasoningContent).ToList();
+                }
+
+                var stubbed = index < keepCallsFrom ? StubArguments(contents, entries, ref arguments) : null;
+                if (thinking || stubbed is not null)
+                {
+                    var kept = message.Clone();
+                    kept.Contents = stubbed ?? contents;
+                    if (stubbed is not null)
+                    {
+                        // A raw SDK message would go out as it was, its arguments whole.
+                        kept.RawRepresentation = null;
+                    }
+
+                    into.Add(kept);
+                    continue;
+                }
             }
 
             if (message.Role != ChatRole.Tool)
@@ -494,8 +555,55 @@ public static class ConversationCompactor
             into.Add(rebuilt is null ? message : new ChatMessage(ChatRole.Tool, rebuilt));
         }
 
-        return pruned;
+        return (pruned, arguments);
     }
+
+    /// <summary>
+    /// <paramref name="contents"/> with every call's long string arguments stubbed (2026-10-17, the toki-pona session: two 27 KB
+    /// <c>write_file</c> bodies and several 10 KB skill bodies stayed in the history while their results were pruned, and the context
+    /// reached 94%, then 100%): a value over <see cref="ArgumentPruneThreshold"/> becomes <see cref="PrunedArgumentStub"/>, the keys kept
+    /// so the call still names its path, its action, its skill. The opening calls, a call that failed to parse (no arguments) and
+    /// <see cref="KeepsArguments"/>' are left; null when nothing changed. Each stub is counted and, with <paramref name="entries"/>, logged.
+    /// </summary>
+    private static List<AIContent>? StubArguments(IList<AIContent> contents, List<PrunedEntry>? entries, ref int count)
+    {
+        List<AIContent>? rebuilt = null;
+        for (int i = 0; i < contents.Count; i++)
+        {
+            if (contents[i] is not FunctionCallContent { Arguments: { } arguments } call || Assistant.IsOpeningCallId(call.CallId)
+                || KeepsArguments.Contains(call.Name, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            Dictionary<string, object?>? stubbed = null;
+            foreach (var (key, value) in arguments)
+            {
+                if (ArgumentText(value) is { Length: > ArgumentPruneThreshold } text)
+                {
+                    stubbed ??= new Dictionary<string, object?>(arguments, StringComparer.Ordinal);
+                    stubbed[key] = PrunedArgumentStub(text.Length);
+                    count++;
+                    entries?.Add(new PrunedEntry(call.Name, text.Length, Argument: key));
+                }
+            }
+
+            if (stubbed is not null)
+            {
+                rebuilt ??= new List<AIContent>(contents);
+                rebuilt[i] = new FunctionCallContent(call.CallId, call.Name, stubbed) { InformationalOnly = call.InformationalOnly };
+            }
+        }
+
+        return rebuilt;
+    }
+
+    private static string? ArgumentText(object? value) => value switch
+    {
+        string s => s,
+        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } element => element.GetString(),
+        _ => null,
+    };
 
     /// <summary>The longest one tool result runs in <see cref="LeanTranscript"/> (2026-09-28); the rest is cut, and <see cref="LeanCut"/> says how much.</summary>
     public const int LeanResultChars = 1500;
@@ -640,12 +748,13 @@ public static class ConversationCompactor
         var plan = Split(history.Messages, keepRecent);
         int before = history.Messages.Count;
         int recentPruned = 0;
+        int recentArguments = 0;
         var recentEntries = new List<PrunedEntry>();
         if (pruneRecent && plan.Recent.Count > 0)
         {
             var kept = new List<ChatMessage>(plan.Recent.Count);
-            recentPruned = StubBeforeLastIteration(plan.Recent, 0, kept, protectSkills, recentEntries, CallNames(plan.Recent));
-            if (recentPruned > 0)
+            (recentPruned, recentArguments) = StubBeforeLastIteration(plan.Recent, 0, kept, protectSkills, recentEntries, CallNames(plan.Recent));
+            if (recentPruned + recentArguments > 0)
             {
                 plan = plan with { Recent = kept };
             }
@@ -653,7 +762,7 @@ public static class ConversationCompactor
 
         if (!plan.HasOlderTurns)
         {
-            if (recentPruned == 0)
+            if (recentPruned + recentArguments == 0)
             {
                 return null;
             }
@@ -663,29 +772,32 @@ public static class ConversationCompactor
             shrunk.AddRange(plan.Recent);
             history.Replace(shrunk);
             tally.AddCompaction(null);
-            return new Result(before, shrunk.Count, recentPruned, null) { Entries = recentEntries, OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count };
+            return new Result(before, shrunk.Count, recentPruned, null) { Entries = recentEntries, OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = recentArguments };
         }
 
         if (mode == CompactMode.Prune)
         {
             var olderEntries = new List<PrunedEntry>();
-            var (pruned, count) = Prune(plan, protectSkills, olderEntries);
+            var older = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
+            var (count, arguments) = Stub(plan.Older, 0, plan.Older.Count, older, protectSkills, olderEntries, CallNames(plan.Older), dropThinking: true, userPictures: true);
+            older.AddRange(plan.Recent);
             count += recentPruned;
-            if (count == 0)
+            arguments += recentArguments;
+            if (count + arguments == 0)
             {
                 return null;
             }
 
-            history.Replace(pruned);
+            history.Replace(older);
             tally.AddCompaction(null);
-            return new Result(before, pruned.Count, count, null) { Entries = [.. olderEntries, .. recentEntries], OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count };
+            return new Result(before, older.Count, count, null) { Entries = [.. olderEntries, .. recentEntries], OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = arguments };
         }
 
         var (summary, usage) = await assistant.SummarizeAsync(plan.Older, focus, cancellationToken).ConfigureAwait(false);
         var messages = Summarised(summary, plan);
         history.Replace(messages);
         tally.AddCompaction(usage);
-        return new Result(before, messages.Count, recentPruned, usage, Summarised: true) { Summary = summary.Trim(), Entries = recentEntries, OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count };
+        return new Result(before, messages.Count, recentPruned, usage, Summarised: true) { Summary = summary.Trim(), Entries = recentEntries, OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = recentArguments };
     }
 
     /// <summary>The opening call id an assistant message carries, or null.</summary>

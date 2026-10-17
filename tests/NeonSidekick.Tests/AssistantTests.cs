@@ -2069,6 +2069,32 @@ public class AssistantTests
         Assert.Equal("done", history.Messages[^1].Text);
     }
 
+    /// <summary>
+    /// The toki-pona session's shape (2026-10-17): an earlier iteration's long argument (a write's body) goes with its result, the notice
+    /// names both, and the last iteration's call keeps its own long argument.
+    /// </summary>
+    [Fact]
+    public async Task Guard_Prune_StubsAnEarlierIterationsLongArgument_TooAndSaysSo()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Prune);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = LongText(3000) }), FakeChatClient.Usage(500, 50));
+        client.Enqueue(FakeChatClient.Call("c2", "echo", new Dictionary<string, object?> { ["text"] = LongText(2500) }), FakeChatClient.Usage(850, 50));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
+        Assert.StartsWith("(✂️ context at ", notice.Text, StringComparison.Ordinal);
+        Assert.EndsWith("%: pruned 1 tool result and 1 call argument from this turn)", notice.Text, StringComparison.Ordinal);
+        var third = client.Requests[2];
+        var first = Assert.Single(third[2].Contents.OfType<FunctionCallContent>());
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), first.Arguments!["text"]?.ToString());
+        var last = Assert.Single(third[4].Contents.OfType<FunctionCallContent>());
+        Assert.Equal(LongText(2500), last.Arguments!["text"]?.ToString());
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
     [Fact]
     public async Task Guard_Stop_EndsTheTurnAfterTheIterationsResults_WithAnErrorNotice()
     {

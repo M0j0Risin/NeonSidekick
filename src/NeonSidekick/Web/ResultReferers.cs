@@ -32,7 +32,7 @@ public sealed class ResultReferers
                     continue;
                 }
 
-                string key = url.AbsoluteUri;
+                string key = WebFetcher.PageKey(url);   // without its fragment (2026-10-17): a hit and its fetch match whichever carries one
                 if (_byUrl.TryGetValue(key, out var known))
                 {
                     _order.Remove(known.Node);
@@ -54,7 +54,7 @@ public sealed class ResultReferers
         ArgumentNullException.ThrowIfNull(url);
         lock (_gate)
         {
-            return _byUrl.TryGetValue(url.AbsoluteUri, out var known) ? known.Referer : null;
+            return _byUrl.TryGetValue(WebFetcher.PageKey(url), out var known) ? known.Referer : null;
         }
     }
 }

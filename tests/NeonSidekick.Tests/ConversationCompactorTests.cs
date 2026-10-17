@@ -570,6 +570,81 @@ public class ConversationCompactorTests
         Assert.Equal(Long(900), ((FunctionResultContent)messages[6].Contents[0]).Result);   // the held list untouched
     }
 
+    private static ChatMessage CallWith(string callId, string name, params (string Key, object? Value)[] arguments) =>
+        new(ChatRole.Assistant, [new FunctionCallContent(callId, name, arguments.ToDictionary(a => a.Key, a => a.Value))]);
+
+    /// <summary>
+    /// Long call arguments are stubbed as long results are (2026-10-17, the toki-pona session: two 27 KB write_file bodies and the skill
+    /// bodies stayed while their results were pruned). The session's shape in one turn: the earlier iterations' long arguments go, keys
+    /// and short ones kept, a raw SDK message dropped with them; the last iteration's call, the one being answered, is never touched.
+    /// </summary>
+    [Fact]
+    public void PruneRecent_StubsTheEarlierIterationsLongArguments_NeverTheLastCall()
+    {
+        var history = new ConversationHistory("s");
+        history.AddUser("write the vocabulary");
+        var write = CallWith("w1", "skill_editor", ("action", "write_file"), ("name", "toki-pona"), ("path", "references/vocabulary.txt"), ("content", Long(27_610)));
+        write.RawRepresentation = new object();
+        history.AddMessage(write);
+        history.AddToolResults([new FunctionResultContent("w1", "skill 'toki-pona' (profile): wrote references\\vocabulary.txt")]);
+        history.AddMessage(CallWith("p1", "present_plan", ("title", "t"), ("markdown", Long(5_000))));
+        history.AddToolResults([new FunctionResultContent("p1", "approved")]);
+        history.AddMessage(CallWith("w2", "write_file", ("path", "b.txt"), ("content", Long(3_000))));
+        history.AddToolResults([new FunctionResultContent("w2", "wrote b.txt")]);
+        var messages = history.Messages.ToList();
+        var entries = new List<ConversationCompactor.PrunedEntry>();
+
+        var (pruned, count) = ConversationCompactor.PruneRecent(messages, entries: entries);
+
+        Assert.Equal(0, count);   // no result was long: the arguments alone are this prune
+        var stubbed = (FunctionCallContent)pruned[1].Contents[0];
+        Assert.Equal("(a 27,610-character argument, pruned by /compact)", stubbed.Arguments!["content"]);
+        Assert.Equal("references/vocabulary.txt", stubbed.Arguments["path"]);
+        Assert.Equal("write_file", stubbed.Arguments["action"]);
+        Assert.Equal("w1", stubbed.CallId);
+        Assert.Null(pruned[1].RawRepresentation);
+        Assert.Same(messages[3], pruned[3]);   // present_plan's markdown is kept: an approved plan runs from it
+        Assert.Same(messages[5], pruned[5]);   // the last iteration's call, long content and all
+        Assert.Equal([new ConversationCompactor.PrunedEntry("skill_editor", 27_610, Argument: "content")], entries);
+        Assert.Equal(Long(27_610), ((FunctionCallContent)messages[1].Contents[0]).Arguments!["content"]);   // the held list untouched
+        Assert.True(ConversationCompactor.EstimateTokens(pruned) < ConversationCompactor.EstimateTokens(messages) - 6_000);
+        Assert.Equal(["present_plan"], ConversationCompactor.KeepsArguments);
+    }
+
+    /// <summary>A prune of an older turn stubs its long arguments too, the thinking dropped from the same clone; short arguments and the opening calls stay.</summary>
+    [Fact]
+    public async Task RunAsync_Prune_StubsAnOlderTurnsLongArguments_AndCountsThem()
+    {
+        var call = new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("thinking"), new FunctionCallContent("c1", "write_file", new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = Long(4_000) })]);
+        var (_, assistant, tally) = Build([User("one"), call, Result("c1", "wrote a.txt"), Assistant("done"), User("two"), Assistant("reply two")]);
+
+        var result = await ConversationCompactor.RunAsync(assistant, tally, CompactMode.Prune, keepRecent: 1, focus: null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.Pruned);
+        Assert.Equal(1, result.ArgumentsPruned);
+        var kept = assistant.History.Messages[1];
+        Assert.DoesNotContain(kept.Contents, c => c is TextReasoningContent);
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(4_000), ((FunctionCallContent)kept.Contents.Single()).Arguments!["content"]);
+        Assert.Equal("a.txt", ((FunctionCallContent)kept.Contents.Single()).Arguments!["path"]);
+        Assert.Equal("(✂️ write_file content · 4,000 characters)", NeonSidekick.App.CompactionText.PrunedLine(result.Entries.Single()));
+    }
+
+    [Fact]
+    public void PrunedStubs_AreRecognized_AndNothingElse()
+    {
+        Assert.True(ConversationCompactor.IsPrunedStub(ConversationCompactor.PrunedArgumentStub(27_610)));
+        Assert.True(ConversationCompactor.IsPrunedStub(" " + ConversationCompactor.PrunedStub(4_312) + "\n"));
+        Assert.False(ConversationCompactor.IsPrunedStub("The stub reads (a 12-character result, pruned by /compact) in the log."));
+        Assert.False(ConversationCompactor.IsPrunedStub(""));
+        Assert.False(ConversationCompactor.IsPrunedStub(null));
+        Assert.Equal("(a 27,610-character argument, pruned by /compact)", ConversationCompactor.PrunedArgumentStub(27_610));
+        Assert.Equal("3 tool results and 2 call arguments", NeonSidekick.Llm.Assistant.PrunedWords(3, 2));
+        Assert.Equal("1 call argument", NeonSidekick.Llm.Assistant.PrunedWords(0, 1));
+        Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", NeonSidekick.Llm.Assistant.TurnPrunedNotice(85, 23));
+        Assert.Equal("(✂️ context at 94%: pruned 11 tool results and 2 call arguments from this turn)", NeonSidekick.Llm.Assistant.TurnPrunedNotice(94, 11, 2));
+    }
+
     [Fact]
     public void PruneRecent_NothingToStub_IsACopyAndZero()
     {

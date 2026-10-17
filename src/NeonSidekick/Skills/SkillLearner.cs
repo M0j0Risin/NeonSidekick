@@ -188,7 +188,7 @@ public static class SkillLearner
     /// </summary>
     public const string SupportingFilesInstruction =
         "A skill may keep supporting files beside its instructions (data, examples, a script; load_skill lists them): when the turns corrected or extended one, keep it current with skill_editor action edit_file (old_text to new_text) or write_file (the whole file), a path relative to the skill folder. " +
-        "That call counts as your one skill_editor call; never write the SKILL.md that way.";
+        "That call counts as your one skill_editor call; the SKILL.md only through update, or edit_file for part of its instructions — never write_file.";
 
     /// <summary>The catalog's stand-in when no skill is installed. Pinned.</summary>
     public const string NoSkillsLine = "No skills are installed yet.";
@@ -231,7 +231,7 @@ public static class SkillLearner
     /// <see cref="ConversationHistory.IsTurnStart"/> message) with each tool result cut at
     /// <see cref="MaxResultChars"/>, the turns before it — the lead-up — with theirs cut at
     /// <see cref="MaxLeadUpResultChars"/>, both with <see cref="CutMark"/>; the user's words, the
-    /// replies and the calls whole throughout (a <c>write_file</c> body is the procedure itself).
+    /// replies and the calls as the history holds them (a <c>write_file</c> body is the procedure itself; since 2026-10-17 an earlier iteration's long argument may be a pruned stub, the file on disk).
     /// New message objects throughout — the history's are never edited.
     /// </summary>
     public static List<ChatMessage> Transcript(IReadOnlyList<ChatMessage> turn)

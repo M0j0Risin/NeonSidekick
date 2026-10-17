@@ -9,7 +9,7 @@ public enum CompactMode
     /// <summary>The older turns become one summary message; the recent turns stay verbatim. One model request.</summary>
     Summary,
 
-    /// <summary>Every turn stays; the bulky tool results in the older turns become one-line stubs. No model request.</summary>
+    /// <summary>Every turn stays; the bulky tool results and long call arguments (2026-10-17) in the older turns become one-line stubs. No model request.</summary>
     Prune,
 }
 
@@ -51,7 +51,7 @@ public static class CompactType
     public static string Describe(string name) => name switch
     {
         "summary" => "summarize the older turns into one message, keep the recent ones",
-        "prune" => "stub the bulky tool results in the older turns, keep every turn",
+        "prune" => "stub the bulky tool results and call arguments in the older turns, keep every turn",
         _ => "",
     };
 

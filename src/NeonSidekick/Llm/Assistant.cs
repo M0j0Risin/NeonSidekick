@@ -1023,9 +1023,20 @@ public sealed class Assistant
     /// <summary>The prefix of a failed compact's error line, <c>/compact</c>'s and the mid-turn guard's: <c>🗜️ Compact failed: </c> + <see cref="Explain"/>.</summary>
     public const string CompactFailedPrefix = CompactGlyph + "Compact failed: ";
 
-    /// <summary>The transcript line after the guard pruned: <c>(✂️ context at 85%: pruned 23 tool results from this turn)</c>. Pinned.</summary>
-    public static string TurnPrunedNotice(int percent, int pruned) =>
-        "(" + PruneGlyph + "context at " + percent.ToString(CultureInfo.InvariantCulture) + "%: pruned " + pruned.ToString(CultureInfo.InvariantCulture) + (pruned == 1 ? " tool result" : " tool results") + " from this turn)";
+    /// <summary>
+    /// The transcript line after the guard pruned: <c>(✂️ context at 85%: pruned 23 tool results from this turn)</c>; with long call
+    /// arguments stubbed too (2026-10-17), <c>pruned 3 tool results and 2 call arguments</c>, or the arguments alone. Pinned.
+    /// </summary>
+    public static string TurnPrunedNotice(int percent, int pruned, int arguments = 0) =>
+        "(" + PruneGlyph + "context at " + percent.ToString(CultureInfo.InvariantCulture) + "%: pruned " + PrunedWords(pruned, arguments) + " from this turn)";
+
+    /// <summary><c>23 tool results</c>, <c>3 tool results and 2 call arguments</c>, <c>2 call arguments</c> (2026-10-17): what a prune stubbed, for its notices.</summary>
+    public static string PrunedWords(int results, int arguments)
+    {
+        string resultWords = results.ToString(CultureInfo.InvariantCulture) + (results == 1 ? " tool result" : " tool results");
+        string argumentWords = arguments.ToString(CultureInfo.InvariantCulture) + (arguments == 1 ? " call argument" : " call arguments");
+        return arguments == 0 ? resultWords : results == 0 ? argumentWords : resultWords + " and " + argumentWords;
+    }
 
     /// <summary>The error line when the guard stopped the turn: <c>🛑 Stopped at 85% …</c>. Pinned.</summary>
     public static string TurnStoppedNotice(int percent) =>
@@ -1789,13 +1800,16 @@ public sealed class Assistant
                     yield break;
                 }
 
-                var (shrunk, pruned) = ConversationCompactor.PruneRecent(_history.Messages, guard.ProtectSkills);
-                if (pruned > 0)
+                // The entries count the long call arguments stubbed besides the results (2026-10-17): a prune of those alone is one too.
+                var entries = new List<ConversationCompactor.PrunedEntry>();
+                var (shrunk, pruned) = ConversationCompactor.PruneRecent(_history.Messages, guard.ProtectSkills, entries);
+                int arguments = entries.Count(e => e.Argument is not null);
+                if (pruned + arguments > 0)
                 {
                     projected -= ConversationCompactor.EstimateTokens(_history.Messages) - ConversationCompactor.EstimateTokens(shrunk);
                     _history.Replace(shrunk);
-                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); pruned {pruned} tool result(s) from this turn.");
-                    yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned), IsError: false);
+                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); pruned {pruned} tool result(s) and {arguments} call argument(s) from this turn.");
+                    yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned, arguments), IsError: false);
                 }
                 else
                 {
@@ -2399,6 +2413,14 @@ public sealed class Assistant
             // The adapter puts a JSON parse failure here instead of throwing.
             DiagnosticLog.Info(Category, $"Arguments for tool '{call.Name}' could not be parsed: {call.Exception.Message}");
             return ($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}", [], null, null);
+        }
+
+        // A leaked </parameter=name> folded one argument into another (2026-10-17, LeakedParameters): split back before the tool reads
+        // them, and written onto the call so the history and the session store hold it as it ran.
+        if (call.Arguments is { } sent && LeakedParameters.Repair(sent, tool.JsonSchema, out var repaired) is var fixedUp && !ReferenceEquals(fixedUp, sent))
+        {
+            call.Arguments = fixedUp;
+            DiagnosticLog.Info(Category, LeakedParameters.LogLine(call.Name, repaired));
         }
 
         return await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);

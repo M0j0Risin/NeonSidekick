@@ -404,6 +404,47 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Single(_http.Requests);
     }
 
+    /// <summary>
+    /// A URL's #fragment starts the window at that anchor (2026-10-17, the toki-pona session: #n and #epiku on one Wikisource page both
+    /// downloaded it again and read from the top). One download for every fragment; one the page lacks reads from the top and says so;
+    /// an offset given wins; a text answer ignores it.
+    /// </summary>
+    [Fact]
+    public async Task Fetch_AFragment_StartsAtItsAnchor_OneDownloadForAll()
+    {
+        string filler = string.Join(" ", Enumerable.Range(0, 400).Select(i => "w" + i));
+        _http.Map("https://example.com/dict", HttpStatusCode.OK,
+            "<title>Dict</title><h2 id=\"a\">a</h2><p>" + filler + "</p>" +
+            "<p><b><span id=\"ken_ala\" title=\"Anchor:ken ala\" class=\"wst-anchor\">ken ala</span></b>: cannot.</p><p>" + filler + "</p>" +
+            "<h2 id=\"Soweli\">soweli</h2><p>animal</p>", "text/html");
+
+        string ken = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#ken_ala")), CancellationToken.None))!;
+        string header = ken.Split('\n')[0];
+        Assert.StartsWith("Dict — https://example.com/dict (chars ", header, StringComparison.Ordinal);
+        Assert.EndsWith(", from #ken_ala, http)", header, StringComparison.Ordinal);
+        Assert.StartsWith("**ken ala**: cannot.", ken[(ken.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
+
+        // Ignoring case when nothing matches exactly; a heading's id starts at its heading.
+        string soweli = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#soweli")), CancellationToken.None))!;
+        Assert.StartsWith("## soweli\n\nanimal", soweli[(soweli.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
+
+        // One the page lacks: from the top, said so.
+        string epiku = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#epiku")), CancellationToken.None))!;
+        Assert.StartsWith("Dict — https://example.com/dict (#epiku not found, from the top; chars 1–", epiku, StringComparison.Ordinal);
+        Assert.StartsWith("## a", epiku[(epiku.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
+
+        // An offset given wins over the fragment.
+        string offset = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#soweli"), ("offset", Json("5"))), CancellationToken.None))!;
+        Assert.StartsWith("Dict — https://example.com/dict (chars 6–", offset, StringComparison.Ordinal);
+        Assert.DoesNotContain("#soweli", offset.Split('\n')[0], StringComparison.Ordinal);
+
+        Assert.Single(_http.Requests);   // every fragment, one download
+
+        // A text answer has no anchors: the fragment is ignored.
+        _http.Map("https://example.com/a.txt", HttpStatusCode.OK, "plain", "text/plain");
+        Assert.Equal("(untitled) — https://example.com/a.txt (chars 1–5 of 5, http)\n\nplain", await _fetch.InvokeAsync(Args(("url", "https://example.com/a.txt#x")), CancellationToken.None));
+    }
+
     [Fact]
     public async Task Fetch_Text_ComesBackVerbatim_Untitled()
     {

@@ -53,7 +53,7 @@ Under *Web tools*.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `web_search` | `query, max_results?` | Searches the web with *Web search method* (DuckDuckGo or SearXNG): title, URL, snippet. |
-| `web_fetch` | `url, offset?` | A page's readable content as Markdown, 32,000 characters at a time; also plain text, JSON, XML and CSV, and a PDF's outline and first 40 pages (see [Reading PDFs](#reading-pdfs)). |
+| `web_fetch` | `url, offset?` | A page's readable content as Markdown, 32,000 characters at a time; a `#anchor` in the URL starts at that part of the page (or says it is not there), every anchor of a page one download. Also plain text, JSON, XML and CSV, and a PDF's outline and first 40 pages (see [Reading PDFs](#reading-pdfs)). |
 | `open_url` | `url?, urls?` | Opens up to five links in your browser. Under *Web open links in* `browser-window` it opens one in the [Browser window](#the-browser-window) when the window can take it. While *YouTube tools* is on, a YouTube video or playlist link goes where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), numbered, at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link. To remove or rename, `url` may be its number in `web_links`; `current` is the Browser window's page. |
@@ -985,9 +985,12 @@ Under *Agent skills*.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `load_skill` | `name, file?` | Loads a skill's instructions or one of its files, up to 64,000 characters; never one you [disabled](SETTINGS.md#disabling-a-skill). |
-| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | Creates or updates a skill in `profile` (default) or `global` scope (*Global skills*); `write_file` and `edit_file` change a supporting file. |
+| `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | Creates or updates a skill in `profile` (default) or `global` scope (*Global skills*); `write_file` and `edit_file` change a supporting file, and `edit_file` on `SKILL.md` changes part of its instructions. |
 
 `skill_editor` never deletes, and never touches an external skill or one you [locked](SETTINGS.md#locking-a-skill) or disabled.
+
+* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`. An empty `""` is still allowed. A pruned stub copied back from the history is refused too.
+* **A skill's files by full path:** `read_file` and the other file tools refuse a path inside a skill folder and name `load_skill` (`name`, `file`) instead.
 
 ### Sessions
 

@@ -235,6 +235,9 @@ public sealed class UncToolsTests : IDisposable
             Assert.StartsWith("replaced", await Invoke<UncWriteTool>(("share", "data"), ("path", @"new\x.txt"), ("content", "y"), ("mode", "overwrite")));
             Assert.StartsWith("appended", await Invoke<UncWriteTool>(("share", "data"), ("path", @"new\x.txt"), ("content", "z"), ("mode", "append")));
             Assert.StartsWith("Edited", await Invoke<UncPatchTool>(("share", "data"), ("path", "notes.txt"), ("old_text", "two"), ("new_text", "deux")), StringComparison.OrdinalIgnoreCase);
+            // A missing content or new_text is refused, never read as "" (2026-10-17): the file keeps its text.
+            Assert.Equal(FileText.ContentRequired("unc_patch", sentEdit: true), await Invoke<UncWriteTool>(("share", "data"), ("path", @"new\x.txt"), ("old_text", "y"), ("new_text", "q"), ("mode", "overwrite")));
+            Assert.Equal(FileText.NewTextRequired, await Invoke<UncPatchTool>(("share", "data"), ("path", "notes.txt"), ("old_text", "deux")));
             Assert.StartsWith("created", await Invoke<UncCreateDirectoryTool>(("share", "data"), ("path", "made")));
             Assert.StartsWith("copied", await Invoke<UncCopyTool>(("share", "data"), ("from", "notes.txt"), ("to", @"made\copy.txt")));
             Assert.StartsWith("renamed", await Invoke<UncMoveTool>(("share", "data"), ("from", @"made\copy.txt"), ("to", @"made\moved.txt")));

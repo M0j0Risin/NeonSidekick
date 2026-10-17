@@ -25,9 +25,11 @@ namespace NeonSidekick.Llm.Tools;
 /// <para><c>write_file</c> and <c>edit_file</c> (2026-09-27, the user's ask: a skill's data files were
 /// readable through <c>load_skill</c> and changeable by nothing) write the files beside the SKILL.md of an
 /// existing skill — whole, or <c>old_text</c> → <c>new_text</c> as <c>patch_file</c> does — through
-/// <see cref="SkillEditor.WriteFile"/> / <see cref="SkillEditor.EditFile"/>; never the SKILL.md itself, never a
-/// delete. Offered only with a <see cref="SkillFileAccess"/>: the main chat always, a reflection when
-/// <c>Reflection edit supporting files</c> is on; without it the schema names create and update alone.</para>
+/// <see cref="SkillEditor.WriteFile"/> / <see cref="SkillEditor.EditFile"/>; never a delete. The SKILL.md itself only by
+/// <c>edit_file</c> since 2026-10-17 (the toki-pona session: a one-line change was refused and the model resent the whole body through
+/// <c>update</c>): part of its instructions, through <see cref="SkillEditor.EditBody"/> and update's rules (<see cref="IsSkillMd"/>);
+/// never by <c>write_file</c>, which would bypass the frontmatter. Offered only with a <see cref="SkillFileAccess"/>: the main chat always,
+/// a reflection when <c>Reflection edit supporting files</c> is on; without it the schema names create and update alone.</para>
 /// </summary>
 public sealed class SkillEditorTool : AIFunction
 {
@@ -75,7 +77,7 @@ public sealed class SkillEditorTool : AIFunction
             "name": { "type": "string", "description": "The skill's name and folder: 1 to 64 lowercase letters, digits and hyphens (pdf-processing), not starting or ending with a hyphen." },
             "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Required for create." },
             "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Required for create; replaces the whole body on update." },
-            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. Never SKILL.md; change that with update." },
+            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. edit_file may name SKILL.md to change part of its instructions; write_file never." },
             "content": { "type": "string", "description": "write_file: the whole new content of the file." },
             "old_text": { "type": "string", "description": "edit_file: the text to replace, copied from the file as load_skill shows it; it must occur exactly once unless replace_all is true. Small differences in spacing, indentation, quotes and dashes are tolerated." },
             "new_text": { "type": "string", "description": "edit_file: the text to put in its place. Empty removes old_text." },
@@ -114,7 +116,7 @@ public sealed class SkillEditorTool : AIFunction
             "name": { "type": "string", "description": "The skill's name and folder: 1 to 64 lowercase letters, digits and hyphens (pdf-processing), not starting or ending with a hyphen." },
             "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Required for create." },
             "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Required for create; replaces the whole body on update." },
-            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. Never SKILL.md; change that with update." },
+            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. edit_file may name SKILL.md to change part of its instructions; write_file never." },
             "content": { "type": "string", "description": "write_file: the whole new content of the file." },
             "old_text": { "type": "string", "description": "edit_file: the text to replace, copied from the file as load_skill shows it; it must occur exactly once unless replace_all is true. Small differences in spacing, indentation, quotes and dashes are tolerated." },
             "new_text": { "type": "string", "description": "edit_file: the text to put in its place. Empty removes old_text." },
@@ -152,7 +154,7 @@ public sealed class SkillEditorTool : AIFunction
             "name": { "type": "string", "description": "The name of a listed skill to change, as the list shows it." },
             "description": { "type": "string", "description": "One or two sentences on what the skill does and when to use it, with the words a task would contain; at most 1,024 characters. Optional: left out, the skill keeps the one it has." },
             "instructions": { "type": "string", "description": "The skill's Markdown body: the steps to follow, examples, edge cases. Replaces the whole body on update." },
-            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. Never SKILL.md; change that with update." },
+            "path": { "type": "string", "description": "write_file / edit_file: the supporting file, relative to the skill folder (data/mapping.json), as load_skill lists it. edit_file may name SKILL.md to change part of its instructions; write_file never." },
             "content": { "type": "string", "description": "write_file: the whole new content of the file." },
             "old_text": { "type": "string", "description": "edit_file: the text to replace, copied from the file as load_skill shows it; it must occur exactly once unless replace_all is true. Small differences in spacing, indentation, quotes and dashes are tolerated." },
             "new_text": { "type": "string", "description": "edit_file: the text to put in its place. Empty removes old_text." },
@@ -228,11 +230,11 @@ public sealed class SkillEditorTool : AIFunction
 
     /// <summary>The description's file-actions sentence, only when they are offered (2026-09-27).</summary>
     public const string FilesSentence =
-        "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through create and update.";
+        "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself through create and update, or edit_file for part of its instructions.";
 
     /// <summary><see cref="FilesSentence"/> for an editor that offers no create (2026-10-16, <c>Reflection mode</c> <c>update-only</c>). Pinned.</summary>
     public const string UpdateOnlyFilesSentence =
-        "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through update.";
+        "A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself through update, or edit_file for part of its instructions.";
 
     /// <summary>
     /// The schema for the live roots (2026-10-13): the profile-only twins while the profile has <c>Global skills</c> off; the update-only
@@ -340,8 +342,27 @@ public sealed class SkillEditorTool : AIFunction
 
     /// <summary><see cref="DescribeEdit"/> with the reflection's ask awaited before the write (2026-10-12).</summary>
     public Task<string> DescribeEditAsync(string name, string path, string oldText, string newText, bool replaceAll, string? summary, CancellationToken cancellationToken) =>
-        DescribeFileAsync(name, path, files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary,
+        DescribeFileAsync(name, path, IsSkillMd(path)
+                // The SKILL.md itself (2026-10-17, the toki-pona session): its body, through update's rules (SkillEditor.EditBody).
+                ? _ => SkillEditor.EditBody(_roots(), SkillScope.Profile, name, oldText, newText, replaceAll, _external())
+                : files => SkillEditor.EditFile(_roots(), SkillScope.Profile, name, path, oldText, newText, replaceAll, _external(), files.Time), summary,
             new SkillProposal(SkillChangeKind.Edit, EditFileAction, name.Trim(), Path: path, OldText: oldText, NewText: newText, Summary: SkillText.CleanSummary(summary)), cancellationToken);
+
+    /// <summary>
+    /// Whether an <c>edit_file</c> path names the skill's own SKILL.md (2026-10-17): one segment, any case, a leading <c>./</c> or <c>.\</c>
+    /// allowed. A <c>sub/SKILL.md</c> is a supporting file, as the file actions always read it.
+    /// </summary>
+    public static bool IsSkillMd(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string relative = path.Trim();
+        if (relative.StartsWith("./", StringComparison.Ordinal) || relative.StartsWith(".\\", StringComparison.Ordinal))
+        {
+            relative = relative[2..];
+        }
+
+        return string.Equals(relative, SkillCatalog.FileName, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// The ask (2026-10-12): null when the host said yes; the declined sentence otherwise, <see cref="LastResult"/> the
@@ -428,6 +449,19 @@ public sealed class SkillEditorTool : AIFunction
         ArgumentNullException.ThrowIfNull(arguments);
         switch (ToolArguments.ReadString(arguments, ActionArgument).Trim().ToLowerInvariant())
         {
+            // A missing content or new_text is not "" (2026-10-17, the toki-pona session: write_file sent with old_text and new_text and no
+            // content emptied a 27 KB file). Here, where absent is told from empty; DescribeWrite/DescribeEdit take plain strings.
+            case WriteFileAction when _files is not null && !ToolArguments.Has(arguments, ContentArgument):
+                return SkillText.NoContent(ToolArguments.Has(arguments, OldTextArgument) || ToolArguments.Has(arguments, NewTextArgument));
+            case EditFileAction when _files is not null && !ToolArguments.Has(arguments, NewTextArgument):
+                return SkillText.NoNewText;
+            // A pruned stub copied back from the history is no text (2026-10-17, call arguments pruned).
+            case WriteFileAction when _files is not null && WriteFileTool.StubSent(arguments, ContentArgument) is { } stub:
+                return stub;
+            case EditFileAction when _files is not null && WriteFileTool.StubSent(arguments, NewTextArgument) is { } stub:
+                return stub;
+            case UpdateAction or CreateAction when WriteFileTool.StubSent(arguments, InstructionsArgument) is { } stub:
+                return stub;
             case WriteFileAction when _files is not null:
                 return await DescribeWriteAsync(
                     ToolArguments.ReadString(arguments, NameArgument),

@@ -55,6 +55,17 @@ public sealed class UncPatchTool : UncTool
             return FileText.PathRequired(PathArgument);
         }
 
+        // A missing new_text is not "" (2026-10-17): read as empty it removed old_text.
+        if (!ToolArguments.Has(arguments, NewTextArgument))
+        {
+            return FileText.NewTextRequired;
+        }
+
+        if (WriteFileTool.StubSent(arguments, NewTextArgument) is { } stub)
+        {
+            return stub;
+        }
+
         string oldText = ToolArguments.ReadString(arguments, OldTextArgument);
         string newText = ToolArguments.ReadString(arguments, NewTextArgument);
         // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult).

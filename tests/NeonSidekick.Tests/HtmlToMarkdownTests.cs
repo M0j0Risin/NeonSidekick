@@ -8,6 +8,44 @@ public class HtmlToMarkdownTests
 
     private static string Md(string html) => HtmlToMarkdown.Convert(html, Base).Markdown;
 
+    /// <summary>The text from an anchor's offset to the end of its line (2026-10-17, <see cref="PageText.Anchors"/>).</summary>
+    private static string LineAt(PageText page, string id)
+    {
+        int at = page.Anchors![id];
+        int end = page.Markdown.IndexOf('\n', at);
+        return end < 0 ? page.Markdown[at..] : page.Markdown[at..end];
+    }
+
+    /// <summary>
+    /// Anchors (2026-10-17, web_fetch's #fragment): each id at the start of its Markdown line — a heading's at the heading, a span inside a
+    /// paragraph at its paragraph (the Wikisource dictionary's wst-anchor shape), a link's name, one inside a table row or a link at the
+    /// start of what was rewritten; Tidy's collapses kept straight; chrome's ids left out; none at all, null.
+    /// </summary>
+    [Fact]
+    public void Anchors_AreLineStarts_ThroughTheRewrites()
+    {
+        var page = HtmlToMarkdown.Convert(
+            "<nav id=\"menu\">Home</nav><h1 id=\"top\">Title</h1>\n\n\n<p>Intro text.</p>" +
+            "<p><b><span id=\"ken_ala\" class=\"wst-anchor\">ken ala</span></b>: cannot.</p>" +
+            "<p>See <a name=\"old\" href=\"/x\">the <em id=\"in-link\">old</em> page</a>.</p>" +
+            "<table><tr><th>A</th></tr><tr><td><span id=\"cell\">b</span></td></tr></table>" +
+            "<h2 id=\"End\">End</h2>", Base);
+        Assert.Equal("# Title", LineAt(page, "top"));
+        Assert.Equal("**ken ala**: cannot.", LineAt(page, "ken_ala"));
+        Assert.Equal("See [the *old* page](https://example.com/x).", LineAt(page, "old"));
+        Assert.Equal("See [the *old* page](https://example.com/x).", LineAt(page, "in-link"));
+        Assert.Equal("| b |", LineAt(page, "cell"));
+        Assert.Equal("## End", LineAt(page, "End"));
+        Assert.False(page.Anchors!.ContainsKey("menu"));
+        Assert.All(page.Anchors.Values, at => Assert.True(at == 0 || page.Markdown[at - 1] == '\n'));
+
+        Assert.Null(HtmlToMarkdown.Convert("<p>No ids here.</p>", Base).Anchors);
+        // The first of a repeated id wins; a trailing one lands on the last line, never past the end.
+        var twice = HtmlToMarkdown.Convert("<p id=\"x\">one</p><p id=\"x\">two</p><span id=\"tail\"></span>", Base);
+        Assert.Equal("one", LineAt(twice, "x"));
+        Assert.Equal("two", LineAt(twice, "tail"));
+    }
+
     [Fact]
     public void Title_IsTheDocumentTitle_Collapsed()
     {

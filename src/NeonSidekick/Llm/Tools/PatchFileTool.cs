@@ -70,6 +70,17 @@ public sealed class PatchFileTool : FileTool
             return new ValueTask<object?>(refused);
         }
 
+        // A missing new_text is not "" (2026-10-17): read as empty it removed old_text.
+        if (!ToolArguments.Has(arguments, NewTextArgument))
+        {
+            return new ValueTask<object?>(FileText.NewTextRequired);
+        }
+
+        if (WriteFileTool.StubSent(arguments, NewTextArgument) is { } stub)
+        {
+            return new ValueTask<object?>(stub);
+        }
+
         // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult); the model gets the sentence alone.
         var edited = Files.EditText(
             path,

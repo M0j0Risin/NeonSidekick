@@ -11,6 +11,17 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public static class ToolArguments
 {
+    /// <summary>
+    /// Whether the argument was sent at all: present and not JSON null (2026-10-17, the toki-pona session: a <c>write_file</c> with no
+    /// <c>content</c> read it as <c>""</c> through <see cref="ReadString"/> and emptied a 27 KB file). An explicit <c>""</c> counts, so an
+    /// empty file and an <c>old_text</c> removal stay possible; a script's <c>None</c> arrives as null and does not.
+    /// </summary>
+    public static bool Has(AIFunctionArguments arguments, string name)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return arguments.TryGetValue(name, out var value) && value is not null and not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
+    }
+
     /// <summary>The string argument, or empty when missing or null. A non-string JSON value is its raw text.</summary>
     public static string ReadString(AIFunctionArguments arguments, string name)
     {

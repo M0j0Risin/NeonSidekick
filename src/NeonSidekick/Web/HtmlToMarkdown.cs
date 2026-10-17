@@ -2,8 +2,13 @@ using System.Text;
 
 namespace NeonSidekick.Web;
 
-/// <summary>A page reduced to what the model reads: its title and its readable text as light Markdown.</summary>
-public sealed record PageText(string Title, string Markdown);
+/// <summary>
+/// A page reduced to what the model reads: its title and its readable text as light Markdown. <paramref name="Anchors"/> (2026-10-17, the
+/// toki-pona session: <c>#n</c> and <c>#epiku</c> on one page both read from its top) maps each element id (and an <c>a</c>'s name) to the
+/// start of the Markdown line it fell on, so <c>web_fetch</c> can start at a URL's fragment; null when the page has none, and always for
+/// a PDF or a text answer.
+/// </summary>
+public sealed record PageText(string Title, string Markdown, IReadOnlyDictionary<string, int>? Anchors = null);
 
 /// <summary>
 /// HTML to light Markdown over <see cref="HtmlTokenizer"/>: headings as <c>#</c>, links as
@@ -155,7 +160,37 @@ public static class HtmlToMarkdown
                 Pop();
             }
 
-            return new PageText(Collapse(_title.ToString()), Tidy(_out.ToString()));
+            string markdown = Tidy(_out.ToString(), _anchors, out var anchors);
+            return new PageText(Collapse(_title.ToString()), markdown, anchors);
+        }
+
+        /// <summary>The most anchors a page keeps (2026-10-17); past it a page's later ids are not recorded.</summary>
+        public const int MaxAnchors = 10_000;
+
+        // Each id's offset in the output as written, first one wins; Truncate pulls back any past the cut.
+        private readonly List<(string Id, int Offset)> _anchors = new();
+        private readonly HashSet<string> _anchorIds = new(StringComparer.Ordinal);
+
+        private void Anchor(HtmlToken token)
+        {
+            if (_anchors.Count >= MaxAnchors)
+            {
+                return;
+            }
+
+            Add(token.Attribute("id"));
+            if (token.Name == "a")
+            {
+                Add(token.Attribute("name"));
+            }
+
+            void Add(string? id)
+            {
+                if (!string.IsNullOrWhiteSpace(id) && _anchorIds.Add(id.Trim()))
+                {
+                    _anchors.Add((id.Trim(), _out.Length));
+                }
+            }
         }
 
         // ── Elements ────────────────────────────────────────────────────────
@@ -205,6 +240,8 @@ public static class HtmlToMarkdown
                 return;
             }
 
+            // A fragment's target (2026-10-17): where the element's text will start, chrome and dropped subtrees left out.
+            Anchor(token);
             switch (name)
             {
                 case "br":
@@ -658,6 +695,11 @@ public static class HtmlToMarkdown
             if (start < _out.Length)
             {
                 _out.Length = Math.Max(start, 0);
+                // An anchor in what was cut lands where the rewrite starts (a link's text, a table's row).
+                for (int i = _anchors.Count - 1; i >= 0 && _anchors[i].Offset > _out.Length; i--)
+                {
+                    _anchors[i] = (_anchors[i].Id, _out.Length);
+                }
             }
         }
 
@@ -756,19 +798,25 @@ public static class HtmlToMarkdown
             return null;
         }
 
-        /// <summary>Trailing spaces off every line, blank runs to one blank line (fences included), nothing blank at either end.</summary>
-        private static string Tidy(string text)
+        /// <summary>
+        /// Trailing spaces off every line, blank runs to one blank line (fences included), nothing blank at either end. Each of
+        /// <paramref name="anchors"/> comes out as the start of its line in the result (2026-10-17): a line dropped as blank sends it to
+        /// the next line kept, and with none after, to the last; null when there are none.
+        /// </summary>
+        private static string Tidy(string text, List<(string Id, int Offset)> anchors, out IReadOnlyDictionary<string, int>? mapped)
         {
             var lines = text.Split('\n');
             var sb = new StringBuilder(text.Length);
+            var starts = new int[lines.Length];   // each line's start in the result, -1 when dropped
             bool blankPending = false;
             bool any = false;
-            foreach (var raw in lines)
+            for (int i = 0; i < lines.Length; i++)
             {
-                string line = raw.TrimEnd();
+                string line = lines[i].TrimEnd();
                 if (line.Length == 0)
                 {
                     blankPending = any;
+                    starts[i] = -1;
                     continue;
                 }
 
@@ -783,11 +831,55 @@ public static class HtmlToMarkdown
                     sb.Append('\n');
                 }
 
+                starts[i] = sb.Length;
                 sb.Append(line);
                 any = true;
             }
 
+            mapped = anchors.Count == 0 ? null : MapAnchors(lines, starts, anchors);
             return sb.ToString();
+        }
+
+        private static Dictionary<string, int> MapAnchors(string[] lines, int[] starts, List<(string Id, int Offset)> anchors)
+        {
+            // The kept line at or after each line, else the last kept one (0 for an empty result).
+            var target = new int[lines.Length];
+            int next = -1;
+            for (int i = lines.Length - 1; i >= 0; i--)
+            {
+                if (starts[i] >= 0)
+                {
+                    next = starts[i];
+                }
+
+                target[i] = next;
+            }
+
+            int last = starts.Where(s => s >= 0).DefaultIfEmpty(0).Max();
+            var lineStarts = new int[lines.Length];
+            for (int i = 1; i < lines.Length; i++)
+            {
+                lineStarts[i] = lineStarts[i - 1] + lines[i - 1].Length + 1;
+            }
+
+            var map = new Dictionary<string, int>(anchors.Count, StringComparer.Ordinal);
+            foreach (var (id, offset) in anchors)
+            {
+                int line = Array.BinarySearch(lineStarts, offset);
+                line = line >= 0 ? line : ~line - 1;
+                line = Math.Clamp(line, 0, lines.Length - 1);
+                // A block's id is recorded before the break the block writes ahead of itself: nothing of its own on that line yet,
+                // so it belongs to the next one.
+                int column = Math.Min(Math.Max(offset - lineStarts[line], 0), lines[line].Length);
+                if (lines[line].AsSpan(column).IsWhiteSpace() && line + 1 < lines.Length)
+                {
+                    line++;
+                }
+
+                map[id] = target[line] >= 0 ? target[line] : last;
+            }
+
+            return map;
         }
     }
 }

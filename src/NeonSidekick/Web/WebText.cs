@@ -228,15 +228,29 @@ public static class WebText
     /// engine — <c>Example Domain — https://example.com/ (chars 1–2,100 of 2,100, http)</c>; a longer
     /// page adds <c>; continue with offset 32000</c> before the engine.
     /// </summary>
-    public static string FetchHeader(string title, string url, int from, int to, int total, string engine, int? nextOffset)
+    /// <param name="anchor">
+    /// The URL's fragment the window was asked to start at (2026-10-17, the toki-pona session): found, <c>, from #epiku</c> follows the
+    /// window; not found (<paramref name="anchorMissing"/>), <c>#epiku not found, from the top; </c> leads it.
+    /// </param>
+    public static string FetchHeader(string title, string url, int from, int to, int total, string engine, int? nextOffset, string? anchor = null, bool anchorMissing = false)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(engine);
         var sb = new StringBuilder();
-        sb.Append(string.IsNullOrWhiteSpace(title) ? Untitled : title).Append(" — ").Append(url);
-        sb.Append(" (chars ").Append(from.ToString("N0", CultureInfo.InvariantCulture)).Append('–').Append(to.ToString("N0", CultureInfo.InvariantCulture))
+        sb.Append(string.IsNullOrWhiteSpace(title) ? Untitled : title).Append(" — ").Append(url).Append(" (");
+        if (anchor is not null && anchorMissing)
+        {
+            sb.Append('#').Append(anchor).Append(" not found, from the top; ");
+        }
+
+        sb.Append("chars ").Append(from.ToString("N0", CultureInfo.InvariantCulture)).Append('–').Append(to.ToString("N0", CultureInfo.InvariantCulture))
             .Append(" of ").Append(total.ToString("N0", CultureInfo.InvariantCulture));
+        if (anchor is not null && !anchorMissing)
+        {
+            sb.Append(", from #").Append(anchor);
+        }
+
         if (nextOffset is { } next)
         {
             sb.Append("; continue with offset ").Append(next.ToString(CultureInfo.InvariantCulture));

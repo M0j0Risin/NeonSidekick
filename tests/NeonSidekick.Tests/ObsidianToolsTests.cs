@@ -308,6 +308,9 @@ public sealed class ObsidianToolsTests : IDisposable
         Assert.Equal("replaced Plan.md (1 line, 1 word)", await Invoke<VaultWriteTool>(("note", "Plan"), ("content", "new"), ("mode", "overwrite")));
         Assert.Equal("new\n", Get("Plan.md"));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
+        // A missing content is refused, never read as "" (2026-10-17, the toki-pona session's emptied file): the note keeps its text.
+        Assert.Equal(ObsidianText.Required("content"), await Invoke<VaultWriteTool>(("note", "Plan"), ("mode", "overwrite")));
+        Assert.Equal("new\n", Get("Plan.md"));
     }
 
     [Fact]

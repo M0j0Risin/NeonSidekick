@@ -149,6 +149,10 @@ public class SkillEditorToolTests : IDisposable
     {
         Assert.Equal("Error: 'delete' is not an action; use create or update", await Invoke(("action", "delete"), ("scope", "global"), ("name", "x")));
         Assert.Equal("Error: '' is not an action; use create or update", await Invoke(("scope", "global"), ("name", "x")));
+        // The toki-pona session's call (2026-10-17): a leaked </parameter=content> folded a whole file into action; the refusal echoes its first
+        // line alone, and a long word is cut to 40 characters.
+        Assert.Equal("Error: 'write_file' is not an action; use create or update", await Invoke(("action", "write_file\n</parameter=content>\n# Toki Pona spelling & pronunciation\n" + new string('x', 1600)), ("name", "toki-pona")));
+        Assert.Equal("Error: '" + new string('z', 39) + "…' is not an action; use create or update", await Invoke(("action", new string('z', 60)), ("name", "x")));
         Assert.Equal("Error: 'external' is not a scope; use profile (this profile only) or global (every profile)", await Invoke(("action", "create"), ("scope", "external"), ("name", "x"), ("description", "d"), ("instructions", "i")));
         Assert.Equal("Error: 'My Skill' is not a valid skill name; use 1 to 64 lowercase letters, digits and hyphens, not starting or ending with a hyphen and with no two hyphens in a row", await Invoke(("action", "create"), ("scope", "global"), ("name", "My Skill"), ("description", "d"), ("instructions", "i")));
         Assert.Equal("Error: description is empty; say what the skill does and when to use it", await Invoke(("action", "create"), ("scope", "global"), ("name", "x"), ("instructions", "i")));
@@ -241,7 +245,7 @@ public class SkillEditorToolTests : IDisposable
         Assert.StartsWith("Updates a skill that exists: ", plain.Description, StringComparison.Ordinal);
         Assert.EndsWith("Never deletes anything.", plain.Description, StringComparison.Ordinal);
         Assert.EndsWith(" " + SkillEditorTool.UpdateOnlyFilesSentence, withFiles.Description, StringComparison.Ordinal);
-        Assert.Equal("A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself only through update.", SkillEditorTool.UpdateOnlyFilesSentence);
+        Assert.Equal("A skill's supporting files (the ones load_skill lists beside its instructions) are kept current with write_file (the whole file) or edit_file (old_text to new_text), paths relative to the skill folder; the SKILL.md itself through update, or edit_file for part of its instructions.", SkillEditorTool.UpdateOnlyFilesSentence);
 
         // The main chat's editor is unchanged.
         Assert.True(_tool.OffersCreate);

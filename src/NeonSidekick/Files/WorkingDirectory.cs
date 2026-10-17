@@ -83,6 +83,14 @@ public enum FileOutcome
     /// do reach the folder by full path (<c>search_files</c>, <c>file_info</c> and the picture tools).
     /// </summary>
     InImagesFolder,
+
+    /// <summary>
+    /// A path outside the working directory but inside a skill folder (2026-10-17, the toki-pona session: a model read a skill's own file by
+    /// its full path, was told only "outside the working directory", and found <c>load_skill</c> on its third try;
+    /// <see cref="WorkingDirectory.SkillFolders"/>): refused as <see cref="OutsideRoot"/> is, with a sentence naming <c>load_skill</c> and
+    /// <c>skill_editor</c>.
+    /// </summary>
+    InSkillFolder,
 }
 
 public readonly record struct DirectoryEntry(string Name, bool IsDirectory, long Length);
@@ -531,6 +539,15 @@ public sealed class WorkingDirectory
     /// </summary>
     public Func<string?>? ImagesFolder { get; set; }
 
+    /// <summary>
+    /// The skill roots whose skills the model reads with <c>load_skill</c> (2026-10-17, the toki-pona session: <c>read_file</c> and
+    /// <c>file_info</c> on a skill's file by its full path were told only "outside the working directory"): read when a path is refused as
+    /// outside, so one inside a root is <see cref="FileOutcome.InSkillFolder"/>, whose sentence names <c>load_skill</c>. The host returns
+    /// the roots only while skills are offered, so the sentence never names a tool that is not. Set on the working directory alone; null,
+    /// or an empty answer, keeps every refusal <see cref="FileOutcome.OutsideRoot"/>.
+    /// </summary>
+    public Func<IReadOnlyList<string>>? SkillFolders { get; set; }
+
     /// <summary>The setting's meaning: blank is the profile's <see cref="DefaultFolderName"/> folder, anything else a full path.</summary>
     public static string Resolve(string configured, string profileDirectory)
     {
@@ -580,6 +597,20 @@ public sealed class WorkingDirectory
         try
         {
             return ImagesFolder?.Invoke() is { Length: > 0 } images && IsInside(Path.TrimEndingDirectorySeparator(Path.GetFullPath(images)), candidate);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    // Whether a refused candidate lies in a skill root (SkillFolders); a bad hook answer is no root.
+    private bool InSkillFolderOf(string candidate)
+    {
+        try
+        {
+            return SkillFolders?.Invoke() is { } roots
+                && roots.Any(root => root.Length > 0 && IsInside(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), candidate));
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
@@ -650,7 +681,9 @@ public sealed class WorkingDirectory
         string walked = linkItself ? Path.GetDirectoryName(candidate) ?? candidate : candidate;
         if (!IsInside(root, candidate))
         {
-            return InImagesFolderOf(candidate) ? FileOutcome.InImagesFolder : FileOutcome.OutsideRoot;
+            return InImagesFolderOf(candidate) ? FileOutcome.InImagesFolder
+                : InSkillFolderOf(candidate) ? FileOutcome.InSkillFolder
+                : FileOutcome.OutsideRoot;
         }
 
         if (LinkEscape(root, walked, RealLinkTarget) is not null)
@@ -1910,6 +1943,27 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
+    /// The <see cref="EditResult"/> a match that replaced nothing answers (<see cref="FileText.Edited"/> words it), or null when it
+    /// replaced: <see cref="EditText"/>'s, and <c>skill_editor</c>'s edit of a SKILL.md body, which is no file of a working directory
+    /// (2026-10-17, <see cref="Skills.SkillEditor.EditBody"/>).
+    /// </summary>
+    public static EditResult? EditRefusal(FuzzyResult match, string display)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        return match.Outcome switch
+        {
+            MatchOutcome.Empty => new EditResult(FileOutcome.Empty, display, 0, 0),
+            MatchOutcome.Same => new EditResult(FileOutcome.Same, display, 0, 0),
+            MatchOutcome.NotFound => new EditResult(FileOutcome.EditNotFound, display, 0, 0),
+            MatchOutcome.AlreadyApplied => new EditResult(FileOutcome.AlreadyApplied, display, 0, 0),
+            MatchOutcome.Ambiguous => new EditResult(FileOutcome.EditAmbiguous, display, 0, match.Count, Strategy: match.Strategy, Locations: match.Locations),
+            MatchOutcome.ApproximateAll => new EditResult(FileOutcome.ApproximateAll, display, 0, match.Count, Strategy: match.Strategy, Locations: match.Locations),
+            MatchOutcome.EscapeDrift => new EditResult(FileOutcome.EscapeDrift, display, 0, match.Count, Strategy: match.Strategy, Drift: match.Drift),
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// Replaces one occurrence of <paramref name="oldText"/> — exactly one unless
     /// <paramref name="replaceAll"/>, then every one — found by <see cref="FuzzyMatch.Replace"/>'s
     /// chain (2026-09-19: as written first, then with spacing, indentation, escapes and typographic
@@ -1957,22 +2011,9 @@ public sealed class WorkingDirectory
             }
 
             var match = FuzzyMatch.Replace(content, needle, replacement, replaceAll);
-            switch (match.Outcome)
+            if (EditRefusal(match, display) is { } refused)
             {
-                case MatchOutcome.Empty:
-                    return new EditResult(FileOutcome.Empty, display, 0, 0);
-                case MatchOutcome.Same:
-                    return new EditResult(FileOutcome.Same, display, 0, 0);
-                case MatchOutcome.NotFound:
-                    return new EditResult(FileOutcome.EditNotFound, display, 0, 0);
-                case MatchOutcome.AlreadyApplied:
-                    return new EditResult(FileOutcome.AlreadyApplied, display, 0, 0);
-                case MatchOutcome.Ambiguous:
-                    return new EditResult(FileOutcome.EditAmbiguous, display, 0, match.Count, Strategy: match.Strategy, Locations: match.Locations);
-                case MatchOutcome.ApproximateAll:
-                    return new EditResult(FileOutcome.ApproximateAll, display, 0, match.Count, Strategy: match.Strategy, Locations: match.Locations);
-                case MatchOutcome.EscapeDrift:
-                    return new EditResult(FileOutcome.EscapeDrift, display, 0, match.Count, Strategy: match.Strategy, Drift: match.Drift);
+                return refused;
             }
 
             string edited = match.Content;

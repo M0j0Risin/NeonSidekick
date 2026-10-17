@@ -755,7 +755,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What <c>/compact</c> does: <c>summary</c> (the older turns become one summary the model
-    /// writes) or <c>prune</c> (their bulky tool results become stubs). One of
+    /// writes) or <c>prune</c> (their bulky tool results and long call arguments become stubs). One of
     /// <see cref="Llm.CompactType.Names"/>; anything else reads as <see cref="Llm.CompactType.Default"/>. No variable.
     /// </summary>
     public string LlmCompactType { get; set; } = Llm.CompactType.Default;
@@ -848,7 +848,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// What the tool loop does when a request's usage reaches <see cref="LlmAutoCompactPercent"/> of the
     /// window mid-turn: <c>compact</c> (a prune, then a summary when that was not enough — the default
-    /// since 2026-09-28), <c>prune</c> (this turn's older tool results become stubs), <c>stop</c> (the
+    /// since 2026-09-28), <c>prune</c> (this turn's older tool results and long call arguments become stubs), <c>stop</c> (the
     /// turn ends with a notice) or <c>nothing</c>. One of <see cref="Llm.ToolCompactType.Names"/>;
     /// anything else reads as <see cref="Llm.ToolCompactType.Default"/>. No variable.
     /// </summary>
