@@ -539,7 +539,7 @@ public static class WebUiText
     public const string BotCheckTab = "Tab";
 
     /// <summary>Over the last picture while the window isn't drawing.</summary>
-    public const string BotCheckStalled = "The window isn't drawing right now (is the PC locked or asleep?). Give up, or wait and it may come back.";
+    public const string BotCheckStalled = "The window isn't drawing right now (is the PC asleep?). Give up, or wait and it may come back.";
 
     /// <summary>A bot check card's input or picture refused with Web UI bot check control off.</summary>
     public const string BotCheckControlOff = "Web UI bot check control is off: the page can't see or drive the Browser window.";

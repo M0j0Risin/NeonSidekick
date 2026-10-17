@@ -499,7 +499,7 @@ When a web tool meets a bot check (a Cloudflare click, a captcha) the challenge 
   * 🔍 zooms (fit, 2×, 3×); a zoomed picture pans with a swipe. ▲ ▼ scroll the page; a desktop wheel over the picture scrolls where it points.
   * The text box types into the field you tapped (its Enter types it, nothing more); ⏎ ⌫ ⇥ send Enter, Backspace and Tab.
 * **It ends** when the page gets through (the card closes and the tool goes on), on *Give up* or Esc at either side, on the page's Stop, or after 5 minutes.
-* **The PC:** the first input from a page flashes on the hint row (📱) and is logged with the phone's address; what you type is never logged. A minimized window is restored, without taking the keyboard, so it draws. A locked or sleeping PC may stop drawing it: the card says so, and *Give up* still works.
+* **The PC:** the first input from a page flashes on the hint row (📱) and is logged with the phone's address; what you type is never logged. A minimized window is restored, without taking the keyboard, so it draws; a locked PC keeps drawing it. A sleeping PC stops: the card says so, and *Give up* still works.
 
 ### The Home tab
 

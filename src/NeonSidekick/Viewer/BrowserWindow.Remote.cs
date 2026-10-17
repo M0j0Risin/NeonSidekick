@@ -21,7 +21,7 @@ namespace NeonSidekick.Viewer;
 /// <item>A 2.2 s press and release, inserted text, Backspace and Enter all arrived trusted.</item>
 /// <item>A clip at the visual viewport's <c>pageX</c>/<c>pageY</c> showed the scrolled view, and a tap at the picture's middle hit what
 /// the picture showed there.</item>
-/// <item>A covered window drew as ever. A minimized one did not (<see cref="Unminimize"/>).</item>
+/// <item>A covered window drew as ever, and so did one on a locked PC (the phone run under <c>auto</c>, later that day). A minimized one did not (<see cref="Unminimize"/>).</item>
 /// </list>
 /// </remarks>
 internal sealed unsafe partial class BrowserWindowThread
