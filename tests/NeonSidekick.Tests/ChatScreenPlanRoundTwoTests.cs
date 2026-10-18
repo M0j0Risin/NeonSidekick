@@ -52,6 +52,7 @@ public partial class ChatScreenTests
 
         Assert.Equal((PlanStatus.Done, 1, 1), (PlanFileHeader!.Status, PlanFileHeader.StepsDone, PlanFileHeader.StepsTotal));
         Assert.Contains(PlanText.DoneNotice(PlanPath), output);
+        AssertComesTogetherNext(output);
         Assert.DoesNotContain("marked incomplete", output);
     }
 
@@ -71,7 +72,18 @@ public partial class ChatScreenTests
         Assert.Equal(5, _chat.Requests.Count);
         Assert.Equal(1, CountOccurrences(LastTranscript(output), PlanText.IncompleteNotice(PlanPath, 0, 1)));   // the count did not move on the second turn
         Assert.Contains(PlanText.DoneNotice(PlanPath), output);
+        AssertComesTogetherNext(output);
+        Assert.DoesNotContain(PlanText.ComesTogetherNotice, output[..output.IndexOf(PlanText.DoneNotice(PlanPath), StringComparison.Ordinal)]);   // not after the incomplete turn
         Assert.Equal(PlanStatus.Done, PlanFileHeader!.Status);
+    }
+
+    /// <summary>"📝 I ❤️ it when a plan comes together." on the notice line right after the done line (2026-10-17).</summary>
+    private static void AssertComesTogetherNext(string output)
+    {
+        // The screen redraws its pane under each new line, so "next" reads as the order of the two lines.
+        int done = output.IndexOf(PlanText.DoneNotice(PlanPath), StringComparison.Ordinal);
+        int comes = output.IndexOf(PlanText.ComesTogetherNotice, StringComparison.Ordinal);
+        Assert.True(done >= 0 && comes > done);
     }
 
     [Fact]
@@ -92,6 +104,7 @@ public partial class ChatScreenTests
         Assert.Equal(PlanStatus.Approved, PlanFileStatus);
         Assert.DoesNotContain("marked incomplete", output);
         Assert.DoesNotContain("marked done", output);
+        Assert.DoesNotContain(PlanText.ComesTogetherNotice, output);
     }
 
     [Fact]
@@ -107,6 +120,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.DoesNotContain(PlanText.DoneNotice(PlanPath), output);
+        Assert.DoesNotContain(PlanText.ComesTogetherNotice, output);
         Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
     }
 

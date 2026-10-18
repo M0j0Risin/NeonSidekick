@@ -293,7 +293,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan approve [--fresh]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first. |
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
-| `/plan gaps [model\|advisor\|any] [passes]` | Reviews the plan pass after pass until no gaps are left. |
+| `/plan gaps [model\|advisor\|any\|confirm] [passes]` | Reviews the plan pass after pass until passes in a row find no gaps. |
+| `/plan chat` | Starts plan mode to talk a plan through first: nothing is sent, and the model writes the plan only when you ask. While planning, it turns talking back on. |
+| `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
 | `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
@@ -313,9 +315,14 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **The web:** while `web_search` or `web_fetch` is offered, the model is told to look up the APIs, versions and specifications the plan depends on rather than guess, and to name its sources in the plan's Context; a gap pass also counts an unchecked one as a gap.
 * **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
+* **Talking it through:** `/plan chat` opens plan mode with nothing sent. Your first message opens the conversation, and the model discusses, asks and researches but doesn't present a plan until you ask for it, in your own words or with `/plan ready`; the plan's title then becomes its requirement. The plan-like-reply hint stays quiet meanwhile (`/plan save` still works). `/plan ready` in any plan mode asks for the plan, or, once one is presented, opens its approval pane with no new turn.
 * **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision. A number (`/plan gaps 3`, `/plan gaps advisor 3`) caps this run's passes instead of *LLM plan gap passes*.
-* **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), or the model consulting advisors (`y`).
-* **When it stops:** at a pass with no gaps (the approval pane comes back), at its pass limit (the count given to `/plan gaps`, else *LLM plan gap passes*), when a pass changes nothing or repeats itself, when you type a message, or on Esc.
+* **Clean passes:** a review ends only after *LLM plan gap clean passes* in a row find no gaps (2 by default). A pass after a clean one is told the last pass found none and to look again, each such pass pointed at a different area (the steps' order, how each is verified, the risks, then what the plan assumes). A pass with no gaps must say what it checked, and the notices list it. Small fixes that aren't gaps (wording, formatting) go in `present_plan`'s `minor` and don't break a clean streak.
+* **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or the model closing the gaps and an advisor checking once it finds none (`c`, `/plan gaps confirm`, at least 2 clean passes).
+* **When it stops:** after the clean passes in a row (the approval pane comes back), at its pass limit (the count given to `/plan gaps`, else *LLM plan gap passes*; a clean pass there brings the pane back unconfirmed), when a pass changes nothing or repeats itself, when you type a message, or on Esc. Every pass counts toward the limit, and a limit below the clean count lowers it to the limit for that run, with a notice.
+* **The summary:** when a review stops, a notice lists its passes: each one's gaps, minor fixes, focus, time and tokens.
+* **The record:** a review that ends on its own (clean, at its limit, or stalled) writes a `review:` line into the plan's header with a fingerprint of its text. `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`; ticking steps is no edit, and a new revision drops the line.
+* **Done:** when every step is ticked, the done line is followed by "📝 I ❤️ it when a plan comes together."
 * `/new`, `/clear` and a profile switch leave plan mode.
 
 ### Bot conversations

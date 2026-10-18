@@ -71,6 +71,13 @@ public static class TextCells
     /// </summary>
     public static bool ForTerminal(string? termProgram) => termProgram is "Apple_Terminal" or "iTerm.app";
 
+    /// <summary>
+    /// Whether the terminal named by <c>TERM_PROGRAM</c> draws a selector sequence one cell wide on its main screen, where headless writes
+    /// (2026-10-17, the plan done line's ❤️): Terminal.app's <c>Apple_Terminal</c> alone — iTerm2 draws it two cells there (the 2026-10-06
+    /// measurement, <see cref="ForTerminal"/>). Pure.
+    /// </summary>
+    public static bool NarrowOnMainScreen(string? termProgram) => termProgram is "Apple_Terminal";
+
     /// <summary>Cells occupied by one UTF-16 unit. A lone surrogate half counts one; see <see cref="Width(string)"/> for pairs.</summary>
     public static int Width(char c)
     {

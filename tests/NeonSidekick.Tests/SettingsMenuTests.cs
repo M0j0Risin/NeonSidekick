@@ -379,6 +379,31 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("LLM max images " + SettingsMenu.LlmPictureKeepRangeError + "; keeping 20.", Output);
     }
 
+    /// <summary>The clean passes (2026-10-17): a typed row under the gap passes, 2 by default, 1 to 5, out of range refused; no reconnect.</summary>
+    [Fact]
+    public async Task ThePlanGapCleanPassesRow_IsTyped_OneToFive_OutOfRangeRefused()
+    {
+        _console.Profile.Width = 240;
+        Assert.Equal("LLM plan gap clean passes", SettingsMenu.FieldName(SettingsField.PlanGapCleanPasses));
+        Assert.Equal("2 passes", SettingsMenu.FieldValue(SettingsField.PlanGapCleanPasses, new AppSettingsData(), _settings.ProfileDirectory));
+        Assert.Equal("1 pass", SettingsMenu.FieldValue(SettingsField.PlanGapCleanPasses, new AppSettingsData { PlanGapCleanPasses = 1 }, _settings.ProfileDirectory));
+        Assert.Equal("2", SettingsMenu.EditableValue(SettingsField.PlanGapCleanPasses, new AppSettingsData()));
+        Assert.Equal("must be 1 to 5 passes", SettingsMenu.PlanGapCleanPassesRangeError);
+        Assert.False(SettingsMenu.IsToggle(SettingsField.PlanGapCleanPasses) || SettingsMenu.IsLlmField(SettingsField.PlanGapCleanPasses));
+
+        Down((int)SettingsField.PlanGapCleanPasses);
+        Push(Keys.Enter, Keys.Backspace);       // "2" gone
+        _console.Input.PushText("0");
+        Push(Keys.Enter);                       // refused
+        Push(Keys.Enter, Keys.Backspace);
+        _console.Input.PushText("3");
+        Push(Keys.Enter, Keys.Escape);
+
+        Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
+        Assert.Equal(3, _settings.Current.PlanGapCleanPasses);
+        Assert.Contains("LLM plan gap clean passes " + SettingsMenu.PlanGapCleanPassesRangeError + "; keeping 2.", Output);
+    }
+
     [Theory]
     [InlineData("-1")]
     [InlineData("32k")]
@@ -981,6 +1006,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebUiYouTubeControls, // 2026-10-16, Client › Web UI under the shopping controls: the YouTube tab only while on
                 SettingsField.ReflectionMode,       // later on 2026-10-16, /skills › Reflection, What it may change's first row: create-update or update-only
                 SettingsField.WebUiBotCheckControl, // 2026-10-17, Client › Web UI's Guardrails under the connection details: a page drives a bot check's window
+                SettingsField.PlanGapCleanPasses,   // later on 2026-10-17, Servers › Common's Plan mode under the gap passes: the clean passes in a row a review ends on
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1012,7 +1038,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("the one compact notice alone", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
         // The Common tab (2026-10-10, the user's call: the LLM tab less the six rows only an OpenAI-compatible HTTP server reads) in the LLM tab's five runs (2026-10-01, the user's call):
         // the connection, how it answers, tools and limits, the context, the pictures and fun verbs; the tools toggle still ABOVE the tool-compact picker (the user's order, 2026-09-15).
-        Assert.Equal(new[] { SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Common]);
+        Assert.Equal(new[] { SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Common]);
         // The Http tab: those six, in the order they had on the LLM tab (the scan mode and the key, the thinking rows, the sampling door and its switch).
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmApiKey, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace }, SettingsMenu.TabFields[(int)SettingsTab.Http]);   // before that: LLM reasoning estimate under preserve thinking since 2026-09-29;   // LLM sampling last (2026-09-28)
         // The tool-compact row (2026-09-15): a picker under LLM offer tools, no reconnect, read at each turn.
@@ -1070,7 +1096,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("0", SettingsMenu.EditableValue(SettingsField.LlmContextLength, data));
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }, _settings.ProfileDirectory));
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
-        Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Common][SettingsMenu.TabFields[(int)SettingsTab.Common].ToList().IndexOf(SettingsField.PlanGapPasses) + 1]);   // the context run's first row, under the plan gap passes (the tools run's last since 2026-10-14, the user's ask), the turn timeout before it since 2026-10-01 (the user's call); [^16] before: the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
+        Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Common][SettingsMenu.TabFields[(int)SettingsTab.Common].ToList().IndexOf(SettingsField.PlanGapCleanPasses) + 1]);   // the context run's first row, under the plan gap clean passes (2026-10-17), the plan gap passes before it (the tools run's last since 2026-10-14, the user's ask), the turn timeout before it since 2026-10-01 (the user's call); [^16] before: the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
         Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "TTS", "STT"], SettingsMenu.TabTitles);   // Advisors before Voice later still on 2026-10-10 (the user's order); Chat (General until then), Sessions and Botchat first, under Client, since later on 2026-10-10 (the user's call); Common and Http for LLM since 2026-10-10 (the user's call); LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
@@ -1712,7 +1738,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("must be 2 to 15 choices", SettingsMenu.AskMaxChoicesRangeError);
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());   // the four panes together, every field once
         Assert.Equal(29, SettingsMenu.TabLabelWidth(SettingsTab.Chat));   // "Working directory in header", 27 (2026-09-21; "Hide /exit autocomplete", 23, from 2026-09-18; "Show image thumbnails", 21, before)
-        Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Common));       // "LLM compact show summary" (2026-10-10, the Http tab's rows gone; "LLM sampling from Hugging Face", 32, from 2026-09-28; "LLM compact show summary", 24, from 2026-09-21; "LLM request timeout (s)", 23, before)
+        Assert.Equal(27, SettingsMenu.TabLabelWidth(SettingsTab.Common));       // "LLM plan gap clean passes" (2026-10-17; "LLM compact show summary", 26, from 2026-10-10, the Http tab's rows gone; "LLM sampling from Hugging Face", 32, from 2026-09-28; "LLM compact show summary", 24, from 2026-09-21; "LLM request timeout (s)", 23, before)
         Assert.Equal(32, SettingsMenu.TabLabelWidth(SettingsTab.Http));       // "LLM sampling from Hugging Face" (2026-10-10)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(30, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard (%)" (2026-10-13; 26 without the unit)
@@ -3414,7 +3440,7 @@ public partial class SettingsMenuTests : IDisposable
         // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then; the bot check control on under them since 2026-10-17.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               lan\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   on\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI YouTube controls    off\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n  LLM plan gap passes       5 passes\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                    (probe local ports)\n  LLM model                  (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning              none\n  LLM show thinking          on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools            on\n  LLM max tool iterations    10000 round trips\n  LLM request timeout (s)    3600\n  LLM turn timeout (s)       21600\n" + MenuLayout.Heading("Plan mode", 120) + "\n  LLM plan gap passes        5 passes\n  LLM plan gap clean passes  2 passes\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length         (from the server)\n  LLM mid-turn usage         last-known\n  LLM max turns              auto\n  LLM auto compact (%)       90 %\n  LLM compact mode           summary\n  LLM compact keep recent    2 turns\n  LLM compact show summary   off\n  LLM tool compact mode      compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images             20 pictures\n  LLM max images (MB)        24 MB\n  LLM fun verbs              off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n  LLM API key                     em•••\n" + MenuLayout.Heading("Thinking", 120) + "\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n" + MenuLayout.Heading("Sampling", 120) + "\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 120);
         AssertTabEnds("\n \n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n" + MenuLayout.Heading("Voices", 120) + "\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix (%)  80 % / 20 %\n  Speed          1.2\n", 120);
@@ -3652,7 +3678,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("qwen3", _settings.Current.LlmModel);
         // The edit: the tab's list under its strip with the row marked, the slot under it, the edit keys in the hint row.
-        Assert.Contains("\n" + Head(SettingsTab.Common) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  LLM URL                   (probe local ports)\n▸ LLM model                 (first listed)\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Common) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n  LLM URL                    (probe local ports)\n▸ LLM model                  (first listed)\n", Output);
         Assert.Contains("\n› \n" + Rule(120) + "\n" + SettingsMenu.EditKeys, Output);
         Assert.Contains("qwen3-typo", Output);
         // The results on the status line, never as a › line or a notice in the flow.
@@ -4551,7 +4577,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("\n" + Head(SettingsTab.Common) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n", Output);
+        Assert.Contains("\n" + Head(SettingsTab.Common) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                    (probe local ports)\n", Output);
         Assert.Contains("\n" + Head(SettingsTab.Http) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n", Output);
         Assert.Contains("\n▸ Servers enabled", Output);   // the Embedded tab's rows wear no "Embedded" since 2026-10-04
         Assert.DoesNotContain("Agent skills", Output);
@@ -5359,7 +5385,7 @@ public partial class SettingsMenuTests : IDisposable
     public void Sections_RowNames_AndTheFooter_ArePinned()
     {
         Assert.Equal(["Who and where", "Input line", "Transcript", "Screen", "Tool bars", "Outside apps"], SettingsMenu.TabSections[SettingsTab.Chat].Select(s => s.Title));
-        Assert.Equal(["Connection", "How it answers", "Tools and limits", "Context", "Pictures and verbs"], SettingsMenu.TabSections[SettingsTab.Common].Select(s => s.Title));   // the LLM tab's runs, on Common since 2026-10-10
+        Assert.Equal(["Connection", "How it answers", "Tools and limits", "Plan mode", "Context", "Pictures and verbs"], SettingsMenu.TabSections[SettingsTab.Common].Select(s => s.Title));   // the LLM tab's runs, on Common since 2026-10-10; Plan mode since 2026-10-17
         Assert.Equal(["Connection", "Thinking", "Sampling"], SettingsMenu.TabSections[SettingsTab.Http].Select(s => s.Title));   // 2026-10-10
         Assert.Equal(SettingsField.LlmUrl, SettingsMenu.TabSections[SettingsTab.Common][0].First);   // Connection over the URL (over the scan mode until 2026-10-10)
         Assert.Equal(SettingsField.LlmScanMode, SettingsMenu.TabSections[SettingsTab.Http][0].First);

@@ -86,8 +86,9 @@ They need no server unless the row says so.
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
 - Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines.
-- **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans) or `gaps [model|advisor|any]`.
-- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run instead of *LLM plan gap passes*. Since there's no Esc to stop the passes, 0 (no limit) means 20, either way, and under *Advisor confirm* the model reviews alone.
+- **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans), `gaps [model|advisor|any|confirm]`, `chat` or `ready`.
+- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run instead of *LLM plan gap passes*. Since there's no Esc to stop the passes, 0 (no limit) means 20, either way, and under *Advisor confirm* the model reviews alone. It ends after *LLM plan gap clean passes* in a row with no gaps, as on the screen; a clean pass cut short at the limit names `/plan approve`.
+- **`/plan chat`** sends nothing; your next line opens the conversation, and the model writes the plan when you ask. `/plan ready` asks for it, or, once one is presented, prints where it stands.
 
 ### Everything else goes to the model as text
 

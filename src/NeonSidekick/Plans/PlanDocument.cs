@@ -21,7 +21,9 @@ public enum PlanStatus
 /// A plan file's front matter: its status, revision, when it was written and rewritten, the requirement it answers,
 /// and — once it has been carried out (2026-09-26) — how many of its steps are ticked (<c>progress: 5/7</c>).
 /// </summary>
-public sealed record PlanHeader(PlanStatus Status, int Revision, DateTimeOffset Created, DateTimeOffset Updated, string Requirement, int? StepsDone = null, int? StepsTotal = null);
+/// <para><c>review:</c> (2026-10-17, <see cref="Review"/>): how the last gap review that ended on its own went, with the body's fingerprint
+/// (<see cref="PlanReview"/>); written only when set, so a file without it reads as before, and dropped by the next revision.</para>
+public sealed record PlanHeader(PlanStatus Status, int Revision, DateTimeOffset Created, DateTimeOffset Updated, string Requirement, int? StepsDone = null, int? StepsTotal = null, string? Review = null);
 
 /// <summary>
 /// A plan file (2026-09-26): a small front-matter block the app owns — <c>status</c>, <c>revision</c>,
@@ -83,6 +85,7 @@ public static class PlanDocument
             .Append("updated: ").Append(header.Updated.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\n')
             .Append("requirement: ").Append(Quote(header.Requirement)).Append('\n')
             .Append(header is { StepsDone: { } done, StepsTotal: { } total } ? "progress: " + N(done) + "/" + N(total) + "\n" : "")
+            .Append(header.Review is { Length: > 0 } review ? "review: " + review + "\n" : "")
             .Append(Fence).Append('\n')
             .ToString();
     }
@@ -255,7 +258,8 @@ public static class PlanDocument
             (done, total) = (dn, tn);
         }
 
-        return new PlanHeader(status, revision, created ?? DateTimeOffset.MinValue, updated ?? DateTimeOffset.MinValue, Unquote(fields.GetValueOrDefault("requirement") ?? ""), done, total);
+        string? review = fields.TryGetValue("review", out var reviewed) && reviewed.Length > 0 ? reviewed : null;
+        return new PlanHeader(status, revision, created ?? DateTimeOffset.MinValue, updated ?? DateTimeOffset.MinValue, Unquote(fields.GetValueOrDefault("requirement") ?? ""), done, total, review);
     }
 
     /// <summary>
@@ -279,6 +283,60 @@ public static class PlanDocument
         }
 
         return HeaderText(new PlanHeader(status, 1, now, now, requirement, progress?.Done, progress?.Total)) + "\n" + normalized.TrimStart('﻿');
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with its <c>review:</c> line set to <paramref name="review"/> (2026-10-17, <see cref="WithStatus"/>'s twin) and
+    /// <c>updated</c> stamped, the body and the status untouched; a file with no header the app wrote gains a draft one over the whole text.
+    /// </summary>
+    public static string WithReview(string text, string review, DateTimeOffset now, string requirement)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(review);
+        string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (TryParse(normalized) is { } header && Split(normalized, out _) is { } body)
+        {
+            return HeaderText(header with { Review = review, Updated = now }) + body;
+        }
+
+        return HeaderText(new PlanHeader(PlanStatus.Draft, 1, now, now, requirement, Review: review)) + "\n" + normalized.TrimStart('﻿');
+    }
+
+    /// <summary>
+    /// The body's fingerprint for the <c>review:</c> line (2026-10-17): the first 8 hex of SHA-256 over <paramref name="body"/>,
+    /// LF-normalized and trimmed, with every task line's <c>[x]</c> / <c>[X]</c> read as <c>[ ]</c> (task lines as <see cref="Progress"/>
+    /// knows them, outside code fences), so ticking steps while the plan is carried out never reads as an edit. Pure, invariant.
+    /// </summary>
+    public static string Fingerprint(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        string[] lines = body.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Trim().Split('\n');
+        bool fenced = false;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string trimmed = lines[i].TrimStart();
+            if (trimmed.StartsWith("```", StringComparison.Ordinal) || trimmed.StartsWith("~~~", StringComparison.Ordinal))
+            {
+                fenced = !fenced;
+                continue;
+            }
+
+            int marker = fenced ? 0 : ListMarker(trimmed);
+            if (marker == 0)
+            {
+                continue;
+            }
+
+            string rest = trimmed[marker..];
+            if (rest.Length >= 3 && rest[0] == '[' && rest[1] is 'x' or 'X' && rest[2] == ']' && (rest.Length == 3 || char.IsWhiteSpace(rest[3])))
+            {
+                int box = lines[i].Length - trimmed.Length + marker + 1;
+                lines[i] = string.Concat(lines[i].AsSpan(0, box), " ", lines[i].AsSpan(box + 1));
+            }
+        }
+
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', lines)));
+        return Convert.ToHexStringLower(hash.AsSpan(0, 4));
     }
 
     /// <summary>The text after the leading front matter (its lines in <paramref name="block"/>), or null when it does not open with one.</summary>

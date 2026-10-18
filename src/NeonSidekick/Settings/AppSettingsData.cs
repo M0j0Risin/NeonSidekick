@@ -804,6 +804,21 @@ public sealed class AppSettingsData
     public const int DefaultPlanGapPasses = 5;
 
     /// <summary>
+    /// How many passes in a row must find no gaps before plan mode's gap-closing loop ends (2026-10-17, the user's report: a pass
+    /// sometimes answered "0 gaps" when the next review would still find plenty, and one such pass ended the review). 1 is the
+    /// behavior until then, the first clean pass ending it; 2, the default, asks one confirming pass, told the last pass found
+    /// none and pointed at an area no earlier pass covered. Every pass counts toward <see cref="PlanGapPasses"/>; a clean pass at
+    /// that limit stops the loop unconfirmed, and a limit below this count lowers it to the limit for that review. <c>/plan gaps
+    /// confirm</c> raises it to at least 2. <see cref="MinPlanGapCleanPasses"/> to <see cref="MaxPlanGapCleanPasses"/>. Read when a
+    /// loop starts. The Plan mode section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapPasses"/>. No variable.
+    /// </summary>
+    public int PlanGapCleanPasses { get; set; } = DefaultPlanGapCleanPasses;
+
+    public const int MinPlanGapCleanPasses = 1;
+    public const int MaxPlanGapCleanPasses = 5;
+    public const int DefaultPlanGapCleanPasses = 2;
+
+    /// <summary>
     /// Model id sent with every request. Empty means "the first chat model the server lists".
     /// vLLM and SGLang require an exact match with <c>--served-model-name</c>.
     /// </summary>

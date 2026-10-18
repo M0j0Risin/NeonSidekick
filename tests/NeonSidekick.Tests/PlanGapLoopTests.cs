@@ -41,7 +41,8 @@ public class PlanGapLoopTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    private static AIFunctionArguments Args(string title, string markdown, object? gaps = null)
+    /// <summary>present_plan's arguments; <paramref name="checked"/> and <paramref name="minor"/> (2026-10-17) only when given.</summary>
+    internal static AIFunctionArguments Args(string title, string markdown, object? gaps = null, object? @checked = null, object? minor = null)
     {
         var args = new Dictionary<string, object?>
         {
@@ -53,8 +54,21 @@ public class PlanGapLoopTests : IDisposable
             args[PresentPlanTool.GapsArgument] = gaps;
         }
 
+        if (@checked is not null)
+        {
+            args[PresentPlanTool.CheckedArgument] = @checked;
+        }
+
+        if (minor is not null)
+        {
+            args[PresentPlanTool.MinorArgument] = minor;
+        }
+
         return new AIFunctionArguments(args);
     }
+
+    /// <summary>A clean report's checked list (2026-10-17): every empty gaps list during a review comes with one.</summary>
+    internal static readonly string[] Checked = ["the steps"];
 
     /// <summary>A plan presented once (refined on the pane), then a loop on its first pass.</summary>
     private async Task<PlanGapLoop> PassOneAsync(string markdown = Plan, string title = "Guide")
@@ -256,7 +270,8 @@ public class PlanGapLoopTests : IDisposable
         Assert.Equal(PlanApprovalMenu.Choices.Count, PlanApprovalMenu.Rows.Count);
         Assert.Equal(PlanReviewer.Advisor, (PlanReviewer)PlanApprovalMenu.ReviewerHotkeys['a']);
         Assert.Equal(PlanReviewer.Any, (PlanReviewer)PlanApprovalMenu.ReviewerHotkeys['y']);
-        Assert.Equal(3, PlanApprovalMenu.ReviewerPage(new PlanPresentation("G", "p.md", 1, "")).Rows.Count);
+        Assert.Equal(PlanReviewer.Confirm, (PlanReviewer)PlanApprovalMenu.ReviewerHotkeys['c']);   // 2026-10-17; the main page's c (Cancel plan) is its own map
+        Assert.Equal(4, PlanApprovalMenu.ReviewerPage(new PlanPresentation("G", "p.md", 1, "")).Rows.Count);
     }
 
     // ── present_plan while a pass runs ──────────────────────────────────────
@@ -281,7 +296,7 @@ public class PlanGapLoopTests : IDisposable
         // A body with no heading of its own: the file has "# Guide" added, and the same markdown again is still no change.
         var loop = await PassOneAsync("## Steps\n- [ ] Write it\n");
 
-        object? result = await _tool.InvokeAsync(Args("Guide", "## Steps\n- [ ] Write it\n", Array.Empty<string>()));
+        object? result = await _tool.InvokeAsync(Args("Guide", "## Steps\n- [ ] Write it\n", Array.Empty<string>(), Checked));
 
         Assert.Equal(PlanText.RefineResult(_session.Path!, null), result);
         var shown = Assert.Single(_presented);
@@ -296,7 +311,7 @@ public class PlanGapLoopTests : IDisposable
     public async Task Tool_AfterConverging_ThePaneIsTheUsualOne()
     {
         var loop = await PassOneAsync();
-        await _tool.InvokeAsync(Args("Guide", Plan));
+        await _tool.InvokeAsync(Args("Guide", Plan, @checked: Checked));
         _presented.Clear();
 
         object? again = await _tool.InvokeAsync(Args("Guide", Revised, new[] { "ignored now" }));

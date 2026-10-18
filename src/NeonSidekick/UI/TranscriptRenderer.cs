@@ -195,7 +195,12 @@ public sealed class TranscriptRenderer : INoticeSink
     public static string SpeakerMarkup(string name, Color color, string? avatar = null) =>
         string.Concat("[", Theme.ToHex(color), " bold]", Markup.Escape((Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : SpeakerGlyph) + name), "[/]");
 
-    public static string NoticeMarkup(string text) => Theme.StyleMarkup(Theme.SystemText, NoticeGlyph + text);
+    /// <summary>
+    /// A notice line: its glyph and text in the system style. The text goes through <see cref="TextCells.Spaced"/> first (2026-10-17, the plan done
+    /// line's ❤️): a terminal that draws a selector sequence one cell wide (Terminal.app, iTerm2's alternate screen) gets a space after it, so
+    /// "I ❤️ it" never reads "I ❤️it" there; Windows is unchanged. The panes' notice lines (<see cref="MenuPane"/>, <see cref="FolderPane"/>) draw through here too.
+    /// </summary>
+    public static string NoticeMarkup(string text) => Theme.StyleMarkup(Theme.SystemText, NoticeGlyph + TextCells.Spaced(text));
 
     public static string WarningMarkup(string text) => Theme.ColorMarkup(Theme.Warn, WarningGlyph + text);
 
@@ -364,8 +369,9 @@ public sealed class TranscriptRenderer : INoticeSink
 
     public void Notice(string text)
     {
+        // The Web UI's feed takes the plain text before any spacing (2026-10-17): the browser draws its own one space.
         Feed?.Add(WebUi.FeedKind.Notice, text);
-        Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, text));
+        Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, TextCells.Spaced(text)));
     }
 
     /// <summary>

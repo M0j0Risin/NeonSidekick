@@ -17,7 +17,8 @@ internal sealed partial class SettingsMenu
     /// command and Anthropic API; Embedded, Docker, OpenAI, TTS, STT, Sessions and Advisors in runs of their own, a few rows moved
     /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the bar rows under
     /// Screen. Web UI's three runs (2026-10-16, the user's ask): Server, then Guardrails and Tabs, "The page" split into what the
-    /// page may do and which tabs it shows. Pinned.
+    /// page may do and which tabs it shows. Common's Plan mode (2026-10-17, the user's ask): the gap review's two rows,
+    /// <c>LLM plan gap passes</c> and <c>LLM plan gap clean passes</c>, between Tools and limits and Context. Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
@@ -36,6 +37,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.LlmUrl, "Connection"),
                 (SettingsField.LlmReasoning, "How it answers"),
                 (SettingsField.LlmOfferTools, "Tools and limits"),
+                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own
                 (SettingsField.LlmContextLength, "Context"),
                 (SettingsField.LlmPictureKeep, "Pictures and verbs"),
             ],

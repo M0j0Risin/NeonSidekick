@@ -1515,7 +1515,7 @@ internal sealed partial class ChatScreen
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
         _skillInstallMenu = new SkillInstallMenu(_menuPane);
         _skillInstall = new SkillInstallFlow(new SkillHub(_web.Fetcher));
-        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses);
+        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses, () => _effective().PlanGapCleanPasses);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
         _queuedClicks = new DoubleClick(_pane.Time);
@@ -15780,6 +15780,12 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built.
+        if (_plan.Active && _plan.NoteMessage(text))
+        {
+            SavePlanState();
+        }
+
         // An attached PDF's text read and checked before anything else (2026-10-14, the PDF plan's phase 3): null to go on.
         if (images.Any(i => i.IsDocument))
         {
@@ -15835,6 +15841,8 @@ internal sealed partial class ChatScreen
 
         while (true)
         {
+            // Talking a plan through (2026-10-17): a present_plan save inside the turn ends it, and the chrome and the row follow below.
+            bool talkingBefore = _plan.Talking;
             var outcome = await RunTurnAsync(assistant, text, images, cancellationToken).ConfigureAwait(false);
             // A pane opened mid-turn is closed when the keys are needed now (the listen below, the
             // exit) and left to the user otherwise; then the acts and the owed reconnects.
@@ -15842,7 +15850,8 @@ internal sealed partial class ChatScreen
             if (TakeHandoverReset())
             {
                 // A pane the reply ended under switched the profile or replaced the conversation (2026-10-12): the plan's round and the
-                // reflection were about the one that is gone.
+                // reflection were about the one that is gone, and so was a review that converged in it (2026-10-17).
+                _plan.ForgetFinished();
                 return outcome == TurnOutcome.Exit;
             }
 
@@ -15855,6 +15864,12 @@ internal sealed partial class ChatScreen
             // Round two (2026-09-26): a plan being carried out marked done or incomplete, and a plan the model never presented hinted.
             CheckPlanProgress(interrupted: _lastTurnCancelled || _lastTurnFailed);
             CheckUnpresentedPlan(outcome);
+            if (_plan.Talking != talkingBefore)
+            {
+                SyncPlanChrome();
+                SavePlanState();
+            }
+
             if (_lastTurnCancelled)
             {
                 // What a cancelled reply does to the queue (2026-09-18): the setting's word, here

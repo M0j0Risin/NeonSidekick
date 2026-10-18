@@ -37,7 +37,7 @@ public sealed class PlanApprovalMenu
     public static readonly IReadOnlyList<PlanChoice> Choices = [PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.Refine, PlanChoice.CloseGaps, PlanChoice.Cancel];
 
     /// <summary>The reviewer page's hotkeys: model, advisor, any.</summary>
-    public static readonly IReadOnlyDictionary<char, int> ReviewerHotkeys = new Dictionary<char, int> { ['m'] = 0, ['a'] = 1, ['y'] = 2 };
+    public static readonly IReadOnlyDictionary<char, int> ReviewerHotkeys = new Dictionary<char, int> { ['m'] = 0, ['a'] = 1, ['y'] = 2, ['c'] = 3 };   // c (2026-10-17): confirm, beside the main page's own c = Cancel plan, a separate map
 
     /// <summary>The row the cursor starts on: Keep refining.</summary>
     public const int StartRow = 2;
@@ -103,7 +103,7 @@ public sealed class PlanApprovalMenu
                     }
 
                     var reviewer = await _pane.PickAsync(ReviewerPage(plan), 0, cancellationToken).ConfigureAwait(false);
-                    if (reviewer is { Row: >= 0 and <= (int)PlanReviewer.Any } who)
+                    if (reviewer is { Row: >= 0 and <= (int)PlanReviewer.Confirm } who)
                     {
                         return new PlanVerdict(PlanChoice.CloseGaps, Reviewer: (PlanReviewer)who.Row);
                     }
