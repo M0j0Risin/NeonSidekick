@@ -77,7 +77,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Files elsewhere:** `\\server\share` paths (`smb://server/share` on a Mac) and folders outside the working directory, as you or another account.
 * **Docker:** Docker Desktop's containers (on a Mac, OrbStack, Colima and Rancher Desktop too): logs, health and resource use. Starting, stopping and cleaning up are opt-in and ask first; `/docker` does it by hand.
 * **Network checks:** DNS lookups, ping, traceroute, open ports and TLS certificates, one host at a time; `/net` does it by hand.
-* **Event logs (Windows only):** what Windows recorded (crashes, failed service starts, failed sign-ins) on this PC, in `.evtx` files or on computers you name. Read-only; `/eventlog` does it by hand.
+* **Event logs:** what Windows recorded (crashes, failed service starts, failed sign-ins) on this PC, in `.evtx` files or on computers you name; on a Mac, its own unified log, crash reports and install.log. Read-only; `/eventlog` does it by hand.
 * **Services & scheduled tasks (Windows only):** read them on this PC or computers you name. Starting, stopping, running or disabling one is opt-in and asks first; `/services` and `/tasks` do it by hand.
 * **Active Directory (Windows only):** users, groups, computers and OUs, and the locked, expiring, stale and privileged accounts among them. It never writes to the directory; `/ad` does it by hand.
 * **Printing & PDFs:** `/print` to any installed printer, on Windows or a Mac, and `/pdf` from Markdown, text, pictures or a web page. The model reads PDFs (local or on the web), you can attach one to a message or `/view` it, and PDFs can be merged, split, rotated and filled in.
@@ -103,7 +103,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal**, which comes with Windows 11; the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
 * **A language model:** the app can download one for you, or use one you already run.
 
-**On a Mac?** It runs on Apple Silicon (M1 and later). Docker servers, the browser window, the admin tools (event logs, services, tasks, Active Directory), the `printer` PDF engine and the NVFP4 models need Windows, and the camera, screen capture and YouTube playback need macOS 14 or later. [On a Mac](docs/MAC.md) covers setup and every difference.
+**On a Mac?** It runs on Apple Silicon (M1 and later). Docker servers, the browser window, the admin tools (services, tasks, Active Directory; event logs read the Mac's own), the `printer` PDF engine and the NVFP4 models need Windows, and the camera, screen capture and YouTube playback need macOS 14 or later. [On a Mac](docs/MAC.md) covers setup and every difference.
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA card (driver 580 or newer) or any Vulkan card; without one it works, but slowly. 16 GB of VRAM runs the smaller models, and 32 GB runs the biggest of the included models.

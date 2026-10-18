@@ -69,7 +69,7 @@ They need no server unless the row says so.
 | `/advisor [<name> <question>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation. |
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, and several matches are listed as ids you can type back. |
 | `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. |
-| `/eventlog …` | Prints a log's events as lines, newest first, taking the same filter words as the [event-log tools](TOOLS.md#event-logs); full text, ticked computers only. Windows only. |
+| `/eventlog …` | Prints a log's events as lines, newest first, taking the same filter words as the [event-log tools](TOOLS.md#event-logs); full text, ticked computers only; on a Mac, `system`, `crashes`, `install` or a `.logarchive`. |
 | `/net …` | Runs a [network](TOOLS.md#network) check and prints it; ignores *Network tools reach*, the host lists and the per-turn budget, and adds a line when the model's own call would be refused. |
 | `/services …`, `/tasks …` | Print a computer's [services](TOOLS.md#services) or [scheduled tasks](TOOLS.md#scheduled-tasks) as lines; the ticked computers only. Changes need an on-screen confirmation, so headless mode can't make them (the model's `service_control`, `service_start_type` and `task_control` aren't offered either). Windows only. |
 | `/ad …` | Prints a user's, group's or computer's card, an OU, a find or the domain from [Active Directory](TOOLS.md#active-directory), in columns; the ticked domains only. `to:<file.csv or folder>` saves a list as a CSV in the working directory. Windows only. |

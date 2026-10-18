@@ -437,7 +437,7 @@ Under *Obsidian tools*, on the vault *Obsidian vault* names. They work on its fi
 
 ## Admin
 
-Checks on the network, then Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. The network checks work everywhere; the rest are **Windows only**, all through Windows' own APIs inside the app: nothing is started (no `wevtutil`, `sc`, `schtasks` or PowerShell). Each has its own command (`/net`, `/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
+Checks on the network, then Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. The network checks work everywhere, and the event logs on a Mac read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)); the rest are **Windows only**. All go through the system's own APIs inside the app: nothing is started (no `wevtutil`, `log show`, `sc`, `schtasks` or PowerShell). Each has its own command (`/net`, `/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
 
 The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home's or the profile's `configs` folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins), each entry is used only after you tick it in its *… offered* setting, and its *add/edit* wizard walks you through adding one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
 
