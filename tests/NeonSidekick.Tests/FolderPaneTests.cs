@@ -66,6 +66,12 @@ public class FolderPaneTests : IDisposable
     /// <summary>The second root's row, or nothing off Windows (one root there).</summary>
     private static string SecondRoot(bool active = false) => Windows ? Closed(active, 0, D) + "\n" : "";
 
+    /// <summary>
+    /// The blank rows under <see cref="Disks"/> closed, where the pane holds the height of the tree opened to bob: four on Windows,
+    /// five off it (2026-10-17, the Mac pass), where the one root holds Repo too, so the closed tree lost its second root's row.
+    /// </summary>
+    private static string HeldBlanks => Windows ? "\n\n\n\n" : "\n\n\n\n\n";
+
     private string Output => _console.Output;
 
     [Fact]
@@ -148,7 +154,7 @@ public class FolderPaneTests : IDisposable
         Assert.Contains("\n" + P(C, "Windows") + "\n" + Open(false, 0, C) + "\n", Output);
         // The tree closed is four rows shorter than the one it was opened on: the pane holds its height (2026-10-14), the
         // blank rows under the roots, so the title stays on its row.
-        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + "\n\n\n\n" + Rule(40), Output);
+        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + HeldBlanks + Rule(40), Output);
     }
 
     [Fact]
@@ -268,9 +274,10 @@ public class FolderPaneTests : IDisposable
         using var _ = screen;
         var tree = new FolderTree(Disks().AddFiles(C, "notes.txt"), withFiles: true);
         int users = tree.ExpandTo(P(C, "Users"));      // C:\ at 102, Users 103, Windows 104, notes.txt 105
+        int notes = Windows ? 105 : 106;                 // off Windows the one root holds Repo too, before the file (2026-10-17, the Mac pass)
         var opened = new List<string>();
-        input.PushClick(14, 105);                        // notes.txt's name: the cursor
-        input.PushClick(14, 105);                        // the pair: opened
+        input.PushClick(14, notes);                      // notes.txt's name: the cursor
+        input.PushClick(14, notes);                      // the pair: opened
         input.PushClick(14, 103);                        // Users' name: the cursor
         input.PushClick(14, 103);                        // the pair: Users open
         input.Push(Keys.Escape);
@@ -316,7 +323,7 @@ public class FolderPaneTests : IDisposable
         Assert.Equal(Windows ? D : C, picked);
         // The tree closed is four rows shorter than the one it was opened on: the pane holds its height (2026-10-14), the
         // blank rows under the roots, so the title stays on its row.
-        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + "\n\n\n\n" + Rule(40), Output);
+        Assert.Contains("\n" + C + "\n" + Closed(true, 0, C) + "\n" + SecondRoot() + HeldBlanks + Rule(40), Output);
         Assert.True(FolderPane.ButtonAt(12));
         Assert.True(FolderPane.ButtonAt(27));
         Assert.False(FolderPane.ButtonAt(11));

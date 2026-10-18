@@ -17,8 +17,12 @@ public sealed class AttachPdfTests
 {
     private static readonly byte[] Bytes = Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF\n");
 
-    private static ImageAttachment Document(string path = @"C:\docs\report.pdf", string text = "--- page 1 ---\nHello", int pages = 1) =>
-        new(path, Bytes, PdfFile.MediaType, 0, 0) { DocumentText = Task.FromResult(new PdfDocumentText(text, pages, pages)) };
+    /// <summary>The attached file's full path, spelled as the machine spells one (2026-10-17, the Mac pass: off Windows a backslash is
+    /// no separator, so <c>C:\docs\report.pdf</c> was one file name and the labels read the whole path).</summary>
+    private static readonly string ReportPath = OperatingSystem.IsWindows() ? @"C:\docs\report.pdf" : "/docs/report.pdf";
+
+    private static ImageAttachment Document(string? path = null, string text = "--- page 1 ---\nHello", int pages = 1) =>
+        new(path ?? ReportPath, Bytes, PdfFile.MediaType, 0, 0) { DocumentText = Task.FromResult(new PdfDocumentText(text, pages, pages)) };
 
     [Fact]
     public void ThePasteStore_NumbersPdfsApart_AndLabelsThemByName()
@@ -71,8 +75,8 @@ public sealed class AttachPdfTests
         var part = ConversationHistory.ImagePart(Document());
         Assert.Equal(PdfFile.MediaType, part.MediaType);
         Assert.Equal("report.pdf", part.Name);
-        Assert.Equal(@"C:\docs\report.pdf", ConversationHistory.PicturePath(part));
-        Assert.Equal("(the PDF report.pdf, attached from C:\\docs\\report.pdf: its text, 1 page)\n--- page 1 ---\nHello", ConversationHistory.DocumentText(part));
+        Assert.Equal(ReportPath, ConversationHistory.PicturePath(part));
+        Assert.Equal("(the PDF report.pdf, attached from " + ReportPath + ": its text, 1 page)\n--- page 1 ---\nHello", ConversationHistory.DocumentText(part));
         Assert.True(ConversationHistory.IsDocument(part));
     }
 

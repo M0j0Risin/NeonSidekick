@@ -103,6 +103,7 @@ public sealed class MacTidyUpTests : IDisposable
             .Where(l => l.EndsWith('{') || l.EndsWith(',') || l.EndsWith('}') || l.EndsWith('"') || l.EndsWith("true", StringComparison.Ordinal))
             .Where(l => l.StartsWith('"') || l.StartsWith("  ", StringComparison.Ordinal) || l.StartsWith('}'));
         string path = SqlConfigFile.ProfilePath(profile);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);   // the profile's configs folder (2026-10-17, the Mac pass: ProfilePath is under configs since 2026-10-16)
         File.WriteAllText(path, "{ \"connections\": {\n" + string.Join("\n", example) + "\n} }");
 
         var loaded = SqlConfigFile.Load(path);

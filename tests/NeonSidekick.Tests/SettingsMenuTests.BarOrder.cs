@@ -71,7 +71,7 @@ public partial class SettingsMenuTests
         Assert.Equal(["ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
-        Assert.Contains("  · Performance bar: RAM, GPU, VRAM · gauge", Output);   // the look set before the page opened
+        Assert.Contains("  · Performance bar: RAM, GPU, " + Perf.PerfText.VramLabel + " · gauge", Output);   // the look set before the page opened; GMEM on a Mac (2026-10-17, the Mac pass)
         pane.Dispose();
 
         (menu, pane) = PaneMenu();

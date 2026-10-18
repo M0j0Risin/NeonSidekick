@@ -74,7 +74,18 @@ public class WinMmAudioCaptureTests
         lock (sizes)
         {
             Assert.True(sizes.Count >= 5, $"only {sizes.Count} buffers in 3 s");
-            Assert.All(sizes, s => Assert.Equal(1600, s));
+            if (OperatingSystem.IsWindows())
+            {
+                Assert.All(sizes, s => Assert.Equal(1600, s));
+            }
+            else
+            {
+                // AudioQueue converts from the device's rate and may hand back a short buffer, which the contract allows ("how many
+                // bytes of it are valid"): one of the first two came in at 1,222 to 1,382 bytes on a Logitech StreamCam (2026-10-17,
+                // the Mac pass). Never more than the 50 ms asked for, and most of them full.
+                Assert.All(sizes, s => Assert.InRange(s, 1, 1600));
+                Assert.True(sizes.Count(s => s == 1600) > sizes.Count / 2, string.Join(", ", sizes));
+            }
         }
     }
 

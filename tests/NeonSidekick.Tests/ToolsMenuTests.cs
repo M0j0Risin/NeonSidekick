@@ -1555,7 +1555,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("bash", _settings.Current.ShellDefault);   // the second of the Mac's three
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
-        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default                   zsh\n  Shell default timeout (s)               180\n  Shell max timeout (s)        600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)          300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
+        AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default shell             zsh\n  Shell default timeout (s)       180\n  Shell max timeout (s)           600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)  300\n  Shell tool bridge               off\n  Shell tool bridge max calls     50 tool calls\n"), 100);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
@@ -1625,7 +1625,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("\n" + Titled(SettingsMenu.PoliceOffConfirmQuestion) + "\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell police │ ≡ strings (none) ") + "\n \n▸ on  shell police enabled\n  off shell police disabled\n", Output);
         Assert.Contains("  · Shell police: off", Output);
-        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n" + Heading("── Commands") + "\n  Shell prefer native tools       on\n  Shell default                   zsh\n", Output);
+        Assert.Contains("\n▸ Shell police                    off\n  Shell police forbidden strings  none\n" + Heading("── Commands") + "\n  Shell prefer native tools       on\n  Shell default shell             zsh\n", Output);
         pane.Dispose();
     }
 
@@ -1855,7 +1855,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell code languages: python, node\n", Output);
         Assert.Contains("  · Shell code languages: node\n", Output);
         Assert.Contains("At least one language stays on.", Output);
-        Assert.Contains("\n▸ Shell code languages            node\n  Shell code default timeout (s)          300\n", Output);
+        Assert.Contains("\n▸ Shell code languages            node\n  Shell code default timeout (s)  300\n", Output);
         pane.Dispose();
     }
 

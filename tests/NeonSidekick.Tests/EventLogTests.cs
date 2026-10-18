@@ -417,7 +417,7 @@ public sealed class EventLogTests : IDisposable
         var (loaded, wrong) = EventLogConfigFile.Load(path);
         Assert.Empty(wrong);
         Assert.Equal(["local", "fs01", "dc01"], loaded.Select(c => c.Name));
-        Assert.Contains("cmdkey /generic:NeonSidekick/eventlog/dc01", EventLogConfigFile.EmptyText, StringComparison.Ordinal);
+        Assert.Contains(OperatingSystem.IsMacOS() ? "security add-generic-password -s NeonSidekick/eventlog/dc01" : "cmdkey /generic:NeonSidekick/eventlog/dc01", EventLogConfigFile.EmptyText, StringComparison.Ordinal);   // the Keychain's line on a Mac (2026-10-17, the Mac pass: SqlText.CredentialCommand)
     }
 
     // ── The errors' sentences ──────────────────────────────────────────────
