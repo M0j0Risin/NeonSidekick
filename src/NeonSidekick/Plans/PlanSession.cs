@@ -43,12 +43,30 @@ public sealed record PlanPresentation(string Title, string Path, int Revision, s
 /// <summary>What <see cref="NeonSidekick.App.ChatScreen.PrepareTurn"/> needs of plan mode for one turn: the directive and the tool that presents the plan.</summary>
 public sealed record PlanTurn(string Directive, AIFunction Tool)
 {
-    /// <summary>The directive again with the advisors' bullet (2026-10-10, <see cref="PlanText.AdvisorsLine"/>); null composes none.</summary>
-    public Func<IReadOnlyList<Settings.AdvisorEntry>, string>? WithAdvisors { get; init; }
+    /// <summary>
+    /// The directive again with the advisors' bullet (2026-10-10, <see cref="PlanText.AdvisorsLine"/>) and the web research tools'
+    /// (2026-10-17, <see cref="PlanText.WebResearchLine"/>), either null for none; null composes none.
+    /// </summary>
+    public Func<IReadOnlyList<Settings.AdvisorEntry>?, IReadOnlyList<string>?, string>? Compose { get; init; }
 
-    /// <summary>The directive a turn sends: with <paramref name="advisors"/> when the turn offers <c>neon_advisor</c> and any is listed, else <see cref="Directive"/>.</summary>
-    public string DirectiveFor(IReadOnlyList<Settings.AdvisorEntry>? advisors) =>
-        advisors is { Count: > 0 } && WithAdvisors is { } compose ? compose(advisors) : Directive;
+    /// <summary>
+    /// The directive a turn sends: with <paramref name="advisors"/> when the turn offers <c>neon_advisor</c> and any is listed, and with
+    /// <paramref name="research"/>, the turn's offered tools of <see cref="PlanText.ResearchTools"/>; else <see cref="Directive"/>.
+    /// </summary>
+    public string DirectiveFor(IReadOnlyList<Settings.AdvisorEntry>? advisors, IReadOnlyList<string>? research = null)
+    {
+        var listed = advisors is { Count: > 0 } ? advisors : null;
+        var web = research is { Count: > 0 } ? research : null;
+        return (listed is not null || web is not null) && Compose is { } compose ? compose(listed, web) : Directive;
+    }
+
+    /// <summary>Of <paramref name="tools"/>, the names in <see cref="PlanText.ResearchTools"/>, in that order (2026-10-17).</summary>
+    public static IReadOnlyList<string> ResearchOf(IEnumerable<AIFunction> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        var names = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        return PlanText.ResearchTools.Where(names.Contains).ToList();
+    }
 }
 
 /// <summary>
@@ -182,6 +200,6 @@ public sealed class PlanSession
         int revision = Revision;
         // A pass of the gap-closing loop under way (2026-10-13): its rules ride in the directive, so a compaction cannot lose them.
         var gap = Closing is { Pending: false, Converged: false } loop ? new PlanGapState(loop.Pass, loop.Limit, loop.Reviewer) : null;
-        return new PlanTurn(PlanText.Directive(requirement, path, revision, null, gap), tool) { WithAdvisors = advisors => PlanText.Directive(requirement, path, revision, advisors, gap) };
+        return new PlanTurn(PlanText.Directive(requirement, path, revision, null, gap), tool) { Compose = (advisors, research) => PlanText.Directive(requirement, path, revision, advisors, gap, research) };
     }
 }

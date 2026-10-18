@@ -92,7 +92,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(WriteFileTool.ToolName, planning);
         Assert.DoesNotContain(RunCommandTool.ToolName, planning);
         Assert.DoesNotContain(GitCommitTool.ToolName, planning);
-        Assert.Contains(PlanText.Directive("Add a guide", null, 0), _chat.Requests[0][0].Text);
+        Assert.Contains(ScreenPlanDirective("Add a guide", null, 0), _chat.Requests[0][0].Text);
         Assert.Equal("Add a guide", LastUserText(_chat.Requests[0]));
         Assert.Equal(PlanText.ApprovedResult(PlanPath), PlanResultOf(_chat.Requests[1], "p1"));
         // Carrying it out: every tool again, no directive, the message naming the file; the file marked approved.
@@ -154,7 +154,7 @@ public partial class ChatScreenTests
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(PlanText.RefineResult(PlanPath, null), PlanResultOf(_chat.Requests[1], "p1"));
         Assert.Contains(PresentPlanTool.ToolName, OfferedNames(_chat.Options[2]));
-        Assert.Contains(PlanText.Directive("Add a guide", PlanPath, 1), _chat.Requests[2][0].Text);
+        Assert.Contains(ScreenPlanDirective("Add a guide", PlanPath, 1), _chat.Requests[2][0].Text);
         Assert.Contains(PlanText.LeftOnResetNotice(PlanPath), output);
         Assert.Contains(WriteFileTool.ToolName, OfferedNames(_chat.Options[3]));
         Assert.DoesNotContain("PLAN MODE", _chat.Requests[3][0].Text);
@@ -296,7 +296,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Contains(PresentPlanTool.ToolName, OfferedNames(_chat.Options[2]));
-        Assert.Contains(PlanText.Directive("Add a guide", PlanPath, 1), _chat.Requests[2][0].Text);
+        Assert.Contains(ScreenPlanDirective("Add a guide", PlanPath, 1), _chat.Requests[2][0].Text);
         Assert.Contains($"Plan: {PlanPath} (revision 1)", output);
     }
 }

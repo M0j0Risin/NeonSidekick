@@ -125,7 +125,7 @@ public partial class ChatScreenTests
         Assert.Equal(message, LastUserText(_chat.Requests[0]));
         Assert.Contains(PresentPlanTool.ToolName, OfferedNames(_chat.Options[0]));
         Assert.DoesNotContain(WriteFileTool.ToolName, OfferedNames(_chat.Options[0]));
-        Assert.Contains(PlanText.Directive("Add a guide", PlanPath, 2), _chat.Requests[0][0].Text);
+        Assert.Contains(ScreenPlanDirective("Add a guide", PlanPath, 2), _chat.Requests[0][0].Text);
         Assert.Contains(PlanText.OpenedNotice(PlanPath, PlanStatus.Incomplete, 1, 2), output);
         Assert.Equal(PlanStatus.Draft, PlanFileStatus);
         Assert.Contains(InputLine.PromptGlyph + PlanText.Placeholder, output);

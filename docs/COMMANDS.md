@@ -310,6 +310,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 * **Tools:** only read-only ones (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
 * **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first.
+* **The web:** while `web_search` or `web_fetch` is offered, the model is told to look up the APIs, versions and specifications the plan depends on rather than guess, and to name its sources in the plan's Context; a gap pass also counts an unchecked one as a gap.
 * **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
 * **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision. A number (`/plan gaps 3`, `/plan gaps advisor 3`) caps this run's passes instead of *LLM plan gap passes*.

@@ -335,23 +335,34 @@ public static class PlanText
     /// <see cref="Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?)"/> with a gap-closing pass under way (2026-10-13):
     /// <see cref="GapReviewLines"/> before the state line, and no advisors bullet when the model reviews alone. Pinned.
     /// </summary>
-    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap)
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap) =>
+        Directive(requirement, path, revision, advisors, gap, null);
+
+    /// <summary>
+    /// <see cref="Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?, PlanGapState?)"/> with <paramref name="research"/>
+    /// (2026-10-17, the user's ask: a plan that rests on an API or a spec should look it up, not guess): the web tools the turn offers of
+    /// <see cref="ResearchTools"/>, named by <see cref="WebResearchLine"/> after the first rule and, in a gap pass, by its research line;
+    /// null or none, the directive as before. Pinned.
+    /// </summary>
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap, IReadOnlyList<string>? research)
     {
         ArgumentNullException.ThrowIfNull(requirement);
         bool offered = advisors is { Count: > 0 };
+        bool web = research is { Count: > 0 };
         string state = path is null
             ? "No plan has been presented yet."
             : $"The plan so far is in {path} (revision {N(revision)}); present_plan overwrites it with the next revision.";
         return
             "PLAN MODE is on. The user asked for a plan before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n" +
             "- Do not change anything: write no file, change no repository, run no command that changes state, send no message and change no setting. Only read-only tools are offered; use them to research what the plan needs.\n" +
+            (web ? WebResearchLine(research!) + "\n" : "") +
             "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n" +
             "- Never claim anything was done: nothing is carried out until the user approves.\n" +
             "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n" +
             "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
             (offered && gap is not { Reviewer: PlanReviewer.Model } ? AdvisorsLine(advisors!) + "\n" : "") +
-            (gap is { } review ? GapReviewLines(review, offered) + "\n" : "") +
+            (gap is { } review ? GapReviewLines(review, offered, web) + "\n" : "") +
             state;
     }
 
@@ -360,7 +371,13 @@ public static class PlanText
     /// report the pass through <c>present_plan</c>'s <c>gaps</c>; then the reviewer's sentence, which falls back to the model
     /// alone when no advisor is offered (Any adds none: the advisors bullet above already says to consult only where a role fits). Pinned.
     /// </summary>
-    public static string GapReviewLines(PlanGapState gap, bool advisorsOffered)
+    public static string GapReviewLines(PlanGapState gap, bool advisorsOffered) => GapReviewLines(gap, advisorsOffered, web: false);
+
+    /// <summary>
+    /// <see cref="GapReviewLines(PlanGapState, bool)"/> with the web offered (2026-10-17): an API, specification or version the plan
+    /// assumes without checking is a gap, and the research line sends the model to the web for it. Pinned.
+    /// </summary>
+    public static string GapReviewLines(PlanGapState gap, bool advisorsOffered, bool web)
     {
         ArgumentNullException.ThrowIfNull(gap);
         string reviewer = gap.Reviewer switch
@@ -372,10 +389,29 @@ public static class PlanText
         };
         return
             "- A gap review is running (pass " + PassOf(gap.Pass, gap.Limit) + "): present_plan's gaps lists what each revision closed; only a pass with no gaps returns the plan to the user.\n" +
-            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open, a file, API or setting assumed but not read, a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
-            "- Research what you need with the read-only tools. A decision only the user can make, ask them (with ask_user when it is offered).\n" +
+            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open, " +
+            (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
+            ", a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
+            (web
+                ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. A decision only the user can make, ask them (with ask_user when it is offered).\n"
+                : "- Research what you need with the read-only tools. A decision only the user can make, ask them (with ask_user when it is offered).\n") +
             "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed. If you find none, call present_plan with the plan as it stands and gaps empty." +
             (reviewer.Length > 0 ? "\n" + reviewer : "");
+    }
+
+    /// <summary>The web tools plan mode's research rule names when the turn offers them (2026-10-17), in this order.</summary>
+    public static readonly IReadOnlyList<string> ResearchTools = [NeonSidekick.Llm.Tools.WebSearchTool.ToolName, NeonSidekick.Llm.Tools.WebFetchTool.ToolName];
+
+    /// <summary>
+    /// Plan mode's web bullet (2026-10-17, the user's ask): the research tools offered by name, what to look up with them rather than
+    /// guess, and the sources named in the plan's Context. Pinned.
+    /// </summary>
+    public static string WebResearchLine(IReadOnlyList<string> research)
+    {
+        ArgumentNullException.ThrowIfNull(research);
+        return "- You can research on the web with " + string.Join(" and ", research) + ": where the plan depends on something outside the working directory " +
+            "(a library's API or version, a specification or standard, a service's limits, a setting's meaning), look it up and read the source rather than guess. " +
+            "In ## Context, name the pages the plan relies on.";
     }
 
     /// <summary>
