@@ -65,6 +65,7 @@ They need no server unless the row says so.
 | `/rewind [n]` | Goes back n messages (1 by default) immediately and prints the dropped message so you can send it again; what tools changed stays changed. |
 | `/compact [focus]` | Shrinks the conversation now. Needs a server. |
 | `/plan …` | [Plan mode](COMMANDS.md#plan-mode), approved by typing (see below). Needs a server and *LLM offer tools*. |
+| `/code-audit …` | [Code audit](COMMANDS.md#code-audit), every pass run without waiting (see below). Needs a server, *LLM offer tools* and `read_file`. |
 | `/claude <message>` | Asks [Claude Code](COMMANDS.md#claude-code-from-the-chat); the reply follows `Claude: `, then the cost. Nothing is asked: what *Claude Code command permissions* doesn't allow is denied. |
 | `/advisor [<name> <question>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation. |
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, and several matches are listed as ids you can type back. |
@@ -88,6 +89,7 @@ They need no server unless the row says so.
 - Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines.
 - **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans), `gaps [model|advisor|any|confirm]`, `chat` or `ready`.
 - **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run instead of *LLM plan gap passes*. Since there's no Esc to stop the passes, 0 (no limit) means 20, either way, and under *Advisor confirm* the model reviews alone. With *LLM plan gap ask user* off, a pass writes a decision only you can make into `## Risks` as an open question. It ends after *LLM plan gap clean passes* in a row with no gaps, as on the screen; a clean pass cut short at the limit names `/plan approve`.
+- **`/code-audit`** runs every pass without waiting, each echoed as a `You:` line, and each `present_audit` call prints as any tool's. There's no pane, so the end prints the way on: `/code-audit fix <name>` (plan mode on the open findings) and `/code-audit open <name>`. As with `/plan gaps`, 0 (no limit) means 20 passes, and under *Advisor confirm* the model audits alone. `/code-audit open`, `fix` and `resume` work as on the screen.
 - **`/plan chat`** sends nothing; your next line opens the conversation, and the model writes the plan when you ask. `/plan ready` asks for it, or, once one is presented, prints where it stands.
 
 ### Everything else goes to the model as text

@@ -124,6 +124,9 @@ public sealed record FileTreeResult(FileOutcome Outcome, string Relative, string
 
 public sealed record FindResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Paths, bool Truncated, string Detail = "");
 
+/// <summary><see cref="WorkingDirectory.ListFiles"/>'s answer (2026-10-18): the files, sandbox-relative, and whether the walk was cut by its budget.</summary>
+public sealed record FileListResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Files, bool Cut, string Detail = "");
+
 /// <summary>
 /// The @-mention completions for a typed query (<see cref="WorkingDirectory.Complete"/>): relative
 /// paths spelled with <c>/</c>, a trailing <c>/</c> on a folder, folders first; <paramref name="Truncated"/>
@@ -472,8 +475,18 @@ public sealed class WorkingDirectory
 
     // The files the model's own file tools read or wrote this session, each with the size and write time it had then (2026-10-10,
     // MarkSeen): write_file without a mode replaces one still as it was. Keyed by full path, case-blind where the file system is.
-    private readonly Dictionary<string, (long Length, DateTime Written)> _seen = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly Dictionary<string, (long Length, DateTime Written)> _seen = new(PathComparer);
+
+    // The files read_file returned text of this session, a window too (2026-10-18, MarkViewed): a code audit's finding needs its file read.
+    // The same stamp, the same SeenOff rule and the same lock as _seen.
+    private readonly Dictionary<string, (long Length, DateTime Written)> _viewed = new(PathComparer);
     private readonly object _seenGate = new();
+
+    /// <summary>
+    /// How paths compare here (2026-10-18, exposed for the code audit's one path form): case-blind where the file system is — on Windows —
+    /// and exact elsewhere, the comparer the seen files have always used.
+    /// </summary>
+    public static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     // Set for the flow of a turn that is not the main model's own (2026-10-11, the review: an advisor's read_file, over the chat's
     // own tools and this same instance, marked a file the main model never saw, and its write_file without a mode then replaced it;
@@ -1500,12 +1513,126 @@ public sealed class WorkingDirectory
         }
     }
 
-    /// <summary>Every file forgotten as seen: the session is (<c>/new</c>, <c>/clear</c>, a profile switch).</summary>
+    /// <summary>
+    /// <paramref name="relative"/> as <c>read_file</c> returned text of it, a window or the whole (2026-10-18, the code audit: <see cref="WasSeen"/>
+    /// marks whole reads alone, <c>write_file</c>'s rule, so a <c>start_line</c>/<c>max_lines</c> window would never count). The same stamp and
+    /// <see cref="SeenOff"/> rule as <see cref="MarkSeen"/>: an advisor's read marks nothing.
+    /// </summary>
+    public void MarkViewed(string relative)
+    {
+        if (s_seenOff.Value)
+        {
+            return;
+        }
+
+        if (Stamp(relative) is { } stamp)
+        {
+            lock (_seenGate)
+            {
+                _viewed[stamp.Full] = (stamp.Length, stamp.Written);
+            }
+        }
+    }
+
+    /// <summary>Whether <c>read_file</c> returned text of <paramref name="relative"/> this session (<see cref="MarkViewed"/>) and it is unchanged since.</summary>
+    public bool WasViewed(string relative)
+    {
+        if (s_seenOff.Value || Stamp(relative) is not { } stamp)
+        {
+            return false;
+        }
+
+        lock (_seenGate)
+        {
+            return _viewed.TryGetValue(stamp.Full, out var viewed) && viewed == (stamp.Length, stamp.Written);
+        }
+    }
+
+    /// <summary>Every file forgotten as seen and as viewed: the session is (<c>/new</c>, <c>/clear</c>, a profile switch).</summary>
     public void ForgetSeen()
     {
         lock (_seenGate)
         {
             _seen.Clear();
+            _viewed.Clear();
+        }
+    }
+
+    /// <summary>The most entries <see cref="ListFiles"/> walks (2026-10-18), files and folders alike.</summary>
+    public const int MaxListEntries = 100_000;
+
+    /// <summary>The longest <see cref="ListFiles"/> walks before it stops and says it was cut.</summary>
+    public static readonly TimeSpan ListFilesBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Every file under <paramref name="relative"/> (2026-10-18, the code audit's scope), sandbox-relative, by the rules <see cref="Search"/> walks
+    /// by — never into a reparse point (so a link out of the sandbox is never followed), the hidden rule off Windows — with a folder
+    /// <paramref name="skip"/> says to (its name) left unentered; at most <paramref name="limit"/> files. The walk stops at
+    /// <see cref="MaxListEntries"/> entries or <see cref="ListFilesBudget"/> and says it was cut; <paramref name="cancellationToken"/> throws.
+    /// A file named as the path is listed alone.
+    /// </summary>
+    public FileListResult ListFiles(string relative, int limit, Func<string, bool>? skip, CancellationToken cancellationToken)
+    {
+        var outcome = Resolve(relative, forWrite: false, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new FileListResult(outcome, relative, [], false);
+        }
+
+        try
+        {
+            EnsureExists();
+            if (File.Exists(full))
+            {
+                return new FileListResult(FileOutcome.Ok, Relative(full), [Relative(full)], false);
+            }
+
+            if (!Directory.Exists(full))
+            {
+                return new FileListResult(FileOutcome.Missing, Relative(full, isDirectory: true), [], false);
+            }
+
+            long started = _time.GetTimestamp();
+            var files = new List<string>();
+            int entries = 0;
+            bool cut = false;
+            var walk = new FileSystemEnumerable<WalkEntry>(
+                full,
+                (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory),
+                WalkOptions(recurse: true))
+            {
+                ShouldIncludePredicate = (ref FileSystemEntry entry) => !IsHiddenOffWindows(entry.Attributes, entry.FileName),
+                ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                    !IsHiddenOffWindows(entry.Attributes, entry.FileName) && !(skip?.Invoke(entry.FileName.ToString()) ?? false),
+            };
+            foreach (var entry in walk)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (++entries > MaxListEntries || _time.GetElapsedTime(started) > ListFilesBudget)
+                {
+                    cut = true;
+                    break;
+                }
+
+                if (entry.IsDirectory)
+                {
+                    continue;
+                }
+
+                if (files.Count >= limit)
+                {
+                    cut = true;
+                    break;
+                }
+
+                files.Add(Relative(entry.FullPath));
+            }
+
+            return new FileListResult(FileOutcome.Ok, Relative(full, isDirectory: true), files, cut);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new FileListResult(FileOutcome.Failed, Relative(full), [], false, ex.Message);
         }
     }
 

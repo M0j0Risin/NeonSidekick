@@ -312,6 +312,21 @@ public class NeonHelpTests
         Assert.Same(text, HelpText.Cap(text));
     }
 
+    /// <summary>
+    /// The code audit's ten help lines (2026-10-18) hold to the 200-character first sentence: <see cref="HelpText.FirstSentence"/> cuts a
+    /// longer one with "…" in silence in the model's listings.
+    /// </summary>
+    [Fact]
+    public void TheCodeAuditsHelpLines_HaveAFirstSentenceNeverCut()
+    {
+        var settings = new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls }
+            .Select(HelpSettings.Describe);
+        var forms = HelpCommands.Commands.Single(c => c.Command == "/code-audit").Forms.Select(f => f.Meaning);
+        var lines = settings.Concat(forms).ToList();
+        Assert.Equal(10, lines.Count);
+        Assert.All(lines, line => Assert.False(HelpText.FirstSentence(line).EndsWith('…'), line));
+    }
+
     [Fact]
     public void FirstSentence_StopsAtTheFirstFullStop_AndCapsALongOne()
     {

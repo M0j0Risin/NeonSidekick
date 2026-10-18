@@ -41,6 +41,14 @@ public static partial class ConversationCompactor
     /// </summary>
     public static readonly IReadOnlyList<string> KeepsArguments = [Tools.PresentPlanTool.ToolName];
 
+    /// <summary>
+    /// The tools whose list arguments are recorded elsewhere (2026-10-18, the code audit): <c>present_audit</c>'s findings, retractions,
+    /// revisions, nits, questions and coverage are in the report on disk, so a long array of them is stubbed too, as a long string is;
+    /// no other tool's arrays are touched. Only a <see cref="System.Text.Json.JsonElement"/> array is measured (by its JSON's length): any other
+    /// shape is left alone rather than serialized, since serializing an unknown type is the reflection path NativeAOT forbids. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> RecordedArguments = [Tools.PresentAuditTool.ToolName];
+
     /// <summary>The stub a pruned argument becomes: <c>(a 27,610-character argument, pruned by /compact)</c> (2026-10-17). Pinned.</summary>
     public static string PrunedArgumentStub(int length) =>
         "(a " + length.ToString("N0", CultureInfo.InvariantCulture) + "-character argument, pruned by /compact)";
@@ -580,9 +588,10 @@ public static partial class ConversationCompactor
             }
 
             Dictionary<string, object?>? stubbed = null;
+            bool recorded = !plansOnly && RecordedArguments.Contains(call.Name, StringComparer.Ordinal);
             foreach (var (key, value) in arguments)
             {
-                if (ArgumentText(value) is { Length: > ArgumentPruneThreshold } text)
+                if ((ArgumentText(value) ?? (recorded ? ArrayText(value) : null)) is { Length: > ArgumentPruneThreshold } text)
                 {
                     stubbed ??= new Dictionary<string, object?>(arguments, StringComparer.Ordinal);
                     stubbed[key] = PrunedArgumentStub(text.Length);
@@ -722,6 +731,10 @@ public static partial class ConversationCompactor
         return normal.StartsWith(Plans.PlanSlug.Folder + "/", StringComparison.OrdinalIgnoreCase)
             || normal.Contains("/" + Plans.PlanSlug.Folder + "/", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>A <see cref="System.Text.Json.JsonElement"/> array's JSON (2026-10-18, <see cref="RecordedArguments"/>); null for any other shape, never serialized.</summary>
+    private static string? ArrayText(object? value) =>
+        value is System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Array } element ? element.GetRawText() : null;
 
     private static string? ArgumentText(object? value) => value switch
     {

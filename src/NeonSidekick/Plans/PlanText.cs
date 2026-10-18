@@ -452,7 +452,8 @@ public static class PlanText
     /// <summary>A review that converged on one clean pass, as its <c>review:</c> line says it (2026-10-17): "reviewed", not "confirmed".</summary>
     public const string ReviewOneCleanPass = "no gaps left after 1 clean pass";
 
-    private static string PassOf(int pass, int limit) => limit > 0 ? $"{N(pass)} of {N(limit)}" : N(pass);
+    /// <summary><c>2 of 5</c>, or <c>2</c> with no limit; shared with the code audit's words since 2026-10-18 (<see cref="Audits.AuditText"/>).</summary>
+    internal static string PassOf(int pass, int limit) => limit > 0 ? $"{N(pass)} of {N(limit)}" : N(pass);
 
     private static string Passes(int passes) => passes == 1 ? "1 pass" : $"{N(passes)} passes";
 

@@ -71,6 +71,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Sandboxed:** file tools reach only the working directory; shell commands go through an approval pane (once, this session, or always).
 * **Shell police (👮):** refuses a command that names a path outside the working directory or holds a forbidden string (disk wipes, shutdowns…), even under `--yolo`. It keeps the shell off the database tools' databases too ([Shell guards](docs/SETTINGS.md#shell-guards)).
 * **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve.
+* **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
 
 ### IT & admin
 * **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.

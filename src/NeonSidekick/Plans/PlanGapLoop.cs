@@ -101,6 +101,7 @@ public sealed class PlanGapLoop
     private PlanPassMeter? _passStart;
     private bool _passAdvisor;
     private bool _passRecorded = true;
+    private readonly int _focusCount;
 
     public PlanGapLoop(PlanReviewer reviewer, int limit) : this(reviewer, limit, 1)
     {
@@ -110,8 +111,13 @@ public sealed class PlanGapLoop
     /// <see cref="Settings.AppSettingsData.PlanGapCleanPasses"/>: clamped to 1–5, raised to at least 2 under <see cref="PlanReviewer.Confirm"/>,
     /// then lowered to a pass limit that could never fit it (the user's call, 2026-10-17), once, here.
     /// </param>
-    public PlanGapLoop(PlanReviewer reviewer, int limit, int cleanPasses)
+    /// <param name="focusCount">
+    /// How many confirming focuses a pass's record rotates through (2026-10-18, the code audit's dimensions): null for
+    /// <see cref="PlanText.ConfirmFocuses"/>' count, a plan's.
+    /// </param>
+    public PlanGapLoop(PlanReviewer reviewer, int limit, int cleanPasses, int? focusCount = null)
     {
+        _focusCount = Math.Max(1, focusCount ?? PlanText.ConfirmFocuses.Count);
         Reviewer = reviewer;
         Limit = Math.Max(0, limit);
         CleanAsked = Math.Clamp(cleanPasses, Settings.AppSettingsData.MinPlanGapCleanPasses, Settings.AppSettingsData.MaxPlanGapCleanPasses);
@@ -312,7 +318,7 @@ public sealed class PlanGapLoop
             advisorTokens = Math.Max(0, end.AdvisorTokens - start.AdvisorTokens);
         }
 
-        int focus = Confirmation > 0 ? (Confirmation - 1) % PlanText.ConfirmFocuses.Count : -1;
+        int focus = Confirmation > 0 ? (Confirmation - 1) % _focusCount : -1;
         _history.Add(new PlanPassRecord(Pass, _passGaps.Count, _passMinor.Count, PassClean, focus, _passAdvisor, elapsed, tokens, advisorTokens));
     }
 

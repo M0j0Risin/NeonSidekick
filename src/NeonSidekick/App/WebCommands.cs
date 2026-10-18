@@ -78,7 +78,7 @@ public static class WebCommands
         SlashCommand.Help, SlashCommand.Clear, SlashCommand.New, SlashCommand.Splash, SlashCommand.Rewind, SlashCommand.Compact,
         SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Remember, SlashCommand.Memory,
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
-        SlashCommand.Plan, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
+        SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear,
@@ -144,6 +144,8 @@ public static class WebCommands
             SlashCommand.Rewind => WebCommandVerdict.Pick,
             SlashCommand.Model or SlashCommand.Reasoning => text.Length > 0 ? WebCommandVerdict.Run : WebCommandVerdict.Pick,
             SlashCommand.Plan => Is(first, PlanText.OpenWord) && FirstWord(text[first.Length..].Trim()).Length == 0 ? WebCommandVerdict.List : WebCommandVerdict.Run,
+            // 2026-10-18: the reports' list is lines; a report, a fix, a resume and an audit run (their pane asked on the page too).
+            SlashCommand.CodeAudit => Is(first, Audits.AuditText.OpenWord) && FirstWord(text[first.Length..].Trim()).Length == 0 ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.Learn => Is(first, LearnSessionsWord) ? Pane(word, "/learn [<note>]") : WebCommandVerdict.Run,
             SlashCommand.Print => text.Length == 0 || Is(text, PrintText.PrintersWord) ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.Avatar => Emojis.AvatarCommand.ParseLine(args).Verb is Emojis.AvatarVerb.Set or Emojis.AvatarVerb.Clear ? WebCommandVerdict.Run : Pane(word, "/avatar <emoji>|clear"),

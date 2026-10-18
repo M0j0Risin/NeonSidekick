@@ -157,13 +157,13 @@ public class PlanTests : IDisposable
 
     // ── PlanTools ───────────────────────────────────────────────────────────
 
-    /// <summary>Every tool class the app ships, by its <c>ToolName</c>: the MCP wrapper aside (its names are the servers'), and present_plan (plan mode's own).</summary>
+    /// <summary>Every tool class the app ships, by its <c>ToolName</c>: the MCP wrapper aside (its names are the servers'), present_plan (plan mode's own) and present_audit (the code audit's own, 2026-10-18).</summary>
     private static IReadOnlyList<string> EveryToolName() =>
         typeof(SaveMemoryTool).Assembly.GetTypes()
             .Where(t => typeof(AIFunction).IsAssignableFrom(t) && !t.IsAbstract)
             .Select(t => t.GetField("ToolName", BindingFlags.Public | BindingFlags.Static)?.GetRawConstantValue() as string)
             .OfType<string>()
-            .Where(name => name != PresentPlanTool.ToolName)
+            .Where(name => name != PresentPlanTool.ToolName && name != PresentAuditTool.ToolName)
             .ToList();
 
     [Fact]

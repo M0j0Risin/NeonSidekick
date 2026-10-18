@@ -56,9 +56,21 @@ public sealed class PlanApprovalMenu
     public static MenuPage ReviewerPage(PlanPresentation plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return new MenuPage(PlanText.ReviewerTitle, PlanText.ReviewerRows.Select(Markup.Escape).ToList(), PlanText.ReviewerKeys)
+        return ReviewerPage(PlanText.ReviewerTitle, PlanText.ReviewerRows, PlanText.Caption(plan));
+    }
+
+    /// <summary>
+    /// A reviewer page with its own <paramref name="title"/>, <paramref name="rows"/> (in <see cref="PlanReviewer"/>'s order) and
+    /// <paramref name="caption"/> (2026-10-18: the code audit's More passes… asks who audits in its own words), the plan's hotkeys and hint.
+    /// </summary>
+    public static MenuPage ReviewerPage(string title, IReadOnlyList<string> rows, string caption)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(caption);
+        return new MenuPage(title, rows.Select(Markup.Escape).ToList(), PlanText.ReviewerKeys)
         {
-            Caption = PlanText.Caption(plan),
+            Caption = caption,
             Hotkeys = ReviewerHotkeys,
         };
     }

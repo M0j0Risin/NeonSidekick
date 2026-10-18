@@ -1,3 +1,4 @@
+using NeonSidekick.Audits;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
@@ -214,9 +215,13 @@ internal sealed partial class ChatScreen
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        var turn = _plan.Active
+        var turn = _plan.Active || _audit.Reviewing
             ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
             : disabled;
+        // A code audit's pass (2026-10-18) keeps its own tools alone, as the turn's OnlyTools does.
+        turn = _audit.Reviewing
+            ? DisableAllBut(turn, AuditTools.Allowed(effective).Contains, _clockTools, _timerTools, _helpTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _networkTools, _serviceTools, _taskTools, _directoryTools, _comfyTools, _haTools, _printTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _cameraTools, _screenTools, _neonAdvisorTools, _mcp.Tools)
+            : turn;
         return GapAsksBarred(effective) ? PlanTools.WithoutAsking(turn) : turn;
     }
 
@@ -225,7 +230,7 @@ internal sealed partial class ChatScreen
     /// <see cref="AppSettingsData.PlanGapAskUser"/> off, read every turn. Such a pass is offered none of <see cref="PlanTools.AskingTools"/>;
     /// the turn whose pane chose <c>Close gaps…</c> (the loop still pending) and every other plan-mode turn keep them.
     /// </summary>
-    private bool GapAsksBarred(AppSettingsData effective) => _plan.Reviewing && !effective.PlanGapAskUser;
+    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !effective.PlanGapAskUser) || (_audit.Reviewing && !effective.CodeAuditAskUser);
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
@@ -233,7 +238,19 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<ToolGroup> WithPlanGroup(IReadOnlyList<ToolGroup> groups)
     {
-        if (!_plan.Active || !_effective().LlmOfferTools)
+        if (!_effective().LlmOfferTools)
+        {
+            return groups;
+        }
+
+        if (_audit.Reviewing && !_plan.Active)
+        {
+            // present_audit's group during a code audit's pass (2026-10-18), so /sys says what the turn sends.
+            var audit = new ToolGroup(SystemPromptSummary.GroupName(AuditGroupName, 1, 1), "", [_presentAudit], true) { Label = AuditGroupName };
+            return SystemPromptSummary.SortedGroups([.. groups, audit]);
+        }
+
+        if (!_plan.Active)
         {
             return groups;
         }
@@ -327,26 +344,7 @@ internal sealed partial class ChatScreen
                 return await CarryOutPlanAsync(fresh: true, cancellationToken).ConfigureAwait(false);
 
             case PlanCommand.Enter:
-                if (!_effective().LlmOfferTools)
-                {
-                    _transcript.Error(PlanText.NeedsToolsError);
-                    return false;
-                }
-
-                if (_session.Assistant is null)
-                {
-                    _transcript.Error(NoAssistantError);
-                    return false;
-                }
-
-                _plan.Enter(args);
-                _executingPlan = null;
-                _planDraftReply = null;
-                SyncPlanChrome();
-                SavePlanState();
-                _transcript.Notice(PlanText.EnteredNotice);
-                _transcript.User(_plan.Requirement);
-                return await RunMessageAsync(_plan.Requirement, images, cancellationToken).ConfigureAwait(false);
+                return await EnterPlanAsync(args, images, cancellationToken).ConfigureAwait(false);
 
             default:
                 // More detail while planning: a message like any other, echoed since the typed line was the command.
@@ -691,9 +689,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether <c>neon_advisor</c> is what the turn would offer (2026-10-13): <c>Advisors enabled</c>, an advisor listed, and the tool
-    /// not off on <c>/tools</c> — the test the directive's advisors bullet uses. The reviewer page is shown only then.
+    /// not off on <c>/tools</c> — the test the directive's advisors bullet uses. The reviewer page is shown only then. Shared by the gap
+    /// review and the code audit since 2026-10-18 (<c>PlanAdvisorsOffered</c> until then).
     /// </summary>
-    private bool PlanAdvisorsOffered()
+    private bool AdvisorPassOffered()
     {
         var effective = _effective();
         return AdvisorsOffered(effective) && Without(_neonAdvisorTools, TurnDisabled(effective)).Count > 0;
@@ -722,7 +721,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private GapAfterTurn BeginGapPass(PlanGapLoop loop, string path, string? body)
     {
-        bool offered = PlanAdvisorsOffered();
+        bool offered = AdvisorPassOffered();
         loop.BeginPass(body, PlanMeter(), offered);
         if (loop.Pass == 1 && loop.CleanLowered)
         {
@@ -741,12 +740,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>A pass's message sent as a turn, the <see cref="CarryOutPlanAsync"/> shape.</summary>
-    private async Task<bool> SendGapPassAsync(GapAfterTurn pass, CancellationToken cancellationToken)
-    {
-        string message = pass.Message!;
-        _transcript.User(message);
-        return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
-    }
+    private async Task<bool> SendGapPassAsync(GapAfterTurn pass, CancellationToken cancellationToken) =>
+        await SendPassAsync(pass.Message!, [], cancellationToken).ConfigureAwait(false);
 
     /// <summary>The plan file's body, header aside; null when it cannot be read.</summary>
     private string? ReadPlanBody(string path) => PlanFiles.ReadWhole(_files, path) is { } text ? PlanDocument.Body(text) : null;

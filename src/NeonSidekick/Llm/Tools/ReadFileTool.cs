@@ -48,6 +48,12 @@ public sealed class ReadFileTool : FileTool
     public string Describe(string path, int? startLine, int? maxLines)
     {
         var read = Files.ReadText(path, startLine, maxLines);
+        if (read.Outcome == FileOutcome.Ok)
+        {
+            // Any read that returned text, a window too (2026-10-18): what present_audit's read check asks of a finding's file.
+            Files.MarkViewed(path);
+        }
+
         if (read.Whole)
         {
             // write_file may replace it without a mode while it stays as read (2026-10-10); a window or a cut read never (2026-10-11).

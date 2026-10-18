@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Audits;
 using NeonSidekick.Camera;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
@@ -737,6 +738,11 @@ internal sealed partial class ChatScreen
     private readonly SkillInstallMenu _skillInstallMenu;
     private readonly SkillInstallFlow _skillInstall;
     private readonly PresentPlanTool _presentPlan;
+
+    // The code audit (2026-10-18, /code-audit): its state, its done pane and the tool a pass reports through (ChatScreen.Audit.cs).
+    private readonly AuditSession _audit;
+    private readonly AuditDoneMenu _auditMenu;
+    private readonly PresentAuditTool _presentAudit;
     private readonly IReadOnlyList<AIFunction> _askTools;
     private readonly SkillCatalog _catalog;
 
@@ -830,6 +836,8 @@ internal sealed partial class ChatScreen
         if (left)
         {
             _conversation++;
+            // A code audit goes with the conversation it ran in (2026-10-18); a purge of the row keeps both, as it keeps a /cmd --bg run.
+            StopAuditOnReset();
         }
         _claudeServerSessionId = null;
         _cameraAllowed = false;
@@ -1212,6 +1220,7 @@ internal sealed partial class ChatScreen
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
         _files = new WorkingDirectory(() => WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory), time);
+        _audit = new AuditSession(_files);   // 2026-10-18: the strip reads it, so it is made with the sandbox
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
         _files.Databases = () => _effective().SqliteTools ? SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
         _files.ServerDatabases = () => Shell.ServerDatabasePolice.For(_effective(), _settings.ProfileDirectory, _settings.StorageDirectory);
@@ -1384,7 +1393,7 @@ internal sealed partial class ChatScreen
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
             // The jobs behind the line (2026-09-29) after the pictures; a switch whose setup runs shows its job's glyph, not
             // its own (a click on 🎤 or 🔊 turns it off).
-            Strip = () => !HintOn(StatusBarItems.Status) ? "" : CameraStrip(_camera.Live, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())))),
+            Strip = () => !HintOn(StatusBarItems.Status) ? "" : CameraStrip(_camera.Live, AuditStrip(_audit.StripPass, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip()))))),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
@@ -1524,11 +1533,13 @@ internal sealed partial class ChatScreen
         // The allow pane's whole-statement view (2026-10-07): the info pane over the question, as the shell approval's.
         _cameraMenu = new CameraMenu(_menuPane, (label, lines, ct) => _info.ShowAsync(label, [new InfoTab(label, () => new Spectre.Console.Text(string.Join('\n', lines)))], 0, ct));
         _askTools = AskTools(AskUserAsync, _effective);
-        _planMenu = new PlanApprovalMenu(_menuPane, _input, PlanAdvisorsOffered);
+        _planMenu = new PlanApprovalMenu(_menuPane, _input, AdvisorPassOffered);
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
         _skillInstallMenu = new SkillInstallMenu(_menuPane);
         _skillInstall = new SkillInstallFlow(new SkillHub(_web.Fetcher));
         _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses, () => _effective().PlanGapCleanPasses);
+        _auditMenu = new AuditDoneMenu(_menuPane, AdvisorPassOffered);
+        _presentAudit = new PresentAuditTool(_audit, _files, time, OnAuditReported);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
         _queuedClicks = new DoubleClick(_pane.Time);
@@ -4390,7 +4401,7 @@ internal sealed partial class ChatScreen
             effective.ShellPreferNative,
             // Plan mode's advisors bullet (2026-10-10) as the turn would send it: neon_advisor offered and not off on /tools.
             // ...and its web research bullet (2026-10-17) with the research tools the turn offers.
-            _plan.Turn(_presentPlan, effective.PlanGapAskUser)?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null),
+            (_plan.Turn(_presentPlan, effective.PlanGapAskUser) ?? AuditTurn(effective))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null),
             HomeAssistantOffered(effective),
             Without(_haTools, disabled).Count,
             OracleOffered(effective, _oracle),
@@ -4440,14 +4451,14 @@ internal sealed partial class ChatScreen
     /// as the turn picks it (<see cref="MarkdownTurn"/>, spoken while speech output is on and ready, as <c>/sys</c> reads it), then,
     /// with tools on, the sentences of the groups <see cref="ComposeTurnTools"/> offers from <see cref="TurnInputs"/>. Plan mode is
     /// left out: its read-only narrowing is one turn's, and its directive lives outside the rules, so a file written while planning
-    /// keeps the write tools' sentences. A read only.
+    /// keeps the write tools' sentences. A code audit's narrowing (its <c>OnlyTools</c>, 2026-10-18) is left out the same way. A read only.
     /// </summary>
     private string CurrentOperatingRules()
     {
         var effective = _effective();
         bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, effective.TtsOutput && _speech.IsReady);
         return effective.LlmOfferTools
-            ? ComposeTurnTools(TurnInputs(effective) with { Plan = null }).Rules.DefaultRules(markdown)
+            ? ComposeTurnTools(TurnInputs(effective) with { Plan = null, OnlyTools = null }).Rules.DefaultRules(markdown)
             : Assistant.TextRule(markdown);
     }
 
@@ -4784,7 +4795,8 @@ internal sealed partial class ChatScreen
         Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null,
         Func<string, MentionResult>? MachineFolders = null, Func<IReadOnlyList<CompletionItem>>? Advisors = null, Func<string, IReadOnlyList<CompletionItem>>? Shopping = null,
         Func<string, IReadOnlyList<CompletionItem>>? EventLog = null, Func<string, IReadOnlyList<CompletionItem>>? Net = null, Func<string, IReadOnlyList<CompletionItem>>? Services = null,
-        Func<string, IReadOnlyList<CompletionItem>>? Tasks = null, Func<string, IReadOnlyList<CompletionItem>>? Ad = null);
+        Func<string, IReadOnlyList<CompletionItem>>? Tasks = null, Func<string, IReadOnlyList<CompletionItem>>? Ad = null,
+        Func<IReadOnlyList<CompletionItem>>? Audits = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5363,6 +5375,10 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(sources.Planning ? PlanVerbs : PlanVerbsIdle, argText);
             }
 
+            case SlashCommand.CodeAudit:
+                // 2026-10-18: the verbs, the reports after open, fix and resume, the reviewer, scope and focus words, and the folders.
+                return AuditCommand.Complete(argText, sources.Audits, sources.Folders);
+
             case SlashCommand.YouTube:
                 // The verbs (2026-10-05); past the first word, a search's words or a video, free text.
                 return YouTube.YouTubeCommand.Complete(argText);
@@ -5724,7 +5740,8 @@ internal sealed partial class ChatScreen
             NetChoices,
             ServiceChoices,
             TaskChoices,
-            AdChoices);
+            AdChoices,
+            Audits: AuditChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -6834,6 +6851,7 @@ internal sealed partial class ChatScreen
         LoadSkillTool.ToolName,
         SkillEditorTool.ToolName,
         PresentPlanTool.ToolName,
+        PresentAuditTool.ToolName,
         GitStatusTool.ToolName,
         GitLogTool.ToolName,
         GitShowTool.ToolName,
@@ -6909,7 +6927,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false, IReadOnlyList<AIFunction>? screenTools = null, bool screenEnabled = false, IReadOnlyList<AIFunction>? sqliteTools = null, bool sqliteEnabled = false, IReadOnlyList<AIFunction>? postgresTools = null, bool postgresEnabled = false, bool memorySave = true, IReadOnlyList<AIFunction>? youTubeTools = null, bool youTubeEnabled = false, IReadOnlyList<AIFunction>? imageTools = null, bool imagesEnabled = false, IReadOnlyList<AIFunction>? neonAdvisorTools = null, bool neonAdvisorEnabled = false, Action<TurnToolInputs>? composed = null, IReadOnlyList<AIFunction>? shoppingTools = null, bool shoppingEnabled = false, IReadOnlyList<AIFunction>? eventLogTools = null, bool eventLogEnabled = false, IReadOnlyList<AIFunction>? networkTools = null, bool networkEnabled = false, IReadOnlyList<AIFunction>? serviceTools = null, bool serviceEnabled = false, IReadOnlyList<AIFunction>? taskTools = null, bool taskEnabled = false, IReadOnlyList<AIFunction>? directoryTools = null, bool directoryEnabled = false)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false, IReadOnlyList<AIFunction>? screenTools = null, bool screenEnabled = false, IReadOnlyList<AIFunction>? sqliteTools = null, bool sqliteEnabled = false, IReadOnlyList<AIFunction>? postgresTools = null, bool postgresEnabled = false, bool memorySave = true, IReadOnlyList<AIFunction>? youTubeTools = null, bool youTubeEnabled = false, IReadOnlyList<AIFunction>? imageTools = null, bool imagesEnabled = false, IReadOnlyList<AIFunction>? neonAdvisorTools = null, bool neonAdvisorEnabled = false, Action<TurnToolInputs>? composed = null, IReadOnlyList<AIFunction>? shoppingTools = null, bool shoppingEnabled = false, IReadOnlyList<AIFunction>? eventLogTools = null, bool eventLogEnabled = false, IReadOnlyList<AIFunction>? networkTools = null, bool networkEnabled = false, IReadOnlyList<AIFunction>? serviceTools = null, bool serviceEnabled = false, IReadOnlyList<AIFunction>? taskTools = null, bool taskEnabled = false, IReadOnlyList<AIFunction>? directoryTools = null, bool directoryEnabled = false, IReadOnlySet<string>? onlyTools = null)
     {
         ArgumentNullException.ThrowIfNull(memoryTools);
         ArgumentNullException.ThrowIfNull(standingTools);
@@ -6983,6 +7001,8 @@ internal sealed partial class ChatScreen
             DirectoryEnabled = directoryEnabled,
             Disabled = disabledTools,
             Plan = plan,
+            // A code audit's pass headless (2026-10-18): its read-only tools alone, as the screen's TurnInputs narrows them.
+            OnlyTools = onlyTools,
         };
         // What the turn was made of (2026-10-10): headless keeps it, so an advisor is offered this turn's read-only tools.
         composed?.Invoke(inputs);
@@ -7147,8 +7167,14 @@ internal sealed partial class ChatScreen
         ScreenEnabled = ScreenOffered(effective),
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost.
         Disabled = GapAsksBarred(effective) ? PlanTools.WithoutAsking(ToolsText.DisabledSet(effective.ToolsDisabled)) : ToolsText.DisabledSet(effective.ToolsDisabled),
-        Plan = _plan.Turn(_presentPlan, effective.PlanGapAskUser),
-    }, effective);   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
+        Plan = _plan.Turn(_presentPlan, effective.PlanGapAskUser) ?? AuditTurn(effective),
+        // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under LLM code audit web research; an advisor asked in it the same.
+        OnlyTools = _audit.Reviewing ? AuditTools.Allowed(effective) : null,
+    }, effective);
+
+    /// <summary>The turn's audit part while a pass is under way (2026-10-18, <see cref="AuditSession.Turn"/>), else null.</summary>
+    private PlanTurn? AuditTurn(AppSettingsData effective) =>
+        _audit.Turn(_presentAudit, effective.CodeAuditAskUser, effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations);   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
 
     /// <summary>
     /// <paramref name="tools"/> less every one whose name is in <paramref name="disabled"/> (the
@@ -13598,6 +13624,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Plan:
                 return await HandlePlanAsync(args, images, cancellationToken).ConfigureAwait(false);
 
+            case SlashCommand.CodeAudit:
+                return await HandleCodeAuditAsync(args, images, cancellationToken).ConfigureAwait(false);
+
             case SlashCommand.BotChat:
                 return await HandleBotChatAsync(args, cancellationToken).ConfigureAwait(false);
 
@@ -15968,12 +15997,15 @@ internal sealed partial class ChatScreen
                 // A pane the reply ended under switched the profile or replaced the conversation (2026-10-12): the plan's round and the
                 // reflection were about the one that is gone, and so was a review that converged in it (2026-10-17).
                 _plan.ForgetFinished();
+                StopAuditOnReset();
                 return outcome == TurnOutcome.Exit;
             }
 
             // The gap-closing loop after the turn (2026-10-13), ahead of the approval: a converged loop is said and cleared before
             // the approval its pane gave goes ahead; otherwise the next pass, or the plan back on the pane, is acted on below.
             var gapPass = TakeGapPass(outcome);
+            // The code audit after the turn (2026-10-18), for every outcome: an Esc'd pass ends it as Stopped; else the next pass or the done pane below.
+            var auditPass = TakeAuditPass(outcome);
             // Plan mode after the turn (2026-09-26): an approval given on the pane is carried out below once the reply
             // ended on its own, dropped with a notice otherwise; a cancel on the pane has ended plan mode already.
             bool planApproved = TakePlanApproval(outcome, out bool planFresh);
@@ -16031,10 +16063,21 @@ internal sealed partial class ChatScreen
                     return await SendGapPassAsync(next, cancellationToken).ConfigureAwait(false);
                 }
 
+                if (auditPass is { Message: { } auditMessage })
+                {
+                    // No reflection between an audit's passes either.
+                    return await SendPassAsync(auditMessage, [], cancellationToken).ConfigureAwait(false);
+                }
+
                 MaybeLearn(focus: null, forced: false, cancellationToken);
                 if (gapPass is { Pane: { } stopped })
                 {
                     return await AskStoppedPlanAsync(stopped, cancellationToken).ConfigureAwait(false);
+                }
+
+                if (auditPass is { DonePath: { } donePath })
+                {
+                    return await AskAuditDoneAsync(donePath, cancellationToken).ConfigureAwait(false);
                 }
 
                 return planApproved && await CarryOutPlanAsync(planFresh, cancellationToken).ConfigureAwait(false);
@@ -17505,6 +17548,14 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, PresentPlanTool.ToolName, StringComparison.Ordinal):
                 // The plan and the verdict were printed as it ran (PresentPlanAsync); only a refusal has a line of its own.
+                if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
+                {
+                    _transcript.ToolNote(result.Text);
+                }
+
+                break;
+            case TurnEvent.ToolResult result when string.Equals(result.Name, PresentAuditTool.ToolName, StringComparison.Ordinal):
+                // The changes were printed as 🔎 notices as the call ran (OnAuditReported); only a refusal has a line of its own (2026-10-18).
                 if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
                 {
                     _transcript.ToolNote(result.Text);

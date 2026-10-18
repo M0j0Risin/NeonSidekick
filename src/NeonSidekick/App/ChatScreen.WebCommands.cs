@@ -1,3 +1,4 @@
+using NeonSidekick.Audits;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.UI;
 using NeonSidekick.WebUi;
@@ -289,9 +290,20 @@ internal sealed partial class ChatScreen
         pc();
     }
 
-    /// <summary>Leaves <paramref name="line"/> for the idle line; always taken.</summary>
+    /// <summary>
+    /// Leaves <paramref name="line"/> for the idle line; always taken. Under a running <c>/botchat</c> a <c>/code-audit</c> that would start passes
+    /// is refused here instead (2026-10-18, the user's pick: a held audit would start an unattended chain of passes long after it was typed):
+    /// every held line passes through this one place, the botchat drain's own interjections included. A line sent as text, and a multi-line
+    /// or pasted draft (no <c>CommandText</c>), stays a message as everywhere else.
+    /// </summary>
     private bool Pend(SubmittedLine line)
     {
+        if (_botChatRunning && !line.AsText && line.CommandText is { } text && ParseLine(text) is (SlashCommand.CodeAudit, var args) && AuditCommand.StartsPasses(args))
+        {
+            Post(() => _transcript.Error(AuditText.BotChatError));
+            return true;
+        }
+
         lock (_pendingGate)
         {
             _pendingLines.Enqueue(line);
@@ -353,6 +365,7 @@ internal sealed partial class ChatScreen
         var skillList = SkillChoices();
         var workflowList = WorkflowChoices();
         var plans = PlanChoices();
+        var audits = AuditChoices();
         var ha = _ha.Last;
         var docker = _docker.Last;
         var printers = _printerNames.Last;
@@ -381,7 +394,8 @@ internal sealed partial class ChatScreen
             Net: NetChoices,
             Services: ServiceChoices,
             Tasks: TaskChoices,
-            Ad: AdChoices);
+            Ad: AdChoices,
+            Audits: () => audits);
         var sources = new CompletionSources(
             () => commands,
             (command, argText) => ArgumentPaths(command, argText, arguments) is { } paths

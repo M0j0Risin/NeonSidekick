@@ -6,6 +6,15 @@ using Spectre.Console.Rendering;
 
 namespace NeonSidekick.UI;
 
+/// <summary>The theme role a <see cref="TranscriptRenderer.Notice(string, NoticeTone)"/> is drawn in (2026-10-18): plain, as an error, as a warning, dim.</summary>
+public enum NoticeTone
+{
+    Plain,
+    Bad,
+    Warn,
+    Dim,
+}
+
 /// <summary>
 /// The append-only transcript: what the user said, the assistant's streamed reply, and the
 /// notices, tool activity and diagnostics that land between them. Everything renders to the
@@ -372,6 +381,29 @@ public sealed class TranscriptRenderer : INoticeSink
         // The Web UI's feed takes the plain text before any spacing (2026-10-17): the browser draws its own one space.
         Feed?.Add(WebUi.FeedKind.Notice, text);
         Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, TextCells.Spaced(text)));
+    }
+
+    /// <summary>
+    /// A notice in one of the theme's existing roles (2026-10-18, the code audit's severities: critical and high as errors are, medium as
+    /// warnings, low dim): the same glyph and feed as <see cref="Notice(string)"/>, no new theme key.
+    /// </summary>
+    public void Notice(string text, NoticeTone tone)
+    {
+        if (tone == NoticeTone.Plain)
+        {
+            Notice(text);
+            return;
+        }
+
+        Feed?.Add(WebUi.FeedKind.Notice, text);
+        string spaced = TextCells.Spaced(text);
+        string inline = tone switch
+        {
+            NoticeTone.Bad => Theme.StyleMarkup(Theme.ErrorText, spaced),
+            NoticeTone.Warn => Theme.ColorMarkup(Theme.Warn, spaced),
+            _ => Theme.DimMarkup(spaced),
+        };
+        Line(Theme.StyleMarkup(Theme.SystemText, NoticeGlyph) + inline, inline);
     }
 
     /// <summary>

@@ -26,7 +26,7 @@ namespace NeonSidekick.App;
 /// <see cref="ChatScreen"/>. Milestone 3: speech output. Milestone 4: push-to-talk voice input.
 /// Milestone 5: the wake word, behind the same constructor.</para>
 /// </summary>
-public sealed class SidekickApp
+public sealed partial class SidekickApp
 {
     public const string Name = "NeonSidekick";
 
@@ -917,6 +917,9 @@ public sealed class SidekickApp
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
         var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses), () => EffectiveSettings.PlanGapCleanPasses);
         var planState = new HeadlessPlanState();
+        // The code audit (2026-10-18): no seam, so each present_audit call prints as any tool's; its passes ride the gap review's slot.
+        var audit = new Audits.AuditSession(files);
+        var presentAudit = new Llm.Tools.PresentAuditTool(audit, files, _time);
         // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
         string? gapTurn = null;
         _liveSession = session;
@@ -968,6 +971,12 @@ public sealed class SidekickApp
                 {
                     await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.LeftOnResetNotice(plan.Path)).ConfigureAwait(false);
                     plan.Exit();
+                }
+
+                if (audit.Active)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + Audits.AuditText.LeftOnResetNotice(audit.Name)).ConfigureAwait(false);
+                    audit.Stop();
                 }
             }
 
@@ -1407,6 +1416,18 @@ public sealed class SidekickApp
                     planState.RevisionShown = plan.Revision;
                 }
 
+                if (command == SlashCommand.CodeAudit)
+                {
+                    // /code-audit headless (2026-10-18): the screen's words; a pass (or fix's plan mode) comes back as the turn's text.
+                    if (await HeadlessAuditAsync(audit, plan, files, git, args, () => HeadlessPlanMeter(session), cancellationToken).ConfigureAwait(false) is not { } audited)
+                    {
+                        continue;
+                    }
+
+                    text = audited;
+                    planState.RevisionShown = plan.Revision;
+                }
+
                 // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built.
                 if (plan.Active)
                 {
@@ -1433,7 +1454,7 @@ public sealed class SidekickApp
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt; a fresh network scan budget too (2026-10-15).
                 networkBudget.Reset();
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, StandingTools(EffectiveSettings), persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength, replyFloor: ChatScreen.PlanReplyFloor(plan, files)), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan, EffectiveSettings.PlanGapAskUser), preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools), imageTools: imageTools, imagesEnabled: EffectiveSettings.ImageTools, neonAdvisorTools: neonAdvisorTools, neonAdvisorEnabled: ChatScreen.AdvisorsOffered(EffectiveSettings), composed: inputs => lastInputs = inputs, shoppingTools: shoppingTools, shoppingEnabled: ChatScreen.ShoppingOffered(EffectiveSettings), eventLogTools: eventLogTools, eventLogEnabled: ChatScreen.EventLogOffered(EffectiveSettings, eventLog, macLog), networkTools: ChatScreen.NetworkToolsFor(networkTools, EffectiveSettings, _pinger), networkEnabled: ChatScreen.NetworkOffered(EffectiveSettings), serviceTools: ChatScreen.ServiceToolsFor(serviceTools, EffectiveSettings, pane: false, services.Catalog()), serviceEnabled: ChatScreen.ServicesOffered(EffectiveSettings, services), taskTools: ChatScreen.TaskToolsFor(taskTools, EffectiveSettings, pane: false, tasks.Catalog()), taskEnabled: ChatScreen.TasksOffered(EffectiveSettings, tasks), directoryTools: directoryTools, directoryEnabled: ChatScreen.DirectoryOffered(EffectiveSettings, directory));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, StandingTools(EffectiveSettings), persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength, replyFloor: ChatScreen.PlanReplyFloor(plan, files)), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan, EffectiveSettings.PlanGapAskUser) ?? audit.Turn(presentAudit, EffectiveSettings.CodeAuditAskUser, EffectiveSettings.CodeAuditPassToolCalls, EffectiveSettings.LlmMaxToolIterations), preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools), imageTools: imageTools, imagesEnabled: EffectiveSettings.ImageTools, neonAdvisorTools: neonAdvisorTools, neonAdvisorEnabled: ChatScreen.AdvisorsOffered(EffectiveSettings), composed: inputs => lastInputs = inputs, shoppingTools: shoppingTools, shoppingEnabled: ChatScreen.ShoppingOffered(EffectiveSettings), eventLogTools: eventLogTools, eventLogEnabled: ChatScreen.EventLogOffered(EffectiveSettings, eventLog, macLog), networkTools: ChatScreen.NetworkToolsFor(networkTools, EffectiveSettings, _pinger), networkEnabled: ChatScreen.NetworkOffered(EffectiveSettings), serviceTools: ChatScreen.ServiceToolsFor(serviceTools, EffectiveSettings, pane: false, services.Catalog()), serviceEnabled: ChatScreen.ServicesOffered(EffectiveSettings, services), taskTools: ChatScreen.TaskToolsFor(taskTools, EffectiveSettings, pane: false, tasks.Catalog()), taskEnabled: ChatScreen.TasksOffered(EffectiveSettings, tasks), directoryTools: directoryTools, directoryEnabled: ChatScreen.DirectoryOffered(EffectiveSettings, directory), onlyTools: audit.Reviewing ? Audits.AuditTools.Allowed(EffectiveSettings) : null);
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude Code server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -1467,6 +1488,14 @@ public sealed class SidekickApp
                 foreach (string gapLine in gapLines)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + gapLine.Trim()).ConfigureAwait(false);
+                }
+
+                // The code audit after the pass (2026-10-18): its notices, then the next pass as the next line, or the audit over.
+                var auditLines = new List<string>();
+                gapTurn ??= HeadlessAuditAfterTurn(audit, files, turn.Trace.ToolNames, turn.Cancelled, auditLines, HeadlessPlanMeter(session));
+                foreach (string auditLine in auditLines)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + auditLine.Trim()).ConfigureAwait(false);
                 }
 
                 if (EffectiveSettings.SessionLogging)

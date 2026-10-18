@@ -25,6 +25,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
   - [Automation](#automation)
 - [Command details](#command-details)
   - [Plan mode](#plan-mode)
+  - [Code audit](#code-audit)
   - [Bot conversations](#bot-conversations)
   - [Claude Code from the chat](#claude-code-from-the-chat)
   - [Advisor](#advisor)
@@ -297,6 +298,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan chat` | Starts plan mode to talk a plan through first: nothing is sent, and the model writes the plan only when you ask. While planning, it turns talking back on. |
 | `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
 | `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
+| `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
+| `/code-audit open [<name>]` | Lists the reports, or shows one. |
+| `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). |
+| `/code-audit resume [<name>] [model\|advisor\|any\|confirm] [<passes>]` | Runs more passes on a kept report (the newest without a name). |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
@@ -325,6 +330,23 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **The record:** a review that ends on its own (clean, at its limit, or stalled) writes a `review:` line into the plan's header with a fingerprint of its text. `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`; ticking steps is no edit, and a new revision drops the line.
 * **Done:** when every step is ticked, the done line is followed by "📝 I ❤️ it when a plan comes together."
 * `/new`, `/clear` and a profile switch leave plan mode.
+
+### Code audit
+
+`/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply.
+
+* **Scope:** the whole working directory by default. A path narrows it (quote one with a blank: `/code-audit "My Folder"`); `diff` audits the working changes (unstaged, staged and untracked), `staged` the staged ones, and `branch [<base>]` the branch's commits since its base (`main`, else `master`). Inside a repository the scope is git's files, ignored ones left out; elsewhere a walk that skips `bin`, `obj`, `node_modules`, `dist` and the like. Minified, map and lock files, generated C# and `vendor/`-style folders are left out unless the line names a path holding them; secret-looking files (`.env`, keys, certificates) are always left out. `.neon/` is the app's own and is refused. Past 5,000 files the list is cut and the rest counted.
+* **Focus:** security, correctness, performance, maintainability and tests, in any mix on the line (`all` for the five); none named means *LLM code audit focus*. A pass covers every dimension chosen; a pass after a clean one takes one in turn (with one chosen, an angle in turn: edge cases, error paths, concurrency, input from outside).
+* **The brief:** the first word that is none of the above starts it, or everything after `--` (`/code-audit src -- tests are flaky`). A word that looks like a path but names nothing is refused, so a typo never becomes the brief.
+* **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies every line it cites), `any` (the model, asking advisors where a role fits) or `confirm` (the model, with an advisor on each pass after a clean one; at least 2 clean passes). A number (0–20, 0 for no cap) caps this run instead of *LLM code audit passes*.
+* **Tools:** the file, picture, PDF and git reads, the advisors, the manual, the clock, skills, memory's recall and `ask_user`, plus `present_audit`. The web's reads only under *LLM code audit web research* (off by default: audited code may carry instructions, and the web is the one way a pass could send code out).
+* **The report:** `.neon/audits/<name>.md`, written by the app from each `present_audit` call: findings by severity with stable ids (`A3`, never reused), each with its file and line, detail, fix and the quoted evidence the app checked against the file, then nits, open questions, coverage, what clean passes checked and the retracted findings. A finding needs its file read this session (a window is enough; a diff is not). You may edit the report during an audit: a ticked box settles a finding (reporting it again reopens it), and every call reads the file fresh. The files the passes read are kept beside it in `<name>.coverage.txt`, so `resume` carries on where they left off.
+* **Clean passes and coverage:** an audit ends after *LLM code audit clean passes* in a row find nothing new (2 by default); a pass after a clean one looks first at the files no pass has read. A pass is asked to report within *LLM code audit pass tool calls* (40); it is guidance, never a cut-off. The passes line, the converged notice and the pane say how much of the scope was read.
+* **Unattended:** with *LLM code audit ask user* off, a pass asks nothing, takes no photo and captures no screen; a question only you can answer goes into the report's Open questions.
+* **When it stops:** after the clean passes in a row, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, when you type a message, or on Esc. Each stop says why, and `/code-audit resume <name>` runs more passes; `/new`, `/clear` and a profile switch stop it too.
+* **The pane:** the open findings as a short table first, then **Fix via plan** (`p`, only with a finding open: plan mode on the open findings, the report marked `fixing`), **More passes…** (`g`, the reviewer page when advisors are offered), **Keep report** (`k`, where the cursor starts; Esc is Keep too) and **Discard report** (`d`, after a yes; to the Recycle bin when *File deletes to Recycle bin* is on). The Web UI's page gets the same choices but the reviewer page.
+* **Picking up again:** `/code-audit open` lists the reports (newest first, a report left `auditing` after a restart as `stopped`, a fix in progress as `fixing 3/7`, every box ticked as `fixed`); `/code-audit fix` and `resume` take the newest without a name, and say which.
+* **Not during a botchat:** a form that would start passes is refused at once while `/botchat` runs (`/code-audit open` waits for the chat's end); for several voices, use the advisor reviewers.
 
 ### Bot conversations
 

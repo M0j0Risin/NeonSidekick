@@ -518,6 +518,68 @@ public sealed class GitAccess
         return new GitRefsReport(GitOutcome.Ok, "", repo.Info.IsHeadDetached ? null : BranchName(repo), repo.Info.IsHeadDetached, local, remote, tags, truncated);
     });
 
+    /// <summary>
+    /// The files git knows under <paramref name="relative"/> (2026-10-18, a code audit's scope inside a repository): the index's entries, and
+    /// with <paramref name="includeUntracked"/> the untracked files too (every one, folders walked; ignored files and submodules out), all in
+    /// the sandbox's spelling. Uncapped: the audit cuts its own list.
+    /// </summary>
+    public GitTrackedReport TrackedFiles(string relative, bool includeUntracked) => Run(relative, GitTrackedReport.Refused, (repo, location, full) =>
+    {
+        if (RepoPath(location, full) is not { } prefix)
+        {
+            return GitTrackedReport.Refused(GitOutcome.NotInRepository, _files.Relative(full));
+        }
+
+        string under = prefix.Length == 0 ? "" : prefix + "/";
+        var tracked = new List<string>();
+        foreach (var entry in repo.Index)
+        {
+            // The index's path in libgit2's spelling whatever the platform hands back.
+            string path = entry.Path.Replace('\\', '/');
+            if (under.Length == 0 || path.StartsWith(under, StringComparison.Ordinal) || string.Equals(path, prefix, StringComparison.Ordinal))
+            {
+                tracked.Add(SandboxPath(location, path));
+            }
+        }
+
+        var untracked = new List<string>();
+        if (includeUntracked)
+        {
+            foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: true))
+            {
+                if (entry.State.HasFlag(FileStatus.NewInWorkdir) && !entry.FilePath.EndsWith('/'))
+                {
+                    untracked.Add(SandboxPath(location, entry.FilePath));
+                }
+            }
+        }
+
+        return new GitTrackedReport(GitOutcome.Ok, "", tracked, untracked, location.RootRelative);
+    });
+
+    /// <summary>
+    /// The commit <paramref name="a"/> and <paramref name="b"/> last shared (2026-10-18, <c>/code-audit branch</c>): LibGit2Sharp's
+    /// <c>ObjectDatabase.FindMergeBase</c>, in-process; null in <see cref="GitMergeBaseReport.Sha"/> when they share none. HEAD's sha comes with it,
+    /// so the caller can tell a merge-base that is HEAD itself (nothing on the branch since the base).
+    /// </summary>
+    public GitMergeBaseReport MergeBase(string relative, string a, string b) => Run(relative, GitMergeBaseReport.Refused, (repo, location, full) =>
+    {
+        var foundA = TryCommit(repo, a, out var first, out string detail);
+        if (foundA != GitOutcome.Ok)
+        {
+            return GitMergeBaseReport.Refused(foundA, detail);
+        }
+
+        var foundB = TryCommit(repo, b, out var second, out detail);
+        if (foundB != GitOutcome.Ok)
+        {
+            return GitMergeBaseReport.Refused(foundB, detail);
+        }
+
+        var shared = repo.ObjectDatabase.FindMergeBase(first!, second!);
+        return new GitMergeBaseReport(GitOutcome.Ok, "", shared?.Sha, repo.Head.Tip?.Sha);
+    });
+
     // ---- writes ----
 
     /// <summary>A branch <paramref name="name"/> at <paramref name="startPoint"/> (blank = HEAD), checked out when <paramref name="switchTo"/>.</summary>

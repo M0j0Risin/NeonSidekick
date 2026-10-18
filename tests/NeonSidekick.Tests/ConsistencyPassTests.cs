@@ -42,6 +42,7 @@ public class ConsistencyPassTests
         CameraText.AllowHint, CameraMenu.AllowHintWithView, YouTubeText.SavedKeys, MenuPane.EmptyKeys,
         SavedPromptText.PaneKeys, BrowserLinkText.PaneKeys, ShoppingText.PaneKeys, ShoppingText.StoresKeys, ShoppingText.LayoutKeys, ShoppingText.AislesKeys,   // 2026-10-16, the 120-column pass
         MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, "", letteredButtons: true), TasksMenu.Keys, ServicesMenu.Keys, EventLogMenu.Keys, HomeBarText.BarHint,
+        NeonSidekick.Audits.AuditText.DoneKeys(hasFix: true), NeonSidekick.Audits.AuditText.DoneKeys(hasFix: false), SettingsMenu.CodeAuditFocusKeys,   // the code audit's pane and focus checklist (2026-10-18)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)
     ];

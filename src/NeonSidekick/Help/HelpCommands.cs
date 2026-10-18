@@ -100,6 +100,13 @@ public static class HelpCommands
             new("/cmd --shell <shell> <command>", "Run the line in another shell: `powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac."),
             new("/cmd --bg <command>", "Run the line in the background while you chat, after the same checks (with `--shell` too, in either order). `/process` lists it and its window shows the output live; Ctrl+K twice there stops it. When it ends or is stopped, its output is shown (cut at *Shell output max chars*, the whole in `.shell\\proc_….log`) and goes into the conversation before your next message; the model's process tool never sees it."),
         ]),
+        new("/code-audit",
+        [
+            new("/code-audit [model|advisor|any|confirm] [<passes>] [diff|staged|branch [<base>]|<path> ...] [<focus> ...] [--] [<brief>]", "Audit the code in read-only passes, each reporting through `present_audit` into a report under `.neon/audits/`, until *LLM code audit clean passes* in a row find nothing new. The scope is the whole working directory, a path (quote one with blanks), `diff`, `staged` or `branch` (main, else master); the focus is security, correctness, performance, maintainability or tests (*LLM code audit focus* by default); the reviewers are `/plan gaps`' words; a number caps the passes (0–20); the first other word, or everything after `--`, is the brief. The done pane offers Fix via plan, More passes…, Keep and Discard."),
+            new("/code-audit open [<name>]", "List the reports with their status, open findings and passes; with a name, show that report."),
+            new("/code-audit fix [<name>]", "Plan mode on a report's open findings (the newest report without a name), each step naming the findings it closes; the report is marked fixing."),
+            new("/code-audit resume [<name>] [model|advisor|any|confirm] [<passes>]", "More passes on a kept report (the newest without a name): its scope, focus and brief from its header, the files listed again, what earlier passes read carried over."),
+        ]),
         new("/collapse",
         [
             new("/collapse", "Fold the tool runs, code blocks, diffs and thinking again."),

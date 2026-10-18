@@ -23,6 +23,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
 * **Headless, anything that would stop to ask you is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
+* **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps fewer still: the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads (`web_search`, `web_fetch`, `web_links`) only under *LLM code audit web research*, off by default. An advisor asked in a pass gets the same set.
 * **On a Mac** the Browser window, Docker servers, services, scheduled tasks and Active Directory are Windows only, the event logs read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)), and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
 ## Core
@@ -1033,6 +1034,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 | Tool | Arguments | What it does |
 |---|---|---|
 | `present_plan` | `title, name?, markdown, gaps?, checked?, minor?` | Saves the plan as `.neon/plans/<name>.md`, prints it and asks for your approval. Revisions overwrite the file. A pruned stub sent back as `markdown` is refused. |
+| `present_audit` | `findings?, retract?, revise?, minor?, questions?, covered?, checked?, summary?` | Records a code audit pass's changes in its report (`.neon/audits/<name>.md`); the app writes the file. At most 20 findings a call, calls adding up over a pass. A finding's file must have been read this session, its quoted evidence must stand within 5 lines of its line, its text is redacted; a duplicate of an open finding is refused, one of a settled finding reopens it. With nothing new, `checked` is required. |
 
 * The header's `status` is `draft`, `approved`, `canceled`, `done` or `incomplete`. Headless, the plan is saved and `/plan approve` starts it.
 * In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review and asks for approval.

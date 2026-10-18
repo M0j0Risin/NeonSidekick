@@ -829,6 +829,63 @@ public sealed class AppSettingsData
     public bool PlanGapAskUser { get; set; } = true;
 
     /// <summary>
+    /// The most passes a code audit may run (2026-10-18, <c>/code-audit</c>, the user's idea: the gap review's engine for code) before its
+    /// done pane comes back. The plan gap passes' range (<see cref="MinCodeAuditPasses"/> to <see cref="MaxCodeAuditPasses"/>, defined as theirs
+    /// so the loop never clamps what this row offers); 0 is no limit on the screen (Esc stops it) and <see cref="MaxCodeAuditPasses"/> headless.
+    /// A count on <c>/code-audit</c> overrides it for that run. Read when an audit starts. The Code audit section of <c>/settings</c> ›
+    /// Servers › Common, after Plan mode. No variable.
+    /// </summary>
+    public int CodeAuditPasses { get; set; } = DefaultCodeAuditPasses;
+
+    public const int MinCodeAuditPasses = MinPlanGapPasses;
+    public const int MaxCodeAuditPasses = MaxPlanGapPasses;
+    public const int DefaultCodeAuditPasses = 5;
+
+    /// <summary>
+    /// How many passes in a row must find nothing new before a code audit ends (2026-10-18): a confirming pass looks first where no pass has
+    /// read, with a focus of its own. <c>/code-audit confirm</c> raises it to at least 2. The plan gap clean passes' range
+    /// (<see cref="MinCodeAuditCleanPasses"/> to <see cref="MaxCodeAuditCleanPasses"/>, the loop's clamp). Read when an audit starts. No variable.
+    /// </summary>
+    public int CodeAuditCleanPasses { get; set; } = DefaultCodeAuditCleanPasses;
+
+    public const int MinCodeAuditCleanPasses = MinPlanGapCleanPasses;
+    public const int MaxCodeAuditCleanPasses = MaxPlanGapCleanPasses;
+    public const int DefaultCodeAuditCleanPasses = 2;
+
+    /// <summary>
+    /// Whether a code audit's pass may wait on the user (2026-10-18, the user's pick: on, as plan gaps' is): off, a pass is offered none of
+    /// <c>ask_user</c>, <c>camera_capture</c> and <c>screen_capture</c>, and a question only the user can answer goes into the report's Open
+    /// questions. Read every turn. No variable.
+    /// </summary>
+    public bool CodeAuditAskUser { get; set; } = true;
+
+    /// <summary>
+    /// The dimensions a <c>/code-audit</c> with none named covers (2026-10-18, <see cref="Audits.AuditFocus"/>): a checklist of security,
+    /// correctness, performance, maintainability and tests, all five by default; the editor never lets the last one go, and null (an old or
+    /// hand-edited profile) reads as all five. No variable.
+    /// </summary>
+    public List<string>? CodeAuditFocus { get; set; } = Audits.AuditFocus.Default();
+
+    /// <summary>
+    /// Whether a code audit's passes are offered <c>web_search</c>, <c>web_fetch</c> and <c>web_links</c> (2026-10-18, the user's pick: off by
+    /// default, since audited code may carry instructions, and the web is the one way a read-only pass could send code out). Off, an advisor
+    /// asked in a pass is offered none either. Read every turn. No variable.
+    /// </summary>
+    public bool CodeAuditWebResearch { get; set; }
+
+    /// <summary>
+    /// The tool calls a code audit's pass is asked to report within (2026-10-18, the user's pick, a soft budget): the directive asks for
+    /// about this many with <c>present_audit</c> called by then, the rest left to the next pass; never a cut-off. <see cref="LlmMaxToolIterations"/>
+    /// lower than it is named instead; 0 asks only that the pass report as it goes. <see cref="MinCodeAuditPassToolCalls"/> to
+    /// <see cref="MaxCodeAuditPassToolCalls"/>. Read every turn. No variable.
+    /// </summary>
+    public int CodeAuditPassToolCalls { get; set; } = DefaultCodeAuditPassToolCalls;
+
+    public const int MinCodeAuditPassToolCalls = 0;
+    public const int MaxCodeAuditPassToolCalls = 500;
+    public const int DefaultCodeAuditPassToolCalls = 40;
+
+    /// <summary>
     /// Model id sent with every request. Empty means "the first chat model the server lists".
     /// vLLM and SGLang require an exact match with <c>--served-model-name</c>.
     /// </summary>
