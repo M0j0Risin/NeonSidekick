@@ -24,7 +24,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
 * **Headless, anything that would stop to ask you is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
-* **On a Mac** the Browser window, Docker servers, the event logs, services, scheduled tasks and Active Directory are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
+* **On a Mac** the Browser window, Docker servers, services, scheduled tasks and Active Directory are Windows only, the event logs read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)), and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
 ## Always offered
 
@@ -516,6 +516,22 @@ Computers live in `eventlog.json`, in the home's or the profile's `configs` fold
 * **A `.evtx` file** takes `local`'s detail and no `logs` applies to it: a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
 * **Out of any rule's reach:** what the main model quotes, and saved sessions, which keep what the main chat saw. Set `full` only for computers whose events you are content to have anywhere the conversation goes.
 * **Event text is untrusted:** any program or user can write an event. Each message and value is fenced as quoted data (`⟪ ⟫`), the model is told it is never an instruction, and an event whose source isn't registered says "source not registered: any program could have written this". Control characters are replaced.
+
+#### Event logs on a Mac
+
+The same four tools read the Mac's own logs, in the app: the unified log through macOS's own log API (no `log show`, nothing started), and the report files directly. No computers, runas or `.evtx`.
+
+| Log | What it is | Default window |
+|---|---|---|
+| `system` | The unified log: every process's entries. `level` is `fault`, `error`, `default`, `info`, `debug` or `all` (default `fault,error`); `process`, `pid`, `subsystem` (a prefix), `category`, `text` and `exclude_process` narrow it. | the last hour |
+| `crashes` | The crash and diagnostic reports in `~/Library/Logs/DiagnosticReports` and `/Library/Logs/DiagnosticReports` (and their `Retired` folders): crashes, jetsams (low memory), resource reports. A report's handle is its file name; `eventlog_event` shows its exception, termination and the crashed thread's top 30 frames. | the last 7 days |
+| `install` | `/var/log/install.log`: software installs and updates. | the last day |
+| `<name>.logarchive` | A saved unified log in the working directory (`log collect` makes one), read like `system`. | the last hour |
+
+* **The unified log is vast** (tens of thousands of errors in minutes on a busy Mac), so every read is held to its window, stops at *Event log scan limit* entries or 10 seconds, says how far back it got, and names a process that made most of what it read, with the `exclude_process` to leave it out.
+* **Handles:** `u<time>.<pid>.<thread>.<n>` for the unified log, a report's file name, `i<offset>.<time>` for install.log. An entry the log has since dropped says so.
+* **Detail:** `eventlog.json`'s `local` entry alone applies: `redacted` (the default) also writes your home folder as `~`; `full` is the main chat's alone, as on Windows. A `level`, `subsystem` or `category` given to `crashes` or `install` is ignored, and the answer says so.
+* **Permissions:** reading the unified log needs an administrator account. The system's report folder needs the `_analyticsusers` group, which an administrator is in; a folder you can't read is named in the answer, and the other is still read. `--eventlog-check local` tests them all.
 
 ### Services
 

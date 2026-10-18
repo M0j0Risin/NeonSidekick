@@ -193,6 +193,10 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsWindows() ? ProbeEventLog() : new SmokeCheck("eventlog:wevtapi", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeEventLogRpcLogin() : new SmokeCheck("eventlog:rpc-login", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeEventLogEvtx() : new SmokeCheck("eventlog:evtx", true, "skipped: not Windows"));
+        // A Mac's logs (2026-10-18, the Mac event-log plan's phase 5): the unified log in-process, the reports and install.log, a missing archive.
+        results.Add(OperatingSystem.IsMacOS() ? ProbeMacOsLog() : new SmokeCheck("eventlog:oslog", true, "skipped: not macOS"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeMacCrashes() : new SmokeCheck("eventlog:crashes", true, "skipped: not macOS"));
+        results.Add(OperatingSystem.IsMacOS() ? ProbeMacArchiveError() : new SmokeCheck("eventlog:archive-error", true, "skipped: not macOS"));
         // The admin families (2026-10-15, the admin-tools plan): the network checks everywhere, the Windows layers on Windows.
         results.Add(ProbeIcmp());
         results.Add(ProbeDns());

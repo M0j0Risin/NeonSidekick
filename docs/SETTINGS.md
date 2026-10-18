@@ -663,7 +663,7 @@ See [Network](TOOLS.md#network).
 
 #### EventLog
 
-See [Event logs](TOOLS.md#event-logs).
+See [Event logs](TOOLS.md#event-logs). On a Mac only *Event log tools*, the max events, the scan limit and `local`'s `detail` in `eventlog.json` apply ([Event logs on a Mac](TOOLS.md#event-logs-on-a-mac)).
 
 | Setting | What it does | Default |
 |---|---|---|

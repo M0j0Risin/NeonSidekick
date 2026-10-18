@@ -68,6 +68,39 @@ internal static class EventLogCheck
         return Report(console, checks);
     }
 
+    /// <summary>
+    /// <c>--eventlog-check local</c> on a Mac (2026-10-18, the Mac event-log plan's phase 5): a Mac reads only its own logs, so any other
+    /// name fails at once; then a line each for the store, a short read, the predicates, fd 2, each crash folder (a refused one named, not
+    /// failed: the answers say so too), the newest report, install.log, and a missing archive's refusal. Reads only.
+    /// </summary>
+    public static int RunMac(IAnsiConsole console, IUnifiedLog log, MacLogPlaces places, string name, TimeProvider time)
+    {
+        ArgumentNullException.ThrowIfNull(console);
+        ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(places);
+        ArgumentNullException.ThrowIfNull(name);
+        console.MarkupLine(Markup.Escape(IntroLine(name)));
+        var checks = new List<SmokeCheck>();
+        if (!string.Equals(name.Trim(), EventLogText.LocalName, StringComparison.OrdinalIgnoreCase))
+        {
+            checks.Add(new SmokeCheck("eventlog:computer", false, MacLogText.OnlyLocal(name.Trim())));
+            return Report(console, checks);
+        }
+
+        checks.Add(MacLogProbes.Store(log));
+        if (checks[0].Passed)
+        {
+            checks.Add(MacLogProbes.Read(log, time));
+            checks.Add(MacLogProbes.Predicates(log, time));
+            checks.Add(MacLogProbes.Stderr(log, time));
+        }
+
+        checks.AddRange(MacLogProbes.Crashes(places, time));
+        checks.Add(MacLogProbes.Install(places, time));
+        checks.Add(MacLogProbes.ArchiveError(log));
+        return Report(console, checks);
+    }
+
     private static int Report(IAnsiConsole console, IReadOnlyList<SmokeCheck> checks)
     {
         int failed = 0;

@@ -43,6 +43,9 @@ public static class MacLogText
     /// <summary>Where every answer says it read.</summary>
     public const string OnThisMac = "on this Mac";
 
+    /// <summary><c>--eventlog-check</c> naming anything but <c>local</c> on a Mac.</summary>
+    public static string OnlyLocal(string name) => $"'{name}': a Mac reads only its own logs; use --eventlog-check local.";
+
     /// <summary>The pane's place in its title.</summary>
     public const string OnThisMacWords = "this Mac";
 
@@ -175,7 +178,8 @@ public static class MacLogErrors
         }
 
         if (archive is not null && (words.Contains("no such file", StringComparison.Ordinal) || words.Contains("doesn't exist", StringComparison.Ordinal)
-            || words.Contains("couldn't be opened", StringComparison.Ordinal) || words.Contains("not a valid", StringComparison.Ordinal)))
+            || words.Contains("couldn't be opened", StringComparison.Ordinal) || words.Contains("not a valid", StringComparison.Ordinal)
+            || words.Contains("valid log archive", StringComparison.Ordinal)))
         {
             return MacLogText.NoArchive(Path.GetFileName(archive.TrimEnd('/')));
         }

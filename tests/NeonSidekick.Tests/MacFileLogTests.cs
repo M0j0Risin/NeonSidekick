@@ -499,4 +499,55 @@ public sealed class MacFileLogTests : IDisposable
         Assert.Equal("install entry " + installRow.Handle + " on this Mac\ntime:       2026-09-11 13:30:00 -07:00\nprocess:    softwareupdated   pid 534\n\nSUOSUServiceDaemon: idle", entry);
         Assert.Null(gone);
     }
+
+    // ── --eventlog-check local and the smoke's probes (phase 5) ─────────────
+
+    [Fact]
+    public void Check_Local_PassesEveryLine_OverTheFakeAndTheFixtures()
+    {
+        _log.Entries.Add(FakeUnifiedLog.Entry(ManualTimeProvider.DefaultUtcNow.AddMinutes(-1)));
+        var console = new Spectre.Console.Testing.TestConsole { EmitAnsiSequences = false };
+        console.Profile.Width = 200;
+
+        int exit = EventLogCheck.RunMac(console, _log, _places, "local", _time);
+
+        Assert.Equal(0, exit);
+        foreach (string check in new[] { "eventlog:store", "eventlog:read", "eventlog:predicates", "eventlog:stderr", "eventlog:crashes-user", "eventlog:crashes-system", "eventlog:crash-report", "eventlog:install", "eventlog:archive-error" })
+        {
+            Assert.Contains("PASS  " + check + "  ", console.Output, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("eventlog:archive-error  refused (NSCocoaErrorDomain 260): '", console.Output, StringComparison.Ordinal);
+        Assert.Contains("EVENT LOG CHECK PASS  9 checks", console.Output, StringComparison.Ordinal);
+        var predicates = _log.Opens.Single(o => o.Filter.Process == "neonsidekick-smoke");
+        Assert.Equal(MacLogPredicate.Placeholders(predicates.Format), predicates.Arguments.Count);
+        Assert.Contains("NOT (process IN %@)", predicates.Format, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Check_AnotherName_OrARefusedStore_Fails()
+    {
+        var other = new Spectre.Console.Testing.TestConsole { EmitAnsiSequences = false };
+        other.Profile.Width = 200;
+        var refused = new Spectre.Console.Testing.TestConsole { EmitAnsiSequences = false };
+        refused.Profile.Width = 200;
+        _log.Fail = new UnifiedLogException("OSLogErrorDomain", 9, "Operation not permitted");
+
+        Assert.Equal(1, EventLogCheck.RunMac(other, _log, _places, "dc01", _time));
+        Assert.Equal(1, EventLogCheck.RunMac(refused, _log, _places, "local", _time));
+        Assert.Contains(MacLogText.OnlyLocal("dc01"), other.Output, StringComparison.Ordinal);
+        Assert.Contains("FAIL  eventlog:store  " + MacLogText.NeedsAdmin, refused.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("eventlog:read", refused.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Probes_AMissingInstallLog_Fails()
+    {
+        File.Delete(_places.InstallLog);
+
+        var check = MacLogProbes.Install(_places, _time);
+
+        Assert.False(check.Passed);
+        Assert.StartsWith(_places.InstallLog + ": ", check.Detail, StringComparison.Ordinal);
+    }
 }

@@ -428,7 +428,7 @@ public static class SlashCommands
             new("/docker", "manage the Docker engine's containers"),
             new("/draft", "write the next message in your editor"),
             new("/echo", "print a line as a reply"),
-            new(EventLog.EventLogCommand.Word, "read Windows' event logs"),
+            new(EventLog.EventLogCommand.Word, OperatingSystem.IsMacOS() ? "read this Mac's logs" : "read Windows' event logs"),   // a Mac's own since 2026-10-18
             new(Network.NetworkCommand.Word, "check hosts, ports, DNS and certificates"),
             new("/services", "list, start and stop Windows services"),
             new("/tasks", "list and run scheduled tasks"),

@@ -550,6 +550,11 @@ public sealed class SidekickApp
         if (options.EventLogCheck is { } eventLogComputer)
         {
             // The live proof on the published exe (2026-10-15): the whole catalog, not the ticked list, as the UNC and database checks.
+            if (_unifiedLog is not null)
+            {
+                return EventLogCheck.RunMac(_console, _unifiedLog, EventLog.MacLogPlaces.Default, eventLogComputer, _time);   // a Mac's own logs (2026-10-18)
+            }
+
             var loaded = EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory);
             var checkFiles = new Files.WorkingDirectory(() => Files.WorkingDirectory.Resolve(EffectiveSettings.WorkingDirectory, _settings.ProfileDirectory), _time);
             return await EventLogCheck.RunAsync(_console, _eventLogSystem, loaded, eventLogComputer, checkFiles, _time, cancellationToken).ConfigureAwait(false);

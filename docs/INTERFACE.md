@@ -135,6 +135,8 @@ In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key lette
 
 `/eventlog` shows a computer's events newest first, a tab per log (Application, System, Security, Setup, and the one you named). Each row is the time, a level icon (◆ critical, ● error, ▲ warning, ○ information; ✗ and ✓ for Security's audit failures and successes), the provider, the id and the message's first line; a dim line marks each new day. A tab reads "(no access)" once Windows refused it. The title row's `⟳ refresh`, `more` (lit while there is a next page) and `computer` (with more than one ticked) are buttons. An event's page shows everything Windows recorded, its XML too, as plain text: nothing an event holds is read as markup or a terminal code.
 
+On a Mac the title is `🪵 Event logs · this Mac` and the tabs are `system`, `crashes` and `install` (and a `.logarchive` you named). A row's icon is ◆ fault, ● error or a crash, ▲ a jetsam, ○ default and the other reports, · the rest; there is no `computer` button.
+
 ### The services and tasks panes
 
 `/services` lists a computer's services a row each (name, display name, state, a failure's exit code), a tab per state. `/tasks` lists its scheduled tasks (path, state, last run and result, next run), Windows' own under `\Microsoft\` hidden until `w`. Enter opens one whole, with the actions its computer allows as buttons; each asks you first, and a refusal (protected, a driver, privileged, not in `control`) says why. Times are the computer's own clock.
@@ -270,7 +272,7 @@ Icons under the status bar (*Tool bar*), each shown while it is checked there. A
 | 👮 / 🥷 | *Shell police* on / off (none while the policy is `off`) | `/tools shell police` |
 | 🐚 | dark background under `off` | `/tools shell` |
 | 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | dark background while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
-| 🪵 | dark background while off, and always off Windows | `/tools eventlog` |
+| 🪵 | dark background while off, and always where there are no event logs to read | `/tools eventlog` |
 | 📡 | dark background while off | `/tools network` |
 | 🧩 📅 🏢 | dark background while off, and always off Windows | `/tools services`, `tasks`, `directory` |
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |

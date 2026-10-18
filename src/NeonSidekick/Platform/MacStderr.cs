@@ -11,7 +11,9 @@ namespace NeonSidekick.Platform;
 /// leave fd 2 silenced: the first in saves fd 2 and points it at /dev/null, the last out puts it back. While a scope is open nothing
 /// of ours reaches stderr (the app's own diagnostics go through <c>DiagnosticLog</c>); a crash print in that moment is lost, as the
 /// crash handler's report is not. Excluded from coverage with the other native layers; the smoke's <c>eventlog:oslog</c> checks fd 2
-/// keeps its file.
+/// keeps its file. The last one out restores fd 2 only after <see cref="Linger"/> (later on 2026-10-18, the phase 5 check: OSLog writes
+/// its line from a background queue a few milliseconds after an enumerator is made, so two of nine probe reads printed it just after
+/// their scope had closed); a scope opened inside the linger keeps the redirect and cancels the restore.
 /// </summary>
 [SupportedOSPlatform("macos")]
 public static partial class MacStderr
@@ -19,16 +21,22 @@ public static partial class MacStderr
     private const string LibSystem = "/usr/lib/libSystem.B.dylib";
     private const int WriteOnly = 1;   // O_WRONLY
 
+    /// <summary>How long fd 2 stays quiet after the last scope ends.</summary>
+    public static readonly TimeSpan Linger = TimeSpan.FromSeconds(1);
+
     private static readonly object s_gate = new();
     private static int s_depth;
     private static int s_saved = -1;
+    private static Timer? s_restore;
 
     /// <summary>A quiet scope: dispose it to end it (the last one out restores stderr).</summary>
     public static IDisposable Quiet()
     {
         lock (s_gate)
         {
-            if (s_depth++ == 0)
+            s_restore?.Dispose();
+            s_restore = null;
+            if (s_depth++ == 0 && s_saved < 0)
             {
                 int saved = Dup(2);
                 int sink = OpenFile("/dev/null", WriteOnly);
@@ -74,10 +82,39 @@ public static partial class MacStderr
 
             if (s_saved >= 0)
             {
-                _ = Dup2(s_saved, 2);
-                _ = CloseFile(s_saved);
-                s_saved = -1;
+                s_restore?.Dispose();
+                s_restore = new Timer(_ => Restore(), null, Linger, Timeout.InfiniteTimeSpan);
             }
+        }
+    }
+
+    /// <summary>Whether fd 2 is pointed away now (a scope open, or the linger after one).</summary>
+    public static bool Silenced
+    {
+        get
+        {
+            lock (s_gate)
+            {
+                return s_saved >= 0;
+            }
+        }
+    }
+
+    /// <summary>Puts fd 2 back now when no scope is open (the linger's end; the smoke and the tests, which compare it at once).</summary>
+    public static void Restore()
+    {
+        lock (s_gate)
+        {
+            if (s_depth > 0 || s_saved < 0)
+            {
+                return;
+            }
+
+            s_restore?.Dispose();
+            s_restore = null;
+            _ = Dup2(s_saved, 2);
+            _ = CloseFile(s_saved);
+            s_saved = -1;
         }
     }
 
@@ -93,6 +130,19 @@ public static partial class MacStderr
             }
         }
     }
+
+    /// <summary>
+    /// The inode fd 2 points at now (2026-10-18, the smoke's <c>eventlog:oslog</c>): the same before and after a read proves the quiet scope
+    /// put the terminal back. arm64's <c>struct stat</c> has the 64-bit inode at offset 8; null when <c>fstat</c> fails.
+    /// </summary>
+    public static unsafe ulong? Inode(int fd = 2)
+    {
+        byte* buffer = stackalloc byte[256];
+        return FStat(fd, buffer) == 0 ? *(ulong*)(buffer + 8) : null;
+    }
+
+    [LibraryImport(LibSystem, EntryPoint = "fstat")]
+    private static unsafe partial int FStat(int fd, byte* buffer);
 
     [LibraryImport(LibSystem, EntryPoint = "dup")]
     private static partial int Dup(int fd);
