@@ -41,7 +41,6 @@ internal static unsafe partial class MacCameraNative
     public const ulong LockReadOnly = 1;
 
     private const int BlockIsGlobal = 1 << 28;
-    private const int OpenWriteOnly = 1;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct CMTime
@@ -176,18 +175,6 @@ internal static unsafe partial class MacCameraNative
     [LibraryImport(LibSystem)]
     public static partial void dispatch_release(nint queue);
 
-    [LibraryImport(LibSystem, EntryPoint = "dup")]
-    private static partial int Dup(int fd);
-
-    [LibraryImport(LibSystem, EntryPoint = "dup2")]
-    private static partial int Dup2(int fd, int fd2);
-
-    [LibraryImport(LibSystem, EntryPoint = "open", StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int OpenFile(string path, int flags);
-
-    [LibraryImport(LibSystem, EntryPoint = "close")]
-    private static partial int CloseFile(int fd);
-
     // ---- AVFoundation's constants and classes ----
 
     /// <summary>AVFoundation loaded; false where the framework is not there.</summary>
@@ -262,7 +249,9 @@ internal static unsafe partial class MacCameraNative
 
     /// <summary>
     /// <paramref name="work"/> with stderr pointed at /dev/null the first time it runs in the process (AVFoundation's deprecation line
-    /// comes on the first discovery only); later calls run plainly. Nothing else of ours writes to stderr while the TUI runs.
+    /// comes on the first discovery only); later calls run plainly. Nothing else of ours writes to stderr while the TUI runs. The quiet
+    /// is <see cref="Platform.MacStderr"/>'s shared scope since 2026-10-18 (the Mac event-log plan: the unified log's reads quiet it
+    /// too, and two private dup2 pairs overlapping could have left stderr silenced for good).
     /// </summary>
     public static T Quietly<T>(Func<T> work)
     {
@@ -275,29 +264,9 @@ internal static unsafe partial class MacCameraNative
             }
 
             s_quieted = true;
-            int saved = Dup(2);
-            int sink = OpenFile("/dev/null", OpenWriteOnly);
-            bool redirected = saved >= 0 && sink >= 0 && Dup2(sink, 2) >= 0;
-            try
+            using (Platform.MacStderr.Quiet())
             {
                 return work();
-            }
-            finally
-            {
-                if (redirected)
-                {
-                    _ = Dup2(saved, 2);
-                }
-
-                if (saved >= 0)
-                {
-                    _ = CloseFile(saved);
-                }
-
-                if (sink >= 0)
-                {
-                    _ = CloseFile(sink);
-                }
             }
         }
     }
