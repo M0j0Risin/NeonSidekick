@@ -171,7 +171,8 @@ public sealed partial class ActiveDirectoryTests
         _system.Transport = "389, Kerberos as ldap/dc1.lab.example, sealed";
         var (stillOk, named) = await DirectoryAccess.TestAsync(_system, domain, _time, CancellationToken.None);
         Assert.True(stillOk);
-        Assert.Equal(plain + "; 389, Kerberos as ldap/dc1.lab.example, sealed", named);
+        Assert.EndsWith(".", plain);
+        Assert.Equal(plain[..^1] + "; 389, Kerberos as ldap/dc1.lab.example, sealed.", named);
     }
 
     // ── The managed client's sentences ─────────────────────────────────────

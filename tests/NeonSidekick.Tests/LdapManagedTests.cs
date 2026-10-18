@@ -1,7 +1,10 @@
 using System.Formats.Asn1;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 using NeonSidekick.ActiveDirectory;
@@ -222,6 +225,50 @@ public sealed class LdapManagedTests
                 Assert.DoesNotContain("LoopbackSaslLayer", text, StringComparison.Ordinal);
             }
         }
+    }
+
+    /// <summary>
+    /// LDAPS to a DC whose certificate this machine refuses (2026-10-18, phase 3: Samba's self-signed one read as "did not answer LDAP"): the
+    /// system's judgement stands, and the refusal is <see cref="LdapResultCodes.TlsRefused"/> naming what was wrong.
+    /// </summary>
+    [Fact]
+    public async Task Open_Ldaps_AnUntrustedCertificate_IsRefused_SayingWhy()
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest("CN=dc9.elsewhere.invalid", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
+        using var made = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        using var certificate = X509CertificateLoader.LoadPkcs12(made.Export(X509ContentType.Pfx), null);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = Task.Run(async () =>
+        {
+            using var accepted = await listener.AcceptTcpClientAsync();
+            using var ssl = new SslStream(accepted.GetStream());
+            try
+            {
+                await ssl.AuthenticateAsServerAsync(certificate);
+            }
+            catch (Exception ex) when (ex is IOException or System.Security.Authentication.AuthenticationException)
+            {
+                // the client walked away, as it should
+            }
+        });
+
+        var refused = Assert.Throws<DirectoryException>(() => LdapConnection.Open("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, tls: true));
+        Assert.Equal(LdapResultCodes.TlsRefused, refused.Code);
+        Assert.Equal(DirectoryText.CertificateRefused("127.0.0.1", SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateChainErrors), refused.Message);
+        await server.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void CertificateRefused_NamesEachProblem_AndTheSentenceSaysWhatToDo()
+    {
+        Assert.Equal("it does not name dc1.lab.example, and no authority this machine trusts signed it",
+            DirectoryText.CertificateRefused("dc1.lab.example", SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateChainErrors));
+        Assert.Equal("it sent none", DirectoryText.CertificateRefused("x", SslPolicyErrors.RemoteCertificateNotAvailable));
+        Assert.Equal("Error: dc1.lab.example:636 answered, but its certificate was refused: it sent none. Trust the DC's certificate authority here (on a Mac, in the Keychain), and name the DC in server as its certificate does.",
+            DirectoryErrors.Sentence(LdapResultCodes.TlsRefused, "lab.example", "dc1.lab.example", 636, "reader", "it sent none"));
     }
 
     /// <summary>The smoke's <c>ad:ldap</c> under the JIT: the loopback bind, RootDSE and two pages (and on a Mac a made-up realm refused).</summary>

@@ -87,12 +87,31 @@ public sealed class LdapConnection : IDisposable
         if (tls)
         {
             var ssl = new SslStream(stream, leaveInnerStreamOpen: false);
+            SslPolicyErrors refused = SslPolicyErrors.None;
             try
             {
                 ssl.ReadTimeout = (int)ConnectTimeout.TotalMilliseconds;
-                ssl.AuthenticateAsClient(host);
+
+                // The system's own judgement, only noted on the way past so a refusal can say why; nothing it refuses is let through.
+                var options = new SslClientAuthenticationOptions
+                {
+                    TargetHost = host,
+                    RemoteCertificateValidationCallback = (_, _, _, errors) =>
+                    {
+                        refused = errors;
+                        return errors == SslPolicyErrors.None;
+                    },
+                };
+                using var timeout = new CancellationTokenSource(ConnectTimeout);
+                ssl.AuthenticateAsClientAsync(options, timeout.Token).GetAwaiter().GetResult();
             }
-            catch (Exception ex) when (ex is IOException or System.Security.Authentication.AuthenticationException)
+            catch (System.Security.Authentication.AuthenticationException) when (refused != SslPolicyErrors.None)
+            {
+                ssl.Dispose();
+                client.Dispose();
+                throw new DirectoryException(LdapResultCodes.TlsRefused, DirectoryText.CertificateRefused(host, refused));
+            }
+            catch (Exception ex) when (ex is IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
             {
                 ssl.Dispose();
                 client.Dispose();

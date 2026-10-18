@@ -187,6 +187,6 @@ public sealed class DirectoryAccess
         }, cancellationToken).ConfigureAwait(false);
         return result.Error is { } failed
             ? (false, failed)
-            : (true, DirectoryText.TestOk(domain.Name, result.Value.Item1, domain.DomainName, result.Value.Item3) + (result.Value.Item4 is { } transport ? "; " + transport : ""));   // how it connected, where the backend says (a Mac's, 2026-10-18)
+            : (true, DirectoryText.WithTransport(DirectoryText.TestOk(domain.Name, result.Value.Item1, domain.DomainName, result.Value.Item3), result.Value.Item4));   // how it connected, where the backend says (a Mac's, 2026-10-18)
     }
 }

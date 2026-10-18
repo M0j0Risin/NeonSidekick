@@ -37,6 +37,10 @@ public static class DirectoryText
     public static string Transport(int port, bool tls, string serviceName, string layer) =>
         port.ToString(System.Globalization.CultureInfo.InvariantCulture) + (tls ? " TLS" : "") + ", Kerberos as " + serviceName + ", " + layer;
 
+    /// <summary>A test's line with how it connected inside its full stop: <c>…, 1 user read; 389, Kerberos as …, sealed.</c> Pinned.</summary>
+    public static string WithTransport(string line, string? transport) =>
+        transport is null ? line : line.TrimEnd('.') + "; " + transport + ".";
+
     /// <summary>The SASL layer's word in <see cref="Transport"/>.</summary>
     public static string LayerWord(string layer) => layer switch
     {
@@ -51,6 +55,28 @@ public static class DirectoryText
     /// </summary>
     public static string Held(string domain, string account) =>
         $"Error: {domain} refused the password for {account}, so it is not tried again (repeated tries can lock the account). Set it again with Directory set password on {MenuPath}.";
+
+    /// <summary>What was wrong with a DC's LDAPS certificate (2026-10-18), for <see cref="DirectoryErrors"/>' refusal. Pinned.</summary>
+    public static string CertificateRefused(string host, System.Net.Security.SslPolicyErrors errors)
+    {
+        var why = new List<string>();
+        if (errors.HasFlag(System.Net.Security.SslPolicyErrors.RemoteCertificateNotAvailable))
+        {
+            why.Add("it sent none");
+        }
+
+        if (errors.HasFlag(System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch))
+        {
+            why.Add("it does not name " + host);
+        }
+
+        if (errors.HasFlag(System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors))
+        {
+            why.Add("no authority this machine trusts signed it");
+        }
+
+        return string.Join(", and ", why);
+    }
 
     /// <summary>The wizard's account question on a Mac. Pinned.</summary>
     public const string MacUserQuestion = "The account as name@REALM (reader@CORP.EXAMPLE): Kerberos, so the realm in capitals.";

@@ -28,4 +28,27 @@ docker run -d --name samba_ad_dev --hostname DC1 --privileged \
 docker exec samba_ad_dev samba-tool user create reader '<reader password>'
 ```
 
+The live directory tests read a seed of their own (any password will do for the seeded accounts; nobody signs in as them):
+
+```sh
+docker exec samba_ad_dev sh -c '
+B="DC=lab,DC=neon,DC=test"; PW="<a password>"
+samba-tool ou create "OU=Neon,$B"; samba-tool ou create "OU=Engineering,OU=Neon,$B"; samba-tool ou create "OU=Sales,OU=Neon,$B"
+for u in "alice Alice Smith" "bob Bob Jones" "carol Carol King" "dave Dave Lee" "grace Grace Hu"; do set -- $u; samba-tool user create $1 "$PW" --given-name=$2 --surname=$3; done
+samba-tool user create erin "$PW" --given-name=Erin --surname=Ng --department=Engineering --userou="OU=Engineering,OU=Neon"
+samba-tool user create frank "$PW" --given-name=Frank --surname=Ode --department=Sales --userou="OU=Sales,OU=Neon"
+samba-tool user setexpiry erin --noexpiry; samba-tool user setexpiry frank --days=10
+for g in Engineers Staff Tier0 Unused; do samba-tool group create $g; done
+samba-tool group create All-Hands --group-type=Distribution --description="Company-wide mail list"
+samba-tool group addmembers Engineers bob; samba-tool group addmembers Staff Engineers,carol
+samba-tool group addmembers Tier0 grace; samba-tool group addmembers "Domain Admins" Tier0
+samba-tool contact create "Vendor Rep"; samba-tool group addmembers All-Hands "Vendor Rep" --object-types=contact
+samba-tool computer create WS01; samba-tool user disable --filter="(sAMAccountName=WS01\$)"
+samba-tool domain passwordsettings set --account-lockout-threshold=10
+samba-tool domain passwordsettings pso create ShortPasswords 10 --min-pwd-length=4
+printf "dn: CN=Frank Ode,OU=Sales,OU=Neon,$B\nchangetype: modify\nreplace: manager\nmanager: CN=Erin Ng,OU=Engineering,OU=Neon,$B\n" | ldbmodify -H /usr/local/samba/private/sam.ldb'
+```
+
+`frank`'s account ends 10 days after seeding, so `account_expiring` finds him only within that time; run `samba-tool user setexpiry frank --days=10` again after.
+
 Then a `krb5.conf` holding `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`, named by `KRB5_CONFIG` in the shell that runs the tests or the app, and `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=localhost;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).

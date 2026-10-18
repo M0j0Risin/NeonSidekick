@@ -4,6 +4,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.ActiveDirectory;
+using NeonSidekick.ActiveDirectory.Ldap;
 using NeonSidekick.Computers;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Network;
@@ -24,7 +25,8 @@ namespace NeonSidekick.Tests;
 /// you made on this PC run once, disabled and enabled again.</item>
 /// <item><c>NEONSIDEKICK_TEST_AD_DOMAIN</c>: <c>Domain=…;Server=…;User=DOMAIN\name;Password=…</c>, written as the <c>lab</c> entry of a scratch
 /// home's <c>ad.json</c> and read through it (the <c>samba_ad_dev</c> container: <c>Domain=lab.neon.test;Server=localhost;User=LAB\reader</c>
-/// and the container's password).</item>
+/// and the container's password). On a Mac too since 2026-10-18 (the Mac AD plan's phase 3), through the managed LDAP client: the user is
+/// <c>reader@LAB.NEON.TEST</c>, and the test realm's KDC is named by a <c>krb5.conf</c> that <c>KRB5_CONFIG</c> points at.</item>
 /// </list>
 /// </summary>
 internal static class LiveAdmin
@@ -63,7 +65,9 @@ public sealed class LiveTasksFactAttribute : FactAttribute
 
 public sealed class LiveDirectoryFactAttribute : FactAttribute
 {
-    public LiveDirectoryFactAttribute() => Skip = LiveAdmin.Unavailable(LiveAdmin.DirectoryVariable, windowsOnly: true);
+    public LiveDirectoryFactAttribute() => Skip = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        ? LiveAdmin.Unavailable(LiveAdmin.DirectoryVariable, windowsOnly: false)
+        : "There is no directory client here.";   // wldap32 on Windows, the managed client on a Mac (2026-10-18)
 }
 
 /// <summary>The four live gates' facts: reads always, a change only where its variable names a harmless thing to change.</summary>
@@ -175,23 +179,24 @@ public sealed class LiveAdminTests : IDisposable
 
     // ── The directory ──────────────────────────────────────────────────────
 
-    [SupportedOSPlatform("windows")]
-    private DirectoryAccess DirectoryFromScratchHome()
+    /// <summary>The system the app builds here: wldap32 on Windows, the managed LDAP client on a Mac (2026-10-18).</summary>
+    private static IDirectorySystem DirectorySystem() => OperatingSystem.IsWindows() ? new WindowsDirectorySystem() : new ManagedDirectorySystem();
+
+    private DirectoryAccess DirectoryFromScratchHome(string? password = null)
     {
         var spec = new DbConnectionStringBuilder { ConnectionString = LiveAdmin.Read(LiveAdmin.DirectoryVariable)! };
         string Part(string key) => spec.TryGetValue(key, out object? value) ? (string)value : throw new InvalidOperationException(LiveAdmin.DirectoryVariable + " has no " + key + ".");
         var config = new DirectoryDomainConfig { Domain = Part("Domain"), Server = Part("Server"), Auth = "runas", User = Part("User"), Description = "the live gate's domain" };
         string path = DirectoryConfigFile.ProfilePath(_root);
         Assert.Null(DirectoryConfigFile.AddDomain(path, "lab", config));
-        var saved = DirectoryConfigFile.SavePassword(DirectoryConfigFile.LoadCatalog(_root, null, null).Domains.Single(d => d.Name == "lab"), Part("Password"));
+        var saved = DirectoryConfigFile.SavePassword(DirectoryConfigFile.LoadCatalog(_root, null, null).Domains.Single(d => d.Name == "lab"), password ?? Part("Password"));
         Assert.True(saved.Saved, saved.Notice);
         string file = File.ReadAllText(path);
-        Assert.Contains("\"dpapi:", file);
-        Assert.DoesNotContain(Part("Password"), file);
-        return new DirectoryAccess(new WindowsDirectorySystem(), () => DirectoryConfigFile.LoadCatalog(_root, null, null), () => ["lab"], () => null, TimeProvider.System);
+        Assert.Contains(OperatingSystem.IsWindows() ? "\"dpapi:" : "\"keychain:", file);
+        Assert.DoesNotContain(password ?? Part("Password"), file);
+        return new DirectoryAccess(DirectorySystem(), () => DirectoryConfigFile.LoadCatalog(_root, null, null), () => ["lab"], () => null, TimeProvider.System);
     }
 
-    [SupportedOSPlatform("windows")]
     [LiveDirectoryFact]
     public async Task Directory_TheFiveQuestions()
     {
@@ -208,8 +213,28 @@ public sealed class LiveAdminTests : IDisposable
         Assert.Contains("dave", await Call(new AdFindTool(access), ("kind", "stale_users")));
         Assert.Contains("alice", await Call(new AdFindTool(access), ("kind", "name"), ("words", "ali")));
         Assert.StartsWith("User carol in ", await Call(new AdUserTool(access), ("name", "carol")));
-        var (ok, text) = await DirectoryAccess.TestAsync(new WindowsDirectorySystem(), access.Catalog().Domains.Single(), TimeProvider.System, CancellationToken.None);
+        var (ok, text) = await DirectoryAccess.TestAsync(DirectorySystem(), access.Catalog().Domains.Single(), TimeProvider.System, CancellationToken.None);
         Assert.True(ok, text);
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Contains(", Kerberos as ldap/", text);   // the managed client names how it connected: signed and sealed on 389
+            Assert.EndsWith(", sealed.", text);
+        }
+    }
+
+    /// <summary>
+    /// A refused password, on both systems (2026-10-18, the Mac AD plan's hold): the first call reaches the DC and is refused, worded as wldap32's
+    /// 0x31 (on a Mac the DC's port 88 answered, so the failed Kerberos sign-in was a refusal, not an unreachable KDC); the second is held
+    /// here and never reaches it. Costs the account one bad password, under any lockout threshold.
+    /// </summary>
+    [LiveDirectoryFact]
+    public async Task Directory_ARefusedPassword_IsWorded_ThenHeld()
+    {
+        var access = DirectoryFromScratchHome("not-the-password-" + Guid.NewGuid().ToString("N"));
+        var domain = access.Catalog().Domains.Single();
+        string first = await Call(new AdDomainTool(access));
+        Assert.Contains("refused the sign-in as " + domain.Account, first);
+        Assert.Equal(DirectoryText.Held(domain.DomainName, domain.Account), await Call(new AdDomainTool(access)));
     }
 
     /// <summary>
@@ -218,7 +243,6 @@ public sealed class LiveAdminTests : IDisposable
     /// and DN batches, <c>primaryGroupID</c>, <c>directReports</c>, <c>canonicalName</c>, <c>showInAdvancedViewOnly</c> and GeneralizedTime filters,
     /// each search under the call's deadline, and a list saves as a CSV.
     /// </summary>
-    [SupportedOSPlatform("windows")]
     [LiveDirectoryFact]
     public async Task Directory_SearchesBrowsesAndNests()
     {

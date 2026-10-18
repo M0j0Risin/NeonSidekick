@@ -41,6 +41,12 @@ public static class LdapResultCodes
 
     /// <summary>This client's own: the Kerberos sign-in failed before the bind for another reason (no ticket, an unknown service name).</summary>
     public const int KerberosFailed = 0x1002;
+
+    /// <summary>
+    /// This client's own: the DC answered on LDAPS and its certificate was refused (2026-10-18, phase 3: Samba's self-signed one read as
+    /// "did not answer LDAP" under <see cref="ConnectError"/>). The message names what was wrong with it.
+    /// </summary>
+    public const int TlsRefused = 0x1003;
 }
 
 /// <summary>Which reply a message is (RFC 4511's protocolOp tags).</summary>
