@@ -44,15 +44,17 @@ internal sealed class BrowserLinksMenu
     private readonly InputLine? _input;
     private readonly Action? _changed;
     private readonly TimeZoneInfo _zone;
+    private readonly bool _window;
 
     /// <param name="links">The loaded profile's saved links, read when the pane opens and after every act.</param>
     /// <param name="transcript">Where the lines outside the pane go (clear all's, which closes it).</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
-    /// <param name="open">What Enter hands a link to: the screen's open in the Browser window, answering at once (never waiting for the visit); null with no Browser window (Enter says so).</param>
+    /// <param name="open">What Enter hands a link to: the screen's open in the Browser window, answering at once (never waiting for the visit), or in the default browser where there is no window (2026-10-17, the Mac pass); null: Enter says there is no Browser window.</param>
     /// <param name="input">The input row an address or a name is typed on; null: they say so.</param>
     /// <param name="changed">Called after every change: the open window reads its ☆ again.</param>
     /// <param name="zone">The zone the footer's date is shown in.</param>
-    public BrowserLinksMenu(Func<BrowserLinks> links, INoticeSink transcript, MenuPane pane, Func<BrowserLink, string>? open, InputLine? input = null, Action? changed = null, TimeZoneInfo? zone = null)
+    /// <param name="window">Whether there is a Browser window: false words the caption and the empty row without it (2026-10-17, the Mac pass).</param>
+    public BrowserLinksMenu(Func<BrowserLinks> links, INoticeSink transcript, MenuPane pane, Func<BrowserLink, string>? open, InputLine? input = null, Action? changed = null, TimeZoneInfo? zone = null, bool window = true)
     {
         _links = links ?? throw new ArgumentNullException(nameof(links));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -60,6 +62,7 @@ internal sealed class BrowserLinksMenu
         _open = open;
         _input = input;
         _changed = changed;
+        _window = window;
         _zone = zone ?? TimeZoneInfo.Local;
     }
 
@@ -77,7 +80,7 @@ internal sealed class BrowserLinksMenu
                 bool empty = links.Count == 0;
                 var shown = Enumerable.Range(0, links.Count).Where(i => BrowserLinkText.Matches(filter, links[i])).ToList();
                 var columns = BrowserLinkText.Columns(links);
-                List<string> rows = empty ? [Theme.DimMarkup(BrowserLinkText.EmptyRow)]
+                List<string> rows = empty ? [Theme.DimMarkup(_window ? BrowserLinkText.EmptyRow : BrowserLinkText.EmptyRowNoWindow)]
                     : shown.Count == 0 ? [MenuFilter.NoMatchRow(filter)]
                     : shown.Select(i => Markup.Escape(BrowserLinkText.PaneRow(links[i], columns.Name, columns.Address))).ToList();
                 int at = on is null ? -1 : shown.FindIndex(i => BrowserLinks.Key(links[i].Url) == BrowserLinks.Key(on));
@@ -86,7 +89,7 @@ internal sealed class BrowserLinksMenu
                 {
                     Buttons = Buttons,
                     Filter = empty ? null : filter,
-                    Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, links.Count) ?? BrowserLinkText.Caption(links.Count),
+                    Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, links.Count) ?? BrowserLinkText.Caption(links.Count, _window),
                     Footer = (_, row) => !empty && row < shown.Count ? BrowserLinkText.Footer(links[shown[row]], _zone) : null,
                     Moves = !empty && filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
                     Removes = !empty && shown.Count > 0,     // Delete removes a filtered row too (2026-10-16, the user's ask)
@@ -124,7 +127,7 @@ internal sealed class BrowserLinksMenu
                     {
                         var outcome = _links().Clear(out int cleared);
                         _changed?.Invoke();
-                        Tell(BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSaved : BrowserLinkText.Cleared(cleared)));
+                        Tell(BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSavedFor(_window) : BrowserLinkText.Cleared(cleared)));
                         return;
                     }
 

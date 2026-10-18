@@ -18,31 +18,35 @@ internal static class MacLineWindows
     private static ProcessSession? s_session;           // main thread
     private static int s_registered;
 
-    /// <summary>The log window on <paramref name="buffer"/>, or the open one brought forward. Throws when it could not be made.</summary>
-    public static void ShowLog(DiagnosticBuffer buffer)
+    /// <summary>
+    /// The log window on <paramref name="buffer"/>, or the open one brought forward. Throws when it could not be made. With
+    /// <paramref name="activate"/> false it is shown and raised without the focus, the keyboard left in the terminal: a chord's
+    /// open, as on Windows since 2026-10-13 (2026-10-17, the Mac pass, the user's call; it took the focus here until then).
+    /// </summary>
+    public static void ShowLog(DiagnosticBuffer buffer, bool activate = true)
     {
         RegisterEnd();
-        if (s_log is { Alive: true } && AppKitHost.Post(() => ShowLogOnMain(buffer)))
+        if (s_log is { Alive: true } && AppKitHost.Post(() => ShowLogOnMain(buffer, activate)))
         {
             return;
         }
 
-        if (!AppKitHost.Invoke(() => ShowLogOnMain(buffer), out _))
+        if (!AppKitHost.Invoke(() => ShowLogOnMain(buffer, activate), out _))
         {
             throw new InvalidOperationException("the window did not start");
         }
     }
 
-    private static bool ShowLogOnMain(DiagnosticBuffer buffer)
+    private static bool ShowLogOnMain(DiagnosticBuffer buffer, bool activate)
     {
         if (s_log is { Alive: true } open)
         {
-            open.Raise();
+            open.Raise(activate);
             return true;
         }
 
         var window = new MacLineWindow(new DiagnosticFeed(buffer), "Log window", LogWindow.Position, LogWindow.Placed);
-        window.Start();
+        window.Start(activate: activate);
         s_log = window;
         return true;
     }
@@ -188,8 +192,8 @@ internal sealed class MacLineWindow : AppKitWindow
 
     protected override Action<int, int>? Placed => _placed;
 
-    /// <summary>The window made, filled with the feed's lines, at the bottom and following, and brought forward.</summary>
-    public void Start(bool show = true)
+    /// <summary>The window made, filled with the feed's lines, at the bottom and following, and brought forward (with the focus unless <paramref name="activate"/> is false).</summary>
+    public void Start(bool show = true, bool activate = true)
     {
         Create(DefaultWidth, DefaultHeight, _position);
         MakeText();
@@ -198,16 +202,16 @@ internal sealed class MacLineWindow : AppKitWindow
         Pull();
         if (show)
         {
-            ShowWindow(activate: true);
+            ShowWindow(activate);
             DiagnosticLog.Info("Viewer", $"{_name} opened.");
         }
     }
 
-    /// <summary>Brought forward with the keyboard.</summary>
-    public void Raise()
+    /// <summary>Brought forward, with the keyboard unless <paramref name="activate"/> is false.</summary>
+    public void Raise(bool activate = true)
     {
         ApplyStyle();
-        ShowWindow(activate: true);
+        ShowWindow(activate);
     }
 
     /// <summary>Shown over <paramref name="feed"/> in place of its own (the process window switched to another process), at the bottom and following.</summary>

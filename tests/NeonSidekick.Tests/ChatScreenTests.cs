@@ -5229,12 +5229,15 @@ public partial class ChatScreenTests : IDisposable
         }
 
         WriteProfileConfig("unc.json", "{ \"shares\": { \"eng\": { \"path\": \"" + _dir.Replace("\\", "/", StringComparison.Ordinal) + "\" } } }");
-        _settings.Update(d => { d.TtsOutput = false; d.UncTools = true; d.UncSharesOffered = ["eng"]; d.DockerTools = true; d.PrintTools = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.UncTools = true; d.UncSharesOffered = ["eng"]; d.DockerTools = true; d.PrintTools = true; d.EventLogTools = true; });
         PushLine("/tools");
         PushLine("/exit");
 
         string output = await RunAsync();
 
+        // The event logs, switched on, say what is missing here, never that they need Windows (2026-10-17, the Mac pass: unpinned on a Mac until then).
+        Assert.Matches(@"·   EventLog \(\d+\) " + System.Text.RegularExpressions.Regex.Escape("(off: " + ToolsText.NoEventLogsReason + ")\n"), output);
+        Assert.DoesNotMatch(@"·   EventLog \(\d+\) " + System.Text.RegularExpressions.Regex.Escape("(off: " + ToolsText.NeedsWindowsReason), output);
         string reason = "(off: " + ToolsText.NeedsWindowsReason + ")\n";
         Assert.DoesNotMatch(@"·   UNC \(\d+\) " + System.Text.RegularExpressions.Regex.Escape(reason), output);   // a Mac mounts shares since 2026-10-11
         Assert.Matches(@"UNC \(\d+\)", output);

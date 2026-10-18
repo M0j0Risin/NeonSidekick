@@ -48,6 +48,30 @@ internal sealed partial class ChatScreen
             case BrowserVerb.Save when line.Url is { } address:
                 SaveBrowserLink(address.AbsoluteUri, line.Name, sink);
                 return;
+            case BrowserVerb.OpenSaved when _browserWindow is null:
+            {
+                // No Browser window (a Mac): the saved link in the default browser, as open_url's (2026-10-17, the Mac pass, the user's call).
+                var links = BrowserLinksNow();
+                if (links.Resolve(line.Text) is { } link && Uri.TryCreate(link.Url, UriKind.Absolute, out var url))
+                {
+                    string answer = OpenInDefaultBrowser(url);
+                    if (answer.StartsWith(ErrorLead, StringComparison.Ordinal))
+                    {
+                        sink.Error(answer[ErrorLead.Length..]);
+                    }
+                    else
+                    {
+                        sink.Notice(answer);
+                    }
+                }
+                else
+                {
+                    Show(BrowserLinkText.NotSaved(line.Text, links.List().Count), sink);
+                }
+
+                return;
+            }
+
             case BrowserVerb.Unsave:
             {
                 var links = BrowserLinksNow();
@@ -215,32 +239,57 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/browser list</c> (later on 2026-10-13): the saved links on <see cref="BrowserLinksMenu"/>'s pane, Enter opening one in the
-    /// Browser window; without the pane, the rows as notices through <paramref name="sink"/>.
+    /// Browser window, or in the default browser where there is none (2026-10-17, the Mac pass, the user's call: it said there was no
+    /// window until then); without the pane, the rows as notices through <paramref name="sink"/>.
     /// </summary>
     private Task ShowBrowserLinksAsync(INoticeSink sink, CancellationToken cancellationToken)
     {
+        bool window = _browserWindow is not null;
         if (_pane.Enabled)
         {
-            Func<BrowserLink, string>? open = _browserWindow is null ? null
-                : link => Uri.TryCreate(link.Url, UriKind.Absolute, out var url) ? OpenInBrowser(url, sink: null) : "Error: " + BrowserLinkText.NotWeb;
+            Func<BrowserLink, string> open = link => !Uri.TryCreate(link.Url, UriKind.Absolute, out var url) ? ErrorLead + BrowserLinkText.NotWeb
+                : window ? OpenInBrowser(url, sink: null) : OpenInDefaultBrowser(url);
             Action changed = () => _browserWindow?.LinksChanged();
-            return new BrowserLinksMenu(BrowserLinksNow, sink, _menuPane, open, _input, changed, _time.LocalTimeZone).ShowAsync(cancellationToken);
+            return new BrowserLinksMenu(BrowserLinksNow, sink, _menuPane, open, _input, changed, _time.LocalTimeZone, window).ShowAsync(cancellationToken);
         }
 
-        PrintBrowserLinks(BrowserLinksNow().List(), sink);
+        PrintBrowserLinks(BrowserLinksNow().List(), sink, window);
         return Task.CompletedTask;
     }
 
-    /// <summary>The saved links as notices: the count, then a numbered line each (<see cref="BrowserLinkText.PrintedRow"/>); none says so.</summary>
-    internal static void PrintBrowserLinks(IReadOnlyList<BrowserLink> links, INoticeSink sink)
+    /// <summary>The error answers' lead, as <see cref="OpenInBrowser"/> and the pane's <c>Say</c> read it.</summary>
+    private const string ErrorLead = "Error: ";
+
+    /// <summary>
+    /// A saved link where there is no Browser window (2026-10-17, the Mac pass, the user's call): the user's default browser, through
+    /// the same <see cref="WebAccess.OpenUrl"/> <c>open_url</c> uses, answered as its one-link answer or its failure (an <see cref="ErrorLead"/> line).
+    /// </summary>
+    private string OpenInDefaultBrowser(Uri url)
+    {
+        try
+        {
+            _web.OpenUrl(url.AbsoluteUri);
+            return WebText.OpenedOne(url.AbsoluteUri);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
+        {
+            return WebText.OpenFailed(url.AbsoluteUri, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The saved links as notices: the count, then a numbered line each (<see cref="BrowserLinkText.PrintedRow"/>); none says so.
+    /// <paramref name="window"/> false words them without a Browser window (2026-10-17, the Mac pass).
+    /// </summary>
+    internal static void PrintBrowserLinks(IReadOnlyList<BrowserLink> links, INoticeSink sink, bool window = true)
     {
         if (links.Count == 0)
         {
-            sink.Notice(BrowserLinkText.NoneSaved);
+            sink.Notice(BrowserLinkText.NoneSavedFor(window));
             return;
         }
 
-        sink.Notice(BrowserLinkText.Caption(links.Count));
+        sink.Notice(BrowserLinkText.Caption(links.Count, window));
         for (int i = 0; i < links.Count; i++)
         {
             sink.Notice(BrowserLinkText.PrintedRow(i + 1, links[i]));
@@ -254,7 +303,7 @@ internal sealed partial class ChatScreen
         int count = links.List().Count;
         if (count == 0)
         {
-            sink.Notice(BrowserLinkText.NoneSaved);
+            sink.Notice(BrowserLinkText.NoneSavedFor(_browserWindow is not null));
             return;
         }
 
@@ -265,7 +314,7 @@ internal sealed partial class ChatScreen
         }
 
         var outcome = links.Clear(out int cleared);
-        Show(BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSaved : BrowserLinkText.Cleared(cleared)), sink);
+        Show(BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSavedFor(_browserWindow is not null) : BrowserLinkText.Cleared(cleared)), sink);
         _browserWindow?.LinksChanged();
     }
 

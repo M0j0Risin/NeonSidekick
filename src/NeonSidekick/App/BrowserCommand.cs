@@ -52,11 +52,14 @@ public static class BrowserCommand
     /// <summary>The switch after <c>list</c> that empties the list, <c>/youtube list --clear</c>'s.</summary>
     public const string ClearSwitch = "--clear";
 
-    /// <summary>The words in the order the completion offers them, with their notes. Pinned.</summary>
+    /// <summary>
+    /// The words in the order the completion offers them, with their notes. Pinned. Off Windows there is no Browser window (2026-10-17,
+    /// the Mac pass): <c>save</c> takes a link, and Enter on <c>list</c>'s rows opens one in the default browser.
+    /// </summary>
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
-        (SaveWord, "save the page the Browser window shows, or /browser save <url> [name]"),
-        (ListWord, "the saved links: Enter opens one in the Browser window; /browser list --clear empties it"),
+        (SaveWord, OperatingSystem.IsWindows() ? "save the page the Browser window shows, or /browser save <url> [name]" : "save a link: /browser save <url> [name]"),
+        (ListWord, OperatingSystem.IsWindows() ? "the saved links: Enter opens one in the Browser window; /browser list --clear empties it" : "the saved links: Enter opens one in your browser; /browser list --clear empties it"),
         (UnsaveWord, "take a saved link off the list: /browser unsave <n|url>"),
         (BotCheckText.ClearWord, "clear the Browser window's history, or everything it keeps: /browser clear history|all"),
     ];
@@ -179,13 +182,14 @@ public static class BrowserCommand
             case BrowserVerb.List:
             {
                 var list = links.List();
-                return list.Count == 0 ? [BrowserLinkText.NoneSaved] : [BrowserLinkText.Caption(list.Count), .. list.Select((l, i) => BrowserLinkText.PrintedRow(i + 1, l))];
+                bool window = OperatingSystem.IsWindows();   // the window's words where there is one (2026-10-17, the Mac pass)
+                return list.Count == 0 ? [BrowserLinkText.NoneSavedFor(window)] : [BrowserLinkText.Caption(list.Count, window), .. list.Select((l, i) => BrowserLinkText.PrintedRow(i + 1, l))];
             }
 
             case BrowserVerb.ClearList:
             {
                 var outcome = links.Clear(out int cleared);
-                return [BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSaved : BrowserLinkText.Cleared(cleared))];
+                return [BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSavedFor(OperatingSystem.IsWindows()) : BrowserLinkText.Cleared(cleared))];
             }
 
             case BrowserVerb.Unsave:

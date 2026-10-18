@@ -37,12 +37,24 @@ public static class BrowserLinkText
     /// <summary>The one dim row of an empty list, under the same buttons, so add works on it. Pinned.</summary>
     public const string EmptyRow = "No saved links yet: a adds one, and Ctrl+D in the Browser window saves its page.";
 
+    /// <summary><see cref="EmptyRow"/> where there is no Browser window (2026-10-17, the Mac pass): no Ctrl+D to name. Pinned.</summary>
+    public const string EmptyRowNoWindow = "No saved links yet: a adds one.";
+
     /// <summary>No saved links, on the transcript (a printed list, a clear of none).</summary>
     public const string NoneSaved = "No saved links yet: /browser save <url> adds one, and Ctrl+D in the Browser window saves its page.";
 
-    /// <summary>The count over the pane's rows and the printed list.</summary>
-    public static string Caption(int count) =>
-        $"{Links(count)}; Enter opens one in the Browser window.";
+    /// <summary><see cref="NoneSaved"/> where there is no Browser window (2026-10-17, the Mac pass). Pinned.</summary>
+    public const string NoneSavedNoWindow = "No saved links yet: /browser save <url> adds one.";
+
+    /// <summary>
+    /// The count over the pane's rows and the printed list. With no Browser window (<paramref name="window"/> false: a Mac, 2026-10-17,
+    /// the Mac pass, the user's call) Enter opens a link in the default browser, and the caption says so rather than promise the window.
+    /// </summary>
+    public static string Caption(int count, bool window = true) =>
+        window ? $"{Links(count)}; Enter opens one in the Browser window." : $"{Links(count)}; Enter opens one in your browser.";
+
+    /// <summary><see cref="NoneSaved"/> or <see cref="NoneSavedNoWindow"/>.</summary>
+    public static string NoneSavedFor(bool window) => window ? NoneSaved : NoneSavedNoWindow;
 
     /// <summary>The pane's name column at most: a longer name is cut with an ellipsis, the footer showing it whole.</summary>
     public const int NameWidth = 40;

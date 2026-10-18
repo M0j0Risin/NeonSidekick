@@ -183,9 +183,9 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 |---|---|
 | `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. Windows only. |
 | `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. Windows only. |
-| `/browser <n>` | Opens saved link *n* in the Browser window. Windows only. |
+| `/browser <n>` | Opens saved link *n* in the Browser window; on a Mac, in your default browser. |
 | `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. Headless, give the address. |
-| `/browser list`, `/browser list --clear` | The saved links in a pane; `--clear` removes them all after a yes (headless: without asking). |
+| `/browser list`, `/browser list --clear` | The saved links in a pane, where Enter opens one (on a Mac, in your default browser); `--clear` removes them all after a yes (headless: without asking). |
 | `/browser unsave <n>\|<url>` | Removes one saved link. Works headless too. |
 | `/youtube`, `/youtube status` | Says what the video player is playing. |
 | `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (needs a *YouTube API key*; 100 quota units a search); use `search` when the words start with one of `/youtube`'s own words (`play`, `list`…). |

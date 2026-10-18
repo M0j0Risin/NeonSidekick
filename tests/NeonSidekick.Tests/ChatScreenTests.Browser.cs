@@ -89,9 +89,14 @@ public sealed partial class ChatScreenTests
         Assert.Equal(0, _browserWindow.CurrentAsks);
     }
 
-    /// <summary>Off Windows (no Browser window) the list still works; opening says the window needs Windows.</summary>
+    /// <summary>
+    /// Off Windows (no Browser window) the list still works, and <c>/browser 1</c> opens the saved link in the default browser through
+    /// open_url's opener (2026-10-17, the Mac pass, the user's call: it said there was no window until then); the printed caption names
+    /// no window. The pane's Enter: <see cref="BrowserLinks_ThePaneWithNoWindow_EnterOpensInTheDefaultBrowser"/>. Bare <c>/browser</c>
+    /// still says there is none (<see cref="BrowserCommand_WithNoWindow_SaysThereIsNone"/>).
+    /// </summary>
     [Fact]
-    public async Task BrowserLinks_WithNoWindow_TheListWorks_OpeningSaysWhy()
+    public async Task BrowserLinks_WithNoWindow_TheListWorks_OpeningGoesToTheDefaultBrowser()
     {
         PushLine("/browser save example.com Ex");
         PushLine("/browser list");
@@ -103,9 +108,36 @@ public sealed partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("Saved \"Ex\" (https://example.com/).", output);
-        Assert.Contains(BrowserLinkText.Caption(1), output);
-        Assert.Contains(BotCheckText.BrowserNotHere, output);
+        Assert.Contains(BrowserLinkText.Caption(1, window: false), output);
+        Assert.DoesNotContain(BrowserLinkText.Caption(1), output);
+        Assert.DoesNotContain(BotCheckText.BrowserNotHere, output);
+        Assert.Equal(["https://example.com/"], _openedUrls);   // /browser 1; with no pane the list is printed and the Enter is an empty line
+        Assert.Contains(WebText.OpenedOne("https://example.com/"), output);   // /browser 1's line on the transcript
         Assert.Single(SavedLinks().List());
+    }
+
+    /// <summary>
+    /// The pane with no Browser window (2026-10-17, the Mac pass, the user's call): Enter opens the highlighted link in the default
+    /// browser, the caption and nothing else naming a window; the pane stays open as with one.
+    /// </summary>
+    [Fact]
+    public async Task BrowserLinks_ThePaneWithNoWindow_EnterOpensInTheDefaultBrowser()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 160;
+        _geometry = new ScreenGeometry(() => null);
+        SavedLinks().Add("https://a.example/", "A", out _);
+        PushLine("/browser list");
+        _console.Input.PushKey(Keys.Enter);   // open A
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(["https://a.example/"], _openedUrls);
+        Assert.Contains(BrowserLinkText.Caption(1, window: false), output);
+        Assert.DoesNotContain(BotCheckText.BrowserNotHere, output);
+        Assert.DoesNotContain(BrowserLinkText.Caption(1), output);
     }
 
     /// <summary>

@@ -48,7 +48,7 @@ public static class LogWindow
 
         if (OperatingSystem.IsMacOS())
         {
-            MacLineWindows.ShowLog(buffer);
+            MacLineWindows.ShowLog(buffer, activate);
             return;
         }
 
