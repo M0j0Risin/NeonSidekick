@@ -19,6 +19,105 @@ public partial class ChatScreenTests
     /// <summary>The fake unified log the chat screen gets (2026-10-18, the Mac event-log plan); null (the default) is a screen with none.</summary>
     private FakeUnifiedLog? _unifiedLog;
 
+    /// <summary>Where the screen's Mac logs that are files are (2026-10-18); null is this account's real places, which no test should read.</summary>
+    private MacLogPlaces? _macLogPlaces;
+
+    /// <summary>
+    /// A Mac's logs for the screen (2026-10-18, the Mac event-log plan's phase 4): the fake unified log with one error, and a temporary home
+    /// holding the Widget crash and the fixture install.log.
+    /// </summary>
+    private void MacLogFixture(bool pane = true)
+    {
+        _unifiedLog = new FakeUnifiedLog();
+        _unifiedLog.Entries.Add(FakeUnifiedLog.Entry(EventNow.AddMinutes(-2), message: "applicationQuit: for app:Single Sign-On"));
+        string reports = Path.Combine(_dir, "maclog", "reports");
+        Directory.CreateDirectory(reports);
+        string fixtures = Path.Combine(AppContext.BaseDirectory, "Fixtures", "maclog");
+        File.Copy(Path.Combine(fixtures, "Widget-2026-09-11-150000.ips"), Path.Combine(reports, "Widget-2026-09-11-150000.ips"));
+        File.Copy(Path.Combine(fixtures, "install.log"), Path.Combine(_dir, "maclog", "install.log"));
+        _macLogPlaces = new MacLogPlaces([new MacCrashFolder(reports, "user")], Path.Combine(_dir, "maclog", "install.log"), "/Users/tester");
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 160;
+        if (pane)
+        {
+            _geometry = new ScreenGeometry(() => null);
+        }
+    }
+
+    [Fact]
+    public async Task MacLog_WithoutThePane_PrintsTheLines()
+    {
+        MacLogFixture(pane: false);
+        StepsWhenIdle(Line("/eventlog crashes"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("crashes on this Mac: 1 report, newest first", output);
+        Assert.Contains("Widget-2026-09-11-150000.ips  2026-09-11 13:00:00 -07:00  crash  Widget[4242]  EXC_CRASH (SIGABRT)", output);
+        Assert.DoesNotContain(MacLogMenu.Title, output);
+    }
+
+    [Fact]
+    public async Task MacLog_ThePane_ShowsThreeLogsAsTabs_AndEnterOpensTheEntrysPage()
+    {
+        MacLogFixture();
+        StepsWhenIdle(Line("/eventlog"), Key(Keys.Enter), Key(Keys.Escape), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(MacLogMenu.Title, output);
+        Assert.Contains("crashes", output);
+        Assert.Contains("install", output);
+        Assert.Contains("▸ 14:03:30 ● " + "loginwindow[395]".PadRight(MacLogMenu.ProcessCells) + " applicationQuit: for app:Single Sign-On", output);
+        Assert.Contains("Friday 11 September 2026", output);
+        Assert.Contains("system entry u", output);
+        Assert.Contains("subsystem:  com.apple.loginwindow.logging", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task MacLog_ACrash_OpensOnItsTab_AndAskDraftsTheQuestion_WhichSends()
+    {
+        MacLogFixture();
+        _settings.Update(d => d.EventLogTools = true);
+        _chat.EnqueueText("Widget aborted.");
+        StepsWhenIdle(Line("/eventlog crashes"), Key(Keys.Enter), Key(Keys.Char('a')), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("▸ 13:00:00 ● Widget[4242]", output);
+        Assert.Contains("crashes report Widget-2026-09-11-150000.ips on this Mac", output);
+        Assert.Single(_chat.Requests);
+        Assert.Equal(MacLogMenu.AskDraft("crashes", "Widget-2026-09-11-150000.ips"), UserText(_chat.Requests[0]));
+    }
+
+    [Fact]
+    public async Task MacLog_Copy_CopiesTheInstallEntry()
+    {
+        MacLogFixture();
+        StepsWhenIdle(Line("/eventlog install"), Key(Keys.Enter), Key(Keys.Char('c')), Key(Keys.Escape), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("▸ 13:30:00 · softwareupdated[534]", output);
+        Assert.Contains(_copied, c => c.StartsWith("install entry i", StringComparison.Ordinal) && c.EndsWith("SUOSUServiceDaemon: idle", StringComparison.Ordinal));
+        Assert.Contains("(" + EventLogText.Glyph + " copied i", output);
+    }
+
+    [Fact]
+    public async Task MacLog_ABadTerm_IsAnError_AndThePaneNeverOpens()
+    {
+        MacLogFixture();
+        StepsWhenIdle(Line("/eventlog system level:loud"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(MacLogText.BadLevel("loud"), output);
+        Assert.DoesNotContain(MacLogMenu.Title, output);
+    }
+
+
     private static readonly DateTimeOffset EventNow = ManualTimeProvider.DefaultUtcNow;
 
     /// <summary>A reader whose System log holds three Service Control Manager errors (records 100, 99, 98) and Application one warning.</summary>

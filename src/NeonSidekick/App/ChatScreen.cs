@@ -1143,6 +1143,7 @@ internal sealed partial class ChatScreen
         Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null,
         EventLog.IEventLogSystem? eventLogSystem = null,
         EventLog.IUnifiedLog? unifiedLog = null,
+        EventLog.MacLogPlaces? macLogPlaces = null,
         Files.IRecycleBin? recycleBin = null,
         Network.IPinger? pinger = null,
         Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve = null,
@@ -1274,7 +1275,7 @@ internal sealed partial class ChatScreen
         // The event logs (2026-10-15): the ticked computers and the working directory's .evtx files; the bots' twins read every computer redacted.
         _eventLog = new EventLog.EventLogAccess(eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().EventLogComputersOffered, _files, time);
         // A Mac's unified log (2026-10-18, the Mac event-log plan): the same four tool names over it when a reader was given.
-        _macLog = new EventLog.MacLogAccess(unifiedLog, () => LocalFull(_settings.ProfileDirectory, _settings.StorageDirectory), _files, time);
+        _macLog = new EventLog.MacLogAccess(unifiedLog, () => LocalFull(_settings.ProfileDirectory, _settings.StorageDirectory), _files, time, macLogPlaces);
         _eventLogTools = unifiedLog is not null ? MacLogTools(_macLog, _effective) : EventLogTools(_eventLog, _effective);
         _eventLogBotTools = unifiedLog is not null ? MacLogTools(_macLog, _effective, forceRedacted: true) : EventLogTools(_eventLog, _effective, forceRedacted: true);
         // The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory; the bots' twins read redacted.

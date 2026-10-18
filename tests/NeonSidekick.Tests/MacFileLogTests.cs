@@ -13,7 +13,8 @@ namespace NeonSidekick.Tests;
 /// A Mac's logs that are files (2026-10-18, the Mac event-log plan's phase 3): the crash and diagnostic reports (<see cref="CrashReports"/>:
 /// the header, the kinds, a crash's exception, termination and faulting thread, a jetsam's ended processes, a text report's headings, the
 /// names a handle may be) and install.log (<see cref="InstallLog"/>: newest first across read edges, continued entries, the handle's time
-/// checked again), then the four tools over both under <c>Fixtures/maclog</c> copied into a temporary home. Portable: plain files.
+/// checked again), then the four tools over both under <c>Fixtures/maclog</c> copied into a temporary home, and <c>/eventlog</c>'s words and
+/// printed lines over all three logs (phase 4, <see cref="MacLogCommand"/>, <see cref="MacLogReads"/>). Portable: plain files and the fake.
 /// </summary>
 public sealed class MacFileLogTests : IDisposable
 {
@@ -62,8 +63,10 @@ public sealed class MacFileLogTests : IDisposable
 
     private static CrashReportInfo Report(string name) => CrashReports.Info(Fixture(name), name, DateTimeOffset.UnixEpoch, "user");
 
+    private readonly FakeUnifiedLog _log = new();
+
     private MacLogAccess Access() =>
-        new(new FakeUnifiedLog(), () => _full, new WorkingDirectory(() => _root, _time), _time, _places);
+        new(_log, () => _full, new WorkingDirectory(() => _root, _time), _time, _places);
 
     private AIFunction Tool(string name, bool forceRedacted = false) =>
         ChatScreen.MacLogTools(Access(), () => _settings, forceRedacted).Single(t => t.Name == name);
@@ -406,5 +409,94 @@ public sealed class MacFileLogTests : IDisposable
 
         Assert.StartsWith("Error: install could not be read: ", answer, StringComparison.Ordinal);
         Assert.Contains("\ninstall  install.log, not readable here: install could not be read: ", logs, StringComparison.Ordinal);
+    }
+
+    // ── /eventlog (phase 4) ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Command_ReadsTheLogAndEveryTerm_TheRestIsText()
+    {
+        var (args, error) = MacLogCommand.Parse("crashes level:fault,error process:Widget subsystem:com.x category:Cat pid:42 exclude:a,b since:2h until:30m frozen app", ManualTimeProvider.DefaultUtcNow, _time.LocalTimeZone);
+
+        Assert.Null(error);
+        Assert.Equal("crashes", args!.Log);
+        Assert.True(args.LogGiven);
+        Assert.Equal("fault,error", args.Levels);
+        Assert.Equal("Widget", args.Process);
+        Assert.Equal(42, args.Pid);
+        Assert.Equal(["a", "b"], args.Exclude);
+        Assert.Equal(ManualTimeProvider.DefaultUtcNow.AddHours(-2), args.Since);
+        Assert.Equal(ManualTimeProvider.DefaultUtcNow.AddMinutes(-30), args.Until);
+        Assert.Equal("frozen app", args.Text);
+        Assert.Equal(MacLogCommand.DefaultLog, MacLogCommand.Parse("", ManualTimeProvider.DefaultUtcNow, _time.LocalTimeZone).Args!.Log);
+    }
+
+    [Theory]
+    [InlineData("system level:loud", "Error: level 'loud' is not one of fault, error, default, info, debug or all.")]
+    [InlineData("system pid:x", "Error: pid 'x' is not a process id.")]
+    [InlineData("system since:soon", "Error: since 'soon' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).")]
+    public void Command_RefusesABadTerm(string line, string expected) =>
+        Assert.Equal(expected, MacLogCommand.Parse(line, ManualTimeProvider.DefaultUtcNow, _time.LocalTimeZone).Error);
+
+    [Fact]
+    public void Command_Completes_TheLogsArchivesAndKeys()
+    {
+        var first = MacLogCommand.Complete("", ["my logs/a.logarchive"]).Select(i => i.Text).ToList();
+        var levels = MacLogCommand.Complete("system level:f", []).Select(i => i.Text).ToList();
+
+        Assert.Equal(["system", "crashes", "install", "\"my logs/a.logarchive\""], first.Take(4));
+        Assert.Contains("process:", first);
+        Assert.Equal(["system level:fault"], levels);
+    }
+
+    [Fact]
+    public async Task Command_PrintsEachLog_InFull_WithTheTermsALogLacksNoted()
+    {
+        _log.Entries.Add(FakeUnifiedLog.Entry(ManualTimeProvider.DefaultUtcNow.AddMinutes(-2), message: "login failed Password=hunter2;"));
+        var access = Access();
+
+        var system = await MacLogCommand.RunAsync(access, "", 20, 20_000, CancellationToken.None);
+        var crashes = await MacLogCommand.RunAsync(access, "crashes process:widget level:error", 20, 20_000, CancellationToken.None);
+        var install = await MacLogCommand.RunAsync(access, "install Products", 20, 20_000, CancellationToken.None);
+        var none = await MacLogCommand.RunAsync(access, "install since:10m", 20, 20_000, CancellationToken.None);
+        var bad = await MacLogCommand.RunAsync(access, "x.evtx", 20, 20_000, CancellationToken.None);
+        var away = await MacLogCommand.RunAsync(new MacLogAccess(null, () => false, new WorkingDirectory(() => _root, _time), _time, _places), "", 20, 20_000, CancellationToken.None);
+
+        Assert.False(system.Failed);
+        Assert.Equal("system on this Mac: 1 entry, newest first", system.Lines[0]);
+        Assert.EndsWith("  error  loginwindow[395]  com.apple.loginwindow.logging/TAL  login failed Password=hunter2;", system.Lines[1], StringComparison.Ordinal);
+        Assert.Equal(["crashes on this Mac: 1 report, newest first", MacLogText.NotApplied("crashes", ["level"])], crashes.Lines.Take(2));
+        Assert.StartsWith("Widget-2026-09-11-150000.ips  ", crashes.Lines[2], StringComparison.Ordinal);
+        Assert.Contains("  crash  Widget[4242]  EXC_CRASH (SIGABRT)", crashes.Lines[2], StringComparison.Ordinal);
+        Assert.Equal("install on this Mac: 1 entry, newest first", install.Lines[0]);
+        Assert.Contains("  softwareupdated[534]  Products found:", install.Lines[1], StringComparison.Ordinal);
+        Assert.StartsWith("no install.log entries since ", none.Lines[0], StringComparison.Ordinal);
+        Assert.True(bad.Failed);
+        Assert.Equal([MacLogText.EvtxIsWindows], bad.Lines);
+        Assert.Equal([EventLogText.NoneHere], away.Lines);
+    }
+
+    [Fact]
+    public async Task Reads_AnEntrysPage_ForEachLog_AndNullWhenGone()
+    {
+        _log.Entries.Add(FakeUnifiedLog.Entry(ManualTimeProvider.DefaultUtcNow.AddMinutes(-2), message: "line one\nline two"));
+        var access = Access();
+        var system = access.Resolve("system", false).Source! with { Redacted = false };
+        var crashes = access.Resolve("crashes", false).Source! with { Redacted = false };
+        var install = access.Resolve("install", false).Source! with { Redacted = false };
+        var unifiedRow = (await MacLogReads.SearchAsync(access, system, new MacLogQuery("system", [], ManualTimeProvider.DefaultUtcNow.AddHours(-1)), 20_000, null, CancellationToken.None)).Value!.Rows.Single();
+        var installRow = (await MacLogReads.SearchAsync(access, install, new MacLogQuery("install", [], ManualTimeProvider.DefaultUtcNow.AddHours(-1)), 20_000, null, CancellationToken.None)).Value!.Rows.Single();
+
+        string? unified = (await MacLogReads.PageAsync(access, system, unifiedRow.Handle, CancellationToken.None)).Value;
+        string? crash = (await MacLogReads.PageAsync(access, crashes, "Widget-2026-09-11-150000.ips", CancellationToken.None)).Value;
+        string? entry = (await MacLogReads.PageAsync(access, install, installRow.Handle, CancellationToken.None)).Value;
+        string? gone = (await MacLogReads.PageAsync(access, crashes, "Gone-2026-09-11-000000.ips", CancellationToken.None)).Value;
+
+        Assert.Equal("system entry " + unifiedRow.Handle + " on this Mac\ntime:       2026-09-11 14:03:30 -07:00\nlevel:      error\nprocess:    loginwindow   pid 395   thread 7\n"
+            + "subsystem:  com.apple.loginwindow.logging\ncategory:   TAL\n\nline one\nline two", unified);
+        Assert.StartsWith("crashes report Widget-2026-09-11-150000.ips on this Mac\ntime:       2026-09-11 13:00:00 -07:00\nkind:       crash\nprocess:    Widget   pid 4242\nfolder:     user   ", crash, StringComparison.Ordinal);
+        Assert.Contains("password=hunter2", crash, StringComparison.Ordinal);   // the user's own page: full text
+        Assert.Equal("install entry " + installRow.Handle + " on this Mac\ntime:       2026-09-11 13:30:00 -07:00\nprocess:    softwareupdated   pid 534\n\nSUOSUServiceDaemon: idle", entry);
+        Assert.Null(gone);
     }
 }

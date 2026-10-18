@@ -104,6 +104,11 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<UI.CompletionItem> EventLogChoices(string argText)
     {
+        if (_macLog.Log is not null)
+        {
+            return MacLogCommand.Complete(argText, _macLog.Archives());   // a Mac's logs (2026-10-18, the Mac event-log plan's phase 4)
+        }
+
         if (!OperatingSystem.IsWindows() || _eventLog.System is null)
         {
             return [];
@@ -120,6 +125,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleEventLogAsync(string args, UI.INoticeSink sink, CancellationToken cancellationToken, bool onWatcher = false)
     {
+        if (_macLog.Log is not null)
+        {
+            await HandleMacLogAsync(args, sink, cancellationToken, onWatcher).ConfigureAwait(false);
+            return;
+        }
+
         if (!OperatingSystem.IsWindows() || _eventLog.System is null)
         {
             sink.Error(EventLogText.NoneHere);
@@ -157,6 +168,57 @@ internal sealed partial class ChatScreen
         var result = onWatcher
             ? await EventLogCommand.RunAsync(_eventLog, args, limit, scanLimit, cancellationToken).ConfigureAwait(false)
             : await _transcript.WithSpinnerAsync(EventLogText.Working, () => EventLogCommand.RunAsync(_eventLog, args, limit, scanLimit, cancellationToken)).ConfigureAwait(false);
+        if (result.Failed)
+        {
+            foreach (string failed in result.Lines)
+            {
+                sink.Error(failed);
+            }
+
+            return;
+        }
+
+        await ShowLinesAsync(TreeText.PaneLabel(EventLogCommand.Word, args), result.Lines, sink, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>/eventlog [line]</c> on a Mac (2026-10-18, the Mac event-log plan's phase 4; <see cref="HandleEventLogAsync"/>'s shape): on the
+    /// pane, <see cref="MacLogMenu"/>; without the pane, or from the Web UI's page, <see cref="MacLogCommand.RunAsync"/>'s lines on the list
+    /// pane. An ask is drafted at once at the idle line, kept for after the pane phase under a reply. Works with the tools off.
+    /// </summary>
+    private async Task HandleMacLogAsync(string args, UI.INoticeSink sink, CancellationToken cancellationToken, bool onWatcher)
+    {
+        var effective = _effective();
+        int limit = Math.Clamp(effective.EventLogMaxEvents, AppSettingsData.MinEventLogMaxEvents, AppSettingsData.MaxEventLogMaxEvents);
+        int scanLimit = Math.Clamp(effective.EventLogScanLimit, AppSettingsData.MinEventLogScanLimit, AppSettingsData.MaxEventLogScanLimit);
+        if (_pane.Enabled && !FromWebNow)
+        {
+            var (line, error) = MacLogCommand.Parse(args, _time.GetUtcNow(), _time.LocalTimeZone);
+            if (line is null)
+            {
+                sink.Error(error!);
+                return;
+            }
+
+            var menu = new MacLogMenu(_macLog, _effective, sink, _menuPane, _info, _copy, () => _pane.Profile.Width);
+            if (await menu.ShowAsync(line, cancellationToken).ConfigureAwait(false) is { } draft)
+            {
+                if (onWatcher)
+                {
+                    _eventLogDraft = draft;
+                }
+                else
+                {
+                    FillDraft(draft, keepOld: true);
+                }
+            }
+
+            return;
+        }
+
+        var result = onWatcher
+            ? await MacLogCommand.RunAsync(_macLog, args, limit, scanLimit, cancellationToken).ConfigureAwait(false)
+            : await _transcript.WithSpinnerAsync(EventLogText.Working, () => MacLogCommand.RunAsync(_macLog, args, limit, scanLimit, cancellationToken)).ConfigureAwait(false);
         if (result.Failed)
         {
             foreach (string failed in result.Lines)

@@ -1263,7 +1263,9 @@ public sealed class SidekickApp
                 // /eventlog (2026-10-15): ahead of the server check too — the logs need no LLM; the rows as lines.
                 if (SlashCommands.Parse(text) is (SlashCommand.EventLog, var eventLogArgs))
                 {
-                    var eventLogResult = await EventLog.EventLogCommand.RunAsync(eventLog, eventLogArgs, EffectiveSettings.EventLogMaxEvents, EffectiveSettings.EventLogScanLimit, cancellationToken).ConfigureAwait(false);
+                    var eventLogResult = _unifiedLog is not null   // a Mac's logs (2026-10-18, the Mac event-log plan's phase 4)
+                        ? await EventLog.MacLogCommand.RunAsync(macLog, eventLogArgs, EffectiveSettings.EventLogMaxEvents, EffectiveSettings.EventLogScanLimit, cancellationToken).ConfigureAwait(false)
+                        : await EventLog.EventLogCommand.RunAsync(eventLog, eventLogArgs, EffectiveSettings.EventLogMaxEvents, EffectiveSettings.EventLogScanLimit, cancellationToken).ConfigureAwait(false);
                     foreach (string eventLogLine in eventLogResult.Lines)
                     {
                         await HeadlessLineAsync((eventLogResult.Failed ? "[error] " : "") + eventLogLine).ConfigureAwait(false);

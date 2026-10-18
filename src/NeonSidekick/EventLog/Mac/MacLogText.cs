@@ -43,6 +43,9 @@ public static class MacLogText
     /// <summary>Where every answer says it read.</summary>
     public const string OnThisMac = "on this Mac";
 
+    /// <summary>The pane's place in its title.</summary>
+    public const string OnThisMacWords = "this Mac";
+
     /// <summary>An entry with no message.</summary>
     public const string NoMessage = "(no message)";
 

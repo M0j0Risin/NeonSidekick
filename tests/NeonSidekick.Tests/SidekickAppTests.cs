@@ -112,9 +112,13 @@ public partial class SidekickAppTests : IDisposable
             // The Docker servers' switcher (2026-10-02): the real host over the stub unless a test hands in the fake.
             dockerServers: dockerServers,
             // The event logs (2026-10-15): none unless a test hands in the fake.
-            eventLogSystem: _eventLogSystem);
+            eventLogSystem: _eventLogSystem,
+            // A Mac's unified log (2026-10-18): none unless a test hands in the fake.
+            unifiedLog: _unifiedLog);
 
     private Fakes.FakeEventLogSystem? _eventLogSystem;
+
+    private Fakes.FakeUnifiedLog? _unifiedLog;
 
     private FakeCameraSystem? _camera;
 
@@ -369,6 +373,22 @@ public partial class SidekickAppTests : IDisposable
         string output = await Headless("/eventlog sys\n/eventlog sys level:loud\n");
         Assert.Contains("System on local: 1 event, newest first" + Environment.NewLine + "#9  2026-09-11 14:05:30 -07:00  critical  Kernel-Power  41  The system rebooted without cleanly shutting down first.", output);
         Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.BadLevel("loud"), output);
+        Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
+    }
+
+    /// <summary><c>/eventlog</c> headless with a Mac's unified log (2026-10-18, the Mac event-log plan's phase 4; any OS, the fake standing in): the rows as lines, full text, a refusal as an error.</summary>
+    [Fact]
+    public async Task Headless_EventLog_WithAUnifiedLog_PrintsItsRows()
+    {
+        _unifiedLog = new Fakes.FakeUnifiedLog();
+        _unifiedLog.Entries.Add(Fakes.FakeUnifiedLog.Entry(Fakes.ManualTimeProvider.DefaultUtcNow.AddMinutes(-2), message: "login failed Password=hunter2;"));
+
+        string output = await Headless("/eventlog\n/eventlog system level:loud\n/eventlog nope\n");
+
+        Assert.Contains("system on this Mac: 1 entry, newest first" + Environment.NewLine + "u", output);
+        Assert.Contains("  2026-09-11 14:03:30 -07:00  error  loginwindow[395]  com.apple.loginwindow.logging/TAL  login failed Password=hunter2;", output);
+        Assert.Contains("[error] " + NeonSidekick.EventLog.MacLogText.BadLevel("loud"), output);
+        Assert.Contains("[error] " + NeonSidekick.EventLog.MacLogText.UnknownLog("nope"), output);
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
     }
 
