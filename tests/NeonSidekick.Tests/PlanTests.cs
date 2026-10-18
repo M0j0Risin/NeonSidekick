@@ -297,6 +297,16 @@ public class PlanTests : IDisposable
     [InlineData("gaps 3 4", true, "Detail")]
     [InlineData("gaps advisor 3", false, "NotPlanning")]
     [InlineData("gaps 3 4", false, "Enter")]
+    // The confirm reviewer, /plan chat and /plan ready (2026-10-17).
+    [InlineData("gaps confirm", true, "CloseGaps")]
+    [InlineData("gaps confirm 3", true, "CloseGaps")]
+    [InlineData("chat", false, "Chat")]
+    [InlineData(" CHAT ", true, "Chat")]
+    [InlineData("chat with the vendor about it", false, "Enter")]
+    [InlineData("chat with the vendor about it", true, "Detail")]
+    [InlineData("ready", true, "Ready")]
+    [InlineData("ready", false, "NotPlanning")]
+    [InlineData("ready now please", true, "Detail")]
     public void ParsePlanArgs_SubcommandsOnlyWhole(string args, bool planning, string expected) =>
         Assert.Equal(expected, ChatScreen.ParsePlanArgs(args, planning).ToString());
 
@@ -316,6 +326,7 @@ public class PlanTests : IDisposable
     [InlineData("3 4", "NotGaps", null, null, "")]
     [InlineData("model three", "NotGaps", null, null, "")]
     [InlineData("in the auth flow", "NotGaps", null, null, "")]
+    [InlineData("confirm 3", "Ok", "Confirm", 3, "")]
     public void ParseGapsArgs_ReadsAReviewerAndACount(string after, string expected, string? reviewer, int? passes, string word)
     {
         var outcome = PlanText.ParseGapsArgs(after, out var named, out int? count, out string fault);
@@ -330,7 +341,7 @@ public class PlanTests : IDisposable
     public void GapsWords_ThePinnedSentences()
     {
         Assert.Equal("'25' passes: /plan gaps takes 0 to 20, 0 for no cap", PlanText.GapPassesRangeError("25"));
-        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor or any, and a pass count (0–20)", PlanText.UnknownReviewerError("x"));
+        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor, any or confirm, and a pass count (0–20)", PlanText.UnknownReviewerError("x"));
         Assert.Equal(PlanText.Glyph + " /plan gaps 0 means no limit, but headless has no Esc: at most 20 passes.", PlanText.GapsHeadlessCapNotice(20, fromCommand: true));
         Assert.Equal(PlanText.Glyph + " LLM plan gap passes is 0 (no limit), but headless has no Esc: at most 20 passes.", PlanText.GapsHeadlessCapNotice(20));
     }
@@ -359,7 +370,7 @@ public class PlanTests : IDisposable
         var properties = _tool.JsonSchema.GetProperty("properties");
 
         Assert.Equal(PresentPlanTool.ToolName, _tool.Name);
-        Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.NameArgument, PresentPlanTool.MarkdownArgument, PresentPlanTool.GapsArgument], properties.EnumerateObject().Select(p => p.Name));
+        Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.NameArgument, PresentPlanTool.MarkdownArgument, PresentPlanTool.GapsArgument, PresentPlanTool.CheckedArgument, PresentPlanTool.MinorArgument], properties.EnumerateObject().Select(p => p.Name));
         Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.MarkdownArgument], _tool.JsonSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
     }
 

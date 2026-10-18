@@ -29,10 +29,35 @@ public static class PlanText
     /// <summary><c>/plan approve --fresh</c>: the conversation cleared before the plan is carried out, the plan's text sent with the message.</summary>
     public const string FreshSwitch = "--fresh";
 
+    /// <summary>
+    /// <c>/plan chat</c> and <c>/plan ready</c> (2026-10-17, the user's ask): plan mode opened to talk a plan through before it is written,
+    /// and the way to ask for it. Each only as the whole argument; with words after it, a requirement or detail as before.
+    /// </summary>
+    public const string ChatWord = "chat";
+    public const string ReadyWord = "ready";
+
     /// <summary>The input row's placeholder while planning.</summary>
     public const string Placeholder = "Planning — add detail, or /plan approve · /plan cancel";
 
-    public const string UsageError = "Usage: /plan <what you want done> — the model plans it with you and nothing is changed until you approve";
+    /// <summary>The placeholder while talking a plan through (2026-10-17, <c>/plan chat</c>).</summary>
+    public const string TalkingPlaceholder = "Planning — talk it through; /plan ready for the plan · /plan cancel";
+
+    public const string UsageError = "Usage: /plan <what you want done>, or /plan chat to talk it through first — the model plans it with you and nothing is changed until you approve";
+
+    /// <summary><c>/plan chat</c> outside plan mode (2026-10-17): nothing sent, the first message opens it.</summary>
+    public const string ChatEnteredNotice = Glyph + " Plan mode, talking it through: the model reads and researches but changes nothing, and writes the plan when you ask for it (or /plan ready). /plan cancel leaves.";
+
+    /// <summary><c>/plan chat</c> while planning (2026-10-17): talking again.</summary>
+    public const string ChatResumedNotice = Glyph + " Talking it through again: the model won't present until you ask.";
+
+    /// <summary>The turn <c>/plan ready</c> sends (2026-10-17). Pinned.</summary>
+    public const string ReadyMessage = "I'm ready: present the plan now with present_plan.";
+
+    /// <summary><c>/plan ready</c> before the first message of a <c>/plan chat</c> (2026-10-17): nothing sent. Pinned.</summary>
+    public const string ReadyTooSoonError = "Say what the plan is for first: your first message becomes its requirement";
+
+    /// <summary>The line after <see cref="DoneNotice"/> when a plan is complete (2026-10-17, the user's ask and words). Pinned.</summary>
+    public const string ComesTogetherNotice = Glyph + " I ❤️ it when a plan comes together.";
     public const string NeedsToolsError = "Plan mode needs the model's tools: switch LLM offer tools on (/settings) and try again";
     public const string NothingPresentedError = "No plan has been presented yet: ask for it (\"present the plan\") and approve it on the pane, or /plan cancel";
     public static string PlanUnreadableError(string path) => $"The plan file {path} could not be read; plan mode stays on — present it again, or /plan cancel";
@@ -48,7 +73,7 @@ public static class PlanText
     public const string GapsWord = "gaps";
 
     /// <summary>The reviewer words <c>/plan gaps</c> takes, in <see cref="PlanReviewer"/>'s order.</summary>
-    public static readonly IReadOnlyList<string> ReviewerWords = ["model", "advisor", "any"];
+    public static readonly IReadOnlyList<string> ReviewerWords = ["model", "advisor", "any", "confirm"];
 
     /// <summary>The word for <paramref name="reviewer"/>, as <c>/plan gaps</c> takes it.</summary>
     public static string ReviewerWord(PlanReviewer reviewer) => ReviewerWords[(int)reviewer];
@@ -129,7 +154,7 @@ public static class PlanText
     }
 
     public static string UnknownReviewerError(string word) =>
-        $"No reviewer named '{word}': /plan gaps takes model, advisor or any, and a pass count ({N(Settings.AppSettingsData.MinPlanGapPasses)}–{N(Settings.AppSettingsData.MaxPlanGapPasses)})";
+        $"No reviewer named '{word}': /plan gaps takes model, advisor, any or confirm, and a pass count ({N(Settings.AppSettingsData.MinPlanGapPasses)}–{N(Settings.AppSettingsData.MaxPlanGapPasses)})";
 
     /// <summary><c>/plan gaps 25</c> (2026-10-17): a pass count out of range, nothing started. Pinned.</summary>
     public static string GapPassesRangeError(string word) =>
@@ -164,7 +189,7 @@ public static class PlanText
     public static string ListLine(PlanListing plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        string status = StatusWord(plan);
+        string status = StatusWord(plan) + ReviewMarkPart(plan.Review);
         string steps = plan.Total > 0 ? $" · {N(plan.Done)}/{N(plan.Total)}" : "";
         string when = plan.Updated is { } u && u != DateTimeOffset.MinValue ? " · " + u.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
         return $"  {plan.Name} — {plan.Title} ({status}{steps}{when})";
@@ -174,9 +199,20 @@ public static class PlanText
     public static string CompletionNote(PlanListing plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        string status = StatusWord(plan);
+        string status = StatusWord(plan) + ReviewMarkPart(plan.Review);
         return plan.Total > 0 ? $"{status} · {N(plan.Done)}/{N(plan.Total)} · {plan.Title}" : $"{status} · {plan.Title}";
     }
+
+    /// <summary>The words <c>/plan open</c> puts after the status for a plan's last review (2026-10-17): <c>confirmed</c>, <c>reviewed</c>, <c>edited since review</c>. Pinned.</summary>
+    public static string ReviewMarkWord(PlanReviewMark mark) => mark switch
+    {
+        PlanReviewMark.Confirmed => "confirmed",
+        PlanReviewMark.Reviewed => "reviewed",
+        PlanReviewMark.EditedSince => "edited since review",
+        _ => "",
+    };
+
+    private static string ReviewMarkPart(PlanReviewMark mark) => mark == PlanReviewMark.None ? "" : " · " + ReviewMarkWord(mark);
 
     /// <summary>A listed plan's status word: its header's, <see cref="UnreadableWord"/> for a file not read whole (2026-10-17), else <c>no header</c>.</summary>
     private static string StatusWord(PlanListing plan) =>
@@ -188,6 +224,7 @@ public static class PlanText
     /// <summary><c>MarkFile</c> on a plan file that is there but cannot be read whole (2026-10-17): the status was left as it was. Pinned.</summary>
     public static string StatusUnwrittenWarning(string path) => $"The plan file {path} could not be read whole; its status was not updated";
 
+    /// <summary>A plan complete; <see cref="ComesTogetherNotice"/> follows it on the next line (2026-10-17).</summary>
     public static string DoneNotice(string path) => $"{Glyph} Every step of {path} is ticked: marked done.";
 
     public static string IncompleteNotice(string path, int done, int total) =>
@@ -200,46 +237,99 @@ public static class PlanText
 
     // ── The gap-closing loop (2026-10-13) ───────────────────────────────────
 
-    /// <summary>The message each pass sends: one line, since the rules ride in the directive (<see cref="GapReviewLines"/>). Pinned.</summary>
-    public static string GapPassMessage(string path, int pass, int limit, PlanReviewer reviewer) =>
-        $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): find and close its gaps, then call present_plan.";
+    /// <summary>
+    /// The message each pass sends: one line, since the rules ride in the directive (<see cref="GapReviewLines"/>). Pinned. A pass after a clean
+    /// one (2026-10-17, <paramref name="cleanSoFar"/> above 0) asks for another look, not a "confirm", so the model isn't steered toward agreeing.
+    /// </summary>
+    public static string GapPassMessage(string path, int pass, int limit, PlanReviewer reviewer, int cleanSoFar = 0) => cleanSoFar > 0
+        ? $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): the last pass found no gaps; review it again, close any you find, then call present_plan."
+        : $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): find and close its gaps, then call present_plan.";
 
-    /// <summary>A pass that saved a revision with gaps closed: the count, then each gap (at most <see cref="PassNoticeGaps"/>, then how many more).</summary>
-    public static IReadOnlyList<string> PassNoticeLines(int pass, int limit, int revision, IReadOnlyList<string> gaps)
+    /// <summary>
+    /// A pass that saved a revision with gaps closed: the count (and since 2026-10-17 its minor fixes), then each gap and each minor fix
+    /// (at most <see cref="PassNoticeGaps"/> lines, then how many more).
+    /// </summary>
+    public static IReadOnlyList<string> PassNoticeLines(int pass, int limit, int revision, IReadOnlyList<string> gaps, IReadOnlyList<string>? minor = null)
     {
         ArgumentNullException.ThrowIfNull(gaps);
-        var lines = new List<string>(Math.Min(gaps.Count, PassNoticeGaps) + 2)
+        minor ??= [];
+        var lines = new List<string>(PassNoticeGaps + 2)
         {
-            $"{Glyph} Gap review pass {PassOf(pass, limit)}: revision {N(revision)} saved, {Gaps(gaps.Count)} closed.",
+            $"{Glyph} Gap review pass {PassOf(pass, limit)}: revision {N(revision)} saved, {Gaps(gaps.Count)} closed{MinorPart(minor.Count)}.",
         };
-        lines.AddRange(gaps.Take(PassNoticeGaps).Select(gap => "  · " + Flatten(gap)));
-        if (gaps.Count > PassNoticeGaps)
-        {
-            lines.Add($"  … and {N(gaps.Count - PassNoticeGaps)} more");
-        }
-
+        lines.AddRange(ItemLines(gaps.Select(Flatten).Concat(minor.Select(m => MinorLabel + Flatten(m))).ToList()));
         return lines;
     }
 
     /// <summary>The most gaps a pass's notice lists; the --log line has them all.</summary>
     public const int PassNoticeGaps = 10;
 
-    /// <summary>The approval pane's note once a pass found no gaps.</summary>
-    public static string ConvergedNote(int passes, int closed) =>
-        $"no gaps left after {Passes(passes)}, {Gaps(closed)} closed";
+    /// <summary>
+    /// A clean pass that did not end the review (2026-10-17): the streak, its minor fixes, then what it checked and each minor fix (at most
+    /// <see cref="PassNoticeGaps"/> lines). Said only when another pass follows. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> CleanPassNoticeLines(int pass, int limit, int clean, int needed, IReadOnlyList<string> @checked, IReadOnlyList<string>? minor = null)
+    {
+        ArgumentNullException.ThrowIfNull(@checked);
+        minor ??= [];
+        var lines = new List<string>(PassNoticeGaps + 2) { CleanPassNotice(pass, limit, clean, needed, minor.Count) };
+        lines.AddRange(ReportLines(@checked, minor));
+        return lines;
+    }
 
-    public static string ConvergedNotice(string path, int passes, int closed) =>
-        $"{Glyph} Gap review done: no gaps left in {path} after {Passes(passes)}, {Gaps(closed)} closed.";
+    /// <summary>The head of <see cref="CleanPassNoticeLines"/>: <c>📝 Gap review pass 2 of 5: no gaps found (1 of 2 clean passes); checking again.</c> Pinned.</summary>
+    public static string CleanPassNotice(int pass, int limit, int clean, int needed, int minor = 0) =>
+        $"{Glyph} Gap review pass {PassOf(pass, limit)}: no gaps found ({N(clean)} of {CleanPassesWord(needed)}){MinorPart(minor)}; checking again.";
 
-    /// <summary>The approval pane's note when the loop stopped short at its limit or on a stall, the last pass's gaps counted.</summary>
-    public static string StoppedNote(PlanGapStop reason, int passes, int left) => reason == PlanGapStop.Limit
-        ? $"gap review stopped at its limit after {Passes(passes)}; the last pass still closed {Gaps(left)}"
-        : $"gap review stalled after {Passes(passes)}: the plan stopped changing or the same gaps came back";
+    /// <summary>A pass limit below the clean count (2026-10-17, the user's call): said once as pass 1 begins. Pinned.</summary>
+    public static string CleanLoweredNotice(int limit, int asked) =>
+        $"{Glyph} The pass limit ({N(limit)}) is below LLM plan gap clean passes ({N(asked)}): this review finishes on {CleanRun(limit)}.";
+
+    /// <summary>The approval pane's note once enough passes found no gaps; with <paramref name="clean"/> above 1 (2026-10-17), the confirmation said.</summary>
+    public static string ConvergedNote(int passes, int closed, int clean = 1) =>
+        $"no gaps left after {Passes(passes)}, {Gaps(closed)} closed" + Confirmed(clean);
+
+    public static string ConvergedNotice(string path, int passes, int closed, int clean = 1) =>
+        $"{Glyph} Gap review done: no gaps left in {path} after {Passes(passes)}, {Gaps(closed)} closed" + Confirmed(clean) + ".";
+
+    /// <summary>The lines under a convergence's notice (2026-10-17): what its last pass checked, and its minor fixes.</summary>
+    public static IReadOnlyList<string> ReportLines(IReadOnlyList<string> @checked, IReadOnlyList<string>? minor = null)
+    {
+        ArgumentNullException.ThrowIfNull(@checked);
+        return ItemLines(@checked.Select(c => CheckedLabel + Flatten(c)).Concat((minor ?? []).Select(m => MinorLabel + Flatten(m))).ToList());
+    }
+
+    private const string CheckedLabel = "checked: ";
+    private const string MinorLabel = "minor: ";
+
+    /// <summary><c>  · item</c> lines, at most <see cref="PassNoticeGaps"/>, then <c>  … and N more</c>.</summary>
+    private static List<string> ItemLines(IReadOnlyList<string> items)
+    {
+        var lines = items.Take(PassNoticeGaps).Select(item => "  · " + item).ToList();
+        if (items.Count > PassNoticeGaps)
+        {
+            lines.Add($"  … and {N(items.Count - PassNoticeGaps)} more");
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// The approval pane's note when the loop stopped short at its limit or on a stall, the last pass's gaps counted; at the limit with the
+    /// last pass clean (2026-10-17, <see cref="PlanGapStop.Unconfirmed"/>) the streak it got to.
+    /// </summary>
+    public static string StoppedNote(PlanGapStop reason, int passes, int left, int clean = 0, int needed = 1) => reason switch
+    {
+        PlanGapStop.Limit => $"gap review stopped at its limit after {Passes(passes)}; the last pass still closed {Gaps(left)}",
+        PlanGapStop.Unconfirmed => $"no gaps in the last pass, but the limit came after {N(clean)} of {CleanPassesWord(needed)}",
+        _ => $"gap review stalled after {Passes(passes)}: the plan stopped changing or the same gaps came back",
+    };
 
     /// <summary>Why the loop stopped, said once it has (a convergence has <see cref="ConvergedNotice"/>).</summary>
     public static string GapStopNotice(PlanGapStop reason, int passes, int closed) => reason switch
     {
         PlanGapStop.Limit => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed; the last pass still found some.",
+        PlanGapStop.Unconfirmed => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed: the last pass found no gaps, but there was no pass left to check it again.",
         PlanGapStop.Stalled => $"{Glyph} Gap review stopped after {Passes(passes)}, {Gaps(closed)} closed: the plan stopped changing or the same gaps came back.",
         PlanGapStop.NoRevision => $"{Glyph} Gap review stopped: pass {N(passes)} saved no revision. /plan gaps starts a new review; /plan approve starts the plan.",
         PlanGapStop.UserSpoke => $"{Glyph} Gap review stopped after {Passes(passes)} for your message. /plan gaps starts a new review.",
@@ -259,12 +349,108 @@ public static class PlanText
         ? $"{Glyph} /plan gaps 0 means no limit, but headless has no Esc: at most {N(cap)} passes."
         : $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
-    /// <summary>The --log line of a pass: its gaps whole, and whether it asked an advisor.</summary>
-    public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked)
+    /// <summary>The --log line of a pass: its gaps whole, whether it asked an advisor, and since 2026-10-17 its minor fixes and its cost.</summary>
+    public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked, IReadOnlyList<string>? minor = null, PlanPassRecord? cost = null)
     {
         ArgumentNullException.ThrowIfNull(gaps);
-        return $"plan gaps: pass {N(pass)}, revision {N(revision)}, {Gaps(gaps.Count)} closed" + (advisorAsked ? ", an advisor asked" : "") + (gaps.Count > 0 ? ": " + string.Join(" | ", gaps.Select(Flatten)) : "");
+        minor ??= [];
+        return $"plan gaps: pass {N(pass)}, revision {N(revision)}, {Gaps(gaps.Count)} closed{MinorPart(minor.Count)}" + (advisorAsked ? ", an advisor asked" : "") + CostPart(cost)
+            + (gaps.Count > 0 ? ": " + string.Join(" | ", gaps.Select(Flatten)) : "")
+            + (minor.Count > 0 ? (gaps.Count > 0 ? "; " : ": ") + MinorLabel + string.Join(" | ", minor.Select(Flatten)) : "");
     }
+
+    /// <summary>The --log line of a clean pass (2026-10-17): <c>plan gaps: pass N clean (k of n)</c>, its cost, what it checked and its minor fixes, every item.</summary>
+    public static string CleanPassLogLine(int pass, int clean, int needed, IReadOnlyList<string> @checked, IReadOnlyList<string>? minor = null, bool advisorAsked = false, PlanPassRecord? cost = null)
+    {
+        ArgumentNullException.ThrowIfNull(@checked);
+        minor ??= [];
+        return $"plan gaps: pass {N(pass)} clean ({N(clean)} of {N(needed)})" + (advisorAsked ? ", an advisor asked" : "") + CostPart(cost)
+            + (@checked.Count > 0 ? ": " + CheckedLabel + string.Join(" | ", @checked.Select(Flatten)) : "")
+            + (minor.Count > 0 ? (@checked.Count > 0 ? "; " : ": ") + MinorLabel + string.Join(" | ", minor.Select(Flatten)) : "");
+    }
+
+    /// <summary>
+    /// What each confirming pass looks hardest at (2026-10-17, the user's pick of idea #1), in turn: the loop's <see cref="PlanGapLoop.Confirmations"/>
+    /// counts across streaks, the fifth wrapping to the first. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ConfirmFocuses =
+    [
+        "the steps' order and dependencies: what each step needs done before it",
+        "how each step is verified, and what proves the whole plan worked",
+        "the risks: what could go wrong, how it would show, and how it is undone",
+        "every file, API, specification, version or setting the plan assumes, and whether it was read or looked up",
+    ];
+
+    /// <summary><see cref="ConfirmFocuses"/>' short labels for the review summary (2026-10-17). Pinned.</summary>
+    public static readonly IReadOnlyList<string> ConfirmFocusLabels = ["order", "verification", "risks", "assumptions"];
+
+    /// <summary>
+    /// The review summary said at every stop with a pass recorded (2026-10-17, the user's approval of later idea #2): a heading with the
+    /// totals, one line per pass (its gaps or <c>clean</c>, its minor fixes, a confirming pass's focus, an advisor's under <c>confirm</c>, its
+    /// time and tokens when metered), the last line ending with how it stopped. Pinned.
+    /// </summary>
+    public static IReadOnlyList<string> ReviewSummaryLines(IReadOnlyList<PlanPassRecord> history, PlanGapStop reason, int cleanPasses = 1)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        if (history.Count == 0)
+        {
+            return [];
+        }
+
+        var timed = history.Where(p => p.Elapsed is not null).ToList();
+        string totals = timed.Count == 0 ? ""
+            : ", " + NeonSidekick.UI.ThinkingFoldText.Duration(timed.Aggregate(TimeSpan.Zero, (sum, p) => sum + p.Elapsed!.Value))
+              + TokensPart(timed.Sum(p => p.Tokens ?? 0), 0);
+        var lines = new List<string>(history.Count + 1) { $"{Glyph} Gap review, {Passes(history.Count)}{totals}:" };
+        for (int i = 0; i < history.Count; i++)
+        {
+            var p = history[i];
+            string outcome = p.Gaps > 0 ? Gaps(p.Gaps) : p.Clean ? "clean" : "nothing presented";
+            string marks = string.Join(", ", new[] { p.Focus >= 0 ? ConfirmFocusLabels[p.Focus % ConfirmFocusLabels.Count] : null, p.Advisor ? "advisor" : null }.OfType<string>());
+            string line = $"  pass {N(p.Pass)}: {outcome}{MinorPart(p.Minor)}" + (marks.Length > 0 ? $" ({marks})" : "")
+                + (i == history.Count - 1 ? ", " + EndingWord(reason, cleanPasses) : "");
+            if (p.Elapsed is { } elapsed)
+            {
+                line += " · " + NeonSidekick.UI.ThinkingFoldText.Duration(elapsed) + TokensPart(p.Tokens ?? 0, p.AdvisorTokens ?? 0, " · ");
+            }
+
+            lines.Add(line);
+        }
+
+        return lines;
+    }
+
+    /// <summary>How a review ended, as the summary's last line says it (2026-10-17).</summary>
+    private static string EndingWord(PlanGapStop reason, int cleanPasses) => reason switch
+    {
+        PlanGapStop.Converged => cleanPasses >= 2 ? "confirmed" : "no gaps left",
+        PlanGapStop.Unconfirmed => "cut short",
+        PlanGapStop.Stopped => "stopped",
+        PlanGapStop.Limit => "limit",
+        PlanGapStop.Stalled => "stalled",
+        PlanGapStop.NoRevision => "no revision",
+        _ => "your message",
+    };
+
+    /// <summary>
+    /// The plan file's <c>review:</c> line (2026-10-17, the user's approval of later idea #3) for a review that ended on its own, with the body's
+    /// fingerprint (<see cref="PlanDocument.Fingerprint"/>); read back by <see cref="PlanReview.TryParse"/>. Pinned.
+    /// </summary>
+    public static string ReviewLine(int passes, int closed, PlanGapStop outcome, int cleanPasses, string fingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(fingerprint);
+        string how = outcome switch
+        {
+            PlanGapStop.Converged => cleanPasses >= 2 ? $"confirmed by {N(cleanPasses)} clean passes" : ReviewOneCleanPass,
+            PlanGapStop.Unconfirmed => "cut short at the limit",
+            PlanGapStop.Limit => "stopped at the limit with gaps left",
+            _ => "stalled",
+        };
+        return $"{Passes(passes)}, {Gaps(closed)} closed, {how} (body {fingerprint})";
+    }
+
+    /// <summary>A review that converged on one clean pass, as its <c>review:</c> line says it (2026-10-17): "reviewed", not "confirmed".</summary>
+    public const string ReviewOneCleanPass = "no gaps left after 1 clean pass";
 
     private static string PassOf(int pass, int limit) => limit > 0 ? $"{N(pass)} of {N(limit)}" : N(pass);
 
@@ -272,16 +458,43 @@ public static class PlanText
 
     private static string Gaps(int gaps) => gaps == 1 ? "1 gap" : $"{N(gaps)} gaps";
 
+    /// <summary><c>, 2 minor fixes</c> / <c>, 1 minor fix</c>, nothing at 0 (2026-10-17).</summary>
+    private static string MinorPart(int minor) => minor <= 0 ? "" : minor == 1 ? ", 1 minor fix" : $", {N(minor)} minor fixes";
+
+    /// <summary><c>2 clean passes</c> / <c>1 clean pass</c>.</summary>
+    private static string CleanPassesWord(int count) => count == 1 ? "1 clean pass" : $"{N(count)} clean passes";
+
+    /// <summary><c>1 clean pass</c> / <c>2 clean passes in a row</c>.</summary>
+    private static string CleanRun(int count) => count == 1 ? "1 clean pass" : $"{N(count)} clean passes in a row";
+
+    private static string Confirmed(int clean) => clean > 1 ? $", confirmed by {N(clean)} clean passes" : "";
+
+    /// <summary><c>, 41.2k tokens (12.0k advisor)</c>; nothing when no tokens were reported (a server that sends no usage).</summary>
+    private static string TokensPart(long tokens, long advisor, string lead = ", ") =>
+        tokens <= 0 && advisor <= 0 ? "" : lead + NeonSidekick.App.UsageText.Compact(tokens) + (advisor > 0 ? " (" + NeonSidekick.App.UsageText.CompactNumber(advisor) + " advisor)" : "");
+
+    /// <summary>A pass's time and tokens for its --log line, nothing when it was not metered.</summary>
+    private static string CostPart(PlanPassRecord? cost) => cost is { Elapsed: { } elapsed }
+        ? ", " + NeonSidekick.UI.ThinkingFoldText.Duration(elapsed) + TokensPart(cost.Tokens ?? 0, cost.AdvisorTokens ?? 0)
+        : "";
+
     public static IReadOnlyList<string> ShowLines(PlanSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var lines = new List<string>(3) { $"{Glyph} Planning: {session.Requirement}" };
+        string requirement = session.RequirementIsOpening ? "(the conversation began with) " + session.Requirement : session.Requirement;
+        var lines = new List<string>(4) { $"{Glyph} Planning: {requirement}" };
+        if (session.Talking)
+        {
+            lines.Add("  Talking it through: the model writes the plan when you ask (or /plan ready)");
+        }
+
         lines.Add(session.Path is { } path
             ? $"  Plan: {path} (revision {N(session.Revision)}) — /plan approve [--fresh] starts it"
             : "  Plan: not presented yet");
         if (session.Closing is { Pending: false } loop)
         {
-            lines.Add($"  Closing gaps: pass {PassOf(loop.Pass, loop.Limit)} ({ReviewerWord(loop.Reviewer)}), {Gaps(loop.Closed)} closed so far");
+            lines.Add($"  Closing gaps: pass {PassOf(loop.Pass, loop.Limit)} ({ReviewerWord(loop.Reviewer)}), {Gaps(loop.Closed)} closed so far"
+                + (loop.CleanStreak > 0 ? $", {N(loop.CleanStreak)} of {CleanPassesWord(loop.CleanPasses)}" : ""));
         }
 
         return lines;
@@ -301,8 +514,8 @@ public static class PlanText
 
     /// <summary>The second page Close gaps… opens while advisors are offered: who reviews.</summary>
     public const string ReviewerTitle = "Close gaps: who reviews?";
-    public static readonly IReadOnlyList<string> ReviewerRows = ["Close gaps (model)", "Close gaps (advisor)", "Close gaps (any)"];
-    public const string ReviewerKeys = "m / a / y = pick · Enter = choose · Esc = back";
+    public static readonly IReadOnlyList<string> ReviewerRows = ["Close gaps (model)", "Close gaps (advisor)", "Close gaps (any)", "Close gaps (model, advisor confirms)"];
+    public const string ReviewerKeys = "m / a / y / c = pick · Enter = choose · Esc = back";
     public const string FeedbackKeys = "Enter = send · Esc = back";
     public const string FeedbackPrompt = "What should change? Type it below (empty for nothing in particular).";
 
@@ -335,47 +548,139 @@ public static class PlanText
     /// <see cref="Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?)"/> with a gap-closing pass under way (2026-10-13):
     /// <see cref="GapReviewLines"/> before the state line, and no advisors bullet when the model reviews alone. Pinned.
     /// </summary>
-    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap)
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap) =>
+        Directive(requirement, path, revision, advisors, gap, null);
+
+    /// <summary>
+    /// <see cref="Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?, PlanGapState?)"/> with <paramref name="research"/>
+    /// (2026-10-17, the user's ask: a plan that rests on an API or a spec should look it up, not guess): the web tools the turn offers of
+    /// <see cref="ResearchTools"/>, named by <see cref="WebResearchLine"/> after the first rule and, in a gap pass, by its research line;
+    /// null or none, the directive as before. Pinned.
+    /// </summary>
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap, IReadOnlyList<string>? research) =>
+        Directive(requirement, path, revision, advisors, gap, research, default);
+
+    /// <summary>
+    /// <see cref="Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?, PlanGapState?, IReadOnlyList{string}?)"/> with
+    /// <paramref name="talk"/> (2026-10-17, <c>/plan chat</c>): while talking, the opening says the user wants to talk it through (and what the
+    /// conversation began with, or that nothing is said yet) and <see cref="TalkingLine"/> replaces the present bullet; the default, the
+    /// directive as before. Pinned.
+    /// </summary>
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap, IReadOnlyList<string>? research, PlanTalk talk)
     {
         ArgumentNullException.ThrowIfNull(requirement);
         bool offered = advisors is { Count: > 0 };
+        bool web = research is { Count: > 0 };
         string state = path is null
             ? "No plan has been presented yet."
             : $"The plan so far is in {path} (revision {N(revision)}); present_plan overwrites it with the next revision.";
+        string opening = talk.Talking && requirement.Trim().Length == 0
+            ? "PLAN MODE is on. The user wants to talk a plan through before anything is done; they haven't said what it is for yet.\n"
+            : talk.Opening
+                ? (talk.Talking ? "PLAN MODE is on. The user wants to talk a plan through before anything is done." : "PLAN MODE is on. The user asked for a plan before anything is done.")
+                  + " The conversation began with: \"" + Flatten(requirement) + "\"\n"
+                : "PLAN MODE is on. The user asked for a plan before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n";
         return
-            "PLAN MODE is on. The user asked for a plan before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n" +
+            opening +
             "- Do not change anything: write no file, change no repository, run no command that changes state, send no message and change no setting. Only read-only tools are offered; use them to research what the plan needs.\n" +
-            "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n" +
+            (web ? WebResearchLine(research!) + "\n" : "") +
+            (gap is { AskUser: false } ? GapNoAskLine + "\n" : "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n") +
             "- Never claim anything was done: nothing is carried out until the user approves.\n" +
-            "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n" +
+            (talk.Talking
+                ? TalkingLine + "\n"
+                : "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n") +
             "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
-            (offered && gap is not { Reviewer: PlanReviewer.Model } ? AdvisorsLine(advisors!) + "\n" : "") +
-            (gap is { } review ? GapReviewLines(review, offered) + "\n" : "") +
+            (offered && gap?.Who is not PlanReviewer.Model ? AdvisorsLine(advisors!) + "\n" : "") +
+            (gap is { } review ? GapReviewLines(review, offered, web) + "\n" : "") +
             state;
     }
+
+    /// <summary>
+    /// The ask bullet's place in a gap pass that may not wait on the user (2026-10-18, the user's ask: <see cref="Settings.AppSettingsData.PlanGapAskUser"/>
+    /// off, so a review can run unattended). Pinned.
+    /// </summary>
+    public const string GapNoAskLine =
+        "- Do not ask the user anything during this review, and take no photo or screen capture: settle what research can, and fold the user's later messages into the plan.";
+
+    /// <summary>
+    /// The research bullet's second sentence in a gap pass that may not ask (2026-10-18): the user's call written into <c>## Risks</c> as an open
+    /// question. A plain bullet, never a checkbox: <see cref="PlanDocument"/>'s progress counts every task box in the body, so an unticked one
+    /// would hold back the plan's done state. Listed in <c>minor</c>, it shows in the pass's notice without breaking the clean streak. Pinned.
+    /// </summary>
+    public const string GapOpenQuestionSentence =
+        "A decision only the user can make, write into ## Risks as a plain bullet starting \"Open question (your call):\", never a checkbox; it is not a gap, so leave it out of gaps and list it in minor as \"open question: …\".";
+
+    /// <summary>
+    /// What the gap definition's "a choice left open" gains in a gap pass that may not ask (2026-10-18): without it a later pass would report the
+    /// open question as a gap and the review could never converge. Pinned.
+    /// </summary>
+    public const string GapOpenQuestionException = " (except an open question written into ## Risks as the user's call)";
+
+    /// <summary>The present bullet's place while talking a plan through (2026-10-17, <c>/plan chat</c>). Pinned.</summary>
+    public const string TalkingLine =
+        "- The user wants to talk this through first: discuss, ask and research, but do not call present_plan and do not write the whole plan out until they ask for it, in their own words or with /plan ready. " +
+        "When they do, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.";
 
     /// <summary>
     /// The gap-closing pass's rules (2026-10-13, the user's ask): what a gap is and is not, how to research and ask, and how to
     /// report the pass through <c>present_plan</c>'s <c>gaps</c>; then the reviewer's sentence, which falls back to the model
     /// alone when no advisor is offered (Any adds none: the advisors bullet above already says to consult only where a role fits). Pinned.
     /// </summary>
-    public static string GapReviewLines(PlanGapState gap, bool advisorsOffered)
+    public static string GapReviewLines(PlanGapState gap, bool advisorsOffered) => GapReviewLines(gap, advisorsOffered, web: false);
+
+    /// <summary>
+    /// <see cref="GapReviewLines(PlanGapState, bool)"/> with the web offered (2026-10-17): an API, specification or version the plan
+    /// assumes without checking is a gap, and the research line sends the model to the web for it. Pinned. The clean passes (later that
+    /// day): the first bullet names the count a review ends on when it is above 1, a confirming pass gets its own bullet with its focus
+    /// (<see cref="ConfirmFocuses"/>), the last bullet asks for <c>minor</c> and <c>checked</c>, and the reviewer's sentence follows the
+    /// pass's reviewer (<see cref="PlanGapState.Who"/>), an advisor's on a confirming pass naming the focus.
+    /// </summary>
+    public static string GapReviewLines(PlanGapState gap, bool advisorsOffered, bool web)
     {
         ArgumentNullException.ThrowIfNull(gap);
-        string reviewer = gap.Reviewer switch
+        bool confirming = gap.CleanSoFar > 0;
+        // A pass that may not ask (2026-10-18): the user's call becomes an open question in ## Risks, never a question on a pane.
+        string decision = gap.AskUser ? "A decision only the user can make, ask them (with ask_user when it is offered)." : GapOpenQuestionSentence;
+        string focus = ConfirmFocuses[(Math.Max(1, gap.Confirmation) - 1) % ConfirmFocuses.Count];
+        string reviewer = gap.Who switch
         {
             PlanReviewer.Model => "- Review it yourself; do not consult advisors on this pass.",
             _ when !advisorsOffered => "- No advisors are offered: review it yourself.",
+            PlanReviewer.Advisor when confirming => "- Ask at least one advisor with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ", the one whose role fits best, to find the gaps: put the plan's text and this pass's focus in the question, then close what they name.",
             PlanReviewer.Advisor => "- Ask at least one advisor with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ", the one whose role fits best, to find the gaps: put the plan's text in the question, then close what they name.",
             _ => "",
         };
         return
-            "- A gap review is running (pass " + PassOf(gap.Pass, gap.Limit) + "): present_plan's gaps lists what each revision closed; only a pass with no gaps returns the plan to the user.\n" +
-            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open, a file, API or setting assumed but not read, a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
-            "- Research what you need with the read-only tools. A decision only the user can make, ask them (with ask_user when it is offered).\n" +
-            "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed. If you find none, call present_plan with the plan as it stands and gaps empty." +
+            "- A gap review is running (pass " + PassOf(gap.Pass, gap.Limit) + "): present_plan's gaps lists what each revision closed; " +
+            (gap.CleanPasses > 1 ? $"only {N(gap.CleanPasses)} passes in a row with no gaps return the plan to the user.\n" : "only a pass with no gaps returns the plan to the user.\n") +
+            (confirming
+                ? $"- The last pass found no gaps; this pass checks again (clean pass {N(gap.CleanSoFar + 1)} of {N(gap.CleanPasses)}). Review the plan as if seeing it for the first time, and look hardest at {focus}, which an earlier pass may have skimmed; then the rest as usual. Report every gap you find; an empty gaps list is right only when you find none.\n"
+                : "") +
+            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? "" : GapOpenQuestionException) + ", " +
+            (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
+            ", a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
+            (web
+                ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
+                : "- Research what you need with the read-only tools. " + decision + "\n") +
+            "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed; put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. " +
+            "If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked." +
             (reviewer.Length > 0 ? "\n" + reviewer : "");
+    }
+
+    /// <summary>The web tools plan mode's research rule names when the turn offers them (2026-10-17), in this order.</summary>
+    public static readonly IReadOnlyList<string> ResearchTools = [NeonSidekick.Llm.Tools.WebSearchTool.ToolName, NeonSidekick.Llm.Tools.WebFetchTool.ToolName];
+
+    /// <summary>
+    /// Plan mode's web bullet (2026-10-17, the user's ask): the research tools offered by name, what to look up with them rather than
+    /// guess, and the sources named in the plan's Context. Pinned.
+    /// </summary>
+    public static string WebResearchLine(IReadOnlyList<string> research)
+    {
+        ArgumentNullException.ThrowIfNull(research);
+        return "- You can research on the web with " + string.Join(" and ", research) + ": where the plan depends on something outside the working directory " +
+            "(a library's API or version, a specification or standard, a service's limits, a setting's meaning), look it up and read the source rather than guess. " +
+            "In ## Context, name the pages the plan relies on.";
     }
 
     /// <summary>
@@ -416,9 +721,26 @@ public static class PlanText
 
     public static string CouldNotSaveResult(string detail) => $"Error: the plan could not be saved: {detail}";
 
-    /// <summary>A gap-closing pass's revision saved (2026-10-13): the pane is not shown, the next pass starts by itself. Pinned.</summary>
-    public static string GapPassResult(string path, int revision, int gaps) =>
-        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed. Reply with one short line and call no more tools; the next review pass starts by itself.";
+    /// <summary>A gap-closing pass's revision saved (2026-10-13): the pane is not shown, the next pass starts by itself; its minor fixes since 2026-10-17. Pinned.</summary>
+    public static string GapPassResult(string path, int revision, int gaps, int minor = 0) =>
+        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself.";
+
+    /// <summary>A clean pass that does not end the review (2026-10-17): no pane, the streak said, the next pass starts by itself. Pinned.</summary>
+    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0) =>
+        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself.";
+
+    /// <summary><c> and 2 minor fixes</c> after a gap count, nothing at 0.</summary>
+    private static string MinorAnd(int minor) => minor <= 0 ? "" : minor == 1 ? " and 1 minor fix" : $" and {N(minor)} minor fixes";
+
+    /// <summary><c> with 2 minor fixes</c>, nothing at 0.</summary>
+    private static string MinorWith(int minor) => minor <= 0 ? "" : minor == 1 ? " with 1 minor fix" : $" with {N(minor)} minor fixes";
+
+    /// <summary>An empty gaps list during a review with no checked list (2026-10-17): nothing saved, no pass counted. Pinned.</summary>
+    public const string CheckedRequiredResult = "Error: with gaps empty, checked is required: one short line for each part of the plan you checked this pass. Call present_plan again with it.";
+
+    public static string CheckedInvalidResult(string raw) => $"Error: checked must be a list of strings, one short line for each part of the plan you checked; got {raw}";
+
+    public static string MinorInvalidResult(string raw) => $"Error: minor must be a list of strings, one short line for each small fix that is not a gap; got {raw}";
 
     /// <summary>The user chose Close gaps… on the pane (2026-10-13). Pinned.</summary>
     public static string CloseGapsResult(string path) =>

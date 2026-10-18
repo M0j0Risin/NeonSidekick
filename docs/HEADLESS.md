@@ -24,7 +24,7 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 
 ## Before you start
 
-- **A fresh profile does little headless.** The model gets only the clock, help, memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`). Set the profile up first in the TUI (`/settings`, `/tools`) or its `profile.json`: a server (or pass `--url`) and the tool groups the job needs.
+- **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`). Set the profile up first in the TUI (`/settings`, `/tools`) or its `profile.json`: a server (or pass `--url`) and the tool groups the job needs.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`. SQLite files in the working directory need no ticking.
 - **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
 - **`delete` follows *File deletes to Recycle bin*** (on by default): the `delete` tool moves files to the Recycle bin (the Trash on a Mac), as in the TUI.
@@ -48,7 +48,7 @@ You:
 
 - The first lines are the version, `Headless mode` and the server (or `LLM: no server …` and what to do), then a line on the MCP servers if any are set up.
 - `You: ` is printed before each line is read, even from a pipe, so a reply often starts `You: Neon: `.
-- `[tool]` lines trace tool calls and their results, which may run over several lines. A conversation's opening calls (clock, working directory, memory) print before `Neon: `.
+- `[tool]` lines trace tool calls and their results, which may run over several lines. A conversation's opening calls (clock while *Clock tools* is on, working directory, memory) print before `Neon: `.
 - `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking is never printed.
 - Each **line** of input is one message; blank lines are skipped. Ctrl+C ends the run, and a reply cut short ends with `(canceled)`.
 
@@ -80,14 +80,15 @@ They need no server unless the row says so.
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos; playing a video is an error. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows; other forms are errors. On a Mac they need macOS 14 or later. |
 | `/avatar …` | Prints or sets the *Model avatar* (`/avatar user …` sets your *User avatar*); a description picks the closest emoji. |
-| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). |
+| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or *Help tools* or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). |
 | `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app in this version. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
 - Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines.
-- **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans) or `gaps [model|advisor|any]`.
-- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run instead of *LLM plan gap passes*. Since there's no Esc to stop the passes, 0 (no limit) means 20, either way, and under *Advisor confirm* the model reviews alone.
+- **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans), `gaps [model|advisor|any|confirm]`, `chat` or `ready`.
+- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run instead of *LLM plan gap passes*. Since there's no Esc to stop the passes, 0 (no limit) means 20, either way, and under *Advisor confirm* the model reviews alone. With *LLM plan gap ask user* off, a pass writes a decision only you can make into `## Risks` as an open question. It ends after *LLM plan gap clean passes* in a row with no gaps, as on the screen; a clean pass cut short at the limit names `/plan approve`.
+- **`/plan chat`** sends nothing; your next line opens the conversation, and the model writes the plan when you ask. `/plan ready` asks for it, or, once one is presented, prints where it stands.
 
 ### Everything else goes to the model as text
 

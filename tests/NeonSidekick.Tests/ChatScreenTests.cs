@@ -310,13 +310,13 @@ public partial class ChatScreenTests : IDisposable
     private static string MemoryResult(IReadOnlyList<ChatMessage> request) =>
         (string)Assert.Single(request.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == Assistant.OpeningMemoryCallId).Result!;
 
-    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true, bool help = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
+    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true, bool help = true, bool clock = true) =>
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools, clock: clock);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
 
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, macLogPlaces: _macLogPlaces, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, macLogPlaces: _macLogPlaces, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null, tonePlayback: _ => _tonePlayback);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -9811,7 +9811,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -9847,7 +9847,7 @@ public partial class ChatScreenTests : IDisposable
         (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "off" });
         Assert.Equal("📊 💾", strip);
         Assert.Equal([1], off);
-        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15)
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers" or "clock" or "help")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15), the clock and help on (2026-10-18)
         // 🙋 (2026-10-09, the user's ask): Ask user is on by default, on the slab while it is off.
         Assert.False(ChatScreen.ToolbarItemOff("ask", new AppSettingsData()));
         Assert.True(ChatScreen.ToolbarItemOff("ask", new AppSettingsData { AskUser = false }));
@@ -10164,6 +10164,11 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("cooking", TimerActionKind.Invalid, 0, "")]
     [InlineData("0m", TimerActionKind.Invalid, 0, "")]
     [InlineData("ten minutes", TimerActionKind.Invalid, 0, "")]
+    [InlineData("stopwatch", TimerActionKind.Stopwatch, 0, "stopwatch")]   // 2026-10-18: a stopwatch, the default name
+    [InlineData("Stopwatch tea", TimerActionKind.Stopwatch, 0, "tea")]
+    [InlineData("stopwatch  the  big pot", TimerActionKind.Stopwatch, 0, "the big pot")]
+    [InlineData("5m stopwatch", TimerActionKind.Start, 300, "stopwatch")]   // a countdown named stopwatch
+    [InlineData("stop stopwatch", TimerActionKind.Stop, 0, "stopwatch")]
     public void ParseTimerArgs_IsPinned(string args, TimerActionKind kind, int seconds, string name)
     {
         var action = ChatScreen.ParseTimerArgs(args);
@@ -10655,7 +10660,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 149;   // /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 152;   // /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -11744,7 +11749,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ChatScreen.ProcessToolGlyph + " Process", ProcessMenu.Title);
         Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
-        Assert.All(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord && w != ToolsText.TimersSwitchWord), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not (ToolsText.ShoppingSwitchWord or ToolsText.TimersSwitchWord or ToolsText.ClockSwitchWord or ToolsText.HelpSwitchWord)), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
         Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
         Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));
@@ -24693,8 +24698,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["pull memory work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL MEMORY WORK ov", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy ", sources));
 
-        // /timer: stop, then stop all | <name> with the names whole.
-        Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote)], ChatScreen.ArgumentItems("/timer", "", sources));
+        // /timer: stop and stopwatch (2026-10-18), then stop all | <name> with the names whole.
+        Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote), new CompletionItem(TimerText.StopwatchName, ChatScreen.TimerStopwatchNote)], ChatScreen.ArgumentItems("/timer", "", sources));
+        Assert.Equal(["stopwatch"], Texts(ChatScreen.ArgumentItems("/timer", "stopw", sources)));
         Assert.Equal(["stop all", "stop tea", "stop the big pot of soup"], Texts(ChatScreen.ArgumentItems("/timer", "stop ", sources)));
         Assert.Equal(["stop the big pot of soup"], Texts(ChatScreen.ArgumentItems("/timer", "stop the b", sources)));
         Assert.Equal(["stop all"], Texts(ChatScreen.ArgumentItems("/timer", "stop ", Sources())));

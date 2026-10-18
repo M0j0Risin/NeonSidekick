@@ -220,6 +220,8 @@ internal sealed partial class ChatScreen
         bool files = inputs.FilesEnabled && fileTools is { Count: > 0 };
         // The timer sentence rides only with a timer tool (2026-09-20): headless has none, the pane loses all three on /tools.
         bool timers = standingTools.Any(t => t is StartTimerTool or StopTimerTool or ListTimersTool);
+        // The clock sentence rides only with a clock tool (2026-10-18, the timers' rule): Clock tools off, or all three switched off on /tools.
+        bool clock = standingTools.Any(t => t is GetCurrentTimeTool or ShiftDateTool or DateDifferenceTool);
         // The manual's sentence rides with neon_help (2026-10-02): a standing tool, gone with it when /tools switches it off.
         bool help = standingTools.Any(t => t is NeonHelpTool);
         // The download tool rides the web list only while the file tools are offered (2026-09-18).
@@ -355,7 +357,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog, admin);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog, admin, clock);
         return new TurnToolSet(
             tools,
             offered,

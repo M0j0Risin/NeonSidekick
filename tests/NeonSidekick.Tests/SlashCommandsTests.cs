@@ -576,7 +576,7 @@ public class SlashCommandsTests
                 "/profile push|pull persona <name> [overwrite]", "/profile push|pull operata <name> [overwrite]", "/profile push|pull vocalia <name> [overwrite]", "/profile push|pull avatar user|model <name>", "/profile edit|reload"),
             SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28, their sections 2026-10-09, the prompt files 2026-10-10, the avatars 2026-10-12, memory and prompts 2026-10-13; one form a line since 2026-10-05
         Assert.Contains(Row("/clear", Summary("/clear")), SlashCommands.HelpText);   // a bare command: no forms column
-        Assert.Contains(Row("/timer", Summary("/timer"), "/timer [<duration> [<name>]]", "/timer stop <name>|all"), SlashCommands.HelpText);
+        Assert.Contains(Row("/timer", Summary("/timer"), "/timer [<duration> [<name>]]", "/timer stopwatch [<name>]", "/timer stop <name>|all"), SlashCommands.HelpText);
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(Row(e), SlashCommands.HelpText));
         Assert.DoesNotContain("M5", SlashCommands.HelpText);
         Assert.EndsWith("push-to-talk key (F4 unless changed) = talk", SlashCommands.HelpText);

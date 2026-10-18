@@ -8,7 +8,8 @@ namespace NeonSidekick.Plans;
 /// (2026-10-17, the user's report: a long plan was missing from the list) is a <c>.md</c> that cannot be read whole, listed by its
 /// file name with no status or steps rather than left out.
 /// </summary>
-public sealed record PlanListing(string Path, string Title, PlanStatus? Status, int Done, int Total, DateTimeOffset? Updated, bool Unreadable = false)
+/// <paramref name="Review"/> (2026-10-17) is what its <c>review:</c> line and body say of its last gap review (<see cref="PlanReview.Mark"/>).
+public sealed record PlanListing(string Path, string Title, PlanStatus? Status, int Done, int Total, DateTimeOffset? Updated, bool Unreadable = false, PlanReviewMark Review = PlanReviewMark.None)
 {
     /// <summary>The name <c>/plan open</c> takes: the file name without <c>.neon/plans/</c> or <c>.md</c>.</summary>
     public string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
@@ -37,7 +38,9 @@ public static class PlanFiles
         var now = time.GetLocalNow();
         string path = session.Path ?? PlanSlug.Choose(PlanSlug.From(string.IsNullOrWhiteSpace(name) ? title : name), p => Taken(files, p), now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         int revision = session.Path is null ? 1 : session.Revision + 1;
-        var header = new PlanHeader(PlanStatus.Draft, revision, session.Created ?? now, now, session.Requirement);
+        // /plan chat (2026-10-17): while the requirement is only the conversation's opening, the plan's title is written in its place, and
+        // Presented settles the session on the same words, so the file and the session agree.
+        var header = new PlanHeader(PlanStatus.Draft, revision, session.Created ?? now, now, session.RequirementFor(title));
         var written = files.WriteText(path, PlanDocument.Render(header, title, markdown), overwrite: true);
         if (written.Outcome != FileOutcome.Ok)
         {
@@ -65,6 +68,26 @@ public static class PlanFiles
         }
 
         var written = files.WriteText(path, PlanDocument.WithStatus(text, status, now, requirement, progress), overwrite: true);
+        return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
+    }
+
+    /// <summary>
+    /// The plan file's <c>review:</c> line set (2026-10-17, <see cref="PlanDocument.WithReview"/>), the body and the status untouched: the
+    /// <see cref="MarkFile"/> shape, null when done, else the same warnings.
+    /// </summary>
+    public static string? MarkReview(WorkingDirectory files, string path, string review, DateTimeOffset now, string requirement)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(review);
+        if (ReadWhole(files, path) is not { } text)
+        {
+            return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full)
+                ? PlanText.StatusUnwrittenWarning(path)
+                : FileText.Missing(path);
+        }
+
+        var written = files.WriteText(path, PlanDocument.WithReview(text, review, now, requirement), overwrite: true);
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
@@ -153,7 +176,7 @@ public static class PlanFiles
             var (done, total) = PlanDocument.Progress(body);
             string title = PlanDocument.FirstHeading(body) ?? Path.GetFileNameWithoutExtension(full);
             DateTimeOffset order = header?.Updated is { } updated && updated != DateTimeOffset.MinValue ? updated : WrittenAt(full);
-            listings.Add((new PlanListing(path, title, header?.Status, done, total, header?.Updated), order));
+            listings.Add((new PlanListing(path, title, header?.Status, done, total, header?.Updated, Review: PlanReview.Mark(header?.Review, body)), order));
         }
 
         return listings.OrderByDescending(l => l.Order).ThenBy(l => l.Listing.Path, StringComparer.Ordinal).Select(l => l.Listing).ToList();

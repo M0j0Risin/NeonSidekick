@@ -67,7 +67,7 @@ public partial class SidekickAppTests
         Assert.Contains("[notice] " + PlanText.UnpresentedHint, output);
         Assert.Contains("[notice] " + PlanText.SavedNotice(".neon/plans/guide.md", 1), output);
         Assert.Equal(PlanText.ExecuteMessage(".neon/plans/guide.md"), _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
-        Assert.Contains("[notice] " + PlanText.DoneNotice(".neon/plans/guide.md"), output);
+        Assert.Contains("[notice] " + PlanText.DoneNotice(".neon/plans/guide.md") + Environment.NewLine + "[notice] " + PlanText.ComesTogetherNotice, output);
         Assert.Equal((PlanStatus.Done, 2, 2), (PlanDocument.TryParse(File.ReadAllText(file))!.Status, PlanDocument.TryParse(File.ReadAllText(file))!.StepsDone, PlanDocument.TryParse(File.ReadAllText(file))!.StepsTotal));
     }
 

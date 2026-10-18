@@ -6,7 +6,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// <c>stop_timer(name)</c>: removes a running timer, or silences one that is ringing. An unknown
-/// name answers with the names that do exist, so the model can ask rather than guess.
+/// name answers with the names that do exist, so the model can ask rather than guess. A stopwatch (2026-10-18) stops the same way,
+/// its result saying the time it ran.
 /// </summary>
 public sealed class StopTimerTool : AIFunction
 {
@@ -35,7 +36,7 @@ public sealed class StopTimerTool : AIFunction
     public override string Name => ToolName;
 
     public override string Description =>
-        "Stops a running timer by name, or silences one that has gone off. Call " + ListTimersTool.ToolName + " first if unsure of the name.";
+        "Stops a running timer or stopwatch by name, or silences one that has gone off. Call " + ListTimersTool.ToolName + " first if unsure of the name.";
 
     public override JsonElement JsonSchema => Schema;
 

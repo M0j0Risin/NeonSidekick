@@ -74,7 +74,8 @@ public partial class SidekickAppTests : IDisposable
         Func<string, VadOptions, IVoiceActivityDetector>? vad = null,
         Func<int>? microphones = null,
         Func<string, string, IWakeWordDetector>? wake = null,
-        Func<NeonSidekick.Docker.IDockerServers>? dockerServers = null)
+        Func<NeonSidekick.Docker.IDockerServers>? dockerServers = null,
+        bool headlessNarrow = false)
         => new(
             _console,
             _settings,
@@ -114,7 +115,8 @@ public partial class SidekickAppTests : IDisposable
             // The event logs (2026-10-15): none unless a test hands in the fake.
             eventLogSystem: _eventLogSystem,
             // A Mac's unified log (2026-10-18): none unless a test hands in the fake.
-            unifiedLog: _unifiedLog);
+            unifiedLog: _unifiedLog,
+            headlessNarrow: headlessNarrow);
 
     private Fakes.FakeEventLogSystem? _eventLogSystem;
 
@@ -126,8 +128,8 @@ public partial class SidekickAppTests : IDisposable
     private readonly InProcessMcpServers _mcpServers = new();
 
     /// <summary>The prompt as headless builds it: Agent skills on by default, no skill installed, so every prompt with tools ends with the skills block over an empty catalog (2026-09-16); no timer tool, so the tool rules lose their timer sentence (2026-09-20).</summary>
-    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true, bool help = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
+    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true, bool help = true, bool clock = true) =>
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools, clock: clock);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
 
     /// <summary>Every window title the app set (the <c>setTitle</c> seam): the interactive screen's launch, never headless.</summary>
     private readonly List<string> _titles = new();
@@ -148,10 +150,10 @@ public partial class SidekickAppTests : IDisposable
         _settings.Update(d => d.LlmUrl = "http://127.0.0.1:1234/v1");
     }
 
-    private async Task<string> Headless(string input, EnvironmentOverrides? env = null, Func<LlmEndpoint, LlmTimeouts, IChatClient>? chat = null, SidekickOptions? options = null, int exitCode = 0)
+    private async Task<string> Headless(string input, EnvironmentOverrides? env = null, Func<LlmEndpoint, LlmTimeouts, IChatClient>? chat = null, SidekickOptions? options = null, int exitCode = 0, bool headlessNarrow = false)
     {
         var stdout = new StringWriter();
-        var app = App(env, new StringReader(input), stdout, chat: chat);
+        var app = App(env, new StringReader(input), stdout, chat: chat, headlessNarrow: headlessNarrow);
         int code = await app.RunAsync((options ?? SidekickOptions.None) with { Headless = true }, CancellationToken.None);
         Assert.Equal(exitCode, code);
         Assert.Empty(_console.Output); // headless never touches the TUI console
@@ -951,6 +953,39 @@ public partial class SidekickAppTests : IDisposable
         Assert.DoesNotContain(NeonHelpTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.Equal(SkilledPrompt(false, [], web: true, help: false), _chat.Requests[0][0].Text);
         Assert.DoesNotContain(Assistant.HelpRule, _chat.Requests[0][0].Text!);
+    }
+
+    [Fact]
+    public async Task Headless_HelpToolsOff_OffersNoNeonHelp_AndItsRuleGoes()
+    {
+        // Help tools (2026-10-18) reaches headless too, read per turn.
+        ServerOn1234("llama");
+        _settings.Update(d => d.HelpTools = false);
+        _chat.EnqueueText("Hi.");
+
+        await Headless("hello\n");
+
+        Assert.DoesNotContain(NeonHelpTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
+        Assert.Equal(SkilledPrompt(false, [], web: true, help: false), _chat.Requests[0][0].Text);
+    }
+
+    [Fact]
+    public async Task Headless_ClockToolsOff_OffersNoClockTool_NoClockSentence_AndNoOpeningClockCall()
+    {
+        // Clock tools (2026-10-18) reaches headless too, read per turn: the cwd and memory pairs open the conversation, no clock ahead of them.
+        ServerOn1234("llama");
+        _settings.Update(d => d.ClockTools = false);
+        _chat.EnqueueText("Hi.");
+
+        await Headless("hello\n");
+
+        var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
+        Assert.DoesNotContain(offered, n => n is "get_current_time" or "shift_date" or "date_difference");
+        Assert.Contains(NeonHelpTool.ToolName, offered);
+        var request = _chat.Requests[0];
+        Assert.Equal(SkilledPrompt(false, [], web: true, clock: false), request[0].Text);
+        Assert.DoesNotContain(Assistant.ClockRule, request[0].Text!);
+        Assert.DoesNotContain(request, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningClockCallId));
     }
 
     [Fact]

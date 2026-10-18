@@ -25,6 +25,11 @@ public static class TimerText
     public const string NoName = "Error: give the name of the timer to stop";
     public const string SilenceHint = "press Enter to silence";
 
+    /// <summary>The log line when a timer tone finds no audio output (2026-10-18), once per run at Warn. Pinned.</summary>
+    public static string ToneUnavailableLogLine(string detail) => "Timer tone: audio output unavailable: " + detail;
+
+    /// <summary>The log line when a timer tone's play fails past its start (2026-10-18). Pinned.</summary>
+    public static string ToneFailedLogLine(string detail) => "Timer tone: playback failed: " + detail;
     public static string Full(int max) =>
         "Error: too many timers (" + max.ToString(CultureInfo.InvariantCulture) + "); stop one first";
 
@@ -237,15 +242,19 @@ public static class TimerText
     public static string Started(TimerSnapshot timer) =>
         $"started the {timer.Name} timer: {Describe(timer.Duration)}, done at {Clock(timer.DueLocal)}";
 
-    /// <summary>The name is taken: <c>… is already running (7 minutes 12 seconds left) …</c> or <c>… is done and ringing …</c>.</summary>
+    /// <summary>The name is taken: <c>… is already running (7 minutes 12 seconds left) …</c>, <c>… is done and ringing …</c>, or a stopwatch's <c>… is running (3 minutes 12 seconds elapsed) …</c> (2026-10-18).</summary>
     public static string Duplicate(TimerSnapshot existing) =>
-        existing.Ringing
+        existing.Stopwatch
+            ? $"Error: a stopwatch called '{existing.Name}' is running ({Describe(existing.Elapsed)} elapsed); stop it first or use another name"
+        : existing.Ringing
             ? $"Error: a timer called '{existing.Name}' is done and ringing; stop it first or use another name"
             : $"Error: a timer called '{existing.Name}' is already running ({Describe(existing.Remaining)} left); stop it first or use another name";
 
-    /// <summary><c>stopped the cooking timer with 7 minutes 12 seconds left</c>, or <c>silenced the cooking timer</c> when it was ringing.</summary>
+    /// <summary><c>stopped the cooking timer with 7 minutes 12 seconds left</c>, <c>silenced the cooking timer</c> when it was ringing, or a stopwatch's <c>stopped the stopwatch at 3 minutes 12 seconds</c> (2026-10-18).</summary>
     public static string Stopped(TimerSnapshot timer) =>
-        timer.Ringing
+        timer.Stopwatch
+            ? $"stopped {StopwatchLabel(timer.Name)} at {Describe(timer.Elapsed)}"
+        : timer.Ringing
             ? $"silenced the {timer.Name} timer"
             : $"stopped the {timer.Name} timer with {Describe(timer.Remaining)} left";
 
@@ -258,9 +267,11 @@ public static class TimerText
         return $"Error: no timer called '{name}'; {tail}";
     }
 
-    /// <summary>One timer: <c>cooking: 7 minutes 12 seconds left of 10 minutes (done at 14:15)</c> or <c>tea: done, ringing</c>.</summary>
+    /// <summary>One timer: <c>cooking: 7 minutes 12 seconds left of 10 minutes (done at 14:15)</c> or <c>tea: done, ringing</c>; a stopwatch: <c>stopwatch: 3 minutes 12 seconds elapsed (started at 14:02)</c> (2026-10-18).</summary>
     public static string Line(TimerSnapshot timer) =>
-        timer.Ringing
+        timer.Stopwatch
+            ? $"{timer.Name}: {Describe(timer.Elapsed)} elapsed (started at {Clock(timer.DueLocal)})"
+        : timer.Ringing
             ? $"{timer.Name}: done, ringing"
             : $"{timer.Name}: {Describe(timer.Remaining)} left of {Describe(timer.Duration)} (done at {Clock(timer.DueLocal)})";
 
@@ -270,6 +281,21 @@ public static class TimerText
         ArgumentNullException.ThrowIfNull(timers);
         return timers.Count == 0 ? NoTimers : string.Join("; ", timers.Select(Line));
     }
+
+    // ---- stopwatches (2026-10-18, the user's ask: /timer stopwatch, a simple count-up, no laps) ----
+
+    /// <summary>The name <c>/timer stopwatch</c> gives a stopwatch started without one.</summary>
+    public const string StopwatchName = "stopwatch";
+
+    /// <summary><c>the stopwatch</c> for <see cref="StopwatchName"/>, else <c>the tea stopwatch</c>. Pinned.</summary>
+    public static string StopwatchLabel(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return NameEquals(name, StopwatchName) ? "the " + StopwatchName : $"the {name} stopwatch";
+    }
+
+    /// <summary><c>started the stopwatch at 14:02</c>. Pinned.</summary>
+    public static string StopwatchStarted(TimerSnapshot stopwatch) => $"started {StopwatchLabel(stopwatch.Name)} at {Clock(stopwatch.DueLocal)}";
 
     // ---- alerts ----
 
@@ -291,7 +317,18 @@ public static class TimerText
     /// <summary>The most cells a name takes on the hint row; a longer one ends in an ellipsis (<see cref="ScreenPane.Fit"/>).</summary>
     public const int StatusNameCells = 10;
 
-    /// <summary><c>⏰ cooking 07:12 · tea ringing</c>, a long name cut to <see cref="StatusNameCells"/> (<c>the big p… 07:12</c>); null when there are none.</summary>
+    /// <summary>
+    /// A stopwatch's glyph on the Status bar (2026-10-18): U+23F1 with the emoji selector. Unicode 15.1's emoji-data.txt lists ⏰ as
+    /// Emoji_Presentation but not ⏱, so a bare ⏱ is drawn as a narrow text glyph; with FE0F it is the emoji, two cells like ⏰ in
+    /// Windows Terminal (the Status bar spaces a selector sequence where a terminal draws it one cell wide, <c>ScreenPane.Spaced</c>).
+    /// </summary>
+    public const string StopwatchGlyph = "⏱️";
+
+    /// <summary>
+    /// <c>⏰ cooking 07:12 · tea ringing</c>, a long name cut to <see cref="StatusNameCells"/> (<c>the big p… 07:12</c>); null when there are none.
+    /// A stopwatch (2026-10-18) counts up with its own glyph: <c>⏰ tea 04:12 · ⏱️ stopwatch 03:12</c>; stopwatches alone lead with theirs, <c>⏱️ stopwatch 03:12</c>,
+    /// rather than both glyphs.
+    /// </summary>
     public static string? StatusLine(IReadOnlyList<TimerSnapshot> timers)
     {
         ArgumentNullException.ThrowIfNull(timers);
@@ -300,7 +337,10 @@ public static class TimerText
             return null;
         }
 
-        return StatusGlyph + " " + string.Join(" · ", timers.Select(t => StatusName(t.Name) + (t.Ringing ? " ringing" : " " + Countdown(t.Remaining))));
+        string parts = string.Join(" · ", timers.Select(t => t.Stopwatch
+            ? StopwatchGlyph + " " + StatusName(t.Name) + " " + Countdown(t.Elapsed)
+            : StatusName(t.Name) + (t.Ringing ? " ringing" : " " + Countdown(t.Remaining))));
+        return timers.All(t => t.Stopwatch) ? parts : StatusGlyph + " " + parts;
     }
 
     /// <summary>The name as the hint row shows it: whole up to <see cref="StatusNameCells"/> cells, else cut with an ellipsis inside them.</summary>

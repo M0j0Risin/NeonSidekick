@@ -195,7 +195,12 @@ public sealed class TranscriptRenderer : INoticeSink
     public static string SpeakerMarkup(string name, Color color, string? avatar = null) =>
         string.Concat("[", Theme.ToHex(color), " bold]", Markup.Escape((Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : SpeakerGlyph) + name), "[/]");
 
-    public static string NoticeMarkup(string text) => Theme.StyleMarkup(Theme.SystemText, NoticeGlyph + text);
+    /// <summary>
+    /// A notice line: its glyph and text in the system style. The text goes through <see cref="TextCells.Spaced"/> first (2026-10-17, the plan done
+    /// line's ❤️): a terminal that draws a selector sequence one cell wide (Terminal.app, iTerm2's alternate screen) gets a space after it, so
+    /// "I ❤️ it" never reads "I ❤️it" there; Windows is unchanged. The panes' notice lines (<see cref="MenuPane"/>, <see cref="FolderPane"/>) draw through here too.
+    /// </summary>
+    public static string NoticeMarkup(string text) => Theme.StyleMarkup(Theme.SystemText, NoticeGlyph + TextCells.Spaced(text));
 
     public static string WarningMarkup(string text) => Theme.ColorMarkup(Theme.Warn, WarningGlyph + text);
 
@@ -309,12 +314,12 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <remarks>
     /// <paramref name="webIds"/> (later on 2026-10-14) are the pictures the Web UI's entry offers — every picture of the set, a codec-refused one too
     /// — written before the PC's early return, so a set the terminal drew none of still reaches the page; without them, <paramref name="ids"/>.
-    /// Returns the entry's seq, or null with no feed or nothing to record.
+    /// Returns the entry's seq, or null with no feed or nothing to record. <paramref name="splash"/> (2026-10-18) marks the tiled welcome splash's entry.
     /// </remarks>
-    public long? Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null, IReadOnlyList<int>? webIds = null)
+    public long? Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null, IReadOnlyList<int>? webIds = null, bool splash = false)
     {
         ArgumentNullException.ThrowIfNull(thumbnails);
-        long? seq = webIds is { Count: > 0 } ? FeedPictures(webIds, webIds.Count) : FeedPictures(ids ?? [], thumbnails.Count);
+        long? seq = webIds is { Count: > 0 } ? FeedPictures(webIds, webIds.Count, splash) : FeedPictures(ids ?? [], thumbnails.Count, splash);
         if (thumbnails.Count == 0)
         {
             return seq;
@@ -342,10 +347,10 @@ public sealed class TranscriptRenderer : INoticeSink
     /// console's, so the picture sits in the middle of the window as it is now. The strip under a
     /// sent line (<see cref="Images"/>) stays at the left, under the line it belongs to.
     /// </summary>
-    public long? Picture(ImageThumbnail thumbnail, int? id = null)
+    public long? Picture(ImageThumbnail thumbnail, int? id = null, bool splash = false)
     {
         ArgumentNullException.ThrowIfNull(thumbnail);
-        long? seq = FeedPictures(id is { } web ? [web] : [], 1);
+        long? seq = FeedPictures(id is { } web ? [web] : [], 1, splash);
         EndRun();
         BreakIfMidText();
         if (id is { } key && _pane is { Enabled: true } pane)
@@ -364,8 +369,9 @@ public sealed class TranscriptRenderer : INoticeSink
 
     public void Notice(string text)
     {
+        // The Web UI's feed takes the plain text before any spacing (2026-10-17): the browser draws its own one space.
         Feed?.Add(WebUi.FeedKind.Notice, text);
-        Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, text));
+        Line(NoticeMarkup(text), Theme.StyleMarkup(Theme.SystemText, TextCells.Spaced(text)));
     }
 
     /// <summary>
@@ -601,8 +607,8 @@ public sealed class TranscriptRenderer : INoticeSink
     public static string PictureWords(int count) =>
         count == 1 ? "a picture" : count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " pictures";
 
-    /// <summary>The feed's picture entry for <paramref name="ids"/>: its pictures where the screen describes them; its seq, or null with no feed.</summary>
-    private long? FeedPictures(IReadOnlyList<int> ids, int count)
+    /// <summary>The feed's picture entry for <paramref name="ids"/>: its pictures where the screen describes them, marked as the splash's with <paramref name="splash"/>; its seq, or null with no feed.</summary>
+    private long? FeedPictures(IReadOnlyList<int> ids, int count, bool splash = false)
     {
         if (Feed is not { } feed || count == 0)
         {
@@ -615,7 +621,7 @@ public sealed class TranscriptRenderer : INoticeSink
             pictures = [.. ids.Select(describe).OfType<WebUi.WebPicture>()];
         }
 
-        return feed.Add(WebUi.FeedKind.Picture, PictureWords(count), pictures: pictures);
+        return feed.Add(WebUi.FeedKind.Picture, PictureWords(count), pictures: pictures, splash: splash);
     }
 
     /// <summary>

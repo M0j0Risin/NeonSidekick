@@ -149,6 +149,8 @@ Settings every server reads, whatever its kind.
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
 | LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. A count on `/plan gaps` overrides it for that run. | 5 |
+| LLM plan gap clean passes | How many passes in a row must find no gaps before plan mode's **Close gaps…** review ends (1–5; 1 ends on the first pass with none). A pass limit below it lowers it to the limit for that review; `/plan gaps confirm` needs at least 2. | 2 |
+| LLM plan gap ask user | Whether a gap pass may stop to ask you (`ask_user`), take a photo (`camera_capture`) or capture the screen (`screen_capture`). Off, a pass is offered none of the three, whatever *Ask user* and the camera and screen settings say, and a decision only you can make goes into the plan's `## Risks` as an open question. Read every turn, so it applies from the next pass. | on |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
@@ -457,7 +459,7 @@ Each group's tools and what they do are in [Tools](TOOLS.md); this section cover
 
 ### Offered
 
-Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
+Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
 
 ### Core
 
@@ -512,11 +514,18 @@ The tools most profiles use, and the pane's own options.
 * **Package commands:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`) isn't judged by the database rules.
 * **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval pane.
 
+#### Clock
+
+| Setting | What it does | Default |
+|---|---|---|
+| Clock tools | Offers `get_current_time`, `shift_date` and `date_difference`. Off, the model has none, its prompt drops the clock sentence and a conversation no longer opens with the time. `/tools clock` opens its on/off page. | on |
+
 #### Timers
 
 | Setting | What it does | Default |
 |---|---|---|
 | Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the model has none and its prompt drops the timer sentence; `/timer` and timers already running keep working. `/tools timers` opens its on/off page. | on |
+| Timer tone | The tone a timer rings with when it goes off: `silent`, `chime`, `bell`, `beep` or `alarm`. It rings at each repeat until you silence or stop the timer, mid-reply too, for `/timer`'s countdowns and the model's alike, even with *Timer tools* off; a stopwatch never rings. The picker plays the highlighted tone. On this PC only, not on the Web UI. | silent |
 
 #### Ask
 
@@ -525,6 +534,12 @@ The tools most profiles use, and the pane's own options.
 | Ask user | Offers `ask_user`: multiple-choice questions you answer in the app. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
+
+#### Help
+
+| Setting | What it does | Default |
+|---|---|---|
+| Help tools | Offers `neon_help`, the app's own manual. Off, the model has none, its prompt drops the manual's sentence and `/help <words>` shows the manual's own answer. `/tools help` opens its on/off page. | on |
 
 #### Options
 

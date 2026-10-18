@@ -80,6 +80,8 @@ internal sealed partial class ChatScreen
             MemoriesNow = WebMemoriesNow,
             MemorySave = WebSaveMemory,
             MemoryDelete = WebDeleteMemory,
+            MemoryEdit = WebEditMemory,
+            MemoryToggle = WebToggleMemory,
             HistoryNow = WebHistoryNow,
             HistoryClear = WebClearHistory,
             // The status row's 🧠 (2026-10-17): the reflection canceled from the page, as Ctrl+L does.

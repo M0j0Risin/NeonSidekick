@@ -142,6 +142,12 @@ public interface IWebUiBackend
     /// <summary>A memory deleted by its text (2026-10-16; memories have no ids), in any mode; NotFound when it is gone.</summary>
     WebReply DeleteMemory(WebTextBody request, IPAddress? remote);
 
+    /// <summary>A memory's text changed from the 💾 tab (2026-10-18), in any mode, as the PC pane's edit; NotFound when it is gone.</summary>
+    WebReply EditMemory(WebMemoryEdit request, IPAddress? remote);
+
+    /// <summary>A memory turned off or on from the 💾 tab (2026-10-18), in any mode, as the PC pane's toggle; NotFound when it is gone.</summary>
+    WebReply ToggleMemory(WebMemoryToggle request, IPAddress? remote);
+
     /// <summary>The profile's message history for ↑/↓ and the sheet's 🕘 tab (2026-10-16): no drafts set aside, no paste tokens; reads only.</summary>
     WebHistory History();
 

@@ -217,7 +217,7 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
     {
         lock (ListsGate)
         {
-            return new([.. MemoryList], MemoryModeOff);
+            return new([.. MemoryList], MemoryModeOff, MemoryMaxChars);
         }
     }
 
@@ -254,6 +254,58 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         }
 
         return new WebReply(WebOutcome.Ok, "Removed.");
+    }
+
+    /// <summary>The 💾 tab's edits (old → new) and off/ons (text, off) asked (2026-10-18); each changes <see cref="MemoryList"/> as the store would.</summary>
+    public ConcurrentQueue<(string Old, string Text)> MemoriesEdited { get; } = new();
+
+    public ConcurrentQueue<(string Text, bool Off)> MemoriesToggled { get; } = new();
+
+    /// <summary>The cap <see cref="Memories"/> reports (2026-10-18).</summary>
+    public int MemoryMaxChars { get; set; } = 300;
+
+    public WebReply EditMemory(WebMemoryEdit request, IPAddress? remote)
+    {
+        MemoriesEdited.Enqueue((request.Old ?? "", request.Text ?? ""));
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            int at = MemoryList.FindIndex(m => m.Text == request.Old);
+            if (at < 0)
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+            }
+
+            MemoryList[at] = MemoryList[at] with { Text = request.Text ?? "" };
+        }
+
+        return new WebReply(WebOutcome.Ok, "Edited.");
+    }
+
+    public WebReply ToggleMemory(WebMemoryToggle request, IPAddress? remote)
+    {
+        MemoriesToggled.Enqueue((request.Text ?? "", request.Off == true));
+        if (ListReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            int at = MemoryList.FindIndex(m => m.Text == request.Text);
+            if (at < 0)
+            {
+                return new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+            }
+
+            MemoryList[at] = MemoryList[at] with { Off = request.Off == true };
+        }
+
+        return new WebReply(WebOutcome.Ok, request.Off == true ? "Turned off." : "Turned on.");
     }
 
     /// <summary>The message history the page walks (2026-10-16), oldest first.</summary>

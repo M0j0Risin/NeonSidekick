@@ -16,13 +16,22 @@ public partial class ChatScreenTests
 {
     private const string RevisedPlanMarkdown = "# Guide\n\n## Steps\n- [ ] Write it\n- [ ] Test it\n";
 
-    private static ChatResponseUpdate PresentGapsCall(string id, string markdown, params string[] gaps) =>
-        FakeChatClient.Call(id, PresentPlanTool.ToolName, new Dictionary<string, object?>
+    /// <summary>A pass's <c>present_plan</c>; with no gaps, a <c>checked</c> line too (2026-10-17: every clean report says what it checked).</summary>
+    private static ChatResponseUpdate PresentGapsCall(string id, string markdown, params string[] gaps)
+    {
+        var args = new Dictionary<string, object?>
         {
             [PresentPlanTool.TitleArgument] = "Guide",
             [PresentPlanTool.MarkdownArgument] = markdown,
             [PresentPlanTool.GapsArgument] = gaps,
-        });
+        };
+        if (gaps.Length == 0)
+        {
+            args[PresentPlanTool.CheckedArgument] = new[] { "the steps" };
+        }
+
+        return FakeChatClient.Call(id, PresentPlanTool.ToolName, args);
+    }
 
     /// <summary><see cref="PlanFixture"/> with idle steps of any kind: the pane a stopped loop brings back waits at the idle line.</summary>
     private void PlanGapsFixture(ConsoleKeyInfo[][] answers, params Action<ScriptedInput>[] steps)
@@ -60,13 +69,15 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Closing the gaps.");                                         // 1
         _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));  // 2: pass 1 closes one
         _chat.EnqueueText("Pass 1 done.");                                              // 3
-        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown));                      // 4: pass 2 finds none: the pane, approved
-        _chat.EnqueueText("Approved, starting.");                                       // 5
-        _chat.EnqueueText("Done.");                                                     // 6: carried out
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown));                      // 4: pass 2 finds none: clean 1 of 2, no pane (2026-10-17)
+        _chat.EnqueueText("Pass 2 clean.");                                             // 5
+        _chat.Enqueue(PresentGapsCall("p4", RevisedPlanMarkdown));                      // 6: pass 3 confirms: the pane, approved
+        _chat.EnqueueText("Approved, starting.");                                       // 7
+        _chat.EnqueueText("Done.");                                                     // 8: carried out
 
         string output = await RunAsync();
 
-        Assert.Equal(7, _chat.Requests.Count);
+        Assert.Equal(9, _chat.Requests.Count);
         Assert.Equal(PlanText.CloseGapsResult(PlanPath), PlanResultOf(_chat.Requests[1], "p1"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 5, PlanReviewer.Model), LastUserText(_chat.Requests[2]));
         Assert.Contains("A gap review is running (pass 1 of 5)", _chat.Requests[2][0].Text);
@@ -75,19 +86,35 @@ public partial class ChatScreenTests
         Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1), PlanResultOf(_chat.Requests[3], "p2"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model), LastUserText(_chat.Requests[4]));
         Assert.Contains("A gap review is running (pass 2 of 5)", _chat.Requests[4][0].Text);
-        Assert.Equal(PlanText.ApprovedResult(PlanPath), PlanResultOf(_chat.Requests[5], "p3"));
-        Assert.Equal(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[6]));
-        Assert.DoesNotContain("gap review", _chat.Requests[6][0].Text);
+        Assert.Contains("only 2 passes in a row with no gaps return the plan to the user", _chat.Requests[4][0].Text);
+        Assert.DoesNotContain("this pass checks again", _chat.Requests[4][0].Text);
+        // Pass 2 clean: no pane, the streak said; pass 3 is told to look again, with the first focus.
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2), PlanResultOf(_chat.Requests[5], "p3"));
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 3, 5, PlanReviewer.Model, cleanSoFar: 1), LastUserText(_chat.Requests[6]));
+        Assert.Contains("this pass checks again (clean pass 2 of 2)", _chat.Requests[6][0].Text);
+        Assert.Contains(PlanText.ConfirmFocuses[0], _chat.Requests[6][0].Text);
+        Assert.Equal(PlanText.ApprovedResult(PlanPath), PlanResultOf(_chat.Requests[7], "p4"));
+        Assert.Equal(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[8]));
+        Assert.DoesNotContain("gap review", _chat.Requests[8][0].Text);
         // The pane twice, its row and the note; each pass said; no new revision for an unchanged plan.
         Assert.Contains(PlanText.CloseGapsRow, output);
         Assert.Contains(PlanText.ApprovalKeys, output);
         Assert.DoesNotContain(PlanText.ReviewerTitle, output);
         Assert.Contains(PlanText.PassNoticeLines(1, 5, 2, ["Add a test step"])[0], output);
         Assert.Contains("· Add a test step", output);
-        Assert.Contains(PlanText.ConvergedNotice(PlanPath, 2, 1), output);
-        Assert.Contains(PlanText.ConvergedNote(2, 1), output);
+        Assert.Contains(PlanText.CleanPassNotice(2, 5, 1, 2), output);
+        Assert.Contains("· checked: the steps", output);
+        Assert.Contains(PlanText.ConvergedNotice(PlanPath, 3, 1, 2), output);
+        Assert.Contains(PlanText.ConvergedNote(3, 1, 2), output);
+        // The summary ahead of the converged notice, said once.
+        int summary = output.IndexOf(PlanText.Glyph + " Gap review, 3 passes", StringComparison.Ordinal);
+        Assert.True(summary >= 0 && summary < output.IndexOf(PlanText.ConvergedNotice(PlanPath, 3, 1, 2), StringComparison.Ordinal));
+        Assert.Contains("pass 3: clean (order), confirmed", output);
         Assert.Contains("Test it", File.ReadAllText(PlanFile));
-        Assert.Equal(2, PlanDocument.TryParse(File.ReadAllText(PlanFile))!.Revision);
+        var header = PlanDocument.TryParse(File.ReadAllText(PlanFile))!;
+        Assert.Equal(2, header.Revision);
+        // The review recorded in the header (2026-10-17), over the body as it stood; approval kept it.
+        Assert.Equal(PlanText.ReviewLine(3, 1, PlanGapStop.Converged, 2, PlanDocument.Fingerprint(PlanDocument.Body(File.ReadAllText(PlanFile)))), header.Review);
         Assert.Contains("Done.", output);
     }
 
@@ -133,6 +160,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_APassWithNoRevision_Stops_AndPlanGapsStartsAgain()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 1);   // the second run's one clean pass ends it; confirming is not this test's subject
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/plan gaps", "/exit");
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Closing the gaps.");
@@ -146,7 +174,10 @@ public partial class ChatScreenTests
         Assert.Contains(PlanText.GapStopNotice(PlanGapStop.NoRevision, 1, 0), output);
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 5, PlanReviewer.Model), LastUserText(_chat.Requests[3]));
         Assert.Equal(PlanText.CancelledResult(PlanPath), PlanResultOf(_chat.Requests[4], "p2"));
-        Assert.DoesNotContain(PlanText.ConvergedNotice(PlanPath, 1, 0), output);
+        // Canceled on the converged pane (2026-10-17): the review is still said and recorded before plan mode ends, never lost.
+        Assert.Contains(PlanText.ConvergedNotice(PlanPath, 1, 0), output);
+        Assert.Equal(PlanText.ReviewLine(1, 0, PlanGapStop.Converged, 1, PlanDocument.Fingerprint(PlanDocument.Body(File.ReadAllText(PlanFile)))), PlanDocument.TryParse(File.ReadAllText(PlanFile))!.Review);
+        Assert.Equal(PlanStatus.Cancelled, PlanDocument.TryParse(File.ReadAllText(PlanFile))!.Status);
     }
 
     [Fact]
@@ -192,6 +223,7 @@ public partial class ChatScreenTests
     public async Task PlanGaps_WithAdvisors_ThePickerAsksWho_AndTheAdvisorRuleRides()
     {
         AdvisorProfiles();
+        _settings.Update(d => d.PlanGapCleanPasses = 1);
         PlanFixture([[Keys.Char('g'), Keys.Enter, Keys.Char('a'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Closing the gaps.");
@@ -210,6 +242,7 @@ public partial class ChatScreenTests
     public async Task PlanGaps_TheModelReviewing_LeavesTheAdvisorsOut_AndNoPickerWhenTheToolIsOff()
     {
         AdvisorProfiles();
+        _settings.Update(d => d.PlanGapCleanPasses = 1);
         _settings.Update(d => d.ToolsDisabled = [NeonAdvisorTool.ToolName]);
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
         _chat.Enqueue(PresentPlanCall());

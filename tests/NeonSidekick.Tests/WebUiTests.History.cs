@@ -90,6 +90,31 @@ public sealed partial class WebUiTests
     }
 
     [Fact]
+    public void TheMemoryEditAndToggle_ReachTheirHooks_AndWithNoneOrNoMemoryAreNotFound()
+    {
+        // The 💾 tab's edit and off/on (2026-10-18): no hook or no memory named is NotFound as a delete is; an off/on saying neither is refused.
+        Assert.Equal((WebOutcome.NotFound, WebUiText.MemoryGone), (_session.EditMemory(new WebMemoryEdit { Old = "x", Text = "y" }, null).Outcome, _session.EditMemory(new WebMemoryEdit { Old = "x", Text = "y" }, null).Message));
+        Assert.Equal(WebOutcome.NotFound, _session.ToggleMemory(new WebMemoryToggle { Text = "x", Off = true }, null).Outcome);
+
+        var calls = new List<string>();
+        _session.MemoryEdit = (old, text, _) => { calls.Add("edit " + old + " > " + text); return WebReply.Ok; };
+        _session.MemoryToggle = (text, off, _) => { calls.Add((off ? "off " : "on ") + text); return WebReply.Ok; };
+
+        _session.EditMemory(new WebMemoryEdit { Old = "Likes tea.", Text = "Likes green tea." }, null);
+        _session.EditMemory(new WebMemoryEdit { Old = "Likes tea." }, null);   // no text: the hook answers it (Empty refused there)
+        Assert.Equal(WebOutcome.NotFound, _session.EditMemory(new WebMemoryEdit { Text = "y" }, null).Outcome);   // no memory named
+        _session.ToggleMemory(new WebMemoryToggle { Text = "Likes tea.", Off = true }, null);
+        _session.ToggleMemory(new WebMemoryToggle { Text = "Likes tea.", Off = false }, null);
+        Assert.Equal((WebOutcome.Refused, WebUiText.MemoryToggleUnsaid), (_session.ToggleMemory(new WebMemoryToggle { Text = "Likes tea." }, null).Outcome, _session.ToggleMemory(new WebMemoryToggle { Text = "Likes tea." }, null).Message));
+        Assert.Equal(WebOutcome.NotFound, _session.ToggleMemory(new WebMemoryToggle { Off = true }, null).Outcome);
+
+        Assert.Equal(["edit Likes tea. > Likes green tea.", "edit Likes tea. > ", "off Likes tea.", "on Likes tea."], calls);
+        Assert.All(
+            new[] { WebUiText.Words.MemoryEdit, WebUiText.Words.MemoryEditSave, WebUiText.Words.MemoryEditCancel, WebUiText.Words.MemoryTurnOff, WebUiText.Words.MemoryTurnOn },
+            word => Assert.False(string.IsNullOrEmpty(word)));
+    }
+
+    [Fact]
     public void TheSheetsWords_AreSentWithTheSnapshot()
     {
         Assert.Equal(WebUiText.PromptsTab, WebUiText.Words.PromptsTab);

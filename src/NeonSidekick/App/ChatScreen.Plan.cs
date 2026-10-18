@@ -58,6 +58,12 @@ internal sealed partial class ChatScreen
 
         /// <summary><c>/plan gaps 25</c> (2026-10-17): a pass count out of range; the number as typed is the rest.</summary>
         BadGapPasses,
+
+        /// <summary><c>/plan chat</c> alone (2026-10-17): plan mode on to talk a plan through first, or talking again while planning; nothing sent.</summary>
+        Chat,
+
+        /// <summary><c>/plan ready</c> alone while planning (2026-10-17): the plan asked for now, or its pane opened on the current revision.</summary>
+        Ready,
     }
 
     /// <summary>The <c>/plan</c> list while planning: the subcommands, each with its note. Pinned.</summary>
@@ -68,7 +74,9 @@ internal sealed partial class ChatScreen
         new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked canceled"),
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
         new(PlanText.SaveWord, "keep the last reply as the plan and ask for approval: /plan save [name]"),
-        new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any] [passes]"),
+        new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any|confirm] [passes]"),
+        new(PlanText.ChatWord, "talk the plan through again; the model won't present until you ask"),
+        new(PlanText.ReadyWord, "ask for the plan now, or open its approval pane once one is presented"),
         new(PlanText.ShowWord, "where the plan stands"),
     ];
 
@@ -78,12 +86,14 @@ internal sealed partial class ChatScreen
         new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Model), "the planning model reviews alone"),
         new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Advisor), "an advisor whose role fits best finds the gaps each pass"),
         new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Any), "the model reviews, asking advisors only where a role fits"),
+        new(PlanText.GapsWord + " " + PlanText.ReviewerWord(PlanReviewer.Confirm), "the model closes the gaps; an advisor checks once it finds none"),
     ];
 
-    /// <summary>The <c>/plan</c> list outside plan mode: <c>open</c> alone — the rest is a requirement, free text.</summary>
+    /// <summary>The <c>/plan</c> list outside plan mode: <c>open</c> and <c>chat</c> (2026-10-17) alone — the rest is a requirement, free text.</summary>
     public static readonly IReadOnlyList<CompletionItem> PlanVerbsIdle =
     [
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
+        new(PlanText.ChatWord, "talk a plan through before it's written; /plan ready when you want it"),
     ];
 
     /// <summary>The /sys Tools tab's name for the group that holds <c>present_plan</c>.</summary>
@@ -149,9 +159,16 @@ internal sealed partial class ChatScreen
         }
 
         string words = string.Join(' ', args.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+        // /plan chat (2026-10-17): alone, in plan mode or out of it; with words after it, a requirement or detail as before.
+        if (words == PlanText.ChatWord)
+        {
+            return PlanCommand.Chat;
+        }
+
         PlanCommand? verb = words switch
         {
             "" => planning ? PlanCommand.Show : PlanCommand.Usage,
+            PlanText.ReadyWord => PlanCommand.Ready,
             PlanText.ShowWord => PlanCommand.Show,
             PlanText.ApproveWord => PlanCommand.Approve,
             PlanText.ApproveWord + " " + PlanText.FreshSwitch or PlanText.FreshSwitch + " " + PlanText.ApproveWord => PlanCommand.ApproveFresh,
@@ -173,14 +190,25 @@ internal sealed partial class ChatScreen
         return !planning ? strip : strip.Length == 0 ? PlanText.Glyph : PlanText.Glyph + GlyphSeparator + strip;
     }
 
-    /// <summary>The <c>/tools</c> list as the next turn applies it: widened by every tool plan mode drops while planning (<see cref="PlanTools.Widen"/>), so <c>/sys</c> shows what is sent.</summary>
+    /// <summary>
+    /// The <c>/tools</c> list as the next turn applies it: widened by every tool plan mode drops while planning (<see cref="PlanTools.Widen"/>), so <c>/sys</c> shows what is sent;
+    /// since 2026-10-18 also by the tools that wait on the user while a gap pass may not (<see cref="GapAsksBarred"/>).
+    /// </summary>
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        return _plan.Active
+        var turn = _plan.Active
             ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
             : disabled;
+        return GapAsksBarred(effective) ? PlanTools.WithoutAsking(turn) : turn;
     }
+
+    /// <summary>
+    /// Whether this turn is a gap pass that may not wait on the user (2026-10-18, the user's ask): a pass under way and
+    /// <see cref="AppSettingsData.PlanGapAskUser"/> off, read every turn. Such a pass is offered none of <see cref="PlanTools.AskingTools"/>;
+    /// the turn whose pane chose <c>Close gaps…</c> (the loop still pending) and every other plan-mode turn keep them.
+    /// </summary>
+    private bool GapAsksBarred(AppSettingsData effective) => _plan.Reviewing && !effective.PlanGapAskUser;
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
@@ -244,6 +272,12 @@ internal sealed partial class ChatScreen
                 PlanText.ParseGapsArgs(rest, out var reviewer, out int? passes, out _);
                 return await StartGapsAsync(reviewer ?? PlanReviewer.Model, passes, cancellationToken).ConfigureAwait(false);
             }
+
+            case PlanCommand.Chat:
+                return EnterPlanChat();
+
+            case PlanCommand.Ready:
+                return await PlanReadyAsync(cancellationToken).ConfigureAwait(false);
 
             case PlanCommand.Usage:
                 _transcript.Error(PlanText.UsageError);
@@ -660,16 +694,33 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        var loop = _plan.StartClosing(reviewer, passes ?? _effective().PlanGapPasses);
+        var loop = _plan.StartClosing(reviewer, passes ?? _effective().PlanGapPasses, _effective().PlanGapCleanPasses);
         return await SendGapPassAsync(BeginGapPass(loop, path, ReadPlanBody(path)), cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The next pass begun over <paramref name="body"/>: its one-line message (the reviewer the model alone when no advisor is offered).</summary>
+    /// <summary>
+    /// The next pass begun over <paramref name="body"/>: its one-line message (the reviewer the model alone when no advisor is offered). Since
+    /// 2026-10-17 the pass's own reviewer (<see cref="PlanGapLoop.PassReviewer"/>), its meter, a confirming pass's wording, and — as pass 1
+    /// begins — the notice that a short limit lowered the clean count.
+    /// </summary>
     private GapAfterTurn BeginGapPass(PlanGapLoop loop, string path, string? body)
     {
-        loop.BeginPass(body);
-        var reviewer = PlanAdvisorsOffered() ? loop.Reviewer : PlanReviewer.Model;
-        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer), null);
+        bool offered = PlanAdvisorsOffered();
+        loop.BeginPass(body, PlanMeter(), offered);
+        if (loop.Pass == 1 && loop.CleanLowered)
+        {
+            _transcript.Notice(PlanText.CleanLoweredNotice(loop.Limit, loop.CleanAsked));
+        }
+
+        var reviewer = offered ? loop.PassReviewer : PlanReviewer.Model;
+        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer, loop.CleanStreak), null);
+    }
+
+    /// <summary>The usage now, for a gap pass's cost (2026-10-17): the main model's tokens less the reflections', the advisors', the screen's clock.</summary>
+    private PlanPassMeter PlanMeter()
+    {
+        var usage = _session.Usage;
+        return new PlanPassMeter(_time.GetUtcNow(), usage.Session.Total - usage.Learning.Total, usage.Advisors.Total);
     }
 
     /// <summary>A pass's message sent as a turn, the <see cref="CarryOutPlanAsync"/> shape.</summary>
@@ -691,13 +742,22 @@ internal sealed partial class ChatScreen
     /// </summary>
     private GapAfterTurn? TakeGapPass(TurnOutcome outcome)
     {
+        bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
+        string? path = _plan.Path;
+        if (_plan.TakeFinished(out string? finishedPath) is { } finished)
+        {
+            // A review that converged inside the turn (2026-10-17): its pane may have started another review or ended plan mode, so it was
+            // moved aside; said and recorded here, once, plan mode on or off, before the review its pane started (still pending) goes on.
+            string? finishedBody = finishedPath is null ? null : ReadPlanBody(finishedPath);
+            finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, PlanMeter());
+            EndGapReview(finished, PlanGapStop.Converged, finishedPath, finishedBody);
+        }
+
         if (_plan.Closing is not { } loop)
         {
             return null;
         }
 
-        bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
-        string? path = _plan.Path;
         if (loop.Pending)
         {
             // A message queued under the reply goes first, as it does between passes (2026-10-14, the review: the first pass went
@@ -720,14 +780,27 @@ internal sealed partial class ChatScreen
         }
 
         string? body = path is null ? null : ReadPlanBody(path);
-        var stop = loop.Next(onItsOwn, QueueDrains && _queue.Count > 0, body);
+        var stop = loop.Next(onItsOwn, QueueDrains && _queue.Count > 0, body, PlanMeter());
+        var cost = loop.History.Count > 0 ? loop.History[^1] : null;
+        bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
         if (loop.PassGaps.Count > 0)
         {
-            bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
-            DiagnosticLog.Info(AppCategory, PlanText.PassLogLine(loop.Pass, _plan.Revision, loop.PassGaps, advisorAsked));
-            foreach (string line in PlanText.PassNoticeLines(loop.Pass, loop.Limit, _plan.Revision, loop.PassGaps))
+            DiagnosticLog.Info(AppCategory, PlanText.PassLogLine(loop.Pass, _plan.Revision, loop.PassGaps, advisorAsked, loop.PassMinor, cost));
+            foreach (string line in PlanText.PassNoticeLines(loop.Pass, loop.Limit, _plan.Revision, loop.PassGaps, loop.PassMinor))
             {
                 _transcript.Notice(line);
+            }
+        }
+        else if (loop.PassClean && !loop.Converged)
+        {
+            // A clean pass short of the streak (2026-10-17): the log every time, the notice only when another pass follows (a stop says its own).
+            DiagnosticLog.Info(AppCategory, PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, cost));
+            if (stop is null)
+            {
+                foreach (string line in PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor))
+                {
+                    _transcript.Notice(line);
+                }
             }
         }
 
@@ -737,21 +810,52 @@ internal sealed partial class ChatScreen
         }
 
         _plan.StopClosing();
+        return EndGapReview(loop, reason, path, body);
+    }
+
+    /// <summary>
+    /// A review over (2026-10-17): the summary of its passes, the <c>review:</c> line for a review that ended on its own (converged, cut short,
+    /// at its limit, stalled) written from the file as it now stands, then the stop's own notice — and for a limit, a cut-short or a stall the
+    /// plan back on the pane at the idle line (or where it stands, with no pane).
+    /// </summary>
+    private GapAfterTurn? EndGapReview(PlanGapLoop loop, PlanGapStop reason, string? path, string? body)
+    {
+        foreach (string line in PlanText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses))
+        {
+            _transcript.Notice(line);
+        }
+
+        if (path is not null && body is not null && reason is PlanGapStop.Converged or PlanGapStop.Unconfirmed or PlanGapStop.Limit or PlanGapStop.Stalled)
+        {
+            string review = PlanText.ReviewLine(loop.Pass, loop.Closed, reason, loop.CleanPasses, PlanDocument.Fingerprint(body));
+            if (PlanFiles.MarkReview(_files, path, review, _time.GetLocalNow(), _plan.Requirement) is { } problem)
+            {
+                _transcript.Warning(problem);
+            }
+        }
+
         if (reason == PlanGapStop.Converged)
         {
-            _transcript.Notice(PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed));
+            bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
+            DiagnosticLog.Info(AppCategory, PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
+            _transcript.Notice(PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed, loop.CleanPasses));
+            foreach (string line in PlanText.ReportLines(loop.PassChecked, loop.PassMinor))
+            {
+                _transcript.Notice(line);
+            }
+
             return null;
         }
 
         _transcript.Notice(PlanText.GapStopNotice(reason, loop.Pass, loop.Closed));
-        if (reason is not (PlanGapStop.Limit or PlanGapStop.Stalled) || path is null)
+        if (reason is not (PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed) || path is null)
         {
             return null;
         }
 
         if (_pane.Enabled)
         {
-            return new GapAfterTurn(null, new PlanPresentation(_plan.Title ?? PlanDocument.FirstHeading(body ?? "") ?? path, path, _plan.Revision, body ?? "") { Note = PlanText.StoppedNote(reason, loop.Pass, loop.PassGaps.Count) });
+            return new GapAfterTurn(null, new PlanPresentation(_plan.Title ?? PlanDocument.FirstHeading(body ?? "") ?? path, path, _plan.Revision, body ?? "") { Note = PlanText.StoppedNote(reason, loop.Pass, loop.PassGaps.Count, loop.CleanCount, loop.CleanPasses) });
         }
 
         // No pane to put it back on: where the plan stands, /plan approve the way on.
@@ -761,6 +865,85 @@ internal sealed partial class ChatScreen
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// <c>/plan chat</c> (2026-10-17, the user's ask): outside plan mode, plan mode on with no requirement and talking, nothing sent — the
+    /// first message opens it; while planning, talking again. <see cref="PlanCommand.Enter"/>'s checks and resets.
+    /// </summary>
+    private bool EnterPlanChat()
+    {
+        if (_plan.Active)
+        {
+            _plan.ResumeTalking();
+            SyncPlanChrome();
+            SavePlanState();
+            _transcript.Notice(PlanText.ChatResumedNotice);
+            return false;
+        }
+
+        if (!_effective().LlmOfferTools)
+        {
+            _transcript.Error(PlanText.NeedsToolsError);
+            return false;
+        }
+
+        if (_session.Assistant is null)
+        {
+            _transcript.Error(NoAssistantError);
+            return false;
+        }
+
+        _plan.EnterChat();
+        _executingPlan = null;
+        _planDraftReply = null;
+        SyncPlanChrome();
+        SavePlanState();
+        _transcript.Notice(PlanText.ChatEnteredNotice);
+        return false;
+    }
+
+    /// <summary>
+    /// <c>/plan ready</c> (2026-10-17, the user's pick): with nothing presented yet, or while talking, talking ends and <see cref="PlanText.ReadyMessage"/>
+    /// is sent as a turn; with a plan presented, its approval pane opens on the current revision with no turn (where it stands, with no pane).
+    /// Before the first message of a <c>/plan chat</c> there is nothing to plan yet.
+    /// </summary>
+    private async Task<bool> PlanReadyAsync(CancellationToken cancellationToken)
+    {
+        if (_plan.Requirement.Length == 0)
+        {
+            _transcript.Error(PlanText.ReadyTooSoonError);
+            return false;
+        }
+
+        if (_plan.Path is not { } path || _plan.Talking)
+        {
+            _plan.StopTalking();
+            SyncPlanChrome();
+            SavePlanState();
+            _transcript.User(PlanText.ReadyMessage);
+            return await RunMessageAsync(PlanText.ReadyMessage, [], cancellationToken).ConfigureAwait(false);
+        }
+
+        if (PlanFiles.ReadWhole(_files, path) is not { } text)
+        {
+            _transcript.Error(PlanText.PlanUnreadableError(path));
+            return false;
+        }
+
+        string body = PlanDocument.Body(text);
+        var plan = new PlanPresentation(_plan.Title ?? PlanDocument.FirstHeading(body) ?? path, path, _plan.Revision, body);
+        if (_pane.Enabled || FromWebNow)
+        {
+            return await AskStoppedPlanAsync(plan, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var line in PlanText.ShowLines(_plan))
+        {
+            _transcript.Notice(line);
+        }
+
+        return false;
     }
 
     /// <summary>A loop that stopped short (its limit, a stall): the plan back on the approval pane at the idle line, the verdict acted on.</summary>
@@ -818,6 +1001,7 @@ internal sealed partial class ChatScreen
             }
 
             _transcript.Notice(PlanText.DoneNotice(path));
+            _transcript.Notice(PlanText.ComesTogetherNotice);   // 2026-10-17, the user's ask: its own line, right after the done line
             _executingPlan = null;
             _executingShown = null;
             SavePlanState();
@@ -863,11 +1047,15 @@ internal sealed partial class ChatScreen
         }
 
         _planDraftReply = reply;
-        _transcript.Notice(PlanText.UnpresentedHint);
+        // Talking it through (2026-10-17): the reply is kept for /plan save, but the hint stays quiet until the user is ready.
+        if (!_plan.Talking)
+        {
+            _transcript.Notice(PlanText.UnpresentedHint);
+        }
     }
 
     /// <summary>The input row's placeholder as plan mode stands.</summary>
-    private void SyncPlanChrome() => _pane.Placeholder = _plan.Active ? PlanText.Placeholder : InputPlaceholder;
+    private void SyncPlanChrome() => _pane.Placeholder = !_plan.Active ? InputPlaceholder : _plan.Talking ? PlanText.TalkingPlaceholder : PlanText.Placeholder;
 
     /// <summary>Plan mode into the session row at once (an enter, a cancel, an approval), not only at the turn's end; nothing without a row.</summary>
     private void SavePlanState()

@@ -466,6 +466,8 @@ public sealed class WebUiHost : IWebUiHost
                     PromptDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebPromptDelete).ConfigureAwait(false) is { } unsaved ? _backend.DeletePrompt(unsaved, remote) : null,
                     MemorySavePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } memory ? _backend.SaveMemory(memory, remote) : null,
                     MemoryDeletePath => await ReadAsync(context, WebUiJsonContext.Default.WebTextBody).ConfigureAwait(false) is { } forget ? _backend.DeleteMemory(forget, remote) : null,
+                    MemoryEditPath => await ReadAsync(context, WebUiJsonContext.Default.WebMemoryEdit).ConfigureAwait(false) is { } edit ? _backend.EditMemory(edit, remote) : null,
+                    MemoryTogglePath => await ReadAsync(context, WebUiJsonContext.Default.WebMemoryToggle).ConfigureAwait(false) is { } toggle ? _backend.ToggleMemory(toggle, remote) : null,
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
                     LearnCancelPath => _backend.CancelLearning(remote),   // the status row's 🧠 (2026-10-17); no body either
                     QueueResumePath => _backend.ResumeQueue(remote),   // the held queue's banner (2026-10-17); no body either
@@ -608,7 +610,7 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
-                or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or HistoryPath or HistoryClearPath
+                or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or MemoryEditPath or MemoryTogglePath or HistoryPath or HistoryClearPath
                 or LearnCancelPath or QueueResumePath
                 or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
@@ -723,6 +725,12 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>A memory row's 🗑️ (2026-10-16): the memory's text.</summary>
     public const string MemoryDeletePath = "/api/memory/delete";
+
+    /// <summary>A memory edited on the 💾 tab (2026-10-18): its text as listed and its new text.</summary>
+    public const string MemoryEditPath = "/api/memory/edit";
+
+    /// <summary>A memory turned off or on from the 💾 tab (2026-10-18): its text and the state asked for.</summary>
+    public const string MemoryTogglePath = "/api/memory/toggle";
 
     /// <summary>The message history (2026-10-16): ↑/↓ on the page and the sheet's 🕘 tab.</summary>
     public const string HistoryPath = "/api/history";

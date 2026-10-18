@@ -72,6 +72,7 @@ namespace NeonSidekick.App;
 /// <param name="ImageTools">How many picture tools the next turn offers (none without codecs, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ImageRule"/> while any is.</param>
 /// <param name="ShoppingEnabled">The setting <c>Shopping tools</c> (2026-10-11).</param>
 /// <param name="TimersEnabled">The setting <c>Timer tools</c> (later on 2026-10-15): off, the rules carry no <see cref="Assistant.TimerRule"/>.</param>
+/// <param name="ClockEnabled">The setting <c>Clock tools</c> (2026-10-18): off, the rules carry no <see cref="Assistant.ClockRule"/>.</param>
 /// <param name="ShoppingTools">How many shopping tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShoppingRule"/> while any is.</param>
 /// <param name="GlobalSkills">The profile's <c>Global skills</c> switch as the catalog's last scan read it (2026-10-13, <see cref="SkillCatalog.GlobalEnabled"/>): off, the skills block names no global scope and its status says <see cref="SystemPromptSummary.GlobalOffSuffix"/>.</param>
 /// <param name="Admin">The admin families' sentences the turn would carry (2026-10-15, the admin-tools plan): <see cref="AdminRules"/> as <c>ComposeTurnTools</c> works it out.</param>
@@ -145,7 +146,8 @@ public sealed record SystemPromptFacts(
     bool EventLogEnabled = false,
     int EventLogTools = 0,
     bool TimersEnabled = true,
-    AdminRules Admin = AdminRules.None)
+    AdminRules Admin = AdminRules.None,
+    bool ClockEnabled = true)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.EventLogRuleHere"/> (Windows' sentence, or the Mac's since 2026-10-18): tools on, the switch on with a reader (wevtapi, or the unified log on a Mac) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
@@ -233,6 +235,9 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether the rules carry <see cref="Assistant.TimerRule"/>: any of the three timer tools not switched off on <c>/tools</c> (2026-09-20; the emptied group drops its sentence).</summary>
     public bool Timers => TimersEnabled && !(Off(StartTimerTool.ToolName) && Off(StopTimerTool.ToolName) && Off(ListTimersTool.ToolName));
+
+    /// <summary>Whether the rules carry <see cref="Assistant.ClockRule"/>: <c>Clock tools</c> on and any of the three clock tools not switched off on <c>/tools</c> (2026-10-18, the timers' rule).</summary>
+    public bool Clock => ClockEnabled && !(Off(GetCurrentTimeTool.ToolName) && Off(ShiftDateTool.ToolName) && Off(DateDifferenceTool.ToolName));
 }
 
 /// <summary>
@@ -267,7 +272,7 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
     /// </summary>
     public IReadOnlyDictionary<string, string> ToolNotes { get; init; } = EmptyNotes;
 
-    /// <summary>The settings row that switches the whole group (<c>File tools</c> for Files …); null for the standing clock and timer groups.</summary>
+    /// <summary>The settings row that switches the whole group (<c>File tools</c> for Files …; <c>Clock tools</c>, <c>Timer tools</c> and <c>Help tools</c> for the standing groups since 2026-10-15 and 2026-10-18); null for a group without one.</summary>
     public SettingsField? Switch { get; init; }
 
     /// <summary>
@@ -381,6 +386,12 @@ public static class SystemPromptSummary
     /// <summary>The Timers group's note while <c>Timer tools</c> is off (later on 2026-10-15). Pinned.</summary>
     public const string TimersOffSuffix = "Timer tools is off";
 
+    /// <summary>The Clock group's note while <c>Clock tools</c> is off (2026-10-18). Pinned.</summary>
+    public const string ClockOffSuffix = "Clock tools is off";
+
+    /// <summary>The Help group's note while <c>Help tools</c> is off (2026-10-18). Pinned.</summary>
+    public const string HelpOffSuffix = "Help tools is off";
+
     /// <summary>The tail of the Event logs group while its tools cannot be offered: the switch off, or not Windows (2026-10-15). Pinned.</summary>
     public const string EventLogOffSuffix = "Event log tools is off, or this is not Windows";
 
@@ -455,7 +466,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog, clock: facts.Clock);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -596,7 +607,8 @@ public static class SystemPromptSummary
             shopping: facts.Shopping,
             globalSkills: facts.GlobalSkills,
             eventLog: facts.EventLog,
-            admin: facts.ToolsEnabled ? facts.Admin : AdminRules.None);
+            admin: facts.ToolsEnabled ? facts.Admin : AdminRules.None,
+            clock: facts.Clock);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -731,7 +743,9 @@ public static class SystemPromptSummary
         bool eventLogEnabled = true,
         bool eventLogTicked = true,
         bool timersEnabled = true,
-        IReadOnlyList<AdminGroupSpec>? admin = null)
+        IReadOnlyList<AdminGroupSpec>? admin = null,
+        bool clockEnabled = true,
+        bool helpEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -744,14 +758,15 @@ public static class SystemPromptSummary
         string questionsNote = !askEnabled ? NotOffered(AskOffSuffix) : !paneOn ? NotOffered(NoPaneSuffix) : standing;
         var groups = new List<ToolGroup>(8)
         {
-            Group("Clock", clock, standing, toolsEnabled, null, disabled),
+            // The clock's own switch since 2026-10-18 (the user's ask): Clock tools.
+            Group(ToolsText.ClockMenuTitle, clock, !clockEnabled ? NotOffered(ClockOffSuffix) : standing, clockEnabled && toolsEnabled, SettingsField.ClockTools, disabled),
             // The timers' own switch since later on 2026-10-15 (the user's ask): Timer tools.
             Group(ToolsText.TimersMenuTitle, timers, !timersEnabled ? NotOffered(TimersOffSuffix) : standing, timersEnabled && toolsEnabled, SettingsField.TimerTools, disabled),
         };
         if (help is not null)
         {
-            // The app's own manual (2026-10-02): standing after the timers as the turn offers it, no switch of its own; /tools switches it off by name.
-            groups.Add(Group(HelpText.GroupTitle, help, standing, toolsEnabled, null, disabled));
+            // The app's own manual (2026-10-02): standing after the timers as the turn offers it; its own switch, Help tools, since 2026-10-18 (the user's ask).
+            groups.Add(Group(HelpText.GroupTitle, help, !helpEnabled ? NotOffered(HelpOffSuffix) : standing, helpEnabled && toolsEnabled, SettingsField.HelpTools, disabled));
         }
 
         groups.Add(Group("Files", files, filesNote, filesEnabled && toolsEnabled, SettingsField.FileTools, disabled));

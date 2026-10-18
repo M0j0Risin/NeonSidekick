@@ -38,7 +38,7 @@ namespace NeonSidekick.App;
 /// menu's rows under it edited as a plain tab's are, ←/→ walking every menu along both strips and Tab / Shift+Tab stepping past a group,
 /// which keeps the menu last shown (<see cref="MenuPane.StepLeaf"/>). A picker under a group is still titled <c>Tools › Databases › …</c>
 /// (<see cref="GroupCrumb"/>). Files holds File, Image (later on 2026-10-10, the user's ask: the File menu's picture rows), UNC, GitLib and Obsidian;
-/// Core (Standard until later still that day, as Devices was Media; the user's calls) Ask, Web, Shell and Options (later still on 2026-10-10, the user's ask), four tabs of their own until then. Every menu is headed since then too
+/// Core (Standard until later still that day, as Devices was Media; the user's calls) Ask, Web, Shell and Options (later still on 2026-10-10, the user's ask), four tabs of their own until then (Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18). Every menu is headed since then too
 /// (<see cref="SettingsMenu.ToolsMenuSections"/>, the <c>/settings</c> look): a row is found through <see cref="SettingsMenu.SectionedField"/>, never by index.
 /// Since 2026-10-11 (the user's asks) Home, the strip's last, holds HomeAssistant (off Integrations) and Shopping (off Core), and Integrations,
 /// left with Docker, ComfyUI and YouTube, is Apps.

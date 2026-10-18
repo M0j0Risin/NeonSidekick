@@ -82,7 +82,7 @@ public class HelpSyntaxTests
     {
         Assert.Empty(HelpSyntax.Forms("/clear"));   // its one form is the bare word: the description says it all
         Assert.Empty(HelpSyntax.Forms("/nosuch"));
-        Assert.Equal(["/timer [<duration> [<name>]]", "/timer stop <name>|all"], HelpSyntax.Forms("/timer"));
+        Assert.Equal(["/timer [<duration> [<name>]]", "/timer stopwatch [<name>]", "/timer stop <name>|all"], HelpSyntax.Forms("/timer"));
         Assert.Equal(["/settings", "/settings <words>", "/settings changed"], HelpSyntax.Forms("/settings"));   // a bare form among others stays
         Assert.Equal(["/remember <text>"], HelpSyntax.Forms("/remember"));
     }

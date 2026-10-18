@@ -184,8 +184,9 @@ public partial class ChatScreenTests
     public void HelpLookupOffered_NeedsTheToolsAndNeonHelp()
     {
         var none = new HashSet<string>(StringComparer.Ordinal);
-        Assert.True(ChatScreen.HelpLookupOffered(offerTools: true, none));
-        Assert.False(ChatScreen.HelpLookupOffered(offerTools: false, none));
-        Assert.False(ChatScreen.HelpLookupOffered(offerTools: true, new HashSet<string>(StringComparer.Ordinal) { NeonHelpTool.ToolName }));
+        Assert.True(ChatScreen.HelpLookupOffered(offerTools: true, helpTools: true, none));
+        Assert.False(ChatScreen.HelpLookupOffered(offerTools: false, helpTools: true, none));
+        Assert.False(ChatScreen.HelpLookupOffered(offerTools: true, helpTools: false, none));   // Help tools off (2026-10-18)
+        Assert.False(ChatScreen.HelpLookupOffered(offerTools: true, helpTools: true, new HashSet<string>(StringComparer.Ordinal) { NeonHelpTool.ToolName }));
     }
 }

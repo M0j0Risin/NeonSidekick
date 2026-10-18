@@ -279,7 +279,9 @@ public static class HelpCommands
             new("/plan approve [--fresh]", "While planning, approve the presented plan by typing instead of on the pane (you may edit the file first)."),
             new("/plan cancel", "While planning, leave plan mode; the file is kept, marked `canceled`."),
             new("/plan save [<name>]", "While planning, keep a reply that looks like a plan as the plan when the model never called `present_plan` (a notice says so), and bring up the approval pane."),
-            new("/plan gaps [model|advisor|any] [passes]", "While planning, review the presented plan pass after pass until a pass finds no gaps, then bring the approval pane back; the pane's *Close gaps…* does the same. `model` reviews alone (the default), `advisor` has an advisor find the gaps each pass, `any` consults advisors where a role fits. Esc stops it; *LLM plan gap passes* caps the passes, and a number (0–20, 0 for no cap) caps this run instead."),
+            new("/plan gaps [model|advisor|any|confirm] [passes]", "While planning, review the presented plan pass after pass until passes in a row find no gaps, then bring the approval pane back; the pane's *Close gaps…* does the same. *LLM plan gap clean passes* says how many in a row (2 by default), each pass after a clean one told to look again somewhere new. `model` reviews alone (the default), `advisor` has an advisor find the gaps each pass, `any` consults advisors where a role fits, and `confirm` has the model close the gaps and an advisor check once it finds none. Esc stops it; *LLM plan gap passes* caps the passes, and a number (0–20, 0 for no cap) caps this run instead."),
+            new("/plan chat", "Start plan mode to talk a plan through first: nothing is sent, your first message opens it, and the model writes the plan only when you ask (or /plan ready). While planning, it turns talking back on."),
+            new("/plan ready", "Ask for the plan now; once one is presented, open its approval pane on the current revision without a new turn."),
             new("/plan open <name>", "Pick a plan up again, in or out of plan mode (names complete from `.neon/plans/`). Plan mode turns on over that file, the file goes back to `draft`, and the model reads it and asks what should change; `/plan approve` then carries out only the unticked steps."),
             new("/plan open", "List the plans with their status and progress in a pane."),
         ]),
@@ -449,7 +451,8 @@ public static class HelpCommands
         new("/timer",
         [
             new("/timer [<duration> [<name>]]", "List the timers, or start one: `10m`, `90s`, `1h30m`, `5 min` (a bare number is minutes), up to 24 hours."),
-            new("/timer stop <name>|all", "Stop one timer, or every one."),
+            new("/timer stopwatch [<name>]", "Start a stopwatch that counts up (called `stopwatch` without a name); again, it says how long it has run. `/timer stop <name>` stops it and says the time."),
+            new("/timer stop <name>|all", "Stop one timer or stopwatch, or every one."),
         ]),
         new("/toolbar",
         [
@@ -459,7 +462,7 @@ public static class HelpCommands
         new("/tools",
         [
             new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes."),
-            new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and Esc comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
+            new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and Esc comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
             new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); Esc closes it. The toolbar's lock and Ctrl+Alt+L run it."),
             new("/tools shell police", "Open the *Shell police* on/off page; turning it off asks first, and **strings** (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),

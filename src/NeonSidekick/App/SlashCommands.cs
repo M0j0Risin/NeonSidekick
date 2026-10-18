@@ -111,7 +111,7 @@ public enum SlashCommand
     /// <summary><c>/profile</c>: pick, switch to, add, delete, rename or reset a profile; since 2026-09-21 <c>edit</c> opens its <c>profile.json</c> and <c>reload</c> reads it back; since 2026-09-28 <c>push</c> and <c>pull</c> copy the settings between profiles, and since 2026-10-09 one section of them (<c>keys</c>, <c>servers</c>, <c>commands</c>, <c>history</c>, <c>policestrings</c>: the user's ask, <c>/keycopy</c>, <c>/srvcopy</c> and <c>/cmdcopy</c> folded in, each gaining a pull; <c>prompts</c> on 2026-10-13, the saved prompts).</summary>
     Profile,
 
-    /// <summary><c>/timer</c>: list the timers, start one, stop one or all.</summary>
+    /// <summary><c>/timer</c>: list the timers, start one or a stopwatch (2026-10-18), stop one or all.</summary>
     Timer,
 
     /// <summary><c>/cwd</c>: show the working directory, or <c>/cwd &lt;path&gt;</c> | <c>~</c> (<c>default</c> went 2026-09-16) | <c>browse</c> (the folder picker on the pane, 2026-09-21).</summary>
@@ -477,7 +477,7 @@ public static class SlashCommands
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
             new("/theme", "switch or export the color theme"),
-            new("/timer", "set, list and stop timers"),
+            new("/timer", "set, list and stop timers, stopwatches"),
             new("/toolbar", ToolbarItems.HelpSummary),
             new("/tools", "switch the model's tools on or off"),
             new("/tree", "show the working directory's tree"),

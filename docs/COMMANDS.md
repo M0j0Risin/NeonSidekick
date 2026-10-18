@@ -114,7 +114,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
 | `/settings changed` | Lists the settings that differ from their defaults, to edit one or put it back. |
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
-| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping` or `timers`. |
+| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
 | `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings. Its **loaded** tab shows the skills in this conversation. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
@@ -293,14 +293,16 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan approve [--fresh]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first. |
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
-| `/plan gaps [model\|advisor\|any] [passes]` | Reviews the plan pass after pass until no gaps are left. |
+| `/plan gaps [model\|advisor\|any\|confirm] [passes]` | Reviews the plan pass after pass until passes in a row find no gaps. |
+| `/plan chat` | Starts plan mode to talk a plan through first: nothing is sent, and the model writes the plan only when you ask. While planning, it turns talking back on. |
+| `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
 | `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
 | `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search); under *Reflection mode* `update-only` it only improves an existing skill. Needs *Agent skills* and *LLM offer tools* on. |
-| `/timer [<duration> [<name>]]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), or stops one or all. Works with *Timer tools* off. |
+| `/timer [<duration> [<name>]]`, `/timer stopwatch [<name>]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), starts a stopwatch that counts up (`stopwatch` without a name; again, it says how long it has run), or stops one or all (a stopwatch says its time). Works with *Timer tools* off. A timer going off rings *Timer tone* (silent by default); a stopwatch never rings. |
 
 ## Command details
 
@@ -310,11 +312,18 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 * **Tools:** only read-only ones (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
 * **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first.
+* **The web:** while `web_search` or `web_fetch` is offered, the model is told to look up the APIs, versions and specifications the plan depends on rather than guess, and to name its sources in the plan's Context; a gap pass also counts an unchecked one as a gap.
 * **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
+* **Talking it through:** `/plan chat` opens plan mode with nothing sent. Your first message opens the conversation, and the model discusses, asks and researches but doesn't present a plan until you ask for it, in your own words or with `/plan ready`; the plan's title then becomes its requirement. The plan-like-reply hint stays quiet meanwhile (`/plan save` still works). `/plan ready` in any plan mode asks for the plan, or, once one is presented, opens its approval pane with no new turn.
 * **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision. A number (`/plan gaps 3`, `/plan gaps advisor 3`) caps this run's passes instead of *LLM plan gap passes*.
-* **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), or the model consulting advisors (`y`).
-* **When it stops:** at a pass with no gaps (the approval pane comes back), at its pass limit (the count given to `/plan gaps`, else *LLM plan gap passes*), when a pass changes nothing or repeats itself, when you type a message, or on Esc.
+* **Clean passes:** a review ends only after *LLM plan gap clean passes* in a row find no gaps (2 by default). A pass after a clean one is told the last pass found none and to look again, each such pass pointed at a different area (the steps' order, how each is verified, the risks, then what the plan assumes). A pass with no gaps must say what it checked, and the notices list it. Small fixes that aren't gaps (wording, formatting) go in `present_plan`'s `minor` and don't break a clean streak.
+* **Unattended:** with *LLM plan gap ask user* off, a pass asks nothing, takes no photo and captures no screen; a decision only you can make goes into the plan's `## Risks` as an "Open question (your call):" bullet, which isn't a gap, and the pass's notice lists it.
+* **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or the model closing the gaps and an advisor checking once it finds none (`c`, `/plan gaps confirm`, at least 2 clean passes).
+* **When it stops:** after the clean passes in a row (the approval pane comes back), at its pass limit (the count given to `/plan gaps`, else *LLM plan gap passes*; a clean pass there brings the pane back unconfirmed), when a pass changes nothing or repeats itself, when you type a message, or on Esc. Every pass counts toward the limit, and a limit below the clean count lowers it to the limit for that run, with a notice.
+* **The summary:** when a review stops, a notice lists its passes: each one's gaps, minor fixes, focus, time and tokens.
+* **The record:** a review that ends on its own (clean, at its limit, or stalled) writes a `review:` line into the plan's header with a fingerprint of its text. `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`; ticking steps is no edit, and a new revision drops the line.
+* **Done:** when every step is ticked, the done line is followed by "📝 I ❤️ it when a plan comes together."
 * `/new`, `/clear` and a profile switch leave plan mode.
 
 ### Bot conversations

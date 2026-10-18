@@ -804,6 +804,31 @@ public sealed class AppSettingsData
     public const int DefaultPlanGapPasses = 5;
 
     /// <summary>
+    /// How many passes in a row must find no gaps before plan mode's gap-closing loop ends (2026-10-17, the user's report: a pass
+    /// sometimes answered "0 gaps" when the next review would still find plenty, and one such pass ended the review). 1 is the
+    /// behavior until then, the first clean pass ending it; 2, the default, asks one confirming pass, told the last pass found
+    /// none and pointed at an area no earlier pass covered. Every pass counts toward <see cref="PlanGapPasses"/>; a clean pass at
+    /// that limit stops the loop unconfirmed, and a limit below this count lowers it to the limit for that review. <c>/plan gaps
+    /// confirm</c> raises it to at least 2. <see cref="MinPlanGapCleanPasses"/> to <see cref="MaxPlanGapCleanPasses"/>. Read when a
+    /// loop starts. The Plan mode section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapPasses"/>. No variable.
+    /// </summary>
+    public int PlanGapCleanPasses { get; set; } = DefaultPlanGapCleanPasses;
+
+    public const int MinPlanGapCleanPasses = 1;
+    public const int MaxPlanGapCleanPasses = 5;
+    public const int DefaultPlanGapCleanPasses = 2;
+
+    /// <summary>
+    /// Whether a pass of plan mode's gap review may wait on the user (2026-10-18, the user's ask: a review left to run unattended
+    /// stopped on a question). On, the default, a pass is offered <c>ask_user</c>, <c>camera_capture</c> and <c>screen_capture</c>
+    /// as any plan-mode turn is; off, it is offered none of the three (whatever <see cref="AskUser"/> and the camera and screen
+    /// settings say, during a pass only), and a decision only the user can make goes into the plan's <c>## Risks</c> as an open
+    /// question, which is not a gap. Read every turn, so turning it off mid-review applies from the next pass. The Plan mode
+    /// section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapCleanPasses"/>. No variable.
+    /// </summary>
+    public bool PlanGapAskUser { get; set; } = true;
+
+    /// <summary>
     /// Model id sent with every request. Empty means "the first chat model the server lists".
     /// vLLM and SGLang require an exact match with <c>--served-model-name</c>.
     /// </summary>
@@ -3383,6 +3408,30 @@ public sealed class AppSettingsData
     /// keep working. Read at each turn. No variable.
     /// </summary>
     public bool TimerTools { get; set; } = true;
+
+    /// <summary>
+    /// The tone a countdown rings with when it goes off (2026-10-18, the user's ask: with TTS off nothing was heard): one of
+    /// <see cref="Timers.TimerTones.Names"/>, <c>silent</c> the default (the behavior until then). It rings at each repeat until
+    /// the timer is acknowledged or stopped, mid-reply too, for <c>/timer</c>'s countdowns and the model's alike, whatever
+    /// <see cref="TimerTools"/> says; a stopwatch never rings. On the PC only (the Web UI shows the alert line and plays nothing).
+    /// An unknown value reads as <c>silent</c>. Read at each alert. The Timers menu on <c>/tools</c> › Core. No variable.
+    /// </summary>
+    public string TimerTone { get; set; } = Timers.TimerTones.Default;
+
+    /// <summary>
+    /// Whether a turn offers the clock tools (2026-10-18, the user's ask: the Clock tab on <c>/tools</c> › Core, after Shell): on (the default,
+    /// as before) <c>get_current_time</c>, <c>shift_date</c> and <c>date_difference</c> stand on every turn and a conversation opens with the
+    /// time; off the model has none, its prompt drops the clock sentence (the "use a tool when it helps" one stays), no conversation opens
+    /// with the clock call, and bots and advisors have none either. Read at each turn. No variable.
+    /// </summary>
+    public bool ClockTools { get; set; } = true;
+
+    /// <summary>
+    /// Whether a turn offers the app's own manual, <c>neon_help</c> (2026-10-18, the user's ask: the Help tab on <c>/tools</c> › Core, after
+    /// Ask): on (the default, as before) it stands on every turn; off the model has it not, its prompt drops the manual's sentence, bots and
+    /// advisors have it not either, and <c>/help &lt;words&gt;</c> shows the manual's own answer. Read at each turn. No variable.
+    /// </summary>
+    public bool HelpTools { get; set; } = true;
 
     /// <summary>
     /// Whether deletes go to the Recycle bin (the Trash on a Mac; later on 2026-10-15, the user's ask: on by default, every delete was

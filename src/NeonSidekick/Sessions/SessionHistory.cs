@@ -96,7 +96,11 @@ public sealed class StoredHistory
     public Dictionary<string, string>? AdvisorSessions { get; set; }
 }
 
-/// <summary>A session's plan mode (2026-09-26): the requirement, and the plan's file, title, revision and first save once presented.</summary>
+/// <summary>
+/// A session's plan mode (2026-09-26): the requirement, and the plan's file, title, revision and first save once presented; since
+/// 2026-10-17 (<c>/plan chat</c>) whether it is still talking the plan through, and whether the requirement is only the conversation's
+/// opening (an older row reads both false).
+/// </summary>
 public sealed class StoredPlan
 {
     public string Requirement { get; set; } = "";
@@ -104,6 +108,12 @@ public sealed class StoredPlan
     public string? Title { get; set; }
     public int Revision { get; set; }
     public DateTimeOffset? Created { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Talking { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RequirementIsOpening { get; set; }
 }
 
 /// <summary>

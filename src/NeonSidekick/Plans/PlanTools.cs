@@ -109,6 +109,25 @@ public static class PlanTools
         "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_place", "shopping_layout",
     };
 
+    /// <summary>
+    /// The read-only tools that stop a turn on a pane until the user answers: a question, a photo, a look at the screen
+    /// (2026-10-18, the user's ask). A gap pass under <see cref="Settings.AppSettingsData.PlanGapAskUser"/> off is offered none
+    /// of them, so a review can run unattended; <c>screen_list</c> opens no pane and stays.
+    /// </summary>
+    public static readonly IReadOnlySet<string> AskingTools = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Llm.Tools.AskUserTool.ToolName, Llm.Tools.CameraCaptureTool.ToolName, Llm.Tools.ScreenCaptureTool.ToolName,
+    };
+
+    /// <summary><paramref name="disabled"/> with every one of <see cref="AskingTools"/> added (2026-10-18): what a gap pass that may not wait on the user leaves out. Pure.</summary>
+    public static IReadOnlySet<string> WithoutAsking(IReadOnlySet<string> disabled)
+    {
+        ArgumentNullException.ThrowIfNull(disabled);
+        var union = new HashSet<string>(disabled, StringComparer.Ordinal);
+        union.UnionWith(AskingTools);
+        return union;
+    }
+
     /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>
     public static bool Allowed(string tool) => ReadOnly.Contains(tool);
 

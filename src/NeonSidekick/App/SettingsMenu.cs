@@ -1073,7 +1073,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     WebOpenLinksIn,
 
-    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 20, 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts.</summary>
+    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 20, 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
     PlanGapPasses,
 
     /// <summary>A toggle: whether this profile hosts the Web UI (<see cref="Settings.AppSettingsData.WebUi"/>). The Web UI tab under Client (2026-10-14, the user's ask); a flip starts or stops the server (<see cref="SettingsChanges.WebUi"/>), so it is refused mid-turn. Last in the enum, as every newcomer.</summary>
@@ -1230,6 +1230,21 @@ public enum SettingsField
 
     /// <summary>A toggle: whether a Web UI page may see and drive the Browser window during a bot check (<see cref="Settings.AppSettingsData.WebUiBotCheckControl"/>). The Web UI tab's Guardrails run under <see cref="WebUiConnectionDetails"/> (2026-10-17, the user's ask); read at each request. Last in the enum, as every newcomer.</summary>
     WebUiBotCheckControl,
+
+    /// <summary>Typed: how many passes in a row must find no gaps before plan mode's gap review ends, 1 to 5 (<see cref="Settings.AppSettingsData.PlanGapCleanPasses"/>). The Plan mode section of Servers › Common, right under <see cref="PlanGapPasses"/> (2026-10-17, the user's report and pick); no reconnect (read when a loop starts). Last in the enum, as every newcomer.</summary>
+    PlanGapCleanPasses,
+
+    /// <summary>A toggle: whether a gap pass may ask the user, take a photo or capture the screen (<see cref="Settings.AppSettingsData.PlanGapAskUser"/>). The Plan mode section of Servers › Common, right under <see cref="PlanGapCleanPasses"/> (2026-10-18, the user's ask); no reconnect (read every turn). Last in the enum, as every newcomer.</summary>
+    PlanGapAskUser,
+
+    /// <summary>A picker over <see cref="Timers.TimerTones.Names"/>: the tone a countdown rings with when it goes off, and at each repeat (<see cref="Settings.AppSettingsData.TimerTone"/>). The Timers menu on <c>/tools</c> › Core, under <see cref="TimerTools"/> (2026-10-18, the user's ask); no reconnect (read at each alert). Last in the enum, as every newcomer.</summary>
+    TimerTone,
+
+    /// <summary>A toggle: whether a turn offers the clock tools (<see cref="Settings.AppSettingsData.ClockTools"/>). The Clock menu on <c>/tools</c> › Core, after Shell (2026-10-18, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    ClockTools,
+
+    /// <summary>A toggle: whether a turn offers the app's manual, <c>neon_help</c> (<see cref="Settings.AppSettingsData.HelpTools"/>). The Help menu on <c>/tools</c> › Core, after Ask (2026-10-18, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    HelpTools,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1492,6 +1507,10 @@ internal sealed partial class SettingsMenu
     public static readonly string PlanGapPassesRangeError =
         "must be " + AppSettingsData.MinPlanGapPasses.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxPlanGapPasses.ToString(CultureInfo.InvariantCulture) + " passes (0 for no limit)";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.PlanGapCleanPasses"/> (2026-10-17). Pinned.</summary>
+    public static readonly string PlanGapCleanPassesRangeError =
+        "must be " + AppSettingsData.MinPlanGapCleanPasses.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxPlanGapCleanPasses.ToString(CultureInfo.InvariantCulture) + " passes";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebUiPort"/> (2026-10-14). Pinned.</summary>
     public static readonly string WebUiPortRangeError =
         "must be a port from " + AppSettingsData.MinWebUiPort.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxWebUiPort.ToString(CultureInfo.InvariantCulture);
@@ -1674,7 +1693,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
-         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses,
+         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.LlmScanMode, SettingsField.LlmApiKey,
@@ -1763,12 +1782,15 @@ internal sealed partial class SettingsMenu
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
         [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
-        [SettingsField.TimerTools],
+        [SettingsField.TimerTools, SettingsField.TimerTone],   // the tone under the switch since 2026-10-18
         // The admin families (2026-10-15, the admin-tools plan): Services, Tasks and Directory on Admin after EventLog; Network on Core after Web, on Admin first since 2026-10-16 (the user's order).
         [SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores],
         [SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal],
         [SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal],
         [SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectorySetPassword, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal],
+        // The standing groups' own switches (2026-10-18, the user's asks): Clock on Core after Shell, Help on Core after Ask.
+        [SettingsField.ClockTools],
+        [SettingsField.HelpTools],
     ];
 
     /// <summary>
@@ -2190,9 +2212,10 @@ internal sealed partial class SettingsMenu
             or SettingsField.ShoppingTools or SettingsField.EventLogTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
-            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin
+            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.ClockTools or SettingsField.HelpTools
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
-            or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools;
+            or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools
+            or SettingsField.PlanGapAskUser;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2268,6 +2291,8 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
         SettingsField.PlanGapPasses => "LLM plan gap passes",
+        SettingsField.PlanGapCleanPasses => "LLM plan gap clean passes",
+        SettingsField.PlanGapAskUser => "LLM plan gap ask user",
         SettingsField.WebUi => "Web UI",
         SettingsField.WebUiPort => "Web UI port",
         SettingsField.WebUiReach => "Web UI reach",
@@ -2474,6 +2499,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageTools => "Image tools",
         SettingsField.ShoppingTools => "Shopping tools",
         SettingsField.TimerTools => "Timer tools",
+        SettingsField.ClockTools => "Clock tools",
+        SettingsField.HelpTools => "Help tools",
+        SettingsField.TimerTone => "Timer tone",
         SettingsField.FileDeletesToRecycleBin => "File deletes to " + Files.FileText.RecycleBinName,
         SettingsField.NetworkTools => "Network tools",
         SettingsField.NetworkToolsReach => "Network tools reach",
@@ -2668,6 +2696,8 @@ internal sealed partial class SettingsMenu
             SettingsField.LlmPictureMegabytes => data.LlmPictureMegabytes > 0 ? data.LlmPictureMegabytes.ToString(CultureInfo.InvariantCulture) + " MB" : NoCapLabel,
             SettingsField.LlmMaxToolIterations => RoundTrips(data.LlmMaxToolIterations),
             SettingsField.PlanGapPasses => GapPasses(data.PlanGapPasses),
+            SettingsField.PlanGapCleanPasses => GapPasses(data.PlanGapCleanPasses),
+            SettingsField.PlanGapAskUser => OnOff(data.PlanGapAskUser),
             SettingsField.ImageThumbnailSize => data.ImageThumbnailSize,
             SettingsField.FileTreeMaxLength => Entries(data.FileTreeMaxLength),
             SettingsField.FileTreeShowSizes => OnOff(data.FileTreeShowSizes),
@@ -2895,6 +2925,9 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageTools => OnOff(data.ImageTools),
             SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
             SettingsField.TimerTools => OnOff(data.TimerTools),
+            SettingsField.ClockTools => OnOff(data.ClockTools),
+            SettingsField.HelpTools => OnOff(data.HelpTools),
+            SettingsField.TimerTone => Timers.TimerTones.Normalize(data.TimerTone),
             SettingsField.FileDeletesToRecycleBin => OnOff(data.FileDeletesToRecycleBin),
             >= SettingsField.NetworkTools and <= SettingsField.DirectoryDomainsGlobal => AdminFieldValue(field, data, profileDirectory),
             SettingsField.ShoppingStores => NeonSidekick.Shopping.ShoppingText.ManageStoresLabel,
@@ -4023,6 +4056,7 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? data.LlmMaxTurns.ToString(CultureInfo.InvariantCulture) : LlmMaxTurnsAutoLabel,
         SettingsField.LlmMaxToolIterations => data.LlmMaxToolIterations.ToString(CultureInfo.InvariantCulture),
         SettingsField.PlanGapPasses => data.PlanGapPasses.ToString(CultureInfo.InvariantCulture),
+        SettingsField.PlanGapCleanPasses => data.PlanGapCleanPasses.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
         SettingsField.FileTreeMaxLength => data.FileTreeMaxLength.ToString(CultureInfo.InvariantCulture),
         SettingsField.WorkingDirectory => data.WorkingDirectory,
@@ -5417,6 +5451,11 @@ internal sealed partial class SettingsMenu
             return await PickSttDestinationAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
+        if (field == SettingsField.TimerTone)
+        {
+            return await PickTimerToneAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
         if (field is SettingsField.CameraShutter or SettingsField.CameraPreview or SettingsField.CameraResolution or SettingsField.CameraDevice or SettingsField.ScreenAsk)
         {
             return await PickCameraAsync(field, saved, cancellationToken).ConfigureAwait(false);
@@ -5909,6 +5948,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.PlanGapPasses = passes);
+                return true;
+
+            case SettingsField.PlanGapCleanPasses:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int clean) || clean < AppSettingsData.MinPlanGapCleanPasses || clean > AppSettingsData.MaxPlanGapCleanPasses)
+                {
+                    Sink.Error($"{FieldName(field)} {PlanGapCleanPassesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.PlanGapCleanPasses = clean);
                 return true;
 
             case SettingsField.WebUiPort:
@@ -7895,6 +7944,9 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageTools => data.ImageTools,
             SettingsField.ShoppingTools => data.ShoppingTools,
             SettingsField.TimerTools => data.TimerTools,
+            SettingsField.ClockTools => data.ClockTools,
+            SettingsField.HelpTools => data.HelpTools,
+            SettingsField.PlanGapAskUser => data.PlanGapAskUser,
             SettingsField.FileDeletesToRecycleBin => data.FileDeletesToRecycleBin,
             SettingsField.NetworkTools => data.NetworkTools,
             SettingsField.NetworkCertificateStores => data.NetworkCertificateStores,
@@ -8024,6 +8076,9 @@ internal sealed partial class SettingsMenu
             case SettingsField.ImageTools: data.ImageTools = on; break;
             case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
             case SettingsField.TimerTools: data.TimerTools = on; break;
+            case SettingsField.ClockTools: data.ClockTools = on; break;
+            case SettingsField.HelpTools: data.HelpTools = on; break;
+            case SettingsField.PlanGapAskUser: data.PlanGapAskUser = on; break;
             case SettingsField.FileDeletesToRecycleBin: data.FileDeletesToRecycleBin = on; break;
             case SettingsField.NetworkTools: data.NetworkTools = on; break;
             case SettingsField.NetworkCertificateStores: data.NetworkCertificateStores = on; break;
@@ -8100,6 +8155,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
         SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",
         SettingsField.TimerTools => on ? "timer tools enabled" : "timer tools disabled",
+        SettingsField.ClockTools => on ? "clock tools enabled" : "clock tools disabled",
+        SettingsField.HelpTools => on ? "help tools enabled" : "help tools disabled",
+        SettingsField.PlanGapAskUser => on ? "a gap pass may ask you, take a photo or capture the screen" : "a gap pass never waits on you; your calls go in as open questions",
         SettingsField.FileDeletesToRecycleBin => on ? "deleted files go to the " + Files.FileText.RecycleBinName : "delete files directly",
         SettingsField.NetworkTools => on ? "network tools enabled" : "network tools disabled",
         SettingsField.NetworkCertificateStores => on ? "net_certs offered with the network tools" : "net_certs not offered",

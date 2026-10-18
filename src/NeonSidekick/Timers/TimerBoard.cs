@@ -18,8 +18,12 @@ public enum TimerStartOutcome
 /// <summary><see cref="Timer"/> is the new timer for <see cref="TimerStartOutcome.Started"/>, the existing one for <see cref="TimerStartOutcome.Duplicate"/>, default otherwise.</summary>
 public readonly record struct TimerStartResult(TimerStartOutcome Outcome, TimerSnapshot Timer);
 
-/// <summary>One timer as it stands: <see cref="Remaining"/> is rounded up to whole seconds and zero once <see cref="Ringing"/>.</summary>
-public readonly record struct TimerSnapshot(string Name, TimeSpan Duration, TimeSpan Remaining, DateTimeOffset DueLocal, bool Ringing);
+/// <summary>
+/// One timer as it stands: <see cref="Remaining"/> is rounded up to whole seconds and zero once <see cref="Ringing"/>. A
+/// <see cref="Stopwatch"/> (2026-10-18, <c>/timer stopwatch</c>) counts up: <see cref="Elapsed"/> is whole seconds rounded down,
+/// <see cref="Duration"/> and <see cref="Remaining"/> are zero, and <see cref="DueLocal"/> is when it started.
+/// </summary>
+public readonly record struct TimerSnapshot(string Name, TimeSpan Duration, TimeSpan Remaining, DateTimeOffset DueLocal, bool Ringing, bool Stopwatch = false, TimeSpan Elapsed = default);
 
 /// <summary>One alert to print and speak. <see cref="Repeat"/> is 0 for the first, then 1, 2, … every <see cref="TimerBoard.RepeatInterval"/>; <see cref="Overdue"/> is the time since it expired, whole seconds.</summary>
 public readonly record struct TimerAlert(string Name, TimeSpan Duration, TimeSpan Overdue, int Repeat);
@@ -39,6 +43,11 @@ public readonly record struct TimerAlert(string Name, TimeSpan Duration, TimeSpa
 ///
 /// <para>A ringing timer repeats its alert every <see cref="RepeatInterval"/> until
 /// <see cref="Acknowledge"/> (any input at the line) or <see cref="Stop"/> removes it.</para>
+///
+/// <para>A stopwatch (2026-10-18, the user's ask: <c>/timer stopwatch</c>, no laps) shares the board and its names, its
+/// <see cref="MaxTimers"/> and <see cref="Stop"/>/<see cref="StopAll"/>, but counts up from its start and never rings: it has
+/// nothing due, so <see cref="Reschedule"/> and <see cref="OnTick"/> pass it by and it queues no alert; <see cref="Acknowledge"/>
+/// removes only ringing timers, so it survives any input.</para>
 /// </summary>
 public sealed class TimerBoard : IDisposable
 {
@@ -125,11 +134,48 @@ public sealed class TimerBoard : IDisposable
         }
     }
 
+    /// <summary>
+    /// A stopwatch called <paramref name="name"/> (2026-10-18): the same name rules, the same duplicate check (against timers and
+    /// stopwatches alike) and the same <see cref="MaxTimers"/> as <see cref="Start"/>; <see cref="TimerStartOutcome.BadDuration"/> never.
+    /// </summary>
+    public TimerStartResult StartStopwatch(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string normalized = TimerText.NormalizeName(name);
+        if (!TimerText.IsValidName(normalized))
+        {
+            return new(TimerStartOutcome.BadName, default);
+        }
+
+        lock (_lock)
+        {
+            long now = _time.GetTimestamp();
+            var existing = Find(normalized);
+            if (existing is not null)
+            {
+                return new(TimerStartOutcome.Duplicate, Snapshot(existing, now));
+            }
+
+            if (_entries.Count >= MaxTimers)
+            {
+                return new(TimerStartOutcome.Full, default);
+            }
+
+            var entry = new Entry(normalized, TimeSpan.Zero, now) { Stopwatch = true };
+            _entries.Add(entry);
+            DiagnosticLog.Info(Category, StopwatchStartedLogLine(normalized));
+            return new(TimerStartOutcome.Started, Snapshot(entry, now));
+        }
+    }
+
     /// <summary>The log category of the timers' lines.</summary>
     public const string Category = "Timers";
 
     /// <summary><c>Timer "tea" started for 5 minutes</c>. Pinned.</summary>
     public static string StartedLogLine(string name, TimeSpan duration) => $"Timer \"{name}\" started for {TimerText.Describe(duration)}";
+
+    /// <summary><c>Stopwatch "tea" started</c> (2026-10-18). Pinned.</summary>
+    public static string StopwatchStartedLogLine(string name) => $"Stopwatch \"{name}\" started";
 
     /// <summary><c>Timer "tea" rang</c> (its first alert; the repeats are not logged). Pinned.</summary>
     public static string RangLogLine(string name) => $"Timer \"{name}\" rang";
@@ -201,16 +247,18 @@ public sealed class TimerBoard : IDisposable
         }
     }
 
-    /// <summary>Running timers by remaining time, then the ringing ones in the order they expired.</summary>
+    /// <summary>Running timers by remaining time, then the stopwatches oldest first (2026-10-18), then the ringing ones in the order they expired.</summary>
     public IReadOnlyList<TimerSnapshot> Snapshot()
     {
         lock (_lock)
         {
             long now = _time.GetTimestamp();
             return _entries
-                .Select(e => Snapshot(e, now))
-                .OrderBy(s => s.Ringing ? 1 : 0)
-                .ThenBy(s => s.Remaining)
+                .Select(e => (Entry: e, Snapshot: Snapshot(e, now)))
+                .OrderBy(x => x.Entry.Ringing ? 2 : x.Entry.Stopwatch ? 1 : 0)
+                .ThenBy(x => x.Snapshot.Remaining)
+                .ThenBy(x => x.Entry.Stopwatch ? x.Entry.Started : 0)
+                .Select(x => x.Snapshot)
                 .ToArray();
         }
     }
@@ -254,6 +302,12 @@ public sealed class TimerBoard : IDisposable
 
     private TimerSnapshot Snapshot(Entry entry, long now)
     {
+        if (entry.Stopwatch)
+        {
+            var elapsed = _time.GetElapsedTime(entry.Started, now);
+            return new(entry.Name, TimeSpan.Zero, TimeSpan.Zero, ClockText.LocalNow(_time) - elapsed, false, Stopwatch: true, Elapsed: RoundDown(elapsed));
+        }
+
         var remaining = entry.Ringing ? TimeSpan.Zero : RoundUp(entry.Duration - _time.GetElapsedTime(entry.Started, now));
         if (remaining < TimeSpan.Zero)
         {
@@ -274,6 +328,11 @@ public sealed class TimerBoard : IDisposable
         TimeSpan? next = null;
         foreach (var entry in _entries)
         {
+            if (entry.Stopwatch)
+            {
+                continue;   // nothing due (2026-10-18)
+            }
+
             var delay = entry.Ringing
                 ? RepeatInterval - _time.GetElapsedTime(entry.LastAlert, now)
                 : entry.Duration - _time.GetElapsedTime(entry.Started, now);
@@ -304,6 +363,11 @@ public sealed class TimerBoard : IDisposable
             long now = _time.GetTimestamp();
             foreach (var entry in _entries)
             {
+                if (entry.Stopwatch)
+                {
+                    continue;   // never rings (2026-10-18)
+                }
+
                 if (!entry.Ringing)
                 {
                     var elapsed = _time.GetElapsedTime(entry.Started, now);
@@ -359,6 +423,9 @@ public sealed class TimerBoard : IDisposable
         public long Started { get; }
 
         public bool Ringing { get; set; }
+
+        /// <summary>A stopwatch (2026-10-18): counts up from <see cref="Started"/>, never rings.</summary>
+        public bool Stopwatch { get; init; }
 
         /// <summary>Timestamp of the expiry, set when it rang.</summary>
         public long Due { get; set; }

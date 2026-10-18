@@ -98,6 +98,7 @@ public sealed class SidekickApp
     private readonly Tasks.ITaskSystem? _taskSystem;
     private readonly ActiveDirectory.IDirectorySystem? _directorySystem;
     private readonly Func<string?> _joinedDomain;
+    private readonly bool _headlessNarrow;
     private readonly Files.IRecycleBin? _recycleBin;
     private readonly Viewer.IVideoPlayer? _videoPlayer;
 
@@ -257,8 +258,11 @@ public sealed class SidekickApp
         Services.IServiceSystem? serviceSystem = null,
         Tasks.ITaskSystem? taskSystem = null,
         ActiveDirectory.IDirectorySystem? directorySystem = null,
-        Func<string?>? joinedDomain = null)
+        Func<string?>? joinedDomain = null,
+        bool headlessNarrow = false)
     {
+        // Headless notices on Terminal.app's main screen, not piped (2026-10-17): a space after a one-cell selector sequence (the ❤️ line).
+        _headlessNarrow = headlessNarrow;
         // The admin families (2026-10-15, the admin-tools plan): the pinger by system, the Windows systems in the app on Windows, fakes in tests, none elsewhere.
         _pinger = pinger;
         _serviceSystem = serviceSystem;
@@ -808,8 +812,11 @@ public sealed class SidekickApp
         var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading, editing: pdfEditing);
         // The picture tools (2026-10-10): their own group, Image tools the switch.
         var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory);
-        // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too.
-        IReadOnlyList<AIFunction> standingTools = [.. clockTools, .. ChatScreen.HelpTools()];
+        // The app's own manual beside the clock (2026-10-02): it reads documentation only, so headless offers it too. Both behind their
+        // switches, Clock tools and Help tools, read per turn (2026-10-18; StandingTools below).
+        var helpTools = ChatScreen.HelpTools();
+        IReadOnlyList<AIFunction> StandingTools(AppSettingsData effective) =>
+            [.. (ChatScreen.ClockOffered(effective) ? clockTools : []), .. (ChatScreen.HelpOffered(effective) ? helpTools : [])];
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
         using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
         _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);
@@ -908,7 +915,7 @@ public sealed class SidekickApp
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26, made above): no pane to approve on, so a presented plan is saved and the user approves it with
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
-        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses));
+        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses), () => EffectiveSettings.PlanGapCleanPasses);
         var planState = new HeadlessPlanState();
         // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
         string? gapTurn = null;
@@ -1347,7 +1354,7 @@ public sealed class SidekickApp
                 // tool off) the manual answers itself, ahead of the server check. A bare /help still goes on as the text it is.
                 if (SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } helpWords))
                 {
-                    if (assistant is not null && ChatScreen.HelpLookupOffered(EffectiveSettings.LlmOfferTools, ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled)))
+                    if (assistant is not null && ChatScreen.HelpLookupOffered(EffectiveSettings.LlmOfferTools, ChatScreen.HelpOffered(EffectiveSettings), ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled)))
                     {
                         text = Help.HelpText.AskPrompt(helpWords);
                     }
@@ -1386,7 +1393,7 @@ public sealed class SidekickApp
                 {
                     // /plan headless (2026-09-26): the screen's words, the approval typed; a line that starts a turn comes back as its text.
                     Assistant live = assistant;
-                    if (await HeadlessPlanAsync(plan, planState, files, args, () => { live.History.Clear(); session.Usage.ResetConversation(); sessionId = null; }).ConfigureAwait(false) is not { } planned)
+                    if (await HeadlessPlanAsync(plan, planState, files, args, () => { live.History.Clear(); session.Usage.ResetConversation(); sessionId = null; }, () => HeadlessPlanMeter(session)).ConfigureAwait(false) is not { } planned)
                     {
                         if (sessionId is { } planSession)
                         {
@@ -1398,6 +1405,12 @@ public sealed class SidekickApp
 
                     text = planned;
                     planState.RevisionShown = plan.Revision;
+                }
+
+                // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built.
+                if (plan.Active)
+                {
+                    plan.NoteMessage(text);
                 }
 
                 // As the screen does before a message: the last reply's context past the LLM auto compact (%) share compacts first.
@@ -1419,7 +1432,7 @@ public sealed class SidekickApp
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt; a fresh network scan budget too (2026-10-15).
                 networkBudget.Reset();
-                ChatScreen.PrepareTurn(assistant, memory, memoryTools, standingTools, persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan), preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools), imageTools: imageTools, imagesEnabled: EffectiveSettings.ImageTools, neonAdvisorTools: neonAdvisorTools, neonAdvisorEnabled: ChatScreen.AdvisorsOffered(EffectiveSettings), composed: inputs => lastInputs = inputs, shoppingTools: shoppingTools, shoppingEnabled: ChatScreen.ShoppingOffered(EffectiveSettings), eventLogTools: eventLogTools, eventLogEnabled: ChatScreen.EventLogOffered(EffectiveSettings, eventLog, macLog), networkTools: ChatScreen.NetworkToolsFor(networkTools, EffectiveSettings, _pinger), networkEnabled: ChatScreen.NetworkOffered(EffectiveSettings), serviceTools: ChatScreen.ServiceToolsFor(serviceTools, EffectiveSettings, pane: false, services.Catalog()), serviceEnabled: ChatScreen.ServicesOffered(EffectiveSettings, services), taskTools: ChatScreen.TaskToolsFor(taskTools, EffectiveSettings, pane: false, tasks.Catalog()), taskEnabled: ChatScreen.TasksOffered(EffectiveSettings, tasks), directoryTools: directoryTools, directoryEnabled: ChatScreen.DirectoryOffered(EffectiveSettings, directory));
+                ChatScreen.PrepareTurn(assistant, memory, memoryTools, StandingTools(EffectiveSettings), persona, operata, vocalia, MemoryMode.Enabled(EffectiveSettings), speechOutput: false, EffectiveSettings.LlmMaxToolIterations, EffectiveSettings.LlmOfferTools, webTools, EffectiveSettings.WebTools, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength), fileTools, EffectiveSettings.FileTools, skills: skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, sessionTools: sessionTools, sessionsEnabled: EffectiveSettings.SessionTool, disabledTools: ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled), mcpTools: mcp.Tools, mcpEnabled: EffectiveSettings.McpServers, gitTools: gitTools, gitEnabled: EffectiveSettings.GitLibTools, shellTools: shellTools, shellEnabled: ChatScreen.ShellOffered(EffectiveSettings), processes: processes, shellBridge: EffectiveSettings.ShellToolBridge, shellPolice: EffectiveSettings.ShellPolice, obsidianTools: ChatScreen.ObsidianToolsFor(vaultTools, EffectiveSettings), obsidianEnabled: ChatScreen.ObsidianOffered(EffectiveSettings), sqlTools: sqlTools, sqlEnabled: ChatScreen.SqlOffered(EffectiveSettings, sql), comfyTools: comfyTools, comfyEnabled: ChatScreen.ComfyOffered(EffectiveSettings, comfy), shellNative: EffectiveSettings.ShellPreferNative, plan: plan.Turn(presentPlan, EffectiveSettings.PlanGapAskUser), preserveThinking: EffectiveSettings.LlmPreserveThinking, sampling: LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId), homeTools: haTools, homeEnabled: ChatScreen.HomeAssistantOffered(EffectiveSettings), printTools: printTools, printEnabled: ChatScreen.PrintOffered(EffectiveSettings), oracleTools: oracleTools, oracleEnabled: ChatScreen.OracleOffered(EffectiveSettings, oracle), mysqlTools: mysqlTools, mysqlEnabled: ChatScreen.MySqlOffered(EffectiveSettings, mysql), uncTools: ChatScreen.UncToolsFor(uncTools, EffectiveSettings, unc.Catalog(), EffectiveSettings.FileTools), uncEnabled: ChatScreen.UncOffered(EffectiveSettings, unc), dockerTools: ChatScreen.DockerToolsFor(dockerTools, EffectiveSettings), dockerEnabled: ChatScreen.DockerOffered(EffectiveSettings), sqliteTools: sqliteTools, sqliteEnabled: ChatScreen.SqliteOffered(EffectiveSettings, sqlite), postgresTools: postgresTools, postgresEnabled: ChatScreen.PostgresOffered(EffectiveSettings, postgres), memorySave: MemoryMode.Saves(EffectiveSettings), youTubeTools: ChatScreen.YouTubeToolsFor(youTubeTools, EffectiveSettings), youTubeEnabled: ChatScreen.YouTubeOffered(EffectiveSettings, youTubeTools), imageTools: imageTools, imagesEnabled: EffectiveSettings.ImageTools, neonAdvisorTools: neonAdvisorTools, neonAdvisorEnabled: ChatScreen.AdvisorsOffered(EffectiveSettings), composed: inputs => lastInputs = inputs, shoppingTools: shoppingTools, shoppingEnabled: ChatScreen.ShoppingOffered(EffectiveSettings), eventLogTools: eventLogTools, eventLogEnabled: ChatScreen.EventLogOffered(EffectiveSettings, eventLog, macLog), networkTools: ChatScreen.NetworkToolsFor(networkTools, EffectiveSettings, _pinger), networkEnabled: ChatScreen.NetworkOffered(EffectiveSettings), serviceTools: ChatScreen.ServiceToolsFor(serviceTools, EffectiveSettings, pane: false, services.Catalog()), serviceEnabled: ChatScreen.ServicesOffered(EffectiveSettings, services), taskTools: ChatScreen.TaskToolsFor(taskTools, EffectiveSettings, pane: false, tasks.Catalog()), taskEnabled: ChatScreen.TasksOffered(EffectiveSettings, tasks), directoryTools: directoryTools, directoryEnabled: ChatScreen.DirectoryOffered(EffectiveSettings, directory));
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude Code server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -1449,7 +1462,7 @@ public sealed class SidekickApp
 
                 // The gap-closing loop after the pass (2026-10-13): its notices, then the next pass queued as the next line, or the loop over.
                 var gapLines = new List<string>();
-                gapTurn = HeadlessGapAfterTurn(plan, files, turn.Trace.ToolNames, turn.Cancelled, gapLines);
+                gapTurn = HeadlessGapAfterTurn(plan, files, turn.Trace.ToolNames, turn.Cancelled, gapLines, HeadlessPlanMeter(session));
                 foreach (string gapLine in gapLines)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + gapLine.Trim()).ConfigureAwait(false);
@@ -1501,7 +1514,7 @@ public sealed class SidekickApp
     /// <c>[notice]</c> / <c>[error]</c>. Returns the text to send as a turn — the requirement, more detail, or the
     /// approved plan's message (after <paramref name="forget"/> for <c>--fresh</c>) — or null when the line is done.
     /// </summary>
-    private async Task<string?> HeadlessPlanAsync(Plans.PlanSession plan, HeadlessPlanState state, WorkingDirectory files, string args, Action forget)
+    private async Task<string?> HeadlessPlanAsync(Plans.PlanSession plan, HeadlessPlanState state, WorkingDirectory files, string args, Action forget, Func<Plans.PlanPassMeter> meter)
     {
         var command = ChatScreen.ParsePlanArgs(args, plan.Active, out string rest);
         string? found = command == ChatScreen.PlanCommand.Open ? Plans.PlanFiles.Resolve(files, rest) : null;
@@ -1580,6 +1593,54 @@ public sealed class SidekickApp
                 return null;
             }
 
+            case ChatScreen.PlanCommand.Chat:
+                // /plan chat (2026-10-17): the screen's words; nothing sent, the first line opens it.
+                if (plan.Active)
+                {
+                    plan.ResumeTalking();
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.ChatResumedNotice).ConfigureAwait(false);
+                    return null;
+                }
+
+                if (!EffectiveSettings.LlmOfferTools)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.NeedsToolsError).ConfigureAwait(false);
+                    return null;
+                }
+
+                plan.EnterChat();
+                state.Executing = null;
+                state.Draft = null;
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.ChatEnteredNotice).ConfigureAwait(false);
+                return null;
+
+            case ChatScreen.PlanCommand.Ready:
+                if (plan.Requirement.Length == 0)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.ReadyTooSoonError).ConfigureAwait(false);
+                    return null;
+                }
+
+                if (plan.Path is null || plan.Talking)
+                {
+                    plan.StopTalking();
+                    return Plans.PlanText.ReadyMessage;
+                }
+
+                // A plan presented and not talking: no pane headless, so where it stands, /plan approve the way on.
+                if (Plans.PlanFiles.ReadWhole(files, plan.Path) is null)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.PlanUnreadableError(plan.Path)).ConfigureAwait(false);
+                    return null;
+                }
+
+                foreach (string line in Plans.PlanText.ShowLines(plan))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + line.Trim()).ConfigureAwait(false);
+                }
+
+                return null;
+
             case ChatScreen.PlanCommand.Usage:
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.UsageError).ConfigureAwait(false);
                 return null;
@@ -1617,10 +1678,18 @@ public sealed class SidekickApp
                     await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses, fromCommand: passes is not null)).ConfigureAwait(false);
                 }
 
-                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(limit));
-                loop.BeginPass(Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null);
+                // confirm's clean count kept when the fallback above made the model the reviewer (2026-10-17).
+                int clean = named == Plans.PlanReviewer.Confirm ? Math.Max(2, EffectiveSettings.PlanGapCleanPasses) : EffectiveSettings.PlanGapCleanPasses;
+                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(limit), clean);
+                if (loop.CleanLowered && EffectiveSettings.PlanGapCleanPasses > loop.CleanPasses)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.CleanLoweredNotice(loop.Limit, EffectiveSettings.PlanGapCleanPasses)).ConfigureAwait(false);
+                }
+
+                bool offered = HeadlessAdvisorsOffered();
+                loop.BeginPass(Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null, meter(), offered);
                 state.Draft = null;
-                return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, HeadlessAdvisorsOffered() ? loop.Reviewer : Plans.PlanReviewer.Model);
+                return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak);
             }
 
             case ChatScreen.PlanCommand.Show:
@@ -1710,38 +1779,89 @@ public sealed class SidekickApp
     /// Each pass names the model as the reviewer when no advisor is offered, as the first does (2026-10-14, the review: passes 2..N said
     /// the reviewer asked for, against the directive's "review it yourself").
     /// </summary>
-    private string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines)
+    private string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines, Plans.PlanPassMeter? meter = null)
     {
+        bool advisorAsked = tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
+        if (plan.TakeFinished(out string? finishedPath) is { } finished)
+        {
+            // A review that converged inside the turn (2026-10-17), the screen's symmetry: headless shows no pane, so nothing replaced it.
+            string? finishedBody = ReadBody(files, finishedPath);
+            finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, meter);
+            EndHeadlessGapReview(plan, files, finished, Plans.PlanGapStop.Converged, finishedPath, finishedBody, advisorAsked, lines);
+        }
+
         if (plan.Closing is not { Pending: false } loop)
         {
             return null;
         }
 
         string? path = plan.Path;
-        string? body = path is not null && Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null;
-        var stop = loop.Next(!cancelled, userSpoke: false, body);
+        string? body = ReadBody(files, path);
+        var stop = loop.Next(!cancelled, userSpoke: false, body, meter);
+        var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         if (loop.PassGaps.Count > 0)
         {
-            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.PassLogLine(loop.Pass, plan.Revision, loop.PassGaps, tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal)));
-            lines.AddRange(Plans.PlanText.PassNoticeLines(loop.Pass, loop.Limit, plan.Revision, loop.PassGaps));
+            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.PassLogLine(loop.Pass, plan.Revision, loop.PassGaps, advisorAsked, loop.PassMinor, cost));
+            lines.AddRange(Plans.PlanText.PassNoticeLines(loop.Pass, loop.Limit, plan.Revision, loop.PassGaps, loop.PassMinor));
+        }
+        else if (loop.PassClean && !loop.Converged)
+        {
+            // A clean pass short of the streak (2026-10-17): the log every time, the notice only when another pass follows.
+            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, cost));
+            if (stop is null)
+            {
+                lines.AddRange(Plans.PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor));
+            }
         }
 
         if (stop is not { } reason)
         {
-            loop.BeginPass(body);
-            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, HeadlessAdvisorsOffered() ? loop.Reviewer : Plans.PlanReviewer.Model);
+            bool offered = HeadlessAdvisorsOffered();
+            loop.BeginPass(body, meter, offered);
+            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak);
         }
 
         plan.StopClosing();
-        const string Approve = " — /plan approve [--fresh] starts it";
-        lines.Add(reason switch
-        {
-            Plans.PlanGapStop.Converged => Plans.PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed) + Approve,
-            Plans.PlanGapStop.Limit or Plans.PlanGapStop.Stalled => Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed) + Approve,
-            _ => Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed),
-        });
+        EndHeadlessGapReview(plan, files, loop, reason, path, body, advisorAsked, lines);
         return null;
+
+        static string? ReadBody(WorkingDirectory files, string? path) =>
+            path is not null && Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null;
     }
+
+    /// <summary>
+    /// A headless review over (2026-10-17), the screen's <c>EndGapReview</c>: the summary of its passes, the <c>review:</c> line for a review that
+    /// ended on its own, then the stop's line, naming <c>/plan approve</c> where the screen would put the plan back on the pane.
+    /// </summary>
+    private void EndHeadlessGapReview(Plans.PlanSession plan, WorkingDirectory files, Plans.PlanGapLoop loop, Plans.PlanGapStop reason, string? path, string? body, bool advisorAsked, List<string> lines)
+    {
+        lines.AddRange(Plans.PlanText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses));
+        if (path is not null && body is not null && reason is Plans.PlanGapStop.Converged or Plans.PlanGapStop.Unconfirmed or Plans.PlanGapStop.Limit or Plans.PlanGapStop.Stalled)
+        {
+            string review = Plans.PlanText.ReviewLine(loop.Pass, loop.Closed, reason, loop.CleanPasses, Plans.PlanDocument.Fingerprint(body));
+            if (Plans.PlanFiles.MarkReview(files, path, review, _time.GetLocalNow(), plan.Requirement) is { } problem)
+            {
+                lines.Add(problem);
+            }
+        }
+
+        const string Approve = " — /plan approve [--fresh] starts it";
+        if (reason == Plans.PlanGapStop.Converged)
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
+            lines.Add(Plans.PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed, loop.CleanPasses) + Approve);
+            lines.AddRange(Plans.PlanText.ReportLines(loop.PassChecked, loop.PassMinor));
+            return;
+        }
+
+        lines.Add(reason is Plans.PlanGapStop.Limit or Plans.PlanGapStop.Stalled or Plans.PlanGapStop.Unconfirmed
+            ? Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed) + Approve
+            : Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed));
+    }
+
+    /// <summary>The usage now, for a headless gap pass's cost (2026-10-17): the screen's <c>PlanMeter</c> over the same <see cref="LlmSession"/>.</summary>
+    private Plans.PlanPassMeter HeadlessPlanMeter(LlmSession session) =>
+        new(_time.GetUtcNow(), session.Usage.Session.Total - session.Usage.Learning.Total, session.Usage.Advisors.Total);
 
     /// <summary>Headless plan mode's own state beside the session (2026-09-26, round two): the plan being carried out, the ticked count last said, an unpresented plan reply and the revision last announced.</summary>
     private sealed class HeadlessPlanState
@@ -1793,6 +1913,7 @@ public sealed class SidekickApp
                 {
                     Plans.PlanFiles.MarkFile(files, path, Plans.PlanStatus.Done, _time.GetLocalNow(), executing.Requirement, progress);
                     lines.Add(Plans.PlanText.DoneNotice(path));
+                    lines.Add(Plans.PlanText.ComesTogetherNotice);   // 2026-10-17: its own [notice] line after the done line
                     state.Executing = null;
                     state.Shown = null;
                 }
@@ -1812,7 +1933,11 @@ public sealed class SidekickApp
         if (plan.Active && !cancelled && !tools.Contains(Llm.Tools.PresentPlanTool.ToolName, StringComparer.Ordinal) && Plans.PlanDocument.LooksLikePlan(reply))
         {
             state.Draft = reply.Trim();
-            lines.Add(Plans.PlanText.UnpresentedHint);
+            // Talking it through (2026-10-17): kept for /plan save, the hint quiet until the user is ready.
+            if (!plan.Talking)
+            {
+                lines.Add(Plans.PlanText.UnpresentedHint);
+            }
         }
 
         return lines;
@@ -2517,10 +2642,14 @@ public sealed class SidekickApp
         _headlessAtLineStart = true;
     }
 
+    /// <summary>
+    /// A notice line, on a line of its own; since 2026-10-17 spaced after a selector sequence the terminal draws one cell wide
+    /// (<see cref="UI.TextCells.SpaceSelectorSequences"/> under <c>headlessNarrow</c>, Terminal.app's main screen, never a pipe). A reply never is.
+    /// </summary>
     private async Task HeadlessNoticeLineAsync(string line)
     {
         await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
-        await HeadlessLineAsync(line).ConfigureAwait(false);
+        await HeadlessLineAsync(UI.TextCells.SpaceSelectorSequences(line, _headlessNarrow)).ConfigureAwait(false);
     }
 
     private async Task EnsureHeadlessLineStartAsync()
@@ -2577,7 +2706,7 @@ public sealed class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;
