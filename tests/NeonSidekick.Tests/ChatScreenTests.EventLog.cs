@@ -16,6 +16,9 @@ public partial class ChatScreenTests
     /// <summary>The fake event logs the chat screen gets; null (the default) is a screen with no event-log reader.</summary>
     private FakeEventLogSystem? _eventLogSystem;
 
+    /// <summary>The fake unified log the chat screen gets (2026-10-18, the Mac event-log plan); null (the default) is a screen with none.</summary>
+    private FakeUnifiedLog? _unifiedLog;
+
     private static readonly DateTimeOffset EventNow = ManualTimeProvider.DefaultUtcNow;
 
     /// <summary>A reader whose System log holds three Service Control Manager errors (records 100, 99, 98) and Application one warning.</summary>
@@ -104,6 +107,46 @@ public partial class ChatScreenTests
         Assert.Contains("[red]x[/]", output);
         Assert.Contains("[b]bold[/b] �[31mred", output);
         Assert.DoesNotContain("\u001b[31mred", output, StringComparison.Ordinal);   // ordinal: a culture-aware compare ignores the control character
+    }
+
+    /// <summary>
+    /// A screen given a unified-log reader (2026-10-18, the Mac event-log plan; any OS, the fake standing in): the switch offers the four
+    /// tools, the rules carry this machine's event-log sentence, a model's call reads the log redacted, and the transcript keeps the note.
+    /// </summary>
+    [Fact]
+    public async Task MacLog_WithAReader_TheGroupIsOffered_AndAModelsCallReadsTheLog()
+    {
+        _unifiedLog = new FakeUnifiedLog();
+        _unifiedLog.Entries.Add(FakeUnifiedLog.Entry(EventNow.AddMinutes(-2), message: "login failed Password=hunter2;"));
+        _settings.Update(d => { d.TtsOutput = false; d.EventLogTools = true; });
+        _chat.Enqueue(FakeChatClient.Call("c0", EventLogSearchTool.ToolName, new Dictionary<string, object?> { ["log"] = "system" }));
+        _chat.EnqueueText("One login failure.");
+        StepsWhenIdle(Line("what went wrong?"), Line("/exit"));
+
+        await RunAsync();
+
+        var offered = _chat.Options[0]!.Tools!.Select(t => t.Name).ToList();
+        Assert.All(ChatScreen.EventLogToolNames, name => Assert.Contains(name, offered));
+        Assert.Contains(Llm.Assistant.EventLogRuleHere, _chat.Requests[0][0].Text, StringComparison.Ordinal);
+        string result = _chat.Requests[1].SelectMany(m => m.Contents).OfType<Microsoft.Extensions.AI.FunctionResultContent>().Single(r => r.CallId == "c0").Result!.ToString()!;
+        Assert.StartsWith("system on this Mac: 1 entry, newest first", result, StringComparison.Ordinal);
+        Assert.Contains("Password=<redacted>;", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task MacLog_WithTheSwitchOff_TheToolsAreNotOffered()
+    {
+        _unifiedLog = new FakeUnifiedLog();
+        _settings.Update(d => { d.TtsOutput = false; d.EventLogTools = false; });
+        _chat.EnqueueText("Hello.");
+        StepsWhenIdle(Line("hi"), Line("/exit"));
+
+        await RunAsync();
+
+        var offered = _chat.Options[0]?.Tools?.Select(t => t.Name).ToList() ?? [];
+        Assert.DoesNotContain(EventLogSearchTool.ToolName, offered);
+        Assert.DoesNotContain(Llm.Assistant.EventLogRuleHere, _chat.Requests[0][0].Text, StringComparison.Ordinal);
     }
 
     [Fact]

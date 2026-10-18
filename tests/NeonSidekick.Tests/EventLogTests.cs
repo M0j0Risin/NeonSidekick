@@ -737,6 +737,6 @@ public sealed class EventLogTests : IDisposable
         Assert.True(on.Rules.EventLog);
         Assert.Empty(off.Tools);
         Assert.False(off.Rules.EventLog);
-        Assert.Contains(Llm.Assistant.EventLogRule, on.Rules.DefaultRules(markdown: false), StringComparison.Ordinal);
+        Assert.Contains(Llm.Assistant.EventLogRuleHere, on.Rules.DefaultRules(markdown: false), StringComparison.Ordinal);
     }
 }

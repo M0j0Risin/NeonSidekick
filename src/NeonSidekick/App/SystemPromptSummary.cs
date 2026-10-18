@@ -147,7 +147,7 @@ public sealed record SystemPromptFacts(
     bool TimersEnabled = true,
     AdminRules Admin = AdminRules.None)
 {
-    /// <summary>Whether the rules carry <see cref="Assistant.EventLogRule"/>: tools on, the switch on (Windows) and an event-log tool offered (2026-10-15).</summary>
+    /// <summary>Whether the rules carry <see cref="Assistant.EventLogRuleHere"/> (Windows' sentence, or the Mac's since 2026-10-18): tools on, the switch on with a reader (wevtapi, or the unified log on a Mac) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
 
     /// <summary>Whether the rules carry <see cref="Assistant.ShoppingRule"/>: tools on, the switch on and a shopping tool offered (2026-10-11).</summary>
@@ -383,6 +383,9 @@ public static class SystemPromptSummary
 
     /// <summary>The tail of the Event logs group while its tools cannot be offered: the switch off, or not Windows (2026-10-15). Pinned.</summary>
     public const string EventLogOffSuffix = "Event log tools is off, or this is not Windows";
+
+    /// <summary>The Mac's tail of the Event logs group while its tools cannot be offered (2026-10-18, the Mac event-log plan): never "not Windows" there. Pinned.</summary>
+    public const string MacEventLogOffSuffix = "Event log tools is off, or the unified log has no reader here";
 
     /// <summary>
     /// The Event logs group's note while it is offered with no computer ticked (2026-10-15, the plan: on with nothing ticked is not "off").
@@ -834,7 +837,7 @@ public static class SystemPromptSummary
         if (eventLog is not null)
         {
             // The event logs (2026-10-15): after the Docker tools; offered while Event log tools is on, on Windows — with nothing ticked, for .evtx files alone.
-            string eventLogNote = !eventLogEnabled ? NotOffered(EventLogOffSuffix) : !eventLogTicked && toolsEnabled ? EventLogFilesOnlyNote : standing;
+            string eventLogNote = !eventLogEnabled ? NotOffered(OperatingSystem.IsMacOS() ? MacEventLogOffSuffix : EventLogOffSuffix) : !eventLogTicked && toolsEnabled ? EventLogFilesOnlyNote : standing;
             groups.Add(Group(ToolsText.EventLogTabTitle, eventLog, eventLogNote, eventLogEnabled && toolsEnabled, SettingsField.EventLogTools, disabled));
         }
 

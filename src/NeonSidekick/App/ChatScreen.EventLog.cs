@@ -12,7 +12,13 @@ internal sealed partial class ChatScreen
     /// <summary>The event logs' door the tools and <c>/eventlog</c> share: the ticked computers, the working directory's <c>.evtx</c> files.</summary>
     private readonly EventLogAccess _eventLog;
 
-    /// <summary>The four event-log tools, built once over <see cref="_eventLog"/>; offered while <see cref="EventLogOffered"/> says so.</summary>
+    /// <summary>
+    /// A Mac's door (2026-10-18, the Mac event-log plan): the unified log and the working directory's <c>.logarchive</c> folders, its reader
+    /// null off a Mac (or in a test that gave none), when the Windows door above is the one in use.
+    /// </summary>
+    private readonly MacLogAccess _macLog;
+
+    /// <summary>The four event-log tools, built once over <see cref="_eventLog"/> (or <see cref="_macLog"/> on a Mac); offered while <see cref="EventLogOffered"/> says so.</summary>
     private readonly IReadOnlyList<AIFunction> _eventLogTools;
 
     /// <summary>
@@ -33,6 +39,25 @@ internal sealed partial class ChatScreen
         new EventLogEventTool(access, effective, forceRedacted),
     ];
 
+    /// <summary>
+    /// The event-log tools on a Mac (2026-10-18, the Mac event-log plan): the same four names over the unified log, every one a read;
+    /// <paramref name="forceRedacted"/> builds the twins that read redacted. Shared with headless.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> MacLogTools(MacLogAccess access, Func<AppSettingsData> effective, bool forceRedacted = false) =>
+    [
+        new MacLogLogsTool(access, effective, forceRedacted),
+        new MacLogSearchTool(access, effective, forceRedacted),
+        new MacLogSummaryTool(access, effective, forceRedacted),
+        new MacLogEventTool(access, effective, forceRedacted),
+    ];
+
+    /// <summary>
+    /// Whether <c>eventlog.json</c>'s <c>local</c> says <c>full</c> (2026-10-18): the detail a Mac reads its own logs under, redacted
+    /// unless it does. Read afresh at each call, as the Windows door reads its computers.
+    /// </summary>
+    public static bool LocalFull(string profileDirectory, string storageDirectory) =>
+        EventLogConfigFile.LoadCatalog(profileDirectory, storageDirectory).Computers.FirstOrDefault(c => c.IsLocal)?.Config.Full ?? false;
+
     /// <summary>The event-log tools' names: their result's first line is the transcript's note (<see cref="EventLogText.Note"/>); an advisor reads a stand-in for their results.</summary>
     public static readonly IReadOnlySet<string> EventLogToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -52,6 +77,19 @@ internal sealed partial class ChatScreen
         ArgumentNullException.ThrowIfNull(access);
         return effective.EventLogTools && OperatingSystem.IsWindows() && access.System is not null;
     }
+
+    /// <summary>
+    /// <see cref="EventLogOffered(AppSettingsData, EventLogAccess)"/>, or on a Mac with a unified-log reader (2026-10-18, the Mac event-log
+    /// plan): the switch on and a reader for either.
+    /// </summary>
+    public static bool EventLogOffered(AppSettingsData effective, EventLogAccess access, MacLogAccess? mac)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return EventLogOffered(effective, access) || (effective.EventLogTools && mac?.Log is not null);
+    }
+
+    /// <summary>Whether this machine has event logs to read: Windows' through its reader, or a Mac's unified log (2026-10-18).</summary>
+    private bool EventLogsHere => (OperatingSystem.IsWindows() && _eventLog.System is not null) || _macLog.Log is not null;
 
     /// <summary>The wizard's Test (2026-10-15): <see cref="EventLogAccess.TestAsync"/> through the screen's reader.</summary>
     private Task<(bool Ok, string Text)> TestEventLogComputerAsync(EventLogComputer computer, CancellationToken cancellationToken) =>
