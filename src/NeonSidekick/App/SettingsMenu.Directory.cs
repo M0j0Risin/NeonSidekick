@@ -412,7 +412,8 @@ internal sealed partial class SettingsMenu
             case 6:
             {
                 int current = c.IsRunAs ? 1 : 0;
-                if (await DirectoryWizardPickAsync(title, DirectoryWizardAuthQuestion, ComputerWizardAuthRows, current, cancellationToken).ConfigureAwait(false) is not { } picked)
+                var rows = OperatingSystem.IsMacOS() ? DirectoryText.MacAuthRows : ComputerWizardAuthRows;   // a Mac's Kerberos words (2026-10-18)
+                if (await DirectoryWizardPickAsync(title, DirectoryWizardAuthQuestion, rows, current, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
                 }
@@ -428,9 +429,21 @@ internal sealed partial class SettingsMenu
             }
 
             case 7:
-                return await DirectoryWizardTypeAsync(step, draft, title, ComputerWizardUserQuestion, c.User ?? "", false, false, text =>
+                return await DirectoryWizardTypeAsync(step, draft, title, OperatingSystem.IsMacOS() ? DirectoryText.MacUserQuestion : ComputerWizardUserQuestion, c.User ?? "", false, false, text =>
                 {
                     string user = text.Trim();
+                    if (KerberosSignIn.Offered)
+                    {
+                        // A Mac: name@REALM only (2026-10-18, SQL's rule), the realm put in capitals.
+                        if (KerberosSignIn.Principal(user) is not { } principal)
+                        {
+                            return user.Length == 0 ? SqlWizardUserRequired : SqlText.RunAsNeedsRealm(user);
+                        }
+
+                        c.User = principal;
+                        return null;
+                    }
+
                     if (WindowsCredentials.SplitAccount(user) is null)
                     {
                         return user.Length == 0 ? SqlWizardUserRequired : SqlText.RunAsNeedsDomain(user);

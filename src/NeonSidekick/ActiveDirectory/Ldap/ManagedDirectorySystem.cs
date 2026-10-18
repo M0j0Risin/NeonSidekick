@@ -90,7 +90,8 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
 
             connection.StartSecurity(layer, security, serverMaximum);
             DiagnosticLog.Debug(DirectoryText.Category, $"bound to {connectedTo}:{target.Port.ToString(CultureInfo.InvariantCulture)} as {NegotiateSaslLayer.ServiceName(host)}, {security} ({Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms)");
-            var result = work(new Session(connection));
+            string transport = DirectoryText.Transport(target.Port, target.Tls, NegotiateSaslLayer.ServiceName(host), DirectoryText.LayerWord(security.ToString()));
+            var result = work(new Session(connection, transport));
             connection.Unbind();
             return result;
         }
@@ -206,11 +207,13 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
     }
 
     /// <summary>The session over a connection already bound (the tests').</summary>
-    internal static IDirectorySession SessionOver(LdapConnection connection) => new Session(connection);
+    internal static IDirectorySession SessionOver(LdapConnection connection) => new Session(connection, null);
 
     /// <summary>One bound session: RootDSE and searches, sequential, each with its own time limit and read deadline.</summary>
-    private sealed class Session(LdapConnection connection) : IDirectorySession
+    private sealed class Session(LdapConnection connection, string? transport) : IDirectorySession
     {
+        public string? Transport => transport;
+
         /// <summary>The read deadline's margin past the server's own time limit.</summary>
         private static readonly TimeSpan Margin = TimeSpan.FromSeconds(5);
 

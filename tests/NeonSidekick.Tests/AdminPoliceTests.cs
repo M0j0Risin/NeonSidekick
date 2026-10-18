@@ -54,6 +54,23 @@ public sealed class AdminPoliceTests
     [InlineData("echo the scheduler and the services are fine")]
     public void ARead_Passes(string line) => Assert.Null(AdminPolice.Find(line, All));
 
+    /// <summary>A Mac's own directory writers (2026-10-18, the Mac AD plan): refused on a Mac, never looked for on Windows.</summary>
+    [Theory]
+    [InlineData("dscl \"/Active Directory/LAB/All Domains\" -create /Users/bob")]
+    [InlineData("dscl '/Active Directory/LAB/All Domains' -passwd /Users/bob NewPass1!")]
+    [InlineData("dscl /Search -delete /Groups/Ops GroupMembership bob")]
+    [InlineData("sudo dsconfigad -remove -force -username admin")]
+    [InlineData("dsconfigad -add lab.example -username admin")]
+    public void AMacDirectoryChange_IsFoundOnAMac(string line) =>
+        Assert.Equal(OperatingSystem.IsMacOS() ? AdminPolice.DirectoryFamily : null, AdminPolice.Find(line, All)?.Family);
+
+    [Theory]
+    [InlineData("dscl \"/Active Directory/LAB/All Domains\" -read /Users/bob")]
+    [InlineData("dscl /Search -list /Users")]
+    [InlineData("dscl . -create /Users/localbob")]
+    [InlineData("dsconfigad -show")]
+    public void AMacDirectoryRead_Passes(string line) => Assert.Null(AdminPolice.Find(line, All));
+
     [Fact]
     public void AFamily_IsGuardedOnlyWhileItsToolsAreOn()
     {

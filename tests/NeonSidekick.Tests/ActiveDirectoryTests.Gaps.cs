@@ -767,7 +767,11 @@ public sealed partial class ActiveDirectoryTests
     {
         Assert.Contains(AdOuTool.ToolName, Assistant.DirectoryRule);
         Assert.Contains("Every user in a group at any depth is ad_group with nested and members: users", Assistant.DirectoryRule);
-        // A Mac's row is HelpMac's (2026-10-17, the Mac pass): the tools are never offered there, so it names none.
-        Assert.Contains(OperatingSystem.IsMacOS() ? "never offered here" : AdOuTool.ToolName, HelpSettings.Describe(NeonSidekick.App.SettingsField.DirectoryTools));
+        // A Mac's row is HelpMac's: since 2026-10-18 (the Mac AD plan) a Mac reads the directory too, through the app's own LDAP client.
+        Assert.Contains(AdOuTool.ToolName, HelpSettings.Describe(NeonSidekick.App.SettingsField.DirectoryTools));
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Contains("read through the app's own LDAP client", HelpSettings.Describe(NeonSidekick.App.SettingsField.DirectoryTools));
+        }
     }
 }

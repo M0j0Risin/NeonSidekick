@@ -248,6 +248,15 @@ public sealed class FakeDirectorySystem : IDirectorySystem
 
     public int? FailWith { get; set; }
 
+    /// <summary>The message <see cref="FailWith"/>'s exception carries (the NTLM-blocked 0x31 is told apart by it).</summary>
+    public string FailMessage { get; set; } = "fake failure";
+
+    /// <summary>What the session says of its connection (a Mac's managed client names one; wldap32 none).</summary>
+    public string? Transport { get; set; }
+
+    /// <summary>How many times <see cref="Run"/> was called, failing or not (the hold's tests count the sign-ins).</summary>
+    public int Runs { get; private set; }
+
     /// <summary>Puts <paramref name="member"/> in <paramref name="group"/>: the group's <c>member</c> and the member's <c>memberOf</c> kept in step.</summary>
     public void AddMember(string group, string member)
     {
@@ -293,9 +302,10 @@ public sealed class FakeDirectorySystem : IDirectorySystem
 
     public T Run<T>(DirectoryTarget target, Func<IDirectorySession, T> work)
     {
+        Runs++;
         if (FailWith is { } code)
         {
-            throw new DirectoryException(code, "fake failure");
+            throw new DirectoryException(code, FailMessage);
         }
 
         return work(new Session(this));
@@ -304,6 +314,8 @@ public sealed class FakeDirectorySystem : IDirectorySystem
     private sealed class Session(FakeDirectorySystem owner) : IDirectorySession
     {
         public DirectoryEntry RootDse() => owner.Root;
+
+        public string? Transport => owner.Transport;
 
         public DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged, TimeSpan? timeLimit = null)
         {

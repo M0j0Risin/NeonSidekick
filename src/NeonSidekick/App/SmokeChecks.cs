@@ -207,6 +207,7 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsWindows() ? ProbeTasks() : new SmokeCheck("tasks:com", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeTasksRemote() : new SmokeCheck("tasks:remote", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsWindows() ? ProbeLdap() : new SmokeCheck("ad:wldap32", true, "skipped: not Windows"));
+        results.Add(ProbeLdapClient());   // the managed LDAP client (2026-10-18, the Mac AD plan): every system
         results.Add(ProbeCulture());
         results.Add(ProbeKokoroVoices(nativeDirectory));
         results.Add(ProbeKokoroPhonemizer());

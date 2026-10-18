@@ -28,6 +28,22 @@ public sealed class DirectoryAccess
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(45);
 
+    /// <summary>
+    /// The runas sign-ins a domain refused this run (2026-10-18, the user's call, both systems), as SHA-256s of the domain, account and
+    /// password: a call with the same three is answered <see cref="DirectoryText.Held"/> without reaching the DC, so a model retrying cannot
+    /// lock the account. A new password hashes differently and is tried at once; nothing of the password itself is kept. Calls run on pool
+    /// threads, so the set is locked.
+    /// </summary>
+    private static readonly HashSet<string> s_held = new(StringComparer.Ordinal);
+
+    private static string HoldKey(DirectorySource source, DirectoryLogin login) =>
+        Convert.ToHexString(global::System.Security.Cryptography.SHA256.HashData(global::System.Text.Encoding.UTF8.GetBytes(
+            source.Domain.DomainName.ToLowerInvariant() + "\n" + login.User + "\n" + login.Password)));
+
+    /// <summary>Whether <paramref name="code"/> with <paramref name="detail"/> is a refused password (never Windows' NTLM-blocked variant, never an unreachable KDC).</summary>
+    public static bool RefusedPassword(int code, string detail) =>
+        code == 0x31 && !detail.Contains("NTLM", StringComparison.OrdinalIgnoreCase);
+
     private readonly Func<DirectoryCatalog> _loaded;
     private readonly Func<IReadOnlyList<string>?> _offered;
     private readonly Func<string?> _joined;
@@ -69,7 +85,20 @@ public sealed class DirectoryAccess
                 return (null, Computers.ComputerText.CannotSignIn(found.Name, missing));
             }
 
-            login = new DirectoryLogin(found.Config.User!.Trim(), secret.Value!);
+            string user = found.Config.User!.Trim();
+            if (Sql.KerberosSignIn.Offered)
+            {
+                // A Mac signs in through Kerberos (2026-10-18, the Mac AD plan, SQL's rule): name@REALM, the realm in capitals. The file's
+                // check keeps Windows' rule, so an ad.json shared with a PC loads whole, and a DOMAIN\name is refused here, at the call.
+                if (Sql.KerberosSignIn.Principal(user) is not { } principal)
+                {
+                    return (null, "Error: " + Sql.SqlText.RunAsNeedsRealm(user));
+                }
+
+                user = principal;
+            }
+
+            login = new DirectoryLogin(user, secret.Value!);
         }
 
         return (new DirectorySource(found, new DirectoryTarget(found.Server, found.Port, found.Config.UsesTls, login, found.DomainName), forceRedacted || !found.Config.Full), null);
@@ -96,6 +125,18 @@ public sealed class DirectoryAccess
             return DirectoryResult<T>.Failed(DirectoryText.NoneHere);
         }
 
+        string? holdKey = source.Target.Login is { } login ? HoldKey(source, login) : null;
+        if (holdKey is not null)
+        {
+            lock (s_held)
+            {
+                if (s_held.Contains(holdKey))
+                {
+                    return DirectoryResult<T>.Failed(DirectoryText.Held(source.Where, source.Domain.Account));
+                }
+            }
+        }
+
         using var timeout = new CancellationTokenSource(Timeout, Time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         var started = Stopwatch.GetTimestamp();
@@ -108,6 +149,16 @@ public sealed class DirectoryAccess
         catch (DirectoryException ex)
         {
             DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name} failed: {ex.Message}");
+            if (holdKey is not null && RefusedPassword(ex.Code, ex.Message))
+            {
+                lock (s_held)
+                {
+                    s_held.Add(holdKey);
+                }
+
+                DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name}: the password for {source.Domain.Account} was refused; held until it changes");
+            }
+
             return DirectoryResult<T>.Failed(DirectoryErrors.Sentence(ex.Code, source.Where, source.Target.Server, source.Target.Port, source.Domain.Account, ex.Message));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -132,8 +183,10 @@ public sealed class DirectoryAccess
             var root = session.RootDse();
             var head = session.Search(domain.BaseDn, DirectoryScope.Base, "(objectClass=*)", AdAttributes.DomainHead, 1, paged: false);
             var users = session.Search(domain.BaseDn, DirectoryScope.Subtree, "(&" + LdapFilter.Users + ")", ["sAMAccountName"], 1, paged: false);
-            return (root.Text("dnsHostName") ?? domain.Server, head.Entries.Count, users.Entries.Count);
+            return (root.Text("dnsHostName") ?? domain.Server, head.Entries.Count, users.Entries.Count, session.Transport);
         }, cancellationToken).ConfigureAwait(false);
-        return result.Error is { } failed ? (false, failed) : (true, DirectoryText.TestOk(domain.Name, result.Value.Item1, domain.DomainName, result.Value.Item3));
+        return result.Error is { } failed
+            ? (false, failed)
+            : (true, DirectoryText.TestOk(domain.Name, result.Value.Item1, domain.DomainName, result.Value.Item3) + (result.Value.Item4 is { } transport ? "; " + transport : ""));   // how it connected, where the backend says (a Mac's, 2026-10-18)
     }
 }

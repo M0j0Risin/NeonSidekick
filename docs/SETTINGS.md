@@ -721,7 +721,7 @@ See [Scheduled tasks](TOOLS.md#scheduled-tasks). The same rows over `tasks.json`
 
 #### Directory
 
-See [Active Directory](TOOLS.md#active-directory). Read-only, always.
+See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac, see [Active Directory on a Mac](TOOLS.md#active-directory-on-a-mac): Kerberos only, and no `current`.
 
 | Setting | What it does | Default |
 |---|---|---|

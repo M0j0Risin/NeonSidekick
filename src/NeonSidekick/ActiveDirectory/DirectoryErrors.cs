@@ -18,8 +18,12 @@ public static class DirectoryErrors
         0x32 => $"Error: {account} may not read that in {domain}.",
         0x20 => $"Error: {domain} has no such object (check baseDn in ad.json).",
         0x55 or 0x03 => $"Error: {server} took too long to answer.",
+        0x56 when OperatingSystem.IsMacOS() => $"Error: {server} offered no signed or sealed connection this Mac takes; on 389 the connection is always signed or sealed.",
         0x56 => $"Error: the sign-in to {domain} failed: no authentication method both sides know (Negotiate). From a PC outside the domain, NTLM must be allowed.",
         0x34 => $"Error: {server} is unavailable (it may be shutting down or not yet ready).",
+        // The managed client's own (2026-10-18, the Mac AD plan): a Kerberos sign-in that never reached the bind.
+        Ldap.LdapResultCodes.KdcUnreachable => $"Error: the Kerberos sign-in to {domain} could not reach its KDC on {server} (port 88). Check the network or VPN, and that the realm's KDC can be found (its DNS records, or a krb5.conf).",
+        Ldap.LdapResultCodes.KerberosFailed => $"Error: the Kerberos sign-in to {domain} as {account} failed. Run kinit for a ticket (the realm in capitals), check the clock is within 5 minutes, and that {server} is a DC of {domain}.",
         _ => $"Error: the directory {domain} failed (LDAP code 0x{code.ToString("X2", CultureInfo.InvariantCulture)})" + (detail.Length > 0 ? ": " + detail : "."),
     };
 }

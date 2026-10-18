@@ -69,7 +69,7 @@ public partial class ChatScreenTests
 
     private static Action<ScriptedInput> AdDoubleClick(int row) => input => { input.PushClick(4, row); input.PushClick(4, row); };
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_ADoubleClickedMember_OpensItsCard_EscGoesBack_AndAgainCloses()
     {
         AdFixture();
@@ -91,7 +91,7 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_OnAUsersCard_AGroupsRowAndTheManager_OpenByDn()
     {
         AdFixture();
@@ -116,7 +116,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(_directorySystem.Filters, f => f.Contains("(sAMAccountName=Ops)", StringComparison.Ordinal));   // never a name search
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_AGroupCardsButtons_NestedThenUsersOnly_ReadInPlace()
     {
         AdFixture();
@@ -137,7 +137,7 @@ public partial class ChatScreenTests
         Assert.Contains("3 users, nested (2 direct, 1 through other groups)", output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_ACardTypedNestedAndUsersOnly_NamesItsButtonsDirectAndAllMembers()
     {
         AdFixture();
@@ -149,7 +149,7 @@ public partial class ChatScreenTests
         Assert.Contains(InfoPane.ShiftFindKeys, output);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_AnAmbiguousName_IsACardOfTheCandidates_ADoubleClickOpensTheSecond()
     {
         AdFixture();
@@ -163,7 +163,7 @@ public partial class ChatScreenTests
         Assert.Contains(_directorySystem!.Filters, f => f == "(distinguishedName=" + LdapFilter.Escape(AdJohn2) + ")");
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_FindStaleUsers_OnThePane_ColumnsUnderAHeader()
     {
         AdFixture();
@@ -181,7 +181,7 @@ public partial class ChatScreenTests
         }
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_GroupTo_WritesTheFile_AndTheCardNamesIt()
     {
         AdFixture();

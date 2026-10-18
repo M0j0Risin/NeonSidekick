@@ -27,6 +27,7 @@ public static class AdminPolice
     private static readonly Lazy<IReadOnlyList<Regex>> s_services = new(() => Compile(ShellText.AdminServiceWords));
     private static readonly Lazy<IReadOnlyList<Regex>> s_tasks = new(() => Compile(ShellText.AdminTaskWords));
     private static readonly Lazy<IReadOnlyList<Regex>> s_directory = new(() => Compile(ShellText.AdminDirectoryWords));
+    private static readonly Lazy<IReadOnlyList<Regex>> s_directoryMac = new(() => Compile(ShellText.AdminDirectoryWordsMac));
 
     /// <summary>A <c>net user|group … /domain</c> line, judged apart: a read unless it changes something.</summary>
     private static readonly Regex NetDomain = new(@"\bnet1?(?:\.exe)?\s+(?<what>user|group)\b(?<rest>[^\r\n;&|]*?)/domain\b(?<tail>[^\r\n;&|]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -86,6 +87,11 @@ public static class AdminPolice
             if (First(text, s_directory.Value) is { } directory)
             {
                 return (DirectoryFamily, directory);
+            }
+
+            if (OperatingSystem.IsMacOS() && First(text, s_directoryMac.Value) is { } macDirectory)
+            {
+                return (DirectoryFamily, macDirectory);   // dscl and dsconfigad (2026-10-18)
             }
 
             foreach (Match m in NetDomain.Matches(text))

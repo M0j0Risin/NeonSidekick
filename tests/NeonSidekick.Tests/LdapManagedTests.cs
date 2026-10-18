@@ -224,6 +224,16 @@ public sealed class LdapManagedTests
         }
     }
 
+    /// <summary>The smoke's <c>ad:ldap</c> under the JIT: the loopback bind, RootDSE and two pages (and on a Mac a made-up realm refused).</summary>
+    [Fact]
+    public void Smoke_ProbeLdapClient_Passes()
+    {
+        var check = NeonSidekick.App.SmokeChecks.ProbeLdapClient();
+        Assert.True(check.Passed, check.Detail);
+        Assert.Equal("ad:ldap", check.Name);
+        Assert.Contains("2 entries over 2 pages", check.Detail, StringComparison.Ordinal);
+    }
+
     private static string RepoRoot()
     {
         string? dir = AppContext.BaseDirectory;

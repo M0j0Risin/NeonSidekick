@@ -135,7 +135,10 @@ public sealed record DirectoryDomain(string Name, DirectoryDomainConfig Config, 
     /// <summary>The base searched under.</summary>
     public string BaseDn => string.IsNullOrWhiteSpace(Config.BaseDn) ? AdValues.DomainDn(DomainName) : Config.BaseDn.Trim();
 
-    public string Account => Config.IsRunAs ? Config.User!.Trim() : OperatingSystem.IsWindows() ? Environment.UserDomainName + "\\" + Environment.UserName : Environment.UserName;
+    public string Account => Config.IsRunAs ? Config.User!.Trim()
+        : OperatingSystem.IsWindows() ? Environment.UserDomainName + "\\" + Environment.UserName
+        : OperatingSystem.IsMacOS() ? DirectoryText.MacTicketAccount   // a Mac signs in with the default Kerberos ticket (2026-10-18)
+        : Environment.UserName;
 }
 
 /// <summary>The domains offered: the file's and <c>current</c>, with the problems.</summary>
@@ -198,8 +201,32 @@ public sealed class DirectoryConfigFile
 
     public Dictionary<string, DirectoryDomainConfig?> Domains { get; set; } = new(StringComparer.Ordinal);
 
-    /// <summary>What a fresh file holds. Pinned.</summary>
-    public static string EmptyText =>
+    /// <summary>What a fresh file holds: Windows' text, or on a Mac its own (2026-10-18: Kerberos, no joined PC, the Keychain). Pinned.</summary>
+    public static string EmptyText => OperatingSystem.IsMacOS() ? MacEmptyText : WindowsEmptyText;
+
+    /// <summary>A fresh file on a Mac (2026-10-18, the Mac AD plan). Pinned.</summary>
+    public static string MacEmptyText =>
+        "{\n" +
+        "  // One entry per domain. Its name is what the model passes as \"domain\", and what /ad domain:<name> reads.\n" +
+        "  // A Mac has no built-in \"current\" domain: name each one here. A domain is read only once it is ticked in\n" +
+        "  // Directory domains offered (" + DirectoryText.MenuPath + "). Remove the leading // from an example to use it, and put it\n" +
+        "  // inside \"domains\" below. Everything is read-only, signed and sealed on 389 (Kerberos).\n" +
+        "  //\n" +
+        "  // A domain read as you, with the Kerberos ticket kinit gives (kinit you@CORP.EXAMPLE); its DCs are found in DNS:\n" +
+        "  // \"corp\": { \"domain\": \"corp.example\", \"description\": \"the office\" },\n" +
+        "  //\n" +
+        "  // As another account, name@REALM, the password in " + SqlText.CredentialStore + " as NeonSidekick/ad/<name> (set it with\n" +
+        "  // Directory set password on " + DirectoryText.MenuPath + "):\n" +
+        "  // \"lab\": { \"domain\": \"lab.example\", \"server\": \"dc1.lab.example\", \"auth\": \"runas\", \"user\": \"reader@LAB.EXAMPLE\", \"passwordStore\": \"credman\" },\n" +
+        "  //\n" +
+        "  // server: a DC (the domain's DCs from DNS when absent). baseDn: where to search (the domain when absent). tls: true for LDAPS on\n" +
+        "  // 636 (the DC's certificate must be trusted in the Keychain). detail: redacted (the default) or full. auth: windows (your\n" +
+        "  // ticket) or runas. A runas password typed here in plain text is encrypted at the next read.\n" +
+        "  \"domains\": {}\n" +
+        "}\n";
+
+    /// <summary>A fresh file on Windows. Pinned.</summary>
+    public static string WindowsEmptyText =>
         "{\n" +
         "  // One entry per domain. Its name is what the model passes as \"domain\", and what /ad domain:<name> reads.\n" +
         "  // \"current\" is this PC's own domain when it is joined, built in (signing in as you, Kerberos).\n" +

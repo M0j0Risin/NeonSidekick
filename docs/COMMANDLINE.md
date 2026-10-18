@@ -28,7 +28,7 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--network-check <host>` | Tests the network tools against a host: a DNS lookup, a ping, port 443 and a TLS handshake, and opens a certificate store. Reads only. |
 | `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed under its account, and one read in full. Changes nothing. Windows only. |
 | `--tasks-check <computer>` | The same for a computer in `tasks.json`, or `local`: the Task Scheduler connected, the tasks listed and one read. Windows only. |
-| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's root object and policy, and one user read. Windows only. |
+| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's root object and policy, and one user read. On a Mac the bind line also says how it connected (`389, Kerberos as ldap/<dc>, sealed`), and there is no `current`. |
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac it needs macOS 14 or later and the terminal app's Camera permission. |
 | `--version` | Prints the version and exits. |

@@ -82,6 +82,12 @@ public interface IDirectorySession
     /// and the client (null: <see cref="DirectoryLimits.SearchTime"/>; 2026-10-15, the AD gaps plan: a walk's searches get what its deadline has left).
     /// </summary>
     DirectoryResults Search(string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, bool paged, TimeSpan? timeLimit = null);
+
+    /// <summary>
+    /// How the session is connected, for <c>--ad-check</c> (2026-10-18, the Mac AD plan: "389, Kerberos as ldap/dc1.corp.example, sealed");
+    /// null where the backend does not say (wldap32's, the fakes).
+    /// </summary>
+    string? Transport => null;
 }
 
 /// <summary>

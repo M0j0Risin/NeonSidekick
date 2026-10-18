@@ -274,7 +274,8 @@ Icons under the status bar (*Tool bar*), each shown while it is checked there. A
 | 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | dark background while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
 | 🪵 | dark background while off, and always where there are no event logs to read | `/tools eventlog` |
 | 📡 | dark background while off | `/tools network` |
-| 🧩 📅 🏢 | dark background while off, and always off Windows | `/tools services`, `tasks`, `directory` |
+| 🧩 📅 | dark background while off, and always off Windows | `/tools services`, `tasks` |
+| 🏢 | dark background while off, and always on a system other than Windows or macOS | `/tools directory` |
 | 📄 ⚡ | always | the [log window](#the-log-window); `/process` |
 | 🎞️ 🪟 | always | the [picture viewer](#the-picture-viewer); the [thumbnail browser](#the-thumbnail-browser) (ComfyUI's folder) |
 | 📺 ⭐ 🛒 | always | `/youtube list`, `/browser list`, `/shopping` |

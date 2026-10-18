@@ -143,9 +143,15 @@ internal sealed partial class ChatScreen
     /// <summary>The task group: <c>Task tools</c> on, on Windows, with a Task Scheduler.</summary>
     public static bool TasksOffered(AppSettingsData effective, TaskAccess access) => effective.TaskTools && OperatingSystem.IsWindows() && access.System is not null;
 
-    /// <summary>The directory group: <c>Directory tools</c> on, on Windows, with a directory and at least one domain ticked.</summary>
+    /// <summary>
+    /// The directory group: <c>Directory tools</c> on, with a directory and at least one domain ticked. A directory is given on Windows
+    /// (wldap32) and, since 2026-10-18, on a Mac (the managed LDAP client, the Mac AD plan), so the switch asks for a system, not for Windows.
+    /// </summary>
     public static bool DirectoryOffered(AppSettingsData effective, DirectoryAccess access) =>
-        effective.DirectoryTools && OperatingSystem.IsWindows() && access.System is not null && access.Catalog().Domains.Count > 0;
+        effective.DirectoryTools && access.System is not null && access.Catalog().Domains.Count > 0;
+
+    /// <summary>Whether this machine has a directory to read (wldap32 on Windows, the managed client on a Mac; 2026-10-18).</summary>
+    private bool DirectoryHere => _directory.System is not null;
 
     /// <summary>
     /// What a turn may offer of the network tools: <c>net_certs</c> only with <c>Network certificate stores</c> on (the user's call), ping and
@@ -253,8 +259,7 @@ internal sealed partial class ChatScreen
             taskNotes[TaskControlTool.ToolName] = SystemPromptSummary.NotOffered(taskWhy);
         }
 
-        bool windows = OperatingSystem.IsWindows();
-        bool directoryOn = effective.DirectoryTools && windows && _directory.System is not null;
+        bool directoryOn = effective.DirectoryTools && DirectoryHere;
         return
         [
             new AdminGroupSpec(ToolsText.NetworkMenuTitle, _networkTools, NetworkOffered(effective), ToolsText.SwitchOffReason(SettingsField.NetworkTools), SettingsField.NetworkTools, networkNotes),
@@ -542,7 +547,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleAdAsync(string args, INoticeSink sink, CancellationToken cancellationToken, bool onWatcher = false)
     {
-        if (!OperatingSystem.IsWindows() || _directory.System is null)
+        if (_directory.System is null)   // a Mac has one too since 2026-10-18 (the managed LDAP client)
         {
             sink.Error(DirectoryText.NoneHere);
             return;
@@ -656,5 +661,5 @@ internal sealed partial class ChatScreen
         OperatingSystem.IsWindows() && _tasks.System is not null ? TaskCommand.Complete(argText, _tasks.Catalog().Computers.Select(c => c.Name).ToList()) : [];
 
     private IReadOnlyList<CompletionItem> AdChoices(string argText) =>
-        OperatingSystem.IsWindows() && _directory.System is not null ? DirectoryCommand.Complete(argText, _directory.Catalog().Domains.Select(d => d.Name).ToList()) : [];
+        _directory.System is not null ? DirectoryCommand.Complete(argText, _directory.Catalog().Domains.Select(d => d.Name).ToList()) : [];
 }

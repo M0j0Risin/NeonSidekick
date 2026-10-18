@@ -1877,7 +1877,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     /// <param name="eventLogsHere">Whether this machine has event logs (the screen's <see cref="EventLogsHere"/>, 2026-10-18: a Mac's unified log
     /// counts); null keeps the old reading, Windows alone.</param>
-    public static bool ToolbarItemOff(string id, AppSettingsData shown, bool noToolsOffered = false, bool? eventLogsHere = null)
+    public static bool ToolbarItemOff(string id, AppSettingsData shown, bool noToolsOffered = false, bool? eventLogsHere = null, bool? directoryHere = null)
     {
         ArgumentNullException.ThrowIfNull(shown);
         if (id == ToolbarItems.Skills)
@@ -1927,7 +1927,7 @@ internal sealed partial class ChatScreen
 
         if (id == ToolbarItems.Directory)
         {
-            return !OperatingSystem.IsWindows() || !shown.DirectoryTools;
+            return !(directoryHere ?? OperatingSystem.IsWindows()) || !shown.DirectoryTools;   // a Mac has one since 2026-10-18 (the screen says so)
         }
 
         if (id == ToolbarItems.Queue)
@@ -1962,7 +1962,7 @@ internal sealed partial class ChatScreen
     /// <see cref="ToolbarItems.NoneOfferedState"/> while <paramref name="noToolsOffered"/> (2026-10-16), a pane or a window its name alone; null
     /// for a glyph that is no item's. Pure; pinned.
     /// </summary>
-    public static string? ToolbarGlyphNote(string glyph, AppSettingsData shown, bool noToolsOffered = false, bool? eventLogsHere = null)
+    public static string? ToolbarGlyphNote(string glyph, AppSettingsData shown, bool noToolsOffered = false, bool? eventLogsHere = null, bool? directoryHere = null)
     {
         ArgumentNullException.ThrowIfNull(glyph);
         ArgumentNullException.ThrowIfNull(shown);
@@ -1981,7 +1981,7 @@ internal sealed partial class ChatScreen
             ToolbarItems.WebUi => shown.WebUi ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-14
             ToolbarItems.Skills => shown.AgentSkills ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-16
             ToolbarItems.Tools => noToolsOffered ? ToolbarItems.NoneOfferedState : null,   // 2026-10-16: its name alone while a tool is offered
-            _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown, eventLogsHere: eventLogsHere) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
+            _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown, eventLogsHere: eventLogsHere, directoryHere: directoryHere) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
             _ => null,
         };
         return ToolbarItems.Note(glyph, id, state);
@@ -1990,7 +1990,7 @@ internal sealed partial class ChatScreen
     /// <summary>One click on a toolbar glyph (2026-10-04): its note flashed on the hint row (<see cref="ToolbarGlyphNote"/>), idle or under a reply; the pair still waits for its second click.</summary>
     private void ShowToolbarNote(string glyph)
     {
-        if (ToolbarGlyphNote(glyph, _effective(), _noToolsOffered, EventLogsHere) is string note)
+        if (ToolbarGlyphNote(glyph, _effective(), _noToolsOffered, EventLogsHere, DirectoryHere) is string note)
         {
             _pane.Flash(note);
         }
@@ -2260,7 +2260,7 @@ internal sealed partial class ChatScreen
         // The model's name (2026-10-12, the user's ask: Model name), its reasoning glyph after it since later that day (the user's ask), as on the hint row.
         string model = ModelLabel(_session.Endpoint?.ModelId);
         string mark = model.Length == 0 ? "" : ModelMark(_session.Endpoint?.ModelId, shown.LlmReasoning);
-        var parts = ToolbarPartsFor(ToolbarItems.Resolve(shown.ToolbarItems), shown, path, model, mark, _noToolsOffered, EventLogsHere);
+        var parts = ToolbarPartsFor(ToolbarItems.Resolve(shown.ToolbarItems), shown, path, model, mark, _noToolsOffered, EventLogsHere, DirectoryHere);
         return parts.Left.Count + parts.Right.Count == 0 ? null : parts;
     }
 
@@ -2271,7 +2271,7 @@ internal sealed partial class ChatScreen
     /// <paramref name="mark"/>; an empty one is left out. <paramref name="noToolsOffered"/> is the screen's own fact (2026-10-16,
     /// <see cref="ToolbarItemOff"/>). Pure; pinned.
     /// </summary>
-    public static ScreenPane.ToolbarParts ToolbarPartsFor(IReadOnlySet<string> items, AppSettingsData shown, string path, string model, string mark, bool noToolsOffered = false, bool? eventLogsHere = null)
+    public static ScreenPane.ToolbarParts ToolbarPartsFor(IReadOnlySet<string> items, AppSettingsData shown, string path, string model, string mark, bool noToolsOffered = false, bool? eventLogsHere = null, bool? directoryHere = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(shown);
@@ -2281,7 +2281,7 @@ internal sealed partial class ChatScreen
         {
             ToolbarItems.Path => path.Length > 0 ? ScreenPane.ToolbarItem.PathOf(path) : null,
             ToolbarItems.Model => model.Length > 0 ? ScreenPane.ToolbarItem.ModelOf(model, mark) : null,
-            _ => ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph ? ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown, noToolsOffered, eventLogsHere)) : null,
+            _ => ToolbarGlyph(id, policy, shown.ShellPolice) is { } glyph ? ScreenPane.ToolbarItem.GlyphOf(glyph, ToolbarItemOff(id, shown, noToolsOffered, eventLogsHere, directoryHere)) : null,
         };
 
         // A divider only between two drawn items of its side (later on 2026-10-13, ItemOrder.ShownDividers).
@@ -5858,7 +5858,7 @@ internal sealed partial class ChatScreen
             SettingsField.NetworkTools => !effective.NetworkTools ? ToolsText.SwitchOffReason(field) : null,
             SettingsField.ServiceTools => !effective.ServiceTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _services.System is null ? Services.ServiceText.NoneHereReason : null,
             SettingsField.TaskTools => !effective.TaskTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _tasks.System is null ? Tasks.TaskText.NoneHereReason : null,
-            SettingsField.DirectoryTools => !effective.DirectoryTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _directory.System is null ? ActiveDirectory.DirectoryText.NoneHereReason : _directory.Catalog().Domains.Count == 0 ? ActiveDirectory.DirectoryText.NoDomainReason : null,
+            SettingsField.DirectoryTools => !effective.DirectoryTools ? ToolsText.SwitchOffReason(field) : !DirectoryHere ? ActiveDirectory.DirectoryText.NoneHereReason : _directory.Catalog().Domains.Count == 0 ? ActiveDirectory.DirectoryText.NoDomainReason : null,
             SettingsField.PrintTools => PrintText.Supported ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,   // a Mac prints since 2026-10-08
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,

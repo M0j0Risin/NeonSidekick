@@ -25,6 +25,36 @@ public static class DirectoryText
 
     public const string NoneHereReason = "there is no directory to read here";
 
+    // ── A Mac's directory (2026-10-18, the Mac AD plan): Kerberos only, no joined PC ──
+
+    /// <summary>Who a <c>windows</c> sign-in is on a Mac: the default Kerberos ticket. Pinned.</summary>
+    public const string MacTicketAccount = "your Kerberos ticket (kinit)";
+
+    /// <summary>The wizard's sign-in rows on a Mac. Pinned.</summary>
+    public static readonly IReadOnlyList<string> MacAuthRows = ["windows  your Kerberos ticket (kinit)", "runas    as another account, name@REALM (Kerberos)"];
+
+    /// <summary>How a managed session is connected: <c>389, Kerberos as ldap/dc1.corp.example, sealed</c>. Pinned.</summary>
+    public static string Transport(int port, bool tls, string serviceName, string layer) =>
+        port.ToString(System.Globalization.CultureInfo.InvariantCulture) + (tls ? " TLS" : "") + ", Kerberos as " + serviceName + ", " + layer;
+
+    /// <summary>The SASL layer's word in <see cref="Transport"/>.</summary>
+    public static string LayerWord(string layer) => layer switch
+    {
+        "Confidentiality" => "sealed",
+        "Integrity" => "signed",
+        _ => "no SASL layer",
+    };
+
+    /// <summary>
+    /// A runas domain held after its password was refused (2026-10-18, the user's call, both systems): never tried again with that password,
+    /// so a model's retries cannot lock the account. Pinned.
+    /// </summary>
+    public static string Held(string domain, string account) =>
+        $"Error: {domain} refused the password for {account}, so it is not tried again (repeated tries can lock the account). Set it again with Directory set password on {MenuPath}.";
+
+    /// <summary>The wizard's account question on a Mac. Pinned.</summary>
+    public const string MacUserQuestion = "The account as name@REALM (reader@CORP.EXAMPLE): Kerberos, so the realm in capitals.";
+
     /// <summary>Why the group is not offered on an unjoined PC with no domain ticked. Pinned.</summary>
     public const string NoDomainReason = "no domain is configured";
 

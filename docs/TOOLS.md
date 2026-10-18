@@ -23,7 +23,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
 * **Headless, anything that would stop to ask you is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
-* **On a Mac** the Browser window, Docker servers, services, scheduled tasks and Active Directory are Windows only, the event logs read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)), and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
+* **On a Mac** the Browser window, Docker servers, services and scheduled tasks are Windows only, the event logs read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)), Active Directory signs in with Kerberos ([Active Directory on a Mac](#active-directory-on-a-mac)), and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
 ## Core
 
@@ -437,7 +437,7 @@ Under *Obsidian tools*, on the vault *Obsidian vault* names. They work on its fi
 
 ## Admin
 
-Checks on the network, then Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. The network checks work everywhere, and the event logs on a Mac read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)); the rest are **Windows only**. All go through the system's own APIs inside the app: nothing is started (no `wevtutil`, `log show`, `sc`, `schtasks` or PowerShell). Each has its own command (`/net`, `/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
+Checks on the network, then Windows' own records and machinery: the event logs, the services, the scheduled tasks and Active Directory. The network checks and Active Directory work everywhere ([Active Directory on a Mac](#active-directory-on-a-mac)), and the event logs on a Mac read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)); services and scheduled tasks are **Windows only**. All go through the system's own APIs inside the app: nothing is started (no `wevtutil`, `log show`, `sc`, `schtasks` or PowerShell). Each has its own command (`/net`, `/eventlog`, `/services`, `/tasks`, `/ad`) that lets you run them yourself, even with the tools off.
 
 The services and tasks reach computers you name in `services.json` and `tasks.json`; the directory reaches domains in `ad.json`. Each sits in the home's or the profile's `configs` folder like the [database connections](#managing-connections) (when both name the same one, the profile's wins), each entry is used only after you tick it in its *… offered* setting, and its *add/edit* wizard walks you through adding one and tests it. A remote computer reached with `runas` has not been tried against a real second machine here yet; this PC and `localhost` have.
 
@@ -642,12 +642,27 @@ Under *Directory tools*. The directory is never written: the app's LDAP layer de
 * **`domain`** (required): its DNS name. **`server`**: a domain controller (the domain's name when absent). **`baseDn`**: where to search (the domain when absent).
 * **`tls`**: `true` for LDAPS on 636, the certificate checked against this machine's trust; otherwise 389, signed and sealed.
 * **`auth`**, **`user`**, **`passwordStore`**: as above (`NeonSidekick/ad/<name>`). From a PC outside the domain, `runas` signs in with NTLM inside Negotiate.
+* **A refused `runas` password is held:** once the domain refuses it, that password is not tried again this run (repeated tries can lock the account); each call says so until *Directory set password* saves a new one, which is tried at once.
 * **`detail`**, **`description`**: as above.
 * Configured domains are your own entries: *Network tools reach* doesn't judge them. `--ad-check <domain>` tests one.
 
+#### Active Directory on a Mac
+
+The same tools, `/ad` and `--ad-check`, through the app's own LDAP client: it holds no call that writes, and nothing is started (no `ldapsearch`, `dscl` or `kinit`).
+
+* **Kerberos only.** `windows` signs in with your default ticket: run `kinit you@CORP.EXAMPLE` first (`klist` shows it). `runas` takes the account as `name@REALM`, the realm in capitals (`reader@CORP.EXAMPLE`); a `DOMAIN\name` is refused when it is used, so an `ad.json` shared with a PC still loads. The password is a Keychain item (`NeonSidekick/ad/<name>`), as the [database connections](#managing-connections)' are.
+* **No `current`:** a Mac bound to a domain doesn't say so to the app. Name each domain in `ad.json`.
+* **Finding a DC:** the `server` when given, else the domain's DCs from its DNS records (`_ldap._tcp.dc._msdcs.<domain>`), else the domain's own name through the system's resolver (which honors a VPN's split DNS).
+* **The Kerberos name** is `ldap/<the DC's own name>`, read from the DC before signing in, and only when it lies inside the domain; otherwise the `server` as given. A container or `localhost` needs no `/etc/hosts` line.
+* **On 389** the connection is always signed and sealed (a DC offering neither is refused). **On LDAPS** (`tls`) the DC's certificate must be trusted in the Keychain, and the channel binding is sent.
+* **A `runas` sign-in leaves that account's ticket** in a cache of its own; with no valid default ticket, macOS may make it the default (`klist -l`). `kdestroy -p <name@REALM>` removes it.
+* **A refused password or an unreachable KDC:** a failed `runas` sign-in tries the DC's port 88. If it answers, the password was refused and is held (above); if not, the KDC is named as unreachable and nothing is held. A firewall that blocks 88 but allows 389 reads as unreachable.
+* **Event 2889:** a DC that audits unsigned binds logs one for these sealed binds too; it's a known false positive (the bind is SASL GSSAPI, sealed).
+* **A test realm** with no DNS records (a container's) needs its KDC named in a `krb5.conf`, pointed at by `KRB5_CONFIG` in the shell that starts the app: `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`.
+
 ### What the shell may not do while these are on
 
-While *Service tools*, *Task tools* or *Directory tools* is on and *Shell police* is too, a `run_command` line, the script files it runs, an `execute_code` script or a `process` write that would change a service (`sc stop`, `net stop`, `Restart-Service`…), a scheduled task (`schtasks /run`, `Disable-ScheduledTask`…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, `net user … /domain` with a change…) is refused before any approval, whatever *Shell command policy* says: changes go through the tools, their checks and your yes. Reading passes (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`). Like the forbidden strings, it's a tripwire, not a sandbox.
+While *Service tools*, *Task tools* or *Directory tools* is on and *Shell police* is too, a `run_command` line, the script files it runs, an `execute_code` script or a `process` write that would change a service (`sc stop`, `net stop`, `Restart-Service`…), a scheduled task (`schtasks /run`, `Disable-ScheduledTask`…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, `net user … /domain` with a change…; on a Mac also `dscl` writing to `/Active Directory` or `/Search`, and `dsconfigad -add`, `-remove`, `-force` or `-leave`) is refused before any approval, whatever *Shell command policy* says: changes go through the tools, their checks and your yes. Reading passes (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`). Like the forbidden strings, it's a tripwire, not a sandbox.
 
 ## Databases
 

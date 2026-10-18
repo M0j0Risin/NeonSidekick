@@ -1201,7 +1201,7 @@ public enum SettingsField
     /// <summary>An edit row: the home's <c>tasks.json</c> in the editor.</summary>
     TaskComputersGlobal,
 
-    /// <summary>A toggle: whether a turn offers the directory tools (<see cref="Settings.AppSettingsData.DirectoryTools"/>). The Directory menu on <c>/tools</c> › Admin. Windows only.</summary>
+    /// <summary>A toggle: whether a turn offers the directory tools (<see cref="Settings.AppSettingsData.DirectoryTools"/>). The Directory menu on <c>/tools</c> › Admin. Windows, and a Mac since 2026-10-18 (the managed LDAP client).</summary>
     DirectoryTools,
 
     /// <summary>A checklist: which domains the directory tools and <c>/ad</c> may read, <c>current</c> first on a joined PC.</summary>

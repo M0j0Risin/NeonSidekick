@@ -179,9 +179,9 @@ public static class DirectoryCommand
     public static async Task<DirectoryCommandResult> RunAsync(DirectoryAccess access, string args, CancellationToken cancellationToken, Func<WorkingDirectory?>? files = null)
     {
         ArgumentNullException.ThrowIfNull(access);
-        if (!OperatingSystem.IsWindows() || access.System is null)
+        if (access.System is null)
         {
-            return Failed(DirectoryText.NoneHere);
+            return Failed(DirectoryText.NoneHere);   // no directory here (since 2026-10-18 a Mac has one: the managed client)
         }
 
         var (line, error) = Parse(args);

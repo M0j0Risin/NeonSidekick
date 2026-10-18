@@ -185,7 +185,7 @@ public partial class ChatScreenTests
         Assert.Empty(_chat.Requests);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task Ad_TheUsersCard_WithoutThePane()
     {
         _directorySystem = new FakeDirectorySystem();

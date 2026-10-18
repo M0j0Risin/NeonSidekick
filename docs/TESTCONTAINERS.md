@@ -14,3 +14,18 @@ The Docker containers the live tests run against. Each live test is skipped unle
 | `searxng-valkey` | Valkey, SearXNG's cache. | [valkey/valkey](https://hub.docker.com/r/valkey/valkey) (`9-alpine`) |
 | `homeassistant` | Home Assistant, for the Home Assistant tools. | [home-assistant](https://github.com/home-assistant/core/pkgs/container/home-assistant) (`ghcr.io/home-assistant/home-assistant:stable`) |
 | `kokoro-fastapi-cpu` | Kokoro text-to-speech behind an OpenAI-style HTTP API, for HTTP voice output. | [kokoro-fastapi-cpu](https://github.com/remsky/Kokoro-FastAPI/pkgs/container/kokoro-fastapi-cpu) (`ghcr.io/remsky/kokoro-fastapi-cpu:latest`) |
+
+## `samba_ad_dev` on a Mac
+
+The image is amd64 only; Docker Desktop on Apple Silicon runs it under emulation, healthy in about a minute. macOS's own Kerberos already holds port 88, so the KDC goes to 1088:
+
+```sh
+docker run -d --name samba_ad_dev --hostname DC1 --privileged \
+  -e REALM=LAB.NEON.TEST -e DOMAIN=LAB -e ADMIN_PASS='<admin password>' -e DNS_FORWARDER=1.1.1.1 -e BIND_NETWORK_INTERFACES=false \
+  -p 127.0.0.1:389:389 -p 127.0.0.1:636:636 -p 127.0.0.1:1088:88 -p 127.0.0.1:1088:88/udp \
+  -v samba_ad_dev_etc:/usr/local/samba/etc -v samba_ad_dev_private:/usr/local/samba/private -v samba_ad_dev_var:/usr/local/samba/var \
+  diegogslomp/samba-ad-dc:4.24.7
+docker exec samba_ad_dev samba-tool user create reader '<reader password>'
+```
+
+Then a `krb5.conf` holding `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`, named by `KRB5_CONFIG` in the shell that runs the tests or the app, and `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=localhost;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).

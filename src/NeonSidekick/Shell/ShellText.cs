@@ -486,6 +486,17 @@ public static class ShellText
         @"\b(?:ldifde|csvde)(?:\.exe)?\b[^\r\n;&|]*?\s-i\b",
     ];
 
+    /// <summary>
+    /// A Mac's own directory writers (2026-10-18, the Mac AD plan: the directory tools now run there): <c>dscl</c> changing a record on an
+    /// Active Directory node (or <c>/Search</c>, which can resolve to one), and <c>dsconfigad</c> changing the Mac's binding. Read on a Mac
+    /// alone, beside <see cref="AdminDirectoryWords"/>, so Windows' list is unchanged.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AdminDirectoryWordsMac =
+    [
+        @"\bdscl\b[^\r\n;&|]*?(?:/Active Directory|/Search)\b[^\r\n;&|]*?\s-(?:create|delete|append|merge|change|passwd)\b",
+        @"\bdsconfigad\b[^\r\n;&|]*?\s-(?:add|remove|force|leave)\b",
+    ];
+
     /// <summary>What a result the admin police refused opens with.</summary>
     public const string AdminHead = "Error: refused by the shell police — admin";
 
