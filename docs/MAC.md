@@ -145,7 +145,7 @@ On a Mac the app gets that account's Kerberos ticket itself at each connect, so 
 
 ## Known issues
 
-* **The Browser window over a full-screen terminal Space, and with the screen locked,** hasn't been tried on a real Mac.
+* **A bot check with the screen locked** hasn't been tried: the Browser window draws covered or minimized, and a check driven from the Web UI passed with it on screen.
 * **YouTube may ask for consent again each run.** WebKit blocks the embedded player's third-party cookies, so a consent given inside the player isn't kept.
 * **Switching the audio output mid-reply (to AirPods, say) hasn't been tried.** The next reply plays on the new default output.
 * **With Bluetooth headphones the microphone may open on the reply's last word**, since they play a fifth of a second or so behind.

@@ -390,9 +390,10 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
     public const double DefaultWidth = BrowserPage.DefaultWidth;
     public const double DefaultHeight = BrowserPage.DefaultHeight;
 
-    // NSWindowCollectionBehaviorMoveToActiveSpace | FullScreenAuxiliary | FullScreenNone (pass 22): a check opened over a full-screen terminal
-    // comes to that Space instead of sending the user to the desktop's; the green button still zooms. Phase 0: AppKit takes the three.
-    private const ulong Behavior = (1UL << 1) | (1UL << 8) | (1UL << 9);
+    // NSWindowCollectionBehaviorMoveToActiveSpace | FullScreenAuxiliary (pass 22): a check opened over a full-screen terminal comes to that
+    // Space instead of sending the user to the desktop's. Not FullScreenNone beside them (AppKitWindow's default): with it the live check
+    // (2026-10-18) slid the user off iTerm2's full-screen Space to show the window.
+    private const ulong Behavior = (1UL << 1) | (1UL << 8);
 
     private readonly BrowserJobs _jobs = new();
     private readonly List<TaskCompletionSource<BotCheckResult>> _pendingSolves = [];
@@ -652,6 +653,8 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
             SendVoid(Window, Sel("deminiaturize:"), 0);
         }
 
+        // On the active Space before the app is activated, so the activation finds a window here and has no reason to switch Spaces.
+        SendVoid(Window, Sel("orderFrontRegardless"));
         ShowWindow(activate: true);
         FocusPage();
     }
