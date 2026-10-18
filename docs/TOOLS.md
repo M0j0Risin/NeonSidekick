@@ -95,13 +95,13 @@ Under *Shell command policy*. Commands run on your machine in the working direct
 
 ### Timers
 
-Under *Timer tools* (on by default). Off, the model has no timer tools and its prompt drops the timer sentence; `/timer` and timers already running keep working. Not offered headless.
+Under *Timer tools* (on by default). Off, the model has no timer tools and its prompt drops the timer sentence; `/timer` and timers already running keep working. Not offered headless. A timer going off rings *Timer tone* (silent by default), whoever started it. The model can't start a stopwatch (`/timer stopwatch` is yours), but `list_timers` and `stop_timer` include them.
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `start_timer` | `name?, hours?, minutes?, seconds?` | Starts a named countdown that alerts you when it ends; several can run at once. |
-| `stop_timer` | `name` | Stops a running timer, or silences one that has gone off. |
-| `list_timers` | — | Every running timer and its time left. |
+| `stop_timer` | `name` | Stops a running timer or stopwatch, or silences one that has gone off. |
+| `list_timers` | — | Every running timer and its time left, and every stopwatch and its time so far. |
 
 ### Ask
 

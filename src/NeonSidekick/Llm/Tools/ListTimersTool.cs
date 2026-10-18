@@ -7,7 +7,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>list_timers()</c>: every timer and how long each has left. The only way the model learns
 /// what remains — nothing about timers is in the prompt, so a long turn cannot carry a stale
-/// figure.
+/// figure. Since 2026-10-18 it lists the user's stopwatches too (<c>/timer stopwatch</c>), each with its elapsed time.
 /// </summary>
 public sealed class ListTimersTool : AIFunction
 {
@@ -31,7 +31,7 @@ public sealed class ListTimersTool : AIFunction
     public override string Name => ToolName;
 
     public override string Description =>
-        "Every running timer and how long each has left. Call it to answer how much time remains on a timer, or which timers exist.";
+        "Every running timer or stopwatch and how long each has left, or for a stopwatch how long it has run. Call it to answer how much time remains on a timer, or which timers exist.";
 
     public override JsonElement JsonSchema => Schema;
 

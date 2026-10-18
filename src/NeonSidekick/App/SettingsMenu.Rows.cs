@@ -37,7 +37,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.LlmUrl, "Connection"),
                 (SettingsField.LlmReasoning, "How it answers"),
                 (SettingsField.LlmOfferTools, "Tools and limits"),
-                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own
+                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, LLM plan gap ask user)
                 (SettingsField.LlmContextLength, "Context"),
                 (SettingsField.LlmPictureKeep, "Pictures and verbs"),
             ],

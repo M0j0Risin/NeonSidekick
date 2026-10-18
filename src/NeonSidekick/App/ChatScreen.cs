@@ -197,11 +197,14 @@ public enum TimerActionKind
     Stop,
     StopAll,
 
+    /// <summary><c>stopwatch [name]</c> (2026-10-18): a stopwatch started, or one of that name said.</summary>
+    Stopwatch,
+
     /// <summary>Anything the grammar does not cover; <c>ChatScreen.TimerUsageError</c>.</summary>
     Invalid,
 }
 
-/// <summary><see cref="Duration"/> is set for <see cref="TimerActionKind.Start"/>; <see cref="Name"/> for Start (may be empty: the default name) and Stop.</summary>
+/// <summary><see cref="Duration"/> is set for <see cref="TimerActionKind.Start"/>; <see cref="Name"/> for Start (may be empty: the default name), Stop and Stopwatch (2026-10-18; never empty: <see cref="Timers.TimerText.StopwatchName"/> without one).</summary>
 public readonly record struct TimerAction(TimerActionKind Kind, TimeSpan Duration, string Name);
 
 /// <summary>What a <c>/cwd</c> argument asks for. Top-level like <see cref="TimerAction"/>, so the test project can pin the grammar.</summary>
@@ -517,7 +520,7 @@ internal sealed partial class ChatScreen
     public const string ForceWord = "force";
     public const string GitUsageError = "/gituser takes nothing or force.";
     public const string GitUserForceNote = "the same, replacing a [user] section already there";
-    public const string TimerUsageError = "/timer takes nothing (list), <duration> [name], stop <name> or stop all; a duration is 10m, 90s, 1h30m, or minutes as a number.";
+    public const string TimerUsageError = "/timer takes nothing (list), <duration> [name], stopwatch [name], stop <name> or stop all; a duration is 10m, 90s, 1h30m, or minutes as a number.";
     public const string NoTimersNotice = "(" + NoticeGlyphs.Timer + "no timers)";
 
     /// <summary>The <c>/cwd</c> word that clears the setting back to the profile's own folder: the shell's home word, bare only (<c>~/x</c> is a path). <c>default</c> was a second word until 2026-09-16 (the user's call); it reads as a relative path now, which the save refuses.</summary>
@@ -908,6 +911,9 @@ internal sealed partial class ChatScreen
     private readonly InterruptTracker _interrupts = new();
     private readonly TimerBoard _timers;
 
+    /// <summary>The timer tone's player (2026-10-18): rings <see cref="AppSettingsData.TimerTone"/> as a countdown goes off, and the Timer tone picker's preview.</summary>
+    private readonly TimerTonePlayer _tones;
+
     // The long connects behind the input line (2026-09-29, the user's ask): the embedded download, the MCP wave, the
     // voice and speech setups. Their ends are drained at the loop top.
     private readonly BackgroundJobs _jobs;
@@ -1148,7 +1154,8 @@ internal sealed partial class ChatScreen
         Services.IServiceSystem? serviceSystem = null,
         Tasks.ITaskSystem? taskSystem = null,
         ActiveDirectory.IDirectorySystem? directorySystem = null,
-        Func<string?>? joinedDomain = null)
+        Func<string?>? joinedDomain = null,
+        Func<Audio.PcmFormat, Audio.IAudioPlayback>? tonePlayback = null)
     {
         _logFile = logFile;
         // The system's Recycle bin (later on 2026-10-15): RecycleBin.Platform() in the app, a fake in tests, none by default.
@@ -1231,6 +1238,8 @@ internal sealed partial class ChatScreen
         _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing);
         _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
+        // The timer tone (2026-10-18, the user's ask): a device of its own from the app's playback factory; none in tests by default.
+        _tones = new TimerTonePlayer(tonePlayback, time);
         _jobs = new BackgroundJobs(SignalAlert, time);
         _timerTools = TimerTools(_timers);
         _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync, WebLinkHooksFor(), _browserWindow is null ? null : OpenForTool, OpenYouTubeForToolAsync);
@@ -1548,6 +1557,8 @@ internal sealed partial class ChatScreen
         // The Docker tools page's manage button (2026-10-11, the user's ask): the bare /docker's list, ESC back to the page.
         _menu.ManageDocker = ct => DockerMenuFor(closeWhenDone: false).ShowAsync(ct);
         _menu.Cameras = _camera.Available ? _camera.List : null;
+        // The Timer tone picker's preview (2026-10-18): the highlighted row played, latest wins.
+        _menu.PreviewTone = (name, token) => _tones.PlayAsync(name, token, replace: true);
         // The Camera tool page's watch button (2026-10-04, the user's ask), only where there is a camera layer to watch with.
         _menu.CameraWatching = _camera.Available ? () => _cameraWatch.Running : null;
         _menu.SetCameraWatch = _camera.Available ? SetWatchFromPane : null;
@@ -4372,7 +4383,7 @@ internal sealed partial class ChatScreen
             effective.ShellPreferNative,
             // Plan mode's advisors bullet (2026-10-10) as the turn would send it: neon_advisor offered and not off on /tools.
             // ...and its web research bullet (2026-10-17) with the research tools the turn offers.
-            _plan.Turn(_presentPlan)?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null),
+            _plan.Turn(_presentPlan, effective.PlanGapAskUser)?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null),
             HomeAssistantOffered(effective),
             Without(_haTools, disabled).Count,
             OracleOffered(effective, _oracle),
@@ -4926,6 +4937,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>The <c>/timer</c> list's entries. Pinned.</summary>
     public const string TimerStopNote = "stop a timer: /timer stop <name> | all";
+
+    /// <summary>The completion's note on <c>stopwatch</c> (2026-10-18). Pinned.</summary>
+    public const string TimerStopwatchNote = "count up from now";
     public const string TimerStopAllNote = "stop every timer";
 
     /// <summary>The <c>/cwd</c> list's note on <c>~</c>. Pinned.</summary>
@@ -5168,7 +5182,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches(stops, argText);
                 }
 
-                return MentionCompleter.Matches([new("stop", TimerStopNote)], argText);
+                return MentionCompleter.Matches([new("stop", TimerStopNote), new(TimerText.StopwatchName, TimerStopwatchNote)], argText);
             }
 
             case SlashCommand.Shortcut:
@@ -7108,8 +7122,9 @@ internal sealed partial class ChatScreen
         CameraEnabled = CameraOffered(effective),
         Screen = _screenTools,
         ScreenEnabled = ScreenOffered(effective),
-        Disabled = ToolsText.DisabledSet(effective.ToolsDisabled),
-        Plan = _plan.Turn(_presentPlan),
+        // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost.
+        Disabled = GapAsksBarred(effective) ? PlanTools.WithoutAsking(ToolsText.DisabledSet(effective.ToolsDisabled)) : ToolsText.DisabledSet(effective.ToolsDisabled),
+        Plan = _plan.Turn(_presentPlan, effective.PlanGapAskUser),
     }, effective);   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
 
     /// <summary>
@@ -8569,7 +8584,9 @@ internal sealed partial class ChatScreen
     /// ⇒ stop; otherwise the longest leading run of tokens (up to six) that
     /// <see cref="TimerText.TryParseDuration"/> accepts is the duration and the rest is the name
     /// (<c>10m cooking</c>, <c>1h 30m tea</c>, <c>5 min</c>, <c>10 eggs</c> = ten minutes); anything
-    /// else ⇒ invalid. The name is not validated here (the board says why it is refused).
+    /// else ⇒ invalid. The name is not validated here (the board says why it is refused). Since 2026-10-18 a first token
+    /// <c>stopwatch</c> (any case) ⇒ a stopwatch, the rest its name (<see cref="TimerText.StopwatchName"/> for none); the duration
+    /// scan never takes it, so <c>5m stopwatch</c> is still a countdown named that.
     /// </summary>
     public static TimerAction ParseTimerArgs(string args)
     {
@@ -8592,6 +8609,12 @@ internal sealed partial class ChatScreen
                 : new(TimerActionKind.Stop, TimeSpan.Zero, target);
         }
 
+        if (tokens[0].Equals(TimerText.StopwatchName, StringComparison.OrdinalIgnoreCase))
+        {
+            string named = string.Join(' ', tokens.Skip(1));
+            return new(TimerActionKind.Stopwatch, TimeSpan.Zero, named.Length > 0 ? named : TimerText.StopwatchName);
+        }
+
         for (int take = Math.Min(6, tokens.Length); take >= 1; take--)
         {
             if (TimerText.TryParseDuration(string.Join(' ', tokens.Take(take)), out var duration))
@@ -8606,7 +8629,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/timer</c>: the list (one notice per timer), a start, a stop by name or of all. The
     /// sentences are the tools' (<see cref="TimerText"/>), as notices in parentheses when they
-    /// did something and as errors when they begin with <c>Error:</c>.
+    /// did something and as errors when they begin with <c>Error:</c>. A stopwatch (2026-10-18): started, or, when one of that
+    /// name runs, its elapsed line said and left running; a countdown of that name is the duplicate error.
     /// </summary>
     private void HandleTimer(string args)
     {
@@ -8656,6 +8680,33 @@ internal sealed partial class ChatScreen
 
             case TimerActionKind.StopAll:
                 _transcript.Notice(TimerText.StoppedAll(_timers.StopAll()));
+                break;
+
+            case TimerActionKind.Stopwatch:
+                if (_timers.TryFind(action.Name, out var running))
+                {
+                    if (running.Stopwatch)
+                    {
+                        _transcript.Notice(NoticeGlyphs.Timer + TimerText.Line(running));
+                    }
+                    else
+                    {
+                        _transcript.Error(TimerText.Duplicate(running));
+                    }
+
+                    break;
+                }
+
+                var started = _timers.StartStopwatch(action.Name);
+                if (started.Outcome == TimerStartOutcome.Started)
+                {
+                    _transcript.Notice("(" + NoticeGlyphs.Timer + TimerText.StopwatchStarted(started.Timer) + ")");
+                }
+                else
+                {
+                    _transcript.Error(StartTimerTool.Describe(started));
+                }
+
                 break;
 
             default:
@@ -10928,6 +10979,7 @@ internal sealed partial class ChatScreen
             // Docker server stop on exit (2026-10-02): off by default; on, the container in use stops while the screen is still up.
             await StopDockerAtExitAsync().ConfigureAwait(false);
             _timers.Dispose();
+            _tones.Dispose();
             _readSeekTimer?.Dispose();
             _perf.Dispose();
             _homeLive.Dispose();
@@ -11130,12 +11182,23 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The queued alerts as lines, no speech: the mid-reply drain (the reply owns the device; the repeat is spoken at the idle line).</summary>
+    /// <summary>
+    /// The queued alerts as lines, no speech; the tone rings: the mid-reply drain (the reply owns the TTS device; the repeat is spoken at
+    /// the idle line). The tone (2026-10-18) has a device of its own and is started, not awaited: this drain has no token, and the player's
+    /// cap and its disposal with the screen bound it. It plays over the reply's speech; the wake-word interrupt listens for a phrase, not a tone.
+    /// </summary>
     private void PrintAlerts()
     {
+        bool rang = false;
         while (_timers.TryTakeAlert(out var alert))
         {
             _transcript.Alert(TimerText.AlertLine(alert));
+            rang = true;
+        }
+
+        if (rang && TimerTones.Normalize(_effective().TimerTone) is var tone && tone != TimerTones.Silent)
+        {
+            _ = _tones.PlayAsync(tone, CancellationToken.None);
         }
 
         PrintProcessAlerts();
@@ -11164,6 +11227,9 @@ internal sealed partial class ChatScreen
     /// speech is on — the read opens at once, and Enter, ESC or a sent line silence it like any
     /// tail; a repeat replaces the tail before it. The read arms no microphone over a tail without
     /// the interrupt, so the device plays with the microphone closed. True when the app token ended it.
+    /// The timer tone (2026-10-18, <see cref="AppSettingsData.TimerTone"/>) rings after the lines and before the speech, TTS on or off,
+    /// awaited: here at the loop top, before the idle read arms the microphone, so the voice input never hears it, and the spoken alert
+    /// follows the tone rather than overlapping it.
     /// </summary>
     private async Task<bool> AnnounceAlertsAsync(CancellationToken cancellationToken)
     {
@@ -11181,6 +11247,11 @@ internal sealed partial class ChatScreen
         {
             _transcript.Alert(TimerText.AlertLine(alert));
             sentences.Add(TimerText.AlertSpeech(alert));
+        }
+
+        if (sentences.Count > 0 && TimerTones.Normalize(_effective().TimerTone) is var tone && tone != TimerTones.Silent)
+        {
+            await _tones.PlayAsync(tone, cancellationToken).ConfigureAwait(false);
         }
 
         if (sentences.Count == 0 || !(_effective().TtsOutput && _speech.IsReady))

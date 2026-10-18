@@ -584,7 +584,7 @@ public static class PlanText
             opening +
             "- Do not change anything: write no file, change no repository, run no command that changes state, send no message and change no setting. Only read-only tools are offered; use them to research what the plan needs.\n" +
             (web ? WebResearchLine(research!) + "\n" : "") +
-            "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n" +
+            (gap is { AskUser: false } ? GapNoAskLine + "\n" : "- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n") +
             "- Never claim anything was done: nothing is carried out until the user approves.\n" +
             (talk.Talking
                 ? TalkingLine + "\n"
@@ -595,6 +595,27 @@ public static class PlanText
             (gap is { } review ? GapReviewLines(review, offered, web) + "\n" : "") +
             state;
     }
+
+    /// <summary>
+    /// The ask bullet's place in a gap pass that may not wait on the user (2026-10-18, the user's ask: <see cref="Settings.AppSettingsData.PlanGapAskUser"/>
+    /// off, so a review can run unattended). Pinned.
+    /// </summary>
+    public const string GapNoAskLine =
+        "- Do not ask the user anything during this review, and take no photo or screen capture: settle what research can, and fold the user's later messages into the plan.";
+
+    /// <summary>
+    /// The research bullet's second sentence in a gap pass that may not ask (2026-10-18): the user's call written into <c>## Risks</c> as an open
+    /// question. A plain bullet, never a checkbox: <see cref="PlanDocument"/>'s progress counts every task box in the body, so an unticked one
+    /// would hold back the plan's done state. Listed in <c>minor</c>, it shows in the pass's notice without breaking the clean streak. Pinned.
+    /// </summary>
+    public const string GapOpenQuestionSentence =
+        "A decision only the user can make, write into ## Risks as a plain bullet starting \"Open question (your call):\", never a checkbox; it is not a gap, so leave it out of gaps and list it in minor as \"open question: …\".";
+
+    /// <summary>
+    /// What the gap definition's "a choice left open" gains in a gap pass that may not ask (2026-10-18): without it a later pass would report the
+    /// open question as a gap and the review could never converge. Pinned.
+    /// </summary>
+    public const string GapOpenQuestionException = " (except an open question written into ## Risks as the user's call)";
 
     /// <summary>The present bullet's place while talking a plan through (2026-10-17, <c>/plan chat</c>). Pinned.</summary>
     public const string TalkingLine =
@@ -619,6 +640,8 @@ public static class PlanText
     {
         ArgumentNullException.ThrowIfNull(gap);
         bool confirming = gap.CleanSoFar > 0;
+        // A pass that may not ask (2026-10-18): the user's call becomes an open question in ## Risks, never a question on a pane.
+        string decision = gap.AskUser ? "A decision only the user can make, ask them (with ask_user when it is offered)." : GapOpenQuestionSentence;
         string focus = ConfirmFocuses[(Math.Max(1, gap.Confirmation) - 1) % ConfirmFocuses.Count];
         string reviewer = gap.Who switch
         {
@@ -634,12 +657,12 @@ public static class PlanText
             (confirming
                 ? $"- The last pass found no gaps; this pass checks again (clean pass {N(gap.CleanSoFar + 1)} of {N(gap.CleanPasses)}). Review the plan as if seeing it for the first time, and look hardest at {focus}, which an earlier pass may have skimmed; then the rest as usual. Report every gap you find; an empty gaps list is right only when you find none.\n"
                 : "") +
-            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open, " +
+            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? "" : GapOpenQuestionException) + ", " +
             (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
             ", a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
             (web
-                ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. A decision only the user can make, ask them (with ask_user when it is offered).\n"
-                : "- Research what you need with the read-only tools. A decision only the user can make, ask them (with ask_user when it is offered).\n") +
+                ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
+                : "- Research what you need with the read-only tools. " + decision + "\n") +
             "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed; put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. " +
             "If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked." +
             (reviewer.Length > 0 ? "\n" + reviewer : "");

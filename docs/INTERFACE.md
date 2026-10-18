@@ -231,7 +231,7 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 
 The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) moves and pins its sections:
 
-* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers**, **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
+* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers** (⏰ countdowns, ⏱️ stopwatches counting up), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
 * **Right by default:** **Model** (name and reasoning icon) and **Working directory** (off by default).
 * During a reply the busy row keeps the same sides.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.

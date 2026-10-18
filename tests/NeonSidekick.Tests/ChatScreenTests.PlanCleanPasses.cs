@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -202,6 +203,57 @@ public partial class ChatScreenTests
         Assert.Contains(PlanText.Glyph + " Gap review, 2 passes", output);
         Assert.Equal(PlanStatus.Cancelled, PlanHeaderNow.Status);
         Assert.NotNull(PlanHeaderNow.Review);
+    }
+
+    // ── LLM plan gap ask user (2026-10-18) ──────────────────────────────────
+
+    /// <summary>A plan presented and kept (Esc), then <c>/plan gaps</c>: one clean pass converging, its pane Esc'd; with the camera and screen on.</summary>
+    private async Task<string> GapPassWithAsksAsync(bool gapAsks)
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _screenSystem = new FakeScreenSystem();
+        _settings.Update(d => { d.PlanGapCleanPasses = 1; d.PlanGapAskUser = gapAsks; d.AskUser = true; d.CameraTools = true; d.ScreenTools = true; });
+        PlanGapsFixture([[Keys.Escape], [Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps"), Line("/exit"));
+        _chat.Enqueue(PresentPlanCall());                     // 0: the planning turn; Esc keeps refining
+        _chat.EnqueueText("Noted.");                          // 1
+        _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown));   // 2: the pass, clean: converged; Esc
+        _chat.EnqueueText("Noted.");                          // 3
+        string output = await RunAsync();
+        Assert.Equal(4, _chat.Requests.Count);
+        return output;
+    }
+
+    [Fact]
+    public async Task PlanGaps_AskUserOff_ThePassIsOfferedNoAskingTool_AndWritesTheUsersCallsIntoTheRisks()
+    {
+        await GapPassWithAsksAsync(gapAsks: false);
+
+        var planning = OfferedNames(_chat.Options[0]);
+        Assert.Contains(AskUserTool.ToolName, planning);   // the planning turn before the review still asks
+        Assert.Contains(CameraCaptureTool.ToolName, planning);
+        Assert.Contains(ScreenCaptureTool.ToolName, planning);
+        var pass = OfferedNames(_chat.Options[2]);
+        Assert.DoesNotContain(AskUserTool.ToolName, pass);
+        Assert.DoesNotContain(CameraCaptureTool.ToolName, pass);
+        Assert.DoesNotContain(ScreenCaptureTool.ToolName, pass);
+        Assert.Contains(ScreenListTool.ToolName, pass);       // it opens no pane
+        Assert.Contains(PresentPlanTool.ToolName, pass);
+        Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
+        Assert.Contains(PlanText.GapNoAskLine, _chat.Requests[2][0].Text);
+        Assert.DoesNotContain(PlanText.GapNoAskLine, _chat.Requests[0][0].Text);
+    }
+
+    [Fact]
+    public async Task PlanGaps_AskUserOn_ThePassStillAsks()
+    {
+        await GapPassWithAsksAsync(gapAsks: true);
+
+        var pass = OfferedNames(_chat.Options[2]);
+        Assert.Contains(AskUserTool.ToolName, pass);
+        Assert.Contains(CameraCaptureTool.ToolName, pass);
+        Assert.Contains(ScreenCaptureTool.ToolName, pass);
+        Assert.DoesNotContain(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
+        Assert.Contains("A decision only the user can make, ask them (with ask_user when it is offered).", _chat.Requests[2][0].Text);
     }
 
     // ── /plan chat and /plan ready ──────────────────────────────────────────

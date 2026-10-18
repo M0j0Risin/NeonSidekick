@@ -76,6 +76,24 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanGaps_AskUserOff_ThePassIsToldNotToAsk()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => { d.PlanGapCleanPasses = 1; d.PlanGapAskUser = false; });
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGaps("p2", []));
+        _chat.EnqueueText("Clean.");
+
+        await Headless("/plan Add a guide\n/plan gaps\n");
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.DoesNotContain(PlanText.GapNoAskLine, _chat.Requests[0][0].Text);   // the planning turn, no review yet
+        Assert.Contains(PlanText.GapNoAskLine, _chat.Requests[2][0].Text);
+        Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
+    }
+
+    [Fact]
     public async Task Headless_PlanChat_TheLineOpensIt_ReadyAsks_AndAfterAPresentationSaysWhereItStands()
     {
         ServerOn1234("llama");

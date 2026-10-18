@@ -451,7 +451,8 @@ public static class HelpCommands
         new("/timer",
         [
             new("/timer [<duration> [<name>]]", "List the timers, or start one: `10m`, `90s`, `1h30m`, `5 min` (a bare number is minutes), up to 24 hours."),
-            new("/timer stop <name>|all", "Stop one timer, or every one."),
+            new("/timer stopwatch [<name>]", "Start a stopwatch that counts up (called `stopwatch` without a name); again, it says how long it has run. `/timer stop <name>` stops it and says the time."),
+            new("/timer stop <name>|all", "Stop one timer or stopwatch, or every one."),
         ]),
         new("/toolbar",
         [

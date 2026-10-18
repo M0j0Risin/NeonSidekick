@@ -316,7 +316,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null, tonePlayback: _ => _tonePlayback);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -10161,6 +10161,11 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("cooking", TimerActionKind.Invalid, 0, "")]
     [InlineData("0m", TimerActionKind.Invalid, 0, "")]
     [InlineData("ten minutes", TimerActionKind.Invalid, 0, "")]
+    [InlineData("stopwatch", TimerActionKind.Stopwatch, 0, "stopwatch")]   // 2026-10-18: a stopwatch, the default name
+    [InlineData("Stopwatch tea", TimerActionKind.Stopwatch, 0, "tea")]
+    [InlineData("stopwatch  the  big pot", TimerActionKind.Stopwatch, 0, "the big pot")]
+    [InlineData("5m stopwatch", TimerActionKind.Start, 300, "stopwatch")]   // a countdown named stopwatch
+    [InlineData("stop stopwatch", TimerActionKind.Stop, 0, "stopwatch")]
     public void ParseTimerArgs_IsPinned(string args, TimerActionKind kind, int seconds, string name)
     {
         var action = ChatScreen.ParseTimerArgs(args);
@@ -10652,7 +10657,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 151;   // /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 152;   // /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -24690,8 +24695,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["pull memory work overwrite"], Texts(ChatScreen.ArgumentItems("/profile", "PULL MEMORY WORK ov", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "copy ", sources));
 
-        // /timer: stop, then stop all | <name> with the names whole.
-        Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote)], ChatScreen.ArgumentItems("/timer", "", sources));
+        // /timer: stop and stopwatch (2026-10-18), then stop all | <name> with the names whole.
+        Assert.Equal([new CompletionItem("stop", ChatScreen.TimerStopNote), new CompletionItem(TimerText.StopwatchName, ChatScreen.TimerStopwatchNote)], ChatScreen.ArgumentItems("/timer", "", sources));
+        Assert.Equal(["stopwatch"], Texts(ChatScreen.ArgumentItems("/timer", "stopw", sources)));
         Assert.Equal(["stop all", "stop tea", "stop the big pot of soup"], Texts(ChatScreen.ArgumentItems("/timer", "stop ", sources)));
         Assert.Equal(["stop the big pot of soup"], Texts(ChatScreen.ArgumentItems("/timer", "stop the b", sources)));
         Assert.Equal(["stop all"], Texts(ChatScreen.ArgumentItems("/timer", "stop ", Sources())));

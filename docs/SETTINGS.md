@@ -150,6 +150,7 @@ Settings every server reads, whatever its kind.
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
 | LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. A count on `/plan gaps` overrides it for that run. | 5 |
 | LLM plan gap clean passes | How many passes in a row must find no gaps before plan mode's **Close gaps…** review ends (1–5; 1 ends on the first pass with none). A pass limit below it lowers it to the limit for that review; `/plan gaps confirm` needs at least 2. | 2 |
+| LLM plan gap ask user | Whether a gap pass may stop to ask you (`ask_user`), take a photo (`camera_capture`) or capture the screen (`screen_capture`). Off, a pass is offered none of the three, whatever *Ask user* and the camera and screen settings say, and a decision only you can make goes into the plan's `## Risks` as an open question. Read every turn, so it applies from the next pass. | on |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
@@ -518,6 +519,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the model has none and its prompt drops the timer sentence; `/timer` and timers already running keep working. `/tools timers` opens its on/off page. | on |
+| Timer tone | The tone a timer rings with when it goes off: `silent`, `chime`, `bell`, `beep` or `alarm`. It rings at each repeat until you silence or stop the timer, mid-reply too, for `/timer`'s countdowns and the model's alike, even with *Timer tools* off; a stopwatch never rings. The picker plays the highlighted tone. On this PC only, not on the Web UI. | silent |
 
 #### Ask
 

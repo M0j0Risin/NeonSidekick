@@ -190,14 +190,25 @@ internal sealed partial class ChatScreen
         return !planning ? strip : strip.Length == 0 ? PlanText.Glyph : PlanText.Glyph + GlyphSeparator + strip;
     }
 
-    /// <summary>The <c>/tools</c> list as the next turn applies it: widened by every tool plan mode drops while planning (<see cref="PlanTools.Widen"/>), so <c>/sys</c> shows what is sent.</summary>
+    /// <summary>
+    /// The <c>/tools</c> list as the next turn applies it: widened by every tool plan mode drops while planning (<see cref="PlanTools.Widen"/>), so <c>/sys</c> shows what is sent;
+    /// since 2026-10-18 also by the tools that wait on the user while a gap pass may not (<see cref="GapAsksBarred"/>).
+    /// </summary>
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        return _plan.Active
+        var turn = _plan.Active
             ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
             : disabled;
+        return GapAsksBarred(effective) ? PlanTools.WithoutAsking(turn) : turn;
     }
+
+    /// <summary>
+    /// Whether this turn is a gap pass that may not wait on the user (2026-10-18, the user's ask): a pass under way and
+    /// <see cref="AppSettingsData.PlanGapAskUser"/> off, read every turn. Such a pass is offered none of <see cref="PlanTools.AskingTools"/>;
+    /// the turn whose pane chose <c>Close gaps…</c> (the loop still pending) and every other plan-mode turn keep them.
+    /// </summary>
+    private bool GapAsksBarred(AppSettingsData effective) => _plan.Reviewing && !effective.PlanGapAskUser;
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;

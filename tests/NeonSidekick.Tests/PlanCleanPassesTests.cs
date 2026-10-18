@@ -290,6 +290,69 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Contains("this pass checks again (clean pass 2 of 2)", _session.Turn(_tool)!.Directive);
     }
 
+    // ── LLM plan gap ask user (2026-10-18) ──────────────────────────────────
+
+    [Fact]
+    public void Directive_AskUserOff_AsksNothing_AndTheUsersCallsAreOpenQuestionsInTheRisks()
+    {
+        string off = PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model, AskUser: false));
+        string offWeb = PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model, AskUser: false), [WebSearchTool.ToolName]);
+
+        Assert.Equal("- Do not ask the user anything during this review, and take no photo or screen capture: settle what research can, and fold the user's later messages into the plan.", PlanText.GapNoAskLine);
+        Assert.Equal("A decision only the user can make, write into ## Risks as a plain bullet starting \"Open question (your call):\", never a checkbox; it is not a gap, so leave it out of gaps and list it in minor as \"open question: …\".", PlanText.GapOpenQuestionSentence);
+        Assert.Contains(PlanText.GapNoAskLine + "\n", off);
+        Assert.Contains("- Research what you need with the read-only tools. " + PlanText.GapOpenQuestionSentence + "\n", off);
+        Assert.Contains("a missing or out-of-order step, a choice left open (except an open question written into ## Risks as the user's call), a file", off);
+        Assert.DoesNotContain("ask_user", off);
+        Assert.DoesNotContain("- Ask what you need to know", off);
+        Assert.Contains("on the web for whatever the plan rests on from outside the working directory. " + PlanText.GapOpenQuestionSentence + "\n", offWeb);
+        Assert.DoesNotContain("ask_user", offWeb);
+    }
+
+    [Fact]
+    public void Directive_AskUserOn_IsAsBefore_AndNoGapStateIsUnchanged()
+    {
+        string on = PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model));
+        string none = PlanText.Directive("R", "p.md", 1, null, null);
+
+        Assert.Equal(on, PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model, AskUser: true)));
+        Assert.Contains("- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n", on);
+        Assert.Contains("- Research what you need with the read-only tools. A decision only the user can make, ask them (with ask_user when it is offered).\n", on);
+        Assert.Contains("a missing or out-of-order step, a choice left open, a file", on);
+        Assert.DoesNotContain(PlanText.GapNoAskLine, on);
+        Assert.DoesNotContain(PlanText.GapOpenQuestionException, on);
+        Assert.Contains("- Ask what you need to know", none);
+        Assert.DoesNotContain(PlanText.GapNoAskLine, none);
+    }
+
+    [Fact]
+    public void Tools_WithoutAsking_AddsTheThreeAndKeepsTheSetsOwn()
+    {
+        var union = PlanTools.WithoutAsking(new HashSet<string>(StringComparer.Ordinal) { "web_fetch" });
+
+        Assert.Equal(new[] { AskUserTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, "web_fetch" }.Order(StringComparer.Ordinal), union.Order(StringComparer.Ordinal));
+        Assert.Equal(3, PlanTools.WithoutAsking(new HashSet<string>()).Count);
+        Assert.DoesNotContain(ScreenListTool.ToolName, PlanTools.AskingTools);
+        Assert.All(PlanTools.AskingTools, t => Assert.True(PlanTools.Allowed(t)));   // each is a plan-mode read: only a review may drop it
+    }
+
+    [Fact]
+    public void Session_Reviewing_OnlyOnceAPassBegins_AndTurnCarriesTheSetting()
+    {
+        _session.Enter("R");
+        Assert.False(_session.Reviewing);
+        var loop = _session.StartClosing(PlanReviewer.Model, 5, 2);
+        Assert.False(_session.Reviewing);   // pending: the turn whose pane chose Close gaps… keeps asking
+        Assert.DoesNotContain(PlanText.GapNoAskLine, _session.Turn(_tool, gapAsks: false)!.Directive);
+        loop.BeginPass("b");
+
+        Assert.True(_session.Reviewing);
+        Assert.Contains(PlanText.GapNoAskLine, _session.Turn(_tool, gapAsks: false)!.Directive);
+        Assert.DoesNotContain(PlanText.GapNoAskLine, _session.Turn(_tool)!.Directive);
+        _session.StopClosing();
+        Assert.False(_session.Reviewing);
+    }
+
     // ── present_plan ────────────────────────────────────────────────────────
 
     [Fact]

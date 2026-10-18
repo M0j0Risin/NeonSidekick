@@ -139,6 +139,13 @@ public sealed class PlanSession
         return Closing = new PlanGapLoop(reviewer, limit, cleanPasses);
     }
 
+    /// <summary>
+    /// A pass of the gap-closing loop under way (2026-10-18, the user's ask): a loop past its first pass's start and not yet
+    /// converged. The turn built now is a gap pass, its directive the review's and, under
+    /// <see cref="Settings.AppSettingsData.PlanGapAskUser"/> off, its tools without <see cref="PlanTools.AskingTools"/>.
+    /// </summary>
+    public bool Reviewing => Closing is { Pending: false, Converged: false };
+
     /// <summary>The loop over, however it ended.</summary>
     public void StopClosing() => Closing = null;
 
@@ -308,8 +315,12 @@ public sealed class PlanSession
         Created = stored.Created;
     }
 
-    /// <summary>The turn's plan-mode part while planning, else null.</summary>
-    public PlanTurn? Turn(AIFunction tool)
+    /// <summary>
+    /// The turn's plan-mode part while planning, else null. <paramref name="gapAsks"/> is
+    /// <see cref="Settings.AppSettingsData.PlanGapAskUser"/> (2026-10-18): false, a gap pass's directive tells the model to ask
+    /// nothing and to write the user's calls into the plan as open questions.
+    /// </summary>
+    public PlanTurn? Turn(AIFunction tool, bool gapAsks = true)
     {
         ArgumentNullException.ThrowIfNull(tool);
         if (!Active)
@@ -321,9 +332,9 @@ public sealed class PlanSession
         string? path = Path;
         int revision = Revision;
         // A pass of the gap-closing loop under way (2026-10-13): its rules ride in the directive, so a compaction cannot lose them; the
-        // streak, the clean count, the confirmation and the pass's reviewer since 2026-10-17.
-        var gap = Closing is { Pending: false, Converged: false } loop
-            ? new PlanGapState(loop.Pass, loop.Limit, loop.Reviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation, loop.PassReviewer)
+        // streak, the clean count, the confirmation and the pass's reviewer since 2026-10-17; whether it may ask the user since 2026-10-18.
+        var gap = Reviewing && Closing is { } loop
+            ? new PlanGapState(loop.Pass, loop.Limit, loop.Reviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation, loop.PassReviewer, gapAsks)
             : null;
         // /plan chat (2026-10-17): the talking form while talking, the opening labeled while the requirement is only that.
         var talk = new PlanTalk(Talking, RequirementIsOpening);
