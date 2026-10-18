@@ -148,7 +148,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 | Command | What it does |
 |---|---|
-| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window)'s own PDF viewer (on a Mac, in Preview). |
+| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window)'s own PDF viewer (on a Mac before macOS 14, in Preview). |
 | `/view <image> --chat` | Draws it in the transcript instead. |
 | `/view <image>\|<folder> --thumbs` | Opens the folder in the [thumbnail browser](INTERFACE.md#the-thumbnail-browser), in step with the viewer. |
 | `/camera`, `/camera snap` | Opens the camera pane to take a photo, or takes one at once, and puts it on the input line. See [Camera](#camera). |
@@ -176,16 +176,16 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 ### Web and video
 
-* **The Browser window** (Windows only): its bar, history and saved links are in [Using the app](INTERFACE.md#the-browser-window), its bot checks in [TOOLS.md](TOOLS.md#the-browser-window).
+* **The Browser window** (Windows; a Mac on macOS 14 or later, with Safari's keys): its bar, history and saved links are in [Using the app](INTERFACE.md#the-browser-window), its bot checks in [TOOLS.md](TOOLS.md#the-browser-window).
 * **YouTube:** saved videos and quota are in [TOOLS.md](TOOLS.md#youtube), the window's keys in [The video window](INTERFACE.md#the-video-window). On a Mac, playing needs macOS 14 or later.
 
 | Command | What it does |
 |---|---|
-| `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. Windows only. |
-| `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. Windows only. |
-| `/browser <n>` | Opens saved link *n* in the Browser window; on a Mac, in your default browser. |
+| `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. Not headless. |
+| `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. |
+| `/browser <n>` | Opens saved link *n* in the Browser window; with no window (headless, a Mac before macOS 14), in your default browser. |
 | `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. Headless, give the address. |
-| `/browser list`, `/browser list --clear` | The saved links in a pane, where Enter opens one (on a Mac, in your default browser); `--clear` removes them all after a yes (headless: without asking). |
+| `/browser list`, `/browser list --clear` | The saved links in a pane, where Enter opens one (with no window, in your default browser); `--clear` removes them all after a yes (headless: without asking). |
 | `/browser unsave <n>\|<url>` | Removes one saved link. Works headless too. |
 | `/youtube`, `/youtube status` | Says what the video player is playing. |
 | `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (needs a *YouTube API key*; 100 quota units a search); use `search` when the words start with one of `/youtube`'s own words (`play`, `list`…). |

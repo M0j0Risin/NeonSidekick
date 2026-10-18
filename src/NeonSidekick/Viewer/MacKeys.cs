@@ -137,6 +137,94 @@ public static class MacKeys
         return VideoKeys.ActionFor(vk, fullScreen, control, option);
     }
 
+    /// <summary>The Mac key codes the Browser window names by code rather than by character (Esc, Return and the arrows, as Safari does).</summary>
+    public const ushort KeyEscape = 53;
+    public const ushort KeyLeft = 123;
+    public const ushort KeyRight = 124;
+
+    /// <summary>
+    /// What a key does in the Browser window on a Mac (2026-10-18, the Mac Browser plan): Safari's chords, matched on the characters the
+    /// key types (<paramref name="characters"/>, <c>charactersIgnoringModifiers</c>: ⌘[ ⌘] ⌘= ⌘L sit on other keys in other layouts) and the
+    /// named keys on their code. ⌘W closes, ⌘R reloads, ⌘. stops a load, ⌘[ ⌘] and ⌘← ⌘→ go back and forward, ⌘L the address, ⌘⇧H home,
+    /// ⌘Y the history, ⌘D saves or unsaves, ⌘⌥B and ⌘⇧O the saved links, ⌃⌘F the window's full screen, ⌘F find with ⌘G and ⌘⇧G, ⌘P print,
+    /// ⌘+ ⌘= ⌘- ⌘0 zoom, and the editing keys (⌘C ⌘X ⌘V ⌘A ⌘Z ⌘⇧Z, sent to whoever has the keyboard: the app has no menu bar to route them).
+    /// Esc closes the find bar, then stops a load, then leaves full screen; otherwise it is the page's. Every other key is the page's. Pure.
+    /// </summary>
+    public static MacBrowserAction BrowserAction(ushort keyCode, ulong flags, string? characters, bool loading = false, bool fullScreen = false, bool finding = false)
+    {
+        bool command = (flags & CommandFlag) != 0;
+        bool control = (flags & ControlFlag) != 0;
+        bool option = (flags & OptionFlag) != 0;
+        bool shift = (flags & ShiftFlag) != 0;
+        if (keyCode == KeyEscape && !command && !control && !option)
+        {
+            return finding ? MacBrowserAction.CloseFind
+                : loading ? MacBrowserAction.Stop
+                : fullScreen ? MacBrowserAction.LeaveFullScreen
+                : MacBrowserAction.None;
+        }
+
+        if (!command)
+        {
+            return MacBrowserAction.None;
+        }
+
+        if (keyCode is KeyLeft or KeyRight && !control && !option && !shift)
+        {
+            return keyCode == KeyLeft ? MacBrowserAction.Back : MacBrowserAction.Forward;
+        }
+
+        string key = (characters ?? "").ToLowerInvariant();
+        if (control)
+        {
+            return key == "f" && !option ? MacBrowserAction.ToggleFullScreen : MacBrowserAction.None;
+        }
+
+        if (option)
+        {
+            return key == "b" && !shift ? MacBrowserAction.Links : MacBrowserAction.None;
+        }
+
+        return (key, shift) switch
+        {
+            ("w", false) => MacBrowserAction.Close,
+            ("r", false) => MacBrowserAction.Reload,
+            (".", false) => loading ? MacBrowserAction.Stop : MacBrowserAction.None,
+            ("[", false) => MacBrowserAction.Back,
+            ("]", false) => MacBrowserAction.Forward,
+            ("l", false) => MacBrowserAction.Address,
+            ("h", true) => MacBrowserAction.Home,
+            ("y", false) => MacBrowserAction.History,
+            ("d", false) => MacBrowserAction.SaveLink,
+            ("o", true) => MacBrowserAction.Links,
+            ("f", false) => MacBrowserAction.Find,
+            ("g", false) => MacBrowserAction.FindNext,
+            ("g", true) => MacBrowserAction.FindPrevious,
+            ("p", false) => MacBrowserAction.Print,
+            ("=", _) or ("+", _) => MacBrowserAction.ZoomIn,
+            ("-", false) => MacBrowserAction.ZoomOut,
+            ("0", false) => MacBrowserAction.ZoomReset,
+            ("c", false) => MacBrowserAction.Copy,
+            ("x", false) => MacBrowserAction.Cut,
+            ("v", false) => MacBrowserAction.Paste,
+            ("a", false) => MacBrowserAction.SelectAll,
+            ("z", false) => MacBrowserAction.Undo,
+            ("z", true) => MacBrowserAction.Redo,
+            _ => MacBrowserAction.None,
+        };
+    }
+
+    /// <summary>
+    /// What a mouse's other button does in the Browser window (2026-10-18): the side buttons go back (button 3) and forward (4), as WebView2
+    /// takes them on Windows; every other button is the page's. Pure.
+    /// </summary>
+    public static MacBrowserAction BrowserButton(long button) => button switch
+    {
+        3 => MacBrowserAction.Back,
+        4 => MacBrowserAction.Forward,
+        _ => MacBrowserAction.None,
+    };
+
     private static Dictionary<ushort, int> Build()
     {
         var keys = new Dictionary<ushort, int>
@@ -180,4 +268,37 @@ public static class MacKeys
 
         return keys;
     }
+}
+
+/// <summary>What a key or a mouse button does in the Browser window on a Mac (<see cref="MacKeys.BrowserAction"/>).</summary>
+public enum MacBrowserAction
+{
+    /// <summary>The page's (or the address box's): typing, a page's own Esc.</summary>
+    None,
+    Close,
+    Reload,
+    Stop,
+    Back,
+    Forward,
+    Address,
+    Home,
+    History,
+    SaveLink,
+    Links,
+    ToggleFullScreen,
+    LeaveFullScreen,
+    Find,
+    FindNext,
+    FindPrevious,
+    CloseFind,
+    Print,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
+    Copy,
+    Cut,
+    Paste,
+    SelectAll,
+    Undo,
+    Redo,
 }

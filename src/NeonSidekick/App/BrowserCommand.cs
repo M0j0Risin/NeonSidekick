@@ -53,13 +53,17 @@ public static class BrowserCommand
     public const string ClearSwitch = "--clear";
 
     /// <summary>
-    /// The words in the order the completion offers them, with their notes. Pinned. Off Windows there is no Browser window (2026-10-17,
-    /// the Mac pass): <c>save</c> takes a link, and Enter on <c>list</c>'s rows opens one in the default browser.
+    /// Whether this run has a Browser window (2026-10-18, the Mac Browser plan: Windows', or a Mac's on macOS 14 or later with a desktop;
+    /// <c>Program</c> sets it on a Mac): the words name the window where there is one. Off Windows there was none until then (2026-10-17, the
+    /// Mac pass): <c>save</c> takes a link, and Enter on <c>list</c>'s rows opens one in the default browser.
     /// </summary>
-    public static readonly IReadOnlyList<(string Word, string Note)> Words =
+    public static Func<bool> WindowHere { get; set; } = OperatingSystem.IsWindows;
+
+    /// <summary>The words in the order the completion offers them, with their notes, for <see cref="WindowHere"/>. Pinned.</summary>
+    public static IReadOnlyList<(string Word, string Note)> Words =>
     [
-        (SaveWord, OperatingSystem.IsWindows() ? "save the page the Browser window shows, or /browser save <url> [name]" : "save a link: /browser save <url> [name]"),
-        (ListWord, OperatingSystem.IsWindows() ? "the saved links: Enter opens one in the Browser window; /browser list --clear empties it" : "the saved links: Enter opens one in your browser; /browser list --clear empties it"),
+        (SaveWord, WindowHere() ? "save the page the Browser window shows, or /browser save <url> [name]" : "save a link: /browser save <url> [name]"),
+        (ListWord, WindowHere() ? "the saved links: Enter opens one in the Browser window; /browser list --clear empties it" : "the saved links: Enter opens one in your browser; /browser list --clear empties it"),
         (UnsaveWord, "take a saved link off the list: /browser unsave <n|url>"),
         (BotCheckText.ClearWord, "clear the Browser window's history, or everything it keeps: /browser clear history|all"),
     ];
@@ -182,14 +186,14 @@ public static class BrowserCommand
             case BrowserVerb.List:
             {
                 var list = links.List();
-                bool window = OperatingSystem.IsWindows();   // the window's words where there is one (2026-10-17, the Mac pass)
+                bool window = WindowHere();   // the window's words where there is one (2026-10-17, the Mac pass; a Mac's too since 2026-10-18)
                 return list.Count == 0 ? [BrowserLinkText.NoneSavedFor(window)] : [BrowserLinkText.Caption(list.Count, window), .. list.Select((l, i) => BrowserLinkText.PrintedRow(i + 1, l))];
             }
 
             case BrowserVerb.ClearList:
             {
                 var outcome = links.Clear(out int cleared);
-                return [BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSavedFor(OperatingSystem.IsWindows()) : BrowserLinkText.Cleared(cleared))];
+                return [BrowserLinkText.Refusal(outcome) ?? (cleared == 0 ? BrowserLinkText.NoneSavedFor(WindowHere()) : BrowserLinkText.Cleared(cleared))];
             }
 
             case BrowserVerb.Unsave:

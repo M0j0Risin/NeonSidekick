@@ -47,6 +47,64 @@ internal static class MacPictureMenu
         }
     }
 
+    /// <summary>
+    /// Any rows as a menu popped at <paramref name="at"/> in <paramref name="view"/> (2026-10-18, the Browser window's history, saved links and
+    /// downloads: already <see cref="ContextMenuItem"/>s, pass 1): the command of the row chosen, or null. The same build as the picture
+    /// menu's, in AppKit's own tracking loop, which the main queue still runs through.
+    /// </summary>
+    public static int? Show(nint view, IReadOnlyList<ContextMenuItem> rows, CGPoint at)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        nint target = Send(Send(AppKitClasses.MenuTargetClass, Sel("alloc")), Sel("init"));
+        nint menu = Build(rows, target);
+        try
+        {
+            IsOpen = true;
+            AppKitClasses.MenuChosen = null;
+            SendPopUp(menu, Sel("popUpMenuPositioningItem:atLocation:inView:"), 0, at, view);
+            long? chosen = AppKitClasses.MenuChosen;
+            AppKitClasses.MenuChosen = null;
+            return chosen is long tag && tag > 0 ? (int)(tag - 1) : null;
+        }
+        finally
+        {
+            IsOpen = false;
+            SendVoid(menu, Sel("release"));
+            SendVoid(target, Sel("release"));
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Show(nint, IReadOnlyList{ContextMenuItem}, CGPoint)"/>'s rows built and a row's choice read back through the target, nothing
+    /// shown (the smoke's <c>browser:webkit</c>): the count of top rows and whether the choice came back as <paramref name="pick"/>'s command.
+    /// </summary>
+    public static (long Rows, bool Chose) ProbeRows(IReadOnlyList<ContextMenuItem> rows, int pick)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        nint target = Send(Send(AppKitClasses.MenuTargetClass, Sel("alloc")), Sel("init"));
+        nint menu = Build(rows, target);
+        try
+        {
+            long count = SendLong(menu, Sel("numberOfItems"));
+            int index = rows.ToList().FindIndex(r => r.Command == pick);
+            bool chose = false;
+            if (index >= 0)
+            {
+                AppKitClasses.MenuChosen = null;
+                SendVoid(target, Sel("chosen:"), SendIndex(menu, Sel("itemAtIndex:"), (nuint)index));
+                chose = AppKitClasses.MenuChosen == pick + 1L;
+                AppKitClasses.MenuChosen = null;
+            }
+
+            return (count, chose);
+        }
+        finally
+        {
+            SendVoid(menu, Sel("release"));
+            SendVoid(target, Sel("release"));
+        }
+    }
+
     /// <summary>Whether a picture menu is up (its loop runs the main queue meanwhile): the slide show holds while it is, as on Windows.</summary>
     public static bool IsOpen { get; private set; }
 

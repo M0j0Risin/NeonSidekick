@@ -174,8 +174,8 @@ internal static unsafe partial class MacWebKit
         }
     }
 
-    // The home's own store, or a store that keeps nothing (the smoke's).
-    private static nint Store(string? storeId)
+    // The home's own store, or a store that keeps nothing (the smoke's). The Browser window's too (2026-10-18, MacBrowserKit).
+    internal static nint Store(string? storeId)
     {
         nint store = Class("WKWebsiteDataStore");
         if (storeId is null)

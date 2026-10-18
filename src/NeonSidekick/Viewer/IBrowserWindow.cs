@@ -12,8 +12,9 @@ public sealed record BrowserVisit(IReadOnlyList<BrowserCookie> Cookies, IReadOnl
 }
 
 /// <summary>
-/// The Browser window as the app sees it (2026-10-13, the bot checks): <see cref="BrowserWindow.Window"/> on Windows, null elsewhere
-/// (the macOS build leaves it out in v1), a fake in tests. One window per process.
+/// The Browser window as the app sees it (2026-10-13, the bot checks): <see cref="BrowserWindow.Window"/> on Windows,
+/// <c>MacBrowserWindows.Window</c> on macOS 14 or later with a window server (2026-10-18, the Mac Browser plan: WebKit), null elsewhere,
+/// a fake in tests. One window per process.
 /// </summary>
 public interface IBrowserWindow
 {
@@ -69,4 +70,11 @@ public interface IBrowserWindow
     /// sent; false with no check running, one finishing, no window open, or a view that did not answer in time. Never throws.
     /// </summary>
     Task<bool> InputAsync(BrowserInput input, CancellationToken cancellationToken) => Task.FromResult(false);
+
+    /// <summary>
+    /// The browser data a profile about to be deleted keeps outside its folder let go (2026-10-18, the Mac Browser plan: <c>/profile delete</c>):
+    /// nothing on Windows, whose WebView2 profile is a folder inside the profile's; on a Mac the WebKit data store the profile's
+    /// <c>webkit-browser.id</c> names, removed. Never the loaded profile's (that one cannot be deleted). Never throws.
+    /// </summary>
+    Task ForgetProfileAsync(string profileDirectory) => Task.CompletedTask;
 }

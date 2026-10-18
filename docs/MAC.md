@@ -7,6 +7,7 @@ How Neon Sidekick runs on an Apple Silicon Mac: setting it up, what works, and w
 - [Install and first run](#install-and-first-run)
 - [What works](#what-works)
 - [What differs](#what-differs)
+- [The Browser window on a Mac](#the-browser-window-on-a-mac)
 - [SQL Server sign-in](#sql-server-sign-in)
 - [Known issues](#known-issues)
 
@@ -35,7 +36,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Camera | Works (macOS 14+) | The built-in camera, a USB webcam, or an iPhone as Continuity Camera. |
 | Screen capture | Works (macOS 14+) | A window on another Space, or minimized, isn't listed until you bring it up. |
 | YouTube playback | Works (macOS 14+) | The video window uses Safari's WebKit. Before macOS 14 there is no video window, so there is no Web UI YouTube tab either. |
-| The Browser window (`/browser`) and bot checks in a window | Not available | It needs Windows. Saved links still work (`/browser save`, `list`, `unsave`), and `/browser <n>` or Enter on the list opens one in your default browser. A page behind a bot check is reported as refused, and *Web open links in* `browser-window` opens links in your default browser, where *YouTube open links in* `browser-window` plays videos too. `/view report.pdf` opens the PDF in Preview. |
+| The Browser window (`/browser`) and bot checks in a window | Works (macOS 14+) | It uses Safari's WebKit and claims to be Safari, so a check passed there is replayed as Safari ([The Browser window on a Mac](#the-browser-window-on-a-mac)). Before macOS 14, and over SSH, there is no window: saved links open in your default browser, a page behind a bot check is reported as refused, and `/view report.pdf` opens in Preview. |
 | Performance bar | Works | VRAM shows as **GMEM**: the GPU's share of the Mac's memory. |
 | `/terminal` | Works | A new Terminal window, or a new tab in iTerm2. |
 | `/shortcut` | Works | A `.command` file on the Desktop that opens in iTerm2 or Terminal. |
@@ -74,6 +75,19 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 * **Editors.** `/sys persona` and the like open the file in its default app. For `/draft`, set *Draft editor* to a command that waits, such as `code --wait` or `open -W -t`; vim can't share the terminal with the app.
 * **Right-clicks in iTerm2.** iTerm2's *Settings › Pointer* bind the right button to its own menu out of the box, and that wins over the app's mouse, so the app sees no right-click there: use Ctrl+V to paste, and a double-click on a bar's open space for `/settings`.
 * **Selecting text with the mouse** while the app is using the mouse: hold Fn (Terminal.app) or Option (iTerm2), or press Cmd+R in Terminal.app to turn the app's mouse off and on.
+
+## The Browser window on a Mac
+
+The [Browser window](INTERFACE.md#the-browser-window) works as on Windows: `/browser`, bot checks from the web tools (and from a Web UI page), *Web open links in* and *YouTube open links in* `browser-window`, `/webui browser`, saved links, history, `/view report.pdf`. What differs:
+
+* **WebKit, as Safari.** The window is Safari's engine and sends Safari's user agent, so the web tools replay a check's cookies as Safari, with Safari's headers.
+* **Safari's keys.** ⌘W closes, ⌘R reloads, ⌘[ ⌘] (or a mouse's side buttons) go back and forward, ⌘L the address box, ⌘⇧H home, ⌘Y the history, ⌘D saves the page, ⌘⇧O or ⌘⌥B the saved links, ⌃⌘F full screen, ⌘F finds, ⌘+ ⌘- ⌘0 zoom, ⌘P prints. ⌘C, ⌘V and the other editing keys work in the address box and the page.
+* **No Dock icon**, as the app's other windows. Bring a window lost behind the terminal back by clicking it, with Mission Control, or with any `/browser` command. Over a full-screen terminal it opens on that Space.
+* **Its data** is a WebKit store of each profile's own, named in the profile's `webkit-browser.id` (kept when you rename the profile, removed with `/profile delete`); `/browser clear all` empties it. A second copy of the app on the same profile can't open the window.
+* **What it adds:** WebKit draws no error page, so the window shows its own; page dialogs, HTTP sign-in and upload pickers are sheets on the window; downloads go to ~/Downloads under a free name, with a button on the bar for them (macOS quarantines each, as Safari's).
+* **What it lacks:** no saved passwords or form autofill, no passkeys or security keys (a site's password or code sign-in still works), no location or web notifications, no developer tools, and Safari's tracking prevention, which blocks third-party cookies, so a sign-in that needs them fails as it does in Safari.
+* **The first download or upload** may make macOS ask whether your terminal may use the Downloads, Documents or Desktop folder.
+* **A covered or minimized window** runs a page's timers slowly, as Safari does, but a bot check still passes; one driven from the Web UI was tried covered, not with the screen locked.
 
 ## SQL Server sign-in
 
@@ -131,6 +145,7 @@ On a Mac the app gets that account's Kerberos ticket itself at each connect, so 
 
 ## Known issues
 
+* **The Browser window over a full-screen terminal Space, and with the screen locked,** hasn't been tried on a real Mac.
 * **YouTube may ask for consent again each run.** WebKit blocks the embedded player's third-party cookies, so a consent given inside the player isn't kept.
 * **Switching the audio output mid-reply (to AirPods, say) hasn't been tried.** The next reply plays on the new default output.
 * **With Bluetooth headphones the microphone may open on the reply's last word**, since they play a fifth of a second or so behind.

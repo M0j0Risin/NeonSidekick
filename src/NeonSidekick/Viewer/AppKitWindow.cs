@@ -182,6 +182,9 @@ internal abstract class AppKitWindow
     /// <summary>A key down: true when the window took it (nothing else sees it).</summary>
     internal virtual bool KeyDown(MacKeyEvent key) => false;
 
+    /// <summary>A mouse's other button down (2026-10-18; <paramref name="button"/> 2 is the middle, 3 and 4 the side buttons): true when the window took it.</summary>
+    internal virtual bool OtherMouseDown(long button) => false;
+
     internal virtual void MouseDown(nint e)
     {
     }
@@ -377,8 +380,8 @@ internal abstract class AppKitWindow
     }
 
     // The last window of ours closed while the app has the keyboard: it goes back to the app that had it (the terminal), or, when that
-    // one is gone, to whichever macOS picks as this app hides.
-    private static void GiveBack()
+    // one is gone, to whichever macOS picks as this app hides. The Browser window's hide after a check too (2026-10-18), Windows' ReturnFocus.
+    internal static void GiveBack()
     {
         nint app = Send(Class("NSApplication"), Sel("sharedApplication"));
         if (SendBool(app, Sel("isActive")) == 0)

@@ -106,7 +106,7 @@ In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key lette
 | `/tools shell allowed` | Enter or Delete removes (asks) · `p` steps *Shell command policy* (yolo asks; a no goes on to off) · type to filter |
 | `/tools shell police` | `s` the forbidden strings |
 | *Shell police forbidden strings* | top row adds · Enter or Delete removes (asks) · `r` restore defaults (asks) |
-| `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows only) |
+| `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows, macOS 14+) |
 | `/tools files` · `image` · `obsidian` · `advisors` · `print` | `b` *File browser/tree mode* · `e` *Image edit mode* · `v` *Obsidian vault* · `a` *Advisor list* · `p` *Print default printer* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
@@ -350,7 +350,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 What every window shares:
 
 * **Focus:** opened by its key chord, a window stays behind the terminal; opened by a typed command, it comes to the front. However it closes (Esc, Alt+F4, ×, its chord), the terminal gets the keyboard back.
-* **Keys:** Tab brings the terminal forward, and a Ctrl or Alt chord the window doesn't use runs in the chat. The Browser window keeps every key for its pages; on Windows the video window keeps Tab.
+* **Keys:** Tab brings the terminal forward, and a Ctrl or Alt chord the window doesn't use runs in the chat. The Browser window keeps every key for its pages (on a Mac too: Tab and Control chords are the page's); on Windows the video window keeps Tab.
 * **Place and look:** a window reopens where it last closed, closes with the app, and wears the theme unless *Themed external windows* is off.
 * **On a Mac** they need the Mac's desktop (not over SSH). ⌘W closes, ⌃⌘F is full screen (F11 too, once macOS's Show Desktop shortcut is off), and Option chords run in the chat.
 
@@ -430,15 +430,16 @@ Where YouTube videos play under *YouTube open links in* `youtube-window`, the de
 
 ### The Browser window
 
-A browser window (Windows only): the web tools open it for bot checks ([TOOLS.md](TOOLS.md#the-browser-window)), which a connected Web UI page can also see and drive ([A bot check from the page](#a-bot-check-from-the-page)), and `/browser [url]` opens it for you. When you close it, its cookies go to the web tools. A bare `/browser` opens *Web browser home page*.
+A browser window (Windows, and a Mac on macOS 14 or later, where it is WebKit: [The Browser window on a Mac](MAC.md#the-browser-window-on-a-mac)): the web tools open it for bot checks ([TOOLS.md](TOOLS.md#the-browser-window)), which a connected Web UI page can also see and drive ([A bot check from the page](#a-bot-check-from-the-page)), and `/browser [url]` opens it for you. When you close it, its cookies go to the web tools. A bare `/browser` opens *Web browser home page*.
 
 * **The bar:** back, forward, reload (✕ stops a load), home, a padlock (https) or a warning (http), the address box, Go, and open in your default browser. Words that aren't an address search with *Web search method*; `file:`, `javascript:` and local paths are refused.
-* **Keys:** Ctrl+W closes; F5 or Ctrl+R reloads; Alt+← / Alt+→ go back and forward; Ctrl+L, Alt+D or F6 go to the address box (Esc there restores it); Ctrl+H opens the history; Ctrl+D saves or unsaves the page; Ctrl+Shift+O opens the saved links; Esc stops a load. Esc never closes the window.
-* **Full screen:** F11, with the bar kept. A page's own full screen (a video's button) takes the window and hides the bar. Esc leaves the page's first, then F11's.
+* **Keys:** Ctrl+W closes; F5 or Ctrl+R reloads; Alt+← / Alt+→ go back and forward; Ctrl+L, Alt+D or F6 go to the address box (Esc there restores it); Ctrl+H opens the history; Ctrl+D saves or unsaves the page; Ctrl+Shift+O opens the saved links; Esc stops a load. Esc never closes the window. On a Mac, Safari's: ⌘W, ⌘R, ⌘[ / ⌘] (or a mouse's side buttons), ⌘L, ⌘⇧H home, ⌘Y, ⌘D, ⌘⇧O or ⌘⌥B, ⌘. or Esc stops, and ⌘F finds (⌘G, ⌘⇧G), ⌘+ ⌘- ⌘0 zoom, ⌘P prints.
+* **Full screen:** F11 (⌃⌘F on a Mac), with the bar kept. A page's own full screen (a video's button) takes the window and hides the bar (on a Mac it fills a Space of its own, as in Safari). Esc leaves the page's first, then F11's.
 * **History** (🕘, Ctrl+H): newest first, older by day, with **Clear history**. *Web browser privacy* `clear-history` clears it at each close; `keep-history` keeps it in `<profile>\configs\browser-history.json`. Cookies and sign-ins stay either way.
 * **Saved links** (☆, ★ on a saved page): the first 15 on the menu, the rest in submenus, up to 190; `/browser list` (⭐) has them all. They're kept in `<profile>\configs\browser-links.json`. An address holding a user name or password is never saved. The model reaches them with `web_links` and `web_save_link` ([TOOLS.md](TOOLS.md#web)).
-* **Per profile:** sign-ins and solved checks live in `<profile>\webview2-browser`. Switching profiles closes the window. Two copies of the app can each open it, on different profiles.
+* **Per profile:** sign-ins and solved checks live in `<profile>\webview2-browser` (on a Mac, in a WebKit store the profile's `webkit-browser.id` names, removed by `/profile delete`). Switching profiles closes the window. Two copies of the app can each open it, on different profiles.
 * **Clearing:** `/browser clear history` clears the history now. `/browser clear all` asks, then clears the history, cookies, sign-ins, cache and site settings; saved links stay.
+* **A Mac's extras:** a status line at the foot shows a hovered link's address; page dialogs, HTTP sign-in and upload pickers are sheets; downloads go to ~/Downloads with a button on the bar for them; a page that fails to load shows the window's own error page, which Reload retries.
 * **A PDF:** `/view report.pdf` shows a PDF from the working directory in the window's own PDF viewer. It shows a copy, made in `%TEMP%\NeonSidekick\pdfview` and deleted when the window closes; the open button opens the file itself in its own program. A PDF view isn't kept in the history, can't be saved as a link, and hands no cookies over. Where the window can't take it (a bot check waiting, no WebView2 runtime), the PDF opens in its own program; a policy that makes Edge download PDFs makes the window download it.
 
 ## Web UI
@@ -505,7 +506,7 @@ When a web tool meets a bot check (a Cloudflare click, a captcha) the challenge 
   * 🔍 zooms (fit, 2×, 3×); a zoomed picture pans with a swipe. ▲ ▼ scroll the page; a desktop wheel over the picture scrolls where it points.
   * The text box types into the field you tapped (its Enter types it, nothing more); ⏎ ⌫ ⇥ send Enter, Backspace and Tab.
 * **It ends** when the page gets through (the card closes and the tool goes on), on *Give up* or Esc at either side, on the page's Stop, or after 5 minutes.
-* **The PC:** the first input from a page flashes on the hint row (📱) and is logged with the phone's address; what you type is never logged. A minimized window is restored, without taking the keyboard, so it draws; a locked PC keeps drawing it. A sleeping PC stops: the card says so, and *Give up* still works.
+* **The PC:** the first input from a page flashes on the hint row (📱) and is logged with the phone's address; what you type is never logged. A minimized window is restored, without taking the keyboard, so it draws; a locked PC keeps drawing it. On a Mac the window draws covered or minimized and its input arrives as the page's own (a covered page runs its timers slowly, as Safari does); a locked Mac is untried. A sleeping PC stops: the card says so, and *Give up* still works.
 
 ### The Home tab
 

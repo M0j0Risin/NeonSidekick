@@ -39,7 +39,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **No installer:** unzip and run. It is compiled to native code (NativeAOT), so it starts fast and needs no .NET runtime.
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, mouse support, and sixty color themes (or your own).
 * **Pictures as input:** paste or drop one on the input line, or take one with the webcam (`/camera`) or of the screen (`/screen`).
-* **Its own windows:** a picture viewer and thumbnail browser (`/view`), a live camera view (`/camera live`), the log (`/log`), a background process's output (`/process`), a YouTube player (`/youtube`) and a web browser (`/browser`, Windows only), where you can sign in to a site or pass its bot check and lend its cookies to the web tools.
+* **Its own windows:** a picture viewer and thumbnail browser (`/view`), a live camera view (`/camera live`), the log (`/log`), a background process's output (`/process`), a YouTube player (`/youtube`) and a web browser (`/browser`), where you can sign in to a site or pass its bot check and lend its cookies to the web tools.
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order.
 * **Saved prompts:** keep the messages you send often and pick one from a list, or save, send and delete them from your phone through the Web UI (`/prompts`).
@@ -103,7 +103,7 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 * **Windows Terminal**, which comes with Windows 11; the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
 * **A language model:** the app can download one for you, or use one you already run.
 
-**On a Mac?** It runs on Apple Silicon (M1 and later). Docker servers, the browser window, the services and scheduled tasks tools, the `printer` PDF engine and the NVFP4 models need Windows (event logs read the Mac's own, and Active Directory signs in with Kerberos), and the camera, screen capture and YouTube playback need macOS 14 or later. [On a Mac](docs/MAC.md) covers setup and every difference.
+**On a Mac?** It runs on Apple Silicon (M1 and later). Docker servers, the services and scheduled tasks tools, the `printer` PDF engine and the NVFP4 models need Windows (event logs read the Mac's own, and Active Directory signs in with Kerberos), and the camera, screen capture, YouTube playback and the Browser window need macOS 14 or later. [On a Mac](docs/MAC.md) covers setup and every difference.
 
 Only for some features:
 * **Running a model inside the app:** an NVIDIA card (driver 580 or newer) or any Vulkan card; without one it works, but slowly. 16 GB of VRAM runs the smaller models, and 32 GB runs the biggest of the included models.

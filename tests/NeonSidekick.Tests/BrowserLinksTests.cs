@@ -353,8 +353,8 @@ public sealed class BrowserLinksTests : IDisposable
         Assert.Equal(BrowserLinkText.NoneSaved, BrowserLinkText.NoneSavedFor(true));
         Assert.Equal(BrowserLinkText.NoneSavedNoWindow, BrowserLinkText.NoneSavedFor(false));
         var notes = BrowserCommand.Words.ToDictionary(w => w.Word, w => w.Note);
-        Assert.Equal(OperatingSystem.IsWindows(), notes[BrowserCommand.ListWord].Contains("Browser window", StringComparison.Ordinal));
-        Assert.Equal(OperatingSystem.IsWindows(), notes[BrowserCommand.SaveWord].Contains("Browser window", StringComparison.Ordinal));
+        Assert.Equal(BrowserCommand.WindowHere(), notes[BrowserCommand.ListWord].Contains("Browser window", StringComparison.Ordinal));
+        Assert.Equal(BrowserCommand.WindowHere(), notes[BrowserCommand.SaveWord].Contains("Browser window", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -363,9 +363,9 @@ public sealed class BrowserLinksTests : IDisposable
         var links = Links();
         Assert.Equal(["Saved \"Ex\" (https://example.com/)."], BrowserCommand.Headless(links, "save example.com Ex"));
         // Off Windows the caption has no Browser window to promise (2026-10-17, the Mac pass).
-        Assert.Equal([OperatingSystem.IsWindows() ? "1 saved link; Enter opens one in the Browser window." : "1 saved link; Enter opens one in your browser.", "1. Ex — https://example.com/"], BrowserCommand.Headless(links, "list"));
+        Assert.Equal([BrowserCommand.WindowHere() ? "1 saved link; Enter opens one in the Browser window." : "1 saved link; Enter opens one in your browser.", "1. Ex — https://example.com/"], BrowserCommand.Headless(links, "list"));
         Assert.Equal(["Removed \"Ex\" from the saved links."], BrowserCommand.Headless(links, "unsave 1"));
-        Assert.Equal([BrowserLinkText.NoneSavedFor(OperatingSystem.IsWindows())], BrowserCommand.Headless(links, "list"));
+        Assert.Equal([BrowserLinkText.NoneSavedFor(BrowserCommand.WindowHere())], BrowserCommand.Headless(links, "list"));
         links.Add("https://a.example/", null, out _);
         Assert.Equal(["Removed 1 saved link."], BrowserCommand.Headless(links, "list --clear"));   // headless: at once
         Assert.Equal(["Error: " + Web.BotCheckText.BrowserNeedsScreen], BrowserCommand.Headless(links, "example.com"));

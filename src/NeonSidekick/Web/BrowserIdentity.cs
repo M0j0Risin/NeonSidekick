@@ -5,12 +5,21 @@ using System.Text.RegularExpressions;
 
 namespace NeonSidekick.Web;
 
-/// <summary>Which Chromium a request claims to be: the brand its client hints name besides Chromium.</summary>
+/// <summary>
+/// Which browser a request claims to be: a Chromium, by the brand its client hints name besides Chromium, or Safari (2026-10-18, the Mac's
+/// Browser window: WebKit, which sends no client hints).
+/// </summary>
 public enum BrowserBrand
 {
     Chrome,
     Edge,
     Brave,
+
+    /// <summary>
+    /// Safari (2026-10-18): what the Mac's Browser window is, a WKWebView claiming Safari's own user agent, so the cookies a person earns
+    /// there are replayed under the same name (<see cref="BrowserHeaders.Apply"/> sends Safari's header set for it).
+    /// </summary>
+    Safari,
 }
 
 /// <summary>The operating system a request claims, in the user agent and <c>Sec-CH-UA-Platform</c>.</summary>
@@ -39,6 +48,18 @@ public sealed partial record BrowserIdentity(BrowserBrand Brand, int Major, Brow
     /// <summary>The lowest version read from a file that is taken as a Chromium major (Chrome 100 shipped in 2022); a lower one is someone else's numbering.</summary>
     public const int LowestMajor = 100;
 
+    /// <summary>The Safari version claimed when Safari's own cannot be read (2026-10-18): the release the Mac pass was built against.</summary>
+    public const string SafariFallbackVersion = "26.6";
+
+    /// <summary>
+    /// The minor version (2026-10-18, Safari: its user agent carries <c>26.6</c>, not a Chromium major alone); 0 for the Chromiums, whose
+    /// reduced user agent says <c>N.0.0.0</c>.
+    /// </summary>
+    public int Minor { get; init; }
+
+    /// <summary>Whether this is a Chromium (Chrome, Edge, Brave), which sends client hints; Safari sends none.</summary>
+    public bool IsChromium => Brand != BrowserBrand.Safari;
+
     /// <summary>Chrome at <see cref="FallbackMajor"/> on this machine's platform: what the HTTP client claims with no browser to read.</summary>
     public static BrowserIdentity Fallback { get; } = new(BrowserBrand.Chrome, FallbackMajor, CurrentPlatform);
 
@@ -47,13 +68,46 @@ public sealed partial record BrowserIdentity(BrowserBrand Brand, int Major, Brow
         OperatingSystem.IsWindows() ? BrowserPlatform.Windows : OperatingSystem.IsMacOS() ? BrowserPlatform.MacOS : BrowserPlatform.Linux;
 
     /// <summary>
+    /// Safari at <paramref name="version"/> (<c>CFBundleShortVersionString</c>, <c>26.6</c>) on macOS (2026-10-18, the Mac's Browser window);
+    /// <see cref="SafariFallbackVersion"/> when the version is missing or no <c>major[.minor[.patch]]</c>. Pure; pinned.
+    /// </summary>
+    public static BrowserIdentity Safari(string? version)
+    {
+        if (!TryReadSafariVersion(version, out int major, out int minor))
+        {
+            TryReadSafariVersion(SafariFallbackVersion, out major, out minor);
+        }
+
+        return new BrowserIdentity(BrowserBrand.Safari, major, BrowserPlatform.MacOS) { Minor = minor };
+    }
+
+    private static bool TryReadSafariVersion(string? version, out int major, out int minor)
+    {
+        major = 0;
+        minor = 0;
+        string[] parts = (version ?? "").Trim().Split('.');
+        return parts.Length is >= 1 and <= 3
+            && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out major) && major is >= 10 and < 1000
+            && (parts.Length == 1 || int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out minor) && minor < 1000)
+            && (parts.Length < 3 || int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out _));
+    }
+
+    /// <summary>
     /// The user agent Chromium sends with its reduced (frozen) form: the platform token, <c>Chrome/N.0.0.0</c>, and Edge's
-    /// <c>Edg/N.0.0.0</c> after. Brave sends Chrome's exactly. Pinned.
+    /// <c>Edg/N.0.0.0</c> after. Brave sends Chrome's exactly. Safari's (2026-10-18) is its own, on macOS's frozen platform token:
+    /// <c>… AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15</c>, the string the Mac's Browser window sets as its
+    /// <c>customUserAgent</c> (a WKWebView's own leaves out <c>Version/…</c> and <c>Safari/…</c>). Pinned.
     /// </summary>
     public string UserAgent
     {
         get
         {
+            if (Brand == BrowserBrand.Safari)
+            {
+                return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/"
+                    + Major.ToString(CultureInfo.InvariantCulture) + "." + Minor.ToString(CultureInfo.InvariantCulture) + " Safari/605.1.15";
+            }
+
             string platform = Platform switch
             {
                 BrowserPlatform.MacOS => "Macintosh; Intel Mac OS X 10_15_7",
@@ -71,6 +125,7 @@ public sealed partial record BrowserIdentity(BrowserBrand Brand, int Major, Brow
     {
         BrowserBrand.Edge => "Microsoft Edge",
         BrowserBrand.Brave => "Brave",
+        BrowserBrand.Safari => "Safari",
         _ => "Google Chrome",
     };
 

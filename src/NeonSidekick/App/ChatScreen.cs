@@ -13948,6 +13948,12 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // The browser data a profile keeps outside its folder goes first (2026-10-18, the Mac Browser plan: a Mac's WebKit store; nothing on Windows).
+        if (_browserWindow is not null)
+        {
+            await _browserWindow.ForgetProfileAsync(Profiles.Directory(home, target)).ConfigureAwait(false);
+        }
+
         try
         {
             Profiles.Delete(home, target);

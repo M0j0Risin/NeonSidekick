@@ -195,13 +195,20 @@ internal static unsafe class AppKitClasses
         return TerminateCancel;
     }
 
-    // Every key goes to its window first (a chord AppKit would take for a menu's too); the rest to NSWindow's own.
+    // Every key goes to its window first (a chord AppKit would take for a menu's too); the rest to NSWindow's own. A mouse's other
+    // buttons likewise (2026-10-18, the Browser window's back and forward); every other window answers false and AppKit has them.
     [UnmanagedCallersOnly]
     private static void SendEvent(nint self, nint selector, nint e)
     {
         try
         {
-            if (SendULong(e, Sel("type")) == EventKeyDown && AppKitWindow.Of(self) is { } window && window.KeyDown(MacKeyEvent.From(e)))
+            ulong type = SendULong(e, Sel("type"));
+            if (type == EventKeyDown && AppKitWindow.Of(self) is { } window && window.KeyDown(MacKeyEvent.From(e)))
+            {
+                return;
+            }
+
+            if (type == EventOtherMouseDown && AppKitWindow.Of(self) is { } owner && owner.OtherMouseDown(SendLong(e, Sel("buttonNumber"))))
             {
                 return;
             }
@@ -305,10 +312,20 @@ internal static unsafe class AppKitClasses
     private static void DidChangeBacking(nint self, nint selector, nint notification) => Delegated(self, static w => w.ScaleChanged());
 }
 
-/// <summary>A key as AppKit gave it (2026-10-07): the hardware key code, the modifier flags, and whether it is a held key's repeat.</summary>
+/// <summary>
+/// A key as AppKit gave it (2026-10-07): the hardware key code, the modifier flags, and whether it is a held key's repeat; and since
+/// 2026-10-18 (the Mac's Browser window, whose chords ⌘[ ⌘] ⌘= ⌘L sit on other keys in other layouts) the characters it types with no
+/// modifier but Shift (<c>charactersIgnoringModifiers</c>), which the other windows never read.
+/// </summary>
 internal readonly record struct MacKeyEvent(ushort KeyCode, ulong Flags, bool Repeat)
 {
+    /// <summary>The key's characters as the layout gives them, Command and Option aside; empty for a dead key or none.</summary>
+    public string Characters { get; init; } = "";
+
     [SupportedOSPlatform("macos")]
     public static MacKeyEvent From(nint e) =>
-        new((ushort)SendULong(e, Sel("keyCode")), SendULong(e, Sel("modifierFlags")), SendBool(e, Sel("isARepeat")) != 0);
+        new((ushort)SendULong(e, Sel("keyCode")), SendULong(e, Sel("modifierFlags")), SendBool(e, Sel("isARepeat")) != 0)
+        {
+            Characters = FromNSString(Send(e, Sel("charactersIgnoringModifiers"))) ?? "",
+        };
 }

@@ -123,7 +123,8 @@ public static class BotCheckText
     public const string BrowserNeedsScreen = "/browser needs the screen: the Browser window is the interactive app's.";
 
     /// <summary>
-    /// No window off Windows (the macOS build leaves it out in v1). "/browser needs Windows: the Browser window is WebView2's." until
+    /// No window here: a Mac before macOS 14 or without a desktop (a Mac's own window since 2026-10-18, the Mac Browser plan; the macOS build left
+    /// it out until then). "/browser needs Windows: the Browser window is WebView2's." until
     /// 2026-10-15: no message tells a Mac user that something needs Windows (2026-10-11, the user's ask), so it says what still works. Pinned.
     /// </summary>
     public const string BrowserNotHere = "There is no Browser window here; /browser save, list and unsave still work.";

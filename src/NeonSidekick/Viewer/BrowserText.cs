@@ -81,4 +81,71 @@ public static class BrowserText
 
     /// <summary>A key the page has no button for.</summary>
     public const string RemoteNoSuchKey = "that key can't be sent: Enter, Backspace and Tab can";
+
+    // ── The Mac's window (2026-10-18, the Mac Browser plan: WebKit) ──
+
+    /// <summary>No window can be had on this Mac: before macOS 14, or no window server (an SSH session).</summary>
+    public const string MacUnavailable = "the Browser window needs macOS 14 or later and a desktop session";
+
+    /// <summary>Another copy of the app holds the profile's WebKit store (its lock file, pass 22): Windows' 0x8007139F sentence, a Mac's words.</summary>
+    public const string MacProfileInUse = "the Browser window's profile folder is in use by another copy of the app";
+
+    /// <summary>The profile's store id could not be kept (<see cref="MacBrowserRules.StoreIdFileName"/>).</summary>
+    public const string MacNoStore = "the Browser window's data store could not be set up in the profile folder";
+
+    /// <summary>The web view could not be made.</summary>
+    public const string MacFailed = "the Browser window's WebKit view could not start";
+
+    /// <summary>A clear WebKit did not answer in time.</summary>
+    public const string MacClearTimedOut = "the Browser window's data was not cleared: WebKit did not answer in time";
+
+    /// <summary>The page's web content process ended twice: the page is gone.</summary>
+    public const string ContentEnded = "the page's web content process ended";
+
+    /// <summary>The error page's title and its lines (pass 17): WebKit draws none of its own. Pinned.</summary>
+    public const string ErrorTitle = "This page did not load";
+
+    /// <summary>The error page's line under the address: the reason, and that Reload tries again. Pinned.</summary>
+    public static string ErrorLine(string reason) => $"{reason.TrimEnd('.')}. Reload (⌘R) to try again.";
+
+    /// <summary>
+    /// The error page's HTML: the title, the address and the reason, all escaped, no script, in the system's font and colours (light or dark).
+    /// </summary>
+    public static string ErrorPage(string url, string reason) =>
+        "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"color-scheme\" content=\"light dark\"><title>" + System.Net.WebUtility.HtmlEncode(ErrorTitle) + "</title>"
+        + "<style>body{font:15px -apple-system,system-ui,sans-serif;max-width:640px;margin:12vh auto;padding:0 24px;line-height:1.5}"
+        + "h1{font-size:22px;font-weight:600}code{word-break:break-all;opacity:.75}</style></head><body><h1>" + System.Net.WebUtility.HtmlEncode(ErrorTitle) + "</h1>"
+        + "<p><code>" + System.Net.WebUtility.HtmlEncode(url) + "</code></p><p>" + System.Net.WebUtility.HtmlEncode(ErrorLine(reason)) + "</p></body></html>";
+
+    /// <summary>The download button's name and its menu's words. Pinned.</summary>
+    public const string DownloadsName = "Downloads";
+    public const string NoDownloads = "No downloads";
+    public const string DownloadOpen = "Open";
+    public const string DownloadShow = "Show in Finder";
+    public const string DownloadCancel = "Cancel download";
+    public const string DownloadFailedWord = "failed";
+    public const string DownloadCancelledWord = "cancelled";
+
+    /// <summary>The find bar's placeholder and its answer for no match. Pinned.</summary>
+    public const string FindPlaceholder = "Find on page";
+    public const string FindNone = "No matches";
+
+    /// <summary>A page's dialogs (sheets) and the HTTP sign-in sheet. Pinned.</summary>
+    public const string DialogOk = "OK";
+    public const string DialogCancel = "Cancel";
+    public const string SignInButton = "Sign In";
+
+    /// <summary>The line naming who asks in a page's dialog: its origin.</summary>
+    public static string DialogFrom(string? origin) => string.IsNullOrEmpty(origin) ? "The page says:" : $"{origin} says:";
+
+    /// <summary>The HTTP sign-in sheet's message for a host and its realm.</summary>
+    public static string SignInMessage(string host, string? realm) =>
+        string.IsNullOrWhiteSpace(realm) ? $"Sign in to {host}" : $"Sign in to {host} ({realm.Trim()})";
+
+    public const string SignInUser = "User name";
+    public const string SignInPassword = "Password";
+
+    /// <summary>The padlock's tooltips on a Mac (Windows draws no tooltip there).</summary>
+    public const string SecureTip = "Secure (https)";
+    public const string NotSecureTip = "Not secure (http)";
 }

@@ -34,6 +34,12 @@ public static class PdfView
     private static readonly ConcurrentDictionary<string, string> s_originals = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Each staged copy's own path, by its random folder's name (2026-10-18, the Mac Browser plan): WebKit cannot serve a folder on a host,
+    /// so the Mac's window loads the copy as a file (<see cref="StagedFileOf"/>).
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, string> s_staged = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// <paramref name="full"/> copied into <paramref name="folder"/> (default <see cref="Folder"/>) under a new random folder, and the address
     /// the window opens it at, its name escaped. Sweeps the folders of processes that are gone first. Throws as <see cref="File.Copy(string, string)"/> does.
     /// </summary>
@@ -48,6 +54,7 @@ public static class PdfView
         Directory.CreateDirectory(target);
         File.Copy(full, Path.Combine(target, name), overwrite: true);
         s_originals[random] = full;
+        s_staged[random] = Path.Combine(target, name);
         return UrlOf(random, name);
     }
 
@@ -71,11 +78,27 @@ public static class PdfView
         return s_originals.TryGetValue(first, out var original) ? original : null;
     }
 
+    /// <summary>
+    /// The staged copy a staged address stands for (2026-10-18, the Mac's Browser window, which loads it as a file); null for another
+    /// address, a copy this process did not make, or one already cleared.
+    /// </summary>
+    public static string? StagedFileOf(string? url)
+    {
+        if (!IsOurs(url))
+        {
+            return null;
+        }
+
+        string first = new Uri(url!).Segments.Skip(1).FirstOrDefault()?.Trim('/') ?? "";
+        return s_staged.TryGetValue(first, out var staged) && File.Exists(staged) ? staged : null;
+    }
+
     /// <summary>Every copy in <paramref name="folder"/> (default <see cref="Folder"/>) deleted; the window closed. Never throws.</summary>
     public static void Clear(string? folder = null)
     {
         folder ??= Folder;
         s_originals.Clear();
+        s_staged.Clear();
         try
         {
             if (Directory.Exists(folder))

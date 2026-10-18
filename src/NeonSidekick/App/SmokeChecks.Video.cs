@@ -54,4 +54,30 @@ public static partial class SmokeChecks
             return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
         }
     }
+
+    /// <summary>
+    /// <c>browser:webkit</c> (2026-10-18, the Mac Browser plan): the Mac's Browser window in the published binary — the runtime delegate and bar
+    /// classes, the blocks, a WKWebView over a store that keeps nothing in a window put on screen transparent and deaf to the mouse, pages from an
+    /// in-process loopback listener: an http:// page, a read in the app's world, a #hash, the cookies, a click to the view arriving trusted, a
+    /// snapshot, a paged print, a file: navigation refused, a staged PDF, a download, the bar and a menu, the store cleared
+    /// (<see cref="Viewer.MacBrowserWindow.Probe"/>). Nothing leaves the machine. Skipped off macOS, before macOS 14, and with no window server.
+    /// </summary>
+    public static SmokeCheck ProbeBrowserWebKit()
+    {
+        const string name = "browser:webkit";
+        if (!OperatingSystem.IsMacOSVersionAtLeast(14))
+        {
+            return new SmokeCheck(name, true, OperatingSystem.IsMacOS() ? "skipped: macOS 14 or later needed" : "skipped: not macOS");
+        }
+
+        try
+        {
+            var (ok, detail) = Viewer.MacBrowserWindow.Probe(TimeSpan.FromSeconds(30));
+            return new SmokeCheck(name, ok, detail);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+    }
 }

@@ -33,6 +33,19 @@ public static class BrowserHeaders
     /// <summary>Chrome's priority for a top-level document (RFC 9218), sent since 2026-10-11.</summary>
     public const string Priority = "u=0, i";
 
+    /// <summary>Safari's <c>Accept</c> for a navigation (2026-10-18, captured from the Mac's Browser window).</summary>
+    public const string SafariAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+    /// <summary>
+    /// The headers in the order Safari sends a navigation over HTTP/2 (2026-10-18, the Mac Browser plan's Phase 0: the window, with Safari's
+    /// user agent, at a header-echo page, Safari 26.6), <c>Referer</c> only with one: no client hints, no <c>Upgrade-Insecure-Requests</c>,
+    /// <c>Sec-Fetch-User</c> or <c>Priority</c>. Pinned.
+    /// </summary>
+    public static readonly string[] SafariOrder =
+    [
+        "Accept", "Sec-Fetch-Site", "Accept-Encoding", "Sec-Fetch-Mode", "User-Agent", "Accept-Language", "Sec-Fetch-Dest", "Referer",
+    ];
+
     /// <summary>The headers in the order Chrome sends a navigation (Chrome 13x to 15x), <c>Referer</c> only with one. Pinned.</summary>
     public static readonly string[] Order =
     [
@@ -45,7 +58,8 @@ public static class BrowserHeaders
     /// coming from the page <paramref name="referer"/> (null for a typed address): <c>Sec-Fetch-Site</c> is <paramref name="site"/>
     /// when given (a redirect's, <see cref="SiteOf"/> over the chain), else worked out from <paramref name="referer"/> and the request's
     /// URL alone; the <c>Referer</c> is what Chrome's default policy lets through (<see cref="RefererFor"/>); <paramref name="accept"/>
-    /// in place of <see cref="Accept"/> when given. Header values are added without validation, as sent.
+    /// in place of <see cref="Accept"/> when given. Header values are added without validation, as sent. For Safari (2026-10-18) the set
+    /// and order are <see cref="SafariOrder"/>'s, with <see cref="SafariAccept"/>.
     /// </summary>
     public static void Apply(HttpRequestMessage request, BrowserIdentity identity, Uri? referer = null, string? accept = null, string? site = null)
     {
@@ -54,6 +68,24 @@ public static class BrowserHeaders
         site ??= request.RequestUri is { } target ? SiteOf(referer, [target]) : referer is null ? "none" : "cross-site";
         string? sent = referer is not null && request.RequestUri is { } to ? RefererFor(referer, to) : null;
         var headers = request.Headers;
+        if (!identity.IsChromium)
+        {
+            // Safari (2026-10-18, the Mac's Browser window): its own set and order (SafariOrder), as the window sent it.
+            headers.TryAddWithoutValidation("Accept", accept ?? SafariAccept);
+            headers.TryAddWithoutValidation("Sec-Fetch-Site", site);
+            headers.TryAddWithoutValidation("Accept-Encoding", AcceptEncoding);
+            headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate");
+            headers.TryAddWithoutValidation("User-Agent", identity.UserAgent);
+            headers.TryAddWithoutValidation("Accept-Language", AcceptLanguage);
+            headers.TryAddWithoutValidation("Sec-Fetch-Dest", "document");
+            if (sent is not null)
+            {
+                headers.TryAddWithoutValidation("Referer", sent);
+            }
+
+            return;
+        }
+
         headers.TryAddWithoutValidation("Sec-CH-UA", identity.SecChUa);
         headers.TryAddWithoutValidation("Sec-CH-UA-Mobile", SecChUaMobile);
         headers.TryAddWithoutValidation("Sec-CH-UA-Platform", identity.PlatformHint);

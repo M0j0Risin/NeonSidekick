@@ -23,7 +23,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 * **Headless** ([HEADLESS.md](HEADLESS.md)) has no timers, `ask_user`, camera or screen tools, Browser window or `_execute` database tools, and YouTube can't play.
 * **Headless, anything that would stop to ask you is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
-* **On a Mac** the Browser window, Docker servers, services and scheduled tasks are Windows only, the event logs read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)), Active Directory signs in with Kerberos ([Active Directory on a Mac](#active-directory-on-a-mac)), and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
+* **On a Mac** Docker servers, services and scheduled tasks are Windows only, the Browser window is WebKit ([The Browser window on a Mac](MAC.md#the-browser-window-on-a-mac)), the event logs read the Mac's own ([Event logs on a Mac](#event-logs-on-a-mac)), Active Directory signs in with Kerberos ([Active Directory on a Mac](#active-directory-on-a-mac)), and the camera and screen tools, YouTube playback and the Browser window need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
 
 ## Core
 
@@ -46,12 +46,12 @@ Under *Web tools*.
 
 #### The Browser window
 
-The app's own browser (Windows only), where you solve a bot check the web tools can't get past.
+The app's own browser (Windows, and a Mac on macOS 14 or later), where you solve a bot check the web tools can't get past.
 
 * **When:** `web_fetch`, `web_search`, `download_file` and `convert_to_pdf` offer it on a 403, a 503 that names no wait, or a check's page; never for a rate limit, and never headless. *Web browser botcheck window* decides whether it asks you first, opens at once or never opens.
 * **Solving:** the window comes to the front; pressing Esc or *Give up*, or closing the window, gives up, and so does waiting 5 minutes. Once the page loads with no check showing, the window closes and the tool goes on with that page.
 * **From the phone:** the allow question and *Give up* are on the Web UI's Chat tab too, and with *Web UI bot check control* on the card shows the window live to tap, hold, scroll and type into ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). The challenge still runs in the PC's window: its pass is a cookie only that browser can use.
-* **Cookies:** the window's cookies for the site go to the web tools for this run, so the next fetch usually needs no window. A site that ties its clearance to the browser's connection may still refuse a download.
+* **Cookies:** the window's cookies for the site go to the web tools for this run, so the next fetch usually needs no window. A site that ties its clearance to the browser's connection may still refuse a download. On a Mac the window is Safari's WebKit, so the web tools then claim Safari, with Safari's headers, on that site.
 * The window's bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
 
 ### Shell

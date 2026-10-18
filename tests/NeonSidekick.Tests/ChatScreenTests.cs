@@ -8366,6 +8366,24 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
+    public async Task Profile_Delete_Y_LetsTheBrowserWindowForgetTheProfileFirst()
+    {
+        // 2026-10-18, the Mac Browser plan: a Mac's WebKit store lives outside the profile's folder, so the window is told before the folder goes.
+        _browserWindow = new FakeBrowserWindow();
+        WorkProfile();
+        PushLine("/profile delete work");
+        PickYes();
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var forgotten = Assert.Single(_browserWindow.Forgotten);
+        Assert.Equal(ProfileDir("work"), forgotten.Directory);
+        Assert.True(forgotten.Existed);
+        Assert.False(Directory.Exists(ProfileDir("work")));
+    }
+
+    [Fact]
     public async Task Profile_Delete_AnythingElse_Keeps()
     {
         WorkProfile();

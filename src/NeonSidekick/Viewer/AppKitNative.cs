@@ -88,6 +88,7 @@ internal static unsafe partial class AppKitNative
 
     // NSEventType
     public const ulong EventKeyDown = 10;
+    public const ulong EventOtherMouseDown = 25;
     public const ulong EventApplicationDefined = 15;
 
     // NSTrackingAreaOptions: entered/exited and moved, whatever the window's state, the rect the view's visible one.
