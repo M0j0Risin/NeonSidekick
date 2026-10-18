@@ -70,6 +70,9 @@
          crash (header line, body JSON, threads and images), a jetsam, a simulated fault, a text .diag, and an install.log with a
          continued entry, a process with a space and secret-like values. -->
     <None Include="Fixtures\maclog\*.*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The managed LDAP client's known-answer bytes (2026-10-18, the Mac AD plan's phase 0): cleartext messages the spike exchanged with
+         a local Samba DC of the made-up LAB.NEON.TEST, the bind's SASL credentials replaced by a placeholder; no Kerberos token. -->
+    <None Include="Fixtures\ldap\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

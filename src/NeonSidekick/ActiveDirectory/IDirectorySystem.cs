@@ -58,8 +58,11 @@ public sealed record DirectoryResults(IReadOnlyList<DirectoryEntry> Entries, boo
 /// <summary>Who a session binds as: the account and its password (never logged), handed to Negotiate as an explicit identity.</summary>
 public sealed record DirectoryLogin(string User, string Password);
 
-/// <summary>Where a session goes: the server (a DC, or the domain's name), its port, LDAPS or not, and the sign-in.</summary>
-public sealed record DirectoryTarget(string Server, int Port, bool Tls, DirectoryLogin? Login);
+/// <summary>
+/// Where a session goes: the server (a DC, or the domain's name), its port, LDAPS or not, and the sign-in; and the domain's DNS name
+/// (2026-10-18, the Mac AD plan: the managed client finds a domain's DCs by it and trusts a DC's own name only inside it; wldap32 ignores it).
+/// </summary>
+public sealed record DirectoryTarget(string Server, int Port, bool Tls, DirectoryLogin? Login, string? Domain = null);
 
 /// <summary>A failure from the LDAP layer: the LDAP result code (or a Win32 code) and where.</summary>
 public sealed class DirectoryException(int code, string message) : Exception(message)

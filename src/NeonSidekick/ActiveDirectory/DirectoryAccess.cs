@@ -72,7 +72,7 @@ public sealed class DirectoryAccess
             login = new DirectoryLogin(found.Config.User!.Trim(), secret.Value!);
         }
 
-        return (new DirectorySource(found, new DirectoryTarget(found.Server, found.Port, found.Config.UsesTls, login), forceRedacted || !found.Config.Full), null);
+        return (new DirectorySource(found, new DirectoryTarget(found.Server, found.Port, found.Config.UsesTls, login, found.DomainName), forceRedacted || !found.Config.Full), null);
     }
 
     public Task<DirectoryResult<T>> RunAsync<T>(DirectorySource source, Func<IDirectorySession, T> work, CancellationToken cancellationToken)
