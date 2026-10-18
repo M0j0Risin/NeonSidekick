@@ -21,10 +21,10 @@ public static class MacLogText
     // ── The tools' refusals ─────────────────────────────────────────────────
 
     /// <summary>An <c>.evtx</c> named on a Mac.</summary>
-    public const string EvtxIsWindows = "Error: an .evtx file is a Windows event log; on a Mac the logs are system and the working directory's .logarchive folders.";
+    public const string EvtxIsWindows = "Error: an .evtx file is a Windows event log; on a Mac the logs are system, crashes, install and the working directory's .logarchive folders.";
 
     /// <summary>A log name that is none of the Mac's.</summary>
-    public static string UnknownLog(string name) => $"Error: there is no log named '{name}' on this Mac; eventlog_logs lists them (system, or a .logarchive in the working directory).";
+    public static string UnknownLog(string name) => $"Error: there is no log named '{name}' on this Mac; eventlog_logs lists them (system, crashes, install, or a .logarchive in the working directory).";
 
     /// <summary>A read that ran out of time.</summary>
     public const string TimedOut = "Error: the read took too long and was stopped; narrow it (a process, a subsystem, a level, or a shorter since).";

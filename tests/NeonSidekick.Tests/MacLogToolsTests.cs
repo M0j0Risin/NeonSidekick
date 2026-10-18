@@ -172,7 +172,7 @@ public sealed class MacLogToolsTests : IDisposable
 
         Assert.Equal(Handles(one).Concat(Handles(two)).Concat(Handles(three)).Distinct().Count(), Handles(one).Length + Handles(two).Length + Handles(three).Length);
         Assert.Null(NextBefore(three));
-        Assert.Equal(tie, _log.Opens[1].Filter.Until);
+        Assert.Equal(tie + MacLogSearch.Microsecond, _log.Opens[1].Filter.Until);   // the cursor's whole microsecond
     }
 
     [Fact]
@@ -366,6 +366,32 @@ public sealed class MacLogToolsTests : IDisposable
         Assert.Null(find.Text);
         Assert.Equal(MacLogText.NoEntry(handle, "system"), gone);
         Assert.Equal(MacLogText.BadHandle("81234"), bad);
+    }
+
+    /// <summary>
+    /// The live bug of the phase 5 check: OSLog's times carry fractions of a microsecond, a handle does not, so a find held to the handle's
+    /// own time left the entry out ("no longer in system"). The find reads forward over its microsecond, ties counted newest first.
+    /// </summary>
+    [Fact]
+    public async Task Event_FindsAnEntryWhoseTimeHasAFractionOfAMicrosecond_AndEachTie()
+    {
+        var time = Now.AddMinutes(-40).AddTicks(7);   // 0.7 µs past its microsecond
+        _log.Entries.Add(FakeUnifiedLog.Entry(time, message: "first of the tie"));
+        _log.Entries.Add(FakeUnifiedLog.Entry(time.AddTicks(1), message: "second of the tie"));
+        _log.Entries.Add(FakeUnifiedLog.Entry(time.AddTicks(2), process: "other", pid: 12, message: "another process"));
+        string search = await Call(Tool(EventLogSearchTool.ToolName), ("log", "system"), ("process", "loginwindow"));
+        string[] handles = Handles(search);
+
+        string newer = await Call(Tool(EventLogEventTool.ToolName), ("log", "system"), ("record", handles[0]));
+        string older = await Call(Tool(EventLogEventTool.ToolName), ("log", "system"), ("record", handles[1]));
+
+        Assert.Equal(2, handles.Length);
+        Assert.Contains("⟪second of the tie⟫", newer, StringComparison.Ordinal);
+        Assert.Contains("⟪first of the tie⟫", older, StringComparison.Ordinal);
+        var find = _log.Opens[^1];
+        Assert.True(find.Filter.Forward);
+        Assert.EndsWith(MacLogPredicate.ForwardTimeLimit, find.Format, StringComparison.Ordinal);
+        Assert.True(find.Filter.Until - find.Filter.Since <= TimeSpan.FromMilliseconds(2));
     }
 
     [Fact]

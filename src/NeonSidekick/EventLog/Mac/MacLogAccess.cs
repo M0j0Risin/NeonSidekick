@@ -276,7 +276,7 @@ public sealed record MacLogQuery(
         DateTimeOffset? until = Until;
         if (Before is { } before && (until is null || before.Time < until))
         {
-            until = before.Time;
+            until = before.Time + MacLogSearch.Microsecond;   // the cursor's whole microsecond: its ties after it are on the next page
         }
 
         return new MacLogFilter(Since, Levels, until, Process, Pid, Subsystem, Category, redacted ? null : Text, Exclude);

@@ -99,7 +99,7 @@ public sealed class MacLogEventTool : MacLogTool
           "type": "object",
           "properties": {
             "log": { "type": "string", "description": "system, crashes, install, or the .logarchive the entry came from." },
-            "record": { "type": "string", "description": "The entry's handle as an answer shows it: a u… (system, an archive), a report's file name (crashes) or an i… (install)." }
+            "record": { "type": "string", "description": "The entry's handle as an answer shows it: a u… (system, an archive: u<microseconds since 1970>.<pid>.<thread>.<n>), a report's file name (crashes) or an i… (install: i<byte offset>.<seconds since 1970>)." }
           },
           "required": ["log", "record"]
         }

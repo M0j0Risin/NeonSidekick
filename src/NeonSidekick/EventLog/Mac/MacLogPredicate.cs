@@ -44,6 +44,10 @@ public static class MacLogPredicate
     public const string LevelTerm = "logType == %@";
     public const string Everything = "TRUEPREDICATE";
     public const string TimeLimit = " OR date < %@";
+    public const string SinceTerm = "date >= %@";
+
+    /// <summary>A forward read's limit: the first entry past <see cref="MacLogFilter.Until"/> ends it.</summary>
+    public const string ForwardTimeLimit = " OR date > %@";
 
     /// <summary>The format and its arguments, in order. Throws <see cref="ArgumentException"/> for a level word OSLog does not have.</summary>
     public static (string Format, IReadOnlyList<MacPredicateArgument> Arguments) Build(MacLogFilter filter)
@@ -81,6 +85,17 @@ public static class MacLogPredicate
         {
             terms.Add(ExcludeTerm);
             arguments.Add(MacPredicateArgument.Of(excluded));
+        }
+
+        if (filter.Forward)
+        {
+            var end = filter.Until ?? throw new ArgumentException("a forward read needs Until", nameof(filter));
+            terms.Add(SinceTerm);
+            arguments.Add(MacPredicateArgument.Of(filter.Since));
+            terms.Add(UntilTerm);
+            arguments.Add(MacPredicateArgument.Of(end));
+            arguments.Add(MacPredicateArgument.Of(end));
+            return ("(" + string.Join(" AND ", terms) + ")" + ForwardTimeLimit, arguments);
         }
 
         if (filter.Until is { } until)

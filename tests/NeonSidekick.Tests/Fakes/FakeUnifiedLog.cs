@@ -3,7 +3,8 @@ using NeonSidekick.EventLog;
 namespace NeonSidekick.Tests.Fakes;
 
 /// <summary>
-/// A unified log for the tests (2026-10-18, the Mac event-log plan): its entries handed back newest first in batches of
+/// A unified log for the tests (2026-10-18, the Mac event-log plan): its entries handed back newest first (a forward filter's oldest
+/// first, ended at its Until) in batches of
 /// <see cref="BatchSize"/>, each filtered as OSLog's predicate would (<see cref="MacLogMatch"/>) and the read ended at the first entry
 /// older than <see cref="MacLogFilter.Since"/>, as the predicate's time limit ends the real one. Records every open with its predicate
 /// (<see cref="MacLogPredicate.Build"/>); <see cref="Fail"/> makes the next open or probe throw, <see cref="Gate"/> holds every open until
@@ -47,12 +48,14 @@ public sealed class FakeUnifiedLog : IUnifiedLog
 
         Gate?.Wait(cancellationToken);
         var source = Source(target);
-        var matched = source
+        var newest = source
             .Select((entry, index) => (entry, index))
             .OrderByDescending(e => e.entry.Time)
             .ThenBy(e => e.index)
-            .Select(e => e.entry)
-            .TakeWhile(e => e.Time >= filter.Since)
+            .Select(e => e.entry);
+        var matched = (filter.Forward
+                ? newest.Reverse().SkipWhile(e => e.Time < filter.Since).TakeWhile(e => e.Time <= filter.Until)   // oldest first, ended past Until
+                : newest.TakeWhile(e => e.Time >= filter.Since))
             .Where(e => MacLogMatch.Matches(e, filter))
             .ToList();
         Open++;

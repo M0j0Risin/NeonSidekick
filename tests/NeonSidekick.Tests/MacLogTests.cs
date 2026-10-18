@@ -45,6 +45,17 @@ public sealed class MacLogTests
         Assert.Equal(MacPredicateArgument.Of(Since), arguments[^1]);
     }
 
+    [Fact]
+    public void AForwardRead_IsHeldBetweenItsTimes_AndEndedPastItsUntil()
+    {
+        var until = Since.AddSeconds(1);
+        var (format, arguments) = MacLogPredicate.Build(new MacLogFilter(Since, [], until, Pid: 395, Forward: true));
+
+        Assert.Equal("(processIdentifier == %@ AND date >= %@ AND date <= %@) OR date > %@", format);
+        Assert.Equal([MacPredicateArgument.Of(395), MacPredicateArgument.Of(Since), MacPredicateArgument.Of(until), MacPredicateArgument.Of(until)], arguments);
+        Assert.Throws<ArgumentException>(() => MacLogPredicate.Build(new MacLogFilter(Since, [], Forward: true)));
+    }
+
     /// <summary>Whatever is typed stays a value: the format is the same with or without the hostile words, and only NULs are taken out.</summary>
     [Theory]
     [InlineData("\" OR 1==1")]

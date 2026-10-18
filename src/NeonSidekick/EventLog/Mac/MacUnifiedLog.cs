@@ -43,7 +43,7 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
             nint predicate = Predicate(format, arguments);
             nint position = Send(store, Sel("positionWithDate:"), Date(filter.Since));
             nint error = 0;
-            nint enumerator = SendEnumerator(store, Sel("entriesEnumeratorWithOptions:position:predicate:error:"), Reverse, position, predicate, &error);
+            nint enumerator = SendEnumerator(store, Sel("entriesEnumeratorWithOptions:position:predicate:error:"), filter.Forward ? 0 : Reverse, position, predicate, &error);
             if (enumerator == 0)
             {
                 throw Failure(error, "the log could not be read");
@@ -173,7 +173,7 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
                     }
 
                     var time = TimeOf(Send(entry, Sel("date")));
-                    if (time < filter.Since)
+                    if (filter.Forward ? time > filter.Until : time < filter.Since)
                     {
                         _done = true;   // the time limit's own entry: the read is over
                         break;

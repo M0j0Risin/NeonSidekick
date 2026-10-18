@@ -22,6 +22,9 @@ public sealed record MacLogEntry(
 /// older than it, the clause <see cref="MacLogPredicate"/> always appends, since a predicate with no match otherwise makes
 /// <c>nextObject</c> scan the store back with no end (Phase 0: <c>threadIdentifier == 1</c> ran the full 300 s). <see cref="Levels"/>
 /// holds OSLog's type words (<c>debug info default error fault</c>); empty means every level. The rest narrow it; null or empty is no term.
+/// <see cref="Forward"/> (later on 2026-10-18, the phase 5 check) reads oldest first from <see cref="Since"/> and needs <see cref="Until"/>,
+/// which ends it: a reverse read always starts at the newest entry (Phase 0), so finding one entry an hour back read the whole hour, while
+/// a forward read starts at its position. The predicate's time limit is then <c>date &gt; until</c>.
 /// </summary>
 public sealed record MacLogFilter(
     DateTimeOffset Since,
@@ -32,7 +35,8 @@ public sealed record MacLogFilter(
     string? Subsystem = null,
     string? Category = null,
     string? Text = null,
-    IReadOnlyList<string>? ExcludeProcesses = null);
+    IReadOnlyList<string>? ExcludeProcesses = null,
+    bool Forward = false);
 
 /// <summary>Where a read goes: this Mac's own store, or a <c>.logarchive</c> folder by its full path (2026-10-18).</summary>
 public sealed record UnifiedLogTarget(string? ArchivePath)
@@ -47,7 +51,7 @@ public sealed record UnifiedLogTarget(string? ArchivePath)
 }
 
 /// <summary>
-/// An open read, newest first, in batches. Not thread-safe: made, read and disposed on one thread (the access layer's work delegate).
+/// An open read, newest first (oldest first for a <see cref="MacLogFilter.Forward"/> filter), in batches. Not thread-safe: made, read and disposed on one thread (the access layer's work delegate).
 /// <see cref="Next"/> returns null once the read reached <see cref="MacLogFilter.Since"/> or the store's end; it honors the
 /// cancellation the read was opened with between entries.
 /// </summary>

@@ -82,4 +82,38 @@ public sealed class MacUnifiedLogTests
         Assert.NotEqual("", MacLogErrors.Sentence(failure, path));
         Assert.Equal(0, MacStderr.Depth);
     }
+
+    /// <summary>
+    /// An entry found again by its handle (later on 2026-10-18, the phase 5 check's bug): the search's last row of a page of errors, read
+    /// forward over its own microsecond, comes back as the same entry, and fast — a reverse find read everything newer than it first.
+    /// </summary>
+    [MacFact]
+    public void AnEntry_IsFoundByItsHandle_ReadForward_Quickly()
+    {
+        var log = new MacUnifiedLog();
+        var query = new MacLogQuery("system", ["error", "fault"], DateTimeOffset.UtcNow.AddMinutes(-30), Limit: 100);
+        var scan = new EventScan(false, 20_000, EventScan.DefaultBudget, TimeProvider.System);
+        MacSearchPage page;
+        using (var reader = log.Open(UnifiedLogTarget.Local, query.Filter(redacted: false), CancellationToken.None))
+        {
+            page = MacLogSearch.Search(reader, query, scan, CancellationToken.None);
+        }
+
+        if (page.Entries.Count == 0)
+        {
+            return;   // a quiet half hour: nothing to find
+        }
+
+        var last = page.Entries[^1];
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        MacLogView? found;
+        using (var reader = log.Open(UnifiedLogTarget.Local, MacLogSearch.FindFilter(last.Handle), CancellationToken.None))
+        {
+            found = MacLogSearch.Find(reader, last.Handle, redacted: false, CancellationToken.None);
+        }
+
+        Assert.NotNull(found);
+        Assert.Equal(last.Entry.Message, found!.Entry.Message);
+        Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(5), "the find read forward from its own microsecond");
+    }
 }

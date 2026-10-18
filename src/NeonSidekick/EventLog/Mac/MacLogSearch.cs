@@ -130,37 +130,32 @@ public static class MacLogSearch
     /// <summary>
     /// The entry <paramref name="handle"/> names in <paramref name="reader"/>'s read, or null when it is no longer there. The tie number was
     /// counted under the search's own filter, which the find's (<see cref="FindFilter"/>, every level) may not repeat; so when the exact
-    /// tie is not met, the first entry with the handle's microsecond, pid and thread stands in.
+    /// tie is not met, the newest entry with the handle's microsecond, pid and thread stands in. The find's read is forward (oldest first,
+    /// later on 2026-10-18), so the entries it names are turned round before the tie is counted.
     /// </summary>
     public static MacLogView? Find(IUnifiedLogReader reader, MacLogHandle handle, bool redacted, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        var walk = new Walk(null);
-        MacLogView? first = null;
+        var named = new List<MacLogEntry>();
         while (reader.Next() is { } batch)
         {
             foreach (var entry in batch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var seen = walk.Step(entry)!.Value;
-                if (seen == handle)
+                if (handle.Names(entry))
                 {
-                    return View(entry, seen, redacted);
-                }
-
-                if (first is null && handle.Names(entry))
-                {
-                    first = View(entry, seen with { Tie = handle.Tie }, redacted);
-                }
-
-                if (MacLogHandle.MicrosecondsOf(entry.Time) < handle.Microseconds)
-                {
-                    return first;   // read past it: the stand-in, or purged since
+                    named.Add(entry);
                 }
             }
         }
 
-        return first;
+        if (named.Count == 0)
+        {
+            return null;   // purged since
+        }
+
+        named.Reverse();   // the find reads oldest first (FindFilter); a search counted the ties newest first
+        return View(named[handle.Tie < named.Count ? handle.Tie : 0], handle, redacted);
     }
 
     /// <summary>
@@ -168,7 +163,13 @@ public static class MacLogSearch
     /// so the read is short and the ties come out as they did. Redacted or not, nothing else narrows it (the text never decides a find).
     /// </summary>
     public static MacLogFilter FindFilter(MacLogHandle handle) =>
-        new(handle.Time.AddSeconds(-1), [], handle.Time, Pid: handle.Pid);
+        new(handle.Time - FindSlack, [], handle.Time + Microsecond, Pid: handle.Pid, Forward: true);
+
+    /// <summary>One microsecond: a handle's time is cut to it, an entry's is not, so an until at the handle's own time would leave the entry out.</summary>
+    public static readonly TimeSpan Microsecond = TimeSpan.FromTicks(10);
+
+    /// <summary>How far before a handle's microsecond a find starts reading (the forward read's position need not be exact).</summary>
+    public static readonly TimeSpan FindSlack = TimeSpan.FromMilliseconds(1);
 
     /// <summary>
     /// A read walked entry by entry (the scan's count, how far back, each process's count, the tie numbers) and, for a page after the
