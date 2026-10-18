@@ -319,7 +319,7 @@ public sealed class NetCertsTool(NetworkAccess access, NetworkBudget budget) : N
           "type": "object",
           "properties": {
             "store": { "type": "string", "description": "my (default), root, ca, trustedpeople, trustedpublisher, authroot, disallowed or webhosting." },
-            "location": { "type": "string", "description": "user (default) or machine." },
+            "location": { "type": "string", "description": "user or machine. The default is user, but on a Mac root defaults to machine, the system's trust." },
             "filter": { "type": "string", "description": "Only certificates whose subject, issuer, a name or the thumbprint contains this text." },
             "expiring_within_days": { "type": "integer", "description": "Only certificates that end within this many days (expired ones too)." },
             "limit": { "type": "integer", "description": "The most to list, 1 to 500 (default 50)." }
@@ -341,10 +341,15 @@ public sealed class NetCertsTool(NetworkAccess access, NetworkBudget budget) : N
             return ValueTask.FromResult<object?>(NetworkText.BadStore(storeWord));
         }
 
-        string locationWord = Optional(arguments, LocationArgument) ?? "user";
-        if (CertificateStores.Location(locationWord) is not { } location)
+        var location = CertificateStores.DefaultLocation(store);   // none named: the user's, a Mac's Root the machine's (2026-10-18)
+        if (Optional(arguments, LocationArgument) is { } locationWord)
         {
-            return ValueTask.FromResult<object?>(NetworkText.BadLocation(locationWord));
+            if (CertificateStores.Location(locationWord) is not { } named)
+            {
+                return ValueTask.FromResult<object?>(NetworkText.BadLocation(locationWord));
+            }
+
+            location = named;
         }
 
         int? expiring = null;

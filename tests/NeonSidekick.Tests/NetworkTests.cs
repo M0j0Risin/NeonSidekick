@@ -551,6 +551,24 @@ public sealed class NetworkTests
         Assert.Equal("expired 3 days ago", NetworkRender.DaysLeft(View(now.AddDays(-2.5)), now));
     }
 
+    /// <summary>
+    /// With no location named, a store is the user's, but a Mac's <c>root</c> is the machine's, the system's trust (2026-10-18, the Mac
+    /// pass: .NET's user Root on a Mac is the account's own trust settings, empty as a rule). On a Mac it reads real roots.
+    /// </summary>
+    [Fact]
+    public void DefaultLocation_IsTheUsers_ButAMacsRootIsTheSystemsTrust()
+    {
+        var user = System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser;
+        var machine = System.Security.Cryptography.X509Certificates.StoreLocation.LocalMachine;
+        Assert.Equal(user, CertificateStores.DefaultLocation("My"));
+        Assert.Equal(user, CertificateStores.DefaultLocation("CA"));
+        Assert.Equal(OperatingSystem.IsMacOS() ? machine : user, CertificateStores.DefaultLocation("Root"));
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.NotEmpty(CertificateStores.Read("Root", CertificateStores.DefaultLocation("Root")).Certificates);
+        }
+    }
+
     [Fact]
     public void Offered_CertsBehindTheirSwitch_PingBehindAPinger()
     {

@@ -44,7 +44,7 @@ You need a Mac with Apple Silicon (M1 or later). Download and unpack the Mac pac
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). CPU and memory figures are the Linux VM's. |
 | Event logs: the event-log tools and `/eventlog` | Not available | They read Windows' own event logs; a Mac has none. The group is never offered, the toolbar's 🪵 stays dimmed, and `/eventlog` says there are no event logs to read. |
 | Services, scheduled tasks and Active Directory: their tools, `/services`, `/tasks`, `/ad` | Not available | They read Windows' own services, Task Scheduler and LDAP client; a Mac has none of them. The groups are never offered, the toolbar's 🧩 📅 🏢 stay dimmed, and each command says there is nothing of its kind to read. |
-| Network tools and `/net` | Works | Ping uses an unprivileged ICMP socket; a trace there is not proven yet. `net_certs`' `my` is your login keychain and `root` the system's trust; the other stores are not kept on a Mac. |
+| Network tools and `/net` | Works | Ping and trace use an unprivileged ICMP socket. `net_certs`' `my` is your login keychain and `root` the system's trust (its default location on a Mac); the other stores are not kept on a Mac. |
 | Docker servers | Not available | Docker Desktop on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | A share is `smb://server/share`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's own shortcuts, apps' exclusive hotkeys and the terminal's Option key. Most apps' shared hotkeys don't show. |

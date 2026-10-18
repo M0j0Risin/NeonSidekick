@@ -35,6 +35,14 @@ public static class CertificateStores
         _ => null,
     };
 
+    /// <summary>
+    /// The location a store is read at when none is named: the user's, but on a Mac the machine's for <c>Root</c>, the system's trust
+    /// (2026-10-18, the Mac pass: .NET's user Root there is the account's own trust settings, empty as a rule, so <c>/net certs root</c>
+    /// listed none where MAC.md promised the system's trust; <c>root machine</c> listed its 154).
+    /// </summary>
+    public static StoreLocation DefaultLocation(string store) =>
+        OperatingSystem.IsMacOS() && string.Equals(store, "Root", StringComparison.Ordinal) ? StoreLocation.LocalMachine : StoreLocation.CurrentUser;
+
     /// <summary>The location; null for a word that is none.</summary>
     public static StoreLocation? Location(string word) => word.Trim().ToLowerInvariant() switch
     {

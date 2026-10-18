@@ -93,7 +93,7 @@ public static class NetworkCommand
                 break;
             case "certs":
                 string store = "My";
-                var location = System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser;
+                System.Security.Cryptography.X509Certificates.StoreLocation? location = null;   // none named: the store's default (CertificateStores.DefaultLocation)
                 var filter = new List<string>();
                 foreach (string word in rest)
                 {
@@ -111,7 +111,7 @@ public static class NetworkCommand
                     }
                 }
 
-                answer = NetworkChecks.Certificates(access, store, location, filter.Count == 0 ? null : string.Join(' ', filter), null, NetworkChecks.MaxCertLimit);
+                answer = NetworkChecks.Certificates(access, store, location ?? CertificateStores.DefaultLocation(store), filter.Count == 0 ? null : string.Join(' ', filter), null, NetworkChecks.MaxCertLimit);
                 break;
             default:
                 return Usage();

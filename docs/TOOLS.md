@@ -461,7 +461,7 @@ Under *Network tools*. Small checks on one host at a time, for "is it up, what d
 * **A budget per turn:** *Network tools max hosts per turn* (8) and *Network tools max ports per turn* (32), counted by address, so two names for one machine count once. Scripts and advisors spend the main chat's budget; bots have their own. The answer says when a budget runs out, and the model is told once a turn how much is left.
 * **TLS checks never fetch:** no certificate is downloaded and no revocation list is asked for, so the chain is judged from what the server sent and this machine already trusts. No credential is ever sent.
 * **What a server wrote is untrusted:** TXT records, certificate names, a banner. Each is fenced as quoted data (`⟪ ⟫`), and an answer is held to 16,000 characters.
-* **On a Mac** ping uses an unprivileged ICMP socket; a trace there is not proven yet ([MAC.md](MAC.md)). `net_certs`' `my` is your login keychain and `root` the system's trust; the other stores are not kept there.
+* **On a Mac** ping and trace use an unprivileged ICMP socket ([MAC.md](MAC.md)). `net_certs`' `my` is your login keychain and `root` the system's trust, read at the machine location unless `user` is named; the other stores are not kept there.
 
 ### Event logs
 
