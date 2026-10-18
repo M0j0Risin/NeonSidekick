@@ -109,6 +109,8 @@ public static class HelpMac
         ["/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]"] = "Make a PDF of a file in the working directory, beside it unless `to=` names a file or folder; an existing PDF is replaced only with `overwrite`. Markdown keeps its headings, tables, lists, links, colored code and the pictures beside it; text and code become a colored listing; HTML prints as the page, without its scripts or anything outside the working directory; a picture is fitted to one page. Options go anywhere. Edge, Chrome, Brave or Chromium makes it. Alone, `/pdf` shows how to use it.",
         ["/terminal [<folder>]"] = TerminalForm,
         ["/eventlog"] = "Read Windows' event logs. A Mac keeps none, so `/eventlog` says there are no event logs to read.",   // 2026-10-15
+        // 2026-10-18, the Mac pass: a Mac keeps two stores, and root without a location is the system's trust.
+        ["/net certs [<store>] [user|machine] [<words>]"] = "One of this Mac's certificate stores, soonest to end first, filtered by the words; nothing exported. `my` (the default) is your login keychain, and `root` the system's trust unless `user` is named; the other stores are not kept on a Mac.",
         // 2026-10-17, the Mac pass (the user's call): no Browser window here, so a saved link opens in the default browser.
         ["/browser <n>"] = "Open saved link n, its number in `/browser list`, in your default browser.",
         ["/browser save [<url> [<name>]]"] = "Save a link to the profile's saved links: the address, with the words after it as its name.",
