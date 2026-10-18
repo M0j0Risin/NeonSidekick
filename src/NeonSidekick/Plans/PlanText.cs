@@ -703,6 +703,12 @@ public static class PlanText
 
     public const string NotPlanningResult = "Error: plan mode is not on; there is no plan to present";
     public const string MarkdownRequired = "Error: markdown is required: the whole plan as Markdown";
+
+    /// <summary>
+    /// <c>present_plan</c>'s answer to a pruned stub sent as <c>markdown</c> (2026-10-18): a compaction stubs the earlier presentations
+    /// (<c>ConversationCompactor.StubSupersededPlans</c>), and one copied back would pass the blank check and be saved as the plan. Pinned.
+    /// </summary>
+    public const string MarkdownStubSent = "Error: markdown is a pruned stub, not the plan; read the plan file again and send the whole plan";
     public const string TitleRequired = "Error: title is required: a short title for the plan";
     public const string AlreadyApprovedResult = "The plan is already approved; it starts when this reply ends. Reply with one short line and call no more tools.";
 

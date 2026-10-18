@@ -98,6 +98,12 @@ public sealed class PresentPlanTool : AIFunction
             return PlanText.MarkdownRequired;
         }
 
+        // A superseded presentation's stub copied back (2026-10-18, ConversationCompactor.StubSupersededPlans) would be saved as the plan.
+        if (ConversationCompactor.IsPrunedStub(markdown))
+        {
+            return PlanText.MarkdownStubSent;
+        }
+
         if (title.Length == 0)
         {
             return PlanText.TitleRequired;

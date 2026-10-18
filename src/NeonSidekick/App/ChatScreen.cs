@@ -7199,12 +7199,13 @@ internal sealed partial class ChatScreen
     /// The tool loop's guard for a turn (<see cref="Assistant.ContextGuard"/>): the window
     /// (<see cref="LlmSession.ContextLength"/> — the Common tab's figure else the server's), the share
     /// <c>LLM auto compact (%)</c> and the mode <c>LLM tool compact type</c> (<c>compact</c>, the default since 2026-09-28,
-    /// <c>prune</c>, <c>stop</c> or <c>nothing</c>); null while the window is unknown.
+    /// <c>prune</c>, <c>stop</c> or <c>nothing</c>); null while the window is unknown. <paramref name="replyFloor"/> (2026-10-18,
+    /// <see cref="PlanReplyFloor"/>) is the least room it leaves for the next reply, passed by the main chat's turns alone.
     /// </summary>
-    public static Assistant.TurnContextGuard? ContextGuardFor(AppSettingsData effective, ContextLength? window)
+    public static Assistant.TurnContextGuard? ContextGuardFor(AppSettingsData effective, ContextLength? window, long replyFloor = 0)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return window is { Tokens: > 0 } w ? new Assistant.TurnContextGuard(w.Tokens, effective.LlmAutoCompactPercent, ToolCompactType.Resolve(effective), SkillCompactMode.Resolve(effective)) : null;
+        return window is { Tokens: > 0 } w ? new Assistant.TurnContextGuard(w.Tokens, effective.LlmAutoCompactPercent, ToolCompactType.Resolve(effective), SkillCompactMode.Resolve(effective)) { ReplyFloor = replyFloor } : null;
     }
 
     /// <summary>
@@ -15943,7 +15944,8 @@ internal sealed partial class ChatScreen
         int share = _effective().LlmAutoCompactPercent;
         assistant.History.MaxTurns = TurnCapFor(_effective(), _session.ContextLength);
         // Never over the Claude CLI (2026-09-30): the CLI compacts the conversation it keeps; a summary here would change nothing it reads.
-        if (!ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl) && ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share))
+        // Room for the next reply too (2026-10-18): the largest so far, or the plan file's size while planning.
+        if (!ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl) && ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share, Math.Max(assistant.History.LargestReplyTokens, PlanReplyFloor(_plan, _files))))
         {
             int percent = UsageText.Percent(_session.Usage.LastRequest.Total, _session.ContextLength) ?? share;
             await CompactAsync(focus: null, autoPercent: percent, cancellationToken).ConfigureAwait(false);
@@ -16458,7 +16460,7 @@ internal sealed partial class ChatScreen
             ForgetBotCheckDeclines();
             // A new turn, a fresh scan budget (2026-10-15, the admin-tools plan): every net_ call of it counts, a script's and an advisor's too.
             _networkBudget.Reset();
-            PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
+            PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: PlanReplyFloor(_plan, _files)), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
 
             // The Claude Code server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
             // measures or prunes a history the CLI does not read (it compacts its own).

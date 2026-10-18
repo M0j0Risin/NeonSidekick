@@ -1,5 +1,6 @@
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Sessions;
@@ -100,6 +101,22 @@ internal sealed partial class ChatScreen
     public const string PlanGroupName = "Plan";
 
     public const string PlanVerdictLogPrefix = "present_plan: ";
+
+    /// <summary>
+    /// The least room the compact checks leave for the next reply while a plan is being written (2026-10-18, the user's pick: a reopened
+    /// plan's first presentation gets room too): the plan file's size over <see cref="ConversationCompactor.CharsPerToken"/>, since
+    /// <c>present_plan</c> sends the plan back whole. 0 with no plan, an approved one (<c>present_plan</c> is then refused), no file yet
+    /// or one the sandbox will not stat. Bytes over-count non-ASCII a little, the safe side. A file stat, so each site calls it: the
+    /// top-of-message check and the turn's guard (<see cref="Assistant.TurnContextGuard.ReplyFloor"/>), headless's too.
+    /// </summary>
+    public static long PlanReplyFloor(PlanSession plan, WorkingDirectory files)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(files);
+        return plan.Active && plan.Approved is null && plan.Path is { } path && files.TryStamp(path) is { } stamp
+            ? stamp.Length / ConversationCompactor.CharsPerToken
+            : 0;
+    }
 
     /// <summary>
     /// What <paramref name="args"/> asks for: the subcommands (<c>show</c>, <c>approve</c>, <c>approve --fresh</c>,

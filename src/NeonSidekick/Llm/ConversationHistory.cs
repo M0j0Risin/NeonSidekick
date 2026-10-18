@@ -514,11 +514,30 @@ public sealed class ConversationHistory
         return false;
     }
 
-    /// <summary>Forgets every message; the system prompt stays.</summary>
+    /// <summary>Forgets every message, and the largest reply with them (2026-10-18); the system prompt stays.</summary>
     public void Clear()
     {
         _messages.Clear();
+        LargestReplyTokens = 0;
         Recount();
+    }
+
+    /// <summary>
+    /// The most output tokens one request of this conversation has produced (2026-10-18, a gap chain that ran out of context mid-way
+    /// through a plan sent back whole): both compact checks leave this much room for the next reply
+    /// (<see cref="ConversationCompactor.ReplyReserve"/>). Raised by <see cref="NoteReply"/>, zeroed by <see cref="Clear"/> and
+    /// <see cref="Restore"/> (another conversation), kept by <see cref="Replace"/> (a compaction does not change how long the model
+    /// writes) and by the rewind. Not stored with a session.
+    /// </summary>
+    public long LargestReplyTokens { get; private set; }
+
+    /// <summary>A request's output tokens (its thinking among them: that takes context too), raising <see cref="LargestReplyTokens"/>.</summary>
+    public void NoteReply(long outputTokens)
+    {
+        if (outputTokens > LargestReplyTokens)
+        {
+            LargestReplyTokens = outputTokens;
+        }
     }
 
     /// <summary>
@@ -552,9 +571,14 @@ public sealed class ConversationHistory
     /// A stored session back as the transcript (<c>/sessions</c>, 2026-09-18): <see cref="Replace"/>
     /// with <paramref name="messages"/>. The opening pairs are in the list; the next turn keeps them
     /// current rather than seeding them again. (Until later on 2026-09-18 it also continued the
-    /// <c>/skill</c> activation counter; the name form went with the counter.)
+    /// <c>/skill</c> activation counter; the name form went with the counter.) A loaded session is another conversation, so
+    /// <see cref="LargestReplyTokens"/> starts again at zero (2026-10-18).
     /// </summary>
-    public void Restore(IReadOnlyList<ChatMessage> messages) => Replace(messages);
+    public void Restore(IReadOnlyList<ChatMessage> messages)
+    {
+        Replace(messages);
+        LargestReplyTokens = 0;
+    }
 
     /// <summary>
     /// A copy of the last turn: from the last <see cref="IsTurnStart"/> message to the end (the

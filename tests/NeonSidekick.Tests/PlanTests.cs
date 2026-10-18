@@ -391,6 +391,55 @@ public class PlanTests : IDisposable
         Assert.Empty(_presented);
     }
 
+    /// <summary>A superseded presentation's stub copied back (2026-10-18) is refused before any save: the plan on disk and its revision stay.</summary>
+    [Fact]
+    public async Task Tool_APrunedStubAsMarkdown_IsRefused_NothingSaved()
+    {
+        _session.Enter("Add a guide");
+        await _tool.InvokeAsync(Args("Contributing guide", Plan));
+        string path = _session.Path!;
+        string saved = Read(path);
+        int revision = _session.Revision;
+
+        var answer = await _tool.InvokeAsync(Args("Contributing guide", ConversationCompactor.PrunedArgumentStub(27_610)));
+
+        Assert.Equal("Error: markdown is a pruned stub, not the plan; read the plan file again and send the whole plan", answer);
+        Assert.Equal(PlanText.MarkdownStubSent, answer);
+        Assert.Equal(saved, Read(path));
+        Assert.Equal(revision, _session.Revision);
+        Assert.Single(_presented);
+    }
+
+    /// <summary>The plan's floor (2026-10-18): the file's size over four while planning; 0 with no plan, no file, an approved plan or a file gone.</summary>
+    [Fact]
+    public async Task PlanFloor_IsThePlanFilesSizeOverFour_WhilePlanning()
+    {
+        Assert.Equal(0, ChatScreen.PlanReplyFloor(_session, _files));                   // no plan
+
+        _session.Enter("Add a guide");
+        Assert.Equal(0, ChatScreen.PlanReplyFloor(_session, _files));                   // nothing presented yet
+
+        await _tool.InvokeAsync(Args("Contributing guide", Plan + new string('x', 40_000)));
+        long length = new FileInfo(Path.Combine(_dir, _session.Path!.Replace('/', Path.DirectorySeparatorChar))).Length;
+        Assert.True(length > 40_000);
+        Assert.Equal(length / ConversationCompactor.CharsPerToken, ChatScreen.PlanReplyFloor(_session, _files));
+
+        File.Delete(Path.Combine(_dir, _session.Path!.Replace('/', Path.DirectorySeparatorChar)));
+        Assert.Equal(0, ChatScreen.PlanReplyFloor(_session, _files));                   // a missing file
+    }
+
+    [Fact]
+    public async Task PlanFloor_IsZero_OnceApproved()
+    {
+        _session.Enter("Add a guide");
+        await _tool.InvokeAsync(Args("Contributing guide", Plan + new string('x', 40_000)));
+        Assert.True(ChatScreen.PlanReplyFloor(_session, _files) > 10_000);
+
+        _session.Approve(fresh: false);
+
+        Assert.Equal(0, ChatScreen.PlanReplyFloor(_session, _files));
+    }
+
     [Fact]
     public async Task Tool_SavesUnderPlans_AsksTheUser_AndARevisionKeepsThePath()
     {

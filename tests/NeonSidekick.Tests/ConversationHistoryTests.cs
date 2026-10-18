@@ -468,4 +468,30 @@ public class ConversationHistoryTests
         history.Clear();
         Assert.Empty(history.LoadedSkills);
     }
+
+    // ── The largest reply (2026-10-18) ─────────────────────────────────────
+
+    [Fact]
+    public void NoteReply_RaisesTheLargestReply_ClearAndRestoreZeroIt_ReplaceKeepsIt()
+    {
+        var history = new ConversationHistory("s");
+        Assert.Equal(0, history.LargestReplyTokens);
+
+        history.NoteReply(500);
+        history.NoteReply(200);
+        Assert.Equal(500, history.LargestReplyTokens);
+        history.NoteReply(28_095);
+        Assert.Equal(28_095, history.LargestReplyTokens);
+
+        history.AddUser("q");
+        history.Replace([new ChatMessage(ChatRole.User, "compacted")]);
+        Assert.Equal(28_095, history.LargestReplyTokens);
+
+        history.Restore([new ChatMessage(ChatRole.User, "another conversation")]);
+        Assert.Equal(0, history.LargestReplyTokens);
+
+        history.NoteReply(900);
+        history.Clear();
+        Assert.Equal(0, history.LargestReplyTokens);
+    }
 }

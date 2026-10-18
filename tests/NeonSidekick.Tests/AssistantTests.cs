@@ -2033,16 +2033,17 @@ public class AssistantTests
     /// <summary>
     /// Two echo round trips over a 1,000-token window, the second's usage at 90 %: what the guard sees before the third request —
     /// 97 % since 2026-09-28, the reported 900 plus the 306-character result just appended (76 tokens at four characters each).
+    /// The replies are a token each (2026-10-18): the guard leaves room for the largest one, and 976 plus one stays under 98 %.
     /// </summary>
     private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) GuardedLoop(Assistant.TurnContextGuard? guard, bool secondReportsUsage = true)
     {
         var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
         assistant.ContextGuard = guard;
-        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = LongText(300) }), FakeChatClient.Usage(500, 50));
+        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = LongText(300) }), FakeChatClient.Usage(549, 1));
         var second = FakeChatClient.Call("c2", "echo", new Dictionary<string, object?> { ["text"] = LongText(300) });
         if (secondReportsUsage)
         {
-            client.Enqueue(second, FakeChatClient.Usage(850, 50));
+            client.Enqueue(second, FakeChatClient.Usage(899, 1));
         }
         else
         {
@@ -2180,6 +2181,227 @@ public class AssistantTests
         Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", Assistant.TurnPrunedNotice(85, 23));
         Assert.Equal("(✂️ context at 85%: pruned 1 tool result from this turn)", Assistant.TurnPrunedNotice(85, 1));
         Assert.Equal("🛑 Stopped at 85% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", Assistant.TurnStoppedNotice(85));
+    }
+
+    // ── A call cut off by the length limit (2026-10-18) ──────────────────────
+
+    /// <summary>A reply whose call's arguments the length limit cut off: M.E.AI kept it with a parse error and the reply said "length".</summary>
+    private static ChatResponseUpdate CutCall(string callId, string name = "echo") =>
+        new(ChatRole.Assistant, new List<AIContent> { new FunctionCallContent(callId, name) { Exception = new JsonException("cut off") } })
+        {
+            FinishReason = ChatFinishReason.Length,
+        };
+
+    [Fact]
+    public void CutOffResults_ArePinned()
+    {
+        Assert.Equal("Error: your reply ran out of context while writing the arguments for 'present_plan', so they were cut off and nothing ran. Make the call again in full.", Assistant.CutOffArgumentsResult("present_plan"));
+        Assert.Equal("Error: your reply hit its output limit while writing the arguments for 'present_plan', so they were cut off and nothing ran. The same call will be cut again: send it shorter, or split the work across calls.", Assistant.CutOffByOutputLimitResult("present_plan"));
+        Assert.Equal("Error: the arguments for 'present_plan' were cut off again, so nothing ran. Do not call it again in this reply; tell the user it does not fit and what you were writing.", Assistant.CutOffAgainResult("present_plan"));
+    }
+
+    /// <summary>The gap chain's shape: usage at the window (990 of 1,000) with a guard, so the context ran out, and the model is asked for the call again in full.</summary>
+    [Fact]
+    public async Task CutOff_AtTheWindow_AsksForTheCallAgainInFull_NotInvoked()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Prune);
+        client.Enqueue(CutCall("c1"), FakeChatClient.Usage(900, 90));
+        client.EnqueueText("ok");
+        var (lines, capture) = LogCapture("Llm");
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        List<TurnEvent> events;
+        try
+        {
+            events = await Run(assistant, "x");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Empty(echo.Received);
+        Assert.Equal(Assistant.CutOffArgumentsResult("echo"), Assert.Single(events.OfType<TurnEvent.ToolResult>()).Text);
+        Assert.Equal(Assistant.CutOffArgumentsResult("echo"), Assert.Single(client.Requests[1][^1].Contents.OfType<FunctionResultContent>()).Result);
+        Assert.Contains(lines, e => e.Message == "Arguments for tool 'echo' were cut off: the reply ended at the context window after 90 output tokens.");
+    }
+
+    /// <summary>Usage well under the window, no usage at all, or no guard (an advisor's or a bot's loop): an output cap, so shorter.</summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task CutOff_UnderTheWindow_OrUnknown_AsksForItShorter(bool guarded, bool usage)
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        assistant.ContextGuard = guarded ? new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Prune) : null;
+        if (usage)
+        {
+            client.Enqueue(CutCall("c1"), FakeChatClient.Usage(100, 50));
+        }
+        else
+        {
+            client.Enqueue(CutCall("c1"));
+        }
+
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "x");
+
+        Assert.Empty(echo.Received);
+        Assert.Equal(Assistant.CutOffByOutputLimitResult("echo"), Assert.Single(events.OfType<TurnEvent.ToolResult>()).Text);
+    }
+
+    [Fact]
+    public async Task CutOff_TheSameToolTwiceInATurn_IsToldToStop()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        client.Enqueue(CutCall("c1"));
+        client.Enqueue(CutCall("c2"));
+        client.EnqueueText("it does not fit");
+
+        var events = await Run(assistant, "x");
+
+        var results = events.OfType<TurnEvent.ToolResult>().Select(r => r.Text).ToList();
+        Assert.Equal([Assistant.CutOffByOutputLimitResult("echo"), Assistant.CutOffAgainResult("echo")], results);
+        Assert.Empty(echo.Received);
+    }
+
+    /// <summary>A call that parsed in the same cut reply still runs; a parse failure on a reply that was not cut keeps its own wording.</summary>
+    [Fact]
+    public async Task CutOff_AParsedCallInTheSameReply_StillRuns()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        client.Enqueue(
+            new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "z" }) }),
+            CutCall("c2"));
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "x");
+
+        Assert.Equal(new[] { "z" }, echo.Received);
+        var results = events.OfType<TurnEvent.ToolResult>().ToList();
+        Assert.Equal("echo: z", results[0].Text);
+        Assert.Equal(Assistant.CutOffByOutputLimitResult("echo"), results[1].Text);
+    }
+
+    // ── Room for the next reply (2026-10-18) ─────────────────────────────────
+
+    /// <summary>
+    /// Two echo round trips over a 1,000-token window at 80 %: the first reply <paramref name="firstOutput"/> tokens long, the second
+    /// request at 570 tokens, so 646 with its result: under the share alone, past it with a 200-token reserve.
+    /// </summary>
+    private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) ReserveLoop(long firstOutput, long replyFloor = 0, ToolCompactMode mode = ToolCompactMode.Prune, int percent = 80)
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, percent, mode) { ReplyFloor = replyFloor };
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(100, firstOutput));
+        client.Enqueue(FakeChatClient.Call("c2", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(550, 20));
+        client.EnqueueText("done");
+        return (client, history, assistant);
+    }
+
+    [Fact]
+    public async Task Guard_LeavesRoomForTheLargestReply_ActsEarly_AndLogsTheRoom()
+    {
+        var (client, history, assistant) = ReserveLoop(firstOutput: 200);
+        var (lines, capture) = LogCapture("Llm");
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        List<TurnEvent> events;
+        try
+        {
+            events = await Run(assistant, "go");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        // The notice keeps the plain share: 646 of 1,000.
+        Assert.Equal("(✂️ context at 64%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
+        Assert.Equal("(a 306-character result, pruned by /compact)", Assert.Single(client.Requests[2][3].Contents.OfType<FunctionResultContent>()).Result);
+        Assert.Contains(lines, e => e.Message.Contains("tool iteration(s), leaving room for a 200-token reply; pruned 1 tool result(s)", StringComparison.Ordinal));
+        Assert.Equal(200, history.LargestReplyTokens);
+    }
+
+    [Fact]
+    public async Task Guard_NoBigReply_ActsAsBefore()
+    {
+        var (client, _, assistant) = ReserveLoop(firstOutput: 20);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Empty(events.OfType<TurnEvent.Notice>());
+        Assert.Equal("echo: " + LongText(300), Assert.Single(client.Requests[2][3].Contents.OfType<FunctionResultContent>()).Result);
+    }
+
+    /// <summary>The plan's floor (a large plan file while planning) acts before any big reply has been seen.</summary>
+    [Fact]
+    public async Task Guard_PlanFloor_ActsEarly_WithNoBigReplyYet()
+    {
+        var (_, _, assistant) = ReserveLoop(firstOutput: 20, replyFloor: 200);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal("(✂️ context at 64%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
+    }
+
+    /// <summary>A 400-token reply over a 1,000-token window reserves a quarter (250): the first iteration (576 + 250) stays under 90 %, the second (686 + 250) stops.</summary>
+    [Fact]
+    public async Task Guard_Reserve_IsCappedAtAQuarterOfTheWindow()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 90, ToolCompactMode.Stop);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(100, 400));
+        client.Enqueue(FakeChatClient.Call("c2", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(600, 10));
+        client.EnqueueText("never asked");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(Assistant.TurnStoppedNotice(68), Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Equal(2, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// An earlier turn's presentation and plan read are superseded by this turn's presentation: the guard stubs them before its prune,
+    /// both steps' stubs reach the history, and the superseded argument is counted once.
+    /// </summary>
+    [Fact]
+    public async Task Guard_StubsSupersededPresentations_BeforeItsPrune()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        var plan = new Dictionary<string, object?> { ["title"] = "Old", ["markdown"] = LongText(3000) };
+        history.AddMessage(new ChatMessage(ChatRole.User, "plan it"));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("p0", PresentPlanTool.ToolName, plan)]));
+        history.AddMessage(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("p0", "saved")]));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("r0", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = ".neon/plans/old.md" })]));
+        history.AddMessage(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("r0", LongText(3000))]));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, "presented"));
+
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        var newer = new Dictionary<string, object?> { ["title"] = "New", ["markdown"] = LongText(2500) };
+        client.Enqueue(
+            new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { new FunctionCallContent("p1", PresentPlanTool.ToolName, newer), new FunctionCallContent("c1", "echo", EchoArgs(LongText(300))) }),
+            FakeChatClient.Usage(3000, 20));
+        client.Enqueue(FakeChatClient.Call("c2", "echo", EchoArgs("b")), FakeChatClient.Usage(8000, 20));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "again");
+
+        var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
+        Assert.EndsWith("%: pruned 2 tool results and 1 call argument from this turn)", notice.Text, StringComparison.Ordinal);
+        var third = client.Requests[2];
+        var old = third.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Single(c => c.CallId == "p0");
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), old.Arguments!["markdown"]?.ToString());
+        Assert.Equal(ConversationCompactor.PrunedStub(3000), third.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single(r => r.CallId == "r0").Result);
+        var latest = third.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Single(c => c.CallId == "p1");
+        Assert.Equal(LongText(2500), latest.Arguments!["markdown"]?.ToString());
+        Assert.Equal(ConversationCompactor.PrunedStub(306), third.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single(r => r.CallId == "c1").Result);
+        Assert.Equal("done", history.Messages[^1].Text);
     }
 
     // ── The mid-turn compact (LLM tool compact type: compact, 2026-09-28) ───

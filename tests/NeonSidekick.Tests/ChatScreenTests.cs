@@ -13057,6 +13057,56 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(3, _chat.Requests.Count);
     }
 
+    /// <summary>
+    /// The plan's floor at the top of a message (2026-10-18): the last request at 61 % of a 1,000-token window is under the 80 % share
+    /// alone, but a plan file of 2,000+ characters while planning leaves room for its presentation (capped at 250 tokens), so the next
+    /// message compacts first; the notice keeps the plain share.
+    /// </summary>
+    [Fact]
+    public async Task AutoCompact_PlanFloor_FiresForALargePlanFile_UnderTheShareAlone()
+    {
+        PlanFixture([[Keys.Char('r'), Keys.Enter, .. PlanTyped("Mention tests")]], "a", "/plan Add a guide", "more", "/exit");
+        _settings.Update(d => { d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 80; });
+        LmStudioWindow(1000);
+        _chat.Enqueue(FakeChatClient.Text("noted"), FakeChatClient.Usage(10, 15));                              // 0: a
+        _chat.Enqueue(FakeChatClient.Call("p1", PresentPlanTool.ToolName, new Dictionary<string, object?>
+        {
+            [PresentPlanTool.TitleArgument] = "Guide",
+            [PresentPlanTool.NameArgument] = "add-guide",
+            [PresentPlanTool.MarkdownArgument] = PlanMarkdown + new string('x', 2000),
+        }));                                                                                                     // 1: presented, refined
+        _chat.Enqueue(FakeChatClient.Text("I will revise it."), FakeChatClient.Usage(600, 10));                // 2: 610 in use
+        _chat.Enqueue(FakeChatClient.Text("A summary."), FakeChatClient.Usage(30, 4));                         // 3: the compact before "more"
+        _chat.EnqueueText("ok");                                                                                 // 4
+
+        string output = await RunAsync();
+
+        Assert.Contains("auto-compacted at 61%", output);
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[3][0].Text);
+        Assert.Equal("more", LastUserText(_chat.Requests[4]));
+    }
+
+    /// <summary>The same conversation without a plan: 610 plus the largest reply (15) stays under the share, so nothing compacts.</summary>
+    [Fact]
+    public async Task AutoCompact_PlanFloor_NotWithoutAPlan()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 80; });
+        LmStudioWindow(1000);
+        _chat.Enqueue(FakeChatClient.Text("noted"), FakeChatClient.Usage(10, 15));
+        _chat.Enqueue(FakeChatClient.Text("I will revise it."), FakeChatClient.Usage(600, 10));
+        _chat.EnqueueText("ok");
+        PushLine("a");
+        PushLine("b");
+        PushLine("more");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("compacted", output);
+        Assert.Equal(3, _chat.Requests.Count);
+    }
+
     [Fact]
     public async Task LlmMaxTurns_AFixedCap_TrimsTheOldestTurnsOffTheRequest()
     {

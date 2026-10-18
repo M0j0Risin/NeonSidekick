@@ -1032,7 +1032,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `present_plan` | `title, name?, markdown, gaps?, checked?, minor?` | Saves the plan as `.neon/plans/<name>.md`, prints it and asks for your approval. Revisions overwrite the file. |
+| `present_plan` | `title, name?, markdown, gaps?, checked?, minor?` | Saves the plan as `.neon/plans/<name>.md`, prints it and asks for your approval. Revisions overwrite the file. A pruned stub sent back as `markdown` is refused. |
 
 * The header's `status` is `draft`, `approved`, `canceled`, `done` or `incomplete`. Headless, the plan is saved and `/plan approve` starts it.
 * In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review and asks for approval.

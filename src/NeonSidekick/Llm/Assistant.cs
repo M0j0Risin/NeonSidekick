@@ -986,6 +986,15 @@ public sealed class Assistant
 
         /// <summary>Whether <paramref name="tokens"/> are at or past the share.</summary>
         public bool Tripped(long tokens) => Acts && tokens > 0 && tokens * 100L >= (long)WindowTokens * Percent;
+
+        /// <summary>
+        /// The least room the guard leaves for the next reply (2026-10-18, a gap chain that ran out of context mid-way through
+        /// <c>present_plan</c>): the plan file's size in tokens while planning (<c>ChatScreen.PlanReplyFloor</c>), so a reopened
+        /// plan's first presentation gets room before any big reply has been seen. Set only by the main chat's turns, through
+        /// <c>ContextGuardFor</c>; 0 elsewhere. The reserve is the larger of it and <see cref="ConversationHistory.LargestReplyTokens"/>,
+        /// capped by <see cref="ConversationCompactor.ReplyReserve"/>.
+        /// </summary>
+        public long ReplyFloor { get; init; }
     }
 
     /// <summary>
@@ -1070,6 +1079,61 @@ public sealed class Assistant
     /// <summary>The error line when the guard stopped the turn: <c>🛑 Stopped at 85% …</c>. Pinned.</summary>
     public static string TurnStoppedNotice(int percent) =>
         StopGlyph + "Stopped at " + percent.ToString(CultureInfo.InvariantCulture) + "% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.";
+
+    /// <summary>
+    /// The share of the window a reply's usage must reach for a cut-off call's reply to count as having run out of context
+    /// (2026-10-18, a gap chain's log: 151,425 tokens of a 151,427-token window), not out of an output cap.
+    /// </summary>
+    public const int ContextFullPercent = 98;
+
+    /// <summary>
+    /// What the model reads for a call whose arguments were cut off because its reply ran out of context (2026-10-18, a gap
+    /// chain's log: <c>present_plan</c>'s ~50k-character plan ended mid-JSON at the window). It asks for the call again in full,
+    /// never shorter (for <c>present_plan</c> that would invite trimming the plan to fit): that usage trips the guard, which makes
+    /// the room before the retry. Pinned.
+    /// </summary>
+    public static string CutOffArgumentsResult(string name) =>
+        "Error: your reply ran out of context while writing the arguments for '" + name + "', so they were cut off and nothing ran. Make the call again in full.";
+
+    /// <summary>
+    /// What the model reads for a call whose arguments were cut off by an output cap, or for an unknown reason (2026-10-18): the
+    /// Anthropic API's fixed <c>max_tokens</c>, the Responses API's <c>max_output_tokens</c>, a server's own cap, or no usage
+    /// reported. The same call again would be cut the same way, so it asks for a shorter one. Pinned.
+    /// </summary>
+    public static string CutOffByOutputLimitResult(string name) =>
+        "Error: your reply hit its output limit while writing the arguments for '" + name + "', so they were cut off and nothing ran. The same call will be cut again: send it shorter, or split the work across calls.";
+
+    /// <summary>
+    /// What the model reads when the same tool's arguments were cut off a second time in one turn (2026-10-18): a call too big for
+    /// the whole window, or for the cap, would otherwise repeat (minutes each) until the iteration cap. Pinned.
+    /// </summary>
+    public static string CutOffAgainResult(string name) =>
+        "Error: the arguments for '" + name + "' were cut off again, so nothing ran. Do not call it again in this reply; tell the user it does not fit and what you were writing.";
+
+    /// <summary>The <c>--log</c> line for a cut-off call (2026-10-18): where the reply ended, and its output tokens when the server reported them.</summary>
+    internal static string CutOffArgumentsLogLine(string name, bool contextFull, long? outputTokens) =>
+        "Arguments for tool '" + name + "' were cut off: the reply ended " + (contextFull ? "at the context window" : "at its output limit")
+        + (outputTokens is { } output ? " after " + output.ToString(CultureInfo.InvariantCulture) + " output tokens" : "") + ".";
+
+    /// <summary>The guard's log lines' tail when it left room for the next reply (2026-10-18): <c>, leaving room for a 28095-token reply</c>; none for no reserve.</summary>
+    internal static string ReserveLogTail(long reserve) =>
+        reserve > 0 ? ", leaving room for a " + reserve.ToString(CultureInfo.InvariantCulture) + "-token reply" : "";
+
+    /// <summary>
+    /// The answer to a call the length limit cut off (2026-10-18), chosen by why the reply ended: a second cut of the same tool in this
+    /// turn first (<see cref="CutOffAgainResult"/>), then a full context (a known guard and the reply's usage at
+    /// <see cref="ContextFullPercent"/> of its window: <see cref="CutOffArgumentsResult"/>), else an output cap or no usage
+    /// (<see cref="CutOffByOutputLimitResult"/>). An advisor's or a bot's loop has no guard, so it always gets the output-limit
+    /// wording: nothing would make room there, and the same call in full would only be cut again.
+    /// </summary>
+    private string CutOffAnswer(string name, TokenUsage usage, HashSet<string> cutOffTools)
+    {
+        bool contextFull = ContextGuard is { } guard && !usage.IsEmpty && usage.Total * 100L >= (long)guard.WindowTokens * ContextFullPercent;
+        DiagnosticLog.Info(Category, CutOffArgumentsLogLine(name, contextFull, usage.IsEmpty ? null : usage.Output));
+        return !cutOffTools.Add(name) ? CutOffAgainResult(name)
+            : contextFull ? CutOffArgumentsResult(name)
+            : CutOffByOutputLimitResult(name);
+    }
 
     /// <summary>
     /// One summary the mid-turn guard may make (2026-09-28): what the summariser reads, its prompt and closing line,
@@ -1487,6 +1551,10 @@ public sealed class Assistant
         // than once but a turn hovering over the share does not pay for a summariser request every iteration.
         bool compactArmed = true;
 
+        // The tools whose arguments a reply cut off at its length limit in this turn (2026-10-18): a second cut of the same one is
+        // told to stop (CutOffAgainResult), so a call too big for the window or the cap does not repeat until MaxToolIterations.
+        var cutOffTools = new HashSet<string>(StringComparer.Ordinal);
+
         // Whether a request the server dropped as it was sent has been tried again with fewer pictures (2026-10-03): once a turn.
         bool picturesRetried = false;
 
@@ -1711,6 +1779,11 @@ public sealed class Assistant
             }
 
             var response = updates.ToChatResponse();
+
+            // The reply ended at its length limit (2026-10-18): a call whose arguments then fail to parse was cut off, not malformed.
+            // SGLang keeps "length" beside parsed tool calls (it rewrites only "stop"), llama-server says it too, and the Anthropic and
+            // Responses streams map their output caps to it.
+            bool cutOff = response.FinishReason == ChatFinishReason.Length;
             if (filter.SawOrphanClose || filter.SawBlock)
             {
                 // The model produced the tags, but they go back as content next time and prime it
@@ -1743,6 +1816,10 @@ public sealed class Assistant
             // two would otherwise count its time twice. No report (the server does not send
             // usage, or the stream was cut) means no event, never zeros.
             var usage = TokenUsage.Zero;
+
+            // The room the guard leaves for the next reply (2026-10-18): the largest reply this conversation has produced, or the plan
+            // file's size while planning, at most a quarter of the window (ConversationCompactor.ReplyReserve). Set below with the usage.
+            long reserve = 0;
             foreach (var reported in updates.SelectMany(u => u.Contents).OfType<UsageContent>())
             {
                 long firstAt = first ?? ended;
@@ -1755,7 +1832,9 @@ public sealed class Assistant
             {
                 DiagnosticLog.Debug(Category, UsageLogLine(usage));
                 lastUsage = usage;
-                if (ContextGuard is { } measured && !measured.Tripped(usage))
+                _history.NoteReply(usage.Output);
+                reserve = ContextGuard is { } g ? ConversationCompactor.ReplyReserve(Math.Max(_history.LargestReplyTokens, g.ReplyFloor), g.WindowTokens) : 0;
+                if (ContextGuard is { } measured && !measured.Tripped(usage.Total + reserve))
                 {
                     compactArmed = true;
                 }
@@ -1791,7 +1870,11 @@ public sealed class Assistant
                 DiagnosticLog.Debug(Category, ToolCallLogLine(call.Name, argumentsJson));
                 yield return new TurnEvent.ToolCall(call.Name, call.CallId, argumentsJson);
 
-                var (result, pictures, diff, shown) = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
+                // A call the length limit cut off (2026-10-18) is answered by why the reply ended, never run; any other parse failure as before.
+                (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) invoked = cutOff && call.Exception is not null
+                    ? (CutOffAnswer(call.Name, usage, cutOffTools), [], null, null)
+                    : await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
+                var (result, pictures, diff, shown) = invoked;
                 // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
                 // copy of the result says so, so it never describes a picture it was not shown.
                 bool seen = !ToolPicturesUnseen.Contains(call.Name);
@@ -1816,46 +1899,53 @@ public sealed class Assistant
 
             // The mid-turn guard, after the iteration's results are in: they are the last
             // iteration a prune keeps, and a stop leaves no call unanswered. It judges the next request —
-            // the reported usage (the reply's own tokens among it) plus the results and pictures just appended.
+            // the reported usage (the reply's own tokens among it) plus the results and pictures just appended. Since 2026-10-18 every test
+            // adds the reserve, room for the next reply (a plan written whole through present_plan ran a request out of context); the
+            // notices keep the plain share.
             long projected = ContextGuard is null || usage.IsEmpty ? 0 : usage.Total + ConversationCompactor.EstimateTokens([new ChatMessage(ChatRole.Tool, [.. results])]) + (long)fetched.Count * ConversationCompactor.PictureTokens;
-            if (ContextGuard is { } guard && guard.Tripped(projected))
+            if (ContextGuard is { } guard && projected > 0 && guard.Tripped(projected + reserve))
             {
                 int percent = guard.PercentOf(projected);
+                string room = ReserveLogTail(reserve);
                 if (guard.Mode == ToolCompactMode.Stop)
                 {
-                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); stopping the turn (LLM tool compact mode is stop).");
+                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; stopping the turn (LLM tool compact mode is stop).");
                     log.Ending = TurnStopped;
                     yield return new TurnEvent.Notice(TurnStoppedNotice(percent), IsError: true);
                     yield break;
                 }
 
                 // The entries count the long call arguments stubbed besides the results (2026-10-17): a prune of those alone is one too.
+                // The earlier copies of a plan go first (2026-10-18, StubSupersededPlans), and the prune reads what that left, so one
+                // Replace keeps both steps' stubs; the superseded arguments sit in the entries, so they are counted there and only once.
                 var entries = new List<ConversationCompactor.PrunedEntry>();
-                var (shrunk, pruned) = ConversationCompactor.PruneRecent(_history.Messages, guard.ProtectSkills, entries);
+                var (superseded, supersededPruned, _) = ConversationCompactor.StubSupersededPlans(_history.Messages, entries);
+                var (shrunk, pruned) = ConversationCompactor.PruneRecent(superseded, guard.ProtectSkills, entries);
+                pruned += supersededPruned;
                 int arguments = entries.Count(e => e.Argument is not null);
                 if (pruned + arguments > 0)
                 {
                     projected -= ConversationCompactor.EstimateTokens(_history.Messages) - ConversationCompactor.EstimateTokens(shrunk);
                     _history.Replace(shrunk);
-                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); pruned {pruned} tool result(s) and {arguments} call argument(s) from this turn.");
+                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; pruned {pruned} tool result(s) and {arguments} call argument(s) from this turn.");
                     yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned, arguments), IsError: false);
                 }
                 else
                 {
-                    DiagnosticLog.Debug(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); nothing in this turn to prune.");
+                    DiagnosticLog.Debug(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; nothing in this turn to prune.");
                 }
 
                 // Compact: the prune was not enough — the turns before this one first, then this turn's earlier iterations.
-                if (guard.Mode == ToolCompactMode.Compact && guard.Tripped(projected))
+                if (guard.Mode == ToolCompactMode.Compact && guard.Tripped(projected + reserve))
                 {
                     if (!compactArmed)
                     {
-                        DiagnosticLog.Debug(Category, $"Context still near {guard.PercentOf(projected)}% after a mid-turn compact; the next summary waits for a request under {guard.Percent}%.");
+                        DiagnosticLog.Debug(Category, $"Context still near {guard.PercentOf(projected)}% after a mid-turn compact{room}; the next summary waits for a request under {guard.Percent}%.");
                     }
                     else
                     {
                         compactArmed = false;
-                        for (int stage = 1; stage <= 2 && guard.Tripped(projected); stage++)
+                        for (int stage = 1; stage <= 2 && guard.Tripped(projected + reserve); stage++)
                         {
                             bool thisTurn = stage == 2;
                             var step = thisTurn ? PlanTurnCompact() : PlanOlderCompact();
@@ -1876,13 +1966,13 @@ public sealed class Assistant
 
                             projected -= done.Saved;
                             DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
-                                $"Context at {at}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s); summarized {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(projected, 0))}% now."));
+                                $"Context at {at}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; summarized {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(projected, 0))}% now."));
                             yield return new TurnEvent.Compacted(compacted, at, thisTurn);
                         }
 
-                        if (guard.Tripped(projected))
+                        if (guard.Tripped(projected + reserve))
                         {
-                            DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(projected)}% after the mid-turn compact: nothing more to summarize; the server's limit answers.");
+                            DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(projected)}% after the mid-turn compact{room}: nothing more to summarize; the server's limit answers.");
                         }
                     }
                 }
