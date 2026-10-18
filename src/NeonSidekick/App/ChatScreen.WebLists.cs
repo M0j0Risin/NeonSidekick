@@ -49,7 +49,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The memories as the sheet's 💾 tab lists them: the PC pane's order, the turned-off ones marked, and whether the mode is off.</summary>
     private WebMemories WebMemoriesNow() =>
-        new([.. _memory.EntriesSnapshot().Select(e => new WebMemory(e.Text, e.Disabled))], !MemoryMode.Enabled(_effective()));
+        new([.. _memory.EntriesSnapshot().Select(e => new WebMemory(e.Text, e.Disabled))], !MemoryMode.Enabled(_effective()), Memory.MemoryStore.MaxTextLength);
 
     /// <summary>
     /// The page's draft saved as a memory: <c>/remember</c>'s rule and words (refused while <i>Memory mode</i> is off; a turned-off one turned
@@ -106,6 +106,73 @@ internal sealed partial class ChatScreen
         _webUi.FlashPc(WebUiText.MemoryDeletedFlash);
         DiagnosticLog.Info(WebUiCategory, WebUiText.MemoryDeletedLogLine(remote));
         return new WebReply(WebOutcome.Ok, MemoryMenu.RemovedNotice(text));
+    }
+
+    /// <summary>
+    /// A memory's text changed from the page (2026-10-18, the user's ask), in any mode, as the PC pane's edit: <see cref="Memory.MemoryStore.Edit"/>'s
+    /// outcome in the pane's words — its date and its off mark kept, a duplicate or an empty text refused, a memory gone meanwhile NotFound.
+    /// </summary>
+    private WebReply WebEditMemory(string old, string text, IPAddress? remote)
+    {
+        Memory.MemoryEditResult result;
+        try
+        {
+            result = _memory.Edit(old, text);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Error(WebUiCategory, "Web UI: a memory could not be edited: " + e.Message, e);
+            return new WebReply(WebOutcome.Refused, MemoryMenu.ChangeFailedError(e.Message));
+        }
+
+        switch (result.Outcome)
+        {
+            case Memory.MemoryEditOutcome.Edited:
+                _webUi.FlashPc(WebUiText.MemoryEditedFlash);
+                DiagnosticLog.Info(WebUiCategory, WebUiText.MemoryEditedLogLine(remote));
+                return new WebReply(WebOutcome.Ok, MemoryMenu.EditedNotice(result.Text));
+            case Memory.MemoryEditOutcome.Duplicate:
+                return new WebReply(WebOutcome.Refused, MemoryMenu.DuplicateError(result.Text));
+            case Memory.MemoryEditOutcome.Missing:
+                return new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+            case Memory.MemoryEditOutcome.Empty:
+                return new WebReply(WebOutcome.Refused, WebUiText.MemoryEditEmpty);
+            default:
+                return new WebReply(WebOutcome.Ok, KeptNotice);   // unchanged
+        }
+    }
+
+    /// <summary>
+    /// A memory turned off or on from the page (2026-10-18, the user's ask), in any mode, as the PC pane's toggle: the state asked for, so a
+    /// repeat answers as the change did, without the flash or the audit; a memory gone meanwhile is NotFound.
+    /// </summary>
+    private WebReply WebToggleMemory(string text, bool off, IPAddress? remote)
+    {
+        var memory = _memory;
+        bool changed;
+        try
+        {
+            changed = memory.SetDisabled(text, off);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Error(WebUiCategory, "Web UI: a memory could not be turned " + (off ? "off" : "on") + ": " + e.Message, e);
+            return new WebReply(WebOutcome.Refused, MemoryMenu.ChangeFailedError(e.Message));
+        }
+
+        string normalized = Memory.MemoryStore.Normalize(text);
+        if (memory.EntriesSnapshot().FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase)) is not { } entry || entry.Disabled != off)
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+        }
+
+        if (changed)
+        {
+            _webUi.FlashPc(off ? WebUiText.MemoryDisabledFlash : WebUiText.MemoryEnabledFlash);
+            DiagnosticLog.Info(WebUiCategory, WebUiText.MemoryToggledLogLine(off, remote));
+        }
+
+        return new WebReply(WebOutcome.Ok, off ? MemoryMenu.DisabledNotice(entry.Text) : MemoryMenu.EnabledNotice(entry.Text));
     }
 
     /// <summary>

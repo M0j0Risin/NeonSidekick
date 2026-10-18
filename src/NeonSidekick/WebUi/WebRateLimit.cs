@@ -69,6 +69,7 @@ public sealed class WebRateLimit
         {
             "/api/shopping/check" or "/api/shopping/store" or "/api/strip/select" or WebUiHost.PictureDeletePath or "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/video"
                 or WebUiHost.PromptSavePath or WebUiHost.PromptDeletePath or WebUiHost.MemorySavePath or WebUiHost.MemoryDeletePath or WebUiHost.HistoryClearPath   // the sheet's (2026-10-16)
+                or WebUiHost.MemoryEditPath or WebUiHost.MemoryTogglePath   // the 💾 tab's edit and off/on (2026-10-18)
                 or WebUiHost.LearnCancelPath or WebUiHost.QueueResumePath   // the status row's 🧠 and the held queue's Resume (2026-10-17)
                 or WebUiHost.YouTubeSavedPlayPath or WebUiHost.YouTubeSavedRemovePath or WebUiHost.YouTubeSavedClearPath or WebUiHost.YouTubeSavedMovePath
                 or WebUiHost.YouTubeSavedSavePath   // the YouTube tab's saved list (later on 2026-10-16)

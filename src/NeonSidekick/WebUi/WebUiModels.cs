@@ -57,6 +57,25 @@ public sealed class WebPromptDelete
     public string? Id { get; set; }
 }
 
+/// <summary>A memory edited on the sheet's 💾 tab (2026-10-18, the user's ask): its text as listed (memories have no ids) and its new text.</summary>
+public sealed class WebMemoryEdit
+{
+    public string? Old { get; set; }
+
+    public string? Text { get; set; }
+}
+
+/// <summary>
+/// A memory turned off or on from the sheet's 💾 tab (2026-10-18, the user's ask): its text, and the state asked for — absolute, so a
+/// repeated tap does no harm; null (a body without it) is refused rather than read as on.
+/// </summary>
+public sealed class WebMemoryToggle
+{
+    public string? Text { get; set; }
+
+    public bool? Off { get; set; }
+}
+
 /// <summary>A picture of the strip picked on the page (later on 2026-10-15): the PC's highlight and its open viewer move to it.</summary>
 public sealed class WebStripSelect
 {
@@ -132,8 +151,9 @@ public enum WebTab
 /// terminal shows besides (2026-10-15), each left out unless set: a reply's stretch after a break once it had spoken (<see cref="Continues"/>, no
 /// glyph), a reply that said nothing (<see cref="NoReply"/>), a folded thinking block's <see cref="Summary"/>, a thinking block, an output or a
 /// run that is over (<see cref="Ended"/>), a tool line's run and whether it completes the call before it (<see cref="Run"/>, <see cref="Joins"/>),
-/// a run's keep count (<see cref="Keep"/>), an edit's rows (<see cref="Diff"/>), and text a snapshot left out (<see cref="Deferred"/>, read from
-/// <c>/api/entry/{seq}</c>).
+/// a run's keep count (<see cref="Keep"/>), an edit's rows (<see cref="Diff"/>), text a snapshot left out (<see cref="Deferred"/>, read from
+/// <c>/api/entry/{seq}</c>), and the welcome splash's pictures (<see cref="Splash"/>, 2026-10-18: the page draws them first, centered and filling it,
+/// until the first sent line takes them out).
 /// </summary>
 public sealed record WebEntry(long Seq, string Kind, string Text, string? Glyph, string? Html, bool Failed, IReadOnlyList<WebPicture>? Pictures = null)
 {
@@ -154,6 +174,8 @@ public sealed record WebEntry(long Seq, string Kind, string Text, string? Glyph,
     public WebDiff? Diff { get; init; }
 
     public bool? Deferred { get; init; }
+
+    public bool? Splash { get; init; }
 }
 
 /// <summary>
@@ -183,7 +205,7 @@ public sealed record WebPicture(int Id, string Name, string Thumb, string Mid, s
 /// </summary>
 public sealed record WebPoint(string Key, long Seq);
 
-/// <summary>An entry taken out of the transcript (the splash cycled to another picture).</summary>
+/// <summary>An entry taken out of the transcript (the splash cycled to another picture, or gone at the first sent line).</summary>
 public sealed record WebRemoved(long Seq);
 
 /// <summary>Text growing on an entry: <see cref="Text"/> belongs at character <see cref="At"/> of entry <see cref="Seq"/>.</summary>
@@ -443,7 +465,8 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string BotCheckHint = "", string BotCheckPicture = "", string BotCheckZoom = "", string BotCheckScrollUp = "", string BotCheckScrollDown = "",
     string BotCheckTypeHere = "", string BotCheckSend = "", string BotCheckEnter = "", string BotCheckBackspace = "", string BotCheckTab = "",
     string BotCheckStalled = "",
-    string LearnCancel = "", string LearnCancelArmed = "", string Resume = "");
+    string LearnCancel = "", string LearnCancelArmed = "", string Resume = "",
+    string MemoryEdit = "", string MemoryEditSave = "", string MemoryEditCancel = "", string MemoryTurnOff = "", string MemoryTurnOn = "");
 
 /// <summary>
 /// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on
@@ -456,9 +479,9 @@ public sealed record WebPrompt(int Number, string Text, string Id);
 
 /// <summary>
 /// The sheet's 💾 tab (2026-10-16): the profile's memories in the PC pane's order, and whether <i>Memory mode</i> is off (the tab says so,
-/// and a save is refused).
+/// and a save is refused). <see cref="MaxChars"/> (2026-10-18) is the longest text a memory keeps, the editor's cap (0: none known).
 /// </summary>
-public sealed record WebMemories(IReadOnlyList<WebMemory> Items, bool ModeOff);
+public sealed record WebMemories(IReadOnlyList<WebMemory> Items, bool ModeOff, int MaxChars = 0);
 
 /// <summary>A memory: its text, and whether it is turned off (kept, but the model doesn't see it).</summary>
 public sealed record WebMemory(string Text, bool Off);
@@ -761,6 +784,8 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebPrompts))]
 [JsonSerializable(typeof(WebTextBody))]
 [JsonSerializable(typeof(WebPromptDelete))]
+[JsonSerializable(typeof(WebMemoryEdit))]
+[JsonSerializable(typeof(WebMemoryToggle))]
 [JsonSerializable(typeof(WebMemories))]
 [JsonSerializable(typeof(WebHistory))]
 [JsonSerializable(typeof(WebAsks))]

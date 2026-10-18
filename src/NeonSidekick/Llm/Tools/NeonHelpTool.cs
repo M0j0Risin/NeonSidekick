@@ -8,8 +8,9 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>neon_help(query?, kind?)</c> (2026-10-02, the user's ask): the app's own manual, for "how do I…" questions about NeonSidekick
 /// itself — its slash commands (every form), its settings (what each does, its default, and where it lives as pane › tab › row),
 /// its panes and its keys (<see cref="NeonHelp"/>). Documentation only: it never reads this profile's values (the user's call).
-/// A standing tool beside the clock, offered everywhere (headless too) and in plan mode; no tab of its own — <c>/tools</c>'
-/// Offered tab lists it under <see cref="HelpText.GroupTitle"/> and switches it off by name.
+/// A standing tool beside the clock, offered everywhere (headless too) and in plan mode while <c>Help tools</c> is on (2026-10-18, the
+/// Help tab on <c>/tools</c> › Core; no tab of its own until then) — <c>/tools</c>' Offered tab lists it under <see cref="HelpText.GroupTitle"/>
+/// and switches it off by name too.
 /// </summary>
 public sealed class NeonHelpTool : AIFunction
 {

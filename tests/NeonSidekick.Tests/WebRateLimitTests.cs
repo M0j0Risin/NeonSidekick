@@ -72,6 +72,8 @@ public sealed class WebRateLimitTests
     [InlineData("/api/prompts/delete", WebRateBucket.Act)]
     [InlineData("/api/memory/save", WebRateBucket.Act)]
     [InlineData("/api/memory/delete", WebRateBucket.Act)]
+    [InlineData("/api/memory/edit", WebRateBucket.Act)]
+    [InlineData("/api/memory/toggle", WebRateBucket.Act)]
     [InlineData("/api/history/clear", WebRateBucket.Act)]
     [InlineData("/api/learn/cancel", WebRateBucket.Act)]   // the status row's 🧠 (2026-10-17)
     [InlineData("/api/queue/resume", WebRateBucket.Act)]   // the held queue's Resume (2026-10-17)

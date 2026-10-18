@@ -11,7 +11,7 @@ namespace NeonSidekick.Help;
 /// </summary>
 public static class HelpText
 {
-    /// <summary>The group <c>neon_help</c> sits in on <c>/tools</c>' Offered tab and <c>/sys</c>: no switch of its own, the tool switched off by name. Pinned.</summary>
+    /// <summary>The group <c>neon_help</c> sits in on <c>/tools</c>' Offered tab and <c>/sys</c>: its switch <c>Help tools</c> on <c>/tools</c> › Core › Help since 2026-10-18 (none until then), the tool switched off by name too. Pinned.</summary>
     public const string GroupTitle = "Help";
 
     /// <summary>Between a pane, a tab, a menu and a row in a setting's place: <c>/tools › Devices › Camera › Camera tool</c>.</summary>

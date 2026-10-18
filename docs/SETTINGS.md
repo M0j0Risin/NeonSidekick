@@ -459,7 +459,7 @@ Each group's tools and what they do are in [Tools](TOOLS.md); this section cover
 
 ### Offered
 
-Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. The Help group (`neon_help`) has no switch of its own, so turn it off here. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
+Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
 
 ### Core
 
@@ -514,6 +514,12 @@ The tools most profiles use, and the pane's own options.
 * **Package commands:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`) isn't judged by the database rules.
 * **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval pane.
 
+#### Clock
+
+| Setting | What it does | Default |
+|---|---|---|
+| Clock tools | Offers `get_current_time`, `shift_date` and `date_difference`. Off, the model has none, its prompt drops the clock sentence and a conversation no longer opens with the time. `/tools clock` opens its on/off page. | on |
+
 #### Timers
 
 | Setting | What it does | Default |
@@ -528,6 +534,12 @@ The tools most profiles use, and the pane's own options.
 | Ask user | Offers `ask_user`: multiple-choice questions you answer in the app. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
+
+#### Help
+
+| Setting | What it does | Default |
+|---|---|---|
+| Help tools | Offers `neon_help`, the app's own manual. Off, the model has none, its prompt drops the manual's sentence and `/help <words>` shows the manual's own answer. `/tools help` opens its on/off page. | on |
 
 #### Options
 

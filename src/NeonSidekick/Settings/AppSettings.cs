@@ -970,6 +970,8 @@ public sealed class AppSettings : IDisposable
         WebUiToken = source.WebUiToken,
         TimerTools = source.TimerTools,
         TimerTone = source.TimerTone,
+        ClockTools = source.ClockTools,
+        HelpTools = source.HelpTools,
         FileDeletesToRecycleBin = source.FileDeletesToRecycleBin,
         WebBrowserSignInMode = source.WebBrowserSignInMode,
         ShellCodeLanguages = [.. source.ShellCodeLanguages],

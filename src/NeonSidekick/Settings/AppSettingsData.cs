@@ -3419,6 +3419,21 @@ public sealed class AppSettingsData
     public string TimerTone { get; set; } = Timers.TimerTones.Default;
 
     /// <summary>
+    /// Whether a turn offers the clock tools (2026-10-18, the user's ask: the Clock tab on <c>/tools</c> › Core, after Shell): on (the default,
+    /// as before) <c>get_current_time</c>, <c>shift_date</c> and <c>date_difference</c> stand on every turn and a conversation opens with the
+    /// time; off the model has none, its prompt drops the clock sentence (the "use a tool when it helps" one stays), no conversation opens
+    /// with the clock call, and bots and advisors have none either. Read at each turn. No variable.
+    /// </summary>
+    public bool ClockTools { get; set; } = true;
+
+    /// <summary>
+    /// Whether a turn offers the app's own manual, <c>neon_help</c> (2026-10-18, the user's ask: the Help tab on <c>/tools</c> › Core, after
+    /// Ask): on (the default, as before) it stands on every turn; off the model has it not, its prompt drops the manual's sentence, bots and
+    /// advisors have it not either, and <c>/help &lt;words&gt;</c> shows the manual's own answer. Read at each turn. No variable.
+    /// </summary>
+    public bool HelpTools { get; set; } = true;
+
+    /// <summary>
     /// Whether deletes go to the Recycle bin (the Trash on a Mac; later on 2026-10-15, the user's ask: on by default, every delete was
     /// permanent until then): the model's <c>delete</c> (headless too) and the picture viewer's, the thumbnail browser's and the picture menu's
     /// deletes, and the Web UI's. Off, they delete directly. A drive with no bin (a network share, a removable drive) deletes directly either

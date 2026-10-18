@@ -135,9 +135,12 @@ function renderEntry(entry) {
     }
     case 'picture':
       if (entry.pictures && entry.pictures.length) {
-        node = el('div', 'entry pictures');
-        const grid = el('div', 'grid');
-        entry.pictures.forEach(p => grid.appendChild(pictureTile(p)));
+        // The welcome splash (2026-10-18, the user's ask): first on the page, centered and filling it as on the PC (fitSplash), until the
+        // first sent line takes it out; a lone picture at its middle size, the tiled one's thumbnails as they are.
+        node = el('div', 'entry pictures' + (entry.splash ? ' splash' : ''));
+        const lone = !!entry.splash && entry.pictures.length === 1;
+        const grid = el('div', 'grid' + (lone ? ' lone' : ''));
+        entry.pictures.forEach(p => grid.appendChild(pictureTile(p, lone ? p.mid : p.thumb)));
         node.appendChild(grid);
         record.pictures = entry.pictures;
       } else {
@@ -281,6 +284,7 @@ function append(entry) {
   if (entries.has(entry.seq)) return;
   const was = nearBottom();
   renderEntry(entry);
+  fitSplash();
   keepBottom(was);
   floatSoon();
   if (shown && !shown.fromStrip && entry.pictures && entry.pictures.length) refreshOverlay();
@@ -344,6 +348,7 @@ function removeEntry(seq) {
   if (!record) return;
   record.el.remove();
   entries.delete(seq);
+  fitSplash();
   floatSoon();
   if (shown && !shown.fromStrip && record.pictures && record.pictures.length) refreshOverlay();
 }
@@ -384,7 +389,7 @@ function pump() {
   }
 }
 
-function pictureTile(p) {
+function pictureTile(p, src) {
   const tile = el('button', 'tile');
   tile.type = 'button';
   tile.title = p.name;
@@ -404,9 +409,10 @@ function pictureTile(p) {
     img.width = p.width;
     img.height = p.height;
   }
-  img.dataset.src = p.thumb;
+  img.dataset.src = src || p.thumb;
   img.dataset.full = p.full;
   tile.appendChild(img);
+  if (src && src !== p.thumb) img.addEventListener('load', fitSplash, { once: true });   // the splash's picture, fitted once its size is known
   tile.addEventListener('click', () => openOverlay(p.id));
   if (seen) seen.observe(img); else { loadQueue.push(img); pump(); }
   return tile;
@@ -1443,7 +1449,7 @@ function showPrompts(on) {
   const was = nearBottom();
   promptsOpen = on;
   promptsEl.classList.toggle('hidden', !on);
-  if (!on) Neon.disarm();
+  if (!on) { Neon.disarm(); closeMemoryEditor(false); }
   keepBottom(was);
   floatSoon();
 }
@@ -1503,6 +1509,7 @@ async function readSheet(tab) {
 }
 
 function renderSheet(tab, sheet) {
+  memoryEditor = null;   // the list is drawn afresh, an open editor with it
   paintTabs();
   paintAction();
   promptsFilter.value = '';
@@ -1556,16 +1563,78 @@ function promptRows(sheet) {
   return (sheet.items || []).map(item => sendableRow(item.text, item.number, rowDelete(() => sheetChange('/api/prompts/delete', { id: item.id })), true));
 }
 
+// A memory's row (2026-10-18, the user's ask: edit one from the page): a tap on its text opens its editor in its place, the 🗑️ beside it.
 function memoryRows(sheet) {
+  const max = sheet.maxChars || 0;
   return (sheet.items || []).map(item => {
     const row = el('div', 'prompt-row memory-row' + (item.off ? ' off' : ''));
-    const text = el('div', 'prompt-text');
+    const text = el('button', 'prompt-text');
+    text.type = 'button';
     text.appendChild(document.createTextNode(item.text));
     if (item.off) text.appendChild(el('span', 'off-mark', ' · ' + (words.memoryOff || 'off')));
+    const label = (words.memoryEdit || 'Edit this memory') + ': ' + item.text;
+    text.setAttribute('aria-label', label);
+    text.title = label;
+    text.addEventListener('click', () => openMemoryEditor(text, item, max));
     row.appendChild(text);
     row.appendChild(rowDelete(() => sheetChange('/api/memory/delete', { text: item.text })));
     return { row, text: item.text.toLowerCase() };
   });
+}
+
+// The open memory editor, one at a time: { box, text } — the editor and the text button it stands in for.
+let memoryEditor = null;
+
+function closeMemoryEditor(refocus) {
+  if (!memoryEditor) return;
+  const { box, text } = memoryEditor;
+  memoryEditor = null;
+  if (box.isConnected) box.replaceWith(text);
+  if (refocus) text.focus({ preventScroll: true });
+}
+
+function editorButton(label, cls) {
+  const b = el('button', cls, label);
+  b.type = 'button';
+  return b;
+}
+
+// A memory's editor (2026-10-18): its text to change (Enter or Save saves, Esc or Cancel keeps it), and Turn off / Turn on at once, as the
+// PC pane's Edit and Toggle. Saving re-reads the tab, which closes it.
+function openMemoryEditor(text, item, max) {
+  closeMemoryEditor(false);
+  Neon.disarm();
+  const box = el('div', 'memory-edit');
+  const area = el('textarea', 'memory-edit-text');
+  area.value = item.text;
+  area.rows = 3;
+  if (max > 0) area.maxLength = max;
+  area.setAttribute('aria-label', words.memoryEdit || 'Edit this memory');
+  const bar = el('div', 'memory-edit-bar');
+  const save = editorButton(words.memoryEditSave || 'Save', 'memory-edit-save');
+  const toggle = editorButton(item.off ? (words.memoryTurnOn || 'Turn on') : (words.memoryTurnOff || 'Turn off'), 'memory-edit-toggle');
+  const cancel = editorButton(words.memoryEditCancel || 'Cancel', 'memory-edit-cancel');
+  const paint = () => { const v = area.value.trim(); save.disabled = !v || v === item.text; };
+  area.addEventListener('input', paint);
+  area.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' && !ev.isComposing) {
+      ev.preventDefault();   // one line: a memory's whitespace runs into one space anyway
+      if (!save.disabled) save.click();
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();   // the editor alone: the sheet's Esc reads defaultPrevented
+      closeMemoryEditor(true);
+    }
+  });
+  save.addEventListener('click', () => { const value = area.value; memoryEditor = null; sheetChange('/api/memory/edit', { old: item.text, text: value }); });
+  toggle.addEventListener('click', () => { memoryEditor = null; sheetChange('/api/memory/toggle', { text: item.text, off: !item.off }); });
+  cancel.addEventListener('click', () => closeMemoryEditor(true));
+  bar.append(save, toggle, cancel);
+  box.append(area, bar);
+  text.replaceWith(box);
+  memoryEditor = { box, text };
+  paint();
+  area.focus({ preventScroll: true });
+  area.setSelectionRange(area.value.length, area.value.length);
 }
 
 function historyRows(sheet) {
@@ -1732,7 +1801,23 @@ function measure() {
   rootEl.style.setProperty('--head-h', headerEl.offsetHeight + 'px');
   rootEl.style.setProperty('--foot-h', footerEl.offsetHeight + 'px');
   rootEl.style.setProperty('--kb', Neon.keyboardInset(window.innerHeight, window.visualViewport) + 'px');
+  fitSplash();
   floatSoon();
+}
+
+// The splash's room (2026-10-18, the user's ask: centered and filling the page, as the PC fills the rows under its banner): the visible
+// height less the header, the footer, main's padding and every other entry, rounded down with a pixel to spare so the page never scrolls
+// by one; 200 px at the least. Nothing while no splash stands.
+function fitSplash() {
+  const splash = logEl.querySelector('.entry.pictures.splash');
+  if (!splash) return;
+  const view = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const main = logEl.parentElement;
+  const style = main ? getComputedStyle(main) : null;
+  const pad = style ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) : 0;
+  const others = logEl.offsetHeight - splash.offsetHeight;
+  const room = Math.max(200, Math.floor(view - headerEl.offsetHeight - footerEl.offsetHeight - pad - others) - 1);
+  logEl.style.setProperty('--splash-room', room + 'px');
 }
 
 function anyFold() {
@@ -2041,6 +2126,7 @@ function connect() {
     reset();
     goneKeys.clear();   // the server's pictures are what they are now; a gone file's tile shows its fallback anyway
     for (const entry of s.entries) renderEntry(entry);
+    fitSplash();
     renderAsks(s.asks);
     for (const text of s.drafts || []) takeDraft(text);
     applyStrip(s.strip);

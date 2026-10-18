@@ -7,8 +7,7 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 ## Contents
 
 - [Where tools are offered](#where-tools-are-offered)
-- [Always offered](#always-offered): [Clock](#clock), [Help](#help)
-- [Core](#core): [Web](#web), [Shell](#shell), [Timers](#timers), [Ask](#ask)
+- [Core](#core): [Web](#web), [Shell](#shell), [Clock](#clock), [Timers](#timers), [Ask](#ask), [Help](#help)
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
 - [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube), [Obsidian](#obsidian)
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
@@ -25,24 +24,6 @@ Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `
 * **Headless, anything that would stop to ask you is refused:** a shell command off the allow list under `ask`, a Docker change, a service or task change (never offered there), a print under `ask`, a Home Assistant service that needs your yes, clearing the whole shopping list, an advisor under *Advisor confirm*.
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps each group's reading tools plus `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops every tool that changes or starts something (`start_timer`, `open`, `open_url`, `process`, `image_edit`, `unc_fetch`…) and every MCP tool.
 * **On a Mac** the Browser window, Docker servers, the event logs, services, scheduled tasks and Active Directory are Windows only, and the camera and screen tools and YouTube playback need macOS 14 or later. Other differences are in each section and [MAC.md](MAC.md#what-works).
-
-## Always offered
-
-These have no group switch. To withhold one, switch it off on the Offered tab.
-
-### Clock
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `get_current_time` | `zone?` | The date, time, weekday and time zone, here or in an IANA zone. Called at the start of every conversation. |
-| `shift_date` | `date, days?, weeks?, months?, years?` | Moves a date by days, weeks, months or years and gives its weekday. |
-| `date_difference` | `from, to` | The days between two dates (negative when the second is earlier), plus years, months and days for longer gaps. |
-
-### Help
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes and keys, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`). It never reads your current settings. `/help <words>` asks the model to use it. |
 
 ## Core
 
@@ -93,6 +74,16 @@ Under *Shell command policy*. Commands run on your machine in the working direct
 
 * **The tool bridge:** with *Shell tool bridge* on, a script can call the app's other tools (Python `from neon_tools import call`, Node `neon.call(...)`, PowerShell `Invoke-NeonTool`), except `execute_code` and `ask_user`. A `run_command` through it still asks, and can't run in the background.
 
+### Clock
+
+Under *Clock tools* (on by default). Off, the model has no clock tools, its prompt drops the clock sentence, and a conversation no longer opens with the time.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `get_current_time` | `zone?` | The date, time, weekday and time zone, here or in an IANA zone. Called at the start of every conversation while *Clock tools* is on. |
+| `shift_date` | `date, days?, weeks?, months?, years?` | Moves a date by days, weeks, months or years and gives its weekday. |
+| `date_difference` | `from, to` | The days between two dates (negative when the second is earlier), plus years, months and days for longer gaps. |
+
 ### Timers
 
 Under *Timer tools* (on by default). Off, the model has no timer tools and its prompt drops the timer sentence; `/timer` and timers already running keep working. Not offered headless. A timer going off rings *Timer tone* (silent by default), whoever started it. The model can't start a stopwatch (`/timer stopwatch` is yours), but `list_timers` and `stop_timer` include them.
@@ -110,6 +101,14 @@ Under *Ask user*. Not offered headless.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `ask_user` | `questions` | Asks you multiple-choice questions: up to *Ask max questions*, each with 2 to *Ask max choices per question* options, `single` or `multi`; you can type your own answer. Esc declines them all. |
+
+### Help
+
+Under *Help tools* (on by default). Off, the model has no `neon_help` and its prompt drops the manual's sentence; `/help <words>` shows the manual's own answer.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes and keys, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`). It never reads your current settings. `/help <words>` asks the model to use it. |
 
 ## Files
 

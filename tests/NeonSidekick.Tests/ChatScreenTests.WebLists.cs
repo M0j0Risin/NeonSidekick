@@ -106,6 +106,74 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task ThePagesMemoryEdits_SayWhatThePanesEditSays_KeepTheOffMark_AndWorkInAnyMode()
+    {
+        // The 💾 tab's edit (2026-10-18, the user's ask): MemoryStore.Edit's outcomes in the PC pane's words, its cap reported for the editor.
+        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "off"; });
+        var store = new MemoryStore(_settings.ProfileDirectory);
+        store.Add("Likes tea.");
+        store.Add("Uses Obsidian.");
+        store.SetDisabled("Uses Obsidian.", true);
+        var replies = new List<WebReply>();
+        WebMemories? after = null;
+        var input = WebSteps(
+            i =>
+            {
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "Likes tea.", Text = "Likes green tea." }, IPAddress.Loopback));
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "Likes green tea.", Text = "Likes green tea." }, IPAddress.Loopback));   // unchanged
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "Likes green tea.", Text = "uses obsidian." }, IPAddress.Loopback));   // another's text, any case
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "Likes green tea.", Text = "  " }, IPAddress.Loopback));
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "Gone already.", Text = "Anything." }, IPAddress.Loopback));
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "", Text = "Anything." }, IPAddress.Loopback));
+                replies.Add(Web.EditMemory(new WebMemoryEdit { Old = "Uses Obsidian.", Text = "Uses Obsidian daily." }, IPAddress.Loopback));
+                after = Web.Memories();
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.Equal(
+            [(WebOutcome.Ok, MemoryMenu.EditedNotice("Likes green tea.")), (WebOutcome.Ok, ChatScreen.KeptNotice),
+             (WebOutcome.Refused, MemoryMenu.DuplicateError("Uses Obsidian.")), (WebOutcome.Refused, WebUiText.MemoryEditEmpty),
+             (WebOutcome.NotFound, WebUiText.MemoryGone), (WebOutcome.NotFound, WebUiText.MemoryGone),
+             (WebOutcome.Ok, MemoryMenu.EditedNotice("Uses Obsidian daily."))],
+            replies.Select(r => (r.Outcome, r.Message)));
+        Assert.Equal([new WebMemory("Likes green tea.", false), new WebMemory("Uses Obsidian daily.", true)], after!.Items);   // the off mark kept
+        Assert.Equal(MemoryStore.MaxTextLength, after.MaxChars);
+    }
+
+    [Fact]
+    public async Task ThePagesMemoryToggles_TurnOffAndOn_ARepeatSaysTheSame_AGoneOneIsNotFound()
+    {
+        // The 💾 tab's off/on (2026-10-18, the user's ask): the state asked for, in any mode; a body without it refused.
+        _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "off"; });
+        new MemoryStore(_settings.ProfileDirectory).Add("Likes tea.");
+        var replies = new List<WebReply>();
+        WebMemories? off = null;
+        var input = WebSteps(
+            i =>
+            {
+                replies.Add(Web.ToggleMemory(new WebMemoryToggle { Text = "Likes tea.", Off = true }, IPAddress.Loopback));
+                off = Web.Memories();
+                replies.Add(Web.ToggleMemory(new WebMemoryToggle { Text = "likes tea.", Off = true }, IPAddress.Loopback));   // a repeat, any case
+                replies.Add(Web.ToggleMemory(new WebMemoryToggle { Text = "Likes tea.", Off = false }, IPAddress.Loopback));
+                replies.Add(Web.ToggleMemory(new WebMemoryToggle { Text = "Gone already.", Off = true }, IPAddress.Loopback));
+                replies.Add(Web.ToggleMemory(new WebMemoryToggle { Text = "Likes tea." }, IPAddress.Loopback));
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.Equal(
+            [(WebOutcome.Ok, MemoryMenu.DisabledNotice("Likes tea.")), (WebOutcome.Ok, MemoryMenu.DisabledNotice("Likes tea.")),
+             (WebOutcome.Ok, MemoryMenu.EnabledNotice("Likes tea.")), (WebOutcome.NotFound, WebUiText.MemoryGone),
+             (WebOutcome.Refused, WebUiText.MemoryToggleUnsaid)],
+            replies.Select(r => (r.Outcome, r.Message)));
+        Assert.Equal([new WebMemory("Likes tea.", true)], off!.Items);
+        Assert.Equal(["Likes tea."], new MemoryStore(_settings.ProfileDirectory).Snapshot());   // on again
+    }
+
+    [Fact]
     public async Task APagesLine_JoinsTheHistoryAndTheStore_AsThePageSendsIt()
     {
         _settings.Update(d => d.TtsOutput = false);

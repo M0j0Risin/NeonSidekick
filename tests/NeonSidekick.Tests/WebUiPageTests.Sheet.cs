@@ -124,6 +124,53 @@ public sealed partial class WebUiPageTests
     }
 
     /// <summary>
+    /// A memory edited from the 💾 tab (2026-10-18, the user's ask): a tap on its text opens its editor (its text, capped, Save off until it
+    /// changes); Enter posts the edit and the tab is read again; Esc closes the editor alone; Turn off posts the off/on at once.
+    /// </summary>
+    [WindowsFact]
+    public async Task TheMemoryTab_ATapEditsAMemory_EnterSaves_EscKeepsIt_TurnOffPostsAtOnce()
+    {
+        _backend.MemoryList.AddRange([new WebMemory("Likes tea.", false), new WebMemory("Uses Obsidian.", false)]);
+        _backend.MemoryMaxChars = 300;
+        if (await PromptsPageAsync(prompts: ["one"]) is not { } page)
+        {
+            return;
+        }
+
+        const string Area = "document.querySelector('.memory-edit-text')";
+        await OpenSheetAsync(page);
+        await ClickTabAsync(page, "memory");
+        await page.WaitAsync(Rows + ".length === 2", "the memories");
+
+        // Esc closes the editor, the sheet stays.
+        await page.EvalAsync("document.querySelectorAll('.memory-row .prompt-text')[0].click()");
+        await page.WaitAsync(Area + " !== null", "the editor");
+        Assert.Equal("Likes tea.", await page.TextAsync(Area + ".value"));
+        Assert.Equal(300, (await page.EvalAsync(Area + ".maxLength")).GetInt32());
+        Assert.True((await page.EvalAsync("document.querySelector('.memory-edit-save').disabled")).GetBoolean());   // nothing changed yet
+        await KeyAsync(page, "Escape", Area);
+        await page.WaitAsync(Area + " === null", "the editor closed");
+        Assert.True((await page.EvalAsync(SheetShown)).GetBoolean());
+        Assert.Empty(_backend.MemoriesEdited);
+
+        // Changed and Enter: the edit posted, the tab read again.
+        await page.EvalAsync("document.querySelectorAll('.memory-row .prompt-text')[0].click()");
+        await page.WaitAsync(Area + " !== null", "the editor again");
+        await page.EvalAsync("(() => { const a = " + Area + "; a.value = 'Likes green tea.'; a.dispatchEvent(new Event('input')); })()");
+        await KeyAsync(page, "Enter", Area);
+        await page.WaitAsync(Rows + "[0].textContent.includes('Likes green tea.')", "the edited row");
+        Assert.Equal(("Likes tea.", "Likes green tea."), Assert.Single(_backend.MemoriesEdited));
+
+        // Turn off: posted at once, the row marked off.
+        await page.EvalAsync("document.querySelectorAll('.memory-row .prompt-text')[1].click()");
+        await page.WaitAsync("document.querySelector('.memory-edit-toggle') !== null", "the editor on the second");
+        Assert.Equal(WebUiText.MemoryTurnOff, await page.TextAsync("document.querySelector('.memory-edit-toggle').textContent"));
+        await page.EvalAsync("document.querySelector('.memory-edit-toggle').click()");
+        await page.WaitAsync(Rows + "[1].textContent.includes('· " + WebUiText.MemoryOff + "')", "the row off");
+        Assert.Equal(("Uses Obsidian.", true), Assert.Single(_backend.MemoriesToggled));
+    }
+
+    /// <summary>
     /// 📣 shows the glyph of the tab the sheet opens on, through a tap, ←/→, a close, a reload and bare <c>/prompts</c>; the tabs read Prompts,
     /// History, Memory, and → focuses the tab it selects (index.html's order and the script's agree) (2026-10-17, the user's asks).
     /// </summary>

@@ -147,6 +147,8 @@ internal sealed partial class SettingsMenu
         [(SettingsField.ServiceTools, "Access"), (SettingsField.ServiceComputersOffered, "Computers"), (SettingsField.ServiceComputersProfile, "Files")],
         [(SettingsField.TaskTools, "Access"), (SettingsField.TaskComputersOffered, "Computers"), (SettingsField.TaskComputersProfile, "Files")],
         [(SettingsField.DirectoryTools, "Access"), (SettingsField.DirectoryDomainsOffered, "Domains"), (SettingsField.DirectoryDomainsProfile, "Files")],
+        [(SettingsField.ClockTools, "Clock")],
+        [(SettingsField.HelpTools, "Help")],
     ];
 
     /// <summary>

@@ -1239,6 +1239,12 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Timers.TimerTones.Names"/>: the tone a countdown rings with when it goes off, and at each repeat (<see cref="Settings.AppSettingsData.TimerTone"/>). The Timers menu on <c>/tools</c> › Core, under <see cref="TimerTools"/> (2026-10-18, the user's ask); no reconnect (read at each alert). Last in the enum, as every newcomer.</summary>
     TimerTone,
+
+    /// <summary>A toggle: whether a turn offers the clock tools (<see cref="Settings.AppSettingsData.ClockTools"/>). The Clock menu on <c>/tools</c> › Core, after Shell (2026-10-18, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    ClockTools,
+
+    /// <summary>A toggle: whether a turn offers the app's manual, <c>neon_help</c> (<see cref="Settings.AppSettingsData.HelpTools"/>). The Help menu on <c>/tools</c> › Core, after Ask (2026-10-18, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
+    HelpTools,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1782,6 +1788,9 @@ internal sealed partial class SettingsMenu
         [SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal],
         [SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal],
         [SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectorySetPassword, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal],
+        // The standing groups' own switches (2026-10-18, the user's asks): Clock on Core after Shell, Help on Core after Ask.
+        [SettingsField.ClockTools],
+        [SettingsField.HelpTools],
     ];
 
     /// <summary>
@@ -2203,7 +2212,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ShoppingTools or SettingsField.EventLogTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
-            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin
+            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.ClockTools or SettingsField.HelpTools
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
             or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools
             or SettingsField.PlanGapAskUser;
@@ -2490,6 +2499,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageTools => "Image tools",
         SettingsField.ShoppingTools => "Shopping tools",
         SettingsField.TimerTools => "Timer tools",
+        SettingsField.ClockTools => "Clock tools",
+        SettingsField.HelpTools => "Help tools",
         SettingsField.TimerTone => "Timer tone",
         SettingsField.FileDeletesToRecycleBin => "File deletes to " + Files.FileText.RecycleBinName,
         SettingsField.NetworkTools => "Network tools",
@@ -2914,6 +2925,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageTools => OnOff(data.ImageTools),
             SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
             SettingsField.TimerTools => OnOff(data.TimerTools),
+            SettingsField.ClockTools => OnOff(data.ClockTools),
+            SettingsField.HelpTools => OnOff(data.HelpTools),
             SettingsField.TimerTone => Timers.TimerTones.Normalize(data.TimerTone),
             SettingsField.FileDeletesToRecycleBin => OnOff(data.FileDeletesToRecycleBin),
             >= SettingsField.NetworkTools and <= SettingsField.DirectoryDomainsGlobal => AdminFieldValue(field, data, profileDirectory),
@@ -7931,6 +7944,8 @@ internal sealed partial class SettingsMenu
             SettingsField.ImageTools => data.ImageTools,
             SettingsField.ShoppingTools => data.ShoppingTools,
             SettingsField.TimerTools => data.TimerTools,
+            SettingsField.ClockTools => data.ClockTools,
+            SettingsField.HelpTools => data.HelpTools,
             SettingsField.PlanGapAskUser => data.PlanGapAskUser,
             SettingsField.FileDeletesToRecycleBin => data.FileDeletesToRecycleBin,
             SettingsField.NetworkTools => data.NetworkTools,
@@ -8061,6 +8076,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.ImageTools: data.ImageTools = on; break;
             case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
             case SettingsField.TimerTools: data.TimerTools = on; break;
+            case SettingsField.ClockTools: data.ClockTools = on; break;
+            case SettingsField.HelpTools: data.HelpTools = on; break;
             case SettingsField.PlanGapAskUser: data.PlanGapAskUser = on; break;
             case SettingsField.FileDeletesToRecycleBin: data.FileDeletesToRecycleBin = on; break;
             case SettingsField.NetworkTools: data.NetworkTools = on; break;
@@ -8138,6 +8155,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
         SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",
         SettingsField.TimerTools => on ? "timer tools enabled" : "timer tools disabled",
+        SettingsField.ClockTools => on ? "clock tools enabled" : "clock tools disabled",
+        SettingsField.HelpTools => on ? "help tools enabled" : "help tools disabled",
         SettingsField.PlanGapAskUser => on ? "a gap pass may ask you, take a photo or capture the screen" : "a gap pass never waits on you; your calls go in as open questions",
         SettingsField.FileDeletesToRecycleBin => on ? "deleted files go to the " + Files.FileText.RecycleBinName : "delete files directly",
         SettingsField.NetworkTools => on ? "network tools enabled" : "network tools disabled",

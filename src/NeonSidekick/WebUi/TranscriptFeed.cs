@@ -126,9 +126,10 @@ public sealed class TranscriptFeed
     /// <summary>
     /// A whole entry of <paramref name="kind"/>; whatever grows now is ended first. A tool line (<see cref="FeedKind.Tool"/>,
     /// <see cref="FeedKind.ToolResult"/>) joins the open run, opening one while <see cref="ToolKeep"/> is above 0; any other kind ends the run.
-    /// <paramref name="joins"/> marks a tool line that completes the call before it (one unit); <paramref name="diff"/> is an edit's rows.
+    /// <paramref name="joins"/> marks a tool line that completes the call before it (one unit); <paramref name="diff"/> is an edit's rows;
+    /// <paramref name="splash"/> (2026-10-18) marks the welcome splash's pictures, which the page draws first, centered and filling it.
     /// </summary>
-    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null)
+    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null, bool splash = false)
     {
         ArgumentNullException.ThrowIfNull(text);
         if (kind == FeedKind.ToolResult && text.Length > MaxResultChars)
@@ -161,6 +162,7 @@ public sealed class TranscriptFeed
             }
 
             entry.Diff = diff;
+            entry.Splash = splash;
             _replyWrote |= _replyOpen;
             added = entry.ToWeb(null);
         }
@@ -170,7 +172,7 @@ public sealed class TranscriptFeed
         return added.Seq;
     }
 
-    /// <summary>Takes entry <paramref name="seq"/> out (the splash cycled to another picture); false when it is gone already or still streaming.</summary>
+    /// <summary>Takes entry <paramref name="seq"/> out (the splash cycled to another picture, or gone at the first sent line since 2026-10-18); false when it is gone already or still streaming.</summary>
     public bool Remove(long seq)
     {
         lock (_gate)
@@ -691,6 +693,9 @@ public sealed class TranscriptFeed
         /// <summary>An edit's rows.</summary>
         public WebDiff? Diff { get; set; }
 
+        /// <summary>The welcome splash's pictures (2026-10-18).</summary>
+        public bool Splash { get; set; }
+
         public WebEntry ToWeb(Func<string, string>? html, bool defer = false)
         {
             string text;
@@ -731,6 +736,7 @@ public sealed class TranscriptFeed
                 Keep = Keep,
                 Diff = deferDiff ? Diff! with { Rows = [], More = null } : Diff,
                 Deferred = deferText || deferDiff ? true : null,
+                Splash = Splash ? true : null,
             };
         }
     }

@@ -435,6 +435,27 @@ public static class WebUiText
     /// <summary>A memory the store could not remove (the file could not be written).</summary>
     public const string MemoryNotRemoved = "Could not remove the memory; the log has the reason.";
 
+    // ── The 💾 tab's edit and off/on (2026-10-18, the user's ask) ──
+
+    /// <summary>A memory's text, the button that opens its editor (its name for a screen reader, before the text).</summary>
+    public const string MemoryEdit = "Edit this memory";
+
+    /// <summary>The editor's buttons.</summary>
+    public const string MemoryEditSave = "Save";
+
+    public const string MemoryEditCancel = "Cancel";
+
+    /// <summary>The editor's off/on button, by the memory's state.</summary>
+    public const string MemoryTurnOff = "Turn off";
+
+    public const string MemoryTurnOn = "Turn on";
+
+    /// <summary>An edit to nothing (the page's Save is off while the text is empty; a post that sends one).</summary>
+    public const string MemoryEditEmpty = "A memory cannot be empty; delete it instead.";
+
+    /// <summary>An off/on post that says neither.</summary>
+    public const string MemoryToggleUnsaid = "Say whether to turn the memory off or on.";
+
     /// <summary>The PC's hint row after the page saved a prompt (its number at the PC) or deleted one.</summary>
     public static string PromptSavedFlash(int number) => "📱 saved prompt " + number.ToString(CultureInfo.InvariantCulture);
 
@@ -444,6 +465,13 @@ public static class WebUiText
     public const string MemorySavedFlash = "📱 saved a memory";
 
     public const string MemoryDeletedFlash = "📱 deleted a memory";
+
+    /// <summary>The PC's hint row after the page edited a memory, or turned one off or on (2026-10-18).</summary>
+    public const string MemoryEditedFlash = "📱 edited a memory";
+
+    public const string MemoryDisabledFlash = "📱 turned a memory off";
+
+    public const string MemoryEnabledFlash = "📱 turned a memory on";
 
     /// <summary>The PC's hint row after the page cleared the message history.</summary>
     public static string HistoryClearedFlash(int count) => "📱 cleared " + App.ChatScreen.HistoryMessages(count);
@@ -457,6 +485,10 @@ public static class WebUiText
     public static string MemorySavedLogLine(IPAddress? remote) => "Web UI saved a memory from " + Where(remote) + ".";
 
     public static string MemoryDeletedLogLine(IPAddress? remote) => "Web UI deleted a memory from " + Where(remote) + ".";
+
+    public static string MemoryEditedLogLine(IPAddress? remote) => "Web UI edited a memory from " + Where(remote) + ".";
+
+    public static string MemoryToggledLogLine(bool off, IPAddress? remote) => "Web UI turned a memory " + (off ? "off" : "on") + " from " + Where(remote) + ".";
 
     public static string HistoryClearedLogLine(int count, IPAddress? remote) =>
         "Web UI cleared the message history (" + App.ChatScreen.HistoryMessages(count) + ") from " + Where(remote) + ".";
@@ -536,7 +568,8 @@ public static class WebUiText
         PromptsTab, MemoryTab, HistoryTab, MemoryNone, HistoryNone, SaveDraft, DraftEmpty, DeleteRow, DeleteRowArmed, ClearAll, ClearAllArmed, MemoryOff,
         MemoryModeOff,
         BotCheckHint, BotCheckPicture, BotCheckZoom, BotCheckScrollUp, BotCheckScrollDown, BotCheckTypeHere, BotCheckSend, BotCheckEnter, BotCheckBackspace, BotCheckTab,
-        BotCheckStalled, LearnCancel, LearnCancelArmed, Resume);
+        BotCheckStalled, LearnCancel, LearnCancelArmed, Resume,
+        MemoryEdit, MemoryEditSave, MemoryEditCancel, MemoryTurnOff, MemoryTurnOn);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 

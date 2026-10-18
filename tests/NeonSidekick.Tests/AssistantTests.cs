@@ -503,6 +503,14 @@ public class AssistantTests
         Assert.DoesNotContain("start_timer", Assistant.SystemPrompt(false, null, timers: false), StringComparison.Ordinal);
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, tools: true, timers: true));
 
+        // No clock tool offered (2026-10-18: Clock tools off, or the three switched off on /tools): the clock sentence goes, the "use a tool" one stays.
+        Assert.Equal(Assistant.ToolUseRule + " " + Assistant.ClockRule, Assistant.ToolRulesWithoutTimers);
+        Assert.Equal("Use a tool when it helps; otherwise answer directly.", Assistant.ToolUseRule);
+        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolUseRule + " " + Assistant.TimerRule + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, clock: false));
+        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolUseRule + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, timers: false, clock: false));
+        Assert.DoesNotContain("get_current_time", Assistant.SystemPrompt(false, null, clock: false), StringComparison.Ordinal);
+        Assert.Equal(Assistant.PlainTextRule, Assistant.DefaultRules(false, tools: false, clock: false));
+
         // Through SystemPrompt: the one paragraph with the default persona, the rule swapped.
         Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.MarkdownRule + " " + Assistant.ToolRules + " " + Assistant.FileRule, Assistant.SystemPrompt(false, null, markdown: true));
         Assert.Equal(Assistant.DefaultPersona + "\n\n" + Assistant.MarkdownRule + " " + Assistant.ToolRules + " " + Assistant.FileRule + " " + Assistant.WebRule + " " + Assistant.DownloadRule, Assistant.SystemPrompt(false, null, web: true, markdown: true));

@@ -200,6 +200,11 @@ public class NeonHelpTests
         Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(["Network", "EventLog", "Services", "Tasks", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.StartsWith("Tab /tools › Admin › EventLog:", Invoke("/tools eventlog"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Admin › Network:", Invoke("/tools network"), StringComparison.Ordinal);   // on Core until 2026-10-16
+        // The standing groups' menus (2026-10-18): Clock and Help on Core; "time" still the Timers menu it starts.
+        Assert.StartsWith("Tab /tools › Core › Clock:", Invoke("/tools clock"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Core › Help:", Invoke("/tools help"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Core › Timers:", Invoke("/tools time"), StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Core › Clock:", Invoke("clock menu"), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -237,7 +242,7 @@ public class NeonHelpTests
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second row of tabs under the tab; ←/→ step through them)", HelpText.MenusTab(["Print", "Camera"]));
-        Assert.Equal([(ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, ToolsText.TimersMenuTitle), (ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, ToolsText.ImageMenuTitle)], HelpLocation.Menus("/tools").Take(7));   // the user's order since 2026-10-16 (Network to Admin)   // Network after Web later still on 2026-10-15 (the admin-tools plan)   // Timers before Options since later on 2026-10-15   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
+        Assert.Equal([(ToolsText.CoreTabTitle, "Web"), (ToolsText.CoreTabTitle, "Shell"), (ToolsText.CoreTabTitle, ToolsText.ClockMenuTitle), (ToolsText.CoreTabTitle, ToolsText.TimersMenuTitle), (ToolsText.CoreTabTitle, "Ask"), (ToolsText.CoreTabTitle, ToolsText.HelpMenuTitle), (ToolsText.CoreTabTitle, "Options"), (ToolsText.FilesTabTitle, "File"), (ToolsText.FilesTabTitle, ToolsText.ImageMenuTitle)], HelpLocation.Menus("/tools").Take(9));   // Clock and Help since 2026-10-18   // the user's order since 2026-10-16 (Network to Admin)   // Network after Web later still on 2026-10-15 (the admin-tools plan)   // Timers before Options since later on 2026-10-15   // the Standard group first since later on 2026-10-10, then Files; Shopping before Options on 2026-10-11 until it went to Home later that day
         Assert.Equal([(SettingsMenu.ClientTabTitle, "Chat"), (SettingsMenu.ClientTabTitle, "Sessions"), (SettingsMenu.ClientTabTitle, "Botchat"), (SettingsMenu.ClientTabTitle, SettingsMenu.WebUiTabTitle), (SettingsMenu.ServersTabTitle, "Common")], HelpLocation.Menus("/settings").Take(5));   // the Servers and Voice groups since 2026-10-10; Common and Http (the LLM tab) later that day; the Client group first later still; Web UI under Client since 2026-10-14
     }
 
@@ -348,7 +353,7 @@ public class NeonHelpTests
     }
 
     [Fact]
-    public void TheGroup_SortsAmongTheOthers_WithoutASwitch_AndCountsASwitchedOffTool()
+    public void TheGroup_SortsAmongTheOthers_UnderItsSwitch_AndCountsASwitchedOffTool()
     {
         var help = ChatScreen.HelpTools();
         var groups = SystemPromptSummary.ToolGroups([], [], [], [], memoryEnabled: false, disabled: ToolsText.DisabledSet([NeonHelpTool.ToolName]), help: help);
@@ -356,7 +361,7 @@ public class NeonHelpTests
         // Alphabetical since 2026-10-04 (the user's ask; after the timers, where the turn offers it, until then).
         Assert.Equal(["Clock (0)", "Files (0)", HelpText.GroupTitle + " (0 of 1)", "Memory (0)", "Timers (0)"], groups.Select(g => g.Name).ToArray());
         var group = groups[2];
-        Assert.Null(group.Switch);
+        Assert.Equal(SettingsField.HelpTools, group.Switch);   // its own switch since 2026-10-18 (none until then)
         Assert.False(group.Offers(NeonHelpTool.ToolName));
     }
 

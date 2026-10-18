@@ -310,7 +310,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.True(groups[1].Offers(WriteFileTool.ToolName));
         Assert.Equal(SettingsField.FileTools, groups[1].Switch);
         Assert.Equal(SettingsField.MemoryMode, groups[2].Switch);
-        Assert.Null(groups[0].Switch);
+        Assert.Equal(SettingsField.ClockTools, groups[0].Switch);   // the clock's own switch since 2026-10-18
         Assert.Empty(groups[3].ToolNotes);
         // The plain lines and the tab carry the note after the description.
         var lines = SystemPromptSummary.ToolLines(groups).ToList();
@@ -348,7 +348,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.True(groups[1].Offers(WriteFileTool.ToolName));
         Assert.Equal(SettingsField.FileTools, groups[1].Switch);
         Assert.Equal(SettingsField.MemoryMode, groups[2].Switch);
-        Assert.Null(groups[0].Switch);
+        Assert.Equal(SettingsField.ClockTools, groups[0].Switch);   // the clock's own switch since 2026-10-18
         Assert.Empty(groups[3].ToolNotes);
         // The plain lines and the tab carry the note after the description.
         var lines = SystemPromptSummary.ToolLines(groups).ToList();

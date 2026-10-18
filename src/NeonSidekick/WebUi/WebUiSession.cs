@@ -353,6 +353,29 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         return MemoryDelete is { } delete && !string.IsNullOrEmpty(request.Text) ? delete(request.Text, remote) : new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
     }
 
+    /// <summary>The screen's edit of a memory, its old text then its new (2026-10-18); null: no edits.</summary>
+    public Func<string, string, IPAddress?, WebReply>? MemoryEdit { get; set; }
+
+    /// <summary>The screen's off/on of a memory by its text, true for off (2026-10-18); null: none.</summary>
+    public Func<string, bool, IPAddress?, WebReply>? MemoryToggle { get; set; }
+
+    public WebReply EditMemory(WebMemoryEdit request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return MemoryEdit is { } edit && !string.IsNullOrEmpty(request.Old) ? edit(request.Old, request.Text ?? "", remote) : new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+    }
+
+    public WebReply ToggleMemory(WebMemoryToggle request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Off is not { } off)
+        {
+            return new WebReply(WebOutcome.Refused, WebUiText.MemoryToggleUnsaid);
+        }
+
+        return MemoryToggle is { } toggle && !string.IsNullOrEmpty(request.Text) ? toggle(request.Text, off, remote) : new WebReply(WebOutcome.NotFound, WebUiText.MemoryGone);
+    }
+
     /// <summary>The message history as the page gets it (2026-10-16, reads only, thread-safe): oldest first, no drafts set aside, no paste tokens.</summary>
     public Func<IReadOnlyList<string>>? HistoryNow { get; set; }
 

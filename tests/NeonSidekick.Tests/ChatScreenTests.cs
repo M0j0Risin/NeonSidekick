@@ -310,8 +310,8 @@ public partial class ChatScreenTests : IDisposable
     private static string MemoryResult(IReadOnlyList<ChatMessage> request) =>
         (string)Assert.Single(request.SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == Assistant.OpeningMemoryCallId).Result!;
 
-    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true, bool help = true) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
+    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool markdown = false, bool sessions = true, bool download = true, bool recall = true, bool mcp = false, bool timers = true, bool git = true, bool shell = true, bool help = true, bool clock = true) =>
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], markdown, sessions: sessions && tools, download: download, recall: recall, mcp: mcp && tools, timers: timers, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools, clock: clock);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02)
 
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
@@ -9808,7 +9808,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, or nothing for the pane.", ToolsText.SwitchUsageError);
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));
@@ -9844,7 +9844,7 @@ public partial class ChatScreenTests : IDisposable
         (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "off" });
         Assert.Equal("📊 💾", strip);
         Assert.Equal([1], off);
-        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15)
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers" or "clock" or "help")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15), the clock and help on (2026-10-18)
         // 🙋 (2026-10-09, the user's ask): Ask user is on by default, on the slab while it is off.
         Assert.False(ChatScreen.ToolbarItemOff("ask", new AppSettingsData()));
         Assert.True(ChatScreen.ToolbarItemOff("ask", new AppSettingsData { AskUser = false }));
@@ -11746,7 +11746,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ChatScreen.ProcessToolGlyph + " Process", ProcessMenu.Title);
         Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
-        Assert.All(ToolsText.SwitchWords.Where(w => w != ToolsText.ShoppingSwitchWord && w != ToolsText.TimersSwitchWord), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not (ToolsText.ShoppingSwitchWord or ToolsText.TimersSwitchWord or ToolsText.ClockSwitchWord or ToolsText.HelpSwitchWord)), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
         Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
         Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));

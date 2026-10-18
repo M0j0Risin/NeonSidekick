@@ -147,6 +147,34 @@ public sealed partial class WebUiPageTests
         Assert.DoesNotContain("talk-21.png", await page.TextAsync("window.__names.join(',')"), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The welcome splash on the page (2026-10-18, the user's ask): above a notice that came after it (a refit feeds it after the startup
+    /// lines), its box filling the visible height, its picture centered across; a <c>remove</c> takes it out and the room goes with it.
+    /// </summary>
+    [WindowsFact]
+    public async Task TheSplash_StandsFirst_CenteredAndFillingThePage_AndARemoveTakesItOut()
+    {
+        var notice = new WebEntry(1, "notice", "LLM: ready", null, null, false);
+        var splash = PictureEntry(2, 31) with { Splash = true };
+        _backend.Snap = new WebSnapshot([notice, splash], [], State(), WebUiText.Words);
+        if (await SignedInAsync("/") is not { } page)
+        {
+            return;
+        }
+
+        await page.ViewportAsync(390, 900);
+        const string Box = "document.querySelector('.entry.pictures.splash')";
+        await page.WaitAsync(Box + " !== null && " + Box + ".offsetHeight > 320", "the splash's room");
+        Assert.True((await page.EvalAsync(Box + ".getBoundingClientRect().top < document.querySelector('.entry.notice').getBoundingClientRect().top")).GetBoolean());
+        double off = (await page.EvalAsync("(() => { const b = " + Box + ".getBoundingClientRect(); const t = " + Box + ".querySelector('.tile').getBoundingClientRect(); return Math.abs((b.left + b.right) / 2 - (t.left + t.right) / 2); })()")).GetDouble();
+        Assert.True(off < 2, $"the picture {off} px off the middle");
+        Assert.True((await page.EvalAsync("document.documentElement.scrollHeight <= window.innerHeight + 1")).GetBoolean());   // filling, never past: no scroll
+
+        Publish("remove", JsonSerializer.Serialize(new WebRemoved(2), WebUiJsonContext.Default.WebRemoved));
+        await page.WaitAsync(Box + " === null", "the splash taken out");
+        Assert.Equal(1, (await page.EvalAsync("document.querySelectorAll('#log .entry').length")).GetInt32());
+    }
+
     [WindowsFact]
     public async Task ASinglePicture_IsLive_AndAReconnectWithANewerStrip_MovesIt()
     {

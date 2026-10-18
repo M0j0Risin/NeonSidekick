@@ -91,6 +91,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/prompts/delete", "{\"id\":\"p1\"}", WebTab.Chat)]
     [InlineData("/api/memory/save", "{\"text\":\"x\"}", WebTab.Chat)]
     [InlineData("/api/memory/delete", "{\"text\":\"x\"}", WebTab.Chat)]
+    [InlineData("/api/memory/edit", "{\"old\":\"x\",\"text\":\"y\"}", WebTab.Chat)]   // 2026-10-18
+    [InlineData("/api/memory/toggle", "{\"text\":\"x\",\"off\":true}", WebTab.Chat)]
     [InlineData("/api/history/clear", "{}", WebTab.Chat)]
     [InlineData("/api/learn/cancel", "{}", WebTab.Chat)]
     [InlineData("/api/queue/resume", "{}", WebTab.Chat)]
@@ -232,6 +234,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/prompts/delete", "{\"id\":\"p1\"}")]
     [InlineData("/api/memory/save", "{\"text\":\"Likes tea.\"}")]
     [InlineData("/api/memory/delete", "{\"text\":\"Likes tea.\"}")]
+    [InlineData("/api/memory/edit", "{\"old\":\"Likes tea.\",\"text\":\"Likes green tea.\"}")]   // the 💾 tab's edit and off/on (2026-10-18)
+    [InlineData("/api/memory/toggle", "{\"text\":\"Likes tea.\",\"off\":true}")]
     [InlineData("/api/history/clear", "{}")]
     public async Task TheSheetsChanges_NeedTheCookieAndTheHeader_AreActs_AndAnswerTheBackendsSentence(string path, string json)
     {
@@ -243,13 +247,15 @@ public sealed partial class WebUiHostTests
         using var crossSite = await _client.SendAsync(Post(path, json, csrf: false));
         Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), (unsigned.StatusCode, crossSite.StatusCode));
         Assert.Equal((0, 0, 0, 0, 0), (_backend.PromptsSaved.Count, _backend.PromptsDeleted.Count, _backend.MemoriesSaved.Count, _backend.MemoriesDeleted.Count, _backend.HistoryClears));
+        Assert.Equal((0, 0), (_backend.MemoriesEdited.Count, _backend.MemoriesToggled.Count));
 
         using var done = await _client.SendAsync(Post(path, json));
         Assert.Equal(HttpStatusCode.OK, done.StatusCode);
         var body = JsonSerializer.Deserialize(await done.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!;
         Assert.True(body.Ok);
         Assert.False(string.IsNullOrEmpty(body.Message));
-        Assert.Equal(1, _backend.PromptsSaved.Count + _backend.PromptsDeleted.Count + _backend.MemoriesSaved.Count + _backend.MemoriesDeleted.Count + _backend.HistoryClears);
+        Assert.Equal(1, _backend.PromptsSaved.Count + _backend.PromptsDeleted.Count + _backend.MemoriesSaved.Count + _backend.MemoriesDeleted.Count + _backend.HistoryClears
+            + _backend.MemoriesEdited.Count + _backend.MemoriesToggled.Count);
 
         _backend.ListReply = new WebReply(WebOutcome.Refused, "Error: no.");
         using var refused = await _client.SendAsync(Post(path, json));
@@ -311,6 +317,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/prompts/delete", "[]")]
     [InlineData("/api/memory/save", "nope")]
     [InlineData("/api/memory/delete", "{")]
+    [InlineData("/api/memory/edit", "[]")]
+    [InlineData("/api/memory/toggle", "{\"off\":")]
     public async Task ASheetChangeThatDoesNotRead_Is400(string path, string json)
     {
         using var response = await _client.SendAsync(Post(path, json));
@@ -373,6 +381,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/memory", WebTab.Chat)]
     [InlineData("/api/memory/save", WebTab.Chat)]
     [InlineData("/api/memory/delete", WebTab.Chat)]
+    [InlineData("/api/memory/edit", WebTab.Chat)]
+    [InlineData("/api/memory/toggle", WebTab.Chat)]
     [InlineData("/api/history", WebTab.Chat)]
     [InlineData("/api/history/clear", WebTab.Chat)]
     [InlineData("/api/learn/cancel", WebTab.Chat)]
