@@ -1,0 +1,22 @@
+{"is_simulated":1,"app_name":"lsd","timestamp":"2026-09-11 12:00:00.00 -0500","bug_type":"309","name":"lsd"}
+{
+  "procName": "lsd",
+  "pid": 77,
+  "exception": {
+    "type": "EXC_GUARD",
+    "subtype": "GUARD_TYPE_USER",
+    "message": "namespc 18 reason_code 0x5"
+  },
+  "termination": {
+    "namespace": "LIBSYSTEM",
+    "code": 5,
+    "indicator": "Application Triggered Fault"
+  },
+  "faultingThread": 0,
+  "threads": [
+    {
+      "frames": []
+    }
+  ],
+  "usedImages": []
+}

@@ -66,6 +66,10 @@
     <!-- Scheduled tasks' definitions (2026-10-15, the admin-tools plan): IRegisteredTask::get_Xml's shape, one per principal the privileged
          guard reads — SYSTEM by its SID, a user with highest privileges, a group, a plain user — with the triggers TaskWords puts in words. -->
     <None Include="Fixtures\tasks\*.xml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- A Mac's logs that are files (2026-10-18, the Mac event-log plan's phase 3), made up in the shapes the Mac of the plan wrote: an .ips
+         crash (header line, body JSON, threads and images), a jetsam, a simulated fault, a text .diag, and an install.log with a
+         continued entry, a process with a space and secret-like values. -->
+    <None Include="Fixtures\maclog\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

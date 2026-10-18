@@ -1,0 +1,12 @@
+Date/Time:        2026-09-11 14:00:00.084 -0500
+End time:         2026-09-11 14:02:03.000 -0500
+OS Version:       macOS 15.7.9 (Build 24G830)
+Command:          logd
+Path:             /usr/libexec/logd
+PID:              319
+Event:            cpu usage
+Action taken:     none
+CPU:              90 seconds cpu time over 123 seconds (73% cpu average), exceeding limit of 50% cpu over 180 seconds
+
+Heaviest stack for the target process:
+  10  start + 2840 (dyld + 27544) [0x18b1a2b98]

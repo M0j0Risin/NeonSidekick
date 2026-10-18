@@ -93,6 +93,65 @@ public static class MacLogText
 
     /// <summary>An archive's line.</summary>
     public const string ArchiveLine = "a saved log archive";
+
+    // ── The logs that are files (phase 3) ───────────────────────────────────
+
+    /// <summary>A report folder this account may not list (the system's needs the <c>_analyticsusers</c> group).</summary>
+    public const string FolderRefused = "not readable from this account";
+
+    /// <summary>A file log this account may not read.</summary>
+    public static string FileRefused(string log) => $"{log} cannot be read from this account.";
+
+    /// <summary>A file log that failed to read, the system's words kept.</summary>
+    public static string FileFailed(string log, string why) => $"{log} could not be read: {why}";
+
+    /// <summary>A report read only up to the cap.</summary>
+    public static string ReportCut(int max) => "(the report is longer than " + (max / (1024 * 1024)).ToString(System.Globalization.CultureInfo.InvariantCulture) + " MB; only its start was read)";
+
+    /// <summary>A report with nothing to sum it up.</summary>
+    public static string ReportOf(string kind) => "a " + kind + " report";
+
+    /// <summary>A report that could not be read.</summary>
+    public const string ReportUnreadable = "(this report could not be read)";
+
+    /// <summary>A jetsam report's line: the processes the system ended for memory, and the largest.</summary>
+    public static string JetsamSummary(int ended, string? first, string? largest) =>
+        "low memory: " + (ended == 0 ? "no process ended" : EventLogText.Count(ended, "process", "processes") + " ended" + (first is null ? "" : ", first " + first))
+        + (largest is null ? "" : "; largest " + largest);
+
+    /// <summary>The note under a text report's shown lines.</summary>
+    public static string MoreLines(int more) => "(" + EventLogText.Count(more, "more line") + " not shown)";
+
+    /// <summary>The note under a thread's shown frames.</summary>
+    public static string MoreFrames(int more) => "(" + EventLogText.Count(more, "more frame") + ")";
+
+    /// <summary>The note when a call gave terms a file log does not have.</summary>
+    public static string NotApplied(string log, IReadOnlyList<string> terms) =>
+        "(" + string.Join(", ", terms) + (terms.Count == 1 ? " does" : " do") + " not apply to " + log + "; ignored)";
+
+    /// <summary>A file log's handle not written by an answer.</summary>
+    public static string BadFileHandle(string text, string log) => log == MacLogAccess.CrashNames[0]
+        ? $"Error: '{text}' is not a report's file name (a name an answer shows, like dotnet-2026-10-18-011440.ips)."
+        : $"Error: '{text}' is not an install.log entry's handle (the i… an answer shows).";
+
+    /// <summary>A page's cursor naming a report that is gone.</summary>
+    public static string CursorGone(string name) => $"Error: report {name} is no longer there; search again without before.";
+
+    /// <summary>What an empty file-log read says: <c>no crash reports since 7 days ago</c>.</summary>
+    public static string NoFileEntries(string log, DateTimeOffset since, DateTimeOffset now, TimeZoneInfo zone) =>
+        "no " + (log == MacLogAccess.CrashNames[0] ? "crash or diagnostic reports" : "install.log entries") + " since " + EventLogText.Since(since, now, zone);
+
+    /// <summary>The crash reports' line in <c>eventlog_logs</c>.</summary>
+    public static string CrashesLine(int week, IReadOnlyList<(string Owner, string? Refused)> folders) =>
+        "crash and diagnostic reports: " + EventLogText.Count(week, "report") + " in the last 7 days ("
+        + string.Join(", ", folders.Select(f => f.Owner + (f.Refused is null ? "" : " " + f.Refused))) + ")";
+
+    /// <summary>install.log's line in <c>eventlog_logs</c>.</summary>
+    public static string InstallLine(string? newest) =>
+        "install.log: software installs and updates" + (newest is null ? "" : ", newest entry " + newest);
+
+    /// <summary>install.log's line when it cannot be read.</summary>
+    public static string InstallRefused(string why) => "install.log, not readable here: " + why;
 }
 
 /// <summary>

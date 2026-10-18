@@ -31,7 +31,7 @@ public sealed class MacLogSearchTool : MacLogTool
         {
           "type": "object",
           "properties": {
-            "log": { "type": "string", "description": "system for this Mac's unified log, or a .logarchive folder in the working directory; eventlog_logs lists them." },
+            "log": { "type": "string", "description": "system for this Mac's unified log, crashes for its crash and diagnostic reports, install for install.log, or a .logarchive folder in the working directory; eventlog_logs lists them." },
             "level": { "type": "string", "description": "fault, error, default, info, debug, or all; several joined by commas. Default: fault,error." },
             "process": { "type": "string", "description": "Only this process, by its name as the answers show it (e.g. loginwindow, kernel)." },
             "pid": { "type": "integer", "description": "Only this process id." },
@@ -41,7 +41,7 @@ public sealed class MacLogSearchTool : MacLogTool
             "exclude_process": { "type": "string", "description": "Processes to leave out, joined by commas: the answer names one that floods the read." },
             "since": { "type": "string", "description": "Only entries from then on: an age (10m, 1h, 1d) or a moment (2026-10-18T09:00, in the user's time zone unless it gives an offset). Default: the last hour. Keep it short: the log is vast." },
             "until": { "type": "string", "description": "Only entries until then: an age or a moment." },
-            "before": { "type": "string", "description": "Only entries older than this handle: the next page, as a previous answer's next: line gives it." },
+            "before": { "type": "string", "description": "Only entries older than this one (its handle, or a report's file name): the next page, as a previous answer's next: line gives it." },
             "limit": { "type": "integer", "description": "How many entries, 1 to 100 (default from the settings, 20)." }
           },
           "required": ["log"]
@@ -55,7 +55,7 @@ public sealed class MacLogSearchTool : MacLogTool
     public override string Name => EventLogSearchTool.ToolName;
 
     public override string Description =>
-        "Searches this Mac's unified log, newest first, by level, process, subsystem, category, text and time, inside a short window. Use it to see what macOS and its apps recorded: crashes, failed launches, network and sign-in errors.";
+        "Searches this Mac's logs newest first — the unified log by level, process, subsystem, category, text and time inside a short window, the crash reports (log=crashes, the last 7 days) or install.log (log=install, the last day). Use it to see what macOS and its apps recorded: crashes, failed launches, installs, network and sign-in errors.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -78,6 +78,11 @@ public sealed class MacLogSearchTool : MacLogTool
         if (limitError is not null)
         {
             return limitError;
+        }
+
+        if (source.Kind != MacLogKind.Unified)
+        {
+            return await FileSearchAsync(arguments, source, (int)limit!.Value, cancellationToken).ConfigureAwait(false);
         }
 
         MacLogHandle? before = null;
@@ -104,5 +109,41 @@ public sealed class MacLogSearchTool : MacLogTool
             return MacLogSearch.Search(reader, query, scan, token);
         }, cancellationToken).ConfigureAwait(false);
         return result.Error ?? MacLogRender.Search(source, query, result.Value!, Zone, Access.Time.GetUtcNow());
+    }
+
+    /// <summary>A search of the crash reports or install.log (phase 3): the same arguments, the terms they lack noted, a file name or <c>i…</c> as the cursor.</summary>
+    private async Task<string> FileSearchAsync(AIFunctionArguments arguments, MacLogSource source, int limit, CancellationToken cancellationToken)
+    {
+        string? cursor = Optional(arguments, BeforeArgument);
+        long offset = 0;
+        bool crashes = source.Kind == MacLogKind.Crashes;
+        if (cursor is not null && (crashes ? !CrashReports.IsReportName(cursor) : !InstallLog.TryParseHandle(cursor, out offset, out _)))
+        {
+            return MacLogText.BadFileHandle(cursor, source.Log);
+        }
+
+        if (crashes && cursor is not null && !MacFileLogs.CrashCursorKnown(Access.Places, cursor))
+        {
+            return MacLogText.CursorGone(cursor);
+        }
+
+        var (query, error) = Terms(arguments, source.Log, limit, before: null, source.Kind);
+        if (query is null)
+        {
+            return error!;
+        }
+
+        var scan = Access.Scan(source, ScanLimit);
+        var result = await Access.RunFilesAsync(source, token =>
+        {
+            if (crashes)
+            {
+                return MacFileLogs.SearchCrashes(Access.Places, query, scan, cursor, token);
+            }
+
+            using var log = Access.OpenInstallLog();
+            return MacFileLogs.SearchInstall(log, Access.Places, query, scan, cursor is null ? null : offset, token);
+        }, cancellationToken).ConfigureAwait(false);
+        return result.Error ?? MacLogRender.FileSearch(source, query, result.Value!, Ignored(arguments, source.Kind), Zone, Access.Time.GetUtcNow());
     }
 }

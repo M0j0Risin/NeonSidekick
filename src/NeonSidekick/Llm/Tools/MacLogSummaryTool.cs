@@ -18,8 +18,8 @@ public sealed class MacLogSummaryTool : MacLogTool
         {
           "type": "object",
           "properties": {
-            "log": { "type": "string", "description": "system for this Mac's unified log, or a .logarchive folder in the working directory." },
-            "since": { "type": "string", "description": "From then on: an age (10m, 1h, 1d) or a moment. Default: the last hour." },
+            "log": { "type": "string", "description": "system for this Mac's unified log, crashes for its crash and diagnostic reports, install for install.log, or a .logarchive folder in the working directory." },
+            "since": { "type": "string", "description": "From then on: an age (10m, 1h, 1d) or a moment. Default: the last hour (crashes: 7 days, install: a day)." },
             "level": { "type": "string", "description": "fault, error, default, info, debug, or all; several joined by commas. Default: fault,error." },
             "process": { "type": "string", "description": "Only this process." },
             "subsystem": { "type": "string", "description": "Only subsystems starting with this." },
@@ -36,7 +36,7 @@ public sealed class MacLogSummaryTool : MacLogTool
     public override string Name => EventLogSummaryTool.ToolName;
 
     public override string Description =>
-        "Counts this Mac's unified-log entries by process, subsystem and category over a window (faults and errors over the last hour by default): what is going wrong, before searching.";
+        "Counts this Mac's log entries over a window — the unified log's by process, subsystem and category (faults and errors over the last hour by default), the crash reports by process and kind, install.log's by process: what is going wrong, before searching.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -55,13 +55,28 @@ public sealed class MacLogSummaryTool : MacLogTool
             return refused;
         }
 
-        var (query, error) = Terms(arguments, source.Log, EventLogQuery.MaxLimit, before: null);
+        var (query, error) = Terms(arguments, source.Log, EventLogQuery.MaxLimit, before: null, source.Kind);
         if (query is null)
         {
             return error;
         }
 
         var scan = Access.Scan(source, ScanLimit);
+        if (source.Kind != MacLogKind.Unified)
+        {
+            var files = await Access.RunFilesAsync(source, token =>
+            {
+                if (source.Kind == MacLogKind.Crashes)
+                {
+                    return MacFileLogs.SummarizeCrashes(Access.Places, query, scan, token);
+                }
+
+                using var log = Access.OpenInstallLog();
+                return MacFileLogs.SummarizeInstall(log, Access.Places, query, scan, token);
+            }, cancellationToken).ConfigureAwait(false);
+            return files.Error ?? MacLogRender.FileSummary(source, query, files.Value!, Ignored(arguments, source.Kind), Zone, Access.Time.GetUtcNow());
+        }
+
         var result = await Access.RunAsync(source, (unified, token) =>
         {
             using var reader = unified.Open(source.Target, query.Filter(source.Redacted), token);
@@ -83,8 +98,8 @@ public sealed class MacLogEventTool : MacLogTool
         {
           "type": "object",
           "properties": {
-            "log": { "type": "string", "description": "system, or the .logarchive the entry came from." },
-            "record": { "type": "string", "description": "The entry's handle, the u… an answer shows." }
+            "log": { "type": "string", "description": "system, crashes, install, or the .logarchive the entry came from." },
+            "record": { "type": "string", "description": "The entry's handle as an answer shows it: a u… (system, an archive), a report's file name (crashes) or an i… (install)." }
           },
           "required": ["log", "record"]
         }
@@ -96,7 +111,7 @@ public sealed class MacLogEventTool : MacLogTool
 
     public override string Name => EventLogEventTool.ToolName;
 
-    public override string Description => "Reads one entry of this Mac's unified log in full by its handle (the u… a search or summary shows).";
+    public override string Description => "Reads one entry of this Mac's logs in full by its handle (the u…, report file name or i… a search or summary shows): a crash report's exception, termination and faulting thread, an install.log entry's whole message.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -114,15 +129,20 @@ public sealed class MacLogEventTool : MacLogTool
             return EventLogText.Missing(EventLogEventTool.RecordArgument);
         }
 
-        if (!MacLogHandle.TryParse(record, out var handle))
-        {
-            return MacLogText.BadHandle(record);
-        }
-
         var (source, refused) = Access.Resolve(log, ForceRedacted);
         if (source is null)
         {
             return refused;
+        }
+
+        if (source.Kind != MacLogKind.Unified)
+        {
+            return await FileEventAsync(source, record, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!MacLogHandle.TryParse(record, out var handle))
+        {
+            return MacLogText.BadHandle(record);
         }
 
         var result = await Access.RunAsync(source, (unified, token) =>
@@ -137,12 +157,40 @@ public sealed class MacLogEventTool : MacLogTool
 
         return result.Value is { } view ? MacLogRender.Event(source, view, Zone) : MacLogText.NoEntry(handle.ToString(), source.Log);
     }
+
+    /// <summary>One crash report by its file name, or one install.log entry by its <c>i…</c> handle, its time checked again (phase 3).</summary>
+    private async Task<string> FileEventAsync(MacLogSource source, string record, CancellationToken cancellationToken)
+    {
+        if (source.Kind == MacLogKind.Crashes)
+        {
+            if (!CrashReports.IsReportName(record))
+            {
+                return MacLogText.BadFileHandle(record, source.Log);
+            }
+
+            var report = await Access.RunFilesAsync(source, _ => MacFileLogs.CrashEvent(Access.Places, record, source.Redacted), cancellationToken).ConfigureAwait(false);
+            return report.Error ?? (report.Value is { } found ? MacLogRender.CrashEvent(source, found.Report, found.Detail, Zone) : MacLogText.NoEntry(record, source.Log));
+        }
+
+        if (!InstallLog.TryParseHandle(record, out _, out _))
+        {
+            return MacLogText.BadFileHandle(record, source.Log);
+        }
+
+        var entry = await Access.RunFilesAsync(source, _ =>
+        {
+            using var log = Access.OpenInstallLog();
+            return MacFileLogs.InstallEvent(log, Access.Places, record, source.Redacted);
+        }, cancellationToken).ConfigureAwait(false);
+        return entry.Error ?? (entry.Value is { } view ? MacLogRender.InstallEvent(source, view, Zone) : MacLogText.NoEntry(record, source.Log));
+    }
 }
 
 /// <summary>
 /// <c>eventlog_logs</c> on a Mac (2026-10-18, the Mac event-log plan): the logs a call may name — the unified log as <c>system</c>,
-/// readable or why not (its store opened, nothing read), and the working directory's <c>.logarchive</c> folders, <c>filter</c> narrowing
-/// them by name.
+/// readable or why not (its store opened, nothing read), the crash reports as <c>crashes</c> (the week's count, each folder readable or
+/// not) and install.log as <c>install</c> (its newest entry's time; phase 3), and the working directory's <c>.logarchive</c> folders,
+/// <c>filter</c> narrowing them by name.
 /// </summary>
 public sealed class MacLogLogsTool : MacLogTool
 {
@@ -162,7 +210,7 @@ public sealed class MacLogLogsTool : MacLogTool
 
     public override string Name => EventLogLogsTool.ToolName;
 
-    public override string Description => "Lists the logs on this Mac the other eventlog_ tools read: the unified log (system) and the .logarchive folders in the working directory.";
+    public override string Description => "Lists the logs on this Mac the other eventlog_ tools read: the unified log (system), the crash and diagnostic reports (crashes), install.log (install) and the .logarchive folders in the working directory.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -177,7 +225,23 @@ public sealed class MacLogLogsTool : MacLogTool
             unified.Probe(UnifiedLogTarget.Local);
             return true;
         }, cancellationToken).ConfigureAwait(false);
-        string? why = probed.Error is { } error ? (error.StartsWith("Error: ", StringComparison.Ordinal) ? error["Error: ".Length..] : error) : null;
-        return MacLogRender.Logs(why, Access.Archives(), filter);
+        string? why = Bare(probed.Error);
+        var now = Access.Time.GetUtcNow();
+        var crashSource = new MacLogSource(MacLogAccess.CrashNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Crashes);
+        var crashes = await Access.RunFilesAsync(crashSource, token =>
+        {
+            var (reports, folders) = CrashReports.List(Access.Places.CrashFolders, now - MacFileLogs.CrashWindow, null, token);
+            return MacLogText.CrashesLine(reports.Count, folders.Select(f => (f.Folder.Owner, f.Refused)).ToList());
+        }, cancellationToken).ConfigureAwait(false);
+        var installSource = new MacLogSource(MacLogAccess.InstallNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Install);
+        var install = await Access.RunFilesAsync(installSource, _ =>
+        {
+            using var stream = Access.OpenInstallLog();
+            return MacLogText.InstallLine(InstallLog.Backward(stream).FirstOrDefault() is { } newest ? EventLogText.Time(newest.Time, Zone) : null);
+        }, cancellationToken).ConfigureAwait(false);
+        return MacLogRender.Logs(why, crashes.Error is { } crashError ? Bare(crashError)! : crashes.Value!, install.Error is { } installError ? MacLogText.InstallRefused(Bare(installError)!) : install.Value!,
+            Access.Archives(), filter);
     }
+
+    private static string? Bare(string? error) => error is null ? null : error.StartsWith("Error: ", StringComparison.Ordinal) ? error["Error: ".Length..] : error;
 }

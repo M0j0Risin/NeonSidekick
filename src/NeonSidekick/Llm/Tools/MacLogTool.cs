@@ -74,9 +74,9 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
     /// A search's or a summary's terms read off the call (the same words both take): the levels (the default faults and errors), the
     /// window (the last hour unless <c>since</c> says), the filters; null with the refusal when one is wrong.
     /// </summary>
-    protected (MacLogQuery? Query, string? Error) Terms(AIFunctionArguments arguments, string log, int limit, MacLogHandle? before)
+    protected (MacLogQuery? Query, string? Error) Terms(AIFunctionArguments arguments, string log, int limit, MacLogHandle? before, MacLogKind kind = MacLogKind.Unified)
     {
-        var (levels, levelError) = MacLogQuery.ParseLevels(Optional(arguments, MacLogSearchTool.LevelArgument));
+        var (levels, levelError) = kind == MacLogKind.Unified ? MacLogQuery.ParseLevels(Optional(arguments, MacLogSearchTool.LevelArgument)) : ([], null);
         if (levels is null)
         {
             return (null, levelError);
@@ -104,15 +104,37 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
         return (new MacLogQuery(
             log,
             levels,
-            since ?? now - MacLogQuery.DefaultWindow,
+            since ?? now - WindowFor(kind),
             until,
             Optional(arguments, MacLogSearchTool.ProcessArgument),
-            pid is { } p ? (int)p : null,
-            Optional(arguments, MacLogSearchTool.SubsystemArgument),
-            Optional(arguments, MacLogSearchTool.CategoryArgument),
+            pid is { } p && kind != MacLogKind.Crashes ? (int)p : null,
+            kind == MacLogKind.Unified ? Optional(arguments, MacLogSearchTool.SubsystemArgument) : null,
+            kind == MacLogKind.Unified ? Optional(arguments, MacLogSearchTool.CategoryArgument) : null,
             Optional(arguments, MacLogSearchTool.TextArgument),
             MacLogQuery.ParseList(Optional(arguments, MacLogSearchTool.ExcludeArgument)),
             before,
             limit), null);
+    }
+
+    /// <summary>The window a call gets when it gives no <c>since</c>: an hour of the unified log, a week of reports, a day of install.log.</summary>
+    public static TimeSpan WindowFor(MacLogKind kind) => kind switch
+    {
+        MacLogKind.Crashes => MacFileLogs.CrashWindow,
+        MacLogKind.Install => MacFileLogs.InstallWindow,
+        _ => MacLogQuery.DefaultWindow,
+    };
+
+    /// <summary>The terms a call gave that a log that is a file does not have (levels, subsystems, categories; a report's pid), for the answer's note.</summary>
+    protected static IReadOnlyList<string> Ignored(AIFunctionArguments arguments, MacLogKind kind)
+    {
+        if (kind == MacLogKind.Unified)
+        {
+            return [];
+        }
+
+        string[] names = kind == MacLogKind.Crashes
+            ? [MacLogSearchTool.LevelArgument, MacLogSearchTool.PidArgument, MacLogSearchTool.SubsystemArgument, MacLogSearchTool.CategoryArgument]
+            : [MacLogSearchTool.LevelArgument, MacLogSearchTool.SubsystemArgument, MacLogSearchTool.CategoryArgument];
+        return names.Where(n => arguments.TryGetValue(n, out object? value) && value?.ToString() is { } text && text.Trim().Length > 0).ToList();
     }
 }

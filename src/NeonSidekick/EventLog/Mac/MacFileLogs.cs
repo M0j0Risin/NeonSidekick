@@ -1,0 +1,310 @@
+namespace NeonSidekick.EventLog;
+
+/// <summary>
+/// One entry of a Mac log that is a file, as an answer shows it (2026-10-18, the Mac event-log plan's phase 3): its handle (a report's file
+/// name, or install.log's <c>i…</c>), its time, its kind (a report's; null for install.log), the process and pid, and the line (a report's
+/// summary, an install entry's message), redacted when the read is.
+/// </summary>
+public sealed record MacFileView(string Handle, DateTimeOffset Time, string? Kind, string Process, int? Pid, string Message, string? Owner = null)
+{
+    /// <summary>The message's first line, or null when it is blank.</summary>
+    public string? FirstLine => Message.Split('\n', 2)[0].Trim() is { Length: > 0 } first ? first : null;
+}
+
+/// <summary>A page of a file log: the entries kept, newest first; how many were read; whether more may follow and the handle the next page starts after; a stop and how far back; the loudest process.</summary>
+public sealed record MacFilePage(IReadOnlyList<MacFileView> Entries, int Read, bool More, string? Cursor, bool BudgetStop, DateTimeOffset? Reached, MacLoudest? Loudest);
+
+/// <summary>One process (and kind)'s share of a file log's summary.</summary>
+public sealed record MacFileGroup(string Process, string? Kind, int Count, DateTimeOffset Newest, string NewestHandle, string Sample);
+
+/// <summary>A file log's summary: the groups by count, the entries counted, the read, a stop and how far back, the loudest process.</summary>
+public sealed record MacFileSummary(IReadOnlyList<MacFileGroup> Groups, int Total, int GroupCount, int Read, bool BudgetStop, DateTimeOffset? Reached, MacLoudest? Loudest);
+
+/// <summary>
+/// The policy over the Mac's two logs that are files (2026-10-18, the Mac event-log plan's phase 3; <see cref="MacLogSearch"/>'s shape):
+/// <c>crashes</c>, the reports of <see cref="CrashReports"/>, and <c>install</c>, <see cref="InstallLog"/>. A query's process (case
+/// ignored, as file names are), pid (install.log's), processes left out, window and text apply; its levels, subsystem and category do
+/// not (the tools say so). A report's text search reads the report in full and matches what the answer would show (redacted when the
+/// read is), so a twin learns nothing it may not see; install.log's matches the message the same way. The scan's limit and budget stop a
+/// read as on the unified log.
+/// </summary>
+public static class MacFileLogs
+{
+    /// <summary>The window when a call gives none: a week of reports, a day of install.log (it gains about 170 KB a day).</summary>
+    public static readonly TimeSpan CrashWindow = TimeSpan.FromDays(7);
+
+    public static readonly TimeSpan InstallWindow = TimeSpan.FromDays(1);
+
+    /// <summary>The redaction a file log's text gets: the home as <c>~</c>, then the secret-like values hidden.</summary>
+    public static Func<string, string> Redactor(MacLogPlaces places, bool redacted)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        return redacted ? text => EventLogRedaction.Text(places.Tilde(text)) : text => text;
+    }
+
+    // ── crashes ─────────────────────────────────────────────────────────────
+
+    /// <summary>The query's reports, newest first, the page after <c>before</c> (a report's name) when given.</summary>
+    public static MacFilePage SearchCrashes(MacLogPlaces places, MacLogQuery query, EventScan scan, string? before, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(scan);
+        long started = scan.Time.GetTimestamp();
+        var redact = Redactor(places, scan.Redacted);
+        var (reports, _) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        var walk = new Tally();
+        var kept = new List<MacFileView>();
+        bool passed = before is null;
+        string? lastRead = null;
+        foreach (var report in reports)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!passed)
+            {
+                passed = string.Equals(report.Name, before, StringComparison.Ordinal);
+                continue;
+            }
+
+            if (!Keeps(query, report.Process, null))
+            {
+                continue;
+            }
+
+            if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+            {
+                return new MacFilePage(kept, walk.Read, true, lastRead ?? before, true, walk.Reached, walk.Loudest());
+            }
+
+            walk.Step(report.Process, report.Time);
+            lastRead = report.Name;
+            var detail = Safe(report, redact);
+            if (query.Text is { Length: > 0 } && !query.KeepsText(report.Name + "\n" + report.Process + "\n" + detail.Summary + "\n" + detail.Text))
+            {
+                continue;
+            }
+
+            kept.Add(new MacFileView(report.Name, report.Time, report.Kind, report.Process, detail.Pid, detail.Summary, report.Owner));
+            if (kept.Count >= query.Limit)
+            {
+                bool more = reports.IndexOf(report) < reports.Count - 1;
+                return new MacFilePage(kept, walk.Read, more, more ? report.Name : null, false, walk.Reached, walk.Loudest());
+            }
+        }
+
+        return new MacFilePage(kept, walk.Read, false, null, false, walk.Reached, walk.Loudest());
+    }
+
+    /// <summary>Whether <paramref name="before"/> names a report the listing still holds (a page's cursor gone stale is said, never guessed past).</summary>
+    public static bool CrashCursorKnown(MacLogPlaces places, string before) => CrashReports.Find(places.CrashFolders, before) is not null;
+
+    /// <summary>The window's reports counted by process and kind, the busiest first.</summary>
+    public static MacFileSummary SummarizeCrashes(MacLogPlaces places, MacLogQuery query, EventScan scan, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        ArgumentNullException.ThrowIfNull(query);
+        var redact = Redactor(places, scan.Redacted);
+        var (reports, _) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        var groups = new Dictionary<(string, string?), (MacFileGroup Group, CrashReportInfo Newest)>();
+        var walk = new Tally();
+        int total = 0;
+        foreach (var report in reports.Where(r => Keeps(query, r.Process, null)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            walk.Step(report.Process, report.Time);
+            if (query.Text is { Length: > 0 })
+            {
+                var detail = Safe(report, redact);
+                if (!query.KeepsText(report.Name + "\n" + report.Process + "\n" + detail.Summary + "\n" + detail.Text))
+                {
+                    continue;
+                }
+            }
+
+            total++;
+            var key = (report.Process, (string?)report.Kind);
+            groups[key] = groups.TryGetValue(key, out var group)
+                ? (group.Group with { Count = group.Group.Count + 1 }, group.Newest)
+                : (new MacFileGroup(report.Process, report.Kind, 1, report.Time, report.Name, ""), report);
+        }
+
+        var top = groups.Values.OrderByDescending(g => g.Group.Count).ThenByDescending(g => g.Group.Newest).Take(MacLogSearch.SummaryGroups)
+            .Select(g => g.Group with { Sample = Safe(g.Newest, redact).Summary })
+            .ToList();
+        return new MacFileSummary(top, total, groups.Count, walk.Read, false, walk.Reached, walk.Loudest());
+    }
+
+    /// <summary>One report in full by its name; null when no folder holds it.</summary>
+    public static (CrashReportInfo Report, CrashDetail Detail)? CrashEvent(MacLogPlaces places, string name, bool redacted)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        return CrashReports.Find(places.CrashFolders, name) is { } report ? (report, CrashReports.Describe(report, Redactor(places, redacted))) : null;
+    }
+
+    private static CrashDetail Safe(CrashReportInfo report, Func<string, string> redact)
+    {
+        try
+        {
+            return CrashReports.Describe(report, redact);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            return new CrashDetail(MacLogText.ReportUnreadable, "", null);
+        }
+    }
+
+    // ── install.log ─────────────────────────────────────────────────────────
+
+    /// <summary>The query's install.log entries, newest first, below <paramref name="before"/> (an entry's offset) when given.</summary>
+    public static MacFilePage SearchInstall(Stream log, MacLogPlaces places, MacLogQuery query, EventScan scan, long? before, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(scan);
+        long started = scan.Time.GetTimestamp();
+        var redact = Redactor(places, scan.Redacted);
+        var walk = new Tally();
+        var kept = new List<MacFileView>();
+        string? last = null;
+        foreach (var entry in InstallLog.Backward(log, before))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (entry.Time < query.Since)
+            {
+                break;   // the log is written in order: an older entry ends the window
+            }
+
+            if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+            {
+                return new MacFilePage(kept, walk.Read, true, last, true, walk.Reached, walk.Loudest());
+            }
+
+            walk.Step(entry.Process, entry.Time);
+            last = InstallLog.Handle(entry);
+            if ((query.Until is { } until && entry.Time > until) || !Keeps(query, entry.Process, entry.Pid))
+            {
+                continue;
+            }
+
+            string message = redact(entry.Message);
+            if (!query.KeepsText(message))
+            {
+                continue;
+            }
+
+            kept.Add(new MacFileView(last, entry.Time, null, entry.Process, entry.Pid, message));
+            if (kept.Count >= query.Limit)
+            {
+                return new MacFilePage(kept, walk.Read, true, last, false, walk.Reached, walk.Loudest());
+            }
+        }
+
+        return new MacFilePage(kept, walk.Read, false, null, false, walk.Reached, walk.Loudest());
+    }
+
+    /// <summary>The window's install.log entries counted by process, the busiest first.</summary>
+    public static MacFileSummary SummarizeInstall(Stream log, MacLogPlaces places, MacLogQuery query, EventScan scan, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(scan);
+        long started = scan.Time.GetTimestamp();
+        var redact = Redactor(places, scan.Redacted);
+        var groups = new Dictionary<string, MacFileGroup>(StringComparer.Ordinal);
+        var walk = new Tally();
+        int total = 0;
+        bool stopped = false;
+        foreach (var entry in InstallLog.Backward(log))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (entry.Time < query.Since)
+            {
+                break;
+            }
+
+            if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+            {
+                stopped = true;
+                break;
+            }
+
+            walk.Step(entry.Process, entry.Time);
+            if ((query.Until is { } until && entry.Time > until) || !Keeps(query, entry.Process, entry.Pid))
+            {
+                continue;
+            }
+
+            string message = redact(entry.Message);
+            if (!query.KeepsText(message))
+            {
+                continue;
+            }
+
+            total++;
+            string first = message.Split('\n', 2)[0].Trim();
+            groups[entry.Process] = groups.TryGetValue(entry.Process, out var group)
+                ? group with { Count = group.Count + 1 }
+                : new MacFileGroup(entry.Process, null, 1, entry.Time, InstallLog.Handle(entry), first);
+        }
+
+        var top = groups.Values.OrderByDescending(g => g.Count).ThenByDescending(g => g.Newest).Take(MacLogSearch.SummaryGroups).ToList();
+        return new MacFileSummary(top, total, groups.Count, walk.Read, stopped, walk.Reached, walk.Loudest());
+    }
+
+    /// <summary>The install.log entry a handle names, its time checked again; null when it is gone.</summary>
+    public static MacFileView? InstallEvent(Stream log, MacLogPlaces places, string handle, bool redacted)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        if (!InstallLog.TryParseHandle(handle, out long offset, out long seconds)
+            || InstallLog.At(log, offset) is not { } entry
+            || entry.Time.ToUnixTimeSeconds() != seconds)
+        {
+            return null;
+        }
+
+        return new MacFileView(InstallLog.Handle(entry), entry.Time, null, entry.Process, entry.Pid, Redactor(places, redacted)(entry.Message));
+    }
+
+    private static bool Keeps(MacLogQuery query, string process, int? pid)
+    {
+        if (MacLogPredicate.Clean(query.Process) is { Length: > 0 } wanted && !string.Equals(process, wanted, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (query.Pid is { } p && pid != p)
+        {
+            return false;
+        }
+
+        return query.Exclude is not { Count: > 0 } exclude || !exclude.Contains(process, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A read's count, how far back it got and each process's share (the loudest-process note).</summary>
+    private sealed class Tally
+    {
+        private readonly Dictionary<string, int> _processes = new(StringComparer.Ordinal);
+
+        public int Read { get; private set; }
+
+        public DateTimeOffset? Reached { get; private set; }
+
+        public void Step(string process, DateTimeOffset time)
+        {
+            Read++;
+            Reached = Reached is { } r && r < time ? r : time;
+            _processes[process] = _processes.GetValueOrDefault(process) + 1;
+        }
+
+        public MacLoudest? Loudest()
+        {
+            if (Read < 20 || _processes.Count < 2)
+            {
+                return null;
+            }
+
+            var (process, count) = _processes.MaxBy(p => p.Value);
+            return count > Read * MacLogSearch.LoudShare ? new MacLoudest(process, count, Read) : null;
+        }
+    }
+}

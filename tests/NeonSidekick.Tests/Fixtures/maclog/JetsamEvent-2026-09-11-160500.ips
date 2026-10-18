@@ -1,0 +1,26 @@
+{"bug_type":"298","timestamp":"2026-09-11 16:05:00.00 -0500","os_version":"macOS 15.7.9 (24G830)","incident_id":"66666666-7777-8888-9999-000000000000"}
+{
+  "date": "2026-09-11 16:05:00.50 -0500",
+  "largestProcess": "Virtualization",
+  "memoryStatus": {
+    "pageSize": 16384
+  },
+  "processes": [
+    {
+      "name": "Virtualization",
+      "pid": 900,
+      "rpages": 200000
+    },
+    {
+      "name": "knowledgeconstructiond",
+      "pid": 44469,
+      "rpages": 968,
+      "reason": "per-process-limit"
+    },
+    {
+      "name": "Safari",
+      "pid": 700,
+      "rpages": 64000
+    }
+  ]
+}
