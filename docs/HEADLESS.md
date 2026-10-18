@@ -87,7 +87,7 @@ They need no server unless the row says so.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
 - Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines.
 - **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md` and a `[notice]` names it. Then type `/plan approve [--fresh]`, `cancel`, `show`, `save [<name>]`, `open [<name>]` (alone, it lists the plans) or `gaps [model|advisor|any]`.
-- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. Since there's no Esc to stop the passes, *LLM plan gap passes* 0 (no limit) means 20, and under *Advisor confirm* the model reviews alone.
+- **`/plan gaps`** runs every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run instead of *LLM plan gap passes*. Since there's no Esc to stop the passes, 0 (no limit) means 20, either way, and under *Advisor confirm* the model reviews alone.
 
 ### Everything else goes to the model as text
 

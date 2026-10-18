@@ -132,6 +132,36 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task Plan_Open_ALongPlan_Reopens()
+    {
+        // 2026-10-17, the user's report: a 40,000-character plan "could not be read" and was missing from the list.
+        OldPlan("add-guide", PlanStatus.Incomplete, PlanRoundTwoTests.LongPlanBody());
+        PlanFixture([[Keys.Escape]], "/plan open add-guide", "/exit");
+        _chat.EnqueueText("What should change?");
+
+        string output = await RunAsync();
+
+        Assert.Equal(PlanText.OpenMessage(PlanPath, 1, 2), LastUserText(_chat.Requests[0]));
+        Assert.Contains(PlanText.OpenedNotice(PlanPath, PlanStatus.Incomplete, 1, 2), output);
+        Assert.DoesNotContain(PlanText.PlanUnreadableError(PlanPath), output);
+        Assert.Equal(PlanStatus.Draft, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Plan_OpenAlone_ListsALongPlan()
+    {
+        OldPlan("add-guide", PlanStatus.Incomplete, PlanRoundTwoTests.LongPlanBody());
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/plan open");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("add-guide — Long plan (incomplete · 1/2 · 2026-09-20", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
     public async Task Plan_Open_ThenPresent_IsTheNextRevisionOfThatFile()
     {
         OldPlan("add-guide", PlanStatus.Cancelled, "# Guide\n- [ ] One");

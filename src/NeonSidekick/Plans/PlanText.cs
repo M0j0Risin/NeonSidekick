@@ -41,7 +41,10 @@ public static class PlanText
     public const string NothingToSaveError = "No reply to save as the plan: ask the model for the plan first";
     public const string NotPlanningError ="Plan mode is not on: /plan <what you want done> starts it";
 
-    /// <summary><c>/plan gaps [model|advisor|any]</c> (2026-10-13): the gap-closing loop started by typing, the reviewer its one word.</summary>
+    /// <summary>
+    /// <c>/plan gaps [model|advisor|any] [passes]</c> (2026-10-13): the gap-closing loop started by typing, the reviewer its one word; a pass
+    /// count (2026-10-17, the user's ask) caps this run instead of <see cref="Settings.AppSettingsData.PlanGapPasses"/>.
+    /// </summary>
     public const string GapsWord = "gaps";
 
     /// <summary>The reviewer words <c>/plan gaps</c> takes, in <see cref="PlanReviewer"/>'s order.</summary>
@@ -65,7 +68,72 @@ public static class PlanText
         return null;
     }
 
-    public static string UnknownReviewerError(string word) => $"No reviewer named '{word}': /plan gaps takes model, advisor or any";
+    /// <summary>
+    /// The words after <c>/plan gaps</c> (2026-10-17): none, a reviewer, a pass count, or one of each in either order is
+    /// <see cref="GapsArgs.Ok"/>; one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–20 (a sign, an overflow)
+    /// <see cref="GapsArgs.OutOfRange"/>; anything else <see cref="GapsArgs.NotGaps"/>, plan detail. <paramref name="word"/> is the
+    /// word at fault, else empty. Pure.
+    /// </summary>
+    public static GapsArgs ParseGapsArgs(string after, out PlanReviewer? reviewer, out int? passes, out string word)
+    {
+        ArgumentNullException.ThrowIfNull(after);
+        reviewer = null;
+        passes = null;
+        word = "";
+        string[] words = after.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length > 2)
+        {
+            return GapsArgs.NotGaps;
+        }
+
+        string? numberWord = null;
+        foreach (string w in words)
+        {
+            if (ParseReviewer(w) is { } named && reviewer is null)
+            {
+                reviewer = named;
+            }
+            else if (IsNumber(w) && numberWord is null)
+            {
+                numberWord = w;
+            }
+            else
+            {
+                reviewer = null;
+                word = words.Length == 1 ? w : "";
+                return words.Length == 1 ? GapsArgs.Unknown : GapsArgs.NotGaps;
+            }
+        }
+
+        if (numberWord is not null)
+        {
+            if (!int.TryParse(numberWord, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count)
+                || count < Settings.AppSettingsData.MinPlanGapPasses || count > Settings.AppSettingsData.MaxPlanGapPasses)
+            {
+                reviewer = null;
+                word = numberWord;
+                return GapsArgs.OutOfRange;
+            }
+
+            passes = count;
+        }
+
+        return GapsArgs.Ok;
+    }
+
+    /// <summary>A whole number as typed, a sign allowed, so <c>-1</c> and an overflow read as a count out of range rather than a reviewer.</summary>
+    private static bool IsNumber(string word)
+    {
+        string digits = word.Length > 1 && word[0] is '-' or '+' ? word[1..] : word;
+        return digits.Length > 0 && digits.All(char.IsAsciiDigit);
+    }
+
+    public static string UnknownReviewerError(string word) =>
+        $"No reviewer named '{word}': /plan gaps takes model, advisor or any, and a pass count ({N(Settings.AppSettingsData.MinPlanGapPasses)}–{N(Settings.AppSettingsData.MaxPlanGapPasses)})";
+
+    /// <summary><c>/plan gaps 25</c> (2026-10-17): a pass count out of range, nothing started. Pinned.</summary>
+    public static string GapPassesRangeError(string word) =>
+        $"'{word}' passes: /plan gaps takes {N(Settings.AppSettingsData.MinPlanGapPasses)} to {N(Settings.AppSettingsData.MaxPlanGapPasses)}, 0 for no cap";
 
     public static string EnteredNotice => $"{Glyph} Plan mode: the model can read and research but not change anything until you approve the plan. Add details as messages; /plan cancel leaves.";
 
@@ -96,7 +164,7 @@ public static class PlanText
     public static string ListLine(PlanListing plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        string status = plan.Status is { } s ? PlanDocument.Word(s) : "no header";
+        string status = StatusWord(plan);
         string steps = plan.Total > 0 ? $" · {N(plan.Done)}/{N(plan.Total)}" : "";
         string when = plan.Updated is { } u && u != DateTimeOffset.MinValue ? " · " + u.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
         return $"  {plan.Name} — {plan.Title} ({status}{steps}{when})";
@@ -106,9 +174,19 @@ public static class PlanText
     public static string CompletionNote(PlanListing plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        string status = plan.Status is { } s ? PlanDocument.Word(s) : "no header";
+        string status = StatusWord(plan);
         return plan.Total > 0 ? $"{status} · {N(plan.Done)}/{N(plan.Total)} · {plan.Title}" : $"{status} · {plan.Title}";
     }
+
+    /// <summary>A listed plan's status word: its header's, <see cref="UnreadableWord"/> for a file not read whole (2026-10-17), else <c>no header</c>.</summary>
+    private static string StatusWord(PlanListing plan) =>
+        plan.Unreadable ? UnreadableWord : plan.Status is { } s ? PlanDocument.Word(s) : "no header";
+
+    /// <summary>The status word of a plan file that cannot be read whole (2026-10-17).</summary>
+    public const string UnreadableWord = "unreadable";
+
+    /// <summary><c>MarkFile</c> on a plan file that is there but cannot be read whole (2026-10-17): the status was left as it was. Pinned.</summary>
+    public static string StatusUnwrittenWarning(string path) => $"The plan file {path} could not be read whole; its status was not updated";
 
     public static string DoneNotice(string path) => $"{Glyph} Every step of {path} is ticked: marked done.";
 
@@ -176,8 +254,10 @@ public static class PlanText
     /// <summary>Headless (2026-10-13): no confirm to ask on, so every advisor call would be refused.</summary>
     public const string GapsConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews the plan alone.";
 
-    /// <summary>Headless (2026-10-13): no ESC to stop a loop with no limit.</summary>
-    public static string GapsHeadlessCapNotice(int cap) => $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
+    /// <summary>Headless (2026-10-13): no Esc to stop a loop with no limit; <paramref name="fromCommand"/> (2026-10-17) when the 0 was typed as <c>/plan gaps 0</c>.</summary>
+    public static string GapsHeadlessCapNotice(int cap, bool fromCommand = false) => fromCommand
+        ? $"{Glyph} /plan gaps 0 means no limit, but headless has no Esc: at most {N(cap)} passes."
+        : $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
     /// <summary>The --log line of a pass: its gaps whole, and whether it asked an advisor.</summary>
     public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked)

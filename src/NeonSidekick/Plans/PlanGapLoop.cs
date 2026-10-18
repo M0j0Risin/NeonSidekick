@@ -13,6 +13,22 @@ public enum PlanReviewer
     Any,
 }
 
+/// <summary>What the words after <c>/plan gaps</c> are (<see cref="PlanText.ParseGapsArgs"/>, 2026-10-17).</summary>
+public enum GapsArgs
+{
+    /// <summary>None, a reviewer, a pass count in range, or one of each in either order.</summary>
+    Ok,
+
+    /// <summary>One word that is neither a reviewer nor a number.</summary>
+    Unknown,
+
+    /// <summary>A pass count outside <see cref="Settings.AppSettingsData.MinPlanGapPasses"/>–<see cref="Settings.AppSettingsData.MaxPlanGapPasses"/>, a sign or an overflow too.</summary>
+    OutOfRange,
+
+    /// <summary>Anything else (two reviewers, two numbers, three words or more): plan detail, not the command.</summary>
+    NotGaps,
+}
+
 /// <summary>Why a gap-closing loop ended (<see cref="PlanGapLoop.Next"/>).</summary>
 public enum PlanGapStop
 {

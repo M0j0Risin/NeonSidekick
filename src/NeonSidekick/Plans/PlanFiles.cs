@@ -3,8 +3,12 @@ using NeonSidekick.Files;
 
 namespace NeonSidekick.Plans;
 
-/// <summary>One plan file as <c>/plan open</c> lists it: its path, title, status, ticked steps and last update.</summary>
-public sealed record PlanListing(string Path, string Title, PlanStatus? Status, int Done, int Total, DateTimeOffset? Updated)
+/// <summary>
+/// One plan file as <c>/plan open</c> lists it: its path, title, status, ticked steps and last update. <paramref name="Unreadable"/>
+/// (2026-10-17, the user's report: a long plan was missing from the list) is a <c>.md</c> that cannot be read whole, listed by its
+/// file name with no status or steps rather than left out.
+/// </summary>
+public sealed record PlanListing(string Path, string Title, PlanStatus? Status, int Done, int Total, DateTimeOffset? Updated, bool Unreadable = false)
 {
     /// <summary>The name <c>/plan open</c> takes: the file name without <c>.neon/plans/</c> or <c>.md</c>.</summary>
     public string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
@@ -54,20 +58,28 @@ public static class PlanFiles
         ArgumentNullException.ThrowIfNull(path);
         if (ReadWhole(files, path) is not { } text)
         {
-            return FileText.Missing(path);
+            // A file that is there but cannot be read whole is not "nothing at" it (2026-10-17).
+            return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full)
+                ? PlanText.StatusUnwrittenWarning(path)
+                : FileText.Missing(path);
         }
 
         var written = files.WriteText(path, PlanDocument.WithStatus(text, status, now, requirement, progress), overwrite: true);
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
-    /// <summary>The plan file's whole text, or null when it cannot be read whole.</summary>
+    /// <summary>
+    /// The plan file's whole text, or null when it cannot be read whole. Read up to <see cref="WorkingDirectory.MaxWriteChars"/>, the most a
+    /// plan can have been written with (2026-10-17, the user's report: a 40,000-character plan "could not be read", missing from
+    /// <c>/plan open</c>'s list, its status never written, its progress dropped; the model's 32,000-character <c>read_file</c> window was
+    /// the wrong limit for a file the app wrote); a line cut is not the whole text either.
+    /// </summary>
     public static string? ReadWhole(WorkingDirectory files, string path)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
-        var read = files.ReadText(path, null, null);
-        return read.Outcome == FileOutcome.Ok && !read.Truncated ? read.Text : null;
+        var read = files.ReadText(path, null, null, WorkingDirectory.MaxWriteChars);
+        return read.Outcome == FileOutcome.Ok && !read.Truncated && !read.LineCut ? read.Text : null;
     }
 
     /// <summary>
@@ -104,7 +116,10 @@ public static class PlanFiles
         return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? path : null;
     }
 
-    /// <summary>Every <c>.neon/plans/*.md</c>, the most recently updated first (the file's time when its header has none).</summary>
+    /// <summary>
+    /// Every <c>.neon/plans/*.md</c>, the most recently updated first (the file's time when its header has none); one that cannot be
+    /// read whole is listed as <see cref="PlanListing.Unreadable"/> (2026-10-17), so <c>/plan open</c> names why rather than not finding it.
+    /// </summary>
     public static IReadOnlyList<PlanListing> List(WorkingDirectory files)
     {
         ArgumentNullException.ThrowIfNull(files);
@@ -129,6 +144,7 @@ public static class PlanFiles
             string path = PlanSlug.Folder + "/" + Path.GetFileName(full);
             if (ReadWhole(files, path) is not { } text)
             {
+                listings.Add((new PlanListing(path, Path.GetFileNameWithoutExtension(full), null, 0, 0, null, Unreadable: true), WrittenAt(full)));
                 continue;
             }
 
@@ -136,7 +152,7 @@ public static class PlanFiles
             string body = PlanDocument.Body(text);
             var (done, total) = PlanDocument.Progress(body);
             string title = PlanDocument.FirstHeading(body) ?? Path.GetFileNameWithoutExtension(full);
-            DateTimeOffset order = header?.Updated is { } updated && updated != DateTimeOffset.MinValue ? updated : File.GetLastWriteTime(full);
+            DateTimeOffset order = header?.Updated is { } updated && updated != DateTimeOffset.MinValue ? updated : WrittenAt(full);
             listings.Add((new PlanListing(path, title, header?.Status, done, total, header?.Updated), order));
         }
 
@@ -145,6 +161,18 @@ public static class PlanFiles
 
     /// <summary><see cref="PlanSlug.Folder"/>'s last segment, <c>plans</c>, as a name may still be typed with it.</summary>
     private const string BareFolder = "plans";
+
+    private static DateTimeOffset WrittenAt(string full)
+    {
+        try
+        {
+            return File.GetLastWriteTime(full);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return DateTimeOffset.MinValue;
+        }
+    }
 
     private static bool Taken(WorkingDirectory files, string path) =>
         files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full);

@@ -1577,6 +1577,9 @@ public sealed class SidekickApp
             case ChatScreen.PlanCommand.UnknownReviewer:
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.UnknownReviewerError(rest)).ConfigureAwait(false);
                 return null;
+            case ChatScreen.PlanCommand.BadGapPasses:
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.GapPassesRangeError(rest)).ConfigureAwait(false);
+                return null;
 
             case ChatScreen.PlanCommand.CloseGaps:
             {
@@ -1586,7 +1589,8 @@ public sealed class SidekickApp
                     return null;
                 }
 
-                var reviewer = rest.Length == 0 ? Plans.PlanReviewer.Model : Plans.PlanText.ParseReviewer(rest) ?? Plans.PlanReviewer.Model;
+                Plans.PlanText.ParseGapsArgs(rest, out var named, out int? passes, out _);
+                var reviewer = named ?? Plans.PlanReviewer.Model;
                 if (reviewer != Plans.PlanReviewer.Model && HeadlessAdvisorsOffered() && EffectiveSettings.AdvisorConfirm)
                 {
                     // No confirm seam headless: every advisor call would be refused, so the model reviews alone.
@@ -1594,12 +1598,14 @@ public sealed class SidekickApp
                     await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsConfirmFallbackNotice).ConfigureAwait(false);
                 }
 
-                if (EffectiveSettings.PlanGapPasses <= 0)
+                // A count typed on /plan gaps caps this run instead of the setting (2026-10-17); 0 is still 20 here.
+                int limit = passes ?? EffectiveSettings.PlanGapPasses;
+                if (limit <= 0)
                 {
-                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses)).ConfigureAwait(false);
+                    await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses, fromCommand: passes is not null)).ConfigureAwait(false);
                 }
 
-                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(EffectiveSettings.PlanGapPasses));
+                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(limit));
                 loop.BeginPass(Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null);
                 state.Draft = null;
                 return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, HeadlessAdvisorsOffered() ? loop.Reviewer : Plans.PlanReviewer.Model);

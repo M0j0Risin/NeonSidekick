@@ -1527,12 +1527,6 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// A text file, or a window of it: <paramref name="startLine"/> is 1-based, a negative one
-    /// counts from the end (<c>-20</c> = the last 20 lines); <paramref name="maxLines"/> null = all
-    /// that fit in <see cref="MaxReadChars"/>.
-    /// </summary>
-
-    /// <summary>
     /// A file's identity for a cache without reading it (2026-10-14, <c>read_pdf</c>'s page texts): its full path, length and last write,
     /// or null when it is outside the sandbox, missing or unreadable. One metadata call, on a UNC share too.
     /// </summary>
@@ -1556,7 +1550,14 @@ public sealed class WorkingDirectory
         }
     }
 
-    public ReadResult ReadText(string relative, int? startLine, int? maxLines)
+    /// <summary>
+    /// A text file, or a window of it: <paramref name="startLine"/> is 1-based, a negative one
+    /// counts from the end (<c>-20</c> = the last 20 lines); <paramref name="maxLines"/> null = all
+    /// that fit in <paramref name="maxChars"/>. <paramref name="maxChars"/> is the window, a line longer than it cut
+    /// (2026-10-17, the user's report: a 40,000-character plan "could not be read"): the model's tools keep
+    /// <see cref="MaxReadChars"/>, and the app reading back a file it wrote passes <see cref="MaxWriteChars"/>.
+    /// </summary>
+    public ReadResult ReadText(string relative, int? startLine, int? maxLines, int maxChars = MaxReadChars)
     {
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
@@ -1610,7 +1611,7 @@ public sealed class WorkingDirectory
             int shown = from - 1;
             for (int i = from - 1; i < to; i++)
             {
-                if (sb.Length + lines[i].Length + 1 > MaxReadChars && sb.Length > 0)
+                if (sb.Length + lines[i].Length + 1 > maxChars && sb.Length > 0)
                 {
                     truncated = true;
                     break;
@@ -1621,8 +1622,8 @@ public sealed class WorkingDirectory
                     sb.Append('\n');
                 }
 
-                lineCut |= lines[i].Length > MaxReadChars;
-                sb.Append(lines[i].Length > MaxReadChars ? lines[i][..MaxReadChars] : lines[i]);
+                lineCut |= lines[i].Length > maxChars;
+                sb.Append(lines[i].Length > maxChars ? lines[i][..maxChars] : lines[i]);
                 shown = i + 1;
             }
 

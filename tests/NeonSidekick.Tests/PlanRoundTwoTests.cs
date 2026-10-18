@@ -176,6 +176,57 @@ public class PlanRoundTwoTests : IDisposable
         Assert.Equal("incomplete · 1/2 · New plan", PlanText.CompletionNote(plans[0]));
     }
 
+    // ── A plan past read_file's window (2026-10-17, the user's report) ──────
+
+    /// <summary>A body past <see cref="WorkingDirectory.MaxReadChars"/>: a heading, two steps, then 400 lines of 100 characters.</summary>
+    internal static string LongPlanBody() =>
+        "# Long plan\n- [x] a\n- [ ] b\n" + string.Join('\n', Enumerable.Range(0, 400).Select(i => i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + new string('x', 96))) + "\nThe last line.";
+
+    [Fact]
+    public void ALongPlan_IsReadWhole_MarkedAndListed()
+    {
+        WritePlan("long.md", PlanDocument.Render(new PlanHeader(PlanStatus.Draft, 1, T0, T0, "r"), "Long", LongPlanBody()));
+        Assert.True(File.ReadAllText(Path.Combine(_dir, ".neon", "plans", "long.md")).Length > 40_000);
+
+        string? text = PlanFiles.ReadWhole(_files, ".neon/plans/long.md");
+        Assert.NotNull(text);
+        Assert.EndsWith("The last line.", text.TrimEnd());
+        Assert.Contains("# Long plan", text);
+
+        Assert.Null(PlanFiles.MarkFile(_files, ".neon/plans/long.md", PlanStatus.Approved, T0.AddDays(1), "r"));
+        string marked = File.ReadAllText(Path.Combine(_dir, ".neon", "plans", "long.md"));
+        Assert.Equal(PlanStatus.Approved, PlanDocument.TryParse(marked)!.Status);
+        Assert.EndsWith("The last line.", marked.TrimEnd());
+
+        var listed = Assert.Single(PlanFiles.List(_files));
+        Assert.Equal(new PlanListing(".neon/plans/long.md", "Long plan", PlanStatus.Approved, 1, 2, T0.AddDays(1)), listed);
+
+        // read_file keeps its window.
+        var window = _files.ReadText(".neon/plans/long.md", null, null);
+        Assert.True(window.Truncated);
+        Assert.True(window.Text.Length <= WorkingDirectory.MaxReadChars);
+    }
+
+    [Fact]
+    public void AFileThatCannotBeReadWhole_IsListedUnreadable_AndItsStatusIsNotWritten()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, ".neon", "plans"));
+        File.WriteAllBytes(Path.Combine(_dir, ".neon", "plans", "blob.md"), [0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0x01, 0x02]);
+        WritePlan("wide.md", new string('x', WorkingDirectory.MaxWriteChars + 10));   // one line past the cap: cut, so not whole
+        File.SetLastWriteTime(Path.Combine(_dir, ".neon", "plans", "wide.md"), new DateTime(2020, 1, 1));
+
+        var plans = PlanFiles.List(_files);
+
+        Assert.Equal(["blob", "wide"], plans.Select(p => p.Name));
+        Assert.Equal(new PlanListing(".neon/plans/blob.md", "blob", null, 0, 0, null, Unreadable: true), plans[0]);
+        Assert.True(plans[1].Unreadable);
+        Assert.Equal("  blob — blob (unreadable)", PlanText.ListLine(plans[0]));
+        Assert.Equal("unreadable · blob", PlanText.CompletionNote(plans[0]));
+        Assert.Equal(PlanText.StatusUnwrittenWarning(".neon/plans/blob.md"), PlanFiles.MarkFile(_files, ".neon/plans/blob.md", PlanStatus.Done, T0, "r"));
+        Assert.Equal("The plan file .neon/plans/blob.md could not be read whole; its status was not updated", PlanText.StatusUnwrittenWarning(".neon/plans/blob.md"));
+        Assert.Equal(FileText.Missing(".neon/plans/gone.md"), PlanFiles.MarkFile(_files, ".neon/plans/gone.md", PlanStatus.Done, T0, "r"));
+    }
+
     // ── The parser's two new words ──────────────────────────────────────────
 
     [Theory]

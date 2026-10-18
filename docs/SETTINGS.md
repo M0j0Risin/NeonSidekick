@@ -148,7 +148,7 @@ Settings every server reads, whatever its kind.
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. | 5 |
+| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. A count on `/plan gaps` overrides it for that run. | 5 |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |

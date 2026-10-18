@@ -285,8 +285,55 @@ public class PlanTests : IDisposable
     [InlineData("gaps", false, "NotPlanning")]
     [InlineData("gaps model", false, "NotPlanning")]
     [InlineData("gaps in the error handling", false, "Enter")]
+    // A pass count (2026-10-17, the user's ask): alone or beside a reviewer, either order; out of range is its own error.
+    [InlineData("gaps 3", true, "CloseGaps")]
+    [InlineData("gaps advisor 3", true, "CloseGaps")]
+    [InlineData("gaps 3 advisor", true, "CloseGaps")]
+    [InlineData("gaps 0", true, "CloseGaps")]
+    [InlineData("gaps 25", true, "BadGapPasses")]
+    [InlineData("gaps -1", true, "BadGapPasses")]
+    [InlineData("gaps advisor 25", true, "BadGapPasses")]
+    [InlineData("gaps advisor any", true, "Detail")]
+    [InlineData("gaps 3 4", true, "Detail")]
+    [InlineData("gaps advisor 3", false, "NotPlanning")]
+    [InlineData("gaps 3 4", false, "Enter")]
     public void ParsePlanArgs_SubcommandsOnlyWhole(string args, bool planning, string expected) =>
         Assert.Equal(expected, ChatScreen.ParsePlanArgs(args, planning).ToString());
+
+    [Theory]
+    [InlineData("", "Ok", null, null, "")]
+    [InlineData("advisor", "Ok", "Advisor", null, "")]
+    [InlineData("ADVISOR 3", "Ok", "Advisor", 3, "")]
+    [InlineData("3 any", "Ok", "Any", 3, "")]
+    [InlineData(" 3 ", "Ok", null, 3, "")]
+    [InlineData("0", "Ok", null, 0, "")]
+    [InlineData("20", "Ok", null, 20, "")]
+    [InlineData("21", "OutOfRange", null, null, "21")]
+    [InlineData("-1", "OutOfRange", null, null, "-1")]
+    [InlineData("model 99999999999", "OutOfRange", null, null, "99999999999")]
+    [InlineData("advsior", "Unknown", null, null, "advsior")]
+    [InlineData("model any", "NotGaps", null, null, "")]
+    [InlineData("3 4", "NotGaps", null, null, "")]
+    [InlineData("model three", "NotGaps", null, null, "")]
+    [InlineData("in the auth flow", "NotGaps", null, null, "")]
+    public void ParseGapsArgs_ReadsAReviewerAndACount(string after, string expected, string? reviewer, int? passes, string word)
+    {
+        var outcome = PlanText.ParseGapsArgs(after, out var named, out int? count, out string fault);
+
+        Assert.Equal(expected, outcome.ToString());
+        Assert.Equal(reviewer, named?.ToString());
+        Assert.Equal(passes, count);
+        Assert.Equal(word, fault);
+    }
+
+    [Fact]
+    public void GapsWords_ThePinnedSentences()
+    {
+        Assert.Equal("'25' passes: /plan gaps takes 0 to 20, 0 for no cap", PlanText.GapPassesRangeError("25"));
+        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor or any, and a pass count (0–20)", PlanText.UnknownReviewerError("x"));
+        Assert.Equal(PlanText.Glyph + " /plan gaps 0 means no limit, but headless has no Esc: at most 20 passes.", PlanText.GapsHeadlessCapNotice(20, fromCommand: true));
+        Assert.Equal(PlanText.Glyph + " LLM plan gap passes is 0 (no limit), but headless has no Esc: at most 20 passes.", PlanText.GapsHeadlessCapNotice(20));
+    }
 
     [Fact]
     public void Plan_IsRefusedMidTurn_WithOrWithoutAnArgument()

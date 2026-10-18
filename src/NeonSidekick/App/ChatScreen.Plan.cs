@@ -47,11 +47,17 @@ internal sealed partial class ChatScreen
         /// <summary><c>/plan save [name]</c> while planning: the last reply kept as the plan.</summary>
         Save,
 
-        /// <summary><c>/plan gaps [model|advisor|any]</c> while planning (2026-10-13): the gap-closing loop; the reviewer word is the rest.</summary>
+        /// <summary>
+        /// <c>/plan gaps [model|advisor|any] [passes]</c> while planning (2026-10-13): the gap-closing loop; the words are the rest
+        /// (<see cref="PlanText.ParseGapsArgs"/>), a pass count capping this run instead of <c>LLM plan gap passes</c> (2026-10-17).
+        /// </summary>
         CloseGaps,
 
         /// <summary><c>/plan gaps &lt;word&gt;</c> with a word that names no reviewer; the word is the rest.</summary>
         UnknownReviewer,
+
+        /// <summary><c>/plan gaps 25</c> (2026-10-17): a pass count out of range; the number as typed is the rest.</summary>
+        BadGapPasses,
     }
 
     /// <summary>The <c>/plan</c> list while planning: the subcommands, each with its note. Pinned.</summary>
@@ -62,7 +68,7 @@ internal sealed partial class ChatScreen
         new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked canceled"),
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
         new(PlanText.SaveWord, "keep the last reply as the plan and ask for approval: /plan save [name]"),
-        new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any]"),
+        new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any] [passes]"),
         new(PlanText.ShowWord, "where the plan stands"),
     ];
 
@@ -120,16 +126,26 @@ internal sealed partial class ChatScreen
             return PlanCommand.Save;
         }
 
-        // /plan gaps (2026-10-13): alone or with one word, the open rule; several words stay detail (or a requirement) as before.
-        if (first == PlanText.GapsWord && !after.Contains(' ', StringComparison.Ordinal) && !after.Contains('\t', StringComparison.Ordinal))
+        // /plan gaps (2026-10-13): alone, a reviewer, a pass count or one of each (2026-10-17), the open rule; other words stay
+        // detail (or a requirement) as before.
+        if (first == PlanText.GapsWord)
         {
-            if (!planning)
+            var gaps = PlanText.ParseGapsArgs(after, out _, out _, out string word);
+            if (gaps != GapsArgs.NotGaps)
             {
-                return PlanCommand.NotPlanning;
-            }
+                if (!planning)
+                {
+                    return PlanCommand.NotPlanning;
+                }
 
-            rest = after;
-            return after.Length == 0 || PlanText.ParseReviewer(after) is not null ? PlanCommand.CloseGaps : PlanCommand.UnknownReviewer;
+                rest = gaps == GapsArgs.Ok ? after : word;
+                return gaps switch
+                {
+                    GapsArgs.Ok => PlanCommand.CloseGaps,
+                    GapsArgs.Unknown => PlanCommand.UnknownReviewer,
+                    _ => PlanCommand.BadGapPasses,
+                };
+            }
         }
 
         string words = string.Join(' ', args.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
@@ -215,12 +231,19 @@ internal sealed partial class ChatScreen
                 _transcript.Error(PlanText.UnknownReviewerError(rest));
                 return false;
 
+            case PlanCommand.BadGapPasses:
+                _transcript.Error(PlanText.GapPassesRangeError(rest));
+                return false;
+
             case PlanCommand.CloseGaps when _plan.Path is null:
                 _transcript.Error(PlanText.NothingPresentedError);
                 return false;
 
             case PlanCommand.CloseGaps:
-                return await StartGapsAsync(rest.Length == 0 ? PlanReviewer.Model : PlanText.ParseReviewer(rest) ?? PlanReviewer.Model, cancellationToken).ConfigureAwait(false);
+            {
+                PlanText.ParseGapsArgs(rest, out var reviewer, out int? passes, out _);
+                return await StartGapsAsync(reviewer ?? PlanReviewer.Model, passes, cancellationToken).ConfigureAwait(false);
+            }
 
             case PlanCommand.Usage:
                 _transcript.Error(PlanText.UsageError);
@@ -594,7 +617,7 @@ internal sealed partial class ChatScreen
                 CancelPlan();
                 return false;
             case PlanChoice.CloseGaps:
-                return await StartGapsAsync(verdict.Reviewer ?? PlanReviewer.Model, cancellationToken).ConfigureAwait(false);
+                return await StartGapsAsync(verdict.Reviewer ?? PlanReviewer.Model, null, cancellationToken).ConfigureAwait(false);
             case PlanChoice.Refine when verdict?.Feedback is { } feedback:
                 string message = feedbackMessage(plan.Path, feedback);
                 _transcript.User(message);
@@ -625,8 +648,11 @@ internal sealed partial class ChatScreen
         return AdvisorsOffered(effective) && Without(_neonAdvisorTools, TurnDisabled(effective)).Count > 0;
     }
 
-    /// <summary>A fresh loop for <paramref name="reviewer"/> over the presented plan, its first pass sent: <c>/plan gaps</c> and an idle-line verdict.</summary>
-    private async Task<bool> StartGapsAsync(PlanReviewer reviewer, CancellationToken cancellationToken)
+    /// <summary>
+    /// A fresh loop for <paramref name="reviewer"/> over the presented plan, its first pass sent: <c>/plan gaps</c> and an idle-line verdict.
+    /// <paramref name="passes"/> is <c>/plan gaps</c>' count (2026-10-17), else <c>LLM plan gap passes</c>.
+    /// </summary>
+    private async Task<bool> StartGapsAsync(PlanReviewer reviewer, int? passes, CancellationToken cancellationToken)
     {
         if (_plan.Path is not { } path)
         {
@@ -634,7 +660,7 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        var loop = _plan.StartClosing(reviewer, _effective().PlanGapPasses);
+        var loop = _plan.StartClosing(reviewer, passes ?? _effective().PlanGapPasses);
         return await SendGapPassAsync(BeginGapPass(loop, path, ReadPlanBody(path)), cancellationToken).ConfigureAwait(false);
     }
 

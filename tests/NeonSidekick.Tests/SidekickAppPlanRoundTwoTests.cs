@@ -29,6 +29,23 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_Plan_Open_ALongPlan_IsListed_AndReopens()
+    {
+        // 2026-10-17, the user's report: a plan past read_file's 32,000 characters "could not be read".
+        ServerOn1234("llama");
+        Directory.CreateDirectory(HeadlessPlansFolder);
+        var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+        File.WriteAllText(Path.Combine(HeadlessPlansFolder, "add-guide.md"), PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide"), "Guide", PlanRoundTwoTests.LongPlanBody()));
+        _chat.EnqueueText("What should change?");
+
+        string output = await Headless("/plan open\n/plan open add-guide\n");
+
+        Assert.Contains("[notice] add-guide — Long plan (incomplete · 1/2", output);
+        Assert.Contains("[notice] " + PlanText.OpenedNotice(".neon/plans/add-guide.md", PlanStatus.Incomplete, 1, 2), output);
+        Assert.Equal(PlanText.OpenMessage(".neon/plans/add-guide.md", 1, 2), Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
+    }
+
+    [Fact]
     public async Task Headless_Plan_AnUnpresentedPlan_IsHinted_Saved_ApprovedAndMarkedDone()
     {
         ServerOn1234("llama");

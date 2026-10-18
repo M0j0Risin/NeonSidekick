@@ -293,7 +293,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan approve [--fresh]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first. |
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
-| `/plan gaps [model\|advisor\|any]` | Reviews the plan pass after pass until no gaps are left. |
+| `/plan gaps [model\|advisor\|any] [passes]` | Reviews the plan pass after pass until no gaps are left. |
 | `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
@@ -312,9 +312,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first.
 * **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
 * **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
-* **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision.
+* **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision. A number (`/plan gaps 3`, `/plan gaps advisor 3`) caps this run's passes instead of *LLM plan gap passes*.
 * **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), or the model consulting advisors (`y`).
-* **When it stops:** at a pass with no gaps (the approval pane comes back), at *LLM plan gap passes*, when a pass changes nothing or repeats itself, when you type a message, or on Esc.
+* **When it stops:** at a pass with no gaps (the approval pane comes back), at its pass limit (the count given to `/plan gaps`, else *LLM plan gap passes*), when a pass changes nothing or repeats itself, when you type a message, or on Esc.
 * `/new`, `/clear` and a profile switch leave plan mode.
 
 ### Bot conversations

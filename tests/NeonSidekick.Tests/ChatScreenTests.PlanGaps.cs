@@ -152,7 +152,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_TheWordsThatCannotRun()
     {
-        PlanFixture([], "/plan gaps", "/plan Add a guide", "/plan gaps", "/plan gaps advsior", "/exit");
+        PlanFixture([], "/plan gaps", "/plan Add a guide", "/plan gaps", "/plan gaps advsior", "/plan gaps 25", "/exit");
         _chat.EnqueueText("What should it cover?");
 
         string output = await RunAsync();
@@ -161,6 +161,31 @@ public partial class ChatScreenTests
         Assert.Contains(PlanText.NotPlanningError, output);
         Assert.Contains(PlanText.NothingPresentedError, output);
         Assert.Contains(PlanText.UnknownReviewerError("advsior"), output);
+        Assert.Contains(PlanText.GapPassesRangeError("25"), output);
+    }
+
+    [Fact]
+    public async Task PlanGaps_ACount_CapsThisRun_InsteadOfTheSetting()
+    {
+        // 2026-10-17, the user's ask: /plan gaps 2 runs two passes while LLM plan gap passes says 5.
+        PlanGapsFixture([[Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps 2"), Key(Keys.Escape), Line("/exit"));
+        _chat.Enqueue(PresentPlanCall());                                                                      // 0: presented; Esc keeps refining
+        _chat.EnqueueText("Noted.");                                                                           // 1
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));                         // 2: pass 1 of 2
+        _chat.EnqueueText("Pass 1 done.");                                                                     // 3
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n", "Add a ship step"));    // 4: pass 2 of 2, the limit
+        _chat.EnqueueText("Pass 2 done.");                                                                     // 5
+
+        string output = await RunAsync();
+
+        Assert.Equal(AppSettingsData.DefaultPlanGapPasses, _settings.Current.PlanGapPasses);
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 2, PlanReviewer.Model), LastUserText(_chat.Requests[2]));
+        Assert.Contains("A gap review is running (pass 1 of 2)", _chat.Requests[2][0].Text);
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 2, PlanReviewer.Model), LastUserText(_chat.Requests[4]));
+        Assert.Contains(PlanText.GapStopNotice(PlanGapStop.Limit, 2, 2), output);
+        Assert.Contains(PlanText.StoppedNote(PlanGapStop.Limit, 2, 1), output);
+        Assert.Contains($"Plan: {PlanPath} (revision 3)", output);
     }
 
     [Fact]
