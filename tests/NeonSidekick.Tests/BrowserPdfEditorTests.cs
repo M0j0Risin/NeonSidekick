@@ -9,7 +9,8 @@ namespace NeonSidekick.Tests;
 /// Editing a PDF in the headless browser (2026-10-14, the PDF plan's phase 4b): pdf-lib embedded, the expressions the page runs and the
 /// reading of their answers, and on the machine's own browser (skipped where none is installed, as <see cref="BrowserPdfReaderTests"/>'
 /// are) every edit made for real and read back with pdf.js: a merge, a cut, a delete, a turn, a form filled and flattened, a locked
-/// input, and an XFA-only form refused.
+/// input, and an XFA-only form refused. The live ones run on every system since 2026-10-17 (the Mac pass, the user's call: all three
+/// passed on a Mac's Chrome, and no reason for <c>[WindowsFact]</c> was ever written down).
 /// </summary>
 public sealed class BrowserPdfEditorTests
 {
@@ -113,7 +114,7 @@ public sealed class BrowserPdfEditorTests
         return [.. read.Pages.Select(p => p.Text)];
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_Merges_Extracts_Deletes_AndTurns()
     {
         var browser = LiveBrowser(out string? executable);
@@ -149,7 +150,7 @@ public sealed class BrowserPdfEditorTests
         Assert.Equal("Error: not all of them", refused.Refused);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_FillsAForm_AndFlattensIt()
     {
         var browser = LiveBrowser(out string? executable);
@@ -185,7 +186,7 @@ public sealed class BrowserPdfEditorTests
         Assert.True(xfa.Xfa, xfa.Detail);
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_RefusesALockedInput_AndNotAPdf()
     {
         var browser = LiveBrowser(out string? executable);

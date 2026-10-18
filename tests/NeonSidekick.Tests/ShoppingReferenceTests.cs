@@ -118,7 +118,7 @@ public sealed class ShoppingReferenceTests : IDisposable
         Assert.Equal("\"eggs\" OR \"egg\"* OR \"berries\" OR \"berr\"*", ShoppingReference.FtsQuery("Eggs, berries; a"));
     }
 
-    [WindowsFact]
+    [Fact]   // on every system since 2026-10-17 (the Mac pass: it passed on a Mac; Windows only until then, for no written reason)
     public async Task TheTools_LocateWithTheGuidesLines_AndReferenceReadsAPageWithItsPicture()
     {
         Put("guide.pdf", BrowserPdfReaderTests.MiniPdf("x"));
@@ -166,7 +166,7 @@ public sealed class ShoppingReferenceTests : IDisposable
         Assert.False(ShoppingReference.IsReadable("guide.docx"));
     }
 
-    [WindowsFact]
+    [WindowsFact]   // the folder in use: an open FileShare.None file blocks the move on Windows only; macOS moves it anyway (seen 2026-10-17, the Mac pass)
     public async Task RenamingAStore_MovesItsFolders_ThePicturesFollow_AndAFolderInUseStaysPut()
     {
         Put("guide.pdf", BrowserPdfReaderTests.MiniPdf("x"));

@@ -8,7 +8,8 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// Reading a PDF through the headless browser (2026-10-11, the shopping list's reference documents): pdf.js embedded, imported into a
-/// blank page, each page's text and picture read back. The pure half everywhere; the live read on the machine's own browser.
+/// blank page, each page's text and picture read back. The pure half everywhere; the live read on the machine's own browser, on every
+/// system since 2026-10-17 (the Mac pass, the user's call: all four passed on a Mac's Chrome; Windows only until then, for no written reason).
 /// </summary>
 public sealed class BrowserPdfReaderTests
 {
@@ -87,7 +88,7 @@ public sealed class BrowserPdfReaderTests
         Assert.Null(BrowserPdfReader.ReadPage(1, bad.RootElement));
     }
 
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_ReadsEachPagesText_AndDrawsIt()
     {
         var browser = new HeadlessBrowser(Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "pdf-" + Guid.NewGuid().ToString("N")));
@@ -122,7 +123,7 @@ public sealed class BrowserPdfReaderTests
     /// The PDF plan's gaps 44, 91, 92 and 94 on the machine's own browser (2026-10-14): exactly the pages asked, a picture of only the one
     /// asked, the outline's two levels with their pages, the printed labels, and a page past the end left out.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_ReadsTheAskedPages_TheOutline_AndTheLabels()
     {
         var browser = LiveBrowser(out string? executable);
@@ -151,7 +152,7 @@ public sealed class BrowserPdfReaderTests
     }
 
     /// <summary>The PDF plan's gap 2 (2026-10-14): a file that asks for a password is <see cref="PdfRead.Locked"/>, not a raw error.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_SaysALockedPdfIsLocked()
     {
         var browser = LiveBrowser(out string? executable);
@@ -167,7 +168,7 @@ public sealed class BrowserPdfReaderTests
     }
 
     /// <summary>The PDF plan's gap 3 (2026-10-14): a Japanese page whose font needs a predefined CMap reads its text, from the packed CMaps.</summary>
-    [WindowsFact]
+    [Fact]
     public async Task TheMachinesBrowser_ReadsAPageThatNeedsAPredefinedCMap()
     {
         Assert.True(BrowserPdfReader.CMapCount > 100, "the packed CMaps are embedded");
