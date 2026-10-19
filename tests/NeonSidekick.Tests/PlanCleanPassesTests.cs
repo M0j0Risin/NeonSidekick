@@ -209,7 +209,7 @@ public class PlanCleanPassesTests : IDisposable
     }
 
     [Fact]
-    public void Loop_TheFifthConfirmation_WrapsToTheFirstFocus()
+    public void Loop_TheFifthConfirmation_IsTheSizeFocus_AndTheSixthWrapsToTheFirst()
     {
         var loop = new PlanGapLoop(PlanReviewer.Model, 0, 5);
         loop.BeginPass("a");
@@ -231,7 +231,13 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Equal(5, loop.Confirmation);
         loop.MarkClean();
         loop.Next(true, false, "x");
-        Assert.Equal(0, loop.History[^1].Focus);                  // the fifth confirmation: focus 1 again
+        Assert.Equal(4, loop.History[^1].Focus);                  // the fifth confirmation: each step's size (later on 2026-10-18)
+        Assert.Equal("size", PlanText.ConfirmFocusLabels[loop.History[^1].Focus]);
+        loop.BeginPass("y");
+        Assert.Equal(6, loop.Confirmation);
+        loop.MarkClean();
+        loop.Next(true, false, "y");
+        Assert.Equal(0, loop.History[^1].Focus);                  // the sixth: focus 1 again
         Assert.Equal(-1, loop.History[0].Focus);
     }
 
@@ -362,8 +368,9 @@ public class PlanCleanPassesTests : IDisposable
 
         object? first = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2), first);
-        Assert.Equal("No gaps found in this pass of .neon/plans/guide.md (revision 1), 1 of 2 clean passes in a row. Reply with one short line and call no more tools; the next review pass starts by itself.", first);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), first);
+        Assert.Equal("No gaps found in this pass of .neon/plans/guide.md (revision 1), 1 of 2 clean passes in a row. Reply with one short line and call no more tools; the next review pass starts by itself."
+            + " The app measured: 1 step has no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", first);
         Assert.Empty(_presented);
         Assert.True(loop.PassClean);
         Assert.Equal(Checked, loop.PassChecked);
@@ -387,7 +394,7 @@ public class PlanCleanPassesTests : IDisposable
         await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
         object? again = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2), again);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), again);
         Assert.False(loop.Converged);
         Assert.Empty(_presented);
     }
@@ -418,8 +425,9 @@ public class PlanCleanPassesTests : IDisposable
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "Add a test step" }, new[] { "ignored" }, new[] { "fix a typo", "reword the title" }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, 2), result);
-        Assert.Equal("Revision 2 of .neon/plans/guide.md is saved with 1 gap closed and 2 minor fixes. Reply with one short line and call no more tools; the next review pass starts by itself.", result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)]), result);
+        Assert.Equal("Revision 2 of .neon/plans/guide.md is saved with 1 gap closed and 2 minor fixes. Reply with one short line and call no more tools; the next review pass starts by itself."
+            + " The app measured: 2 steps have no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", result);
         Assert.Equal(1, loop.Closed);
         Assert.Equal(2, loop.MinorFixed);
         Assert.Empty(loop.PassChecked);
@@ -433,7 +441,7 @@ public class PlanCleanPassesTests : IDisposable
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, Array.Empty<string>(), Checked, new[] { "reword" }));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1), result);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), result);
         Assert.Contains("(revision 2) with 1 minor fix, 1 of 2", (string)result!);
         Assert.Equal(2, _session.Revision);
         Assert.True(loop.PassClean);
@@ -507,8 +515,9 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Equal("Error: with gaps empty, checked is required: one short line for each part of the plan you checked this pass. Call present_plan again with it.", PlanText.CheckedRequiredResult);
         Assert.Equal("plan gaps: pass 2 clean (1 of 2): checked: steps | risks; minor: typo", PlanText.CleanPassLogLine(2, 1, 2, ["steps", "risks"], ["typo"]));
         Assert.Equal("plan gaps: pass 1, revision 2, 2 gaps closed, 1 minor fix: a | b; minor: c", PlanText.PassLogLine(1, 2, ["a", "b"], advisorAsked: false, ["c"]));
-        Assert.Equal(4, PlanText.ConfirmFocuses.Count);
-        Assert.Equal(["order", "verification", "risks", "assumptions"], PlanText.ConfirmFocusLabels);
+        Assert.Equal(5, PlanText.ConfirmFocuses.Count);
+        Assert.Equal(["order", "verification", "risks", "assumptions", "size"], PlanText.ConfirmFocusLabels);
+        Assert.Equal("each step's size: whether a fresh session reading only this plan could do it and check it in one sitting, and whether the plan reads short, with no history of its review", PlanText.ConfirmFocuses[4]);
         Assert.Equal("confirm", PlanText.ReviewerWord(PlanReviewer.Confirm));
         Assert.Equal(PlanReviewer.Confirm, PlanText.ParseReviewer("CONFIRM"));
         Assert.Equal("Close gaps (model, advisor confirms)", PlanText.ReviewerRows[3]);
@@ -558,6 +567,18 @@ public class PlanCleanPassesTests : IDisposable
         Assert.EndsWith("pass 1: nothing presented, stopped", PlanText.ReviewSummaryLines([new PlanPassRecord(1, 0, 0, false, -1)], PlanGapStop.Stopped)[^1]);
         Assert.Equal(PlanText.Glyph + " Gap review, 1 pass, 4.0s:", PlanText.ReviewSummaryLines([new PlanPassRecord(1, 1, 0, false, -1, false, TimeSpan.FromSeconds(4), 0, 0)], PlanGapStop.Limit)[0]);   // no tokens reported: left out
         Assert.Empty(PlanText.ReviewSummaryLines([], PlanGapStop.Stopped));
+        // The fifth focus (later on 2026-10-18): each step's size.
+        Assert.EndsWith("pass 6: clean (size), stopped", PlanText.ReviewSummaryLines([new PlanPassRecord(6, 0, 0, true, 4)], PlanGapStop.Stopped)[^1]);
+    }
+
+    [Fact]
+    public void Directive_TheFifthConfirmingPass_LooksHardestAtTheSize()
+    {
+        string fifth = PlanText.GapReviewLines(new PlanGapState(6, 9, PlanReviewer.Model, 1, 2, 5), advisorsOffered: false);
+        string sixth = PlanText.GapReviewLines(new PlanGapState(7, 9, PlanReviewer.Model, 1, 2, 6), advisorsOffered: false);
+
+        Assert.Contains("look hardest at " + PlanText.ConfirmFocuses[4] + ", which", fifth);
+        Assert.Contains("look hardest at " + PlanText.ConfirmFocuses[0] + ", which", sixth);
     }
 
     // ── The review line ─────────────────────────────────────────────────────

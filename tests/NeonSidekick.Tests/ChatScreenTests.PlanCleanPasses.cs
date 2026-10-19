@@ -35,7 +35,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal(10, _chat.Requests.Count);
-        Assert.Equal(PlanText.CleanPassResult(PlanPath, 1, 1, 2), PlanResultOf(_chat.Requests[3], "p2"));
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), PlanResultOf(_chat.Requests[3], "p2"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model, cleanSoFar: 1), LastUserText(_chat.Requests[4]));
         Assert.Contains(PlanText.ConfirmFocuses[0], _chat.Requests[4][0].Text);
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 3, 5, PlanReviewer.Model), LastUserText(_chat.Requests[6]));

@@ -53,6 +53,10 @@ public partial class SidekickAppTests
         Assert.Contains(FinishStepTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));
         Assert.DoesNotContain(AskUserTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));   // no checkpoint headless: nobody to ask
         Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 6, finalOnly: false), output);
+        // The fit (later on 2026-10-18): two steps with no Done when line said before the start, and the loop goes on.
+        string fit = "[notice] " + RalphText.FitNotice([RalphText.FitNoDoneWhen(2)]);
+        Assert.Contains(fit, output);
+        Assert.True(output.IndexOf(fit, StringComparison.Ordinal) < output.IndexOf(RalphText.StartedNotice(HeadlessPlanPath, 2, 6, finalOnly: false), StringComparison.Ordinal));
         Assert.Contains(RalphText.TranscriptLine(1, 1, 2, "One"), output);
         Assert.DoesNotContain(HeadlessRalphSteps.Split('\n')[0] + "\n\n## Steps", output);   // the pass's message is never echoed
         Assert.Contains("[notice] " + RalphText.StepDoneNotice(1, 2, "One"), output);
@@ -103,6 +107,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[notice] " + RalphText.StopNotice(RalphStop.Blocked, HeadlessPlanPath, 0, 2), output);
         Assert.Contains("[notice] " + RalphText.ResumedNotice(HeadlessPlanPath, 2, 6), output);
+        Assert.Single(output.Split('\n'), l => l.Contains(RalphText.FitNotice([RalphText.FitNoDoneWhen(2)]), StringComparison.Ordinal));   // not again on the resume
         Assert.Contains(RalphText.TranscriptLine(2, 1, 2, "One"), output);
         Assert.Equal(6, _chat.Requests.Count);
         Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);

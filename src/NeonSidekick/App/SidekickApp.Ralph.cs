@@ -159,7 +159,10 @@ public sealed partial class SidekickApp
         }
     }
 
-    /// <summary>A headless loop begun (the screen's <c>BeginRalphAsync</c> without a confirm): steps, lock, baseline, mark, snapshot, then its first pass queued.</summary>
+    /// <summary>
+    /// A headless loop begun (the screen's <c>BeginRalphAsync</c> without a confirm): steps, lock, baseline, mark, snapshot, then its first pass queued.
+    /// A plan that may not suit a loop (later on 2026-10-18, <see cref="PlanFit"/>) is said before the start notice, and the loop goes on; not on a resume.
+    /// </summary>
     private async Task HeadlessRalphBeginAsync(PlanSession plan, HeadlessPlanState state, WorkingDirectory files, string path, string body, string? verify, string? final, string requirement, int? passes, bool fromPlanning, Sessions.StoredPlan? stored, CancellationToken cancellationToken)
     {
         var context = state.RalphContext!;
@@ -248,6 +251,13 @@ public sealed partial class SidekickApp
         state.Executing = new Sessions.StoredPlan { Path = path, Requirement = requirement, Ralph = true, Verify = verify, Final = final, FinalOnly = finalOnly, Shell = snapshot.Shell, Root = snapshot.Root };
         state.Shown = null;
         RalphLog.SetHead(files, path, new RalphLogHead(path, verify, final, finalOnly, snapshot.Shell, _time.GetLocalNow()));
+        if (stored is null
+            && PlanFit.Problems(body, new PlanChecks(verify, final), snapshot.Reviewer != RalphReviewer.Off,
+                RalphText.InlineLimit((context.Session.ContextLength?.Tokens ?? 0) * Llm.ConversationCompactor.CharsPerToken)) is { Count: > 0 } problems)
+        {
+            await HeadlessNoticeLineAsync("[notice] " + RalphText.FitNotice(problems)).ConfigureAwait(false);
+        }
+
         await HeadlessNoticeLineAsync("[notice] " + (stored is not null ? RalphText.ResumedNotice(path, remaining, loop.Cap) : RalphText.StartedNotice(path, remaining, loop.Cap, finalOnly))).ConfigureAwait(false);
         await HeadlessRalphQueueAsync(state, files, cancellationToken).ConfigureAwait(false);
     }

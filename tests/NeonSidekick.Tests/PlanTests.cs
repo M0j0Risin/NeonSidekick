@@ -341,19 +341,26 @@ public class PlanTests : IDisposable
     public void TheDirective_AsksForDoneWhenLines_TheChecks_AndThePictures()
     {
         // 2026-10-18, the Ralph loop's groundwork: each step's check, verify/final only from the project, plain bullets outside Steps.
-        Assert.Equal("a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each with an indented Done when: line saying how to tell it is done), ## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.", PlanText.PlanShape);
+        Assert.Equal("a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: "
+            + "split a big job into several steps, never one step with a plain list of its parts under it (indented - [ ] sub-steps, one level, are fine); "
+            + "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool), "
+            + "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.", PlanText.PlanShape);
         Assert.Equal("- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess.", PlanText.VerifyLine);
+        // Later on 2026-10-18 (the user's 170,000-character sample): the plan kept short, after the checks' bullet.
+        Assert.Equal("- Keep the plan short, under 20,000 characters: the decisions and how to carry them out, never how they were reached. No pass-by-pass notes, and a revision rewrites a passage rather than adding a correction beside it.", PlanText.PlanSizeLine);
         string directive = PlanText.Directive("Add a guide", null, 0);
-        Assert.Contains("- When no open question is left, call present_plan with the whole plan as Markdown: " + PlanText.PlanShape + "\n" + PlanText.VerifyLine + "\n- Never write", directive);
+        Assert.Contains("- When no open question is left, call present_plan with the whole plan as Markdown: " + PlanText.PlanShape + "\n" + PlanText.VerifyLine + "\n" + PlanText.PlanSizeLine + "\n- Never write", directive);
         Assert.DoesNotContain("## References", directive);
         Assert.EndsWith(PlanText.PlanShape, PlanText.TalkingLine);
+        Assert.Contains(PlanText.PlanSizeLine, PlanText.Directive("", null, 0, null, null, null, new PlanTalk(Talking: true, Opening: false)));
 
         string pictures = PlanText.Directive("Add a guide", null, 0, null, null, null, default, ["ref-1", "ref-2"]);
-        Assert.Contains(PlanText.VerifyLine + "\n" + PlanText.ReferencesLine(["ref-1", "ref-2"]) + "\n", pictures);
+        Assert.Contains(PlanText.VerifyLine + "\n" + PlanText.PlanSizeLine + "\n" + PlanText.ReferencesLine(["ref-1", "ref-2"]) + "\n", pictures);
         Assert.Equal("- The pictures in this conversation are saved beside the plan as ref-1, ref-2: list each under ## References as - ref-N: what it shows, and name the ref-N a step relies on in that step, so whoever carries it out is shown the picture.", PlanText.ReferencesLine(["ref-1", "ref-2"]));
 
         var gap = new PlanGapState(1, 5, PlanReviewer.Model);
-        Assert.Contains(", a step with no Done when: line, a risk with no answer, no way to verify.", PlanText.GapReviewLines(gap, advisorsOffered: false));
+        Assert.Contains(", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell), "
+            + "a step too big for one fresh session to do and check, a plan past 20,000 characters or one carrying its review's history. Wording and style are not gaps.", PlanText.GapReviewLines(gap, advisorsOffered: false));
     }
 
     [Fact]

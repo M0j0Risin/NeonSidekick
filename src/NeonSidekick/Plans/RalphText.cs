@@ -106,8 +106,7 @@ public static class RalphText
         ArgumentNullException.ThrowIfNull(body);
         string ask = $"Carry out step {N(step)} of {N(steps)} of the plan in {path}: \"{Flatten(stepText)}\"" + (doneWhen is { Length: > 0 } d ? $" (done when: {Flatten(d)})" : "") +
             ". End with finish_step.";
-        int fits = windowChars > 0 ? Math.Min(InlinePlanChars, windowChars / 4) : InlinePlanChars;
-        if (body.Length <= fits)
+        if (body.Length <= InlineLimit(windowChars))
         {
             return ask + "\n\nThe plan:\n\n" + body.Trim();
         }
@@ -115,6 +114,12 @@ public static class RalphText
         var headings = body.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').Where(l => l.TrimStart().StartsWith('#')).Select(l => "  " + l.Trim()).ToList();
         return ask + "\n\nThe plan is too long to send whole; its headings:\n" + string.Join('\n', headings) + $"\n\nread_file {path} for the rest.";
     }
+
+    /// <summary>
+    /// The most characters of a plan a pass sends whole (later on 2026-10-18, out of <see cref="PassMessage"/> for <see cref="PlanFit"/>): the smaller of
+    /// <see cref="InlinePlanChars"/> and a quarter of the known context window in characters, <see cref="InlinePlanChars"/> when it is unknown (0).
+    /// </summary>
+    public static int InlineLimit(int windowChars) => windowChars > 0 ? Math.Min(InlinePlanChars, windowChars / 4) : InlinePlanChars;
 
     /// <summary>The final fix pass's message, the failing check's tail inline. Pinned.</summary>
     public static string FinalFixMessage(string path, string command, string tail) =>
@@ -133,9 +138,11 @@ public static class RalphText
 
     /// <summary>
     /// The pane's check line (2026-10-18, <see cref="PlanPresentation.Checks"/>): the commands, the reviewer and the budget; <c>unchecked</c> with
-    /// neither command; with <c>Shell command policy</c> at ask, the warning that an unattended run stalls on its asks. Pinned.
+    /// neither command; with <c>Shell command policy</c> at ask, the warning that an unattended run stalls on its asks. Pinned. Since later on
+    /// 2026-10-18 <paramref name="problems"/> (<see cref="PlanFit.Shape"/>'s, never the no-check item: the line says <c>unchecked</c> and the reviewer
+    /// already) follow, one part each, so the pane shows them before its row is picked; none, the line as before.
     /// </summary>
-    public static string PaneCheckLine(PlanChecks? checks, RalphReviewer reviewer, long budget, bool policyAsks)
+    public static string PaneCheckLine(PlanChecks? checks, RalphReviewer reviewer, long budget, bool policyAsks, IReadOnlyList<string>? problems = null)
     {
         var parts = new List<string>();
         if (checks is { Verify.Length: > 0 } v)
@@ -159,7 +166,7 @@ public static class RalphText
             parts.Add("budget " + App.UsageText.CompactNumber(budget));
         }
 
-        return string.Join(" · ", parts) + (policyAsks ? " · " + PolicyAsksWarning : "");
+        return string.Join(" · ", parts) + (policyAsks ? " · " + PolicyAsksWarning : "") + (problems is { Count: > 0 } p ? " · " + string.Join(" · ", p) : "");
     }
 
     /// <summary>The check line's tail under <c>Shell command policy</c> ask. Pinned.</summary>
@@ -182,6 +189,50 @@ public static class RalphText
     /// <summary>The baseline failed and the user would not start: the plan stays as it was. Pinned.</summary>
     public const string BaselineRefusedNotice = Glyph + " Not started: the plan stays as it was. Fix the check, or approve it again.";
 
+    // ── The fit (later on 2026-10-18, PlanFit) ──────────────────────────────
+
+    /// <summary>A plan whose one step is long: a single pass gets the whole job. Pinned.</summary>
+    public const string FitOneStep = "1 step: one pass does the whole plan";
+
+    /// <summary>Unticked steps with no <c>Done when:</c> line. Pinned, both forms.</summary>
+    public static string FitNoDoneWhen(int count) => count == 1 ? "1 step has no Done when line" : $"{Count(count)} steps have no Done when line";
+
+    /// <summary>A plan longer than a pass sends whole (<see cref="InlineLimit"/>). Pinned.</summary>
+    public static string FitTooLong(int chars, int limit) => $"the plan is {Count(chars)} characters; a pass sends it whole only up to {Count(limit)}";
+
+    /// <summary>Neither <c>verify</c> nor <c>final</c>, and the reviewer off. Pinned.</summary>
+    public const string FitNoCheck = "no check: steps stand unchecked";
+
+    /// <summary>
+    /// The question before a loop starts on a plan with problems (the pane's row, <c>/plan approve --ralph</c>), on the PC and the page: every problem,
+    /// the no-check one too, since this question shows no check line of its own. Pinned.
+    /// </summary>
+    public static string FitQuestion(IReadOnlyList<string> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        return $"This plan may not suit a Ralph loop: {string.Join("; ", problems)}. Start anyway?";
+    }
+
+    /// <summary>The problems folded into <c>/plan ralph &lt;name&gt;</c>'s one confirm, after its check line (<see cref="ConfirmQuestion"/>). Pinned.</summary>
+    public static string FitSentence(IReadOnlyList<string> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        return $"It may not suit a Ralph loop: {string.Join("; ", problems)}.";
+    }
+
+    /// <summary>Headless, where nobody can be asked: said before the start notice, and the loop goes on. Pinned.</summary>
+    public static string FitNotice(IReadOnlyList<string> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        return $"{Glyph} This plan may not suit a Ralph loop: {string.Join("; ", problems)}. Starting it anyway.";
+    }
+
+    /// <summary>
+    /// The fit question answered no: nothing started, the plan still presented. The typed form asks the same question again, so the notice says
+    /// to answer yes there rather than promising it runs as it is. Pinned.
+    /// </summary>
+    public const string FitDeclinedNotice = Glyph + " Not started: revise the plan (/plan gaps tightens it), or run /plan approve --ralph and say yes to start it as it is.";
+
     /// <summary>The loop began. Pinned.</summary>
     public static string StartedNotice(string path, int steps, int cap, bool finalOnly) =>
         $"{Glyph} Ralph loop on {path}: {Steps(steps)} to go, at most {Passes(cap)}" + (finalOnly ? "; checked once at the end." : ".");
@@ -202,11 +253,16 @@ public static class RalphText
     public static string BadPassesError(string word) =>
         $"'{word}' passes: a Ralph loop takes {N(Settings.AppSettingsData.MinRalphLoopPasses)} to {N(Settings.AppSettingsData.MaxRalphLoopPasses)}, 0 for three a step";
 
-    /// <summary><c>/plan ralph &lt;name&gt;</c>'s confirm on a plan not yet approved (a draft after <c>/plan open</c>). Pinned.</summary>
-    public static string ConfirmDraftQuestion(string path, string checks) => $"Approve {path} and run it as a Ralph loop? {checks}";
+    /// <summary>
+    /// <c>/plan ralph &lt;name&gt;</c>'s confirm on a plan not yet approved (a draft after <c>/plan open</c>). Pinned. <paramref name="problems"/> (later on
+    /// 2026-10-18) follow as <see cref="FitSentence"/>, so one question covers both; none, as before.
+    /// </summary>
+    public static string ConfirmDraftQuestion(string path, string checks, IReadOnlyList<string>? problems = null) => $"Approve {path} and run it as a Ralph loop? {checks}" + FitPart(problems);
 
-    /// <summary><c>/plan ralph &lt;name&gt;</c>'s confirm on an approved or incomplete plan. Pinned.</summary>
-    public static string ConfirmQuestion(string path, string checks) => $"Run {path} as a Ralph loop? {checks}";
+    /// <summary><c>/plan ralph &lt;name&gt;</c>'s confirm on an approved or incomplete plan, <paramref name="problems"/> as the draft's. Pinned.</summary>
+    public static string ConfirmQuestion(string path, string checks, IReadOnlyList<string>? problems = null) => $"Run {path} as a Ralph loop? {checks}" + FitPart(problems);
+
+    private static string FitPart(IReadOnlyList<string>? problems) => problems is { Count: > 0 } p ? ". " + FitSentence(p) : "";
 
     /// <summary><c>/plan open</c> on a paused Ralph plan: the loop is left, its log kept. Pinned.</summary>
     public static string LeftOnOpenNotice(string path) =>
@@ -412,4 +468,7 @@ public static class RalphText
     private static string Flatten(string text) => string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Replace('"', '\'');
 
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>A count with thousands separators (<c>170,298</c>), invariant.</summary>
+    private static string Count(int value) => value.ToString("N0", CultureInfo.InvariantCulture);
 }

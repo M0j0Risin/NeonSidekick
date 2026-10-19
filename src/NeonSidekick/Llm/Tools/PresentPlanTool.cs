@@ -45,7 +45,7 @@ public sealed class PresentPlanTool : AIFunction
           "properties": {
             "title": { "type": "string", "description": "A short title for the plan, a few words." },
             "name": { "type": "string", "description": "A short kebab-case file name saying what the plan does, like add-contributing-guide. Optional: the title is used when it is missing. Ignored after the first presentation, which fixes the file." },
-            "markdown": { "type": "string", "description": "The whole plan as Markdown: # title, ## Goal, ## Context, ## Steps (- [ ] checkboxes), ## Files and areas, ## Risks, ## Verification." },
+            "markdown": { "type": "string", "description": "The whole plan as Markdown, under 20,000 characters: # title, ## Goal, ## Context, ## Steps (- [ ] checkboxes, each small enough for a fresh session to do and check in one sitting, each with an indented Done when: line), ## Files and areas, ## Risks, ## Verification." },
             "gaps": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each gap this revision closed; empty when none is left." },
             "checked": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review, with gaps empty: one short line for each part of the plan you checked this pass." },
             "minor": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each small fix this revision made that is not a gap (wording, formatting, a clarification nobody would stop over)." },
@@ -63,6 +63,7 @@ public sealed class PresentPlanTool : AIFunction
     private readonly Func<int> _gapLimit;
     private readonly Func<int> _cleanPasses;
     private readonly Func<string, string, string>? _references;
+    private readonly Func<int> _inlineLimit;
 
     /// <param name="review">Shows the saved plan and waits for the user's verdict; the token is the turn's.</param>
     /// <param name="gapLimit">The gap-closing loop's pass limit (0 for none), read when a <c>Close gaps…</c> verdict starts one; null for the default.</param>
@@ -71,9 +72,14 @@ public sealed class PresentPlanTool : AIFunction
     /// The pictures seam (2026-10-18, <c>PlanReferences</c>): the plan's path and body to the body with its <c>## References</c> reconciled,
     /// the conversation's pictures saved beside the plan first; null saves the body as sent (headless without pictures, the tests).
     /// </param>
-    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null)
+    /// <param name="inlineLimit">
+    /// The most characters of a plan a Ralph pass sends whole (later on 2026-10-18, <see cref="RalphText.InlineLimit"/> over the session's window), read
+    /// after each gap pass's save for <see cref="PlanFit.Shape"/>; null for <see cref="RalphText.InlinePlanChars"/>.
+    /// </param>
+    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null)
     {
         _references = references;
+        _inlineLimit = inlineLimit ?? (() => RalphText.InlinePlanChars);
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _time = time ?? throw new ArgumentNullException(nameof(time));
@@ -173,7 +179,7 @@ public sealed class PresentPlanTool : AIFunction
             if (gaps.Count > 0)
             {
                 loop.Record(gaps, minor);
-                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count);
+                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, Measured(saved));
             }
 
             if (!loop.WouldConverge)
@@ -181,7 +187,7 @@ public sealed class PresentPlanTool : AIFunction
                 // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself.
                 int clean = loop.CleanCount;
                 loop.MarkClean(@checked, minor);
-                return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count);
+                return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count, Measured(saved));
             }
 
             int streak = loop.CleanCount;
@@ -225,6 +231,12 @@ public sealed class PresentPlanTool : AIFunction
             ? new PlanPresentation(_session.Title ?? title, path, _session.Revision, body)
             : null;
     }
+
+    /// <summary>
+    /// What the app measured of the revision a gap pass leaves (later on 2026-10-18, <see cref="PlanFit.Shape"/>): the body the save wrote or the
+    /// unchanged one reused, so a clean pass that rewrote nothing is measured as one that did. The convergence's pane shows them on its caption instead.
+    /// </summary>
+    private IReadOnlyList<string> Measured(PlanPresentation saved) => PlanFit.Shape(saved.Markdown, _inlineLimit());
 
     /// <summary>A list argument's lines, trimmed, blanks dropped.</summary>
     private static List<string> Lines(IEnumerable<string> sent) => sent.Select(line => line.Trim()).Where(line => line.Length > 0).ToList();

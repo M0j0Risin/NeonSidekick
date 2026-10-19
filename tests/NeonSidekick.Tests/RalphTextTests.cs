@@ -101,6 +101,46 @@ public sealed class RalphTextTests
     {
         Assert.Equal("verify `dotnet build` · final `dotnet test` · reviewer any", RalphText.PaneCheckLine(new PlanChecks("dotnet build", "dotnet test"), RalphReviewer.Any, 0, false));
         Assert.Equal("unchecked · reviewer off · budget 2.0M · shell policy ask: an unattended loop waits on each command", RalphText.PaneCheckLine(null, RalphReviewer.Off, 2_000_000, true));
+        // The fit (later on 2026-10-18): the problems after the rest, one part each; none or empty, the line as before.
+        Assert.Equal("unchecked · reviewer any · 1 step: one pass does the whole plan · the plan is 170,298 characters; a pass sends it whole only up to 24,000",
+            RalphText.PaneCheckLine(null, RalphReviewer.Any, 0, false, [RalphText.FitOneStep, RalphText.FitTooLong(170_298, 24_000)]));
+        Assert.Equal("verify `make` · reviewer any", RalphText.PaneCheckLine(new PlanChecks("make", null), RalphReviewer.Any, 0, false, []));
+    }
+
+    [Fact]
+    public void TheFitWords_ArePinned()
+    {
+        Assert.Equal("1 step: one pass does the whole plan", RalphText.FitOneStep);
+        Assert.Equal("1 step has no Done when line", RalphText.FitNoDoneWhen(1));
+        Assert.Equal("3 steps have no Done when line", RalphText.FitNoDoneWhen(3));
+        Assert.Equal("1,200 steps have no Done when line", RalphText.FitNoDoneWhen(1200));
+        Assert.Equal("the plan is 170,298 characters; a pass sends it whole only up to 24,000", RalphText.FitTooLong(170_298, 24_000));
+        Assert.Equal("no check: steps stand unchecked", RalphText.FitNoCheck);
+
+        string[] problems = [RalphText.FitOneStep, RalphText.FitNoCheck];
+        Assert.Equal("This plan may not suit a Ralph loop: 1 step: one pass does the whole plan; no check: steps stand unchecked. Start anyway?", RalphText.FitQuestion(problems));
+        Assert.Equal("It may not suit a Ralph loop: 1 step: one pass does the whole plan; no check: steps stand unchecked.", RalphText.FitSentence(problems));
+        Assert.Equal("🔁 This plan may not suit a Ralph loop: 1 step: one pass does the whole plan; no check: steps stand unchecked. Starting it anyway.", RalphText.FitNotice(problems));
+        Assert.Equal("🔁 Not started: revise the plan (/plan gaps tightens it), or run /plan approve --ralph and say yes to start it as it is.", RalphText.FitDeclinedNotice);
+
+        // /plan ralph <name>'s one confirm: the problems after the check line; none, as before.
+        Assert.Equal("Run p.md as a Ralph loop? unchecked · reviewer any", RalphText.ConfirmQuestion("p.md", "unchecked · reviewer any"));
+        Assert.Equal("Run p.md as a Ralph loop? unchecked · reviewer any", RalphText.ConfirmQuestion("p.md", "unchecked · reviewer any", []));
+        Assert.Equal("Run p.md as a Ralph loop? unchecked · reviewer any. It may not suit a Ralph loop: 1 step: one pass does the whole plan.", RalphText.ConfirmQuestion("p.md", "unchecked · reviewer any", [RalphText.FitOneStep]));
+        Assert.Equal("Approve p.md and run it as a Ralph loop? reviewer any. It may not suit a Ralph loop: 1 step has no Done when line.", RalphText.ConfirmDraftQuestion("p.md", "reviewer any", [RalphText.FitNoDoneWhen(1)]));
+    }
+
+    [Fact]
+    public void TheInlineLimit_IsThePassMessagesRoom()
+    {
+        Assert.Equal(RalphText.InlinePlanChars, RalphText.InlineLimit(0));
+        Assert.Equal(RalphText.InlinePlanChars, RalphText.InlineLimit(1_000_000));
+        Assert.Equal(500, RalphText.InlineLimit(2000));
+
+        // The pass message sends a body whole exactly up to the limit.
+        string body = "# G\n" + new string('x', 496);
+        Assert.Contains("The plan:\n\n", RalphText.PassMessage("p", body, 1, 1, "a", null, windowChars: 2000));
+        Assert.Contains("read_file", RalphText.PassMessage("p", body + "x", 1, 1, "a", null, windowChars: 2000));
     }
 
     [Fact]

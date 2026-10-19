@@ -16,7 +16,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
-    private const string RalphSteps = "# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n";
+    private const string RalphSteps = "# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n  Done when: two.md exists\n";
     private const string RalphVerify = "dotnet build";
 
     /// <summary>The add-guide plan with <paramref name="body"/>'s steps and its checks, on disk before the run.</summary>

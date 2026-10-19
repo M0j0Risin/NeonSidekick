@@ -70,7 +70,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[notice] " + PlanText.GapsConfirmFallbackNotice, output);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 5, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[2]));
-        Assert.Equal(PlanText.CleanPassResult(HeadlessPlanPath, 1, 1, 2), _chat.Requests[3].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p2").Result);
+        Assert.Equal(PlanText.CleanPassResult(HeadlessPlanPath, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), _chat.Requests[3].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p2").Result);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 2, 5, PlanReviewer.Model, cleanSoFar: 1), HeadlessLastUser(_chat.Requests[4]));
         Assert.Contains("[notice] " + PlanText.ConvergedNotice(HeadlessPlanPath, 2, 0, 2), output);
     }

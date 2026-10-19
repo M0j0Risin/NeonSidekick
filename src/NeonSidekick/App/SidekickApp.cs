@@ -919,7 +919,8 @@ public sealed partial class SidekickApp
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26, made above): no pane to approve on, so a presented plan is saved and the user approves it with
         // /plan approve; the saved line is printed once the turn is over, never inside the streamed reply.
-        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses), () => EffectiveSettings.PlanGapCleanPasses);
+        var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses), () => EffectiveSettings.PlanGapCleanPasses,
+            inlineLimit: () => Plans.RalphText.InlineLimit((session.ContextLength?.Tokens ?? 0) * Llm.ConversationCompactor.CharsPerToken));
         var planState = new HeadlessPlanState();
         // The Ralph loop headless (2026-10-18): what its passes are judged with.
         planState.RalphContext = new HeadlessRalphContext(session, git, neonAdvisor, interpreters, _ralphVerifier ?? new Plans.RalphVerifier(runner, interpreters.Locate));

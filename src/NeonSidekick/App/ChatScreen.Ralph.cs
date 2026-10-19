@@ -110,6 +110,12 @@ internal sealed partial class ChatScreen
 
     private static string Truncate(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
 
+    /// <summary>The known context window in characters, 0 when unknown: what a pass's message measures the plan against.</summary>
+    private int RalphWindowChars() => (_session.ContextLength?.Tokens ?? 0) * ConversationCompactor.CharsPerToken;
+
+    /// <summary>The most characters of a plan a pass sends whole (later on 2026-10-18, <see cref="RalphText.InlineLimit"/>): the fit's and the gap pass's measure.</summary>
+    private int RalphInlineLimit() => RalphText.InlineLimit(RalphWindowChars());
+
     // ── /plan ralph ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -146,7 +152,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/plan ralph &lt;name&gt;</c> (and the picker's <c>l</c>): a plan not done or canceled, its checks confirmed on both sides (a draft approved
-    /// by the same yes), the baseline, then the loop. A paused loop on the same plan resumes instead.
+    /// by the same yes), the baseline, then the loop. A paused loop on the same plan resumes instead. Since later on 2026-10-18 the same question
+    /// names the plan's fit problems (<see cref="PlanFit.Shape"/>, the check line already saying <c>unchecked</c>), so it is asked once.
     /// </summary>
     private async Task<bool> RalphNamedAsync(string path, int? passes, CancellationToken cancellationToken)
     {
@@ -175,17 +182,18 @@ internal sealed partial class ChatScreen
         }
 
         var effective = _effective();
+        string body = PlanDocument.Body(text);
         string checks = RalphText.PaneCheckLine(header is null ? null : new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask);
-        string question = header is null or { Status: PlanStatus.Draft } ? RalphText.ConfirmDraftQuestion(path, checks) : RalphText.ConfirmQuestion(path, checks);
+        var problems = PlanFit.Shape(body, RalphInlineLimit());
+        string question = header is null or { Status: PlanStatus.Draft } ? RalphText.ConfirmDraftQuestion(path, checks, problems) : RalphText.ConfirmQuestion(path, checks, problems);
         if (!await RalphConfirmAsync(question, cancellationToken).ConfigureAwait(false))
         {
             _transcript.Notice(KeptNotice);
             return false;
         }
 
-        string body = PlanDocument.Body(text);
         string requirement = header is { Requirement.Length: > 0 } ? header.Requirement : PlanDocument.FirstHeading(body) ?? path;
-        return await BeginRalphAsync(path, body, header?.Verify, header?.Final, requirement, passes, resume: false, fromPlanning: false, cancellationToken).ConfigureAwait(false);
+        return await BeginRalphAsync(path, body, header?.Verify, header?.Final, requirement, passes, resume: false, fromPlanning: false, cancellationToken, fitAsked: true).ConfigureAwait(false);
     }
 
     /// <summary>The paused loop again (<c>/plan ralph</c>): no confirm; the file read again (a plan done meanwhile clears the state), the baseline, the loop.</summary>
@@ -276,15 +284,26 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A loop begun on <paramref name="path"/>: no steps refused; the lock taken; the baseline (the verify and the final command) run, a failure asking
     /// "start anyway?" (yes: final-only checking; no: nothing started); the plan marked approved (plan mode left when it came from planning); the run
-    /// snapshotted, said and saved; then <see cref="RunRalphAsync"/>.
+    /// snapshotted, said and saved; then <see cref="RunRalphAsync"/>. A plan that may not suit a loop (later on 2026-10-18, <see cref="PlanFit"/>) is
+    /// asked about first, before the lock: never on a resume, nor when <paramref name="fitAsked"/> (<c>/plan ralph &lt;name&gt;</c>'s confirm named them).
     /// </summary>
-    private async Task<bool> BeginRalphAsync(string path, string body, string? verify, string? final, string requirement, int? passes, bool resume, bool fromPlanning, CancellationToken cancellationToken, StoredPlan? stored = null)
+    private async Task<bool> BeginRalphAsync(string path, string body, string? verify, string? final, string requirement, int? passes, bool resume, bool fromPlanning, CancellationToken cancellationToken, StoredPlan? stored = null, bool fitAsked = false)
     {
         var steps = PlanSteps.Parse(body);
         if (!PlanSteps.Leaves(steps).Any())
         {
             _plan.ClearApproval();
             _transcript.Error(RalphText.NoStepsError);
+            return false;
+        }
+
+        if (!resume && !fitAsked
+            && PlanFit.Problems(body, new PlanChecks(verify, final), RalphReviewerMode.Resolve(_effective()) != RalphReviewer.Off, RalphInlineLimit()) is { Count: > 0 } problems
+            && !await RalphConfirmAsync(RalphText.FitQuestion(problems), cancellationToken).ConfigureAwait(false))
+        {
+            // The plan stays presented, as on the other refusals: /plan gaps tightens it, /plan approve --ralph asks again.
+            _plan.ClearApproval();
+            _transcript.Notice(RalphText.FitDeclinedNotice);
             return false;
         }
 
@@ -471,7 +490,7 @@ internal sealed partial class ChatScreen
         bool reviewed = snapshot.Reviewer != RalphReviewer.Off;
         string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.StepCheck ?? (step is null ? snapshot.FinalCheck : null), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null);
         _ralphTurn = new PlanTurn(directive, _finishStep);
-        int windowChars = (_session.ContextLength?.Tokens ?? 0) * ConversationCompactor.CharsPerToken;
+        int windowChars = RalphWindowChars();
         string message = step is null
             ? RalphText.FinalFixMessage(path, snapshot.FinalCheck ?? "", finalTail ?? "")
             : RalphText.PassMessage(path, body, index, total, step.Text, step.DoneWhen, windowChars);

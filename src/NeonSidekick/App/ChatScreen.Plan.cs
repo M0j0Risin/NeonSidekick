@@ -574,13 +574,15 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The Ralph loop's check line for <paramref name="plan"/> (2026-10-18, the pane's caption and the page's body): its checks (the presentation's,
-    /// else the file's header), the reviewer, the budget, and the warning under <c>Shell command policy</c> ask.
+    /// else the file's header), the reviewer, the budget, and the warning under <c>Shell command policy</c> ask; since later on 2026-10-18 the plan's
+    /// fit problems after them (<see cref="PlanFit.Shape"/>), so the pane says them before its Ralph row is picked.
     /// </summary>
     private string PlanCheckLine(PlanPresentation plan)
     {
         var effective = _effective();
         var checks = plan.Checks ?? (PlanFiles.ReadWhole(_files, plan.Path) is { } text && PlanDocument.TryParse(text) is { } header ? new PlanChecks(header.Verify, header.Final) : null);
-        return RalphText.PaneCheckLine(checks, RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, Shell.CommandPolicy.Resolve(effective) == Shell.CommandPolicyMode.Ask);
+        return RalphText.PaneCheckLine(checks, RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, Shell.CommandPolicy.Resolve(effective) == Shell.CommandPolicyMode.Ask,
+            PlanFit.Shape(plan.Markdown, RalphInlineLimit()));
     }
 
     /// <summary><c>present_plan: approve</c> for the --log file. Pinned.</summary>

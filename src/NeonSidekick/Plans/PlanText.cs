@@ -427,7 +427,8 @@ public static class PlanText
 
     /// <summary>
     /// What each confirming pass looks hardest at (2026-10-17, the user's pick of idea #1), in turn: the loop's <see cref="PlanGapLoop.Confirmations"/>
-    /// counts across streaks, the fifth wrapping to the first. Pinned.
+    /// counts across streaks, the sixth wrapping to the first. Pinned. The fifth (later on 2026-10-18): each step's size and the plan's length,
+    /// what a Ralph loop needs (<see cref="PlanFit"/>).
     /// </summary>
     public static readonly IReadOnlyList<string> ConfirmFocuses =
     [
@@ -435,10 +436,11 @@ public static class PlanText
         "how each step is verified, and what proves the whole plan worked",
         "the risks: what could go wrong, how it would show, and how it is undone",
         "every file, API, specification, version or setting the plan assumes, and whether it was read or looked up",
+        "each step's size: whether a fresh session reading only this plan could do it and check it in one sitting, and whether the plan reads short, with no history of its review",
     ];
 
-    /// <summary><see cref="ConfirmFocuses"/>' short labels for the review summary (2026-10-17). Pinned.</summary>
-    public static readonly IReadOnlyList<string> ConfirmFocusLabels = ["order", "verification", "risks", "assumptions"];
+    /// <summary><see cref="ConfirmFocuses"/>' short labels for the review summary (2026-10-17; <c>size</c> later on 2026-10-18). Pinned.</summary>
+    public static readonly IReadOnlyList<string> ConfirmFocusLabels = ["order", "verification", "risks", "assumptions", "size"];
 
     /// <summary>
     /// The review summary said at every stop with a pass recorded (2026-10-17, the user's approval of later idea #2): a heading with the
@@ -663,6 +665,7 @@ public static class PlanText
                 ? TalkingLine + "\n"
                 : "- When no open question is left, call present_plan with the whole plan as Markdown: " + PlanShape + "\n") +
             VerifyLine + "\n" +
+            PlanSizeLine + "\n" +
             (references is { Count: > 0 } pictures ? ReferencesLine(pictures) + "\n" : "") +
             "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
@@ -694,11 +697,26 @@ public static class PlanText
 
     /// <summary>
     /// The plan's shape as the directive asks for it (2026-10-18, the Ralph loop: each step carries its own check, and the only checkboxes are the
-    /// steps', so a loop and the progress line count the same things). Pinned.
+    /// steps', so a loop and the progress line count the same things). Pinned. The step size (later on 2026-10-18, the user's sample plan: 46 gap
+    /// passes left one checkbox with the whole build as a numbered list under it, which a loop's three passes a step never finished; always on, the
+    /// user's pick, since small steps help a plain execute too): each step one change a fresh conversation can make and check, a big job split into
+    /// steps rather than listed under one (<see cref="PlanSteps.Parse"/> reads only the checkbox line as a step's text, so a plain list under it is
+    /// invisible to a pass), and a <c>Done when:</c> that names a command where one can tell, never a guessed tool (<see cref="VerifyLine"/>'s rule).
     /// </summary>
     public const string PlanShape =
-        "a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each with an indented Done when: line saying how to tell it is done), " +
+        "a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: " +
+        "split a big job into several steps, never one step with a plain list of its parts under it (indented - [ ] sub-steps, one level, are fine); " +
+        "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool), " +
         "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.";
+
+    /// <summary>
+    /// The plan's length bullet, after <see cref="VerifyLine"/> (later on 2026-10-18, the user's sample plan: ~170,000 characters, its pass-by-pass
+    /// history in ## Context and "correction:" notes beside the passages they corrected). 20,000 sits under <see cref="RalphText.InlinePlanChars"/>
+    /// with room for a pass's own text; a smaller window's lower limit is caught by <see cref="PlanFit"/>, not said here. Pinned.
+    /// </summary>
+    public const string PlanSizeLine =
+        "- Keep the plan short, under 20,000 characters: the decisions and how to carry them out, never how they were reached. " +
+        "No pass-by-pass notes, and a revision rewrites a passage rather than adding a correction beside it.";
 
     /// <summary>
     /// The check commands' bullet (2026-10-18, the Ralph loop: the app runs them after each step and at the end): only commands seen in the project,
@@ -772,7 +790,9 @@ public static class PlanText
                 : "") +
             "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? "" : GapOpenQuestionException) + ", " +
             (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
-            ", a step with no Done when: line, a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
+            // The fit (later on 2026-10-18): a step one fresh pass cannot finish, a plan too long to send whole, and a Done when: only a person can judge.
+            ", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell), " +
+            "a step too big for one fresh session to do and check, a plan past 20,000 characters or one carrying its review's history. Wording and style are not gaps.\n" +
             (web
                 ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
                 : "- Research what you need with the read-only tools. " + decision + "\n") +
@@ -841,12 +861,27 @@ public static class PlanText
     public static string CouldNotSaveResult(string detail) => $"Error: the plan could not be saved: {detail}";
 
     /// <summary>A gap-closing pass's revision saved (2026-10-13): the pane is not shown, the next pass starts by itself; its minor fixes since 2026-10-17. Pinned.</summary>
-    public static string GapPassResult(string path, int revision, int gaps, int minor = 0) =>
-        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself.";
+    public static string GapPassResult(string path, int revision, int gaps, int minor = 0, IReadOnlyList<string>? measured = null) =>
+        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself." + Measured(measured);
 
-    /// <summary>A clean pass that does not end the review (2026-10-17): no pane, the streak said, the next pass starts by itself. Pinned.</summary>
-    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0) =>
-        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself.";
+    /// <summary>
+    /// A clean pass that does not end the review (2026-10-17): no pane, the streak said, the next pass starts by itself. Pinned. Since later on
+    /// 2026-10-18 both results end with what <see cref="PlanFit.Shape"/> measured, when anything (<paramref name="measured"/> null or empty: as before).
+    /// </summary>
+    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0, IReadOnlyList<string>? measured = null) =>
+        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself." + Measured(measured);
+
+    /// <summary>
+    /// The facts a gap pass's result carries (later on 2026-10-18): a reviewing model gets the plan's measured fit, not only the rules; "if you can",
+    /// since a plan that truly cannot be shorter must still be able to converge (the pass limit bounds it either way). Pinned.
+    /// </summary>
+    public static string MeasuredSentence(IReadOnlyList<string> measured)
+    {
+        ArgumentNullException.ThrowIfNull(measured);
+        return "The app measured: " + string.Join("; ", measured) + ". A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.";
+    }
+
+    private static string Measured(IReadOnlyList<string>? measured) => measured is { Count: > 0 } m ? " " + MeasuredSentence(m) : "";
 
     /// <summary><c> and 2 minor fixes</c> after a gap count, nothing at 0.</summary>
     private static string MinorAnd(int minor) => minor <= 0 ? "" : minor == 1 ? " and 1 minor fix" : $" and {N(minor)} minor fixes";

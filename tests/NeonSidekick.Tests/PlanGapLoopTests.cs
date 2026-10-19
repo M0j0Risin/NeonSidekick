@@ -285,11 +285,49 @@ public class PlanGapLoopTests : IDisposable
 
         object? result = await _tool.InvokeAsync(Args("Guide", Revised, new[] { "Add a test step", "  " }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1), result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), result);
         Assert.Empty(_presented);
         Assert.Equal(["Add a test step"], loop.PassGaps);
         Assert.Equal(1, loop.Presented);
         Assert.Equal(2, _session.Revision);
+    }
+
+    [Fact]
+    public async Task Tool_APassOnAOneStepPlan_CarriesWhatTheAppMeasured()
+    {
+        // Later on 2026-10-18 (the user's 170,000-character sample): the measured fit, not only the rules; no-check left out.
+        await PassOneAsync();
+        string big = "# Guide\n\n## Context\n\n" + new string('c', PlanFit.OneStepChars) + "\n\n## Steps\n- [ ] Write the whole guide\n";
+
+        object? result = await _tool.InvokeAsync(Args("Guide", big, new[] { "Add context" }));
+
+        string text = Assert.IsType<string>(result);
+        Assert.EndsWith(" The app measured: 1 step: one pass does the whole plan; 1 step has no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", text);
+        Assert.DoesNotContain(RalphText.FitNoCheck, text);
+    }
+
+    [Fact]
+    public async Task Tool_APassOnAWellShapedPlan_CarriesNothingMeasured()
+    {
+        await PassOneAsync();
+        const string good = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the link check passes\n";
+
+        object? result = await _tool.InvokeAsync(Args("Guide", good, new[] { "Add done when lines" }));
+
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1), result);
+    }
+
+    [Fact]
+    public async Task Tool_APassUnderASmallWindow_MeasuresTheLengthAgainstIt()
+    {
+        var tool = new PresentPlanTool(_session, _files, _time, (_, _) => Task.FromResult(_verdict), () => 3, inlineLimit: () => 40);
+        await PassOneAsync();
+        const string good = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the link check passes\n";
+
+        object? result = await tool.InvokeAsync(Args("Guide", good, new[] { "Add done when lines" }));
+
+        Assert.Contains("The app measured: the plan is ", Assert.IsType<string>(result));
+        Assert.Contains("; a pass sends it whole only up to 40.", (string)result!);
     }
 
     [Fact]

@@ -83,13 +83,13 @@ public partial class ChatScreenTests
         Assert.Contains("A gap review is running (pass 1 of 5)", _chat.Requests[2][0].Text);
         Assert.Contains(PresentPlanTool.ToolName, OfferedNames(_chat.Options[2]));
         Assert.DoesNotContain(WriteFileTool.ToolName, OfferedNames(_chat.Options[2]));
-        Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1), PlanResultOf(_chat.Requests[3], "p2"));
+        Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), PlanResultOf(_chat.Requests[3], "p2"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model), LastUserText(_chat.Requests[4]));
         Assert.Contains("A gap review is running (pass 2 of 5)", _chat.Requests[4][0].Text);
         Assert.Contains("only 2 passes in a row with no gaps return the plan to the user", _chat.Requests[4][0].Text);
         Assert.DoesNotContain("this pass checks again", _chat.Requests[4][0].Text);
         // Pass 2 clean: no pane, the streak said; pass 3 is told to look again, with the first focus.
-        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2), PlanResultOf(_chat.Requests[5], "p3"));
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)]), PlanResultOf(_chat.Requests[5], "p3"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 3, 5, PlanReviewer.Model, cleanSoFar: 1), LastUserText(_chat.Requests[6]));
         Assert.Contains("this pass checks again (clean pass 2 of 2)", _chat.Requests[6][0].Text);
         Assert.Contains(PlanText.ConfirmFocuses[0], _chat.Requests[6][0].Text);

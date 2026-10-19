@@ -52,7 +52,7 @@ public sealed class AuditReuseTests : IDisposable
         }
 
         Assert.Equal([-1, 0, 1, 0, 1, 0], loop.History.Select(p => p.Focus));
-        Assert.Equal([-1, 0, 1, 2, 3, 0], plain.History.Select(p => p.Focus));
+        Assert.Equal([-1, 0, 1, 2, 3, 4], plain.History.Select(p => p.Focus));   // a plan's five focuses (the size one later on 2026-10-18)
     }
 
     // ── The reviewer page ────────────────────────────────────────────────────
