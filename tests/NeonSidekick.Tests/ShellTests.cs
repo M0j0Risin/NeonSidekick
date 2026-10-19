@@ -68,18 +68,20 @@ public sealed class ShellTests
     [InlineData("dotnet --info", "dotnet")]   // a last word is only an option
     [InlineData("npm -g install x", "npm install")]   // a known flag
     [InlineData("git --git-dir .git --no-pager log", "git log")]
-    [InlineData("PATH=/tmp/x make test", CommandPrefix.Unreadable)]   // a leading PATH assignment can redirect which make runs
     [InlineData("kubectl -n prod delete pod x", "kubectl delete")]
     [InlineData("docker --context remote rm -f x", "docker rm")]
     [InlineData("npm --prefix web run build", "npm run")]
     [InlineData("GIT STATUS", "git status")]
     [InlineData("dotnet build -c Release", "dotnet build")]
     [InlineData("python -c \"print(1)\"", "python")]
-    [InlineData("\"C:\\Tools\\Foo.EXE\" -x", "foo")]
-    [InlineData("./build.sh --fast", "build")]
-    [InlineData(".\\build.ps1", "build")]
-    [InlineData("C:\\Windows\\System32\\cmd.exe /c dir", "cmd")]
-    [InlineData("FOO=1 BAR=2 make test", "make test")]
+    // A program named by a path keeps its folder (later on 2026-10-19, the third shell review), so a model's own git.cmd is never git:
+    [InlineData("\"C:\\Tools\\Foo.EXE\" -x", "c:/tools/foo")]
+    [InlineData("./build.sh --fast", "./build")]
+    [InlineData(".\\build.ps1", "./build")]
+    [InlineData("C:\\Windows\\System32\\cmd.exe /c dir", "c:/windows/system32/cmd")]
+    [InlineData(".\\git.cmd status", "./git status")]
+    [InlineData("sub\\git.bat -C x push", "sub/git push")]   // the verb and options read by the file's name
+    [InlineData("\"C:\\Program Files\\Git\\cmd\\git.exe\" -c x=y push", CommandPrefix.Unreadable)]
     [InlineData("Get-ChildItem -Recurse", "get-childitem")]
     [InlineData("npm run dev", "npm run")]
     [InlineData("net use Z: \\\\nas\\x", "net use")]   // net a verb program since 2026-10-03
@@ -88,6 +90,66 @@ public sealed class ShellTests
     public void CommandPrefix_Of_IsTheProgram_AndTheVerbForVerbPrograms(string command, string prefix)
     {
         Assert.Equal(prefix, CommandPrefix.Of(command));
+    }
+
+    /// <summary>
+    /// What a leading <c>NAME=value</c> is, by shell (later on 2026-10-19, the third shell review): an assignment skipped only in bash and
+    /// zsh; PowerShell's command name, cmd's up to the <c>=</c>. And a <c>set</c>/<c>export</c> of a variable that redirects what runs asks.
+    /// </summary>
+    [Theory]
+    [InlineData("bash", "FOO=1 BAR=2 make test", "make test")]
+    [InlineData("zsh", "FOO=1 git status", "git status")]
+    [InlineData("bash", "PATH=/tmp/x make test", CommandPrefix.Unreadable)]   // a leading PATH assignment can redirect which make runs
+    [InlineData("powershell", "FOO=1 git status", "foo=1")]
+    [InlineData("cmd", "FOO=1 git status", "foo")]
+    [InlineData("cmd", "git,x status", "git status")]   // cmd runs git; git still reads status as its verb
+    [InlineData("cmd", "set PATH=C:\\x;%PATH%", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "set NoDefaultCurrentDirectoryInExePath=", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "set \"path=C:\\x\"", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "set X=1", "set")]
+    [InlineData("bash", "export PATH=.:$PATH", CommandPrefix.Unreadable)]
+    [InlineData("bash", "export LANG=C", "export")]
+    [InlineData("bash", "/usr/bin/git push", "/usr/bin/git push")]
+    public void CommandPrefix_Of_ReadsAssignmentsAsTheShellDoes(string shell, string command, string prefix)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefix, CommandPrefix.Of(command, shell: kind));
+    }
+
+    /// <summary>
+    /// cmd never runs a bare name from the working folder (later on 2026-10-19, the third shell review): a <c>whoami.bat</c> written there
+    /// ran in place of whoami under an allowed <c>whoami</c>. Every shell child gets <c>NoDefaultCurrentDirectoryInExePath</c>.
+    /// </summary>
+    [WindowsFact]
+    public async Task ShellRunner_CmdNeverRunsABareNameFromTheWorkingFolder()
+    {
+        string work = Path.Combine(Path.GetTempPath(), "neon-shadow-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            File.WriteAllText(Path.Combine(work, "whoami.bat"), "@echo SHADOWED\r\n");
+            var launch = ShellCommandLine.For(ShellKind.Cmd, "whoami & echo [%NoDefaultCurrentDirectoryInExePath%]", Path.Combine(Environment.SystemDirectory, "cmd.exe"), work);
+            await using var session = new ShellRunner(TimeProvider.System).Start(launch, "run_shadow");
+            Assert.True(await session.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None));
+            string output = string.Join("\n", session.Output.Lines().Select(l => l.Text));
+            Assert.DoesNotContain("SHADOWED", output);
+            Assert.Contains("[1]", output);
+            Assert.True(session.InJob);   // started suspended inside its job (ChildJob.StartPiped)
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ChildJob_EnvironmentBlock_IsSortedCaseBlind_AndDoublyEnded()
+    {
+        var block = NeonSidekick.EmbeddedLlm.ChildJob.EnvironmentBlock(new Dictionary<string, string?> { ["b"] = "2", ["A"] = "1", ["c"] = null });
+        Assert.Equal("A=1\0b=2\0c=\0\0", new string(block));
+        Assert.Equal("\0\0", new string(NeonSidekick.EmbeddedLlm.ChildJob.EnvironmentBlock(new Dictionary<string, string?>())));
+        Assert.Equal("\"C:\\x y\\cmd.exe\" /d /c dir", ShellRunner.WindowsCommandLine(new ProcessLaunch("C:\\x y\\cmd.exe", null, "/d /c dir", ".", "dir", "cmd")));
+        Assert.Equal("\"C:\\p.exe\" a \"b c\"", ShellRunner.WindowsCommandLine(new ProcessLaunch("C:\\p.exe", ["a", "b c"], null, ".", "x", "p")));
     }
 
     [Fact]
@@ -106,7 +168,7 @@ public sealed class ShellTests
         Assert.Equal(
             [("a", "&&"), ("b", "||"), ("c", "|"), ("d", "&"), ("e", ";"), ("f", "\n"), ("g 'h && i'", "")],
             CommandPrefix.JoinedSegments("a && b || c | d & e; f\r\ng 'h && i'"));
-        Assert.Equal(["tool"], CommandPrefix.All("& 'C:\\x y\\tool.exe' run"));   // PowerShell's call operator: an empty segment, dropped
+        Assert.Equal(["c:/x y/tool"], CommandPrefix.All("& 'C:\\x y\\tool.exe' run"));   // PowerShell's call operator: an empty segment, dropped
         Assert.Contains("git", CommandPrefix.VerbPrograms);
         Assert.DoesNotContain("python", CommandPrefix.VerbPrograms);
         Assert.DoesNotContain("powershell", CommandPrefix.VerbPrograms);
@@ -494,6 +556,7 @@ public sealed class ShellTests
         start.Environment["NEONSIDEKICK_TEST_SQL_CONNECTION"] = "Password=secret";
         start.Environment["NEONSIDEKICK_TEST_UNC_PASSWORD"] = "secret";
         start.Environment["NEONSIDEKICK_WEBUI_TOKEN"] = "secret";
+        start.Environment["NEONSIDEKICK_TEST_AD_DOMAIN"] = "Domain=x;User=y;Password=secret";
         var launch = new ProcessLaunch("x.exe", [], null, ".", "x", "cmd", new Dictionary<string, string> { ["TERM"] = "xterm", ["NEONSIDEKICK_BRIDGE_TOKEN"] = "t" });
 
         ChildEnvironment.Apply(start, launch);
@@ -504,17 +567,25 @@ public sealed class ShellTests
         Assert.Equal("t", start.Environment["NEONSIDEKICK_BRIDGE_TOKEN"]);
         Assert.Equal("utf-8", start.Environment["PYTHONIOENCODING"]);
         Assert.Equal("cat", start.Environment["GIT_PAGER"]);
-        // The app's secrets are withheld (2026-10-12), and since 2026-10-19 every secret-named one, the tests' too; a test's URL goes through.
+        // The app's secrets are withheld (2026-10-12), and since 2026-10-19 every secret-named one, and later that day every test variable.
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_LLM_API_KEY"));
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_HA_TOKEN"));
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_OPENAI_API_KEY"));
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_SQL_CONNECTION"));
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_UNC_PASSWORD"));
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_WEBUI_TOKEN"));
-        Assert.Equal("http://x", start.Environment["NEONSIDEKICK_TEST_LLM_URL"]);
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_AD_DOMAIN"));
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_LLM_URL"));
+        Assert.Equal("1", start.Environment["NoDefaultCurrentDirectoryInExePath"]);
         Assert.True(ChildEnvironment.IsWithheld("neonsidekick_test_ha_token"));
         Assert.False(ChildEnvironment.IsWithheld("GITHUB_TOKEN"));   // the user's own, not the app's
-        Assert.False(ChildEnvironment.IsWithheld("NEONSIDEKICK_TEST_UNC_SHARE"));
+        Assert.True(ChildEnvironment.IsWithheld("NEONSIDEKICK_TEST_UNC_SHARE"));
+        Assert.False(ChildEnvironment.IsWithheld("NEONSIDEKICK_HOME"));
+        Assert.Equal("NEONSIDEKICK_TEST_", ChildEnvironment.TestPrefix);
+        var withheld = new Dictionary<string, string?> { ["NEONSIDEKICK_OPENAI_API_KEY"] = "k", ["PATH"] = "p" };
+        ChildEnvironment.Withhold(withheld);
+        Assert.Equal(["PATH"], withheld.Keys);
+        Assert.DoesNotContain(ChildEnvironment.WithoutSecrets().Keys, ChildEnvironment.IsWithheld);
         Assert.Equal(["KEY", "TOKEN", "SECRET", "PASSWORD", "CONNECTION", "CREDENTIAL"], ChildEnvironment.SecretWords);
         // An MCP stdio server: every withheld name in the app's environment removed (a null), its own env entries on top.
         var mcp = NeonSidekick.App.McpSession.McpEnvironment(new Dictionary<string, string> { ["NEONSIDEKICK_HA_TOKEN"] = "mine", ["X"] = "1" });
@@ -522,7 +593,7 @@ public sealed class ShellTests
         Assert.Equal("1", mcp["X"]);
         Assert.All(mcp.Where(p => p.Key is not ("NEONSIDEKICK_HA_TOKEN" or "X")), p => Assert.True(p.Value is null && ChildEnvironment.IsWithheld(p.Key)));
         Assert.Equal(["NEONSIDEKICK_LLM_API_KEY", "NEONSIDEKICK_ANTHROPIC_API_KEY", "NEONSIDEKICK_OPENAI_API_KEY", "NEONSIDEKICK_HA_TOKEN", "NEONSIDEKICK_YOUTUBE_API_KEY"], ChildEnvironment.Withheld);
-        Assert.Equal(["NO_COLOR", "FORCE_COLOR", "CLICOLOR", "TERM", "PYTHONIOENCODING", "PYTHONUTF8", "PYTHONUNBUFFERED", "GIT_TERMINAL_PROMPT", "GIT_PAGER", "PAGER", "DOTNET_NOLOGO", "DOTNET_CLI_TELEMETRY_OPTOUT"], ChildEnvironment.Overrides.Select(p => p.Key));
+        Assert.Equal(["NO_COLOR", "FORCE_COLOR", "CLICOLOR", "TERM", "PYTHONIOENCODING", "PYTHONUTF8", "PYTHONUNBUFFERED", "GIT_TERMINAL_PROMPT", "GIT_PAGER", "PAGER", "DOTNET_NOLOGO", "DOTNET_CLI_TELEMETRY_OPTOUT", "NoDefaultCurrentDirectoryInExePath"], ChildEnvironment.Overrides.Select(p => p.Key));
     }
 
     // ── The output ring ──────────────────────────────────────────────────────
@@ -746,11 +817,11 @@ public sealed class ShellTests
     }
 
     /// <summary>
-    /// Leftovers (2026-10-19, the second shell review): only a background command's job counts as holding them, and only while a process
-    /// is still in it, so a foreground command's programs outlive a kill after its shell exits and an emptied job is no kill to report.
+    /// Leftovers (2026-10-19, the second shell review): a job counts as holding them only while a process is still in it, so an emptied job
+    /// is no kill to report. A foreground command's job too since the third review: its server holding the output is killed at the timeout.
     /// </summary>
     [WindowsFact]
-    public void ProcessChild_HoldsLeftovers_OnlyABackgroundJobStillRunningSomething()
+    public void ProcessChild_HoldsLeftovers_WhileItsJobStillRunsSomething()
     {
         static Process Ping() => Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })!;
 
@@ -759,7 +830,7 @@ public sealed class ShellTests
         try
         {
             Assert.True(foreground.InJob && background.InJob);
-            Assert.False(foreground.HoldsLeftovers);
+            Assert.True(foreground.HoldsLeftovers);
             Assert.True(background.HoldsLeftovers);
         }
         finally
@@ -768,14 +839,15 @@ public sealed class ShellTests
             background.Kill();
         }
 
-        Assert.True(background.WaitForExit(10_000));
+        Assert.True(background.WaitForExit(10_000) && foreground.WaitForExit(10_000));
         var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (background.HoldsLeftovers && DateTime.UtcNow < deadline)
+        while ((background.HoldsLeftovers || foreground.HoldsLeftovers) && DateTime.UtcNow < deadline)
         {
             Thread.Sleep(20);
         }
 
         Assert.False(background.HoldsLeftovers);   // the job emptied: nothing left to kill
+        Assert.False(foreground.HoldsLeftovers);
         Assert.False(NeonSidekick.EmbeddedLlm.ChildJob.HoldsProcesses(0));
     }
 }

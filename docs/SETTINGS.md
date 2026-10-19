@@ -524,7 +524,8 @@ The tools most profiles use, and the pane's own options.
 ##### Shell guards
 
 * **Approval (`ask`):** the app asks first: Deny, Allow once, Allow for this session, or Allow always; **≡ view** (`v`) shows the whole command. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` set the policy for one launch.
-* **Prefixes:** a command is allowed by its program, plus the verb for programs that take one (`git status`, `npm run`).
+* **Prefixes:** a command is allowed by its program, plus the verb for programs that take one (`git status`, `npm run`). A program run by its path keeps its folder (`./build`), so a `.\git.cmd` is never `git`.
+* **The working folder:** `cmd` runs a program there only by its path (`.\build.bat`), as PowerShell does, never by its bare name.
 * **Every command in the line** must be allowed: each part of a pipe or `&&` chain, and each command a substitution runs. A substitution the app can't read always asks.
 * **Path police:** refuses an absolute path (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~` or a folder variable (`%USERPROFILE%`, `$HOME`), in switches and URLs too. The transcript shows 👮.
 * **What the police sees:** it reads only the text written, not what runs, so a computed path gets past it. `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` doesn't.
@@ -534,6 +535,7 @@ The tools most profiles use, and the pane's own options.
 * **Databases:** while the police and a database family's tools are both on, a command or script that reaches that family is refused, even under `yolo`.
   * **SQLite:** the word `sqlite`, a `.db` or `.sqlite` file, or a file `sqlite.json` names.
   * **The server families:** their clients and drivers (`sqlcmd`, `sqlplus`, `mysql`, `psql`…) and their connections' hosts.
+  * **Large scripts:** while a database or admin family's tools are on, a script file over 1 MB that a command runs is refused, being too big to check.
 * **Package commands:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`) isn't judged by the database rules.
 * **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval.
 

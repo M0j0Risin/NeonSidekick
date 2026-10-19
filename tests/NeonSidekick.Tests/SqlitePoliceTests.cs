@@ -100,7 +100,12 @@ public sealed class SqlitePoliceTests : IDisposable
         Assert.Null(SqlitePolice.Judge(@"python ..\outside.py", work, work, DatabaseGuard.ByExtension));   // the outside-paths police's, not read here
 
         File.WriteAllText(Path.Combine(work, "big.py"), "import sqlite3\n" + new string('#', (int)SqlitePolice.MaxScriptBytes));
-        Assert.Null(SqlitePolice.Judge("python big.py", work, work, DatabaseGuard.ByExtension));   // past the cap, passed over
+        Assert.Null(SqlitePolice.Judge("python big.py", work, work, DatabaseGuard.ByExtension));   // past the cap, passed over here…
+        // …and named by OversizedScript, which ShellPoliceChecks refuses (later on 2026-10-19, the third shell review).
+        Assert.Equal("big.py", SqlitePolice.OversizedScript("python fine.py big.py", work, work));
+        Assert.Null(SqlitePolice.OversizedScript("python fine.py", work, work));
+        Assert.Equal("Error: refused by the shell police — script too large: a script file this command runs is over 1 MB, more than the shell police reads while the database or admin tools are on. Run a smaller script; do not pad or split one to get past this.", ShellText.ScriptTooLarge(SqlitePolice.MaxScriptBytes));
+        Assert.Equal("script big.py too large to check — not run", ShellText.ScriptTooLargeShown("big.py"));
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace NeonSidekick.Shell;
 
@@ -41,31 +42,48 @@ internal abstract class ShellChild : IDisposable
 }
 
 /// <summary>
-/// A <see cref="Process"/> and the job it was put in right after the start (2026-10-12, the shell review,
-/// <see cref="EmbeddedLlm.ChildJob.CreateOwn"/>, 0 for none: off Windows, or when one could not be made). The kill ends the job whole
-/// before the tree walk, which stays for a child outside one; the dispose closes the job, which for a background command's
-/// kill-on-close job ends what is left in it.
+/// A <see cref="Process"/> and its job, 0 for none (off Windows, or when one could not be made). On Windows the child is started
+/// suspended inside it (2026-10-19, the third shell review, <see cref="EmbeddedLlm.ChildJob.StartPiped"/>), its pipes the app's own;
+/// where that cannot be done it was put in one right after the start (2026-10-12, the shell review, <see cref="EmbeddedLlm.ChildJob.CreateOwn"/>).
+/// The kill ends the job whole before the tree walk, which stays for a child outside one; the dispose closes the job, which for a
+/// background command's kill-on-close job ends what is left in it.
 /// </summary>
 internal sealed class ProcessChild : ShellChild
 {
     private readonly Process _process;
-    private readonly bool _killOnClose;
+    private readonly StreamWriter? _input;
+    private readonly StreamReader? _output;
+    private readonly StreamReader? _error;
     private nint _job;
 
+    /// <summary>A child <c>Process.Start</c> started with its streams redirected, put in a job of its own now.</summary>
     public ProcessChild(Process process, bool killOnClose)
     {
         _process = process ?? throw new ArgumentNullException(nameof(process));
-        _killOnClose = killOnClose;
         _job = EmbeddedLlm.ChildJob.CreateOwn(process, killOnClose);
     }
 
+    /// <summary>A child started suspended in its job (<see cref="EmbeddedLlm.ChildJob.StartPiped"/>): the streams over its pipes, UTF-8 and buffered as <c>Process.Start</c> makes them.</summary>
+    public ProcessChild(EmbeddedLlm.PipedChild piped)
+    {
+        ArgumentNullException.ThrowIfNull(piped);
+        _process = piped.Process;
+        _job = piped.Job;
+        var utf8 = new UTF8Encoding(false);
+        _input = new StreamWriter(new FileStream(piped.Input, FileAccess.Write, StreamBuffer, isAsync: false), utf8, StreamBuffer) { AutoFlush = true };
+        _output = new StreamReader(new FileStream(piped.Output, FileAccess.Read, StreamBuffer, isAsync: false), utf8, detectEncodingFromByteOrderMarks: true, StreamBuffer);
+        _error = new StreamReader(new FileStream(piped.Error, FileAccess.Read, StreamBuffer, isAsync: false), utf8, detectEncodingFromByteOrderMarks: true, StreamBuffer);
+    }
+
+    private const int StreamBuffer = 4096;
+
     public override int Pid => _process.Id;
 
-    public override StreamWriter StandardInput => _process.StandardInput;
+    public override StreamWriter StandardInput => _input ?? _process.StandardInput;
 
-    public override StreamReader StandardOutput => _process.StandardOutput;
+    public override StreamReader StandardOutput => _output ?? _process.StandardOutput;
 
-    public override StreamReader StandardError => _process.StandardError;
+    public override StreamReader StandardError => _error ?? _process.StandardError;
 
     public override bool HasExited => _process.HasExited;
 
@@ -74,13 +92,14 @@ internal sealed class ProcessChild : ShellChild
     public override bool InJob => _job != 0;
 
     // While a job still holds something after the shell itself exited, the kill must reach it (the code review, 2026-10-19;
-    // 709bd39a fixed only the Mac's GroupChild): a background `server & exit` whose server inherits stdout keeps the output pipe
-    // open, so the pumps never drain and the session never completes, and ProcessSession.Kill skips a child whose HasExited is true
-    // unless it HoldsLeftovers. The caller already guards on the session not having exited. Since 2026-10-19 (the second shell review)
-    // only a background command's job, and only while a process is still in it: a foreground command's programs (start notepad, code .)
-    // outlive it as ChildJob.CreateOwn promises, even when they hold its output pipe to the timeout, and a child gone on its own with an
-    // empty job is no longer reported killed.
-    public override bool HoldsLeftovers => _killOnClose && EmbeddedLlm.ChildJob.HoldsProcesses(_job);
+    // 709bd39a fixed only the Mac's GroupChild): a `server & exit` whose server inherits stdout keeps the output pipe open, so the
+    // pumps never drain and the session never completes, and ProcessSession.Kill skips a child whose HasExited is true unless it
+    // HoldsLeftovers. The caller guards on the session not having exited, so this is asked only while something holds the command's
+    // output: a program a command opened that let its output go (code .) completed the session and outlives it, as ChildJob.CreateOwn
+    // promises. Only while a process is still in the job (the second shell review: a child gone on its own is not reported killed).
+    // A foreground command's job too since the third review (the second had made it a background one's only, so a foreground
+    // command's server holding its output outlived the timeout and Esc untracked, while a Mac's GroupChild killed it).
+    public override bool HoldsLeftovers => EmbeddedLlm.ChildJob.HoldsProcesses(_job);
 
     public override Task WaitForExitAsync() => _process.WaitForExitAsync(CancellationToken.None);
 
@@ -96,6 +115,17 @@ internal sealed class ProcessChild : ShellChild
 
     public override void Dispose()
     {
+        try
+        {
+            _input?.Dispose();
+        }
+        catch (IOException)
+        {
+            // Its last flush into a pipe the child already closed.
+        }
+
+        _output?.Dispose();
+        _error?.Dispose();
         _process.Dispose();
         EmbeddedLlm.ChildJob.Close(_job);
         _job = 0;

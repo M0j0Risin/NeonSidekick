@@ -137,6 +137,9 @@ public sealed class ShellGuardTests : IDisposable
         Assert.Equal("group 345: not recorded for the shell guard (full)", ShellText.GroupNotRecorded(345, "full"));
         Assert.Equal("shell guard: pid 12", ShellText.GuardStarted(12));
         Assert.Equal("shell guard: hi", ShellText.GuardSaid("hi"));
+        Assert.Equal("group 345: not recorded for the shell guard (this process's start time could not be read)", ShellText.GroupNotRecorded(345, ShellText.OwnStartUnreadable));
+        Assert.Equal("Error: could not start zsh (posix_spawnp is not available)", ShellText.CouldNotStart("zsh", ShellText.PosixSpawnMissing));
+        Assert.Equal("posix_spawnp: gone", ShellText.PosixSpawnFailed("gone"));
     }
 
     /// <summary>A leader whose start could not be read is recorded with 0 (the code review): the guard kills by group, the sweep cannot prove it and only names it.</summary>

@@ -111,6 +111,9 @@ internal static partial class JobObjectNative
     /// <summary><c>EXTENDED_STARTUPINFO_PRESENT</c>.</summary>
     internal const uint ExtendedStartupInfoPresent = 0x80000;
 
+    /// <summary><c>CREATE_UNICODE_ENVIRONMENT</c>: the environment block is UTF-16 (2026-10-19, <see cref="ChildJob.StartPiped"/>).</summary>
+    internal const uint CreateUnicodeEnvironment = 0x400;
+
     /// <summary><c>STARTF_USESTDHANDLES</c>.</summary>
     internal const uint StartfUseStdHandles = 0x100;
 
@@ -164,7 +167,13 @@ internal static partial class JobObjectNative
 
     [LibraryImport("kernel32.dll", EntryPoint = "CreateProcessW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static unsafe partial bool CreateProcess(string applicationName, char* commandLine, nint processAttributes, nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags, nint environment, string? currentDirectory, ref StartupInfoEx startupInfo, out ProcessInformation processInformation);
+    internal static unsafe partial bool CreateProcess(string? applicationName, char* commandLine, nint processAttributes, nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint creationFlags, nint environment, string? currentDirectory, ref StartupInfoEx startupInfo, out ProcessInformation processInformation);
+
+    // 2026-10-19 (the third shell review): a shell command's three pipes, made here so they are handed to CreateProcessW under the
+    // process-start lock (ChildJob.StartPiped); both ends are made private, the child's made inheritable for the one start.
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool CreatePipe(out Microsoft.Win32.SafeHandles.SafeFileHandle readPipe, out Microsoft.Win32.SafeHandles.SafeFileHandle writePipe, nint pipeAttributes, uint size);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

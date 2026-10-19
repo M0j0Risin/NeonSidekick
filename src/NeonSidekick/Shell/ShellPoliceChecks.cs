@@ -42,10 +42,21 @@ public static partial class ShellPoliceChecks
 
         // The line's script files, read once for both database polices and only if one needs them (2026-10-12).
         var scripts = new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(command, workdir, files.Root));
+        var databases = files.Databases?.Invoke();
+        var servers = files.ServerDatabases?.Invoke();
+        var admin = files.AdminFamilies?.Invoke();
+
+        // A script file too big for them to read is refused while any of them is on (later on 2026-10-19, the third shell review): it
+        // was passed over unread and so passed every one of them.
+        if ((databases is not null || servers is not null || admin is not null) && SqlitePolice.OversizedScript(command, workdir, files.Root) is { } oversized)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptTooLargeLogLine(request, oversized));
+            return new ShellPoliceRefusal(ShellText.ScriptTooLarge(SqlitePolice.MaxScriptBytes), ShellText.ScriptTooLargeShown(oversized));
+        }
 
         // The SQLite police (2026-10-05, the user's call), while the SQLite tools are on: a line, or a script
         // file it runs, that reaches SQLite is refused whatever the policy, so a database is reached only through the sqlite_ tools.
-        if (files.Databases?.Invoke() is { } databases && SqlitePolice.Judge(command, scripts, databases) is { } sqlite)
+        if (databases is not null && SqlitePolice.Judge(command, scripts, databases) is { } sqlite)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite.Token, sqlite.File));
             return new ShellPoliceRefusal(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite.Token, sqlite.File));
@@ -53,7 +64,7 @@ public static partial class ShellPoliceChecks
 
         // The server-database police (2026-10-05, SQLite's rule mirrored): while a server family's tools are on, a line, or a script
         // file it runs, that reaches one (its clients, its drivers, its connections' hosts) is refused whatever the policy.
-        if (files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Judge(command, scripts, servers) is { } server)
+        if (servers is not null && ServerDatabasePolice.Judge(command, scripts, servers) is { } server)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(request, server.Family, server.Token, server.File));
             return new ShellPoliceRefusal(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, server.File));
@@ -61,7 +72,7 @@ public static partial class ShellPoliceChecks
 
         // The admin police (2026-10-15, the admin-tools plan): while the services, tasks or directory tools are on, a line, or a script file it
         // runs, that changes one of them is refused whatever the policy; the families' tools (their checks, their pane) are the one way.
-        if (files.AdminFamilies?.Invoke() is { } admin && AdminPolice.Judge(command, scripts, admin) is { } changed)
+        if (admin is not null && AdminPolice.Judge(command, scripts, admin) is { } changed)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(request, changed.Family, changed.Token, changed.File));
             return new ShellPoliceRefusal(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, changed.File));

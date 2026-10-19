@@ -36,12 +36,14 @@ public sealed class BridgeServer : IAsyncDisposable
     private readonly SemaphoreSlim _slots;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _accepting;
+    private readonly byte[] _tokenBytes;
     private int _calls;
 
     private BridgeServer(TcpListener listener, string token, BridgeDispatch dispatch, int maxCalls, int maxRequestBytes)
     {
         _listener = listener;
         Token = token;
+        _tokenBytes = Encoding.UTF8.GetBytes(token);
         _dispatch = dispatch;
         _maxCalls = maxCalls;
         _maxRequestBytes = maxRequestBytes;
@@ -82,6 +84,22 @@ public sealed class BridgeServer : IAsyncDisposable
     /// closed, freeing both. Pinned.
     /// </summary>
     public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How much of a long request is read before its token is checked (later on 2026-10-19, the third shell review): until then a whole
+    /// line, up to <see cref="MaxRequestBytes"/>, was buffered, decoded and parsed before a wrong token was found, so a local process that
+    /// found the port could make the app hold gigabytes across <see cref="MaxConnections"/> without knowing it. A line still open past this
+    /// must have led with its <c>token</c> (<see cref="LeadsWithToken"/>, as the three client modules write it) or is answered
+    /// <see cref="ShellText.BadToken"/> unread; a shorter line is judged whole by <see cref="AnswerAsync"/>, as before. Pinned.
+    /// </summary>
+    public const int PreAuthBytes = 4096;
+
+    private enum LineEnd
+    {
+        Line,
+        TooLarge,
+        BadToken,
+    }
 
     /// <summary>Binds the listener and starts accepting.</summary>
     public static BridgeServer Start(BridgeDispatch dispatch, int maxCalls) => Start(dispatch, maxCalls, MaxRequestBytes);
@@ -145,9 +163,13 @@ public sealed class BridgeServer : IAsyncDisposable
             {
                 using var stream = client.GetStream();
                 // The read is bounded by both the byte cap and the time: a connection that opens and sends nothing holds nothing for long.
-                var response = await ReadLineAsync(stream, _maxRequestBytes, deadline.Token).ConfigureAwait(false) is { } line
-                    ? await AnswerAsync(line, _stop.Token).ConfigureAwait(false)
-                    : new BridgeResponse { Error = ShellText.RequestTooLarge(_maxRequestBytes) };
+                var (end, line) = await ReadLineAsync(stream, _maxRequestBytes, deadline.Token).ConfigureAwait(false);
+                var response = end switch
+                {
+                    LineEnd.Line => await AnswerAsync(line!, _stop.Token).ConfigureAwait(false),
+                    LineEnd.BadToken => new BridgeResponse { Error = ShellText.BadToken },
+                    _ => new BridgeResponse { Error = ShellText.RequestTooLarge(_maxRequestBytes) },
+                };
                 byte[] bytes = Encoding.UTF8.GetBytes(Serialize(response) + "\n");
                 await stream.WriteAsync(bytes, _stop.Token).ConfigureAwait(false);
                 await stream.FlushAsync(_stop.Token).ConfigureAwait(false);
@@ -193,7 +215,7 @@ public sealed class BridgeServer : IAsyncDisposable
             return new BridgeResponse { Error = ShellText.BadRequest };
         }
 
-        if (!string.Equals(request.Token, Token, StringComparison.Ordinal))
+        if (request.Token is null || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(request.Token), _tokenBytes))
         {
             return new BridgeResponse { Error = ShellText.BadToken };
         }
@@ -231,11 +253,12 @@ public sealed class BridgeServer : IAsyncDisposable
         return result.StartsWith("Error:", StringComparison.Ordinal) ? new BridgeResponse { Error = result } : new BridgeResponse { Result = result };
     }
 
-    /// <summary>The request line, its newline off; null once it passes <paramref name="maxBytes"/>.</summary>
-    private static async Task<string?> ReadLineAsync(NetworkStream stream, int maxBytes, CancellationToken cancellationToken)
+    /// <summary>The request line, its newline off; or how it ended unread: past <paramref name="maxBytes"/>, or past <see cref="PreAuthBytes"/> without the run's token first.</summary>
+    private async Task<(LineEnd End, string? Line)> ReadLineAsync(NetworkStream stream, int maxBytes, CancellationToken cancellationToken)
     {
         var buffer = new MemoryStream();
         var chunk = new byte[16 * 1024];
+        bool tokenChecked = false;
         while (true)
         {
             int read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
@@ -248,17 +271,84 @@ public sealed class BridgeServer : IAsyncDisposable
             int take = newline < 0 ? read : newline;
             if (buffer.Length + take > maxBytes)
             {
-                return null;
+                return (LineEnd.TooLarge, null);
             }
 
             buffer.Write(chunk, 0, take);
+            if (!tokenChecked && buffer.Length >= PreAuthBytes)
+            {
+                tokenChecked = true;
+                if (!LeadsWithToken(buffer.GetBuffer().AsSpan(0, PreAuthBytes)))
+                {
+                    return (LineEnd.BadToken, null);
+                }
+            }
+
             if (newline >= 0)
             {
                 break;
             }
         }
 
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        return (LineEnd.Line, Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="head"/>, the start of a request line, is a JSON object with this run's <c>token</c> among the top-level
+    /// properties it holds whole, compared in constant time; false for anything else, a token past the head included.
+    /// </summary>
+    internal bool LeadsWithToken(ReadOnlySpan<byte> head)
+    {
+        var reader = new Utf8JsonReader(head, isFinalBlock: false, state: default);
+        try
+        {
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return false;
+            }
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                bool isToken = reader.ValueTextEquals("token"u8);
+                if (!reader.Read())
+                {
+                    return false;
+                }
+
+                if (isToken)
+                {
+                    return reader.TokenType == JsonTokenType.String && TokenMatches(ref reader);
+                }
+
+                if (!reader.TrySkip())
+                {
+                    return false;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON: no token.
+        }
+
+        return false;
+    }
+
+    private bool TokenMatches(ref Utf8JsonReader reader)
+    {
+        if (!reader.ValueIsEscaped)
+        {
+            return CryptographicOperations.FixedTimeEquals(reader.ValueSpan, _tokenBytes);
+        }
+
+        if (reader.ValueSpan.Length > 1024)
+        {
+            return false;
+        }
+
+        Span<byte> unescaped = stackalloc byte[reader.ValueSpan.Length];
+        int written = reader.CopyString(unescaped);
+        return CryptographicOperations.FixedTimeEquals(unescaped[..written], _tokenBytes);
     }
 
     /// <summary>Stops accepting, cancels the calls in flight and closes the port.</summary>

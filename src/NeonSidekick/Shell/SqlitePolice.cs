@@ -29,7 +29,7 @@ public static partial class SqlitePolice
         ".py", ".pyw", ".ps1", ".psm1", ".js", ".mjs", ".cjs", ".ts", ".sql", ".bat", ".cmd", ".sh", ".rb", ".pl", ".php", ".lua", ".cs", ".csx", ".r",
     };
 
-    /// <summary>The largest script file <see cref="ScriptFiles"/> reads; a bigger one is passed over.</summary>
+    /// <summary>The largest script file <see cref="ScriptFiles"/> reads; a bigger one is passed over by it and refused by <see cref="ShellPoliceChecks"/> (<see cref="OversizedScript"/>).</summary>
     public const long MaxScriptBytes = 1_000_000;
 
     /// <summary>
@@ -85,10 +85,41 @@ public static partial class SqlitePolice
     /// </summary>
     public static IReadOnlyList<(string Name, string Text)> ScriptFiles(string command, string workdir, string root)
     {
+        var found = new List<(string Name, string Text)>();
+        foreach (var (full, length) in ScriptPaths(command, workdir, root))
+        {
+            if (length > MaxScriptBytes)
+            {
+                continue;
+            }
+
+            try
+            {
+                found.Add((Path.GetFileName(full), File.ReadAllText(full)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A file that cannot be read: nothing to judge.
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The name of the first script file <paramref name="command"/> names (as <see cref="ScriptFiles"/> finds them) that is over
+    /// <see cref="MaxScriptBytes"/>, else null (later on 2026-10-19, the third shell review: <see cref="ScriptFiles"/> passed one over unread,
+    /// and every police read that as clean, so a script padded past the limit reached a database or changed a service).
+    /// </summary>
+    public static string? OversizedScript(string command, string workdir, string root) =>
+        ScriptPaths(command, workdir, root).Where(file => file.Length > MaxScriptBytes).Select(file => Path.GetFileName(file.Full)).FirstOrDefault();
+
+    /// <summary>The script files <paramref name="command"/> names that exist inside <paramref name="root"/>, each once, with their sizes.</summary>
+    private static IEnumerable<(string Full, long Length)> ScriptPaths(string command, string workdir, string root)
+    {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(workdir);
         ArgumentNullException.ThrowIfNull(root);
-        var found = new List<(string Name, string Text)>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (Match token in Token().Matches(command))
         {
@@ -98,25 +129,27 @@ public static partial class SqlitePolice
                 continue;
             }
 
+            (string Full, long Length)? file = null;
             try
             {
                 string full = Path.GetFullPath(Path.Combine(workdir, word));
                 string rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
                 bool inside = full.StartsWith(rootFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-                if (!inside || !seen.Add(full) || !File.Exists(full) || new FileInfo(full).Length > MaxScriptBytes)
+                if (inside && seen.Add(full) && File.Exists(full))
                 {
-                    continue;
+                    file = (full, new FileInfo(full).Length);
                 }
-
-                found.Add((Path.GetFileName(full), File.ReadAllText(full)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                // A token that is no path, or a file that cannot be read: nothing to judge.
+                // A token that is no path: nothing to judge.
+            }
+
+            if (file is { } found)
+            {
+                yield return found;
             }
         }
-
-        return found;
     }
 
     /// <summary>

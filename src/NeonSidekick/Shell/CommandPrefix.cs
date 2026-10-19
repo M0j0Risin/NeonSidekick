@@ -24,6 +24,13 @@ namespace NeonSidekick.Shell;
 /// <c>&amp; $x</c>) — is <see cref="Unreadable"/>, which no allow list holds. A verb program's options before its verb are
 /// skipped on the way to it, with the value of those in <see cref="ValueOptions"/> (the same day): <c>git -C sub push</c> was
 /// <c>git</c>, so allowing that line once allowed every git verb.</para>
+///
+/// <para>A program named by a path keeps its folder (later on 2026-10-19, the third shell review): <c>.\git.cmd status</c> read as
+/// <c>git status</c>, so a <c>git.cmd</c> the model wrote into the working folder ran under the user's allowed <c>git status</c>. It is
+/// now <c>./git status</c> (<see cref="Program"/>), a prefix of its own; a bare name is the one found on PATH, cmd's working-folder
+/// search being turned off for every shell child (<see cref="ChildEnvironment"/>'s <c>NoDefaultCurrentDirectoryInExePath</c>). A leading
+/// <c>NAME=value</c> is skipped only in bash and zsh, where it is an assignment: in PowerShell it is the command's name, in cmd the
+/// name ends at the <c>=</c>.</para>
 /// </summary>
 public static partial class CommandPrefix
 {
@@ -106,7 +113,16 @@ public static partial class CommandPrefix
         "GIT_SSH", "GIT_SSH_COMMAND", "GIT_EXTERNAL_DIFF", "GIT_PAGER", "GIT_EDITOR", "GIT_PROXY_COMMAND",
         "GIT_CONFIG", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_COUNT", "GIT_DIR",
         "BASH_ENV", "ENV", "ZDOTDIR", "PYTHONPATH", "PYTHONSTARTUP", "NODE_OPTIONS", "PERL5LIB", "PERL5OPT", "IFS",
+        "NoDefaultCurrentDirectoryInExePath", "PATHEXT", "COMSPEC",
     };
+
+    /// <summary>
+    /// The commands that set a variable for the rest of the line (later on 2026-10-19, the third shell review): cmd's <c>set</c> and
+    /// bash's and zsh's <c>export</c>, <c>declare</c>, <c>typeset</c>. One that sets a <see cref="DangerousEnvVars"/> name (<c>set
+    /// PATH=…&amp; git status</c>) reads as <see cref="Unreadable"/>, so an allowed <c>set</c> never lets the next segment run another
+    /// program. Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> SettingPrograms = new HashSet<string>(StringComparer.Ordinal) { "set", "export", "declare", "typeset" };
 
     /// <summary>
     /// The options a verb program takes ahead of its verb with no value (2026-10-19, the second shell review): skipped alone on the way to
@@ -275,6 +291,24 @@ public static partial class CommandPrefix
         return eq > 0 && DangerousEnvVars.Contains(token[..eq]);
     }
 
+    /// <summary>Whether a <see cref="SettingPrograms"/> word's arguments set a <see cref="DangerousEnvVars"/> name; cmd's names are case-blind, a quote around the pair is read through.</summary>
+    private static bool SetsDangerous(List<string> tokens, int from, ShellKind shell)
+    {
+        var comparer = shell is ShellKind.Cmd or ShellKind.PowerShell ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        for (int i = from; i < tokens.Count; i++)
+        {
+            string word = tokens[i].Trim('"', '\'');
+            int eq = word.IndexOf('=', StringComparison.Ordinal);
+            string name = eq < 0 ? word : word[..eq];
+            if (DangerousEnvVars.Contains(name, comparer))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// The segments of <paramref name="command"/>: the pieces between <c>&amp;&amp;</c>, <c>||</c>,
     /// <c>|</c>, <c>&amp;</c>, <c>;</c> and line breaks outside single or double quotes, trimmed,
@@ -384,8 +418,10 @@ public static partial class CommandPrefix
         int first = 0;
         // A leading NAME=value is an environment assignment (bash/zsh): the program is the token after it. One that sets PATH, the dynamic
         // loader's or git/shell/interpreter run-a-program variables reads as Unreadable instead (2026-10-19, the code review), as does a
-        // segment of only assignments — either can redirect what the command after it runs.
-        while (first < tokens.Count && IsAssignment(tokens[first]))
+        // segment of only assignments — either can redirect what the command after it runs. Only in bash and zsh (later that day, the
+        // third review): PowerShell runs a command of that name and cmd one named up to the =, so the program after it was judged instead.
+        bool assigns = shell is ShellKind.Bash or ShellKind.Zsh;
+        while (first < tokens.Count && assigns && IsAssignment(tokens[first]))
         {
             if (IsDangerousAssignment(tokens[first]))
             {
@@ -400,17 +436,37 @@ public static partial class CommandPrefix
             return first > 0 ? Unreadable : "";
         }
 
-        string program = Program(tokens[first]);
+        string token = tokens[first];
+        if (shell == ShellKind.Cmd && token.IndexOfAny(CmdNameEnds) is > 0 and var end && QuoteKind(token[0], shell) == '\0')
+        {
+            // cmd ends a command's name at = and , as at a blank: FOO=1 runs foo.
+            token = token[..end];
+        }
+
+        string program = Program(token);
         if (program.Length == 0)
         {
             return "";
         }
 
-        if (VerbPrograms.Contains(program))
+        // A path's program is judged by its folder too; its options and verb by its file's name. A substitution in the folder asks.
+        int slash = program.LastIndexOf('/');
+        string baseName = program[(slash + 1)..];
+        if (slash >= 0 && program.Contains(Hole))
         {
-            var values = ValueOptions.GetValueOrDefault(program);
-            var flags = FlagOptions.GetValueOrDefault(program);
-            var dangerous = DangerousOptions.GetValueOrDefault(program);
+            return Unreadable;
+        }
+
+        if (SettingPrograms.Contains(baseName) && SetsDangerous(tokens, first + 1, shell))
+        {
+            return Unreadable;
+        }
+
+        if (VerbPrograms.Contains(baseName))
+        {
+            var values = ValueOptions.GetValueOrDefault(baseName);
+            var flags = FlagOptions.GetValueOrDefault(baseName);
+            var dangerous = DangerousOptions.GetValueOrDefault(baseName);
             for (int i = first + 1; i < tokens.Count; i++)
             {
                 string verb = tokens[i];
@@ -891,30 +947,32 @@ public static partial class CommandPrefix
         return next < text.Length && (text[next] == '$' || text[next] == '(');
     }
 
+    // The characters that end a command's name in cmd besides a blank.
+    private static readonly char[] CmdNameEnds = ['=', ','];
+
     /// <summary>
-    /// A token as a program name: the quotes off, the folder off (either separator), one of
-    /// <see cref="ExecutableExtensions"/> off, lower case. <c>"C:\Tools\Foo.EXE"</c> is <c>foo</c>, <c>./build.sh</c> is <c>build</c>.
+    /// A token as a program name: the quotes off, one of <see cref="ExecutableExtensions"/> off, lower case, and its folder kept with
+    /// <c>/</c> for either separator (later on 2026-10-19, the third shell review; stripped until then, so a model's own <c>.\git.cmd</c>
+    /// was <c>git</c>). <c>Foo.EXE</c> is <c>foo</c>, <c>./build.sh</c> and <c>.\build.ps1</c> are <c>./build</c>,
+    /// <c>"C:\Tools\Foo.EXE"</c> is <c>c:/tools/foo</c>.
     /// </summary>
     public static string Program(string token)
     {
         ArgumentNullException.ThrowIfNull(token);
         string name = token.Trim().Trim('"', '\'');
         int cut = name.LastIndexOfAny(['\\', '/']);
-        if (cut >= 0)
-        {
-            name = name[(cut + 1)..];
-        }
-
+        string folder = cut >= 0 ? name[..(cut + 1)].Replace('\\', '/') : "";
+        string file = cut >= 0 ? name[(cut + 1)..] : name;
         foreach (string extension in ExecutableExtensions)
         {
-            if (name.Length > extension.Length && name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            if (file.Length > extension.Length && file.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
             {
-                name = name[..^extension.Length];
+                file = file[..^extension.Length];
                 break;
             }
         }
 
-        return name.ToLowerInvariant();
+        return (folder + file).ToLowerInvariant();
     }
 
     private static bool IsAssignment(string token)

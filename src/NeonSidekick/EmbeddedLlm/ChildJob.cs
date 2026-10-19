@@ -24,7 +24,7 @@ namespace NeonSidekick.EmbeddedLlm;
 /// comes later, born in the job), and <see cref="Start"/> (2026-10-11, code review of the headless browser), which starts one suspended inside
 /// the job so nothing it ever starts is outside it.</para>
 /// </summary>
-public static class ChildJob
+public static partial class ChildJob
 {
     private const string Category = "EmbeddedLlm";
     private static readonly Lock Gate = new();
@@ -150,11 +150,14 @@ public static class ChildJob
             startup.StartupInfo.StdOutput = handles[0];
             startup.StartupInfo.StdError = handles[1];
             char[] line = (CommandLine(executable, arguments) + "\0").ToCharArray();   // CreateProcessW may write to it
+            // The app's environment less its secrets (later on 2026-10-19, the third shell review: the headless browser inherited every API key).
+            char[] block = EnvironmentBlock(Shell.ChildEnvironment.WithoutSecrets());
             JobObjectNative.ProcessInformation started;
             bool made;
             fixed (char* text = line)
+            fixed (char* env = block)
             {
-                made = JobObjectNative.CreateProcess(executable, text, 0, 0, true, JobObjectNative.CreateSuspended | JobObjectNative.CreateNoWindow | JobObjectNative.ExtendedStartupInfoPresent, 0, null, ref startup, out started);
+                made = JobObjectNative.CreateProcess(executable, text, 0, 0, true, JobObjectNative.CreateSuspended | JobObjectNative.CreateNoWindow | JobObjectNative.ExtendedStartupInfoPresent | JobObjectNative.CreateUnicodeEnvironment, (nint)env, null, ref startup, out started);
             }
 
             if (!made)

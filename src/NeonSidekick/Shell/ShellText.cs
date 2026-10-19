@@ -405,6 +405,23 @@ public static class ShellText
     /// <summary>The 👮 line the user reads for <see cref="Forbidden"/>, the string named: <c>forbidden string 'rm -rf' — not run</c>. Never the model's. Pinned.</summary>
     public static string ForbiddenShown(string entry) => $"forbidden string '{entry}' — not run";
 
+    /// <summary>What a result opens with when a script file the line runs is too big for the police to read (later on 2026-10-19, the third shell review).</summary>
+    public const string ScriptTooLargeHead = "Error: refused by the shell police — script too large";
+
+    /// <summary>What the model is told for <see cref="SqlitePolice.OversizedScript"/>: the limit, and that a smaller script runs. Pinned.</summary>
+    public static string ScriptTooLarge(long maxBytes) => string.Create(CultureInfo.InvariantCulture,
+        $"{ScriptTooLargeHead}: a script file this command runs is over {maxBytes / 1_000_000} MB, more than the shell police reads while the database or admin tools are on. Run a smaller script; do not pad or split one to get past this.");
+
+    /// <summary>The 👮 line the user reads for <see cref="ScriptTooLarge"/>: <c>script big.py too large to check — not run</c>. Pinned.</summary>
+    public static string ScriptTooLargeShown(string file) => $"script {file} too large to check — not run";
+
+    /// <summary><c>police: script too large (big.py) — powershell "python big.py"</c>.</summary>
+    public static string ScriptTooLargeLogLine(CommandRequest request, string file)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"police: script too large ({file}) — {request.Kind} {Quote(request.Command)}";
+    }
+
     /// <summary>What a result the SQLite police refused opens with (<see cref="SqlitePolice"/>, 2026-10-05).</summary>
     public const string SqliteHead = "Error: refused by the shell police — SQLite";
 
@@ -567,6 +584,15 @@ public static class ShellText
 
     /// <summary><see cref="CouldNotStart"/>'s detail for a raw argument string on a Mac (2026-10-12, <see cref="GroupChild"/>): only cmd.exe's launch has one. Pinned.</summary>
     public const string RawArgumentsAreCmds = "a raw argument string is cmd's";
+
+    /// <summary><see cref="GroupNotRecorded"/>'s reason when this process's own start time cannot be read (later on 2026-10-19, out of <see cref="ShellRecords.Write"/>). Pinned.</summary>
+    public const string OwnStartUnreadable = "this process's start time could not be read";
+
+    /// <summary><see cref="CouldNotStart"/>'s detail when libc's spawn is missing on a Mac (later on 2026-10-19, out of <see cref="GroupChild"/>). Pinned.</summary>
+    public const string PosixSpawnMissing = "posix_spawnp is not available";
+
+    /// <summary>The warning beside <see cref="PosixSpawnMissing"/>: what the runtime said. Pinned.</summary>
+    public static string PosixSpawnFailed(string detail) => "posix_spawnp: " + detail;
 
     // ── Log lines ────────────────────────────────────────────────────────────
 

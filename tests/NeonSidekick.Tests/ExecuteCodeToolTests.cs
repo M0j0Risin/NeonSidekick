@@ -433,6 +433,30 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(32 * 1024 * 1024, BridgeServer.MaxRequestBytes);
     }
 
+    /// <summary>
+    /// The token before the body (later on 2026-10-19, the third shell review): a line still open past <see cref="BridgeServer.PreAuthBytes"/>
+    /// without the run's token first is answered unread, so no one without it makes the app buffer 32 MB; one with it reads on.
+    /// </summary>
+    [Fact]
+    public async Task Bridge_ALongLineWithoutTheToken_IsRefusedBeforeItsBody()
+    {
+        int calls = 0;
+        await using var bridge = BridgeServer.Start((tool, _, _) => { calls++; return Task.FromResult("ok"); }, maxCalls: 5);
+        string body = new string('x', 3 * BridgeServer.PreAuthBytes);
+
+        Assert.Equal("{\"error\":\"Error: the bridge token did not match\"}", await SendAsync(bridge, "{\"token\":\"nope\",\"tool\":\"echo\",\"arguments\":{\"t\":\"" + body + "\"}}"));
+        Assert.Equal("{\"error\":\"Error: the bridge token did not match\"}", await SendAsync(bridge, "{\"tool\":\"echo\",\"arguments\":{\"t\":\"" + body + "\"},\"token\":\"" + bridge.Token + "\"}"));
+        Assert.Equal("{\"result\":\"ok\"}", await SendAsync(bridge, "{\"token\": \"" + bridge.Token + "\", \"tool\": \"echo\", \"arguments\": {\"t\": \"" + body + "\"}}"));   // Python's spacing
+        Assert.Equal(1, calls);
+
+        Assert.True(bridge.LeadsWithToken(Encoding.UTF8.GetBytes("{\"a\":[1,{\"b\":2}],\"token\":\"" + bridge.Token + "\",\"tool\":\"x")));
+        Assert.True(bridge.LeadsWithToken(Encoding.UTF8.GetBytes("{\"token\":\"" + bridge.Token[..10] + "\\u0030" + bridge.Token[11..] + "\"")) == (bridge.Token[10] == '0'));
+        Assert.False(bridge.LeadsWithToken(Encoding.UTF8.GetBytes("{\"token\":\"" + bridge.Token[..20])));   // cut off mid-token
+        Assert.False(bridge.LeadsWithToken(Encoding.UTF8.GetBytes("[\"token\"]")));
+        Assert.False(bridge.LeadsWithToken(Encoding.UTF8.GetBytes("not json")));
+        Assert.Equal(4096, BridgeServer.PreAuthBytes);
+    }
+
     /// <summary>The connection cap and read timeout (2026-10-19, the code review): bounded, and legitimate parallel calls up to the cap still run.</summary>
     [Fact]
     public async Task Bridge_BoundsConcurrentConnections_AndStillServesParallelCalls()

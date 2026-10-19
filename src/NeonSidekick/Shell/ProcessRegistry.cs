@@ -45,6 +45,8 @@ public sealed class ProcessRegistry : IDisposable
     private readonly List<ProcessSession> _sessions = new();
     private readonly ConcurrentQueue<ProcessAlert> _alerts = new();
     private readonly List<string> _notes = new();
+    private readonly List<string> _starting = new();   // ids reserved by a Start between its two locks
+    private readonly int[] _startingCount = new int[2];   // [model, mine]: those Starts, counted against the cap
     private bool _disposed;
 
     /// <param name="signal">Runs after an alert was queued, on the pool. Must not block or write.</param>
@@ -71,19 +73,24 @@ public sealed class ProcessRegistry : IDisposable
 
     /// <summary>
     /// Starts <paramref name="launch"/> as a background session; stdin stays open for <c>write</c>. <paramref name="mine"/> (2026-10-11):
-    /// the user's own <c>/cmd --bg</c> run, hidden from the model and always alerted (<see cref="ProcessSession.Mine"/>).
+    /// the user's own <c>/cmd --bg</c> run, hidden from the model and always alerted (<see cref="ProcessSession.Mine"/>). The child starts
+    /// outside the lock, so the first lock reserves its slot and id and the second takes them back (later on 2026-10-19, the third shell
+    /// review: two Starts at <see cref="MaxRunning"/> - 1 both passed the cap, and one racing <see cref="Dispose"/> added a session that
+    /// was never killed); a dispose in between is seen by the second lock, and the new session is killed here, never added.
     /// </summary>
     /// <exception cref="ShellStartException">Too many are running, or the program could not start.</exception>
+    /// <exception cref="ObjectDisposedException">The registry was disposed, before the start or while it ran.</exception>
     public ProcessSession Start(ProcessLaunch launch, bool notify, bool mine = false)
     {
         ArgumentNullException.ThrowIfNull(launch);
         string id;
+        int owner = mine ? 1 : 0;
         lock (_lock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             // The cap is each owner's (2026-10-11, the review): the user's own runs, which the model's process tool never lists, counted
             // against the model's background run_command, refused with a count its process list could not explain.
-            if (_sessions.Count(s => !s.HasExited && s.Mine == mine) >= MaxRunning)
+            if (_sessions.Count(s => !s.HasExited && s.Mine == mine) + _startingCount[owner] >= MaxRunning)
             {
                 throw new ShellStartException(ShellText.TooManyProcesses(MaxRunning));
             }
@@ -92,21 +99,58 @@ public sealed class ProcessRegistry : IDisposable
             {
                 id = ShellRunner.NewId(_random, IdPrefix);
             }
-            while (_sessions.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal)));
+            while (_sessions.Any(s => string.Equals(s.Id, id, StringComparison.Ordinal)) || _starting.Contains(id, StringComparer.Ordinal));
+
+            _starting.Add(id);
+            _startingCount[owner]++;
         }
 
-        // Tied to the app (2026-10-12, the user's call): a crash, the app's exit, or the session's close or eviction ends what it started, even detached.
-        var session = _runner.Start(launch, id, tiedToApp: true);
+        ProcessSession session;
+        try
+        {
+            // Tied to the app (2026-10-12, the user's call): a crash, the app's exit, or the session's close or eviction ends what it started, even detached.
+            session = _runner.Start(launch, id, tiedToApp: true);
+        }
+        catch
+        {
+            lock (_lock)
+            {
+                Unreserve(id, owner);
+            }
+
+            throw;
+        }
+
         session.Notify = notify;
         session.Mine = mine;
+        bool disposed;
         lock (_lock)
         {
-            _sessions.Add(session);
-            Evict();
+            Unreserve(id, owner);
+            disposed = _disposed;
+            if (!disposed)
+            {
+                _sessions.Add(session);
+                Evict();
+            }
+        }
+
+        if (disposed)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, $"{session.Id}: killed at exit as it started ({session.Kind}) {session.Label}");
+            session.Dispose();
+            throw new ObjectDisposedException(nameof(ProcessRegistry));
         }
 
         _ = WatchAsync(session);
         return session;
+    }
+
+    /// <summary>Takes back what <see cref="Start"/>'s first lock reserved. Under the lock.</summary>
+    private void Unreserve(string id, int owner)
+    {
+        _starting.Remove(id);
+        _startingCount[owner]--;
     }
 
     private async Task WatchAsync(ProcessSession session)

@@ -1393,6 +1393,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             start.ArgumentList.Add(argument);
         }
 
+        Shell.ChildEnvironment.Withhold(start.Environment);   // later on 2026-10-19 (the third shell review): Windows' ChildJob.Start withholds them too
+
         try
         {
             if (Process.Start(start) is not { } process)

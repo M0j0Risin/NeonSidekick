@@ -124,7 +124,7 @@ internal sealed unsafe class GroupChild : ShellChild
             // libc's doors missing (the code review: the pipes leaked); the smoke's shell:posix-spawn is there to catch it first.
             error = -1;
             pid = 0;
-            DiagnosticLog.Warn(ShellKinds.Category, "posix_spawnp: " + ex.Message);
+            DiagnosticLog.Warn(ShellKinds.Category, ShellText.PosixSpawnFailed(ex.Message));
         }
 
         if (error != 0)
@@ -132,7 +132,7 @@ internal sealed unsafe class GroupChild : ShellChild
             stdin.Dispose();
             stdout.Dispose();
             stderr.Dispose();
-            throw new ShellStartException(ShellText.CouldNotStart(name, error < 0 ? "posix_spawnp is not available" : Marshal.GetPInvokeErrorMessage(error)));
+            throw new ShellStartException(ShellText.CouldNotStart(name, error < 0 ? ShellText.PosixSpawnMissing : Marshal.GetPInvokeErrorMessage(error)));
         }
 
         // Tracked before the waiter can reap its leader (the crash watcher, 2026-10-12): every group for the exit signals, a background

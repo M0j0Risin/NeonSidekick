@@ -68,6 +68,8 @@ public static class LlamaGuard
             start.ArgumentList.Add(argument);
         }
 
+        Shell.ChildEnvironment.Withhold(start.Environment);   // the app withheld them from the guard already; a guard started by hand too
+
         Process server;
         try
         {

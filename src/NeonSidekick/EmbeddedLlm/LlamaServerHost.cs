@@ -260,6 +260,9 @@ public sealed class LlamaServerHost : ILlamaServerHost
             start.ArgumentList.Add(argument);
         }
 
+        // The app's secrets stay here (later on 2026-10-19, the third shell review): a downloaded server, or the guard that starts one, gets none.
+        Shell.ChildEnvironment.Withhold(start.Environment);
+
         lock (_state)
         {
             _tail.Clear();

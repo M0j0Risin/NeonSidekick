@@ -64,7 +64,7 @@ public static class ShellRecords
             int owner = Environment.ProcessId;
             if (startTicks(owner) is not { } ownerStart)
             {
-                DiagnosticLog.Debug(ShellKinds.Category, "No record of group " + leaderPid.ToString(CultureInfo.InvariantCulture) + ": this process's start time could not be read");
+                DiagnosticLog.Debug(ShellKinds.Category, ShellText.GroupNotRecorded(leaderPid, ShellText.OwnStartUnreadable));
                 return null;
             }
 
@@ -77,7 +77,7 @@ public static class ShellRecords
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Warn(ShellKinds.Category, "No record of group " + leaderPid.ToString(CultureInfo.InvariantCulture) + ": " + ex.Message);
+            DiagnosticLog.Warn(ShellKinds.Category, ShellText.GroupNotRecorded(leaderPid, ex.Message));
             return null;
         }
     }
