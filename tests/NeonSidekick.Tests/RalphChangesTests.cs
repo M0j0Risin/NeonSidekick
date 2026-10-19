@@ -62,6 +62,51 @@ public sealed class RalphChangesTests : IDisposable
     }
 
     [Fact]
+    public void TheSnapshotAfter_ReadsOnlyTheFilesThatChanged_AndAFileWhoseTextWasNotKept_IsListedWithNoDiff()
+    {
+        // 2026-10-19, the fifth review: every changed and untracked file was read whole before and after every pass.
+        var (files, git, root) = Repo();
+        Write(root, "dirty.cs", "a\nbefore the pass\n");
+        Write(root, "bin/untouched.dll.txt", "build output\n");
+        var before = RalphChanges.Snapshot(files, git);
+
+        Write(root, "dirty.cs", "a\nbefore the pass\nand after\n");
+        var after = RalphChanges.Snapshot(files, git, since: before);
+
+        Assert.Same(before.Files["bin/untouched.dll.txt"], after.Files["bin/untouched.dll.txt"]);   // as it was: taken over unread
+        Assert.NotSame(before.Files["dirty.cs"], after.Files["dirty.cs"]);
+        Assert.Equal(["dirty.cs"], RalphChanges.Delta(before, after, files, git, []).Changed);
+
+        // A file the budget left unread before the pass: listed, never diffed against nothing.
+        var unread = before with { Files = new Dictionary<string, RalphFileMark>(before.Files) { ["dirty.cs"] = before.Files["dirty.cs"] with { Text = null, Unread = true } } };
+        var delta = RalphChanges.Delta(unread, after, files, git, []);
+        Assert.Equal(["dirty.cs"], delta.Changed);
+        Assert.Contains(RalphText.NotKeptToDiff("dirty.cs"), delta.Diff);
+        Assert.DoesNotContain("+and after", delta.Diff);
+    }
+
+    [Fact]
+    public void ADirtyFilePastTheTextLimit_ChangedByThePass_IsNamedWithItsSize_NeverDiffedAsANewFile()
+    {
+        // 2026-10-19: its text was never read, and the delta took that as an empty file before the pass and HEAD's text after, so the reviewer saw
+        // "a new file holding HEAD's version".
+        var (files, git, root) = Repo();
+        string big = new string('x', (int)RalphChanges.MaxTextBytes + 10) + "\n";
+        Write(root, "app.cs", big);   // dirty before the pass, and past the limit
+        var before = RalphChanges.Snapshot(files, git);
+        Assert.True(before.Files["app.cs"] is { Unread: true, Text: null });
+
+        Write(root, "app.cs", big + "and the pass's line\n");
+        var after = RalphChanges.Snapshot(files, git, since: before);
+        var delta = RalphChanges.Delta(before, after, files, git, []);
+
+        Assert.Equal(["app.cs"], delta.Changed);
+        Assert.Contains(RalphText.TooLargeToRead("app.cs", (after.Files["app.cs"].Length / 1024).ToString(System.Globalization.CultureInfo.InvariantCulture) + " KB"), delta.Diff);
+        Assert.DoesNotContain("/dev/null", delta.Diff);
+        Assert.DoesNotContain("+one", delta.Diff);   // HEAD's text, the wrong "after"
+    }
+
+    [Fact]
     public void WorkThePassCommitted_IsListedAndDiffed_FromHeadAsThePassBegan()
     {
         // 2026-10-19, the second review: only the working tree's status was read, so a file changed and committed was in neither snapshot.

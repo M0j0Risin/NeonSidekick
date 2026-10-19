@@ -100,7 +100,7 @@ public sealed class RalphJudgeTests
             const string plan = ".neon/plans/guide.md";
             Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
-            Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before)));
+            Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before), headed: true));
             string crashed = Before.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal).Replace("- [ ] Three", "- [x] Three", StringComparison.Ordinal)
                 .Replace("- [ ] Four\n", "- [x] Four\n- [ ] Five\n", StringComparison.Ordinal);
             File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), crashed);
@@ -134,7 +134,7 @@ public sealed class RalphJudgeTests
             const string plan = ".neon/plans/guide.md";
             Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
-            Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before)));
+            Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before), headed: true));
             File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), Before.Replace("- [ ] Three\n", "", StringComparison.Ordinal));
 
             Assert.Equal(["Three"], RalphJudge.RecoverInPass(files, plan)!.Removed);
@@ -175,10 +175,10 @@ public sealed class RalphJudgeTests
             var lines = Lines(Before);
             var step = Step(Before, "One");
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
-            Assert.Null(RalphLog.MarkInPass(files, plan, step, lines));
+            Assert.Null(RalphLog.MarkInPass(files, plan, step, lines, headed: true));
             File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), Before.Replace("- [ ] One", "- [x] One, all done", StringComparison.Ordinal));
 
-            Assert.True(RalphJudge.PutBackUnjudged(files, plan, lines, step));
+            Assert.True(RalphJudge.PutBackUnjudged(files, plan, lines, step, headed: true));
 
             Assert.Equal(Before.TrimEnd(), File.ReadAllText(Path.Combine(dir, ".neon", "plans", "guide.md")).TrimEnd());
             Assert.Null(RalphLog.Read(files, plan)!.Head!.InPassStep);
@@ -187,6 +187,78 @@ public sealed class RalphJudgeTests
         {
             try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
         }
+    }
+
+    private const string WithAcceptance = Before + "\n## Acceptance\n- [ ] p95 under 200 ms\n  Notes: measured on the bench\n- [ ] docs updated\n";
+
+    [Fact]
+    public void ARenamedStepsHeading_IsPutBack_AndAnotherSectionsChecklistStays()
+    {
+        // 2026-10-19, the fifth review: renamed, every task line of the file read as a step, and Acceptance's were taken out as lines the pass added.
+        string after = WithAcceptance.Replace("## Steps", "## Steps (revised)", StringComparison.Ordinal).Replace("- [ ] One", "- [x] One", StringComparison.Ordinal);
+
+        var restore = RalphJudge.Restore(after, Lines(WithAcceptance), Step(WithAcceptance, "One"), ownBoxBack: false, headed: true);
+
+        Assert.Equal(WithAcceptance.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal), restore.Text);
+        Assert.True(restore.HeadingPutBack);
+        Assert.Equal(0, restore.Added);
+        Assert.Empty(restore.Removed);
+        Assert.True(restore.Own is { Text: "One", Ticked: true });
+        Assert.Contains(RalphText.StepsHeadingPutBackNotice, RalphJudge.RestoreNotices(restore, null));
+    }
+
+    [Fact]
+    public void ADeletedStepsHeading_IsPutBackAboveTheSteps()
+    {
+        string after = WithAcceptance.Replace("## Steps\n", "", StringComparison.Ordinal);
+
+        var restore = RalphJudge.Restore(after, Lines(WithAcceptance), Step(WithAcceptance, "One"), ownBoxBack: false, headed: true);
+
+        Assert.Equal(WithAcceptance, restore.Text);
+        Assert.Equal(0, restore.Added);
+        Assert.Empty(restore.Removed);
+    }
+
+    [Fact]
+    public void AStepsHeadingAddedToAPlanWithout_IsTakenOut()
+    {
+        const string plain = "# Guide\n\n- [x] Zero\n- [ ] One\n- [ ] Two\n";
+        string after = plain.Replace("- [ ] Two\n", "## Steps\n- [ ] Two\n", StringComparison.Ordinal);
+
+        var restore = RalphJudge.Restore(after, Lines(plain), Step(plain, "One"), ownBoxBack: false, headed: false);
+
+        Assert.Equal(plain, restore.Text);
+        Assert.True(restore.HeadingPutBack);
+    }
+
+    [Fact]
+    public void AWeakenedDoneWhen_IsPutBack_TheOwnStepsAndALaterOnes()
+    {
+        // 2026-10-19, the fifth review: only the task lines went back, so a pass could weaken a check and the passes after it read the weak one.
+        const string plan = "# Guide\n\n## Steps\n- [ ] One\n  - **Done when:** dotnet test passes\n- [ ] Two\n- [ ] Three\n  Done when: three.md exists\n";
+        string after = plan.Replace("dotnet test passes", "the file exists", StringComparison.Ordinal)
+            .Replace("- [ ] Two\n", "- [ ] Two\n  Done when: nothing\n", StringComparison.Ordinal)
+            .Replace("  Done when: three.md exists\n", "", StringComparison.Ordinal);
+
+        var restore = RalphJudge.Restore(after, Lines(plan), Step(plan, "One"), ownBoxBack: false, headed: true);
+
+        Assert.Equal(plan, restore.Text);
+        Assert.Equal(3, restore.DoneWhenPutBack);
+        Assert.True(restore.Own is { Text: "One", DoneWhen: "dotnet test passes" });
+        Assert.Contains(RalphText.DoneWhenPutBackNotice(3), RalphJudge.RestoreNotices(restore, null));
+    }
+
+    [Fact]
+    public void AnOldLogsLines_LeaveTheDoneWhenAlone()
+    {
+        // A log the previous build wrote kept no Done when: lines: none is taken out for it.
+        string after = Before.Replace("one.md exists", "anything", StringComparison.Ordinal);
+        var bare = Lines(Before).Select(l => l with { DoneWhen = null }).ToList();
+
+        var restore = RalphJudge.Restore(after, bare, Step(Before, "One"), ownBoxBack: false, headed: null, doneWhenKnown: false);
+
+        Assert.Equal(after, restore.Text);
+        Assert.Equal(0, restore.DoneWhenPutBack);
     }
 
     [Fact]

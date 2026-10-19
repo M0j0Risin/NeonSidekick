@@ -39,6 +39,7 @@ public sealed partial class SidekickApp
         public int Total { get; set; }
         public RalphSnapshotOfFiles? Before { get; set; }
         public IReadOnlyList<PlanStep> Lines { get; set; } = [];
+        public bool Headed { get; set; }
         public bool HadPictures { get; set; }
         public string Line { get; set; } = "";
         public string Title { get; set; } = "";
@@ -187,6 +188,14 @@ public sealed partial class SidekickApp
 
                     if (state.Executing is { Ralph: true, Path: { } paused } stored && PlanFiles.ReadWhole(files, paused) is { } pausedText)
                     {
+                        if (PlanDocument.TryParse(pausedText) is { Status: PlanStatus.Done or PlanStatus.Cancelled } over)
+                        {
+                            // Done or canceled while it was paused (2026-10-19, the fifth review): the state dropped, never run again.
+                            state.Executing = null;
+                            await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.NotRunnableError(paused, over.Status)).ConfigureAwait(false);
+                            return true;
+                        }
+
                         await HeadlessRalphBeginAsync(plan, state, files, paused, PlanDocument.Body(pausedText), stored.Verify, stored.Final, stored.Requirement, passes, fromPlanning: false, stored, cancellationToken).ConfigureAwait(false);
                         return true;
                     }
@@ -210,17 +219,25 @@ public sealed partial class SidekickApp
                 }
 
                 var header = PlanDocument.TryParse(text);
+                // A paused loop on it resumes only in the folder it ran in (2026-10-19); elsewhere the plan is this folder's, its header read afresh.
+                var resumed = state.Executing is { Ralph: true, Path: { } same } held && string.Equals(same, path, StringComparison.Ordinal) && RalphSnapshot.SameRoot(held.Root, files.Root) ? held : null;
                 if (header is { Status: PlanStatus.Done or PlanStatus.Cancelled } finished)
                 {
+                    if (resumed is not null)
+                    {
+                        state.Executing = null;
+                    }
+
                     await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.NotRunnableError(path, finished.Status)).ConfigureAwait(false);
                     return true;
                 }
 
                 string body = PlanDocument.Body(text);
                 string requirement = header is { Requirement.Length: > 0 } ? header.Requirement : PlanDocument.FirstHeading(body) ?? path;
-                // A paused loop on it resumes only in the folder it ran in (2026-10-19); elsewhere the plan is this folder's, its header read afresh.
-                var resumed = state.Executing is { Ralph: true, Path: { } same } held && string.Equals(same, path, StringComparison.Ordinal) && RalphSnapshot.SameRoot(held.Root, files.Root) ? held : null;
-                await HeadlessRalphBeginAsync(plan, state, files, path, body, resumed?.Verify ?? header?.Verify, resumed?.Final ?? header?.Final, requirement, passes, fromPlanning: false, resumed, cancellationToken).ConfigureAwait(false);
+                // A resume runs only the commands its run was approved with (2026-10-19, the fifth review): a run approved with none never took up a
+                // verify or final a pass wrote into the header since, as the screen's resume never has.
+                await HeadlessRalphBeginAsync(plan, state, files, path, body, resumed is not null ? resumed.Verify : header?.Verify, resumed is not null ? resumed.Final : header?.Final,
+                    resumed?.Requirement ?? requirement, passes, fromPlanning: false, resumed, cancellationToken).ConfigureAwait(false);
                 return true;
             }
 
@@ -445,7 +462,8 @@ public sealed partial class SidekickApp
             // The task lines as the pass begins, the file's (steps was parsed from it whole): what the judge pairs the lines after with, and what a
             // start after a crash puts back (the in-pass mark keeps them, the final fix's too: 2026-10-19, the fourth review).
             ralph.Lines = PlanSteps.Flat(steps);
-            if (RalphLog.MarkInPass(files, path, step, ralph.Lines) is { } unmarked)
+            ralph.Headed = PlanSteps.HasStepsHeading(body);
+            if (RalphLog.MarkInPass(files, path, step, ralph.Lines, ralph.Headed) is { } unmarked)
             {
                 Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: " + unmarked);
             }
@@ -487,7 +505,7 @@ public sealed partial class SidekickApp
         RalphStop? stop;
         try
         {
-            var judged = await RalphJudge.JudgeAsync(host, loop, ralph.Step, ralph.Total, ralph.Lines, ralph.Before!, ralph.HadPictures, turn.Cancelled, turn.Failed, ralph.Requirement, _time, cancellationToken).ConfigureAwait(false);
+            var judged = await RalphJudge.JudgeAsync(host, loop, ralph.Step, ralph.Total, ralph.Lines, ralph.Headed, ralph.Before!, ralph.HadPictures, turn.Cancelled, turn.Failed, ralph.Requirement, _time, cancellationToken).ConfigureAwait(false);
             stop = loop.EndPass(judged.Facts, HeadlessPlanMeter(state.RalphContext!.Session));
             if (RalphJudge.LogPass(files, loop, ralph.Step, judged, _time) is { } problem)
             {
@@ -560,7 +578,7 @@ public sealed partial class SidekickApp
         {
             if (ralph.Loop.InPass)
             {
-                RalphJudge.PutBackUnjudged(ralph.Files, ralph.Loop.Snapshot.Path, ralph.Lines, ralph.Step);
+                RalphJudge.PutBackUnjudged(ralph.Files, ralph.Loop.Snapshot.Path, ralph.Lines, ralph.Step, ralph.Headed);
             }
 
             RalphLog.Unlock(ralph.Files, ralph.Loop.Snapshot.Path, RalphLog.Me);

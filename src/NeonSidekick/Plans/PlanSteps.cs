@@ -44,11 +44,28 @@ public static class PlanSteps
     private static readonly Regex s_barePath = new(@"(?<![\w/.-])((?:\.{1,2}/)?[\w.-]+(?:/[\w.-]+)+)", RegexOptions.CultureInvariant);
 
     /// <summary>The steps of <paramref name="text"/> (a plan file whole, or its body), in order.</summary>
-    public static IReadOnlyList<PlanStep> Parse(string text)
+    public static IReadOnlyList<PlanStep> Parse(string text) => Parse(text, null);
+
+    /// <summary>
+    /// The steps of <paramref name="text"/> read in a scope given (2026-10-19, the fifth review of the Ralph loop: the judge reads a plan after a pass
+    /// in the scope it had before it): <paramref name="headed"/> true reads only the task lines under <c>## Steps</c> (none without one), false every
+    /// top-level task line whatever the headings, null as the text has it (<see cref="HasStepsHeading"/>).
+    /// </summary>
+    public static IReadOnlyList<PlanStep> Parse(string text, bool? headed) => ParseCore(text, headed, null);
+
+    /// <summary>Whether <paramref name="text"/> has a <c>## Steps</c> heading outside fenced code: the scope <see cref="Parse(string)"/> reads.</summary>
+    public static bool HasStepsHeading(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return PlanDocument.Walk(text).Any(l => IsStepsHeading(l.Text));
+    }
+
+    /// <summary><see cref="Parse(string, bool?)"/>, each task line's <c>Done when:</c> lines noted in <paramref name="doneWhenAt"/> by its line when given.</summary>
+    private static List<PlanStep> ParseCore(string text, bool? scope, Dictionary<int, List<int>>? doneWhenAt)
     {
         ArgumentNullException.ThrowIfNull(text);
         var lines = PlanDocument.Walk(text).ToList();
-        bool headed = lines.Any(l => IsStepsHeading(l.Text));
+        bool headed = scope ?? lines.Any(l => IsStepsHeading(l.Text));
         bool inSteps = !headed;
         var tops = new List<Builder>();
         Builder? lastTask = null;
@@ -96,6 +113,7 @@ public static class PlanSteps
             if (lastTask is not null && indent > lastTask.Indent && DoneWhenOf(trimmed) is { } doneWhen)
             {
                 lastTask.DoneWhen = lastTask.DoneWhen is null ? doneWhen : lastTask.DoneWhen + " " + doneWhen;
+                lastTask.DoneWhenLines.Add(index);
             }
         }
 
@@ -110,6 +128,14 @@ public static class PlanSteps
             seen[builder.Text] = builder.Occurrence + 1;
         }
 
+        if (doneWhenAt is not null)
+        {
+            foreach (var builder in order)
+            {
+                doneWhenAt[builder.Line] = builder.DoneWhenLines;
+            }
+        }
+
         int leaf = 0;
         var steps = new List<PlanStep>(tops.Count);
         foreach (var top in tops)
@@ -119,6 +145,133 @@ public static class PlanSteps
         }
 
         return steps;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with its <c>## Steps</c> heading back (2026-10-19, the fifth review of the Ralph loop: a pass that renamed or deleted
+    /// it turned every task line of the file into a step, and the judge took the other sections' checklists out as steps the pass added): the
+    /// level 1 or 2 heading nearest above the first task line with the words of one of <paramref name="before"/> named <c>## Steps</c> again when it
+    /// still names steps (a rename), else a <c>## Steps</c> line put in above that task line (a delete). The text as it is when it has the heading;
+    /// null when no task line has any of those words. Pure.
+    /// </summary>
+    public static string? WithStepsHeading(string text, IReadOnlyList<PlanStep> before)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(before);
+        if (HasStepsHeading(text))
+        {
+            return text;
+        }
+
+        var words = before.Select(b => b.Text).ToHashSet(StringComparer.Ordinal);
+        int heading = -1;
+        int first = -1;
+        foreach (var (index, raw) in PlanDocument.Walk(text))
+        {
+            string trimmed = raw.TrimEnd('\r').TrimStart();
+            if (HeadingLevel(trimmed) is int level and > 0 and <= 2)
+            {
+                heading = index;
+            }
+            else if (TaskBox(trimmed) is { } task && words.Contains(task.Text))
+            {
+                first = index;
+                break;
+            }
+        }
+
+        if (first < 0)
+        {
+            return null;
+        }
+
+        var lines = SplitKeepingEndings(text);
+        string stepsLine = "## " + StepsHeading;
+        if (heading >= 0 && lines[heading].Content.Contains(StepsHeading, StringComparison.OrdinalIgnoreCase))
+        {
+            lines[heading] = (stepsLine, lines[heading].Ending);
+        }
+        else
+        {
+            lines.Insert(first, (stepsLine, lines[first].Ending is { Length: > 0 } own ? own : "\n"));
+        }
+
+        return Join(lines);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> without its <c>## Steps</c> headings (2026-10-19, the fifth review of the Ralph loop: one a pass added to a plan that had
+    /// none would have hidden the steps outside it from the loop). Pure.
+    /// </summary>
+    public static string WithoutStepsHeadings(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var headings = PlanDocument.Walk(text).Where(l => IsStepsHeading(l.Text)).Select(l => l.Index).ToHashSet();
+        return headings.Count == 0 ? text : Join(SplitKeepingEndings(text).Where((_, i) => !headings.Contains(i)).ToList());
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with each step of <paramref name="edits"/> given its <c>Done when:</c> line again (2026-10-19, the fifth review of the
+    /// Ralph loop: the judge put back a step's words but not its check, so a pass could weaken its own step's or a later one's): its first
+    /// <c>Done when:</c> line keeps everything up to the label and takes the words, the others go; a step with none gets one under it, indented
+    /// two past its line; a null <c>DoneWhen</c> takes them all out. Each <c>At</c> was parsed from this very text in the scope
+    /// <paramref name="headed"/>; one whose line is not that task any more is left. Pure.
+    /// </summary>
+    public static string WithDoneWhen(string text, IEnumerable<(PlanStep At, string? DoneWhen)> edits, bool? headed)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(edits);
+        var doneWhenAt = new Dictionary<int, List<int>>();
+        ParseCore(text, headed, doneWhenAt);
+        var lines = SplitKeepingEndings(text);
+        // From the bottom up: a line put in or taken out moves only those after it, and a step's own lines are after it.
+        foreach (var (at, doneWhen) in edits.OrderByDescending(e => e.At.Line))
+        {
+            if (at.Line < 0 || at.Line >= lines.Count || !doneWhenAt.TryGetValue(at.Line, out var held)
+                || TaskBox(lines[at.Line].Content.TrimEnd('\r').TrimStart()) is not { } task || !string.Equals(task.Text, at.Text, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            for (int k = held.Count - 1; k >= (doneWhen is null ? 0 : 1); k--)
+            {
+                lines.RemoveAt(held[k]);
+            }
+
+            if (doneWhen is null)
+            {
+                continue;
+            }
+
+            if (held.Count > 0)
+            {
+                var (content, ending) = lines[held[0]];
+                // The label kept as written, a bold or italic mark closing it too; one split by marks (**Done when**:) written plain.
+                int label = content.IndexOf(DoneWhenLabel, StringComparison.OrdinalIgnoreCase);
+                if (label < 0)
+                {
+                    int pad = content.Length - content.TrimStart().Length;
+                    lines[held[0]] = (content[..pad] + DoneWhenLabel + " " + Flat(doneWhen), ending);
+                    continue;
+                }
+
+                label += DoneWhenLabel.Length;
+                while (label < content.Length && content[label] is '*' or '_')
+                {
+                    label++;
+                }
+
+                lines[held[0]] = (content[..label] + " " + Flat(doneWhen), ending);
+            }
+            else
+            {
+                string ending = lines[at.Line].Ending is { Length: > 0 } own ? own : "\n";
+                lines[at.Line] = (lines[at.Line].Content, ending);
+                lines.Insert(at.Line + 1, (new string(' ', at.Indent + 2) + DoneWhenLabel + " " + Flat(doneWhen), ending));
+            }
+        }
+
+        return Join(lines);
     }
 
     /// <summary>The leaves in the order the loop works them: each top-level step's children, else the step itself.</summary>
@@ -481,6 +634,7 @@ public static class PlanSteps
         public string Text { get; } = text;
         public bool Ticked { get; } = ticked;
         public string? DoneWhen { get; set; }
+        public List<int> DoneWhenLines { get; } = [];
         public int Occurrence { get; set; }
         public int Twins { get; set; } = 1;
         public List<Builder> Children { get; } = [];

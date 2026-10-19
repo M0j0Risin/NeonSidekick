@@ -65,8 +65,8 @@ internal static class RalphReviewers
     {
         int windowChars = contextTokens * ConversationCompactor.CharsPerToken;
         int room = windowChars > 0 ? Math.Min(RalphChanges.MaxDiffChars, windowChars / 4) : RalphChanges.MaxDiffChars;
-        string diff = delta.Diff.Length <= room ? delta.Diff : delta.Diff[..room] + "\n… (cut to fit the reviewer's window)";
-        return RalphText.ReviewRequest(step.Text, step.DoneWhen, report?.Summary ?? "(the pass made no report)", report?.Verified ?? [], delta.Flags, delta.Changed, diff);
+        string diff = delta.Diff.Length <= room ? delta.Diff : delta.Diff[..room] + RalphText.ReviewDiffCut;
+        return RalphText.ReviewRequest(step.Text, step.DoneWhen, report?.Summary ?? RalphText.NoReportSummary, report?.Verified ?? [], delta.Flags, delta.Changed, diff);
     }
 
     /// <summary>The --log line of a review.</summary>

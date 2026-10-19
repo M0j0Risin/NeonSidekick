@@ -215,16 +215,18 @@ public sealed class RalphLogTests : IDisposable
     {
         // 2026-10-19, the third review: a run that ended mid-pass left the model's tick standing unchecked; the mark names the step to put back.
         Assert.Null(RalphLog.SetHead(_files, Plan, Head));
-        var step = new PlanStep(1, 7, 0, "Write the outline", false, null, [], [], []);
+        var step = new PlanStep(1, 7, 0, "Write the outline", false, "outline.md lists every chapter", [], [], []);
         var lines = new[] { new PlanStep(0, 6, 0, "Gather notes", true, null, [], [], []), step };
 
-        Assert.Null(RalphLog.MarkInPass(_files, Plan, step, lines));
+        Assert.Null(RalphLog.MarkInPass(_files, Plan, step, lines, headed: true));
         var marked = RalphLog.Read(_files, Plan)!.Head!;
         Assert.Equal(7, marked.InPassLine);
         Assert.Equal("Write the outline", marked.InPassStep);
         Assert.True(RalphLog.InPassOf(marked) is { Line: 7, Text: "Write the outline", Ticked: false, IsLeaf: true });
-        // The task lines as the pass began (2026-10-19, the fourth review), read back.
-        Assert.Equal([(6, true, "Gather notes"), (7, false, "Write the outline")], marked.InPassLines!.Select(l => (l.Line, l.Ticked, l.Text)));
+        // The task lines as the pass began (2026-10-19, the fourth review), read back; their Done when: and the scope too (the fifth).
+        Assert.Equal([(6, true, "Gather notes", (string?)null), (7, false, "Write the outline", "outline.md lists every chapter")],
+            marked.InPassLines!.Select(l => (l.Line, l.Ticked, l.Text, l.DoneWhen)));
+        Assert.True(marked.InPassHeaded);
         Assert.True(RalphLog.InPass(marked));
 
         Assert.Null(RalphLog.ClearInPass(_files, Plan));

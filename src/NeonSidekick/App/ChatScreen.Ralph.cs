@@ -21,8 +21,8 @@ namespace NeonSidekick.App;
 /// log beside it (<see cref="RalphLog"/>), the app — not the model — deciding whether a step stands: its verify command (<see cref="IRalphVerifier"/>),
 /// the evidence (<see cref="RalphChanges"/>), a review, and a checkpoint every N steps when asked for. A flat driver (<see cref="RunRalphAsync"/>):
 /// each pass is one <see cref="RunMessageAsync"/>, its directive riding the turn's own slot (<see cref="TurnToolInputs.Pass"/>, every tool kept) with
-/// <c>finish_step</c>; nothing chains through the turn. A message typed during a pass pauses the loop after the pass is judged; Esc, the page's Stop
-/// or a withdrawal stops it; <c>/plan ralph</c> resumes.
+/// <c>finish_step</c>; nothing chains through the turn. A message typed during a pass pauses the loop after the pass is judged; Esc, the page's Stop,
+/// a withdrawal or the wake phrase (its request run after) stops it; <c>/plan ralph</c> resumes.
 /// </summary>
 internal sealed partial class ChatScreen
 {
@@ -37,6 +37,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>The pass under way's short line and session title: what its row logs instead of the whole message.</summary>
     private (string Line, string Title)? _ralphPass;
+
+    /// <summary>
+    /// The request heard after the wake phrase cut a pass short (2026-10-19, the fifth review: it ran as another turn inside the pass, under its
+    /// directive and <c>finish_step</c>, and the pass was judged as an ordinary one): the pass is judged as stopped, and <see cref="RunRalphAsync"/>
+    /// runs this once the loop has ended. Null otherwise.
+    /// </summary>
+    private string? _ralphSpoken;
 
     /// <summary>The strip's text while a loop runs (one volatile string: <see cref="WebStatusNow"/> reads it off a request's thread).</summary>
     private volatile string? _ralphStrip;
@@ -212,6 +219,16 @@ internal sealed partial class ChatScreen
         if (PlanFiles.ReadWhole(_files, path) is not { } text)
         {
             _transcript.Notice(RalphText.StopNotice(RalphStop.PlanGone, path, 0, 0));
+            _executingPlan = null;
+            SavePlanState();
+            return false;
+        }
+
+        if (PlanDocument.TryParse(text) is { Status: PlanStatus.Done or PlanStatus.Cancelled } finished)
+        {
+            // Done or canceled while it was paused (2026-10-19, the fifth review: every pass's session row keeps the paused state, and a restored one
+            // restarted a plan the user had canceled with /plan cancel): the state is dropped, as a named start refuses it.
+            _transcript.Error(RalphText.NotRunnableError(path, finished.Status));
             _executingPlan = null;
             SavePlanState();
             return false;
@@ -432,8 +449,10 @@ internal sealed partial class ChatScreen
     {
         var loop = _ralph!;
         string path = loop.Snapshot.Path;
+        var files = RalphFiles;
         RalphStop? stop = null;
         bool exit = false;
+        _ralphSpoken = null;
         try
         {
             while (stop is null)
@@ -504,9 +523,26 @@ internal sealed partial class ChatScreen
         {
             _ralphTurn = null;
             _ralphPass = null;
+            if (!ReferenceEquals(_ralph, loop))
+            {
+                // Left with the conversation mid-pass: StopRalphOnReset kept the lock for the put-back (done by now, or skipped by a throw).
+                RalphLog.Unlock(files, path, RalphLog.Me);
+            }
         }
 
+        bool ours = ReferenceEquals(_ralph, loop);
         EndRalph(stop ?? RalphStop.Stopped);
+        if (_ralphSpoken is { } spoken)
+        {
+            // The request the wake phrase cut a pass short for (2026-10-19, the fifth review): run once the loop has stopped, as an ordinary turn
+            // (never under the pass's directive and finish_step), and only in the conversation the loop ran in.
+            _ralphSpoken = null;
+            if (ours && !exit)
+            {
+                return await RunMessageAsync(spoken, [], cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         return exit;
     }
 
@@ -530,7 +566,9 @@ internal sealed partial class ChatScreen
         // The task lines as the pass begins, the file's (steps was parsed from it whole): what the judge pairs the lines after with, and what a start
         // after a crash puts back (the in-pass mark keeps them, the final fix's too: 2026-10-19, the fourth review).
         var lines = PlanSteps.Flat(steps);
-        if (RalphLog.MarkInPass(RalphFiles, path, step, lines) is { } unmarked)
+        // The scope they were read in (2026-10-19, the fifth review): the judge reads the plan after the pass in the same one.
+        bool headed = PlanSteps.HasStepsHeading(body);
+        if (RalphLog.MarkInPass(RalphFiles, path, step, lines, headed) is { } unmarked)
         {
             DiagnosticLog.Info(AppCategory, "ralph: " + unmarked);
         }
@@ -580,9 +618,10 @@ internal sealed partial class ChatScreen
         if (!ReferenceEquals(_ralph, loop))
         {
             // A pane the pass ended under switched the profile or replaced the conversation (2026-10-19, the review): the loop went with it
-            // (StopRalphOnReset let its lock go), so the pass is not judged and the driver sends no more. What it did to the plan's boxes and words
-            // is put back, its own tick too (2026-10-19, the third review: left, it stood unchecked and a resume passed the step by).
-            if (RalphJudge.PutBackUnjudged(files, path, lines, step))
+            // (StopRalphOnReset kept its lock for this put-back, RunRalphAsync's finally lets it go), so the pass is not judged and the driver sends no
+            // more. What it did to the plan's boxes and words is put back, its own tick too (2026-10-19, the third review: left, it stood unchecked and
+            // a resume passed the step by).
+            if (RalphJudge.PutBackUnjudged(files, path, lines, step, headed))
             {
                 DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass} ended with its loop; its plan edits put back");
             }
@@ -590,7 +629,7 @@ internal sealed partial class ChatScreen
             return (exit, RalphStop.Stopped);
         }
 
-        var judged = await JudgeRalphPassAsync(loop, step, total, lines, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
+        var judged = await JudgeRalphPassAsync(loop, step, total, lines, headed, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
         var stop = loop.EndPass(judged.Facts, PlanMeter());
         RalphLogPass(loop, step, judged);
         _ralphTurn = null;
@@ -667,8 +706,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>After a pass's turn: <see cref="RalphJudge.JudgeAsync"/> over the screen.</summary>
-    private Task<RalphJudged> JudgeRalphPassAsync(RalphLoop loop, PlanStep? step, int total, IReadOnlyList<PlanStep> lines, RalphSnapshotOfFiles before, bool hadPictures, CancellationToken cancellationToken) =>
-        RalphJudge.JudgeAsync(new ScreenRalphHost(this), loop, step, total, lines, before, hadPictures, _lastTurnCancelled, _lastTurnFailed, _executingPlan?.Requirement ?? "", _time, cancellationToken);
+    private Task<RalphJudged> JudgeRalphPassAsync(RalphLoop loop, PlanStep? step, int total, IReadOnlyList<PlanStep> lines, bool headed, RalphSnapshotOfFiles before, bool hadPictures, CancellationToken cancellationToken) =>
+        RalphJudge.JudgeAsync(new ScreenRalphHost(this), loop, step, total, lines, headed, before, hadPictures, _lastTurnCancelled, _lastTurnFailed, _executingPlan?.Requirement ?? "", _time, cancellationToken);
 
     /// <summary>A step's box set in the file (the loop's own tick), quietly.</summary>
     private void SetBox(string path, PlanStep step, bool ticked) => RalphJudge.SetBox(new ScreenRalphHost(this), path, step, ticked);
@@ -852,7 +891,13 @@ internal sealed partial class ChatScreen
     {
         if (_ralph is { } loop)
         {
-            RalphLog.Unlock(RalphFiles, loop.Snapshot.Path, RalphLog.Me);
+            // A pass under way keeps the lock until its edits are put back (2026-10-19, the fifth review: let go here, another instance could take the
+            // plan before RalphPassAsync's PutBackUnjudged rewrote it and cleared the in-pass mark): the driver lets it go then (RunRalphAsync's finally).
+            if (!loop.InPass)
+            {
+                RalphLog.Unlock(RalphFiles, loop.Snapshot.Path, RalphLog.Me);
+            }
+
             _ralph = null;
             _ralphFiles = null;
             _ralphGit = null;

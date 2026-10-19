@@ -16307,6 +16307,14 @@ internal sealed partial class ChatScreen
                 return false;
             }
 
+            if (InRalphPass)
+            {
+                // A Ralph pass cut short (2026-10-19, the fifth review): the pass ends here, judged as stopped (the Interrupted outcome set
+                // _lastTurnCancelled), and its loop runs the request once it has stopped, never inside the pass.
+                _ralphSpoken = request;
+                return false;
+            }
+
             text = request;
             images = [];
         }

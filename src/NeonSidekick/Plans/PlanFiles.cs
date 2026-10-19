@@ -73,8 +73,9 @@ public static class PlanFiles
         // Presented settles the session on the same words, so the file and the session agree.
         // The checks a revision does not name are the file's (2026-10-18): a revision that leaves verify out keeps it; "" clears it.
         var before = session.Path is null || ReadWhole(files, path) is not { } old ? null : PlanDocument.TryParse(old);
-        string? verify = checks?.Verify is { } v ? NullIfBlank(v) : before?.Verify;
-        string? final = checks?.Final is { } f ? NullIfBlank(f) : before?.Final;
+        // Each on one line as the header keeps it (2026-10-19), so the presentation the pane shows is the command the loop reads back and runs.
+        string? verify = checks?.Verify is { } v ? NullIfBlank(PlanDocument.OneLine(v)) : before?.Verify;
+        string? final = checks?.Final is { } f ? NullIfBlank(PlanDocument.OneLine(f)) : before?.Final;
         var header = new PlanHeader(PlanStatus.Draft, revision, session.Created ?? now, now, session.RequirementFor(title), Verify: verify, Final: final);
         string body = references is null ? markdown : references(path, PlanDocument.SavedBody(title, markdown));
         var written = files.WriteText(path, PlanDocument.Render(header, title, body), overwrite: true);

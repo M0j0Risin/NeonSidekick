@@ -13,8 +13,11 @@ namespace NeonSidekick.Plans;
 /// (2026-10-19, the fourth review: only the pass's own box went back, so other boxes it ticked, steps it reworded or deleted stood) are the plan's
 /// task lines as that pass began, its <c>## In pass</c> section: the start puts the whole plan back as the judge would (<c>RalphJudge.Restore</c>).
 /// Set for the final fix too, which has no step of its own; null with no pass under way (or a log the previous build wrote).
+/// <paramref name="InPassHeaded"/> (2026-10-19, the fifth review) is whether the plan read its steps under <c>## Steps</c> then, and each in-pass line
+/// keeps its <c>Done when:</c> (a <c>done when:</c> item under it), so the start puts back a renamed heading and a weakened check as the judge does;
+/// null in a log the previous build wrote (which kept neither).
 /// </summary>
-public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null, IReadOnlyList<PlanStep>? InPassLines = null);
+public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null, IReadOnlyList<PlanStep>? InPassLines = null, bool? InPassHeaded = null);
 
 /// <summary>
 /// One pass as the log keeps it (2026-10-18): its number, its step, the outcome and the model's summary, what it said it checked, the app's check
@@ -73,6 +76,9 @@ public static class RalphLog
     private const string TimeFormat = "yyyy-MM-dd'T'HH:mm:sszzz";
     private const string LearnedHeading = "## Learned";
     private const string InPassHeading = "## In pass";
+
+    /// <summary>The label of an in-pass line's <c>Done when:</c>, the item under it.</summary>
+    private const string InPassDoneWhen = "done when: ";
     private const string PassHeading = "## Pass ";
 
     /// <summary>The log of <paramref name="planPath"/>.</summary>
@@ -163,9 +169,10 @@ public static class RalphLog
 
     /// <summary>
     /// The head's mark of a pass under way set: its step (null for the final fix) and the plan's task lines as it began (<see cref="PlanSteps.Flat"/>
-    /// of the file whole), the rest as it was; null when written (or no head to mark).
+    /// of the file whole) with their <c>Done when:</c>, and whether they were read under <c>## Steps</c> (<paramref name="headed"/>), the rest as it was;
+    /// null when written (or no head to mark).
     /// </summary>
-    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step, IReadOnlyList<PlanStep> lines)
+    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step, IReadOnlyList<PlanStep> lines, bool headed)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var document = ReadFor(files, planPath, out string? problem);
@@ -178,7 +185,8 @@ public static class RalphLog
         {
             InPassLine = step?.Line ?? -1,
             InPassStep = step is null ? null : Flat(step.Text),
-            InPassLines = lines.Select(l => new PlanStep(0, l.Line, 0, Flat(l.Text), l.Ticked, null, [], [], [])).ToList(),
+            InPassLines = lines.Select(l => new PlanStep(0, l.Line, 0, Flat(l.Text), l.Ticked, l.DoneWhen is { } d ? Flat(d) : null, [], [], [])).ToList(),
+            InPassHeaded = headed,
         };
         return Write(files, planPath, document with { Head = marked });
     }
@@ -192,7 +200,7 @@ public static class RalphLog
             return problem;
         }
 
-        var cleared = head with { InPassLine = -1, InPassStep = null, InPassLines = null };
+        var cleared = head with { InPassLine = -1, InPassStep = null, InPassLines = null, InPassHeaded = null };
         return cleared == head ? null : Write(files, planPath, document with { Head = cleared });
     }
 
@@ -349,6 +357,11 @@ public static class RalphLog
                 text.Append("- in pass: ").Append(N(head.InPassLine)).Append(" · ").Append(Flat(inPass)).Append('\n');
             }
 
+            if (head.InPassHeaded is { } headed)
+            {
+                text.Append("- in pass steps heading: ").Append(headed ? "yes" : "no").Append('\n');
+            }
+
             text.Append('\n');
             if (head.InPassLines is { } inPassLines)
             {
@@ -357,6 +370,10 @@ public static class RalphLog
                 foreach (var line in inPassLines)
                 {
                     text.Append("- ").Append(N(line.Line)).Append(line.Ticked ? " [x] " : " [ ] ").Append(Flat(line.Text)).Append('\n');
+                    if (line.DoneWhen is { Length: > 0 } doneWhen)
+                    {
+                        text.Append("  - ").Append(InPassDoneWhen).Append(Flat(doneWhen)).Append('\n');
+                    }
                 }
 
                 text.Append('\n');
@@ -529,6 +546,17 @@ public static class RalphLog
 
             if (section == "inpass")
             {
+                // "done when: words" under a line: its check (2026-10-19, the fifth review).
+                if (item.StartsWith(InPassDoneWhen, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (inPassLines!.Count > 0 && item[InPassDoneWhen.Length..].Trim() is { Length: > 0 } words)
+                    {
+                        inPassLines[^1] = inPassLines[^1] with { DoneWhen = words };
+                    }
+
+                    continue;
+                }
+
                 // "12 [x] words": a line that does not read so is skipped (a hand edit).
                 int space = item.IndexOf(' ', StringComparison.Ordinal);
                 if (space > 0 && int.TryParse(item[..space], NumberStyles.Integer, CultureInfo.InvariantCulture, out int lineAt) && lineAt >= 0
@@ -578,6 +606,10 @@ public static class RalphLog
         if (head is not null && inPassLines is not null)
         {
             head = head with { InPassLines = inPassLines };
+            if (headFields.GetValueOrDefault("in pass steps heading") is { } headedWord)
+            {
+                head = head with { InPassHeaded = string.Equals(headedWord, "yes", StringComparison.OrdinalIgnoreCase) };
+            }
         }
 
         return new RalphLogDocument(head, learned, entries);

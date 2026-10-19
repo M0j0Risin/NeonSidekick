@@ -5,8 +5,11 @@ using NeonSidekick.Git;
 
 namespace NeonSidekick.Plans;
 
-/// <summary>A file as a snapshot saw it: its size and time, and in a repository its text (null for a binary file, one too large, one gone).</summary>
-public sealed record RalphFileMark(long Length, DateTime Written, string? Text, bool Binary);
+/// <summary>
+/// A file as a snapshot saw it: its size and time, and in a repository its text (null for a binary file, one too large, one gone).
+/// <paramref name="Unread"/> (2026-10-19, the fifth review): its text was not read, the snapshot's text budget spent, so a change to it is listed with no diff.
+/// </summary>
+public sealed record RalphFileMark(long Length, DateTime Written, string? Text, bool Binary, bool Unread = false);
 
 /// <summary>
 /// The working tree before or after a pass (2026-10-18, <see cref="RalphChanges.Snapshot"/>): in a repository the changed files with their text (so a
@@ -50,19 +53,59 @@ public static class RalphChanges
     /// <summary>The largest file whose text a snapshot keeps.</summary>
     public const long MaxTextBytes = 2_000_000;
 
-    /// <summary>A snapshot of <paramref name="files"/>' tree, through <paramref name="git"/> when the working directory is in a repository.</summary>
-    public static RalphSnapshotOfFiles Snapshot(WorkingDirectory files, GitAccess? git, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The most text, in bytes, a snapshot in a repository reads (2026-10-19, the fifth review: it read every changed and untracked file whole, up to
+    /// <see cref="MaxTextBytes"/> each, before and after every pass, so a tree of untracked build output cost hundreds of MB a pass). The smallest
+    /// files are read first; the rest keep their size and time (<see cref="RalphFileMark.Unread"/>).
+    /// </summary>
+    public const long MaxSnapshotTextBytes = 16_000_000;
+
+    /// <summary>
+    /// A snapshot of <paramref name="files"/>' tree, through <paramref name="git"/> when the working directory is in a repository. Given the snapshot
+    /// before the pass (<paramref name="since"/>), a file whose size and time are as it saw them is taken from it unread (2026-10-19, the fifth review):
+    /// only the files that changed are read again.
+    /// </summary>
+    public static RalphSnapshotOfFiles Snapshot(WorkingDirectory files, GitAccess? git, CancellationToken cancellationToken = default, RalphSnapshotOfFiles? since = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         if (git is not null && git.ChangedPaths("") is { Outcome: GitOutcome.Ok } changed)
         {
-            var marks = new Dictionary<string, RalphFileMark>(StringComparer.Ordinal);
+            // Each file's size and time first; its text then, the smallest first, while the budget lasts.
+            var sizes = new Dictionary<string, RalphFileMark>(StringComparer.Ordinal);
             foreach (string raw in changed.Paths)
             {
                 string path = Slash(raw);
                 if (!Skipped(path))
                 {
+                    sizes[path] = Mark(files, path, withText: false);
+                }
+            }
+
+            var marks = new Dictionary<string, RalphFileMark>(StringComparer.Ordinal);
+            long budget = MaxSnapshotTextBytes;
+            foreach (var (path, stamp) in sizes.OrderBy(s => s.Value.Length).ThenBy(s => s.Key, StringComparer.Ordinal))
+            {
+                if (since is { Git: true } && since.Files.TryGetValue(path, out var seen) && seen.Length == stamp.Length && seen.Written == stamp.Written)
+                {
+                    marks[path] = seen;
+                }
+                else if (stamp.Length < 0)
+                {
+                    marks[path] = stamp;
+                }
+                else if (stamp.Length > MaxTextBytes)
+                {
+                    // Never read, so never diffed against nothing (2026-10-19: its null text read as an empty file before the pass).
+                    marks[path] = stamp with { Unread = true };
+                }
+                else if (stamp.Length <= budget)
+                {
+                    budget -= stamp.Length;
                     marks[path] = Mark(files, path, withText: true);
+                }
+                else
+                {
+                    marks[path] = stamp with { Unread = true };
                 }
             }
 
@@ -132,7 +175,14 @@ public static class RalphChanges
             var current = now ?? Mark(files, path, withText: true);
             if ((was?.Binary ?? false) || current.Binary)
             {
-                diff.Append($"(binary {path}, {Size(current.Length)})\n");
+                diff.Append(RalphText.BinaryNotDiffed(path, Size(current.Length))).Append('\n');
+                continue;
+            }
+
+            if ((was?.Unread ?? false) || current.Unread)
+            {
+                long largest = Math.Max(was?.Length ?? 0, current.Length);
+                diff.Append(largest > MaxTextBytes ? RalphText.TooLargeToRead(path, Size(largest)) : RalphText.NotKeptToDiff(path)).Append('\n');
                 continue;
             }
 
@@ -140,7 +190,7 @@ public static class RalphChanges
             var hunks = UnifiedDiff.Hunks(UnifiedDiff.Split(oldText ?? ""), UnifiedDiff.Split(newText));
             if (hunks is null)
             {
-                diff.Append($"({path} is too large to diff: {Lines(oldText)} lines before, {Lines(newText)} after)\n");
+                diff.Append(RalphText.TooLargeToDiff(path, Lines(oldText), Lines(newText))).Append('\n');
                 continue;
             }
 
@@ -151,7 +201,7 @@ public static class RalphChanges
         string text = Llm.Tools.ToolRedaction.Text(diff.ToString());
         if (text.Length > MaxDiffChars)
         {
-            text = text[..MaxDiffChars] + "\n… (the diff goes on; cut at " + MaxDiffChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)\n";
+            text = text[..MaxDiffChars] + RalphText.DiffCut(MaxDiffChars);
         }
 
         var missing = named.Select(Slash).Where(p => !Exists(files, p)).ToList();
@@ -194,7 +244,8 @@ public static class RalphChanges
 
             if (!withText || info.Length > MaxTextBytes)
             {
-                return new RalphFileMark(info.Length, info.LastWriteTimeUtc, null, false);
+                // A text asked for but too large to read is unread, not empty (2026-10-19): the diff names it instead of showing a wrong one.
+                return new RalphFileMark(info.Length, info.LastWriteTimeUtc, null, false, Unread: withText);
             }
 
             byte[] bytes = File.ReadAllBytes(full);

@@ -843,6 +843,15 @@ public static class PlanText
     /// </summary>
     public const string MarkdownStubSent = "Error: markdown is a pruned stub, not the plan; read the plan file again and send the whole plan";
     public const string TitleRequired = "Error: title is required: a short title for the plan";
+
+    /// <summary>
+    /// <c>present_plan</c>'s answer to a <c>verify</c> or <c>final</c> on more than one line (2026-10-19, the fifth review of the Ralph loop): the header
+    /// keeps a command on one line, so the pane showed two commands while the loop ran them joined into one (a <c>Remove-Item</c> taking the next
+    /// line's words as more paths). Pinned.
+    /// </summary>
+    public static string CheckOneLineResult(string argument) =>
+        $"Error: {argument} must be one command on one line; join several with the shell's own separator (&& or ;) and call present_plan again";
+
     public const string AlreadyApprovedResult = "The plan is already approved; it starts when this reply ends. Reply with one short line and call no more tools.";
 
     public static string ApprovedResult(string path) =>

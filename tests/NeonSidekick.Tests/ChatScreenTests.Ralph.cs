@@ -974,4 +974,83 @@ public partial class ChatScreenTests
         Assert.Equal(4, _chat.Requests.Count);   // two passes: the added step never one
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
+
+    [Fact]
+    public async Task Ralph_APausedLoopsPlanCanceledMeanwhile_IsNeverResumed_AndItsStateGoes()
+    {
+        // 2026-10-19, the fifth review: every pass's session row keeps the paused state, and bare /plan ralph restarted a plan /plan cancel had canceled.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes,
+            input =>
+            {
+                File.WriteAllText(PlanFile, PlanDocument.WithStatus(RalphPlanText, PlanStatus.Cancelled, DateTimeOffset.UnixEpoch, "Add a guide"));
+                Line("/plan ralph")(input);
+            },
+            Line("/plan ralph"), Key(Keys.Escape), Line("/exit"));
+        RalphPass("1", "blocked", "Need a name.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.NotRunnableError(PlanPath, PlanStatus.Cancelled), output);
+        Assert.Contains(RalphText.NothingPausedNotice, output);   // the state went with the refusal
+        Assert.Equal([RalphVerify], _ralphVerifier.Commands);       // no baseline again
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal(PlanStatus.Cancelled, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_TheWakePhraseDuringAPass_StopsTheLoop_ThenRunsTheRequestOutsideIt()
+    {
+        // 2026-10-19, the fifth review: the spoken request ran as another turn inside the pass, under its directive and finish_step, and the pass was
+        // judged as an ordinary one.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _settings.Update(d => d.TtsOutput = true);
+        InterruptOn();
+        _wake.FinalAfterBuffers = 2;
+        _wake.Text = "neon";
+        _chat.EnqueueText("One. ", "Two.").EnqueueText("Go on then.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                _capture.Deliver(_capture.Silence(50), 1600);
+                _capture.Deliver(_capture.Silence(50), 1600);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        FollowUpHears("what are you changing");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StopNotice(RalphStop.Stopped, PlanPath, 0, 2), output);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("what are you changing", _chat.Requests[1][^1].Text);
+        Assert.DoesNotContain(_chat.Requests[1], m => m.Text.Contains("RALPH LOOP PASS", StringComparison.Ordinal));
+        Assert.Equal([RalphVerify], _ralphVerifier.Commands);   // the stopped pass checked nothing
+        Assert.Contains("- [ ] One", RalphPlanText);
+    }
+
+    [Fact]
+    public async Task Ralph_APassThatWeakensADoneWhen_HasItPutBack_AndTheNextPassReadsTheApprovedOne()
+    {
+        // 2026-10-19, the fifth review: only task lines went back, so a weakened check drove the passes and reviews after it.
+        RalphPlan();
+        _console.Profile.Width = 400;
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphEditDuringFirstPass(text => text.Replace("two.md exists", "anything at all", StringComparison.Ordinal));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.DoneWhenPutBackNotice(1), output);
+        Assert.Contains("Done when: two.md exists", RalphPlanText);
+        Assert.Contains(_chat.Requests[2], m => m.Text.Contains("(done when: two.md exists)", StringComparison.Ordinal));
+        Assert.DoesNotContain(_chat.Requests[2], m => m.Text.Contains("anything at all", StringComparison.Ordinal));
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
 }

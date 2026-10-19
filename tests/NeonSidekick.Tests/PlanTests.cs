@@ -549,6 +549,37 @@ public class PlanTests : IDisposable
     }
 
     [Fact]
+    public async Task Tool_AVerifyOrFinalOnSeveralLines_IsRefused_AndNothingIsSaved()
+    {
+        // 2026-10-19, the fifth review: the pane showed two commands while the header joined them into one, which the loop ran (a Remove-Item
+        // taking the next line's words as more paths).
+        _session.Enter("Add a guide");
+        _verdict = new PlanVerdict(PlanChoice.Refine);
+        var args = Args("Contributing guide", Plan, name: "guide");
+        args[PresentPlanTool.VerifyArgument] = "Remove-Item -Recurse build\ndotnet test";
+        var final = Args("Contributing guide", Plan, name: "guide");
+        final[PresentPlanTool.FinalArgument] = "dotnet build\r\ndotnet test";
+
+        Assert.Equal(PlanText.CheckOneLineResult(PresentPlanTool.VerifyArgument), await _tool.InvokeAsync(args));
+        Assert.Equal(PlanText.CheckOneLineResult(PresentPlanTool.FinalArgument), await _tool.InvokeAsync(final));
+        Assert.Empty(_presented);
+        Assert.False(File.Exists(Path.Combine(_dir, ".neon", "plans", "guide.md")));
+    }
+
+    [Fact]
+    public void Save_WritesEachCheckOnOneLine_AndPresentsItSo()
+    {
+        // /plan save and any caller past present_plan's refusal: the presentation is what the header keeps, the command the loop runs.
+        _session.Enter("Add a guide");
+
+        var (saved, error) = PlanFiles.Save(_session, _files, _time, "Guide", Plan, "guide", new PlanChecks("dotnet build\n  && dotnet test", null));
+
+        Assert.Null(error);
+        Assert.Equal("dotnet build && dotnet test", saved!.Checks!.Verify);
+        Assert.Equal("dotnet build && dotnet test", PlanDocument.TryParse(Read(".neon/plans/guide.md"))!.Verify);
+    }
+
+    [Fact]
     public async Task Tool_ANewPlan_DoesNotOverwriteAnOldOneOfTheSameName()
     {
         Directory.CreateDirectory(Path.Combine(_dir, ".neon", "plans"));

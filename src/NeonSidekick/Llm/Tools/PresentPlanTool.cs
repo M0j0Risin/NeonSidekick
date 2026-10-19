@@ -49,8 +49,8 @@ public sealed class PresentPlanTool : AIFunction
             "gaps": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each gap this revision closed; empty when none is left." },
             "checked": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review, with gaps empty: one short line for each part of the plan you checked this pass." },
             "minor": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each small fix this revision made that is not a gap (wording, formatting, a clarification nobody would stop over)." },
-            "verify": { "type": "string", "description": "Optional: a quick command that checks the project (it builds, or its tests pass), run by the app after each step when the plan is carried out step by step. Only a command you have seen this project use (its README, CI file or scripts), such as dotnet build, npm test, cargo test or pytest -q; never a guess. Left out, a revision keeps the plan's; empty clears it." },
-            "final": { "type": "string", "description": "Optional: a slower, whole check run once when every step is done, from the project as verify is. Left out, a revision keeps the plan's; empty clears it." }
+            "verify": { "type": "string", "description": "Optional: a quick command on one line that checks the project (it builds, or its tests pass), run by the app after each step when the plan is carried out step by step. Only a command you have seen this project use (its README, CI file or scripts), such as dotnet build, npm test, cargo test or pytest -q; never a guess. Left out, a revision keeps the plan's; empty clears it." },
+            "final": { "type": "string", "description": "Optional: a slower, whole check on one line, run once when every step is done, from the project as verify is. Left out, a revision keeps the plan's; empty clears it." }
           },
           "required": ["title", "markdown"]
         }
@@ -125,6 +125,18 @@ public sealed class PresentPlanTool : AIFunction
             return PlanText.TitleRequired;
         }
 
+        // A check runs as the header keeps it, on one line (2026-10-19): one sent on several would be shown as several and run as one.
+        var checks = Checks(arguments);
+        if (checks is { Verify: { } multiVerify } && IsMultiLine(multiVerify))
+        {
+            return PlanText.CheckOneLineResult(VerifyArgument);
+        }
+
+        if (checks is { Final: { } multiFinal } && IsMultiLine(multiFinal))
+        {
+            return PlanText.CheckOneLineResult(FinalArgument);
+        }
+
         // A pass of the gap-closing loop under way (2026-10-13); outside one (or once it converged) gaps is ignored.
         var loop = _session.Closing is { Pending: false, Converged: false } running ? running : null;
         IReadOnlyList<string> gaps = [];
@@ -159,14 +171,14 @@ public sealed class PresentPlanTool : AIFunction
         }
 
         PlanPresentation? saved;
-        if (loop is not null && gaps.Count == 0 && Unchanged(title, markdown) is { } same)
+        if (loop is not null && gaps.Count == 0 && Unchanged(title, markdown, checks) is { } same)
         {
             // Nothing left and nothing changed: the revision on disk is the one to approve, no new one written.
             saved = same;
         }
         else
         {
-            (saved, string? error) = PlanFiles.Save(_session, _files, _time, title, markdown, Named(arguments), Checks(arguments), _references);
+            (saved, string? error) = PlanFiles.Save(_session, _files, _time, title, markdown, Named(arguments), checks, _references);
             if (saved is null)
             {
                 return PlanText.CouldNotSaveResult(error ?? "");
@@ -218,10 +230,19 @@ public sealed class PresentPlanTool : AIFunction
         }
     }
 
-    /// <summary>The plan on disk as a presentation when <paramref name="markdown"/> would save the same body; else null.</summary>
-    private PlanPresentation? Unchanged(string title, string markdown)
+    /// <summary>
+    /// The plan on disk as a presentation when <paramref name="markdown"/> would save the same body and <paramref name="checks"/> change neither of its
+    /// commands (2026-10-19: a clean pass that changed only its <c>verify</c> was dropped with the unchanged body); else null.
+    /// </summary>
+    private PlanPresentation? Unchanged(string title, string markdown, PlanChecks? checks)
     {
         if (_session.Path is not { } path || PlanFiles.ReadWhole(_files, path) is not { } text)
+        {
+            return null;
+        }
+
+        var header = PlanDocument.TryParse(text);
+        if (checks is not null && (Changes(checks.Verify, header?.Verify) || Changes(checks.Final, header?.Final)))
         {
             return null;
         }
@@ -248,6 +269,13 @@ public sealed class PresentPlanTool : AIFunction
         string? final = arguments.ContainsKey(FinalArgument) ? ToolArguments.ReadString(arguments, FinalArgument).Trim() : null;
         return verify is null && final is null ? null : new PlanChecks(verify, final);
     }
+
+    /// <summary>Whether a check sent (null: left out, kept) differs from the file's (null: none).</summary>
+    private static bool Changes(string? sent, string? held) =>
+        sent is not null && !string.Equals(sent.Length == 0 ? null : sent, held, StringComparison.Ordinal);
+
+    /// <summary>A check with a line break in it.</summary>
+    private static bool IsMultiLine(string command) => command.AsSpan().IndexOfAny('\r', '\n') >= 0;
 
     private static string? Named(AIFunctionArguments arguments)
     {
