@@ -89,11 +89,25 @@ if ($Publish -and $CiLike) { Fail "-CiLike shapes the test step; -Publish has no
 # everywhere, plus this process's affinity on Windows (children inherit it; --disable-build-servers keeps a warm MSBuild node,
 # started at full affinity, from launching the test host) or `taskpolicy -c background` on a Mac (no affinity there). Everything
 # is put back afterwards: $env: and the affinity outlive the script in the caller's session.
+# The fresh temp folder's path is as long as a runner's, never longer (the first -CiLike run, 2026-10-19: five tests that print
+# a temp path into a notice or the toolbar row wrapped or padded negative under a 66-character one): 39 characters on Windows,
+# C:\Users\runneradmin\AppData\Local\Temp (the runner's account, from its logs; RUNNER~1 is 36), and on a Mac this Mac's own
+# TMPDIR length, the runner's being the same /var/folders/…/T/ shape, made under /tmp. The home is a short folder of its own.
+function New-CiFolder([string]$parent, [int]$length) {
+    $parent = $parent.TrimEnd('\', '/')
+    $size = [Math]::Max(4, $length - $parent.Length - 1)
+    do {
+        $name = -join (1..$size | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+        $path = Join-Path $parent $name
+    } while (Test-Path $path)
+    New-Item -ItemType Directory -Path $path | Out-Null
+    return $path
+}
+
 function Enter-CiLike {
-    $root = Join-Path ([System.IO.Path]::GetTempPath()) ("neonsidekick-cilike-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
-    $ciHome = Join-Path $root "home"
-    $ciTemp = Join-Path $root "temp"
-    New-Item -ItemType Directory -Path $ciHome, $ciTemp | Out-Null
+    $machineTemp = [System.IO.Path]::GetTempPath()
+    $ciTemp = if ($OnWindows) { New-CiFolder $machineTemp 39 } else { New-CiFolder "/tmp" $machineTemp.TrimEnd('/').Length }
+    $ciHome = New-CiFolder $machineTemp 0
     $cleared = @(Get-ChildItem env: | Where-Object { $_.Name -like 'NEONSIDEKICK_*' } | ForEach-Object { $_.Name })
     $saved = @{}
     foreach ($name in $cleared + @('NEONSIDEKICK_HOME', 'NEONSIDEKICK_TEST_LLM_URL', 'TEMP', 'TMP', 'TMPDIR', 'DOTNET_PROCESSOR_COUNT')) {
@@ -114,9 +128,9 @@ function Enter-CiLike {
         $self.ProcessorAffinity = [IntPtr]((1L -shl $cores) - 1)
     }
     $how = if ($OnWindows) { "affinity" } elseif ($IsMacOS) { "taskpolicy -c background" } else { "DOTNET_PROCESSOR_COUNT only" }
-    Write-Host "  CI-like: $cores of $([Environment]::ProcessorCount) cores ($how); home and temp under $root;" -ForegroundColor Yellow
+    Write-Host "  CI-like: $cores of $([Environment]::ProcessorCount) cores ($how); home $ciHome; temp $ciTemp ($($ciTemp.Length) characters);" -ForegroundColor Yellow
     Write-Host "  $($cleared.Count) NEONSIDEKICK_* variable(s) cleared, the LLM URL dead (http://127.0.0.1:9/v1)." -ForegroundColor Yellow
-    return @{ Root = $root; Saved = $saved; Affinity = $affinity }
+    return @{ Folders = @($ciHome, $ciTemp); Saved = $saved; Affinity = $affinity }
 }
 
 function Exit-CiLike($state) {
@@ -126,8 +140,10 @@ function Exit-CiLike($state) {
     if ($null -ne $state.Affinity) {
         [System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = $state.Affinity
     }
-    Remove-Item -Recurse -Force $state.Root -ErrorAction SilentlyContinue
-    if (Test-Path $state.Root) { Write-Host "  CI-like: $($state.Root) left behind (a file still open); delete it by hand." -ForegroundColor Yellow }
+    foreach ($folder in $state.Folders) {
+        Remove-Item -Recurse -Force $folder -ErrorAction SilentlyContinue
+        if (Test-Path $folder) { Write-Host "  CI-like: $folder left behind (a file still open); delete it by hand." -ForegroundColor Yellow }
+    }
 }
 
 if ($Clean) {
