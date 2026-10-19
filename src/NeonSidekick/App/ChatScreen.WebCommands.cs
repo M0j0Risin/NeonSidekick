@@ -109,9 +109,13 @@ internal sealed partial class ChatScreen
     /// on its cancel (<see cref="WebAskHandle.TryClaim"/>). Without menus the page alone asks. <paramref name="noticeAnswer"/> false keeps the
     /// "answered from the Web UI" line out (a list card's close).
     /// </summary>
-    private async Task<AskOutcome<T>> RaceAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken cancellationToken, bool noticeAnswer = true)
+    /// <remarks>
+    /// <paramref name="bothSides"/> (2026-10-18, the Ralph loop's checkpoint and its baseline question: a loop runs unattended, so the page may be
+    /// where the user is) asks the page too whoever started the command, while the Web UI is on; with no pane here and no Web UI, never asked.
+    /// </remarks>
+    private async Task<AskOutcome<T>> RaceAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken cancellationToken, bool noticeAnswer = true, bool bothSides = false)
     {
-        if (!FromWebNow)
+        if (!FromWebNow && !(bothSides && _effective().WebUi))
         {
             return new AskOutcome<T>(await pane(cancellationToken).ConfigureAwait(false), AskSource.Pc, NeverAsked: false);
         }
@@ -301,6 +305,14 @@ internal sealed partial class ChatScreen
         if (_botChatRunning && !line.AsText && line.CommandText is { } text && ParseLine(text) is (SlashCommand.CodeAudit, var args) && AuditCommand.StartsPasses(args))
         {
             Post(() => _transcript.Error(AuditText.BotChatError));
+            return true;
+        }
+
+        // A Ralph loop the same way (later on 2026-10-18): held under a botchat, it would start an unattended chain of passes long after it was typed.
+        if (_botChatRunning && !line.AsText && line.CommandText is { } ralphText && ParseLine(ralphText) is (SlashCommand.Plan, var planArgs)
+            && ParsePlanArgs(planArgs, planning: true) is PlanCommand.Ralph or PlanCommand.ApproveRalph)
+        {
+            Post(() => _transcript.Error(Plans.RalphText.UnderBotChatError));
             return true;
         }
 

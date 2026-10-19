@@ -100,7 +100,7 @@ public sealed class AuditCommandTests : IDisposable
         Assert.Equal(AuditText.NoSuchPath("missing.cs"), Parse("missing.cs").Error);
         Assert.Equal(AuditText.TwoReviewers, Parse("model advisor").Error);
         Assert.Equal(AuditText.TwoCounts, Parse("2 3").Error);
-        Assert.Equal(AuditText.BadPasses("25"), Parse("25").Error);
+        Assert.Equal(AuditText.BadPasses("51"), Parse("51").Error);
         Assert.Equal(AuditText.BadPasses("-1"), Parse("-1").Error);
     }
 

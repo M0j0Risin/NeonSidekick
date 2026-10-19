@@ -728,6 +728,7 @@ const labelEl = spinEl.querySelector('.label');
 const clockEl = spinEl.querySelector('.clock');
 const usageBtn = document.getElementById('usage');
 const learnBtn = document.getElementById('learn');
+const loopEl = document.getElementById('loop');
 const usageCard = document.getElementById('usage-card');
 const Frames = ['⠋', '⠙', '⠸', '⠴', '⠧', '⠇', '⠏'];   // the PC's (Theme.SpinnerFrames)
 const still = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -790,6 +791,10 @@ function drawStatus() {
   const label = status && status.label;
   const spinning = !!label || !!(state && state.busy);
   const learning = !!(status && status.learning);
+  // A Ralph loop's place (2026-10-18): the PC's strip, 🔁 step 4/9 · pass 6, while a loop runs.
+  const loop = (status && status.loop) || '';
+  loopEl.textContent = loop;
+  loopEl.classList.toggle('hidden', !loop);
   if (!learning && learnArmed) Neon.disarm();
   learnBtn.classList.toggle('hidden', !learning);
   spinEl.classList.toggle('hidden', !spinning);
@@ -807,7 +812,7 @@ function drawStatus() {
   const usage = usageText(status && status.usage);
   usageBtn.textContent = usage;
   usageBtn.classList.toggle('hidden', !usage);
-  statusEl.classList.toggle('hidden', !spinning && !usage && !learning);
+  statusEl.classList.toggle('hidden', !spinning && !usage && !learning && !loop);
   if (spinning && !spinTimer) {
     spinTimer = setInterval(() => { frame++; drawStatus(); }, 100);
   } else if (!spinning && spinTimer) {

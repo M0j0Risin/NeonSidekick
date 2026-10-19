@@ -134,7 +134,7 @@ public class SmokeChecksTests
         Assert.Equal("git:roundtrip", check.Name);
         Assert.True(check.Passed, check.Detail);
         Assert.StartsWith("libgit2 5853918 (", check.Detail);
-        Assert.EndsWith("); init, found from a nested path, 1 untracked, staged, branch created and switched, committed ×2, diff +1 −0 unstaged / staged / by commit, 2 commits logged, blame 2 lines by 2 commits, stashed and popped, 1 path discarded, ahead 1 of origin/main, 1 tracked file, merge base found, branch deleted", check.Detail);   // the code audit's two reads since 2026-10-18
+        Assert.EndsWith("); init, found from a nested path, 1 untracked, staged, branch created and switched, committed ×2, diff +1 −0 unstaged / staged / by commit, 2 commits logged, blame 2 lines by 2 commits, stashed and popped, 1 path discarded, ahead 1 of origin/main, 1 tracked file, merge base found, an untracked folder walked, branch deleted", check.Detail);   // the code audit's two reads since 2026-10-18; the Ralph loop's changed paths later that day
         Assert.Contains("git2-5853918.dll", SmokeChecks.WindowsNativeLibraries);
         Assert.Contains("libgit2-5853918.dylib", SmokeChecks.MacNativeLibraries);
     }

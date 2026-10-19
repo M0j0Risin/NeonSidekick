@@ -188,14 +188,16 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The page's form of the plan's approval: the plan whole, and Approve, Approve fresh, Refine (with words) and Cancel. Close gaps stays the PC's.</summary>
-    internal static WebAskSpec PlanSpec(PlanPresentation plan) =>
+    internal static WebAskSpec PlanSpec(PlanPresentation plan, string? checkLine = null) =>
         new("plan", PlanText.ApprovalTitle,
             [
                 new WebChoice("approve", PlanText.ApproveRow),
                 new WebChoice("fresh", PlanText.ApproveFreshRow),
+                new WebChoice("ralph", RalphText.ApproveRalphRow),
                 new WebChoice("refine", PlanText.RefineRow),
                 new WebChoice("cancel", PlanText.CancelRow),
             ],
+            Body: checkLine is { Length: > 0 } line ? PlanText.RalphCaptionLead + line : null,   // the Ralph loop's checks (2026-10-18), as the pane's caption says them
             Markdown: plan.Markdown,
             TextChoice: "refine");
 
@@ -204,6 +206,7 @@ internal sealed partial class ChatScreen
     {
         "approve" => new PlanVerdict(PlanChoice.Approve),
         "fresh" => new PlanVerdict(PlanChoice.ApproveFresh),
+        "ralph" => new PlanVerdict(PlanChoice.ApproveRalph),
         "cancel" => new PlanVerdict(PlanChoice.Cancel),
         _ => new PlanVerdict(PlanChoice.Refine, (answer.Text ?? "").ReplaceLineEndings(" ").Trim() is { Length: > 0 } feedback ? feedback : null),
     };

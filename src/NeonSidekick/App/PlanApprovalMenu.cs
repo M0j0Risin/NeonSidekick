@@ -21,32 +21,37 @@ public sealed class PlanApprovalMenu
     private readonly MenuPane _pane;
     private readonly InputLine _input;
     private readonly Func<bool> _advisorsOffered;
+    private readonly Func<PlanPresentation, string?> _checkLine;
 
     /// <param name="advisorsOffered">Whether the turn would offer <c>neon_advisor</c>: the reviewer page is shown only then.</param>
-    public PlanApprovalMenu(MenuPane pane, InputLine input, Func<bool>? advisorsOffered = null)
+    /// <param name="checkLine">The Ralph loop's check line for a plan (2026-10-18, <see cref="RalphText.PaneCheckLine"/>), after the caption; null for none.</param>
+    public PlanApprovalMenu(MenuPane pane, InputLine input, Func<bool>? advisorsOffered = null, Func<PlanPresentation, string?>? checkLine = null)
     {
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
         _input = input ?? throw new ArgumentNullException(nameof(input));
         _advisorsOffered = advisorsOffered ?? (() => false);
+        _checkLine = checkLine ?? (_ => null);
     }
 
     /// <summary>The hotkeys: the rows' letters, lower case.</summary>
-    public static readonly IReadOnlyDictionary<char, int> Hotkeys = new Dictionary<char, int> { ['a'] = 0, ['f'] = 1, ['r'] = 2, ['g'] = 3, ['c'] = 4 };
+    /// <summary>The hotkeys: the rows' letters, lower case (<c>l</c> for the Ralph loop since 2026-10-18).</summary>
+    public static readonly IReadOnlyDictionary<char, int> Hotkeys = new Dictionary<char, int> { ['a'] = 0, ['f'] = 1, ['l'] = 2, ['r'] = 3, ['g'] = 4, ['c'] = 5 };
 
     /// <summary>The choice each row stands for, by index.</summary>
-    public static readonly IReadOnlyList<PlanChoice> Choices = [PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.Refine, PlanChoice.CloseGaps, PlanChoice.Cancel];
+    public static readonly IReadOnlyList<PlanChoice> Choices = [PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.ApproveRalph, PlanChoice.Refine, PlanChoice.CloseGaps, PlanChoice.Cancel];
 
     /// <summary>The reviewer page's hotkeys: model, advisor, any.</summary>
     public static readonly IReadOnlyDictionary<char, int> ReviewerHotkeys = new Dictionary<char, int> { ['m'] = 0, ['a'] = 1, ['y'] = 2, ['c'] = 3 };   // c (2026-10-17): confirm, beside the main page's own c = Cancel plan, a separate map
 
-    /// <summary>The row the cursor starts on: Keep refining.</summary>
-    public const int StartRow = 2;
+    /// <summary>The row the cursor starts on: Keep refining (3 since the Ralph row, 2026-10-18).</summary>
+    public const int StartRow = 3;
 
     /// <summary>The four rows as markup, escaped.</summary>
     public static IReadOnlyList<string> Rows { get; } =
     [
         Markup.Escape(PlanText.ApproveRow),
         Markup.Escape(PlanText.ApproveFreshRow),
+        Markup.Escape(RalphText.ApproveRalphRow),
         Markup.Escape(PlanText.RefineRow),
         Markup.Escape(PlanText.CloseGapsRow),
         Markup.Escape(PlanText.CancelRow),
@@ -75,13 +80,13 @@ public sealed class PlanApprovalMenu
         };
     }
 
-    /// <summary>The page for <paramref name="plan"/>.</summary>
-    public static MenuPage Page(PlanPresentation plan)
+    /// <summary>The page for <paramref name="plan"/>; with <paramref name="checkLine"/> (2026-10-18) the Ralph loop's checks after the caption.</summary>
+    public static MenuPage Page(PlanPresentation plan, string? checkLine = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         return new MenuPage(PlanText.ApprovalTitle, Rows, PlanText.ApprovalKeys)
         {
-            Caption = PlanText.Caption(plan),
+            Caption = PlanText.Caption(plan) + (checkLine is { Length: > 0 } line ? " · " + PlanText.RalphCaptionLead + line : ""),
             Hotkeys = Hotkeys,
         };
     }
@@ -97,7 +102,7 @@ public sealed class PlanApprovalMenu
 
         try
         {
-            var page = Page(plan);
+            var page = Page(plan, _checkLine(plan));
             while (true)
             {
                 var pick = await _pane.PickAsync(page, StartRow, cancellationToken).ConfigureAwait(false);

@@ -106,7 +106,7 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.False(CodeLanguages.TryParse("ruby", out _));
         Assert.Equal([CodeLanguage.Python], CodeLanguages.Resolve(new AppSettingsData { ShellCodeLanguages = ["python", "ruby"] }));
         Assert.Equal([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node], CodeLanguages.Resolve(new AppSettingsData { ShellCodeLanguages = [] }));
-        Assert.Equal(["execute_code", "ask_user"], ExecuteCodeTool.Excluded);
+        Assert.Equal(["execute_code", "ask_user", "finish_step"], ExecuteCodeTool.Excluded);   // a Ralph pass's report is the model's own call (2026-10-18)
     }
 
     /// <summary>The leftovers (2026-10-12, the shell review): run folders older than a day go; a fresh one and anything not a run's stay.</summary>

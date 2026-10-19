@@ -38,6 +38,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.LlmReasoning, "How it answers"),
                 (SettingsField.LlmOfferTools, "Tools and limits"),
                 (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, LLM plan gap ask user)
+                (SettingsField.RalphLoopReviewer, "Ralph loop"),   // later on 2026-10-18: the loop's seven rows, a section of their own (they would swamp Plan mode's three)
                 (SettingsField.CodeAuditPasses, "Code audit"),   // 2026-10-18, /code-audit's six rows after Plan mode
                 (SettingsField.LlmContextLength, "Context"),
                 (SettingsField.LlmPictureKeep, "Pictures and verbs"),

@@ -116,7 +116,11 @@ public partial class SidekickAppTests : IDisposable
             eventLogSystem: _eventLogSystem,
             // A Mac's unified log (2026-10-18): none unless a test hands in the fake.
             unifiedLog: _unifiedLog,
-            headlessNarrow: headlessNarrow);
+            headlessNarrow: headlessNarrow,
+            // The Ralph loop's checks (2026-10-18): a script, never a real shell.
+            ralphVerifier: _ralphVerifier);
+
+    private readonly Fakes.FakeRalphVerifier _ralphVerifier = new();
 
     private Fakes.FakeEventLogSystem? _eventLogSystem;
 

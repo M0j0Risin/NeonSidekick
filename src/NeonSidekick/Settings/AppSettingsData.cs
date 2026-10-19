@@ -796,11 +796,12 @@ public sealed class AppSettingsData
     /// reported after the last pass, the loop stops and the plan goes back to the pane. <see cref="MinPlanGapPasses"/> to
     /// <see cref="MaxPlanGapPasses"/>; 0 is no limit on the screen (ESC stops it) and <see cref="MaxPlanGapPasses"/> headless, which
     /// has no ESC. Read when a loop starts. The Common tab of <c>/settings</c>, under <see cref="LlmMaxToolIterations"/>. No variable.
+    /// The most went 20 → 50 on 2026-10-18 (the user's ask: long reviews lean on 43e4cfae's compaction); <see cref="MaxCodeAuditPasses"/> follows.
     /// </summary>
     public int PlanGapPasses { get; set; } = DefaultPlanGapPasses;
 
     public const int MinPlanGapPasses = 0;
-    public const int MaxPlanGapPasses = 20;
+    public const int MaxPlanGapPasses = 50;
     public const int DefaultPlanGapPasses = 5;
 
     /// <summary>
@@ -827,6 +828,73 @@ public sealed class AppSettingsData
     /// section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapCleanPasses"/>. No variable.
     /// </summary>
     public bool PlanGapAskUser { get; set; } = true;
+
+    /// <summary>
+    /// Who checks a Ralph loop's step once its own checks stand (2026-10-18, the user's ask: <c>Approve &amp; Ralph loop</c>, a plan carried out
+    /// one step per fresh conversation, the app deciding whether a step stands): <c>off</c>, <c>model</c> (a one-shot request to the chat's
+    /// model), <c>advisor</c> (the first advisor offered) or <c>any</c> (the default: an advisor when one is offered, else the model);
+    /// <see cref="Plans.RalphReviewerMode"/>. A failed review unticks the step; an unclear one leaves it standing, unchecked. Snapshotted when a
+    /// loop starts. The Ralph loop section of <c>/settings</c> › Servers › Common, after Plan mode. No variable.
+    /// </summary>
+    public string RalphLoopReviewer { get; set; } = Plans.RalphReviewerMode.Default;
+
+    /// <summary>
+    /// How often a Ralph loop stops for the user's look (2026-10-18): 0 never (the default, so a loop runs unattended), 1 after every step that
+    /// stands, N after every N; the checkpoint pane offers Keep, Redo with a note…, View the changes and Stop, on the PC and the Web UI page,
+    /// and waits until answered. While it is 0 a pass is offered none of the tools that wait on the user. <see cref="MinRalphLoopCheckpoint"/>
+    /// to <see cref="MaxRalphLoopCheckpoint"/>. Snapshotted when a loop starts. The Ralph loop section, under <see cref="RalphLoopReviewer"/>.
+    /// </summary>
+    public int RalphLoopCheckpoint { get; set; }
+
+    public const int MinRalphLoopCheckpoint = 0;
+    public const int MaxRalphLoopCheckpoint = 20;
+
+    /// <summary>
+    /// The most passes a Ralph loop runs (2026-10-18): 0, the default, is three a remaining step, worked out at each start (and grown by a
+    /// split); a count is that many, room for one final fix pass added either way. <c>/plan ralph</c> and <c>/plan approve --ralph</c> take a
+    /// count for one run. <see cref="MinRalphLoopPasses"/> to <see cref="MaxRalphLoopPasses"/>. Snapshotted when a loop starts.
+    /// </summary>
+    public int RalphLoopPasses { get; set; }
+
+    public const int MinRalphLoopPasses = 0;
+    public const int MaxRalphLoopPasses = 200;
+
+    /// <summary>
+    /// The most passes one step may take before the loop stops on it (2026-10-18): 4 by default; two failed checks in a row stop it sooner.
+    /// <see cref="MinRalphLoopPassesPerStep"/> to <see cref="MaxRalphLoopPassesPerStep"/>. Snapshotted when a loop starts.
+    /// </summary>
+    public int RalphLoopPassesPerStep { get; set; } = DefaultRalphLoopPassesPerStep;
+
+    public const int MinRalphLoopPassesPerStep = 1;
+    public const int MaxRalphLoopPassesPerStep = 20;
+    public const int DefaultRalphLoopPassesPerStep = 4;
+
+    /// <summary>
+    /// How long a Ralph loop's check command may run (2026-10-18): the plan's <c>verify:</c> after each step and its <c>final:</c> at the end,
+    /// killed past it (a timeout fails the check). 600 seconds by default; <see cref="MinRalphLoopCheckTimeoutSeconds"/> to
+    /// <see cref="MaxRalphLoopCheckTimeoutSeconds"/>. Snapshotted when a loop starts.
+    /// </summary>
+    public int RalphLoopCheckTimeoutSeconds { get; set; } = DefaultRalphLoopCheckTimeoutSeconds;
+
+    public const int MinRalphLoopCheckTimeoutSeconds = 30;
+    public const int MaxRalphLoopCheckTimeoutSeconds = 3600;
+    public const int DefaultRalphLoopCheckTimeoutSeconds = 600;
+
+    /// <summary>
+    /// A spending brake on a Ralph loop (2026-10-18): the most tokens a run may use, its passes and its reviews together, checked before each
+    /// pass; 0, the default, is none. Counted from each start or resume. <see cref="MinRalphLoopTokenBudget"/> to <see cref="MaxRalphLoopTokenBudget"/>.
+    /// </summary>
+    public int RalphLoopTokenBudget { get; set; }
+
+    public const int MinRalphLoopTokenBudget = 0;
+    public const int MaxRalphLoopTokenBudget = 2_000_000_000;
+
+    /// <summary>
+    /// The tone a Ralph loop ends with (2026-10-18, so an unattended run is heard to stop): one of <see cref="Timers.TimerTones.Names"/>,
+    /// <c>chime</c> by default; never for a stop the user caused (Esc, the page's Stop, a typed line) and only where audio exists. An unknown
+    /// value reads as <c>silent</c>. Snapshotted when a loop starts.
+    /// </summary>
+    public string RalphLoopStopTone { get; set; } = Timers.TimerTones.Chime;
 
     /// <summary>
     /// The most passes a code audit may run (2026-10-18, <c>/code-audit</c>, the user's idea: the gap review's engine for code) before its
@@ -1478,8 +1546,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Which of a reflection's writes wait for the user (<c>Skills.ReflectionConfirmMode</c>, 2026-10-12, the user's ask and words):
-    /// <c>confirm-none</c> (the default: it never asks), <c>confirm-all</c> (a new skill and an edit), <c>confirm-new</c> (a new skill only),
-    /// <c>confirm-edit</c> (an update or a supporting file only). An ask is a Keep / View / Discard pane at the idle line while the
+    /// <c>none</c> (it never asks), <c>all</c> (a new skill and an edit), <c>new</c> (a new skill only; the default since 2026-10-18, the
+    /// user's call, <c>none</c> until then; a profile that saved <c>none</c> keeps it), <c>edit</c> (an update or a supporting file only). An ask is a Keep / View / Discard pane at the idle line while the
     /// reflection waits; without the pane the write is declined. Read when a reflection is decided, no reconnect; the Reflection tab of
     /// <c>/skills</c>, the first row of What it may change, labelled <c>Reflection confirm mode</c>. No variable.
     /// </summary>

@@ -557,6 +557,46 @@ public sealed class GitAccess
         return new GitTrackedReport(GitOutcome.Ok, "", tracked, untracked, location.RootRelative);
     });
 
+    /// <summary>The most paths <see cref="ChangedPaths"/> returns before it says it was cut.</summary>
+    public const int MaxChangedPaths = 5000;
+
+    /// <summary>
+    /// Every path changed in the working tree under <paramref name="relative"/> (2026-10-18, a Ralph pass's evidence): modified, added, deleted, renamed
+    /// and untracked files, each in the sandbox's spelling, an untracked folder walked to its files (<see cref="Status"/> lists it as one entry);
+    /// ignored files and submodules out, at most <see cref="MaxChangedPaths"/>.
+    /// </summary>
+    public GitChangedReport ChangedPaths(string relative) => Run(relative, GitChangedReport.Refused, (repo, location, full) =>
+    {
+        if (RepoPath(location, full) is not { } prefix)
+        {
+            return GitChangedReport.Refused(GitOutcome.NotInRepository, _files.Relative(full));
+        }
+
+        var paths = new List<string>();
+        bool truncated = false;
+        foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: true))
+        {
+            if (entry.FilePath.EndsWith('/'))
+            {
+                continue;
+            }
+
+            if (paths.Count >= MaxChangedPaths)
+            {
+                truncated = true;
+                break;
+            }
+
+            paths.Add(SandboxPath(location, entry.FilePath));
+            if (entry.IndexToWorkDirRenameDetails is { } moved)
+            {
+                paths.Add(SandboxPath(location, moved.OldFilePath));
+            }
+        }
+
+        return new GitChangedReport(GitOutcome.Ok, "", paths.Distinct(StringComparer.Ordinal).ToList(), truncated);
+    });
+
     /// <summary>
     /// The commit <paramref name="a"/> and <paramref name="b"/> last shared (2026-10-18, <c>/code-audit branch</c>): LibGit2Sharp's
     /// <c>ObjectDatabase.FindMergeBase</c>, in-process; null in <see cref="GitMergeBaseReport.Sha"/> when they share none. HEAD's sha comes with it,

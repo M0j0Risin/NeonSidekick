@@ -157,13 +157,13 @@ public class PlanTests : IDisposable
 
     // ── PlanTools ───────────────────────────────────────────────────────────
 
-    /// <summary>Every tool class the app ships, by its <c>ToolName</c>: the MCP wrapper aside (its names are the servers'), present_plan (plan mode's own) and present_audit (the code audit's own, 2026-10-18).</summary>
+    /// <summary>Every tool class the app ships, by its <c>ToolName</c>: the MCP wrapper aside (its names are the servers'), present_plan (plan mode's own), present_audit (the code audit's own, 2026-10-18) and finish_step (a Ralph pass's own, never offered in plan mode, later on 2026-10-18).</summary>
     private static IReadOnlyList<string> EveryToolName() =>
         typeof(SaveMemoryTool).Assembly.GetTypes()
             .Where(t => typeof(AIFunction).IsAssignableFrom(t) && !t.IsAbstract)
             .Select(t => t.GetField("ToolName", BindingFlags.Public | BindingFlags.Static)?.GetRawConstantValue() as string)
             .OfType<string>()
-            .Where(name => name != PresentPlanTool.ToolName && name != PresentAuditTool.ToolName)
+            .Where(name => name != PresentPlanTool.ToolName && name != PresentAuditTool.ToolName && name != FinishStepTool.ToolName)
             .ToList();
 
     [Fact]
@@ -290,9 +290,9 @@ public class PlanTests : IDisposable
     [InlineData("gaps advisor 3", true, "CloseGaps")]
     [InlineData("gaps 3 advisor", true, "CloseGaps")]
     [InlineData("gaps 0", true, "CloseGaps")]
-    [InlineData("gaps 25", true, "BadGapPasses")]
+    [InlineData("gaps 51", true, "BadGapPasses")]
     [InlineData("gaps -1", true, "BadGapPasses")]
-    [InlineData("gaps advisor 25", true, "BadGapPasses")]
+    [InlineData("gaps advisor 51", true, "BadGapPasses")]
     [InlineData("gaps advisor any", true, "Detail")]
     [InlineData("gaps 3 4", true, "Detail")]
     [InlineData("gaps advisor 3", false, "NotPlanning")]
@@ -317,8 +317,8 @@ public class PlanTests : IDisposable
     [InlineData("3 any", "Ok", "Any", 3, "")]
     [InlineData(" 3 ", "Ok", null, 3, "")]
     [InlineData("0", "Ok", null, 0, "")]
-    [InlineData("20", "Ok", null, 20, "")]
-    [InlineData("21", "OutOfRange", null, null, "21")]
+    [InlineData("50", "Ok", null, 50, "")]
+    [InlineData("51", "OutOfRange", null, null, "51")]
     [InlineData("-1", "OutOfRange", null, null, "-1")]
     [InlineData("model 99999999999", "OutOfRange", null, null, "99999999999")]
     [InlineData("advsior", "Unknown", null, null, "advsior")]
@@ -338,12 +338,46 @@ public class PlanTests : IDisposable
     }
 
     [Fact]
+    public void TheDirective_AsksForDoneWhenLines_TheChecks_AndThePictures()
+    {
+        // 2026-10-18, the Ralph loop's groundwork: each step's check, verify/final only from the project, plain bullets outside Steps.
+        Assert.Equal("a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each with an indented Done when: line saying how to tell it is done), ## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.", PlanText.PlanShape);
+        Assert.Equal("- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess.", PlanText.VerifyLine);
+        string directive = PlanText.Directive("Add a guide", null, 0);
+        Assert.Contains("- When no open question is left, call present_plan with the whole plan as Markdown: " + PlanText.PlanShape + "\n" + PlanText.VerifyLine + "\n- Never write", directive);
+        Assert.DoesNotContain("## References", directive);
+        Assert.EndsWith(PlanText.PlanShape, PlanText.TalkingLine);
+
+        string pictures = PlanText.Directive("Add a guide", null, 0, null, null, null, default, ["ref-1", "ref-2"]);
+        Assert.Contains(PlanText.VerifyLine + "\n" + PlanText.ReferencesLine(["ref-1", "ref-2"]) + "\n", pictures);
+        Assert.Equal("- The pictures in this conversation are saved beside the plan as ref-1, ref-2: list each under ## References as - ref-N: what it shows, and name the ref-N a step relies on in that step, so whoever carries it out is shown the picture.", PlanText.ReferencesLine(["ref-1", "ref-2"]));
+
+        var gap = new PlanGapState(1, 5, PlanReviewer.Model);
+        Assert.Contains(", a step with no Done when: line, a risk with no answer, no way to verify.", PlanText.GapReviewLines(gap, advisorsOffered: false));
+    }
+
+    [Fact]
+    public void OpenChat_TheNotice_AndTheTalkingDirective_ArePinned()
+    {
+        // 2026-10-18: /plan open <name> --chat, a settled requirement while talking, and a plan on disk to read first.
+        Assert.Equal(PlanText.Glyph + " Talking it through: nothing was sent. Say what should change; /plan ready asks for the plan, /plan approve starts it as it stands.", PlanText.OpenChatNotice);
+        string directive = PlanText.Directive("Add a guide", ".neon/plans/g.md", 2, null, null, null, new PlanTalk(Talking: true, Opening: false));
+        Assert.StartsWith("PLAN MODE is on. The user wants to talk the plan through before anything is done. Their requirement: \"Add a guide\"\n", directive);
+        Assert.Contains(PlanText.TalkingLine, directive);
+        Assert.EndsWith("The plan so far is in .neon/plans/g.md (revision 2); present_plan overwrites it with the next revision. Read it before you discuss it if its text isn't in this conversation.", directive);
+        // Not talking: the directive as before, no read-first sentence.
+        Assert.EndsWith("present_plan overwrites it with the next revision.", PlanText.Directive("Add a guide", ".neon/plans/g.md", 2));
+        Assert.StartsWith("PLAN MODE is on. The user asked for a plan before anything is done. Their requirement:", PlanText.Directive("Add a guide", ".neon/plans/g.md", 2));
+        Assert.Equal("--chat", PlanText.ChatSwitch);
+    }
+
+    [Fact]
     public void GapsWords_ThePinnedSentences()
     {
-        Assert.Equal("'25' passes: /plan gaps takes 0 to 20, 0 for no cap", PlanText.GapPassesRangeError("25"));
-        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor, any or confirm, and a pass count (0–20)", PlanText.UnknownReviewerError("x"));
-        Assert.Equal(PlanText.Glyph + " /plan gaps 0 means no limit, but headless has no Esc: at most 20 passes.", PlanText.GapsHeadlessCapNotice(20, fromCommand: true));
-        Assert.Equal(PlanText.Glyph + " LLM plan gap passes is 0 (no limit), but headless has no Esc: at most 20 passes.", PlanText.GapsHeadlessCapNotice(20));
+        Assert.Equal("'51' passes: /plan gaps takes 0 to 50, 0 for no cap", PlanText.GapPassesRangeError("51"));
+        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor, any or confirm, and a pass count (0–50)", PlanText.UnknownReviewerError("x"));
+        Assert.Equal(PlanText.Glyph + " /plan gaps 0 means no limit, but headless has no Esc: at most 50 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses, fromCommand: true));
+        Assert.Equal(PlanText.Glyph + " LLM plan gap passes is 0 (no limit), but headless has no Esc: at most 50 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses));
     }
 
     [Fact]
@@ -370,7 +404,7 @@ public class PlanTests : IDisposable
         var properties = _tool.JsonSchema.GetProperty("properties");
 
         Assert.Equal(PresentPlanTool.ToolName, _tool.Name);
-        Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.NameArgument, PresentPlanTool.MarkdownArgument, PresentPlanTool.GapsArgument, PresentPlanTool.CheckedArgument, PresentPlanTool.MinorArgument], properties.EnumerateObject().Select(p => p.Name));
+        Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.NameArgument, PresentPlanTool.MarkdownArgument, PresentPlanTool.GapsArgument, PresentPlanTool.CheckedArgument, PresentPlanTool.MinorArgument, PresentPlanTool.VerifyArgument, PresentPlanTool.FinalArgument], properties.EnumerateObject().Select(p => p.Name));   // verify and final 2026-10-18
         Assert.Equal([PresentPlanTool.TitleArgument, PresentPlanTool.MarkdownArgument], _tool.JsonSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
     }
 
@@ -467,6 +501,44 @@ public class PlanTests : IDisposable
         Assert.True(revised.Updated > revised.Created);
         Assert.Contains("- [ ] Test it", Read(".neon/plans/add-contributing-guide.md"));
         Assert.Equal(2, _session.Revision);
+    }
+
+    [Fact]
+    public async Task Tool_VerifyAndFinal_GoIntoTheHeader_ARevisionKeepsThem_AndEmptyClearsOne()
+    {
+        // 2026-10-18, the Ralph loop's check commands: quoted header lines, kept by a revision that leaves them out and by a status rewrite.
+        _session.Enter("Add a guide");
+        _verdict = new PlanVerdict(PlanChoice.Refine);
+        var args = Args("Contributing guide", Plan, name: "guide");
+        args[PresentPlanTool.VerifyArgument] = "dotnet build";
+        args[PresentPlanTool.FinalArgument] = "dotnet test \"x y\"";
+
+        await _tool.InvokeAsync(args);
+
+        string path = ".neon/plans/guide.md";
+        var header = PlanDocument.TryParse(Read(path))!;
+        Assert.Equal(("dotnet build", "dotnet test \"x y\""), (header.Verify, header.Final));
+        Assert.Contains("verify: \"dotnet build\"\nfinal: \"dotnet test \\\"x y\\\"\"\n", Read(path));
+        Assert.Equal(new PlanChecks("dotnet build", "dotnet test \"x y\""), Assert.Single(_presented).Checks);
+
+        // A revision that names neither keeps both; a status rewrite keeps them too.
+        await _tool.InvokeAsync(Args("Contributing guide", Plan + "- [ ] Test it\n"));
+        Assert.Equal(("dotnet build", "dotnet test \"x y\""), (PlanDocument.TryParse(Read(path))!.Verify, PlanDocument.TryParse(Read(path))!.Final));
+        Assert.Null(PlanFiles.MarkFile(_files, path, PlanStatus.Approved, _time.GetLocalNow(), "Add a guide", (0, 2)));
+        var marked = PlanDocument.TryParse(Read(path))!;
+        Assert.Equal((PlanStatus.Approved, "dotnet build", "dotnet test \"x y\""), (marked.Status, marked.Verify, marked.Final));
+        Assert.Null(PlanFiles.MarkReview(_files, path, "1 pass", _time.GetLocalNow(), "Add a guide"));
+        Assert.Equal("dotnet build", PlanDocument.TryParse(Read(path))!.Verify);
+
+        // Empty clears one; a header without them reads as none and writes none.
+        _session.Open(path, "Contributing guide", "Add a guide", 3, null);
+        var cleared = Args("Contributing guide", Plan);
+        cleared[PresentPlanTool.FinalArgument] = "";
+        await _tool.InvokeAsync(cleared);
+        var after = PlanDocument.TryParse(Read(path))!;
+        Assert.Equal(("dotnet build", (string?)null), (after.Verify, after.Final));
+        Assert.DoesNotContain("final:", Read(path));
+        Assert.DoesNotContain("verify:", PlanDocument.HeaderText(new PlanHeader(PlanStatus.Draft, 1, T0, T0, "r")));
     }
 
     [Fact]

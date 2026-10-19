@@ -38,7 +38,7 @@ public sealed class ReflectionConfirmModeTests : IDisposable
     public void Names_Default_AndDescriptions_ArePinned()
     {
         Assert.Equal(["none", "all", "new", "edit"], ReflectionConfirmMode.Names);
-        Assert.Equal("none", ReflectionConfirmMode.Default);
+        Assert.Equal("new", ReflectionConfirmMode.Default);   // none until 2026-10-18, the user's call
         Assert.Equal(ReflectionConfirmMode.Default, new AppSettingsData().ReflectionConfirmMode);
         Assert.Equal("a reflection never asks", ReflectionConfirmMode.Describe("none"));
         Assert.Equal("a reflection asks before a new skill and before an edit", ReflectionConfirmMode.Describe("all"));
@@ -82,14 +82,14 @@ public sealed class ReflectionConfirmModeTests : IDisposable
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(ReflectionConfirmScope.None, ReflectionConfirmMode.Resolve(new AppSettingsData { ReflectionConfirmMode = "always" }));
+            Assert.Equal(ReflectionConfirmScope.New, ReflectionConfirmMode.Resolve(new AppSettingsData { ReflectionConfirmMode = "always" }));   // the parsed default since 2026-10-18
         }
         finally
         {
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal("ReflectionConfirmMode='always' is not one of none, all, new, edit. Using none.", Assert.Single(warnings).Message);
+        Assert.Equal("ReflectionConfirmMode='always' is not one of none, all, new, edit. Using new.", Assert.Single(warnings).Message);
     }
 
     /// <summary>A create the user says no to writes nothing and answers Declined; yes writes it as ever. The ask carries what it would write.</summary>

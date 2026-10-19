@@ -12,7 +12,7 @@ public partial class SettingsMenuTests
     public void TheCodeAuditRows_AreASectionAfterPlanMode_LabeledLLM()
     {
         var common = SettingsMenu.TabFields[(int)SettingsTab.Common].ToList();
-        Assert.Equal(common.IndexOf(SettingsField.PlanGapAskUser) + 1, common.IndexOf(SettingsField.CodeAuditPasses));
+        Assert.Equal(common.IndexOf(SettingsField.RalphLoopStopTone) + 1, common.IndexOf(SettingsField.CodeAuditPasses));   // the Ralph loop's seven rows between since later on 2026-10-18
         var section = SettingsMenu.TabSections[SettingsTab.Common].Single(s => s.Title == "Code audit");
         Assert.Equal(SettingsField.CodeAuditPasses, section.First);
         Assert.Equal(
@@ -76,7 +76,7 @@ public partial class SettingsMenuTests
     }
 
     [Theory]
-    [InlineData(SettingsField.CodeAuditPasses, "21")]
+    [InlineData(SettingsField.CodeAuditPasses, "51")]
     [InlineData(SettingsField.CodeAuditCleanPasses, "0")]
     [InlineData(SettingsField.CodeAuditPassToolCalls, "501")]
     public async Task TheTypedRows_RefuseOutOfRange(SettingsField field, string typed)

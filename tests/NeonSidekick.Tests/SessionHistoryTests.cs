@@ -157,6 +157,21 @@ public class SessionHistoryTests
     }
 
     [Fact]
+    public void TheRulesMark_RoundTrips_AndAnOlderRowHasNone()
+    {
+        // /mark (2026-10-18): kept per session, absent when there is none.
+        IReadOnlyList<ChatMessage> messages = [new(ChatRole.User, "hi")];
+        string marked = SessionHistory.ToJson(messages, mark: "green");
+        Assert.Equal("green", SessionHistory.MarkOf(marked));
+        Assert.Contains("\"Mark\":\"green\"", marked);
+        string plain = SessionHistory.ToJson(messages);
+        Assert.Null(SessionHistory.MarkOf(plain));
+        Assert.DoesNotContain("Mark", plain);
+        Assert.Null(SessionHistory.MarkOf("not json"));
+        Assert.Single(SessionHistory.FromJson(marked));
+    }
+
+    [Fact]
     public void ADocumentThatIsNotAHistory_Throws()
     {
         Assert.ThrowsAny<JsonException>(() => SessionHistory.FromJson("not json"));

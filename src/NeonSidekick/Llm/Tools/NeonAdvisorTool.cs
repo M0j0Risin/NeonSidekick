@@ -164,9 +164,10 @@ public sealed class NeonAdvisorTool : AIFunction
     /// <summary>
     /// One question to <paramref name="advisor"/> (the tool's call and <c>/advisor</c>'s): its profile read, its link, its thread replayed
     /// under its persona and the framing, the turn run over the read-only tools, the pair added to its thread. The answer, or an
-    /// <c>Error:</c> sentence.
+    /// <c>Error:</c> sentence. <paramref name="thread"/> false (2026-10-18, the Ralph loop's review: the reviewer must not see the advice it gave
+    /// during the pass and judge its own work) neither replays the thread nor adds to it.
     /// </summary>
-    public async Task<string> AskAsync(AdvisorEntry advisor, string question, string context, IReadOnlyList<string>? recent, AppSettingsData effective, CancellationToken cancellationToken)
+    public async Task<string> AskAsync(AdvisorEntry advisor, string question, string context, IReadOnlyList<string>? recent, AppSettingsData effective, CancellationToken cancellationToken, bool thread = true)
     {
         ArgumentNullException.ThrowIfNull(advisor);
         ArgumentNullException.ThrowIfNull(effective);
@@ -201,7 +202,11 @@ public sealed class NeonAdvisorTool : AIFunction
             + "\n\n" + AdvisorText.Framing(_master(), advisor.Role, tools.Count > 0)
             + (tools.Count > 0 && rules.Length > 0 ? "\n\n" + rules : "");
         var history = new ConversationHistory(system);
-        history.Replace(_threads.Messages(advisor.Profile));
+        if (thread)
+        {
+            history.Replace(_threads.Messages(advisor.Profile));
+        }
+
         var assistant = link.Create(history);
         assistant.Tools = tools;
         assistant.MaxToolIterations = tools.Count > 0 ? rounds + 1 : 1;
@@ -210,7 +215,7 @@ public sealed class NeonAdvisorTool : AIFunction
             // The Claude Code server keeps the conversation (2026-10-10): the advisor's thread names it, so its turns go to its
             // link's own process (beside the chat's since 2026-10-13) with the tools offered over MCP. Its last round is not asked
             // without tools: the server's turn carries on as one, so the cap stops the loop instead.
-            assistant.ConversationId = _threads.SessionOf(advisor.Profile);
+            assistant.ConversationId = thread ? _threads.SessionOf(advisor.Profile) : null;
         }
         else
         {
@@ -271,7 +276,11 @@ public sealed class NeonAdvisorTool : AIFunction
 
         DiagnosticLog.Info(AdvisorText.Category, AdvisorText.ResultLog(advisor.Profile, link.Model, usage, calls));
         text = text.Length > 0 ? text : AdvisorText.NoAnswer(advisor.Profile);
-        _threads.Add(advisor.Profile, new AdvisorPair(question, text), effective.AdvisorThreadPairs);
+        if (thread)
+        {
+            _threads.Add(advisor.Profile, new AdvisorPair(question, text), effective.AdvisorThreadPairs);
+        }
+
         _view?.Answered(advisor, text, link.Model, usage, link.Warning, avatar);
         return text;
     }

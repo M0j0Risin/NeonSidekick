@@ -427,7 +427,8 @@ public sealed record WebStrip(IReadOnlyList<WebPicture> Pictures, int? Selected)
 /// itself from the moment the event lands.
 /// </summary>
 /// <remarks><see cref="Learning"/> (2026-10-17, the user's ask): a reflection runs, the PC's strip 🧠; the page shows its own, two taps cancel it.</remarks>
-public sealed record WebStatus(string? Label, long? ElapsedMs, long? StepMs, WebUsage? Usage, bool Learning = false);
+/// <remarks><c>Loop</c> (2026-10-18): a running Ralph loop's strip, <c>🔁 step 4/9 · pass 6</c>; null while none runs.</remarks>
+public sealed record WebStatus(string? Label, long? ElapsedMs, long? StepMs, WebUsage? Usage, bool Learning = false, string? Loop = null);
 
 /// <summary>The usage figures apart (2026-10-15, <c>UsageText.HintParts</c>): the tokens in use, the share, the speed; a narrow phone drops the first, then the last.</summary>
 public sealed record WebUsage(string Tokens, string? Percent, string? Speed);

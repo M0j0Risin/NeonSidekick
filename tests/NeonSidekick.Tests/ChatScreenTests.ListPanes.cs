@@ -9,8 +9,8 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The read-only lists on the info pane (2026-10-04, the user's pick): <c>/tree</c>, <c>/comfy offered</c>, <c>/docker logs</c>,
-/// <c>/ha states</c>, <c>/print printers</c>, <c>/plan open</c>, <c>/camera list</c> and <c>/screen list</c> open a pane, closed with
-/// ESC, and write nothing into the chat; a failure stays its error line.
+/// <c>/ha states</c>, <c>/print printers</c>, <c>/plan open</c> (a picker since 2026-10-18), <c>/camera list</c> and <c>/screen list</c> open a
+/// pane, closed with ESC, and write nothing into the chat; a failure stays its error line.
 /// </summary>
 public partial class ChatScreenTests
 {
@@ -113,14 +113,15 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task PlanOpen_Alone_ListsThePlansOnThePane()
+    public async Task PlanOpen_Alone_ListsThePlansOnThePicker()
     {
+        // The plans picker since 2026-10-18 (PlansMenu, ChatScreenTests.PlanPicker): still on the pane alone, closed with Esc.
         ListPaneScreen();
         OldPlan("add-guide", PlanStatus.Incomplete, "# Guide\n- [x] One\n- [ ] Two");
 
         string output = await RunListPaneAsync("/plan open");
 
-        Assert.Contains("/plan " + PlanText.OpenWord, output);
+        Assert.Contains(PlanText.PickerTitle, output);
         OnThePaneOnly(output, "add-guide");
     }
 

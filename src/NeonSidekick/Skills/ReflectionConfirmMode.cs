@@ -20,15 +20,15 @@ public enum ReflectionConfirmScope
 }
 
 /// <summary>
-/// The confirm-mode setting (2026-10-12, the user's ask and words): <c>none</c> (the default), <c>all</c>, <c>new</c>,
-/// <c>edit</c>, and their mapping to <see cref="ReflectionConfirmScope"/> — <see cref="ReflectionCooldownMode"/>'s shape.
+/// The confirm-mode setting (2026-10-12, the user's ask and words): <c>none</c>, <c>all</c>, <c>new</c> (the default since 2026-10-18,
+/// the user's call; <c>none</c> until then), <c>edit</c>, and their mapping to <see cref="ReflectionConfirmScope"/> — <see cref="ReflectionCooldownMode"/>'s shape.
 /// <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that is none of them falls back to
 /// <see cref="Default"/> with a warning. A confirmed write is <c>ChatScreen</c>'s pane at the idle line (<see cref="SkillProposal"/>).
 /// </summary>
 public static class ReflectionConfirmMode
 {
     /// <summary>The compiled default (the user's call), pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "none";
+    public const string Default = "new";
 
     /// <summary>The choices in menu order (the user's).</summary>
     public static readonly string[] Names = { "none", "all", "new", "edit" };
@@ -85,6 +85,8 @@ public static class ReflectionConfirmMode
 
         DiagnosticLog.Warn(SkillCatalog.Category,
             $"{nameof(AppSettingsData.ReflectionConfirmMode)}='{effective.ReflectionConfirmMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        return ReflectionConfirmScope.None;
+        // The parsed default, so the fallback agrees with the warning (2026-10-18: None while the default was none, New since).
+        TryParse(Default, out var fallback);
+        return fallback;
     }
 }

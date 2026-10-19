@@ -1033,11 +1033,20 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `present_plan` | `title, name?, markdown, gaps?, checked?, minor?` | Saves the plan as `.neon/plans/<name>.md`, prints it and asks for your approval. Revisions overwrite the file. A pruned stub sent back as `markdown` is refused. |
+| `present_plan` | `title, name?, markdown, verify?, final?, gaps?, checked?, minor?` | Saves the plan as `.neon/plans/<name>.md`, prints it and asks for your approval. Revisions overwrite the file. `verify` and `final` are the plan's check commands, written into its header (a revision without them keeps the file's; empty clears one). A pruned stub sent back as `markdown` is refused. |
 | `present_audit` | `findings?, retract?, revise?, minor?, questions?, covered?, checked?, summary?` | Records a code audit pass's changes in its report (`.neon/audits/<name>.md`); the app writes the file. At most 20 findings a call, calls adding up over a pass. A finding's file must have been read this session, its quoted evidence must stand within 5 lines of its line, its text is redacted; a duplicate of an open finding is refused, one of a settled finding reopens it. With nothing new, `checked` is required. |
 
 * The header's `status` is `draft`, `approved`, `canceled`, `done` or `incomplete`. Headless, the plan is saved and `/plan approve` starts it.
 * In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review and asks for approval.
+* Pictures in the conversation are saved beside the plan as `ref-1.png`… and listed under `## References`; a step names the ones it needs.
+
+### Ralph loop
+
+Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every other tool.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `finish_step` | `outcome, summary, verified?, notes?, learned?, substeps?` | Reports the pass, once: `done` (with `verified`, a line for each check it ran), `partial`, `blocked` or `split` (2–6 `substeps`, each with `text` and `done_when`). `notes` go to the next pass, `learned` into the log for every later one. The app then checks the step. A script can't call it. |
 
 ## MCP servers
 

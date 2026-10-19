@@ -120,6 +120,12 @@ public sealed record GitTrackedReport(GitOutcome Outcome, string Detail, IReadOn
     public static GitTrackedReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], [], "");
 }
 
+/// <summary>The working tree's changed paths (2026-10-18, <see cref="GitAccess.ChangedPaths"/>), in the sandbox's spelling, and whether the list was cut.</summary>
+public sealed record GitChangedReport(GitOutcome Outcome, string Detail, IReadOnlyList<string> Paths, bool Truncated)
+{
+    public static GitChangedReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], false);
+}
+
 /// <summary>Two commits' merge base (2026-10-18, <see cref="GitAccess.MergeBase"/>): its sha, null when they share none, and HEAD's.</summary>
 public sealed record GitMergeBaseReport(GitOutcome Outcome, string Detail, string? Sha, string? Head)
 {

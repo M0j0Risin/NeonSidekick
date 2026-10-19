@@ -275,6 +275,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 |---|---|
 | `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview. |
 | `/theme export <name> [<new-name>]` | Writes a theme to a file to edit. See [Custom themes](#custom-themes). |
+| `/mark [<color>\|default]` | Colors the rules around the input line for this conversation: red, orange, yellow, green, cyan, blue, purple, pink, white or gray; `default` takes it off. Kept with the session; alone, it says the mark and the choices. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear. |
 | `/toolbar [on\|off]`, `/toolbar edit` | Hides or shows the [toolbar](INTERFACE.md#the-toolbar), or opens its checklist (*Tool bar*). |
 | `/perfbar [off\|text\|gauge\|led]`, `/perfbar edit` | Hides or shows the [performance bar](INTERFACE.md#the-performance-bar) in a look, or opens its checklist (*Performance bar*). |
@@ -291,13 +292,15 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 |---|---|
 | `/plan <requirement>` | Has the model research with read-only tools and present a plan before anything changes. See [Plan mode](#plan-mode). |
 | `/plan [show]`, `/plan <detail>` | While planning, says where the plan stands, or adds detail. |
-| `/plan approve [--fresh]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first. |
+| `/plan approve [--fresh \| --ralph [<passes>]]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first, `--ralph` runs it as a [Ralph loop](#ralph-loop). |
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
 | `/plan gaps [model\|advisor\|any\|confirm] [passes]` | Reviews the plan pass after pass until passes in a row find no gaps. |
 | `/plan chat` | Starts plan mode to talk a plan through first: nothing is sent, and the model writes the plan only when you ask. While planning, it turns talking back on. |
 | `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
-| `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps), or lists the plans. |
+| `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps); alone, it lists the plans to pick one: Enter or `o` opens, `c` talks it through, `l` runs it as a Ralph loop. |
+| `/plan open <name> --chat`, `/plan open --chat` | Picks a plan up to talk it through: plan mode over that file with nothing sent. |
+| `/plan ralph [<name>] [<passes>]` | Runs a plan as a Ralph loop, a step a pass, each checked before it stands; alone, it resumes a paused loop, else lists the plans. See [Ralph loop](#ralph-loop). |
 | `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
 | `/code-audit open [<name>]` | Lists the reports, or shows one. |
 | `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). |
@@ -319,7 +322,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first.
 * **The web:** while `web_search` or `web_fetch` is offered, the model is told to look up the APIs, versions and specifications the plan depends on rather than guess, and to name its sources in the plan's Context; a gap pass also counts an unchecked one as a gap.
 * **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
-* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
+* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Approve & Ralph loop** (`l`, see [Ralph loop](#ralph-loop)), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
+* **Steps and checks:** each step is a `- [ ]` checkbox under `## Steps`, with a `Done when:` line saying how to tell it's done. The plan may carry a `verify:` command (run after each step by a Ralph loop) and a `final:` command (run once at the end) in its header; the approval pane's caption shows them.
+* **Reference pictures:** pictures in the conversation while planning are saved beside the plan as `.neon/plans/<name>/ref-1.png`… and listed under `## References`. A run sends them with its first message (a Ralph pass, the ones its step names, else all), when the model can see pictures.
+* **Picking one up:** `/plan open` alone lists the plans to pick one; `/plan open <name> --chat` turns plan mode on over the file with nothing sent, to talk it through.
 * **Talking it through:** `/plan chat` opens plan mode with nothing sent. Your first message opens the conversation, and the model discusses, asks and researches but doesn't present a plan until you ask for it, in your own words or with `/plan ready`; the plan's title then becomes its requirement. The plan-like-reply hint stays quiet meanwhile (`/plan save` still works). `/plan ready` in any plan mode asks for the plan, or, once one is presented, opens its approval pane with no new turn.
 * **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision. A number (`/plan gaps 3`, `/plan gaps advisor 3`) caps this run's passes instead of *LLM plan gap passes*.
 * **Clean passes:** a review ends only after *LLM plan gap clean passes* in a row find no gaps (2 by default). A pass after a clean one is told the last pass found none and to look again, each such pass pointed at a different area (the steps' order, how each is verified, the risks, then what the plan assumes). A pass with no gaps must say what it checked, and the notices list it. Small fixes that aren't gaps (wording, formatting) go in `present_plan`'s `minor` and don't break a clean streak.
@@ -331,6 +337,20 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Done:** when every step is ticked, the done line is followed by "📝 I ❤️ it when a plan comes together."
 * `/new`, `/clear` and a profile switch leave plan mode.
 
+### Ralph loop
+
+`/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, the plan file and a log holding it together. **Approve & Ralph loop** on the approval pane, `/plan approve --ralph` and `l` on the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, with its checks named.
+
+* **A pass:** the model gets the plan, its step and the step's `Done when:` line, the notes and facts earlier passes left, every tool, and `finish_step`, which it calls once to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, a top-level step once).
+* **Whether a step stands** is the app's call, not the model's: the plan's `verify:` command runs after each step (asked once, as you confirm the loop: it never asks again, and runs nothing under *Shell command policy* `off`), then the evidence (files changed, the files the step names there) and a review (*LLM Ralph loop reviewer*). A failed check unticks the step, and the next pass gets its output.
+* **First:** the checks run once on the project as it is. If one fails, you may start anyway: the steps then go unchecked and the verify command runs once at the end.
+* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (the step, the outcome, the check and the end of its output, redacted, the review, the files changed, the time, the tokens and what the pass learned); a `ralph.lock` beside it keeps a second Neon Sidekick off the same plan. With the reference pictures, that's all the folder holds: worth knowing before you commit `.neon/`.
+* **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui) at once. Only then may a pass ask you anything (`ask_user`, the camera, the screen).
+* **When it stops:** every step standing (and the `final:` command passing, with one pass to fix it), a blocked step, two passes in a row with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, or the working directory changing. A message typed during a pass pauses the loop after that pass. A stop you didn't cause rings *LLM Ralph loop stop tone*.
+* **Afterwards:** `/plan ralph` resumes a paused loop (the checks run first again), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
+* **Shell policy `ask`:** a pass's own commands still ask, so an unattended loop waits on each; the confirm says so. For a long run, allow the commands it needs, or use `yolo`.
+* 🔁 leads the Status bar with the step and the pass; each pass is a session of its own.
+
 ### Code audit
 
 `/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply.
@@ -338,7 +358,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Scope:** the whole working directory by default. A path narrows it (quote one with a blank: `/code-audit "My Folder"`); `diff` audits the working changes (unstaged, staged and untracked), `staged` the staged ones, and `branch [<base>]` the branch's commits since its base (`main`, else `master`). Inside a repository the scope is git's files, ignored ones left out; elsewhere a walk that skips `bin`, `obj`, `node_modules`, `dist` and the like. Minified, map and lock files, generated C# and `vendor/`-style folders are left out unless the line names a path holding them; secret-looking files (`.env`, keys, certificates) are always left out. `.neon/` is the app's own and is refused. Past 5,000 files the list is cut and the rest counted.
 * **Focus:** security, correctness, performance, maintainability and tests, in any mix on the line (`all` for the five); none named means *LLM code audit focus*. A pass covers every dimension chosen; a pass after a clean one takes one in turn (with one chosen, an angle in turn: edge cases, error paths, concurrency, input from outside).
 * **The brief:** the first word that is none of the above starts it, or everything after `--` (`/code-audit src -- tests are flaky`). A word that looks like a path but names nothing is refused, so a typo never becomes the brief.
-* **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies every line it cites), `any` (the model, asking advisors where a role fits) or `confirm` (the model, with an advisor on each pass after a clean one; at least 2 clean passes). A number (0–20, 0 for no cap) caps this run instead of *LLM code audit passes*.
+* **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies every line it cites), `any` (the model, asking advisors where a role fits) or `confirm` (the model, with an advisor on each pass after a clean one; at least 2 clean passes). A number (0–50, 0 for no cap) caps this run instead of *LLM code audit passes*.
 * **Tools:** the file, picture, PDF and git reads, the advisors, the manual, the clock, skills, memory's recall and `ask_user`, plus `present_audit`. The web's reads only under *LLM code audit web research* (off by default: audited code may carry instructions, and the web is the one way a pass could send code out).
 * **The report:** `.neon/audits/<name>.md`, written by the app from each `present_audit` call: findings by severity with stable ids (`A3`, never reused), each with its file and line, detail, fix and the quoted evidence the app checked against the file, then nits, open questions, coverage, what clean passes checked and the retracted findings. A finding needs its file read this session (a window is enough; a diff is not). You may edit the report during an audit: a ticked box settles a finding (reporting it again reopens it), and every call reads the file fresh. The files the passes read are kept beside it in `<name>.coverage.txt`, so `resume` carries on where they left off.
 * **Clean passes and coverage:** an audit ends after *LLM code audit clean passes* in a row find nothing new (2 by default); a pass after a clean one looks first at the files no pass has read. A pass is asked to report within *LLM code audit pass tool calls* (40); it is guidance, never a cut-off. The passes line, the converged notice and the pane say how much of the scope was read.

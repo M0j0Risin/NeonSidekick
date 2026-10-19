@@ -8,12 +8,29 @@ namespace NeonSidekick.Plans;
 /// (2026-10-17, the user's report: a long plan was missing from the list) is a <c>.md</c> that cannot be read whole, listed by its
 /// file name with no status or steps rather than left out.
 /// </summary>
-/// <paramref name="Review"/> (2026-10-17) is what its <c>review:</c> line and body say of its last gap review (<see cref="PlanReview.Mark"/>).
-public sealed record PlanListing(string Path, string Title, PlanStatus? Status, int Done, int Total, DateTimeOffset? Updated, bool Unreadable = false, PlanReviewMark Review = PlanReviewMark.None)
+/// <paramref name="Review"/> (2026-10-17) is what its <c>review:</c> line and body say of its last gap review (<see cref="PlanReview.Mark"/>);
+/// <paramref name="Requirement"/> (2026-10-18, the plans picker's footer) its header's requirement, empty for none.
+public sealed record PlanListing(string Path, string Title, PlanStatus? Status, int Done, int Total, DateTimeOffset? Updated, bool Unreadable = false, PlanReviewMark Review = PlanReviewMark.None, string Requirement = "")
 {
     /// <summary>The name <c>/plan open</c> takes: the file name without <c>.neon/plans/</c> or <c>.md</c>.</summary>
     public string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
 }
+
+/// <summary>What a pick on the plans picker does with the plan (2026-10-18): open it (a turn reads it), open it to talk it through, or run it as a Ralph loop.</summary>
+public enum PlanPickMode
+{
+    /// <summary><c>/plan open &lt;name&gt;</c>: plan mode on over it, the model asked to read it.</summary>
+    Open,
+
+    /// <summary><c>/plan open &lt;name&gt; --chat</c>: plan mode on over it, talking it through, nothing sent.</summary>
+    Talk,
+
+    /// <summary><c>/plan ralph &lt;name&gt;</c>: the plan carried out as a Ralph loop (its confirm and baseline first).</summary>
+    Ralph,
+}
+
+/// <summary>A pick off <see cref="PlansMenu"/>: the plan and what to do with it.</summary>
+public sealed record PlanPick(PlanListing Plan, PlanPickMode Mode);
 
 /// <summary>
 /// The plan files under the working directory (2026-09-26, round two): saving a plan — for <c>present_plan</c>
@@ -28,7 +45,15 @@ public static class PlanFiles
     /// over <paramref name="name"/>, else the title), every later one overwrites it as the next revision, the header
     /// the app's (<see cref="PlanDocument.Render"/>); the session then holds the path. The presentation, or the error sentence.
     /// </summary>
-    public static (PlanPresentation? Saved, string? Error) Save(PlanSession session, WorkingDirectory files, TimeProvider time, string title, string markdown, string? name)
+    /// <param name="checks">
+    /// <c>present_plan</c>'s <c>verify</c> and <c>final</c> (2026-10-18): each written into the header; one not given keeps the file's, one given
+    /// empty clears it. Null keeps both (<c>/plan save</c>).
+    /// </param>
+    /// <param name="references">
+    /// The plan's pictures (2026-10-18, <c>PlanReferences</c>): given the plan's path and body, the body again with its <c>## References</c>
+    /// reconciled (the pictures saved beside it first), so the file is written once. Null leaves the body as sent.
+    /// </param>
+    public static (PlanPresentation? Saved, string? Error) Save(PlanSession session, WorkingDirectory files, TimeProvider time, string title, string markdown, string? name, PlanChecks? checks = null, Func<string, string, string>? references = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(files);
@@ -40,15 +65,20 @@ public static class PlanFiles
         int revision = session.Path is null ? 1 : session.Revision + 1;
         // /plan chat (2026-10-17): while the requirement is only the conversation's opening, the plan's title is written in its place, and
         // Presented settles the session on the same words, so the file and the session agree.
-        var header = new PlanHeader(PlanStatus.Draft, revision, session.Created ?? now, now, session.RequirementFor(title));
-        var written = files.WriteText(path, PlanDocument.Render(header, title, markdown), overwrite: true);
+        // The checks a revision does not name are the file's (2026-10-18): a revision that leaves verify out keeps it; "" clears it.
+        var before = session.Path is null || ReadWhole(files, path) is not { } old ? null : PlanDocument.TryParse(old);
+        string? verify = checks?.Verify is { } v ? NullIfBlank(v) : before?.Verify;
+        string? final = checks?.Final is { } f ? NullIfBlank(f) : before?.Final;
+        var header = new PlanHeader(PlanStatus.Draft, revision, session.Created ?? now, now, session.RequirementFor(title), Verify: verify, Final: final);
+        string body = references is null ? markdown : references(path, PlanDocument.SavedBody(title, markdown));
+        var written = files.WriteText(path, PlanDocument.Render(header, title, body), overwrite: true);
         if (written.Outcome != FileOutcome.Ok)
         {
             return (null, FileText.Error(written.Outcome, path, "write", written.Detail));
         }
 
         session.Presented(path, title, revision, now);
-        return (new PlanPresentation(title, path, revision, PlanDocument.Body(markdown)), null);
+        return (new PlanPresentation(title, path, revision, PlanDocument.Body(body)) { Checks = verify is null && final is null ? null : new PlanChecks(verify, final) }, null);
     }
 
     /// <summary>
@@ -88,6 +118,34 @@ public static class PlanFiles
         }
 
         var written = files.WriteText(path, PlanDocument.WithReview(text, review, now, requirement), overwrite: true);
+        return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
+    }
+
+    /// <summary>
+    /// <paramref name="step"/>'s box in the plan file set to <paramref name="ticked"/> (2026-10-18, the Ralph loop's own tick: the model never decides
+    /// whether a step stands), every other byte kept (<see cref="PlanSteps.WithBox"/>); null when written or already so, else the reason.
+    /// </summary>
+    public static string? SetStepBox(WorkingDirectory files, string path, PlanStep step, bool ticked)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(step);
+        if (ReadWhole(files, path) is not { } text)
+        {
+            return FileText.Missing(path);
+        }
+
+        if (PlanSteps.WithBox(text, step, ticked) is not { } changed)
+        {
+            return $"the step \"{step.Text}\" is no longer in {path}";
+        }
+
+        if (string.Equals(changed, text, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var written = files.WriteText(path, changed, overwrite: true);
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
@@ -176,7 +234,7 @@ public static class PlanFiles
             var (done, total) = PlanDocument.Progress(body);
             string title = PlanDocument.FirstHeading(body) ?? Path.GetFileNameWithoutExtension(full);
             DateTimeOffset order = header?.Updated is { } updated && updated != DateTimeOffset.MinValue ? updated : WrittenAt(full);
-            listings.Add((new PlanListing(path, title, header?.Status, done, total, header?.Updated, Review: PlanReview.Mark(header?.Review, body)), order));
+            listings.Add((new PlanListing(path, title, header?.Status, done, total, header?.Updated, Review: PlanReview.Mark(header?.Review, body), Requirement: header?.Requirement ?? ""), order));
         }
 
         return listings.OrderByDescending(l => l.Order).ThenBy(l => l.Listing.Path, StringComparer.Ordinal).Select(l => l.Listing).ToList();
@@ -197,6 +255,10 @@ public static class PlanFiles
         }
     }
 
+    private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    /// <summary>A plan path is taken by a file or folder of that name, and since 2026-10-18 by its own folder (<see cref="PlanReferences.FolderOf"/>: pictures, a Ralph log) left by a plan whose file went.</summary>
     private static bool Taken(WorkingDirectory files, string path) =>
-        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full);
+        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full)
+        || (files.Resolve(PlanReferences.FolderOf(path), forWrite: false, out string folder) == FileOutcome.Ok && Directory.Exists(folder));
 }

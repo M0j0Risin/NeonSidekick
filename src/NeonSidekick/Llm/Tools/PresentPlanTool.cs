@@ -35,6 +35,8 @@ public sealed class PresentPlanTool : AIFunction
     public const string GapsArgument = "gaps";
     public const string CheckedArgument = "checked";
     public const string MinorArgument = "minor";
+    public const string VerifyArgument = "verify";
+    public const string FinalArgument = "final";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
@@ -46,7 +48,9 @@ public sealed class PresentPlanTool : AIFunction
             "markdown": { "type": "string", "description": "The whole plan as Markdown: # title, ## Goal, ## Context, ## Steps (- [ ] checkboxes), ## Files and areas, ## Risks, ## Verification." },
             "gaps": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each gap this revision closed; empty when none is left." },
             "checked": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review, with gaps empty: one short line for each part of the plan you checked this pass." },
-            "minor": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each small fix this revision made that is not a gap (wording, formatting, a clarification nobody would stop over)." }
+            "minor": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each small fix this revision made that is not a gap (wording, formatting, a clarification nobody would stop over)." },
+            "verify": { "type": "string", "description": "Optional: a quick command that checks the project (it builds, or its tests pass), run by the app after each step when the plan is carried out step by step. Only a command you have seen this project use (its README, CI file or scripts), such as dotnet build, npm test, cargo test or pytest -q; never a guess. Left out, a revision keeps the plan's; empty clears it." },
+            "final": { "type": "string", "description": "Optional: a slower, whole check run once when every step is done, from the project as verify is. Left out, a revision keeps the plan's; empty clears it." }
           },
           "required": ["title", "markdown"]
         }
@@ -58,12 +62,18 @@ public sealed class PresentPlanTool : AIFunction
     private readonly Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> _review;
     private readonly Func<int> _gapLimit;
     private readonly Func<int> _cleanPasses;
+    private readonly Func<string, string, string>? _references;
 
     /// <param name="review">Shows the saved plan and waits for the user's verdict; the token is the turn's.</param>
     /// <param name="gapLimit">The gap-closing loop's pass limit (0 for none), read when a <c>Close gaps…</c> verdict starts one; null for the default.</param>
     /// <param name="cleanPasses">The clean passes in a row that loop ends on (2026-10-17), read with the limit; null for the default.</param>
-    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null)
+    /// <param name="references">
+    /// The pictures seam (2026-10-18, <c>PlanReferences</c>): the plan's path and body to the body with its <c>## References</c> reconciled,
+    /// the conversation's pictures saved beside the plan first; null saves the body as sent (headless without pictures, the tests).
+    /// </param>
+    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null)
     {
+        _references = references;
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _time = time ?? throw new ArgumentNullException(nameof(time));
@@ -150,7 +160,7 @@ public sealed class PresentPlanTool : AIFunction
         }
         else
         {
-            (saved, string? error) = PlanFiles.Save(_session, _files, _time, title, markdown, Named(arguments));
+            (saved, string? error) = PlanFiles.Save(_session, _files, _time, title, markdown, Named(arguments), Checks(arguments), _references);
             if (saved is null)
             {
                 return PlanText.CouldNotSaveResult(error ?? "");
@@ -188,7 +198,8 @@ public sealed class PresentPlanTool : AIFunction
                 return PlanText.CloseGapsResult(path);
             case PlanChoice.Approve:
             case PlanChoice.ApproveFresh:
-                _session.Approve(verdict.Choice == PlanChoice.ApproveFresh);
+            case PlanChoice.ApproveRalph:
+                _session.Approve(verdict.Choice);
                 return PlanText.ApprovedResult(path);
             case PlanChoice.Cancel:
                 PlanFiles.MarkFile(_files, path, PlanStatus.Cancelled, _time.GetLocalNow(), _session.Requirement);
@@ -217,6 +228,14 @@ public sealed class PresentPlanTool : AIFunction
 
     /// <summary>A list argument's lines, trimmed, blanks dropped.</summary>
     private static List<string> Lines(IEnumerable<string> sent) => sent.Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
+
+    /// <summary>The <c>verify</c> and <c>final</c> sent (2026-10-18): null for one left out, so a revision keeps the file's.</summary>
+    private static PlanChecks? Checks(AIFunctionArguments arguments)
+    {
+        string? verify = arguments.ContainsKey(VerifyArgument) ? ToolArguments.ReadString(arguments, VerifyArgument).Trim() : null;
+        string? final = arguments.ContainsKey(FinalArgument) ? ToolArguments.ReadString(arguments, FinalArgument).Trim() : null;
+        return verify is null && final is null ? null : new PlanChecks(verify, final);
+    }
 
     private static string? Named(AIFunctionArguments arguments)
     {

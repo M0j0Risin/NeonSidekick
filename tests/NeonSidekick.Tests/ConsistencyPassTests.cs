@@ -4,6 +4,7 @@ using NeonSidekick.App;
 using NeonSidekick.Camera;
 using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.HomeAssistant;
+using NeonSidekick.Plans;
 using NeonSidekick.Prompts;
 using NeonSidekick.Shopping;
 using NeonSidekick.UI;
@@ -43,6 +44,8 @@ public class ConsistencyPassTests
         SavedPromptText.PaneKeys, BrowserLinkText.PaneKeys, ShoppingText.PaneKeys, ShoppingText.StoresKeys, ShoppingText.LayoutKeys, ShoppingText.AislesKeys,   // 2026-10-16, the 120-column pass
         MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, "", letteredButtons: true), TasksMenu.Keys, ServicesMenu.Keys, EventLogMenu.Keys, HomeBarText.BarHint,
         NeonSidekick.Audits.AuditText.DoneKeys(hasFix: true), NeonSidekick.Audits.AuditText.DoneKeys(hasFix: false), SettingsMenu.CodeAuditFocusKeys,   // the code audit's pane and focus checklist (2026-10-18)
+        .. new[] { PlanPickMode.Open, PlanPickMode.Talk, PlanPickMode.Ralph }.SelectMany(mode => new[] { PlanText.PickerKeys(mode, false), PlanText.PickerKeys(mode, true) }),   // the plans picker (2026-10-18)
+        PlanText.ApprovalKeys, RalphText.CheckpointKeys, RalphText.Hint,   // the approval pane with its Ralph row, the loop's checkpoint and its hint (later on 2026-10-18)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)
     ];

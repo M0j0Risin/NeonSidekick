@@ -29,6 +29,13 @@ public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType
     public string? PdfPage { get; init; }
 
     /// <summary>
+    /// A plan's reference picture the app attached itself (2026-10-18, <c>Plans.PlanReferences.ForRun</c>: a fresh-context approve, a Ralph pass), its
+    /// <see cref="Path"/> the file beside the plan: the history marks its part (<c>ConversationHistory.ReferenceKey</c>) so a stored session keeps a
+    /// line naming the file rather than the bytes again, pass after pass.
+    /// </summary>
+    public bool Reference { get; init; }
+
+    /// <summary>
     /// An attached PDF's text (2026-10-14, the PDF plan's phase 3 and gap 39): the read started when it was pasted, carried as the task so
     /// a message sent or queued before it ends hands the read over rather than cancelling it; the send awaits it. Null for a picture.
     /// One attachment list for both (the plan's choice): a PDF is an attachment with <see cref="PdfFile.MediaType"/>, its whole file in

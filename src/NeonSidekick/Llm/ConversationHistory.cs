@@ -106,8 +106,23 @@ public sealed class ConversationHistory
             (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[PdfPageKey] = page;
         }
 
+        if (image.Reference)
+        {
+            (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[ReferenceKey] = image.Path;
+        }
+
         return part;
     }
+
+    /// <summary>
+    /// The additional property a plan's reference picture carries (2026-10-18, <see cref="ImageAttachment.Reference"/>): its path beside the plan.
+    /// <c>SessionHistory</c> stores a line naming it instead of its bytes, as a camera picture's stand-in. Never on the wire.
+    /// </summary>
+    public const string ReferenceKey = "neon.reference";
+
+    /// <summary>The file when <paramref name="content"/> is a reference picture's part (<see cref="ReferenceKey"/>); null otherwise.</summary>
+    public static string? ReferencePath(AIContent content) =>
+        content is DataContent && content.AdditionalProperties?.TryGetValue(ReferenceKey, out var path) == true ? path as string ?? "" : null;
 
     /// <summary>
     /// The additional property an attached PDF's part carries (2026-10-14, the PDF plan's phase 3): its text as an endpoint that takes no

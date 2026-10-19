@@ -1073,7 +1073,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     WebOpenLinksIn,
 
-    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 20, 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
+    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 50 (20 until 2026-10-18), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
     PlanGapPasses,
 
     /// <summary>A toggle: whether this profile hosts the Web UI (<see cref="Settings.AppSettingsData.WebUi"/>). The Web UI tab under Client (2026-10-14, the user's ask); a flip starts or stops the server (<see cref="SettingsChanges.WebUi"/>), so it is refused mid-turn. Last in the enum, as every newcomer.</summary>
@@ -1246,7 +1246,7 @@ public enum SettingsField
     /// <summary>A toggle: whether a turn offers the app's manual, <c>neon_help</c> (<see cref="Settings.AppSettingsData.HelpTools"/>). The Help menu on <c>/tools</c> › Core, after Ask (2026-10-18, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     HelpTools,
 
-    /// <summary>Typed: the most passes a code audit runs, 0 to 20, 0 for no limit (<see cref="Settings.AppSettingsData.CodeAuditPasses"/>). The Code audit section of Servers › Common, after Plan mode (2026-10-18, <c>/code-audit</c>); read when an audit starts. Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the most passes a code audit runs, 0 to 50 (20 until 2026-10-18), 0 for no limit (<see cref="Settings.AppSettingsData.CodeAuditPasses"/>). The Code audit section of Servers › Common, after Plan mode (2026-10-18, <c>/code-audit</c>); read when an audit starts. Last in the enum, as every newcomer.</summary>
     CodeAuditPasses,
 
     /// <summary>Typed: how many passes in a row must find nothing new before a code audit ends, 1 to 5 (<see cref="Settings.AppSettingsData.CodeAuditCleanPasses"/>). Under <see cref="CodeAuditPasses"/> (2026-10-18); read when an audit starts.</summary>
@@ -1263,6 +1263,27 @@ public enum SettingsField
 
     /// <summary>Typed: the tool calls an audit's pass is asked to report within, 0 to 500, 0 for no budget (<see cref="Settings.AppSettingsData.CodeAuditPassToolCalls"/>, 2026-10-18); read every turn.</summary>
     CodeAuditPassToolCalls,
+
+    /// <summary>A picker: who checks a Ralph loop's step, off, model, advisor or any (<see cref="Settings.AppSettingsData.RalphLoopReviewer"/>). It opens the Ralph loop section of Servers › Common, between Plan mode and Code audit (2026-10-18); snapshotted when a loop starts.</summary>
+    RalphLoopReviewer,
+
+    /// <summary>Typed: a Ralph loop's checkpoint, every N steps that stand, 0 to 20, 0 off (<see cref="Settings.AppSettingsData.RalphLoopCheckpoint"/>, 2026-10-18).</summary>
+    RalphLoopCheckpoint,
+
+    /// <summary>Typed: a Ralph loop's pass cap, 0 to 200, 0 three a step (<see cref="Settings.AppSettingsData.RalphLoopPasses"/>, 2026-10-18).</summary>
+    RalphLoopPasses,
+
+    /// <summary>Typed: the passes one step may take, 1 to 20 (<see cref="Settings.AppSettingsData.RalphLoopPassesPerStep"/>, 2026-10-18).</summary>
+    RalphLoopPassesPerStep,
+
+    /// <summary>Typed: the check command's timeout, 30 to 3600 seconds (<see cref="Settings.AppSettingsData.RalphLoopCheckTimeoutSeconds"/>, 2026-10-18).</summary>
+    RalphLoopCheckTimeoutSeconds,
+
+    /// <summary>Typed: a Ralph run's token budget, 0 for none (<see cref="Settings.AppSettingsData.RalphLoopTokenBudget"/>, 2026-10-18).</summary>
+    RalphLoopTokenBudget,
+
+    /// <summary>A picker over the timer tones: what a Ralph loop ends with (<see cref="Settings.AppSettingsData.RalphLoopStopTone"/>, 2026-10-18), the Timer tone picker's preview.</summary>
+    RalphLoopStopTone,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1537,6 +1558,26 @@ internal sealed partial class SettingsMenu
     public static readonly string CodeAuditPassToolCallsRangeError =
         "must be " + AppSettingsData.MinCodeAuditPassToolCalls.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxCodeAuditPassToolCalls.ToString(CultureInfo.InvariantCulture) + " tool calls (0 for no budget)";
 
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.RalphLoopCheckpoint"/> (2026-10-18). Pinned.</summary>
+    public static readonly string RalphLoopCheckpointRangeError =
+        "must be " + AppSettingsData.MinRalphLoopCheckpoint.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxRalphLoopCheckpoint.ToString(CultureInfo.InvariantCulture) + " steps (0 for no checkpoint)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.RalphLoopPasses"/> (2026-10-18). Pinned.</summary>
+    public static readonly string RalphLoopPassesRangeError =
+        "must be " + AppSettingsData.MinRalphLoopPasses.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxRalphLoopPasses.ToString(CultureInfo.InvariantCulture) + " passes (0 for three a step)";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.RalphLoopPassesPerStep"/> (2026-10-18). Pinned.</summary>
+    public static readonly string RalphLoopPassesPerStepRangeError =
+        "must be " + AppSettingsData.MinRalphLoopPassesPerStep.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxRalphLoopPassesPerStep.ToString(CultureInfo.InvariantCulture) + " passes";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.RalphLoopCheckTimeoutSeconds"/> (2026-10-18). Pinned.</summary>
+    public static readonly string RalphLoopCheckTimeoutRangeError =
+        "must be " + AppSettingsData.MinRalphLoopCheckTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxRalphLoopCheckTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.RalphLoopTokenBudget"/> (2026-10-18). Pinned.</summary>
+    public static readonly string RalphLoopTokenBudgetRangeError =
+        "must be a whole number of tokens from " + AppSettingsData.MinRalphLoopTokenBudget.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxRalphLoopTokenBudget.ToString(CultureInfo.InvariantCulture) + " (0 for no budget)";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.PlanGapCleanPasses"/> (2026-10-17). Pinned.</summary>
     public static readonly string PlanGapCleanPassesRangeError =
         "must be " + AppSettingsData.MinPlanGapCleanPasses.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxPlanGapCleanPasses.ToString(CultureInfo.InvariantCulture) + " passes";
@@ -1724,6 +1765,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser,
+         SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone,
          SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
@@ -2324,6 +2366,13 @@ internal sealed partial class SettingsMenu
         SettingsField.PlanGapPasses => "LLM plan gap passes",
         SettingsField.PlanGapCleanPasses => "LLM plan gap clean passes",
         SettingsField.PlanGapAskUser => "LLM plan gap ask user",
+        SettingsField.RalphLoopReviewer => "LLM Ralph loop reviewer",
+        SettingsField.RalphLoopCheckpoint => "LLM Ralph loop checkpoint",
+        SettingsField.RalphLoopPasses => "LLM Ralph loop passes",
+        SettingsField.RalphLoopPassesPerStep => "LLM Ralph loop passes per step",
+        SettingsField.RalphLoopCheckTimeoutSeconds => "LLM Ralph loop check timeout",
+        SettingsField.RalphLoopTokenBudget => "LLM Ralph loop token budget",
+        SettingsField.RalphLoopStopTone => "LLM Ralph loop stop tone",
         SettingsField.CodeAuditPasses => "LLM code audit passes",
         SettingsField.CodeAuditCleanPasses => "LLM code audit clean passes",
         SettingsField.CodeAuditAskUser => "LLM code audit ask user",
@@ -2735,6 +2784,13 @@ internal sealed partial class SettingsMenu
             SettingsField.PlanGapPasses => GapPasses(data.PlanGapPasses),
             SettingsField.PlanGapCleanPasses => GapPasses(data.PlanGapCleanPasses),
             SettingsField.PlanGapAskUser => OnOff(data.PlanGapAskUser),
+            SettingsField.RalphLoopReviewer => Plans.RalphReviewerMode.TryParse(data.RalphLoopReviewer, out var ralphReviewer) ? Plans.RalphReviewerMode.Name(ralphReviewer) : data.RalphLoopReviewer,
+            SettingsField.RalphLoopCheckpoint => data.RalphLoopCheckpoint <= 0 ? OnOff(false) : data.RalphLoopCheckpoint == 1 ? "every step" : "every " + data.RalphLoopCheckpoint.ToString(CultureInfo.InvariantCulture) + " steps",
+            SettingsField.RalphLoopPasses => data.RalphLoopPasses <= 0 ? RalphAutoPassesLabel : GapPasses(data.RalphLoopPasses),
+            SettingsField.RalphLoopPassesPerStep => GapPasses(data.RalphLoopPassesPerStep),
+            SettingsField.RalphLoopCheckTimeoutSeconds => data.RalphLoopCheckTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " s",
+            SettingsField.RalphLoopTokenBudget => data.RalphLoopTokenBudget <= 0 ? NoBudgetLabel : UsageText.CompactNumber(data.RalphLoopTokenBudget) + " tokens",
+            SettingsField.RalphLoopStopTone => Timers.TimerTones.Normalize(data.RalphLoopStopTone),
             SettingsField.CodeAuditPasses => GapPasses(data.CodeAuditPasses),
             SettingsField.CodeAuditCleanPasses => GapPasses(data.CodeAuditCleanPasses),
             SettingsField.CodeAuditAskUser => OnOff(data.CodeAuditAskUser),
@@ -4100,6 +4156,11 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmMaxToolIterations => data.LlmMaxToolIterations.ToString(CultureInfo.InvariantCulture),
         SettingsField.PlanGapPasses => data.PlanGapPasses.ToString(CultureInfo.InvariantCulture),
         SettingsField.PlanGapCleanPasses => data.PlanGapCleanPasses.ToString(CultureInfo.InvariantCulture),
+        SettingsField.RalphLoopCheckpoint => data.RalphLoopCheckpoint.ToString(CultureInfo.InvariantCulture),
+        SettingsField.RalphLoopPasses => data.RalphLoopPasses.ToString(CultureInfo.InvariantCulture),
+        SettingsField.RalphLoopPassesPerStep => data.RalphLoopPassesPerStep.ToString(CultureInfo.InvariantCulture),
+        SettingsField.RalphLoopCheckTimeoutSeconds => data.RalphLoopCheckTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.RalphLoopTokenBudget => data.RalphLoopTokenBudget.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeAuditPasses => data.CodeAuditPasses.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeAuditCleanPasses => data.CodeAuditCleanPasses.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeAuditPassToolCalls => data.CodeAuditPassToolCalls.ToString(CultureInfo.InvariantCulture),
@@ -5497,9 +5558,14 @@ internal sealed partial class SettingsMenu
             return await PickSttDestinationAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.TimerTone)
+        if (field is SettingsField.TimerTone or SettingsField.RalphLoopStopTone)
         {
-            return await PickTimerToneAsync(saved, cancellationToken).ConfigureAwait(false);
+            return await PickTimerToneAsync(saved, cancellationToken, field).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.RalphLoopReviewer)
+        {
+            return await PickRalphReviewerAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.CameraShutter or SettingsField.CameraPreview or SettingsField.CameraResolution or SettingsField.CameraDevice or SettingsField.ScreenAsk)
@@ -6000,6 +6066,34 @@ internal sealed partial class SettingsMenu
 
                 Apply(field, d => d.PlanGapPasses = passes);
                 return true;
+
+            case SettingsField.RalphLoopCheckpoint or SettingsField.RalphLoopPasses or SettingsField.RalphLoopPassesPerStep or SettingsField.RalphLoopCheckTimeoutSeconds or SettingsField.RalphLoopTokenBudget:
+            {
+                // The Ralph loop's five typed rows (2026-10-18): one shape, each its range and its wording.
+                var (min, max, error) = field switch
+                {
+                    SettingsField.RalphLoopCheckpoint => (AppSettingsData.MinRalphLoopCheckpoint, AppSettingsData.MaxRalphLoopCheckpoint, RalphLoopCheckpointRangeError),
+                    SettingsField.RalphLoopPasses => (AppSettingsData.MinRalphLoopPasses, AppSettingsData.MaxRalphLoopPasses, RalphLoopPassesRangeError),
+                    SettingsField.RalphLoopPassesPerStep => (AppSettingsData.MinRalphLoopPassesPerStep, AppSettingsData.MaxRalphLoopPassesPerStep, RalphLoopPassesPerStepRangeError),
+                    SettingsField.RalphLoopCheckTimeoutSeconds => (AppSettingsData.MinRalphLoopCheckTimeoutSeconds, AppSettingsData.MaxRalphLoopCheckTimeoutSeconds, RalphLoopCheckTimeoutRangeError),
+                    _ => (AppSettingsData.MinRalphLoopTokenBudget, AppSettingsData.MaxRalphLoopTokenBudget, RalphLoopTokenBudgetRangeError),
+                };
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ralph) || ralph < min || ralph > max)
+                {
+                    Sink.Error($"{FieldName(field)} {error}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, field switch
+                {
+                    SettingsField.RalphLoopCheckpoint => (Action<AppSettingsData>)(d => d.RalphLoopCheckpoint = ralph),
+                    SettingsField.RalphLoopPasses => d => d.RalphLoopPasses = ralph,
+                    SettingsField.RalphLoopPassesPerStep => d => d.RalphLoopPassesPerStep = ralph,
+                    SettingsField.RalphLoopCheckTimeoutSeconds => d => d.RalphLoopCheckTimeoutSeconds = ralph,
+                    _ => d => d.RalphLoopTokenBudget = ralph,
+                });
+                return true;
+            }
 
             case SettingsField.PlanGapCleanPasses:
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int clean) || clean < AppSettingsData.MinPlanGapCleanPasses || clean > AppSettingsData.MaxPlanGapCleanPasses)
@@ -7574,6 +7668,26 @@ internal sealed partial class SettingsMenu
     /// <summary>A <c>Reflection confirm mode</c> choice and its hint (2026-10-12), the cooldown mode's shape. Pinned.</summary>
     public static string ReflectionConfirmModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(Skills.ReflectionConfirmMode.Describe(name));   // fourteen until the confirm- prefix went (2026-10-13)
+
+    /// <summary>A <c>LLM Ralph loop reviewer</c> choice and its hint (2026-10-18). Pinned.</summary>
+    public static string RalphReviewerLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Plans.RalphReviewerMode.Describe(name));
+
+    /// <summary>The Ralph loop's reviewer picker (2026-10-18), the confirm mode's shape.</summary>
+    private async Task<bool> PickRalphReviewerAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(SettingsField.RalphLoopReviewer)), Plans.RalphReviewerMode.Names.Select(RalphReviewerLabel).ToList(), PickKeys);
+        int at = Plans.RalphReviewerMode.TryParse(saved.RalphLoopReviewer, out var current) ? (int)current : (int)Plans.RalphReviewer.Any;
+        int? picked = await PickAsync(page, at, cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index || index >= Plans.RalphReviewerMode.Names.Length)
+        {
+            return Unchanged();
+        }
+
+        string name = Plans.RalphReviewerMode.Names[index];
+        Apply(SettingsField.RalphLoopReviewer, d => d.RalphLoopReviewer = name);
+        return true;
+    }
 
     /// <summary>The confirm-mode picker under the settings list: one <see cref="ReflectionConfirmModeLabel"/> row per <see cref="Skills.ReflectionConfirmMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickReflectionConfirmModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
@@ -10200,6 +10314,12 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>5 passes</c>, <c>1 pass</c>, <see cref="NoCapLabel"/> for 0: <see cref="AppSettingsData.PlanGapPasses"/> as the row shows it (2026-10-13).</summary>
     public static string GapPasses(int value) => value <= 0 ? NoCapLabel : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " pass" : " passes");
+
+    /// <summary>The Ralph loop's automatic cap (2026-10-18): three a remaining step.</summary>
+    public const string RalphAutoPassesLabel = "auto (3 a step)";
+
+    /// <summary>A token budget of none (2026-10-18).</summary>
+    public const string NoBudgetLabel = "no budget";
 
     /// <summary><c>40 tool calls</c>, <c>1 tool call</c>, <c>no budget</c> for 0: <see cref="AppSettingsData.CodeAuditPassToolCalls"/> as the row shows it (2026-10-18). Pinned.</summary>
     public static string ToolCallBudget(int value) => value <= 0 ? "no budget" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " tool call" : " tool calls");

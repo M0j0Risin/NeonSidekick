@@ -99,6 +99,12 @@ internal sealed record TurnToolInputs
     public bool DirectoryEnabled { get; init; }
     public IReadOnlySet<string>? Disabled { get; init; }
     public PlanTurn? Plan { get; init; }
+
+    /// <summary>
+    /// A Ralph loop pass under way (2026-10-18): its directive (the system prompt's, in plan mode's place: <c>Plan ?? Pass</c>) and <c>finish_step</c>,
+    /// appended to the turn's tools. Unlike <see cref="Plan"/> it narrows nothing: a pass carries out its step with every tool.
+    /// </summary>
+    public PlanTurn? Pass { get; init; }
     public bool PlanReadOnly { get; init; }
     public IReadOnlySet<string>? OnlyTools { get; init; }
 }
@@ -354,6 +360,8 @@ internal sealed partial class ChatScreen
         tools = youTube ? [.. tools, .. youTubeTools!] : tools;
         // present_plan while planning (2026-09-26): after everything else, ahead of the question tool, which stays last.
         tools = plan is not null ? [.. tools, plan.Tool] : tools;
+        // finish_step during a Ralph pass (2026-10-18), in the same place.
+        tools = inputs.Pass is { } pass ? [.. tools, pass.Tool] : tools;
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;

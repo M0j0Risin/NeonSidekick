@@ -42,7 +42,7 @@ public sealed class ExecuteCodeTool : AIFunction
     public const string RunsFolderName = "neonsidekick-code";
 
     /// <summary>The tools a script may not reach: itself (a run inside a run) and the question pane (the script has no screen).</summary>
-    public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal) { ToolName, AskUserTool.ToolName };
+    public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal) { ToolName, AskUserTool.ToolName, FinishStepTool.ToolName };   // finish_step since 2026-10-18: a script never ends a Ralph pass
 
     private readonly ShellRunner _runner;
     private readonly WorkingDirectory _files;

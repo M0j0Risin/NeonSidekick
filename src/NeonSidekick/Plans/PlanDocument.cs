@@ -23,7 +23,20 @@ public enum PlanStatus
 /// </summary>
 /// <para><c>review:</c> (2026-10-17, <see cref="Review"/>): how the last gap review that ended on its own went, with the body's fingerprint
 /// (<see cref="PlanReview"/>); written only when set, so a file without it reads as before, and dropped by the next revision.</para>
-public sealed record PlanHeader(PlanStatus Status, int Revision, DateTimeOffset Created, DateTimeOffset Updated, string Requirement, int? StepsDone = null, int? StepsTotal = null, string? Review = null);
+/// <para><c>verify:</c> and <c>final:</c> (2026-10-18, the Ralph loop, <see cref="Verify"/>, <see cref="Final"/>): the commands the app runs to check
+/// the project, after each step and once at the end; quoted, written only when set, kept by <see cref="PlanDocument.WithStatus"/> and
+/// <see cref="PlanDocument.WithReview"/>.</para>
+public sealed record PlanHeader(PlanStatus Status, int Revision, DateTimeOffset Created, DateTimeOffset Updated, string Requirement, int? StepsDone = null, int? StepsTotal = null, string? Review = null, string? Verify = null, string? Final = null);
+
+/// <summary>
+/// A plan's check commands (2026-10-18, <see cref="PlanHeader.Verify"/> and <see cref="PlanHeader.Final"/>), as <c>present_plan</c> sends them and
+/// the approval pane shows them: null for one not given (a revision keeps the file's), empty for one cleared.
+/// </summary>
+public sealed record PlanChecks(string? Verify, string? Final)
+{
+    /// <summary>Neither set.</summary>
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Verify) && string.IsNullOrWhiteSpace(Final);
+}
 
 /// <summary>
 /// A plan file (2026-09-26): a small front-matter block the app owns — <c>status</c>, <c>revision</c>,
@@ -84,6 +97,8 @@ public static class PlanDocument
             .Append("created: ").Append(header.Created.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\n')
             .Append("updated: ").Append(header.Updated.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\n')
             .Append("requirement: ").Append(Quote(header.Requirement)).Append('\n')
+            .Append(header.Verify is { Length: > 0 } verify ? "verify: " + Quote(verify) + "\n" : "")
+            .Append(header.Final is { Length: > 0 } final ? "final: " + Quote(final) + "\n" : "")
             .Append(header is { StepsDone: { } done, StepsTotal: { } total } ? "progress: " + N(done) + "/" + N(total) + "\n" : "")
             .Append(header.Review is { Length: > 0 } review ? "review: " + review + "\n" : "")
             .Append(Fence).Append('\n')
@@ -196,8 +211,32 @@ public static class PlanDocument
         }
     }
 
-    /// <summary>The length of a list marker with its space (<c>- </c>, <c>12. </c>) at the start of <paramref name="trimmed"/>, or 0.</summary>
-    private static int ListMarker(string trimmed)
+    /// <summary>
+    /// The lines of <paramref name="text"/> outside fenced code blocks with their 0-based index in <c>text.Split('\n')</c> (2026-10-18, shared with
+    /// <see cref="PlanSteps"/>): each line as it is, a CRLF file's <c>\r</c> left on for the caller to trim, the fences themselves left out.
+    /// </summary>
+    internal static IEnumerable<(int Index, string Text)> Walk(string text)
+    {
+        bool fenced = false;
+        string[] lines = text.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string trimmed = lines[i].TrimStart();
+            if (trimmed.StartsWith("```", StringComparison.Ordinal) || trimmed.StartsWith("~~~", StringComparison.Ordinal))
+            {
+                fenced = !fenced;
+                continue;
+            }
+
+            if (!fenced)
+            {
+                yield return (i, lines[i]);
+            }
+        }
+    }
+
+    /// <summary>The length of a list marker with its space (<c>- </c>, <c>12. </c>) at the start of <paramref name="trimmed"/>, or 0; shared with <see cref="PlanSteps"/> (2026-10-18).</summary>
+    internal static int ListMarker(string trimmed)
     {
         if (trimmed.Length >= 2 && trimmed[0] is '-' or '*' or '+' && trimmed[1] == ' ')
         {
@@ -259,7 +298,9 @@ public static class PlanDocument
         }
 
         string? review = fields.TryGetValue("review", out var reviewed) && reviewed.Length > 0 ? reviewed : null;
-        return new PlanHeader(status, revision, created ?? DateTimeOffset.MinValue, updated ?? DateTimeOffset.MinValue, Unquote(fields.GetValueOrDefault("requirement") ?? ""), done, total, review);
+        string? verify = fields.TryGetValue("verify", out var v) && Unquote(v).Trim() is { Length: > 0 } verifyText ? verifyText : null;
+        string? final = fields.TryGetValue("final", out var f) && Unquote(f).Trim() is { Length: > 0 } finalText ? finalText : null;
+        return new PlanHeader(status, revision, created ?? DateTimeOffset.MinValue, updated ?? DateTimeOffset.MinValue, Unquote(fields.GetValueOrDefault("requirement") ?? ""), done, total, review, verify, final);
     }
 
     /// <summary>

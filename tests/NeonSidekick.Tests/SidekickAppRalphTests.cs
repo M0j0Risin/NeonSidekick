@@ -1,0 +1,146 @@
+using System.Text.Json;
+using Microsoft.Extensions.AI;
+using NeonSidekick.Files;
+using NeonSidekick.Llm.Tools;
+using NeonSidekick.Plans;
+using NeonSidekick.Tests.Fakes;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>
+/// The Ralph loop headless (2026-10-18, phase 7): <c>/plan ralph &lt;name&gt;</c> with no confirm, each pass the next line with no stdin read
+/// between and echoed as its short line, the checks over <see cref="FakeRalphVerifier"/>, a failing baseline refused with its tail, a failed turn
+/// tried once more, <c>/plan approve --ralph</c> from planning, and the resume after a stop.
+/// </summary>
+public partial class SidekickAppTests
+{
+    private const string HeadlessRalphSteps = "# Guide\n\n## Steps\n- [ ] One\n- [ ] Two\n";
+
+    private void HeadlessRalphPlan(string? verify = "dotnet build")
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(HeadlessPlanFile)!);
+        var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+        File.WriteAllText(HeadlessPlanFile, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide", Verify: verify), "Guide", HeadlessRalphSteps));
+        _settings.Update(d => d.RalphLoopReviewer = "off");
+    }
+
+    private void HeadlessRalphPass(string id, string outcome = "done", string summary = "Did it.")
+    {
+        string verified = outcome == "done" ? ""","verified":["dotnet build: ok"]""" : "";
+        string json = "{\"outcome\":\"" + outcome + "\",\"summary\":\"" + summary + "\"" + verified + "}";
+        _chat.Enqueue(FakeChatClient.Call(id, FinishStepTool.ToolName, JsonDocument.Parse(json).RootElement.EnumerateObject().ToDictionary(p => p.Name, p => (object?)p.Value.Clone())));
+        _chat.EnqueueText("Pass " + id + " over.");
+    }
+
+    private PlanStatus? HeadlessPlanStatus => PlanDocument.TryParse(File.ReadAllText(HeadlessPlanFile))?.Status;
+
+    [Fact]
+    public async Task Headless_PlanRalph_RunsEachStepAsTheNextLine_FreshEachPass_AndMarksThePlanDone()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(["dotnet build", "dotnet build", "dotnet build"], _ralphVerifier.Commands);
+        Assert.Equal(_chat.Requests[0].Count, _chat.Requests[2].Count);   // the opening's seeded calls and the pass's message: nothing of pass 1
+        Assert.Single(_chat.Requests[2], m => m.Role == ChatRole.User);
+        Assert.Contains("One", HeadlessLastUser(_chat.Requests[0]));
+        Assert.Contains("Two", HeadlessLastUser(_chat.Requests[2]));
+        Assert.Contains(FinishStepTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));
+        Assert.DoesNotContain(AskUserTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));   // no checkpoint headless: nobody to ask
+        Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 6, finalOnly: false), output);
+        Assert.Contains(RalphText.TranscriptLine(1, 1, 2, "One"), output);
+        Assert.DoesNotContain(HeadlessRalphSteps.Split('\n')[0] + "\n\n## Steps", output);   // the pass's message is never echoed
+        Assert.Contains("[notice] " + RalphText.StepDoneNotice(1, 2, "One"), output);
+        Assert.Contains("[notice] " + RalphText.StopNotice(RalphStop.Done, HeadlessPlanPath, 2, 2), output);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
+    [Fact]
+    public async Task Headless_PlanRalph_AFailingBaseline_IsRefusedWithItsTail()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        _ralphVerifier.Fail("error CS0103: the name 'x' does not exist");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Empty(_chat.Requests);
+        Assert.Contains("error CS0103", output);
+        Assert.Contains("[error] " + RalphText.BaselineRefusedHeadless("dotnet build"), output);
+        Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
+    }
+
+    [Fact]
+    public async Task Headless_PlanRalph_AFailedTurn_IsTriedOnceMore_ThenStalls()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        _chat.ThrowAt = 0;   // every request fails at its first update
+        _chat.EnqueueText("never seen");
+        _chat.EnqueueText("never seen");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Contains("[notice] " + RalphText.RetryNotice, output);
+        Assert.Contains("[notice] " + RalphText.StopNotice(RalphStop.Stalled, HeadlessPlanPath, 0, 2), output);
+    }
+
+    [Fact]
+    public async Task Headless_PlanRalph_ABlockedStop_ThenBareResumes()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        HeadlessRalphPass("1", "blocked", "Need a name.");
+        HeadlessRalphPass("2");
+        HeadlessRalphPass("3");
+
+        string output = await Headless("/plan ralph add-guide\n/plan ralph\n");
+
+        Assert.Contains("[notice] " + RalphText.StopNotice(RalphStop.Blocked, HeadlessPlanPath, 0, 2), output);
+        Assert.Contains("[notice] " + RalphText.ResumedNotice(HeadlessPlanPath, 2, 6), output);
+        Assert.Contains(RalphText.TranscriptLine(2, 1, 2, "One"), output);
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
+    [Fact]
+    public async Task Headless_PlanApproveRalph_FromPlanning_LeavesPlanMode_AndRuns()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.RalphLoopReviewer = "off");
+        _chat.Enqueue(FakeChatClient.Call("p1", PresentPlanTool.ToolName, new Dictionary<string, object?>
+        {
+            [PresentPlanTool.TitleArgument] = "Guide",
+            [PresentPlanTool.NameArgument] = "add-guide",
+            [PresentPlanTool.MarkdownArgument] = HeadlessRalphSteps,
+            [PresentPlanTool.VerifyArgument] = "dotnet build",
+        }));
+        _chat.EnqueueText("Saved.");
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
+
+        string output = await Headless("/plan Add a guide\n/plan approve --ralph 3\n");
+
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 3, finalOnly: false), output);
+        Assert.DoesNotContain("PLAN MODE", _chat.Requests[2][0].Text);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
+    [Fact]
+    public async Task Headless_PlanRalph_ABadCount_IsRefused()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+
+        string output = await Headless("/plan ralph add-guide 999\n");
+
+        Assert.Contains("[error] " + RalphText.BadPassesError("999"), output);
+        Assert.Empty(_chat.Requests);
+    }
+}

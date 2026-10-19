@@ -148,10 +148,17 @@ Settings every server reads, whatever its kind.
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. A count on `/plan gaps` overrides it for that run. | 5 |
+| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–50; 0 is no cap, or 50 in a headless run). Esc stops it. A count on `/plan gaps` overrides it for that run. | 5 |
 | LLM plan gap clean passes | How many passes in a row must find no gaps before plan mode's **Close gaps…** review ends (1–5; 1 ends on the first pass with none). A pass limit below it lowers it to the limit for that review; `/plan gaps confirm` needs at least 2. | 2 |
 | LLM plan gap ask user | Whether a gap pass may stop to ask you (`ask_user`), take a photo (`camera_capture`) or capture the screen (`screen_capture`). Off, a pass is offered none of the three, whatever *Ask user* and the camera and screen settings say, and a decision only you can make goes into the plan's `## Risks` as an open question. Read every turn, so it applies from the next pass. | on |
-| LLM code audit passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane comes back (0–20; 0 is no cap, or 20 in a headless run). Esc stops it. A count on `/code-audit` overrides it for that run. | 5 |
+| LLM Ralph loop reviewer | Who looks at a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request, no conversation), `advisor` (the first advisor, its thread left alone) or `any` (an advisor when one is offered, else the model). A fail unticks the step. | `any` |
+| LLM Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you. | 0 (off) |
+| LLM Ralph loop passes | The most passes a loop runs (0–200; 0 is three a step, and one more for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
+| LLM Ralph loop passes per step | The most passes one step may take before the loop stops (1–20). | 4 |
+| LLM Ralph loop check timeout | How long a check command may run before it's stopped and the step unticked (30–3600 seconds). | 600 |
+| LLM Ralph loop token budget | The tokens a loop may spend, its passes and reviews together (0 is no budget). | 0 (none) |
+| LLM Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…), never on Esc: silent, chime, bell, beep or alarm. | chime |
+| LLM code audit passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane comes back (0–50; 0 is no cap, or 50 in a headless run). Esc stops it. A count on `/code-audit` overrides it for that run. | 5 |
 | LLM code audit clean passes | How many passes in a row must find nothing new before a code audit ends (1–5). A pass after a clean one looks first at the files no pass has read; `/code-audit confirm` needs at least 2. | 2 |
 | LLM code audit ask user | Whether an audit's pass may stop to ask you, take a photo or capture the screen. Off, a pass is offered none of the three and puts a question only you can answer in the report's Open questions. Read every turn. | on |
 | LLM code audit focus | The dimensions a `/code-audit` with none named covers: security, correctness, performance, maintainability and tests. At least one stays ticked. | all |
@@ -403,7 +410,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Reflection cooldown mode | `last-written-skill`: only turns that used the skill just written wait. `all-skills`: every automatic reflection waits. | `last-written-skill` |
 | Reflection yield to turns | A message sent during a reflection pauses it, so the reply gets the server. Turn it off if your server handles parallel requests. | on |
 | Reflection mode | What a reflection may write: `create-update` a new skill or an improvement to one; `update-only` only an improvement to a skill that exists, never a new one. With no skill to update, no reflection runs and `/learn` says so. | `create-update` |
-| Reflection confirm mode | Whether a reflection asks before it writes: `none` never, `all` always, `new` before a new skill, `edit` before an edit. It asks at the idle line: **Keep**, **View** or **Discard**. With the Web UI on, the page asks at once too, with the summary, Keep, Discard and the proposal under View; the first answer wins. | `none` |
+| Reflection confirm mode | Whether a reflection asks before it writes: `none` never, `all` always, `new` before a new skill, `edit` before an edit. It asks at the idle line: **Keep**, **View** or **Discard**. With the Web UI on, the page asks at once too, with the summary, Keep, Discard and the proposal under View; the first answer wins. | `new` |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too, not just its `SKILL.md`. | off |
 | Reflection edit downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead (unless *Reflection mode* is `update-only`); `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
 

@@ -1,0 +1,133 @@
+using NeonSidekick.Plans;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>
+/// A plan's steps as the Ralph loop reads them (2026-10-18, <see cref="PlanSteps"/>): under <c>## Steps</c> or, with no such heading, every
+/// top-level task line; fenced code passed over; numbered and bulleted items; one level of children; <c>Done when:</c> lines; the first unticked
+/// leaf; and the box and the children written back with each line's own ending.
+/// </summary>
+public sealed class PlanStepsTests
+{
+    private const string Headed =
+        "# Guide\n\n## Goal\n- [ ] not a step: under Goal\n\n## Steps\n### Phase 1\n- [x] Write the outline\n  Done when: `docs/guide.md` has the headings\n" +
+        "- [ ] Write the body\n  - Done when: every heading has a paragraph (see ref-2)\n\n```\n- [ ] in a fence\n```\n" +
+        "1. [ ] Link it from `README.md`\n   **Done when:** the README links docs/guide.md\n\n## Risks\n- [ ] not a step either\n";
+
+    [Fact]
+    public void Parse_ReadsTheStepsUnderTheHeading_AndTheirDoneWhenLines()
+    {
+        var steps = PlanSteps.Parse(Headed);
+
+        Assert.Equal(["Write the outline", "Write the body", "Link it from `README.md`"], steps.Select(s => s.Text));
+        Assert.Equal([true, false, false], steps.Select(s => s.Ticked));
+        Assert.Equal([1, 2, 3], steps.Select(s => s.Index));
+        Assert.Equal("`docs/guide.md` has the headings", steps[0].DoneWhen);
+        Assert.Equal("every heading has a paragraph (see ref-2)", steps[1].DoneWhen);
+        Assert.Equal("the README links docs/guide.md", steps[2].DoneWhen);
+        Assert.Equal(["docs/guide.md"], steps[0].NamedPaths);
+        Assert.Equal(["ref-2"], steps[1].NamedRefs);
+        Assert.Equal(["README.md", "docs/guide.md"], steps[2].NamedPaths);
+        Assert.Equal(7, steps[0].Line);
+        Assert.All(steps, s => Assert.Empty(s.Children));
+        Assert.Equal("Write the body", PlanSteps.FirstUnticked(steps)!.Text);
+        Assert.Equal((1, 3), PlanSteps.Counts(steps));
+    }
+
+    [Fact]
+    public void Parse_WithoutAStepsHeading_ReadsEveryTopLevelTaskLine()
+    {
+        var steps = PlanSteps.Parse("# Plan\n- [ ] One\n- [x] Two\n  Done when: two is there\n\nSome text.\n* [ ] Three\n");
+
+        Assert.Equal(["One", "Two", "Three"], steps.Select(s => s.Text));
+        Assert.Equal("two is there", steps[1].DoneWhen);
+        Assert.Null(steps[0].DoneWhen);
+    }
+
+    [Fact]
+    public void Parse_NestedTaskLines_AreChildren_AndTheFirstUntickedChildComesBeforeItsParent()
+    {
+        const string text = "## Steps\n- [ ] Parent\n  Done when: all of it\n  - [x] First part\n    Done when: part one\n  - [ ] Second part\n      - [ ] deeper, still a child\n- [ ] After\n";
+
+        var steps = PlanSteps.Parse(text);
+
+        Assert.Equal(["Parent", "After"], steps.Select(s => s.Text));
+        Assert.Equal(["First part", "Second part", "deeper, still a child"], steps[0].Children.Select(c => c.Text));
+        Assert.Equal("part one", steps[0].Children[0].DoneWhen);
+        Assert.Equal("all of it", steps[0].DoneWhen);
+        Assert.Equal([0, 4], steps.Select(s => s.Index));            // a parent is no step; leaves count 1..4
+        Assert.Equal([1, 2, 3], steps[0].Children.Select(c => c.Index));
+        Assert.Equal("Second part", PlanSteps.FirstUnticked(steps)!.Text);
+        Assert.Equal((1, 4), PlanSteps.Counts(steps));
+        Assert.Equal("Parent", PlanSteps.ParentOf(steps, steps[0].Children[1])!.Text);
+        Assert.Null(PlanSteps.ParentOf(steps, steps[1]));
+    }
+
+    [Fact]
+    public void Parse_AllTicked_HasNoFirstUnticked_AndADoneWhenLineIsNeverABox()
+    {
+        const string text = "## Steps\n- [x] One\n  - [ ] Done when: this reads as a child task, not a check\n";
+        var steps = PlanSteps.Parse(text);
+        Assert.Single(steps[0].Children);
+
+        var ticked = PlanSteps.Parse("## Steps\n- [x] One\n  Done when: it is\n- [X] Two\n");
+        Assert.Null(PlanSteps.FirstUnticked(ticked));
+        Assert.Equal((2, 2), PlanDocument.Progress("## Steps\n- [x] One\n  Done when: it is\n- [X] Two\n"));
+    }
+
+    [Fact]
+    public void WithBox_TicksOneStep_AndKeepsEveryOtherByte()
+    {
+        string text = "## Steps\r\n- [ ] One\r\n  Done when: x\r\n- [ ] Two\n- [ ] Three";
+        var steps = PlanSteps.Parse(text);
+
+        string? ticked = PlanSteps.WithBox(text, steps[1], ticked: true);
+
+        Assert.Equal("## Steps\r\n- [ ] One\r\n  Done when: x\r\n- [x] Two\n- [ ] Three", ticked);
+        Assert.Equal(text, PlanSteps.WithBox(ticked!, PlanSteps.Parse(ticked!)[1], ticked: false));
+        Assert.Equal("## Steps\r\n- [ ] One\r\n  Done when: x\r\n- [ ] Two\n- [x] Three", PlanSteps.WithBox(text, steps[2], ticked: true));
+    }
+
+    [Fact]
+    public void WithBox_FindsAStepThatMoved_AndGivesUpOnOneThatWent()
+    {
+        var step = PlanSteps.Parse("## Steps\n- [ ] One\n- [ ] Two\n")[1];
+
+        Assert.Equal("Intro\n\n## Steps\n- [ ] One\n- [x] Two\n", PlanSteps.WithBox("Intro\n\n## Steps\n- [ ] One\n- [ ] Two\n", step, ticked: true));
+        Assert.Null(PlanSteps.WithBox("## Steps\n- [ ] One\n- [ ] Renamed\n", step, ticked: true));
+    }
+
+    [Fact]
+    public void WithChildren_WritesIndentedSubstepsWithTheirChecks_AfterTheStepsOwnLines()
+    {
+        string text = "## Steps\r\n- [ ] Big step\r\n  Done when: it all works\r\n  A note.\r\n- [ ] Next\r\n";
+        var steps = PlanSteps.Parse(text);
+
+        string? split = PlanSteps.WithChildren(text, steps[0], [new PlanSubstep("First half", "half works"), new PlanSubstep("Second\nhalf", "all works")]);
+
+        Assert.Equal("## Steps\r\n- [ ] Big step\r\n  Done when: it all works\r\n  A note.\r\n  - [ ] First half\r\n    Done when: half works\r\n  - [ ] Second half\r\n    Done when: all works\r\n- [ ] Next\r\n", split);
+        var again = PlanSteps.Parse(split!);
+        Assert.Equal(["First half", "Second half"], again[0].Children.Select(c => c.Text));
+        Assert.Equal(["half works", "all works"], again[0].Children.Select(c => c.DoneWhen));
+        Assert.Equal("First half", PlanSteps.FirstUnticked(again)!.Text);
+        Assert.Null(PlanSteps.WithChildren(split!, again[0], [new PlanSubstep("x", "y"), new PlanSubstep("z", "w")]));   // already split
+    }
+
+    [Fact]
+    public void WithChildren_OnTheLastLineWithNoEnding_AddsOne()
+    {
+        string? split = PlanSteps.WithChildren("## Steps\n- [ ] Only", PlanSteps.Parse("## Steps\n- [ ] Only")[0], [new PlanSubstep("a", "b"), new PlanSubstep("c", "d")]);
+
+        Assert.Equal("## Steps\n- [ ] Only\n  - [ ] a\n    Done when: b\n  - [ ] c\n    Done when: d\n", split);
+    }
+
+    [Theory]
+    [InlineData("Edit `src/App/Program.cs` and tests/AppTests.cs", "src/App/Program.cs|tests/AppTests.cs")]
+    [InlineData("Run `npm test`", "")]
+    [InlineData("See https://example.com/a.html, e.g. or i.e.", "")]
+    [InlineData("Add `.gitignore` and `build.yml`", ".gitignore|build.yml")]
+    public void PathsIn_FindsBacktickedAndSlashedFiles(string text, string expected)
+    {
+        Assert.Equal(expected.Length == 0 ? [] : expected.Split('|'), PlanSteps.PathsIn(text));
+    }
+}
