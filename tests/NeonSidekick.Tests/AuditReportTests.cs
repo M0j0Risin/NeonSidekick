@@ -116,6 +116,63 @@ public sealed class AuditReportTests
     }
 
     [Fact]
+    public void Parse_GivesADuplicateId_TheNextFreeOne_WithANote()
+    {
+        // 2026-10-19, the review: a block copied in an editor gave two findings one id, and present_audit threw on every later call.
+        var report = Sample();
+        report.Findings.Add(Finding("A1", title: "Copied by hand"));
+        report.Retracted.Add(Finding("a3", title: "Typed by hand") with { Retracted = true });
+        var back = AuditReport.Parse(report.Render());
+        Assert.Equal(["A1", "A4", "A3"], back.Findings.Select(f => f.Id));
+        Assert.Equal("Copied by hand", back.Findings[1].Title);
+        Assert.Equal([AuditText.RenumberedNote("A1")], back.Findings[1].Notes);
+        Assert.Equal(["A2", "A5"], back.Retracted.Select(f => f.Id));
+        Assert.Equal(6, back.NextIdNumber);
+        Assert.Equal(6, AuditReport.Parse(back.Render()).Header.NextId);
+    }
+
+    [Fact]
+    public void Parse_AnEvidenceFenceLeftOpen_EndsWhereItsIndentDoes()
+    {
+        // 2026-10-19, the review: the open fence swallowed every later finding and section into A1's evidence.
+        string text = Sample().Render();
+        int close = text.IndexOf("    ```\n  Pass: 1\n", StringComparison.Ordinal);
+        text = text[..close] + text[(close + "    ```\n".Length)..];
+        var back = AuditReport.Parse(text);
+        Assert.Equal(["A1", "A3"], back.Findings.Select(f => f.Id));
+        Assert.Equal("var sql = \"SELECT \" + name;", back.Findings[0].Evidence);
+        Assert.Equal(1, back.Findings[0].Pass);
+        Assert.Single(back.Retracted);
+        Assert.Equal(["A typo in a comment"], back.Nits);
+        Assert.Equal(Sample().Render(), back.Render());
+    }
+
+    [Fact]
+    public void Parse_KeepsHandWrittenText_UnderTheTitle_TheLists_AndRetracted()
+    {
+        // 2026-10-19, the review: text the parser had no place for was dropped on the next save.
+        string text = Sample().Render()
+            .Replace("# Code audit: src/Web\n\n", "# Code audit: src/Web\n\nMy notes on this run.\n\n", StringComparison.Ordinal)
+            .Replace("## Nits\n\n- A typo in a comment\n", "## Nits\n\nNits found by hand:\n\n- A typo in a comment\n  in the header too\n", StringComparison.Ordinal)
+            .Replace("## Checked\n\n", "## Checked\n\nSee also the wiki.\n\n", StringComparison.Ordinal)
+            .Replace("## Retracted\n\n", "## Retracted\n\n- A9 dismissed: false positive, see ticket 123\n\n", StringComparison.Ordinal);
+        var back = AuditReport.Parse(text);
+        Assert.Equal("My notes on this run.", back.Preamble);
+        Assert.Equal(["A typo in a comment in the header too"], back.Nits);
+        Assert.Equal(["Nits found by hand:"], back.Prose[AuditReport.NitsHeading]);
+        Assert.Equal(["See also the wiki."], back.Prose[AuditReport.CheckedHeading]);
+        Assert.Contains("A9 dismissed", Assert.Single(back.UnreadableRetracted));
+        Assert.Single(back.Retracted);
+        string rendered = back.Render();
+        foreach (string kept in new[] { "My notes on this run.", "Nits found by hand:", "in the header too", "See also the wiki.", "- A9 dismissed: false positive, see ticket 123" })
+        {
+            Assert.Contains(kept, rendered);
+        }
+
+        Assert.Equal(rendered, AuditReport.Parse(rendered).Render());
+    }
+
+    [Fact]
     public void Parse_KeepsAnUnknownSection_OnTheNextSave()
     {
         string text = Sample().Render() + "\n## My notes\n\nRemember the cache.\n";

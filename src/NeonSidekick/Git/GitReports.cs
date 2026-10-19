@@ -113,9 +113,9 @@ public sealed record GitRef(string Name, string Short, string Subject, bool Curr
 
 /// <summary>
 /// The files git knows under a path (2026-10-18, <see cref="GitAccess.TrackedFiles"/>): the index's entries and the untracked files, sandbox-relative,
-/// with the repository's working tree as the sandbox spells it.
+/// with the repository's working tree as the sandbox spells it, and whether the list was cut (its cap, or an untracked folder's walk budget).
 /// </summary>
-public sealed record GitTrackedReport(GitOutcome Outcome, string Detail, IReadOnlyList<string> Tracked, IReadOnlyList<string> Untracked, string WorkTree)
+public sealed record GitTrackedReport(GitOutcome Outcome, string Detail, IReadOnlyList<string> Tracked, IReadOnlyList<string> Untracked, string WorkTree, bool Truncated = false)
 {
     public static GitTrackedReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], [], "");
 }

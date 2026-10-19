@@ -521,9 +521,14 @@ public sealed class GitAccess
     /// <summary>
     /// The files git knows under <paramref name="relative"/> (2026-10-18, a code audit's scope inside a repository): the index's entries, and
     /// with <paramref name="includeUntracked"/> the untracked files too (every one, folders walked; ignored files and submodules out), all in
-    /// the sandbox's spelling. Uncapped: the audit cuts its own list.
+    /// the sandbox's spelling; at most <see cref="MaxTrackedFiles"/> in all, <see cref="GitTrackedReport.Truncated"/> past it.
+    /// <para>2026-10-19, the review of 8331ebc9: uncapped until then, and the untracked files came from libgit2's recursive status, one
+    /// native call no token reaches, so a large untracked, unignored folder ran for minutes after Esc (and blocked headless). Now status
+    /// lists untracked folders unrecursed and each is walked by <see cref="WorkingDirectory.ListFiles"/> (its entry and time budget, the
+    /// token, never into a reparse point), a nested repository's folder left out as status leaves it, an ignored file dropped.</para>
     /// </summary>
-    public GitTrackedReport TrackedFiles(string relative, bool includeUntracked) => Run(relative, GitTrackedReport.Refused, (repo, location, full) =>
+    public GitTrackedReport TrackedFiles(string relative, bool includeUntracked, CancellationToken cancellationToken = default) =>
+        Run(relative, GitTrackedReport.Refused, (repo, location, full) =>
     {
         if (RepoPath(location, full) is not { } prefix)
         {
@@ -532,30 +537,74 @@ public sealed class GitAccess
 
         string under = prefix.Length == 0 ? "" : prefix + "/";
         var tracked = new List<string>();
+        bool truncated = false;
         foreach (var entry in repo.Index)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // The index's path in libgit2's spelling whatever the platform hands back.
             string path = entry.Path.Replace('\\', '/');
             if (under.Length == 0 || path.StartsWith(under, StringComparison.Ordinal) || string.Equals(path, prefix, StringComparison.Ordinal))
             {
+                if (tracked.Count >= MaxTrackedFiles)
+                {
+                    truncated = true;
+                    break;
+                }
+
                 tracked.Add(SandboxPath(location, path));
             }
         }
 
         var untracked = new List<string>();
-        if (includeUntracked)
+        if (includeUntracked && !truncated)
         {
-            foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: true))
+            foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: false))
             {
-                if (entry.State.HasFlag(FileStatus.NewInWorkdir) && !entry.FilePath.EndsWith('/'))
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!entry.State.HasFlag(FileStatus.NewInWorkdir))
+                {
+                    continue;
+                }
+
+                int room = MaxTrackedFiles - tracked.Count - untracked.Count;
+                if (room <= 0)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                if (!entry.FilePath.EndsWith('/'))
                 {
                     untracked.Add(SandboxPath(location, entry.FilePath));
+                    continue;
+                }
+
+                // An untracked folder: walked here, budgeted and cancellable; a nested repository's (its own .git) is not this one's.
+                string folder = Path.Combine(location.WorkTree, entry.FilePath.TrimEnd('/').Replace('/', Path.DirectorySeparatorChar));
+                if (Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git")))
+                {
+                    continue;
+                }
+
+                var walked = _files.ListFiles(_files.Relative(folder), room, name => string.Equals(name, ".git", StringComparison.OrdinalIgnoreCase), cancellationToken);
+                truncated |= walked.Cut;
+                foreach (string file in walked.Files)
+                {
+                    string repoPath = Path.GetRelativePath(location.WorkTree, Path.Combine(_files.Root, file)).Replace('\\', '/');
+                    if (!repo.Ignore.IsPathIgnored(repoPath))
+                    {
+                        untracked.Add(file);
+                    }
                 }
             }
         }
 
-        return new GitTrackedReport(GitOutcome.Ok, "", tracked, untracked, location.RootRelative);
+        return new GitTrackedReport(GitOutcome.Ok, "", tracked, untracked, location.RootRelative, truncated);
     });
+
+    /// <summary>The most files <see cref="TrackedFiles"/> lists, tracked and untracked together, before it says it was cut.</summary>
+    public const int MaxTrackedFiles = WorkingDirectory.MaxListEntries;
 
     /// <summary>The most paths <see cref="ChangedPaths"/> returns before it says it was cut.</summary>
     public const int MaxChangedPaths = 5000;

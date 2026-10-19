@@ -118,6 +118,25 @@ public sealed partial class AuditReport
 
     public List<AuditFinding> Retracted { get; } = [];
 
+    /// <summary>
+    /// The <c>## Retracted</c> blocks <see cref="Parse"/> could not read, kept verbatim after the readable ones (2026-10-19, the review: they
+    /// were dropped on the next save, unlike the findings' <see cref="Unreadable"/>); counted as nothing.
+    /// </summary>
+    public List<string> UnreadableRetracted { get; } = [];
+
+    /// <summary>
+    /// Text between the title and the first section, a hand edit's (2026-10-19, the review: dropped on the next save), kept verbatim under the
+    /// title.
+    /// </summary>
+    public string Preamble { get; set; } = "";
+
+    /// <summary>
+    /// A list section's lines that are no bullet and continue none (2026-10-19, the review: a note typed under <c>## Nits</c>, <c>## Open
+    /// questions</c>, <c>## Coverage</c> or <c>## Checked</c> was dropped on the next save), by the section's heading, kept verbatim under it
+    /// ahead of its bullets. A line straight after a bullet joins that bullet.
+    /// </summary>
+    public Dictionary<string, List<string>> Prose { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Sections the report does not know, kept.</summary>
     public List<AuditSection> Other { get; } = [];
 
@@ -154,6 +173,11 @@ public sealed partial class AuditReport
     {
         var sb = new StringBuilder();
         sb.Append(TitlePrefix).Append(Flatten(Label)).Append("\n\n");
+        if (Preamble.Trim().Length > 0)
+        {
+            sb.Append(Preamble.Trim('\n')).Append("\n\n");
+        }
+
         sb.Append("## ").Append(SummaryHeading).Append("\n\n");
         if (Summary.Trim().Length > 0)
         {
@@ -169,6 +193,7 @@ public sealed partial class AuditReport
         sb.Append(BulletSection(NitsHeading, Nits));
         sb.Append(BulletSection(QuestionsHeading, Questions));
         sb.Append("## ").Append(CoverageHeading).Append("\n\n");
+        sb.Append(ProseText(CoverageHeading));
         if (CoverageScope > 0)
         {
             sb.Append(CoverageLine(CoverageRead, CoverageScope)).Append("\n\n");
@@ -246,12 +271,22 @@ public sealed partial class AuditReport
             sb.Append(FindingText(finding, retracted: true)).Append('\n');
         }
 
+        foreach (string block in UnreadableRetracted)
+        {
+            sb.Append(block.TrimEnd('\n')).Append("\n\n");
+        }
+
         return sb.ToString();
     }
 
-    private static string BulletSection(string heading, IReadOnlyList<string> items)
+    /// <summary>A section's kept prose (<see cref="Prose"/>), a blank line after it; empty for none.</summary>
+    private string ProseText(string heading) =>
+        Prose.TryGetValue(heading, out var lines) && string.Join('\n', lines).Trim('\n') is { Length: > 0 } text ? text + "\n\n" : "";
+
+    private string BulletSection(string heading, IReadOnlyList<string> items)
     {
         var sb = new StringBuilder("## " + heading + "\n\n");
+        sb.Append(ProseText(heading));
         if (items.Count > 0)
         {
             foreach (string item in items)
@@ -440,13 +475,17 @@ public sealed partial class AuditReport
         AuditSeverity? severity = null;
         var summary = new List<string>();
         var otherBody = new List<string>();
+        var preamble = new List<string>();
         string? otherHeading = null;
+        bool titled = false;
+        bool continues = false;
         while (at < lines.Count)
         {
             string line = lines[at];
-            if (line.StartsWith("# ", StringComparison.Ordinal) && section.Length == 0)
+            if (line.StartsWith("# ", StringComparison.Ordinal) && section.Length == 0 && otherHeading is null && !titled)
             {
                 report.Label = line.StartsWith(TitlePrefix, StringComparison.OrdinalIgnoreCase) ? line[TitlePrefix.Length..].Trim() : line[2..].Trim();
+                titled = true;
                 at++;
                 continue;
             }
@@ -457,6 +496,7 @@ public sealed partial class AuditReport
                 string heading = line[3..].Trim();
                 section = KnownSection(heading) ?? "";
                 severity = null;
+                continues = false;
                 if (section.Length == 0)
                 {
                     otherHeading = heading;
@@ -505,30 +545,34 @@ public sealed partial class AuditReport
 
                     break;
                 case RetractedHeading:
-                    if (line.StartsWith("- ", StringComparison.Ordinal))
+                    if (line.Trim().Length == 0)
+                    {
+                        at++;
+                    }
+                    else
                     {
                         at = ReadFindingBlock(lines, at, out var block);
                         if (TryFinding(block, AuditSeverity.Medium, retracted: true, out var finding))
                         {
                             report.Retracted.Add(finding);
                         }
-                    }
-                    else
-                    {
-                        at++;
+                        else
+                        {
+                            report.UnreadableRetracted.Add(string.Join('\n', block));
+                        }
                     }
 
                     break;
                 case NitsHeading:
-                    AddBullet(report.Nits, line);
+                    AddListLine(report, NitsHeading, report.Nits, line, ref continues);
                     at++;
                     break;
                 case QuestionsHeading:
-                    AddBullet(report.Questions, line);
+                    AddListLine(report, QuestionsHeading, report.Questions, line, ref continues);
                     at++;
                     break;
                 case CheckedHeading:
-                    AddBullet(report.Checked, line);
+                    AddListLine(report, CheckedHeading, report.Checked, line, ref continues);
                     at++;
                     break;
                 case CoverageHeading:
@@ -536,15 +580,18 @@ public sealed partial class AuditReport
                     {
                         report.CoverageRead = Number(m.Groups["read"].Value);
                         report.CoverageScope = Number(m.Groups["scope"].Value);
+                        continues = false;
                     }
                     else
                     {
-                        AddBullet(report.Areas, line);
+                        AddListLine(report, CoverageHeading, report.Areas, line, ref continues);
                     }
 
                     at++;
                     break;
                 default:
+                    // Before the first section: a hand edit's text under the title, kept.
+                    preamble.Add(line);
                     at++;
                     break;
             }
@@ -552,7 +599,40 @@ public sealed partial class AuditReport
 
         FlushOther(report, ref otherHeading, otherBody);
         report.Summary = string.Join('\n', summary).Trim('\n').Trim();
+        report.Preamble = string.Join('\n', preamble).Trim('\n');
+        report.Renumber();
         return report;
+    }
+
+    /// <summary>
+    /// Every id made unique (2026-10-19, the review: a finding block copied in an editor, or a new one typed with an id in use, gave two findings
+    /// one id, and <c>present_audit</c>'s map of the open ones threw on every later call): the first keeps it, findings before retracted ones, and
+    /// each later one takes the next free number with a note naming the id it had. Nothing is dropped.
+    /// </summary>
+    private void Renumber()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int next = NextIdNumber;
+        foreach (var list in (List<AuditFinding>[])[Findings, Retracted])
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                var finding = list[i];
+                if (seen.Add(finding.Id))
+                {
+                    continue;
+                }
+
+                string id = AuditFinding.IdFor(next++);
+                seen.Add(id);
+                list[i] = finding with { Id = id, Notes = [.. finding.Notes, AuditText.RenumberedNote(finding.Id)] };
+            }
+        }
+
+        if (next > Header.NextId)
+        {
+            Header = Header with { NextId = next };
+        }
     }
 
     private static void FlushOther(AuditReport report, ref string? heading, List<string> body)
@@ -572,22 +652,49 @@ public sealed partial class AuditReport
         return known.FirstOrDefault(k => string.Equals(k, heading, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void AddBullet(List<string> into, string line)
+    /// <summary>
+    /// One line of a list section: a bullet is an item; a line straight after one (no blank between) joins it; any other text is kept as the
+    /// section's <see cref="Prose"/>; a blank line ends a bullet.
+    /// </summary>
+    private static void AddListLine(AuditReport report, string heading, List<string> into, string line, ref bool continues)
     {
         string trimmed = line.Trim();
-        if (trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("* ", StringComparison.Ordinal))
+        if (trimmed.Length == 0)
         {
-            string item = UnescapeLine(trimmed[2..].Trim());
+            continues = false;
+            return;
+        }
+
+        if (trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("* ", StringComparison.Ordinal) || trimmed is "-" or "*")
+        {
+            string item = trimmed.Length > 2 ? UnescapeLine(trimmed[2..].Trim()) : "";
             if (item.Length > 0)
             {
                 into.Add(item);
+                continues = true;
             }
+
+            return;
         }
+
+        if (continues && into.Count > 0)
+        {
+            into[^1] = into[^1] + " " + UnescapeLine(trimmed);
+            return;
+        }
+
+        if (!report.Prose.TryGetValue(heading, out var prose))
+        {
+            report.Prose[heading] = prose = [];
+        }
+
+        prose.Add(line);
     }
 
     /// <summary>
     /// The finding block from <paramref name="start"/>: its line, then every line indented under it; a blank line ends it, except inside an
-    /// evidence fence. Returns the index after it.
+    /// evidence fence. Returns the index after it. A fence's lines are indented four (<see cref="FindingText"/>), so a line that is not ends
+    /// a fence a hand edit left open (2026-10-19, the review: the open fence swallowed every later finding and section into one evidence).
     /// </summary>
     private static int ReadFindingBlock(List<string> lines, int start, out List<string> block)
     {
@@ -597,7 +704,7 @@ public sealed partial class AuditReport
         while (at < lines.Count)
         {
             string line = lines[at];
-            if (fence is not null)
+            if (fence is not null && (line.Trim().Length == 0 || line.StartsWith("    ", StringComparison.Ordinal)))
             {
                 block.Add(line);
                 if (line.Trim() == fence)
@@ -608,6 +715,8 @@ public sealed partial class AuditReport
                 at++;
                 continue;
             }
+
+            fence = null;
 
             if (line.Trim().Length == 0 || !line.StartsWith("  ", StringComparison.Ordinal))
             {
@@ -732,10 +841,17 @@ public sealed partial class AuditReport
             }
 
             string raw = block[i];
+            if (raw.Trim().Length > 0 && !raw.StartsWith("    ", StringComparison.Ordinal))
+            {
+                // The fence left open (a hand edit): the evidence ends where its indent does, and this line is read as the part it is.
+                evidence = string.Join('\n', lines).TrimEnd('\n');
+                return i - 1;
+            }
+
             lines.Add(raw.StartsWith("    ", StringComparison.Ordinal) ? raw[4..] : raw.TrimStart());
         }
 
-        evidence = string.Join('\n', lines);
+        evidence = i < block.Count ? string.Join('\n', lines) : string.Join('\n', lines).TrimEnd('\n');
         return i;
     }
 

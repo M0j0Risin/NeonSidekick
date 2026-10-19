@@ -473,6 +473,16 @@ public static class AuditText
     public static string OutsideResult(string file) => $"Error: {file} is outside the working directory";
     public static string NoFileResult(string file) => $"Error: {file} is not a file in the working directory";
     public static string DeletedFileResult(string file) => $"Error: {file} is deleted in this change; report it with no line and no evidence";
+
+    /// <summary>Evidence quoted from a secret-looking file (2026-10-19, the review: the report would keep the secret). Pinned.</summary>
+    public static string SecretEvidenceResult(string field, string file) =>
+        $"Error: {file} looks like a secrets file, so {field} can't quote it; send the finding with no evidence, and name no value from it in the title or detail";
+
+    /// <summary>The note on a finding whose id another one held (2026-10-19, a hand edit's duplicate, <see cref="AuditReport"/>'s renumbering).</summary>
+    public static string RenumberedNote(string id) => $"renumbered from {id}, an id another finding had";
+
+    /// <summary>The log line when the coverage sidecar could not be written after the report was (2026-10-19).</summary>
+    public static string CoverageNotSavedLogLine(string detail) => "Code audit: the coverage sidecar was not saved: " + detail;
     public static string EvidenceTooLongResult(string field) => $"Error: {field} is over 400 characters or 8 lines; quote the few lines that show it";
     public static string EvidenceNotFoundResult(string location) => $"Error: the quoted code isn't at {location}; read it again and quote it as it stands";
     public static string EvidenceElsewhereResult(string file, int line, int found) => $"Error: the quoted code is at {file}:{N(found)}, not line {N(line)}; send the finding again with line {N(found)}";

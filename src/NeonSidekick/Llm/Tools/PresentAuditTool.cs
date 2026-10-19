@@ -37,8 +37,10 @@ public sealed record AuditCallReport(
 /// fields, the words, the file (in the sandbox, not <c>.neon/</c>, read this session by <c>read_file</c>: <see cref="WorkingDirectory.WasViewed"/>),
 /// the line, the evidence (found within ±5 lines of the line, whitespace forgiven) and the ids; each text field redacted
 /// (<see cref="ToolRedaction.Text"/>), then cut to its cap; the duplicates on the capped titles; retractions, then revisions, then reopenings and
-/// new findings; the size; the save; and only then the loop (<see cref="Plans.PlanGapLoop.Record"/>, or a clean report) and the
-/// <c>reported</c> seam. A refusal at any step leaves the file and the loop untouched.</para>
+/// new findings; the size; the save; and only then the coverage sidecar, the loop (<see cref="Plans.PlanGapLoop.Record"/>, or a clean report)
+/// and the <c>reported</c> seam. A refusal at any step leaves the file, its sidecar and the loop untouched (2026-10-19, the review: the sidecar
+/// was written before the size check, so a call refused as full had still changed it). A secret-looking file's finding takes no evidence
+/// (<see cref="AuditScopes.LooksSecret"/>, <see cref="AuditText.SecretEvidenceResult"/>).</para>
 /// </summary>
 public sealed partial class PresentAuditTool : AIFunction
 {
@@ -233,8 +235,14 @@ public sealed partial class PresentAuditTool : AIFunction
             return AuditText.StubSentResult(SummaryArgument);
         }
 
-        // 2.5 The required fields, then 2.6 the words, the file, the line, the evidence and the ids.
-        var open = report.Findings.Where(f => f.State == AuditFindingState.Open).ToDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
+        // 2.5 The required fields, then 2.6 the words, the file, the line, the evidence and the ids. Parse makes every id unique; the first
+        // wins here all the same, so no hand edit can throw.
+        var open = new Dictionary<string, AuditFinding>(StringComparer.OrdinalIgnoreCase);
+        foreach (var finding in report.Findings.Where(f => f.State == AuditFindingState.Open))
+        {
+            open.TryAdd(finding.Id, finding);
+        }
+
         var retractions = new List<(string Id, string Reason)>();
         for (int i = 0; i < retractItems.Count; i++)
         {
@@ -297,6 +305,11 @@ public sealed partial class PresentAuditTool : AIFunction
             if (evidence is not null && EvidenceTooLong(evidence))
             {
                 return AuditText.EvidenceTooLongResult(field + ".evidence");
+            }
+
+            if (evidence is not null && AuditScopes.LooksSecret(finding.File))
+            {
+                return AuditText.SecretEvidenceResult(field + ".evidence", finding.File);
             }
 
             if (line is not null || evidence is not null)
@@ -378,6 +391,11 @@ public sealed partial class PresentAuditTool : AIFunction
             if (evidence.Length > 0 && EvidenceTooLong(evidence))
             {
                 return AuditText.EvidenceTooLongResult(field + ".evidence");
+            }
+
+            if (evidence.Length > 0 && AuditScopes.LooksSecret(file))
+            {
+                return AuditText.SecretEvidenceResult(field + ".evidence", file);
             }
 
             if (scope.Deleted.Contains(file, AuditPath.Comparer) && !AuditFiles.Exists(_files, file))
@@ -579,7 +597,7 @@ public sealed partial class PresentAuditTool : AIFunction
             report.Summary = Cap(ToolRedaction.Text(summary), MaxSummaryChars);
         }
 
-        AuditFiles.MergeCoverage(reports, path, _session.ViewedNow());
+        // The coverage counts the sidecar and this session's reads alike, so it is known before the sidecar is merged, after the save.
         var coverage = _session.Coverage();
         report.CoverageRead = coverage.Read;
         report.CoverageScope = coverage.Scope;
@@ -593,7 +611,14 @@ public sealed partial class PresentAuditTool : AIFunction
             return failed == AuditText.ReportFullResult ? failed : AuditText.CouldNotSaveResult(failed);
         }
 
-        // 9. The loop, and the seam.
+        // 9. The coverage sidecar, the loop, and the seam. The report is saved: a sidecar that can't be written is logged, never a refusal
+        // (the loop must follow the report), and the next call merges it again.
+        if (AuditFiles.MergeCoverage(reports, path, _session.ViewedNow()) is { } notSaved)
+        {
+            DiagnosticLog.Warn("App", AuditText.CoverageNotSavedLogLine(notSaved));
+        }
+
+        _session.Changed();
         int cleanCount = loop.CleanCount;
         if (changes)
         {

@@ -33,6 +33,14 @@ public sealed class AuditSession
 
     private WorkingDirectory? _pinned;
 
+    /// <summary>What <see cref="Turn"/> last built its directive from, and that state (see <see cref="Turn"/>).</summary>
+    private (PlanGapLoop Loop, int Pass, int Version, bool AskUser, int ToolBudget, int MaxToolIterations)? _turnKey;
+
+    private AuditDirectiveState? _turnState;
+
+    /// <summary>Bumped by <see cref="Changed"/>: a directive built before it is stale.</summary>
+    private int _version;
+
     /// <summary>The working directory the report and its coverage sidecar are read and written through: pinned to <see cref="Root"/> while one runs.</summary>
     public WorkingDirectory Files => _pinned ?? _files;
 
@@ -79,7 +87,16 @@ public sealed class AuditSession
         Scope = scope;
         Focus = AuditFocus.Normalize(focus);
         Brief = brief ?? "";
+        Changed();
         return Running = new PlanGapLoop(reviewer, limit, cleanPasses, AuditFocus.FocusCount(Focus));
+    }
+
+    /// <summary>The report or the loop changed (a <c>present_audit</c> call recorded something): the next <see cref="Turn"/> reads them again.</summary>
+    public void Changed()
+    {
+        _version++;
+        _turnKey = null;
+        _turnState = null;
     }
 
     /// <summary>The audit over, however it ended: everything forgotten (the report stays).</summary>
@@ -92,6 +109,7 @@ public sealed class AuditSession
         Scope = null;
         Focus = AuditFocus.Dimensions;
         Brief = "";
+        Changed();
     }
 
     /// <summary>
@@ -125,6 +143,10 @@ public sealed class AuditSession
     /// The turn's audit part while a pass is under way, else null: the directive (with the advisors and web lines through <c>Compose</c>) and
     /// <paramref name="tool"/>, <c>present_audit</c>. <paramref name="askUser"/> is <c>LLM code audit ask user</c>; <paramref name="toolBudget"/>
     /// <c>LLM code audit pass tool calls</c>, named against <paramref name="maxToolIterations"/>.
+    /// <para>2026-10-19, the review: built afresh on every call it parsed the report, read the sidecar and checked every scope file (up to
+    /// 5,000) each time the turn's inputs were built — every advisor call and <c>/sys</c> too. Now the directive's state is built once per pass
+    /// and kept until <see cref="Changed"/> (a recorded <c>present_audit</c> call, a start or a stop) or a setting it names changes; an edit
+    /// made in an editor mid-pass reaches the next pass, as the files read mid-pass reach its unread list.</para>
     /// </summary>
     public PlanTurn? Turn(AIFunction tool, bool askUser, int toolBudget, int maxToolIterations)
     {
@@ -132,6 +154,12 @@ public sealed class AuditSession
         if (!Reviewing || Running is not { } loop || Path is not { } path || Scope is not { } scope)
         {
             return null;
+        }
+
+        var key = (loop, loop.Pass, _version, askUser, toolBudget, maxToolIterations);
+        if (_turnState is { } kept && _turnKey == key)
+        {
+            return new PlanTurn(AuditText.Directive(kept), tool) { Compose = (advisors, research) => AuditText.Directive(kept, advisors, research) };
         }
 
         var report = AuditFiles.Read(Files, path);
@@ -142,6 +170,8 @@ public sealed class AuditSession
             AuditFocus.PassFocus(Focus, loop.Confirmation), Brief, open, report?.SettledCount ?? 0,
             loop.Pass, loop.Limit, loop.Reviewer, passReviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation,
             askUser, toolBudget, maxToolIterations, scope.Deleted.Count > 0, scope.IsGit);
+        _turnKey = key;
+        _turnState = state;
         return new PlanTurn(AuditText.Directive(state), tool) { Compose = (advisors, research) => AuditText.Directive(state, advisors, research) };
     }
 }

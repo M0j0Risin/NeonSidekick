@@ -354,6 +354,23 @@ public static partial class AuditCommand
         return new AuditArguments(AuditVerb.Resume, name, reviewer, passes, null, null, "");
     }
 
+    /// <summary>
+    /// A path as a scope word that reads back as that path (2026-10-19, the review: a folder named <c>diff</c>, <c>staged</c> or <c>branch</c> was
+    /// kept bare in the header's <c>scope:</c>, and <c>resume</c> read it as a git scope): a path the grammar would read as another kind of word
+    /// — a scope word, a verb, a reviewer, a count, a focus, <c>all</c>, <c>--</c> — gains <c>./</c>; a blank-holding one is quoted
+    /// (<see cref="AuditPath.Word"/>).
+    /// </summary>
+    public static string PathWord(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return path.Length > 0 && !path.Any(char.IsWhiteSpace) && !LooksLikePath(path) && Reserved(path) ? "./" + path : AuditPath.Word(path);
+    }
+
+    private static bool Reserved(string word) =>
+        word == AuditText.BriefSwitch || PlanText.ParseReviewer(word) is not null || IsNumber(word) || AuditFocus.Parse(word) is not null
+        || word.ToLowerInvariant() is AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditFocus.AllWord
+            or AuditText.OpenWord or AuditText.FixWord or AuditText.ResumeWord;
+
     /// <summary>A word after <c>branch</c> that names its base: anything the grammar would read as another kind of word is not.</summary>
     private static bool IsBase(string word, Func<string, string?> existing) =>
         word != AuditText.BriefSwitch && PlanText.ParseReviewer(word) is null && !IsNumber(word)

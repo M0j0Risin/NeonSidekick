@@ -69,10 +69,10 @@ public sealed record AuditScope(
     public string Words => string.Join(' ', Kind switch
     {
         AuditScopeKind.Tree => [],
-        AuditScopeKind.Paths => Paths.Select(AuditPath.Word),
-        AuditScopeKind.Diff => [AuditText.DiffWord, .. Paths.Select(AuditPath.Word)],
-        AuditScopeKind.Staged => [AuditText.StagedWord, .. Paths.Select(AuditPath.Word)],
-        _ => [AuditText.BranchWord, Base ?? "", .. Paths.Select(AuditPath.Word)],
+        AuditScopeKind.Paths => Paths.Select(AuditCommand.PathWord),
+        AuditScopeKind.Diff => [AuditText.DiffWord, .. Paths.Select(AuditCommand.PathWord)],
+        AuditScopeKind.Staged => [AuditText.StagedWord, .. Paths.Select(AuditCommand.PathWord)],
+        _ => [AuditText.BranchWord, Base ?? "", .. Paths.Select(AuditCommand.PathWord)],
     });
 
     /// <summary>What the exclusions left out, as the notices say it.</summary>
@@ -91,17 +91,18 @@ public sealed record AuditScopeResult(AuditScope? Scope, string? Error);
 /// Resolving a code audit's scope (2026-10-18). Tree and path scopes: inside a repository the index's files and the untracked ones
 /// (<see cref="GitAccess.TrackedFiles"/>), elsewhere a walk (<see cref="WorkingDirectory.ListFiles"/>) that never enters <see cref="WalkSkips"/>;
 /// git scopes through <see cref="GitAccess.Diff"/> (and <see cref="GitAccess.MergeBase"/> for a branch). Every list then loses, in this order,
-/// <c>.neon/</c>, the secret-looking files (<see cref="SecretPatterns"/>), the vendored and generated ones (<see cref="SkippedPatterns"/>, never
-/// inside a path named on the line) and the binary ones, before the <see cref="AuditText.MaxScopeFiles"/> cut; past the cut the rest is counted
+/// <c>.neon/</c>, the secret-looking files (<see cref="SecretPatterns"/>), the vendored and generated ones (<see cref="SkippedPatterns"/>, judged
+/// on the part of the path below the named path holding it, so a path named through one is audited, <see cref="Vendored"/>) and the binary ones, before the <see cref="AuditText.MaxScopeFiles"/> cut; past the cut the rest is counted
 /// by name alone, never opened. The repository is found by <see cref="GitAccess.Locate"/>, never <c>Repository.Discover</c>.
 /// </summary>
 public static class AuditScopes
 {
-    /// <summary>The folders a walk never enters unless the line names a path through them (<c>.git</c> and <c>.neon</c> never). Pinned.</summary>
+    /// <summary>
+    /// The folders a walk never enters below where it starts (<c>.git</c> and <c>.neon</c> anywhere): naming one on the line walks it, naming a
+    /// folder above it does not (2026-10-19, the review: a named path's walk skipped only <c>.git</c> and <c>.neon</c>, so <c>/code-audit web</c>
+    /// listed <c>web/node_modules</c> ahead of <c>web/src</c> and the cut fell on dependencies). Pinned.
+    /// </summary>
     public static readonly IReadOnlyList<string> WalkSkips = [".git", ".neon", "bin", "obj", "node_modules", ".vs", "packages", "dist", "build", "target"];
-
-    /// <summary>The folders a walk never enters, a named path or not.</summary>
-    private static readonly IReadOnlyList<string> AlwaysSkipped = [".git", ".neon"];
 
     /// <summary>
     /// The vendored and generated files every scope's list leaves out unless the line names a path holding them (2026-10-18; this repository's
@@ -120,7 +121,13 @@ public static class AuditScopes
     /// The secret-looking files every scope's list leaves out, a named path or not (2026-10-18): this only guides what a pass reads —
     /// <c>read_file</c> can still open them — and the directive says why. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> SecretPatterns = [".env", ".env.*", "*.pfx", "*.p12", "*.pem", "*.key", "id_rsa*", "id_ed25519*", "*.kdbx"];
+    /// <remarks>2026-10-19, the review: the SSH keys' other names, PuTTY's, Java's keystores and the package tools' and git's credential files joined.</remarks>
+    public static readonly IReadOnlyList<string> SecretPatterns =
+    [
+        ".env", ".env.*", "*.pfx", "*.p12", "*.pem", "*.key", "*.p8", "*.kdbx", "*.ppk", "*.jks", "*.keystore",
+        "id_rsa*", "id_dsa*", "id_ecdsa*", "id_ed25519*",
+        ".netrc", "_netrc", ".npmrc", ".pypirc", ".git-credentials", ".pgpass", "credentials", "credentials.json", "credentials.xml",
+    ];
 
     /// <summary>Whether a file's name looks like a secret's.</summary>
     public static bool LooksSecret(string path)
@@ -139,6 +146,34 @@ public static class AuditScopes
         return SkippedPatterns.Where(p => !p.EndsWith('/')).Any(p => System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(p, name, ignoreCase: true))
             || folders.Any(f => SkippedPatterns.Any(p => p.EndsWith('/') && string.Equals(p[..^1], f, StringComparison.OrdinalIgnoreCase)))
             || folders.Any(f => WalkSkips.Contains(f, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is left out as vendored or generated under the paths named on the line (2026-10-19, the review: the
+    /// walk let everything under a named folder through, a git scope nothing under one). Under the deepest of <paramref name="roots"/> holding
+    /// it, a named path is taken whole as far as its files' names go (<c>assets/pdflib</c> audits its <c>.min.js</c>, <c>staged src/Gen</c> its
+    /// <c>.g.cs</c>), but a vendored folder below it — <c>vendor/</c>-style or one <see cref="WalkSkips"/> names — is still left out, so
+    /// <c>vendor/mylib</c> named audits its files and <c>web</c> named still leaves out <c>web/node_modules</c>. No roots, or <c>""</c>, judge
+    /// the whole path by <see cref="LooksVendored"/>.
+    /// </summary>
+    public static bool Vendored(string path, IReadOnlyList<string> roots)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(roots);
+        string? root = roots.Where(r => AuditPath.Under(path, r)).OrderByDescending(r => r.Length).FirstOrDefault();
+        if (root is null || root.Length == 0)
+        {
+            return LooksVendored(path);
+        }
+
+        if (AuditPath.Comparer.Equals(path, root))
+        {
+            return false;
+        }
+
+        string[] folders = path[(root.Length + 1)..].Split('/')[..^1];
+        return folders.Any(f => SkippedPatterns.Any(p => p.EndsWith('/') && string.Equals(p[..^1], f, StringComparison.OrdinalIgnoreCase))
+            || WalkSkips.Contains(f, StringComparer.OrdinalIgnoreCase));
     }
 
     private static string Name(string path)
@@ -161,7 +196,6 @@ public static class AuditScopes
     private static AuditScopeResult Disk(WorkingDirectory files, GitAccess git, AuditScopeRequest request, CancellationToken cancellationToken)
     {
         var roots = request.Kind == AuditScopeKind.Tree ? [""] : request.Paths;
-        bool named = request.Kind == AuditScopeKind.Paths;
         var candidates = new List<string>();
         bool cut = false;
         foreach (string root in roots)
@@ -184,18 +218,19 @@ public static class AuditScopes
             }
 
             // Inside one repository: its index and the untracked files (ignored files out). Several side by side, or one above the sandbox: a walk.
-            if (git.Locate(root, out _, out _, out _) == GitOutcome.Ok && git.TrackedFiles(root, includeUntracked: true) is { Outcome: GitOutcome.Ok } known)
+            if (git.Locate(root, out _, out _, out _) == GitOutcome.Ok && git.TrackedFiles(root, includeUntracked: true, cancellationToken) is { Outcome: GitOutcome.Ok } known)
             {
+                cut |= known.Truncated;
                 candidates.AddRange(known.Tracked.Concat(known.Untracked).Select(AuditPath.FromRelative));
                 continue;
             }
 
-            var walked = files.ListFiles(root, WorkingDirectory.MaxListEntries, name => (named ? AlwaysSkipped : WalkSkips).Contains(name, StringComparer.OrdinalIgnoreCase), cancellationToken);
+            var walked = files.ListFiles(root, WorkingDirectory.MaxListEntries, name => WalkSkips.Contains(name, StringComparer.OrdinalIgnoreCase), cancellationToken);
             cut |= walked.Cut;
             candidates.AddRange(walked.Files.Select(AuditPath.FromRelative));
         }
 
-        var scope = Filter(files, request, candidates, [], named, cut, cancellationToken);
+        var scope = Filter(files, request, candidates, [], cut, cancellationToken);
         return scope.Files.Count == 0
             ? new AuditScopeResult(null, AuditText.NothingToAudit(AuditText.NoFilesLeft(scope.Label, scope.Skipped)))
             : new AuditScopeResult(scope, null);
@@ -269,7 +304,7 @@ public static class AuditScopes
                 }
             }
 
-            if (request.Kind == AuditScopeKind.Diff && git.TrackedFiles(path, includeUntracked: true) is { Outcome: GitOutcome.Ok } known)
+            if (request.Kind == AuditScopeKind.Diff && git.TrackedFiles(path, includeUntracked: true, cancellationToken) is { Outcome: GitOutcome.Ok } known)
             {
                 changed.AddRange(known.Untracked.Select(AuditPath.FromRelative));
             }
@@ -277,8 +312,8 @@ public static class AuditScopes
 
         // A file deleted and then made again (deleted in the index, untracked on disk) is a file; one gone from disk is deleted.
         var kept = new HashSet<string>(changed, AuditPath.Comparer);
-        var gone = deleted.Where(d => !kept.Contains(d)).Distinct(AuditPath.Comparer).Where(d => !AuditPath.InAppFolder(d) && !LooksSecret(d) && !LooksVendored(d)).ToList();
-        var scope = Filter(files, request with { Base = @base }, changed, gone, named: false, cut: false, cancellationToken);
+        var gone = deleted.Where(d => !kept.Contains(d)).Distinct(AuditPath.Comparer).Where(d => !AuditPath.InAppFolder(d) && !LooksSecret(d) && !Vendored(d, request.Paths)).ToList();
+        var scope = Filter(files, request with { Base = @base }, changed, gone, cut: false, cancellationToken);
         if (scope.Files.Count == 0 && scope.Deleted.Count == 0)
         {
             string why = changed.Count + deleted.Count == 0
@@ -296,10 +331,10 @@ public static class AuditScopes
     }
 
     /// <summary>
-    /// The candidates less the exclusions, in order: <c>.neon/</c>, the secret-looking files, the vendored and generated ones (unless
-    /// <paramref name="named"/>), files that are gone, the binary ones (probed only until the cut), then the cut with the rest counted.
+    /// The candidates less the exclusions, in order: <c>.neon/</c>, the secret-looking files, the vendored and generated ones (below the paths
+    /// named, <see cref="Vendored"/>), files that are gone, the binary ones (probed only until the cut), then the cut with the rest counted.
     /// </summary>
-    private static AuditScope Filter(WorkingDirectory files, AuditScopeRequest request, IEnumerable<string> candidates, IReadOnlyList<string> deleted, bool named, bool cut, CancellationToken cancellationToken)
+    private static AuditScope Filter(WorkingDirectory files, AuditScopeRequest request, IEnumerable<string> candidates, IReadOnlyList<string> deleted, bool cut, CancellationToken cancellationToken)
     {
         int secret = 0, binary = 0, vendored = 0, more = 0;
         var kept = new List<string>();
@@ -317,7 +352,7 @@ public static class AuditScopes
                 continue;
             }
 
-            if (!named && LooksVendored(path))
+            if (Vendored(path, request.Paths))
             {
                 vendored++;
                 continue;

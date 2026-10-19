@@ -103,6 +103,35 @@ public sealed class PresentAuditToolTests : IDisposable
     }
 
     [Fact]
+    public void ASecretLookingFile_TakesNoEvidence()
+    {
+        // 2026-10-19, the review: the quote went into the report verbatim, redacted only by pattern.
+        _box.Write(".env", "API_TOKEN=abc123xyz\n");
+        Read(".env");
+        Assert.Equal(AuditText.SecretEvidenceResult("findings[0].evidence", ".env"),
+            Report1(FindingJson(file: ".env", line: 1, title: "A token in .env", evidence: "API_TOKEN=abc123xyz")));
+        Assert.StartsWith("Recorded", Report1(FindingJson(file: ".env", line: 1, title: "A token in .env")));
+        Assert.Equal(AuditText.SecretEvidenceResult("revise[0].evidence", ".env"),
+            Call("{\"revise\":[{\"id\":\"A1\",\"evidence\":\"API_TOKEN=abc123xyz\"}]}"));
+        Assert.DoesNotContain("abc123xyz", File.ReadAllText(_box.Full(_path)));
+    }
+
+    [Fact]
+    public void ADuplicateId_FromAHandEdit_NeverStopsTheTool()
+    {
+        // 2026-10-19, the review: a copied block made the open findings' map throw on every later call.
+        Read();
+        Report1(FindingJson());
+        string text = File.ReadAllText(_box.Full(_path));
+        string block = AuditReport.FindingText(Report().Findings[0], retracted: false);
+        File.WriteAllText(_box.Full(_path), text.Replace(block, block + "\n" + block.Replace("SQL built from input", "A copy", StringComparison.Ordinal), StringComparison.Ordinal));
+        Assert.StartsWith("Recorded", Call("{\"retract\":[{\"id\":\"A1\",\"reason\":\"a duplicate\"}]}"));
+        var copy = Assert.Single(Report().Findings);
+        Assert.Equal(("A2", "A copy"), (copy.Id, copy.Title));
+        Assert.Equal(3, Report().NextIdNumber);
+    }
+
+    [Fact]
     public void AWindowedRead_IsEnough_ButNoReadIsRefused_AndADiffIsNoRead()
     {
         Assert.Equal(AuditText.ReadFirstResult("src/x.cs"), Report1(FindingJson()));
@@ -415,8 +444,14 @@ public sealed class PresentAuditToolTests : IDisposable
         report.Summary = new string('s', WorkingDirectory.MaxWriteChars - report.Render().Length - 50);
         AuditFiles.Save(_box.Files, _path, report, _box.Time.GetLocalNow());
         string before = File.ReadAllText(_box.Full(_path));
+
+        // The sidecar too (2026-10-19, the review: it was merged before the size check).
+        Read("src/y.cs");
+        string sidecar = File.ReadAllText(_box.Full(AuditFiles.CoveragePath(_path)));
         Assert.Equal(AuditText.ReportFullResult, Report1(FindingJson(title: "One more", detail: new string('d', 1000))));
         Assert.Equal(before, File.ReadAllText(_box.Full(_path)));
+        Assert.Equal(sidecar, File.ReadAllText(_box.Full(AuditFiles.CoveragePath(_path))));
+        Assert.DoesNotContain("y.cs", sidecar);
     }
 
     [Fact]

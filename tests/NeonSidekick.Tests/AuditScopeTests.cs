@@ -57,6 +57,69 @@ public sealed class AuditScopeTests : IDisposable
     }
 
     [Fact]
+    public void ANamedFolder_StillLeavesOutTheVendoredFoldersBelowIt()
+    {
+        // 2026-10-19, the review: a named folder's walk entered node_modules, and its files came before src in the cut.
+        _box.Write("web/src/a.js", "a");
+        _box.Write("web/app.min.js", "named folder: taken whole by name");
+        _box.Write("web/node_modules/m/index.js", "never walked");
+        _box.Write("web/vendor/v.js", "vendored folder");
+        var scope = Resolve(AuditScopeKind.Paths, "web").Scope!;
+        Assert.Equal(["web/app.min.js", "web/src/a.js"], scope.Files);
+        Assert.Equal(1, scope.Vendored);
+        Assert.Equal(["web/vendor/v.js"], Resolve(AuditScopeKind.Paths, "web/vendor").Scope!.Files);
+    }
+
+    [Fact]
+    public void AGitScope_NamedThroughAVendoredFolder_IsAudited_AsATreeScopeIs()
+    {
+        // 2026-10-19, the review: a git scope judged a named path's files as vendored, so `diff vendor/mylib` had nothing to audit.
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "vendor/mylib/a.cs", "a", "first");
+        _box.Write("vendor/mylib/a.cs", "changed");
+        Assert.Null(Resolve(AuditScopeKind.Diff).Scope);
+        Assert.Equal(["vendor/mylib/a.cs"], Resolve(AuditScopeKind.Diff, "vendor/mylib").Scope!.Files);
+        Assert.Equal(["vendor/mylib/a.cs"], Resolve(AuditScopeKind.Paths, "vendor/mylib").Scope!.Files);
+    }
+
+    [Fact]
+    public void TrackedFiles_WalksAnUntrackedFolder_DropsTheIgnored_LeavesANestedRepoOut_AndHearsTheToken()
+    {
+        // 2026-10-19, the review: one recursive status call no token reached; now each untracked folder is a budgeted, cancellable walk.
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, ".gitignore", "*.log\n", "ignore");
+        _box.Write("fresh/x.cs", "x");
+        _box.Write("fresh/deep/y.cs", "y");
+        _box.Write("fresh/noise.log", "ignored");
+        string nested = GitAccessTests.Init(Path.Combine(_box.Root, "nested"));
+        GitAccessTests.CommitFile(nested, "n.cs", "n", "first");
+        var tracked = _box.Git.TrackedFiles("", includeUntracked: true);
+        Assert.Equal(GitOutcome.Ok, tracked.Outcome);
+        Assert.False(tracked.Truncated);
+        Assert.Equal([Path.Combine("fresh", "deep", "y.cs"), Path.Combine("fresh", "x.cs")], tracked.Untracked.Order(StringComparer.Ordinal));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => _box.Git.TrackedFiles("", includeUntracked: true, cancelled.Token));
+        Assert.ThrowsAny<OperationCanceledException>(() => AuditScopes.Resolve(_box.Files, _box.Git, new AuditScopeRequest(AuditScopeKind.Tree, []), cancelled.Token));
+    }
+
+    [Fact]
+    public void AFolderNamedLikeAScopeWord_IsKeptAsAPath_AndResumesAsOne()
+    {
+        // 2026-10-19, the review: `scope: diff` from a folder named diff resumed as the working changes.
+        _box.Write("diff/a.cs", "a");
+        _box.Write("security/b.cs", "b");
+        var scope = Resolve(AuditScopeKind.Paths, "diff", "security").Scope!;
+        Assert.Equal("./diff ./security", scope.Words);
+        var (request, error) = AuditCommand.ScopeFromHeader(scope.Words, _box.Existing);
+        Assert.Null(error);
+        Assert.Equal(AuditScopeKind.Paths, request!.Kind);
+        Assert.Equal(["diff", "security"], request.Paths);
+        Assert.Equal("src/x.cs", AuditCommand.PathWord("src/x.cs"));
+        Assert.Equal("\"my dir\"", AuditCommand.PathWord("my dir"));
+    }
+
+    [Fact]
     public void AScopeLeftEmpty_IsNothingToAudit_NamingTheCounts()
     {
         _box.Write("only/.env", "s");
@@ -204,6 +267,13 @@ public sealed class AuditScopeTests : IDisposable
     [InlineData("id_rsa.pub", true)]
     [InlineData("keys/server.KEY", true)]
     [InlineData("vault.kdbx", true)]
+    [InlineData("home/id_ecdsa", true)]
+    [InlineData("id_dsa", true)]
+    [InlineData("keys/me.ppk", true)]
+    [InlineData(".netrc", true)]
+    [InlineData(".npmrc", true)]
+    [InlineData("aws/credentials", true)]
     [InlineData("environment.cs", false)]
+    [InlineData("Auth/Credentials.cs", false)]
     public void LooksSecret(string path, bool expected) => Assert.Equal(expected, AuditScopes.LooksSecret(path));
 }
