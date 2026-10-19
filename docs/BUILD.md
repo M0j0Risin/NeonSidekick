@@ -119,7 +119,7 @@ Run `pwsh ./build.ps1 -Clean` once after switching SDKs, so nothing built by the
 
 ```sh
 pwsh ./build.ps1 -TestOnly     # build and test, the Windows-only tests skipped
-pwsh ./build.ps1 -TestOnly -CiLike   # as a CI runner: a Mac can't pin cores, so the tests run under taskpolicy -c background
+pwsh ./build.ps1 -TestOnly -CiLike   # as a CI runner: a Mac can't pin cores, so busy loops (2 per core) load it while the tests run
 pwsh ./build.ps1 -Publish      # publish/output/NeonSidekick, smoke-tested
 pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm64.tar.gz
 ```

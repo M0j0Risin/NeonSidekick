@@ -29,11 +29,16 @@ public partial class ChatScreenTests
     public async Task CtrlB_OpensTheHomePage_AndASecondPress_ClosesItAsTheUser()
     {
         var window = BrowserForChords();
+        // /exit only once the close's notice is in (2026-10-19, the Mac's CI-like run: a quiet line was the only wait, and the visit's
+        // continuation, on the pool, wrote its notice after /exit). At the idle line the notice is written from that thread, so waiting here holds nothing up.
         StepsWhenIdle(
             Key(Keys.CtrlB),
             Key(Keys.CtrlB),
-            Line("/browser list --clear"),   // a quiet line while the close's notice lands
-            Line("/exit"));
+            input =>
+            {
+                SpinWait.SpinUntil(() => Output.Contains("The Browser window closed;", StringComparison.Ordinal), TimeSpan.FromSeconds(10));
+                PushLine(input, "/exit");
+            });
 
         string output = await RunAsync();
 

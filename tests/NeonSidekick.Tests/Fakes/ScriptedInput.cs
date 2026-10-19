@@ -95,6 +95,9 @@ public sealed class ScriptedInput : IAnsiConsoleInput, IInputEvents
         return this;
     }
 
+    /// <summary>How many events wait to be read; never throws (2026-10-19: the mid-reply fixture waits on it for the watcher to take its keys).</summary>
+    public int Queued => _events.Count;
+
     // ── IInputEvents ────────────────────────────────────────────────────────
 
     public bool IsAvailable
