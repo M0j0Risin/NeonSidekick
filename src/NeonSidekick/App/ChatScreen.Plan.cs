@@ -482,7 +482,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case PlanCommand.ApproveRalph:
-                return await ApproveRalphAsync(rest.Length == 0 ? null : int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
+                return await ApproveRalphAsync(rest.Length == 0 ? null : int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture), cancellationToken, checksShown: false).ConfigureAwait(false);
 
             case PlanCommand.Ready:
                 return await PlanReadyAsync(cancellationToken).ConfigureAwait(false);

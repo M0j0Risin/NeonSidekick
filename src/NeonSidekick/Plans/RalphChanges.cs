@@ -35,7 +35,9 @@ public sealed record RalphDelta(IReadOnlyList<string> Changed, string Diff, bool
 /// of any commit the pass made (HEAD before to HEAD after, diffed from HEAD as the pass began; 2026-10-19, the second review); outside one,
 /// every file's size and time (at most <see cref="MaxFiles"/>), with no diff. A binary file is listed with its size, never diffed; a file past
 /// <see cref="UnifiedDiff.MaxDistinctLines"/> is "too large to diff" with its line counts. The flags (nothing changed, a file the step names missing,
-/// test files touched) go to the log, the notices and the reviewer, and never untick a step on their own.
+/// test files touched) go to the log, the notices and the reviewer, and never untick a step on their own. A secret-looking file
+/// (<see cref="Audits.AuditScopes.LooksSecret"/>) is listed, never diffed, and the diff is redacted (<see cref="Llm.Tools.ToolRedaction.Text"/>;
+/// 2026-10-19, the third review: a pass that edited <c>.env</c> sent it whole to the reviewer).
 /// </summary>
 public static class RalphChanges
 {
@@ -117,6 +119,13 @@ public static class RalphChanges
                 continue;
             }
 
+            if (Audits.AuditScopes.LooksSecret(path))
+            {
+                // Never its text (2026-10-19, the third review): the diff goes to the reviewer (an advisor may be a hosted API), the log and the page.
+                diff.Append(RalphText.SecretNotDiffed(path)).Append('\n');
+                continue;
+            }
+
             // The text before the pass: the dirty file's own, else HEAD's as the pass began (a file clean before, made dirty or committed by the pass).
             string? oldText = was is not null ? was.Text : HeadText(git, before.Head ?? "HEAD", path);
             // A file the pass cleaned again (back to HEAD's) is no longer in the after snapshot: its text now is HEAD's or the disk's.
@@ -138,7 +147,8 @@ public static class RalphChanges
             diff.Append(UnifiedDiff.Format(oldText is null ? "/dev/null" : "a/" + path, newText.Length == 0 && !Exists(files, path) ? "/dev/null" : "b/" + path, hunks));
         }
 
-        string text = diff.ToString();
+        // Redacted as a tool result is (a key or a password in an ordinary file's change), before the reviewer, the log or the checkpoint reads it.
+        string text = Llm.Tools.ToolRedaction.Text(diff.ToString());
         if (text.Length > MaxDiffChars)
         {
             text = text[..MaxDiffChars] + "\n… (the diff goes on; cut at " + MaxDiffChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)\n";

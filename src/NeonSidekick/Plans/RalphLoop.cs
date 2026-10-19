@@ -44,6 +44,9 @@ public enum RalphStop
 
     /// <summary>The checkpoint's Stop.</summary>
     UserStopped,
+
+    /// <summary>A pass deleted unfinished steps from the plan (2026-10-19, the third review): the user puts them back or edits the plan.</summary>
+    StepsRemoved,
 }
 
 /// <summary>What a pass said it did: <c>finish_step</c>'s outcome.</summary>
@@ -126,9 +129,11 @@ public readonly record struct RalphNext(RalphNextKind Kind, PlanStep? Step = nul
 /// <summary>
 /// The facts the screen gathered about a pass, after its turn (2026-10-18, <see cref="RalphLoop.EndPass"/>): whether its step stands (ticked and
 /// every check passed), whether a check failed (the step was unticked), whether files changed, whether a split was written, whether the turn
-/// failed (an error, a thrown failure) or was stopped (Esc, the page's Stop, a withdrawal), and the files it changed.
+/// failed (an error, a thrown failure) or was stopped (Esc, the page's Stop, a withdrawal), and the files it changed. <paramref name="Removed"/>
+/// (2026-10-19, the third review) holds the unfinished steps the pass deleted from the plan: with any, the loop stops (the judge cannot write
+/// them back, and a plan left with none unticked read as done).
 /// </summary>
-public sealed record RalphPassFacts(bool Stands, bool CheckFailed, bool FilesChanged, bool Split, bool TurnFailed, bool Cancelled, IReadOnlyList<string> Changed)
+public sealed record RalphPassFacts(bool Stands, bool CheckFailed, bool FilesChanged, bool Split, bool TurnFailed, bool Cancelled, IReadOnlyList<string> Changed, IReadOnlyList<string>? Removed = null)
 {
     /// <summary>A pass with nothing to say: no progress, no failure.</summary>
     public static RalphPassFacts None { get; } = new(false, false, false, false, false, false, []);
@@ -396,6 +401,12 @@ public sealed class RalphLoop
         if (Report?.Outcome == RalphOutcome.Blocked)
         {
             return RalphStop.Blocked;
+        }
+
+        if (facts.Removed is { Count: > 0 })
+        {
+            FixingFinal = false;
+            return RalphStop.StepsRemoved;
         }
 
         if (FixingFinal)

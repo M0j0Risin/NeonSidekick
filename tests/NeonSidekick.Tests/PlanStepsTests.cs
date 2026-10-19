@@ -161,6 +161,18 @@ public sealed class PlanStepsTests
     }
 
     [Fact]
+    public void WithTaskLines_RewritesTheBoxAndTheWords_InPlace_KeepingEachLinesEnding()
+    {
+        // 2026-10-19, the third review: the judge puts back the words a pass changed, not only its boxes.
+        string text = "## Steps\r\n- [x] One (done)\r\n  1. [ ] Two, reworded\n- [ ] Three";
+        var lines = PlanSteps.Flat(PlanSteps.Parse(text));
+
+        string written = PlanSteps.WithTaskLines(text, [(lines[0], false, "One"), (lines[1], true, "Two\nwhole"), (lines[2] with { Text = "Not it" }, true, "x")]);
+
+        Assert.Equal("## Steps\r\n- [ ] One\r\n  1. [x] Two whole\n- [ ] Three", written);
+    }
+
+    [Fact]
     public void WithChildren_OnTheLastLineWithNoEnding_AddsOne()
     {
         string? split = PlanSteps.WithChildren("## Steps\n- [ ] Only", PlanSteps.Parse("## Steps\n- [ ] Only")[0], [new PlanSubstep("a", "b"), new PlanSubstep("c", "d")]);

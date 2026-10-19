@@ -221,6 +221,19 @@ public sealed class RalphLoopTests
     }
 
     [Fact]
+    public void APassThatDeletedUnfinishedSteps_StopsTheLoop_EvenWhenItsOwnStepStood()
+    {
+        // 2026-10-19, the third review: with the steps left deleted, the next look found none unticked and the loop ended done.
+        var loop = new RalphLoop(Snapshot(), 3);
+        var steps = Steps("## Steps\n- [ ] One\n- [ ] Two\n- [ ] Three\n");
+        loop.BeginPass(loop.Next(steps, false).Step, null);
+        Assert.Null(loop.Record(Done));
+
+        Assert.Equal(RalphStop.StepsRemoved, loop.EndPass(Stood with { Removed = ["Two", "Three"] }, null));
+        Assert.Equal("done", loop.History[^1].Outcome);
+    }
+
+    [Fact]
     public void TheFinalCheck_GetsOneFixPass_ThenFails()
     {
         var loop = new RalphLoop(Snapshot(final: "dotnet test"), 1);

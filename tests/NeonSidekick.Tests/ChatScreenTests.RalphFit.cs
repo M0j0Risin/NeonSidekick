@@ -61,7 +61,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task RalphFit_AfterANo_PlanApproveRalph_AsksAgain_AndYesStartsTheLoop()
+    public async Task RalphFit_AfterANo_PlanApproveRalph_ConfirmsItsChecks_WithTheProblems_AndYesStartsTheLoop()
     {
         _settings.Update(d => { d.RalphLoopReviewer = "off"; d.RalphLoopStopTone = "silent"; });
         _console.Profile.Width = 400;
@@ -71,8 +71,12 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
+        // The pane's row asks the fit question; the typed form (2026-10-19, the third review) confirms the commands it is about to run, the
+        // problems in the same question, and never asks the fit question a second time.
         string question = RalphText.FitQuestion([RalphText.FitOneStep]);
-        Assert.True(output.Split(question).Length - 1 >= 2, "asked on the pane's row, then on the typed form");
+        Assert.Equal(1, output.Split(question).Length - 1);
+        Assert.Contains($"Run {PlanPath} as a Ralph loop? verify `{RalphVerify}`", output);
+        Assert.Contains(RalphText.FitSentence([RalphText.FitOneStep]), output);
         Assert.Contains(RalphText.FitDeclinedNotice, output);
         Assert.Contains(RalphText.StartedNotice(PlanPath, 1, 3, finalOnly: false), output);
         Assert.Equal([RalphVerify, RalphVerify], _ralphVerifier.Commands);   // the baseline, then the step's check

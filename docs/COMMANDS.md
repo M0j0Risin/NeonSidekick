@@ -342,11 +342,13 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 ### Ralph loop
 
-`/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, held together by the plan file and a log. **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, its checks named.
+`/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, held together by the plan file and a log. **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, its checks named (the typed `/plan approve --ralph` too).
 
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
 * **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*LLM Ralph loop reviewer*).
-  * Only the app ticks boxes. A box a pass changed, on a line it reworded or added too, is put back; a stopped pass decides nothing.
+  * The diff the reviewer reads is redacted, and a secrets file (`.env`, a key) is named, never shown.
+  * Only the app ticks boxes. A box or a step's words a pass changed are put back, and a line it added is left unticked; a stopped pass decides nothing.
+  * A run that ends mid-pass (a crash, a profile switch) has that step's tick put back before the next pass.
   * The command is approved once with the loop; nothing runs under *Shell command policy* `off`, and a resume with it on runs the checks again.
   * The shell police judge it again before every run, so a script a pass rewrote can't slip past them; a refusal, or the policy turned `off`, stops the loop.
   * A failed check unticks the step, and the next pass gets its output.
@@ -361,10 +363,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 #### When a loop stops
 
 * **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
-* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, or an error.
+* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, a pass that deleted unfinished steps, or an error.
 * **At a limit or by hand:** the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, or a working directory change.
 * **The stop tone:** a stop you didn't cause rings *LLM Ralph loop stop tone*.
-* **A message typed** during a pass pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
+* **A message typed** during a pass, at the PC or on the Web UI, pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
 * **A paused loop resumes only in its own folder.** After a working directory change, `/plan ralph <name>` starts that folder's plan afresh, its checks confirmed again.
 
 ### Code audit

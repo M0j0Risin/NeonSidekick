@@ -84,6 +84,25 @@ public sealed class RalphChangesTests : IDisposable
     }
 
     [Fact]
+    public void ASecretsFile_IsListedNeverDiffed_AndTheDiffIsRedacted()
+    {
+        // 2026-10-19, the third review: the diff goes to the reviewer (an advisor may be a hosted API), and a pass that edited .env sent it whole.
+        var (files, git, root) = Repo();
+        var before = RalphChanges.Snapshot(files, git);
+        Write(root, ".env", "API_TOKEN=abc123secret\n");
+        Write(root, "app.cs", "one\nvar url = \"https://admin:hunter2@db.example/x\";\n");
+        var after = RalphChanges.Snapshot(files, git);
+
+        var delta = RalphChanges.Delta(before, after, files, git, []);
+
+        Assert.Equal([".env", "app.cs"], delta.Changed);
+        Assert.Contains(RalphText.SecretNotDiffed(".env"), delta.Diff);
+        Assert.DoesNotContain("abc123secret", delta.Diff);
+        Assert.DoesNotContain("hunter2", delta.Diff);
+        Assert.Contains("https://admin:", delta.Diff);
+    }
+
+    [Fact]
     public void AWorkingDirectoryInASubfolder_SeesOnlyItsOwn()
     {
         var (files, git, root) = Repo("sub");

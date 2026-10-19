@@ -203,6 +203,38 @@ public static class PlanSteps
     }
 
     /// <summary>
+    /// <paramref name="text"/> with each task line of <paramref name="edits"/> rewritten in place — its box set to <c>Ticked</c>, its words after the
+    /// box to <c>Words</c> — every other byte as it was (2026-10-19, the third review of the Ralph loop: the judge puts back the words a pass changed,
+    /// not only its boxes). Each <c>At</c> was parsed from this very text, so its <see cref="PlanStep.Line"/> is the line; a line whose task is not
+    /// those words any more is left. Pure.
+    /// </summary>
+    public static string WithTaskLines(string text, IEnumerable<(PlanStep At, bool Ticked, string Words)> edits)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(edits);
+        var lines = SplitKeepingEndings(text);
+        foreach (var (at, ticked, words) in edits)
+        {
+            if (at.Line < 0 || at.Line >= lines.Count)
+            {
+                continue;
+            }
+
+            var (content, ending) = lines[at.Line];
+            string trimmed = content.TrimStart();
+            if (TaskBox(trimmed.TrimEnd('\r')) is not { } task || !string.Equals(task.Text, at.Text, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            int box = content.Length - trimmed.Length + PlanDocument.ListMarker(trimmed) + 1;
+            lines[at.Line] = (string.Concat(content.AsSpan(0, box), ticked ? "x" : " ", "] ", Flat(words)), ending);
+        }
+
+        return Join(lines);
+    }
+
+    /// <summary>
     /// <paramref name="text"/> with <paramref name="substeps"/> written under <paramref name="step"/> as indented checkboxes, each with its indented
     /// <c>Done when:</c> line, after the step's own lines (its <c>Done when:</c> and notes); every line written with the step line's ending. Null
     /// when the step is not where it was, or has children already.

@@ -5,8 +5,13 @@ using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.Plans;
 
-/// <summary>A Ralph log's head: what the run was fixed to, when it began, and how its last run stopped (null while one runs).</summary>
-public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null);
+/// <summary>
+/// A Ralph log's head: what the run was fixed to, when it began, and how its last run stopped (null while one runs). <paramref name="InPassLine"/>
+/// and <paramref name="InPassStep"/> (2026-10-19, the third review: a crash, a kill or a reset mid-pass left a box the model ticked standing with no
+/// check, and a resume passed the step by) name the step a pass is working while it runs — its line in the plan file and its words — cleared once
+/// the pass is judged; a start that finds them set puts that step's box back first (<see cref="RalphLog.InPassOf"/>).
+/// </summary>
+public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null);
 
 /// <summary>
 /// One pass as the log keeps it (2026-10-18): its number, its step, the outcome and the model's summary, what it said it checked, the app's check
@@ -28,7 +33,8 @@ public sealed record RalphLogEntry(
     string? Checkpoint,
     DateTimeOffset At,
     TimeSpan? Elapsed = null,
-    long? Tokens = null);
+    long? Tokens = null,
+    string? Notes = null);
 
 /// <summary>A Ralph log read back: its head (null when the file has none the app wrote), its learned facts, its passes in order.</summary>
 public sealed record RalphLogDocument(RalphLogHead? Head, IReadOnlyList<string> Learned, IReadOnlyList<RalphLogEntry> Entries)
@@ -57,6 +63,9 @@ public static class RalphLog
     /// <summary>The most entries and characters <see cref="RecentNotes"/> hands a pass.</summary>
     public const int NotesEntries = 3;
     public const int NotesChars = 1500;
+
+    /// <summary>The most characters of one pass's <c>finish_step</c> notes <see cref="RecentNotes"/> carries (so one long note never crowds out the rest).</summary>
+    public const int NoteChars = 600;
 
     private const string TimeFormat = "yyyy-MM-dd'T'HH:mm:sszzz";
     private const string LearnedHeading = "## Learned";
@@ -137,7 +146,7 @@ public static class RalphLog
         }
 
         var entries = document.Entries.ToList();
-        entries.Add(entry with { Summary = Clean(entry.Summary), Verified = entry.Verified.Select(Clean).ToList(), Tail = entry.Tail is { } tail ? CleanTail(tail) : null });
+        entries.Add(entry with { Summary = Clean(entry.Summary), Verified = entry.Verified.Select(Clean).ToList(), Tail = entry.Tail is { } tail ? CleanTail(tail) : null, Notes = entry.Notes is { } notes ? Clean(notes) : null });
         return Write(files, planPath, new RalphLogDocument(head, MergeLearned(document.Learned, learned), entries));
     }
 
@@ -147,6 +156,26 @@ public static class RalphLog
         var document = ReadFor(files, planPath, out string? problem) ?? RalphLogDocument.Empty;
         return problem ?? Write(files, planPath, document with { Head = head });
     }
+
+    /// <summary>The head's mark of a pass under way set (<paramref name="step"/>) or cleared (null), the rest as it was; null when written (or no head to mark).</summary>
+    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step)
+    {
+        var document = ReadFor(files, planPath, out string? problem);
+        if (problem is not null || document?.Head is not { } head)
+        {
+            return problem;
+        }
+
+        var marked = step is null ? head with { InPassLine = -1, InPassStep = null } : head with { InPassLine = step.Line, InPassStep = Flat(step.Text) };
+        return marked == head ? null : Write(files, planPath, document with { Head = marked });
+    }
+
+    /// <summary>
+    /// The step a pass was working when the run ended without judging it (its head's mark, <see cref="RalphLogHead.InPassStep"/>): a step of no
+    /// children, unticked as it began, at its line with its words (else the one task line of its words); null with no mark. Pure.
+    /// </summary>
+    public static PlanStep? InPassOf(RalphLogHead? head) =>
+        head is { InPassStep: { Length: > 0 } words, InPassLine: >= 0 } ? new PlanStep(0, head.InPassLine, 0, words, false, null, [], [], []) : null;
 
     /// <summary>The learned facts with <paramref name="added"/> after them, redacted, once each, the oldest dropped past <see cref="LearnedChars"/>.</summary>
     public static IReadOnlyList<string> MergeLearned(IReadOnlyList<string> learned, IReadOnlyList<string> added)
@@ -187,7 +216,8 @@ public static class RalphLog
         foreach (var entry in chosen)
         {
             string line = $"- pass {N(entry.Pass)} (step {N(entry.Step)}): {entry.Outcome}; {Flat(entry.Summary)}" + (entry.Check is { Length: > 0 } c && c != "none" ? $"; check {c}" : "") +
-                (entry.Review is { Length: > 0 } r && r != "off" ? $"; review {Flat(r)}" : "");
+                (entry.Review is { Length: > 0 } r && r != "off" ? $"; review {Flat(r)}" : "") +
+                (entry.Notes is { Length: > 0 } notes ? $"; notes for the next pass: {Shorten(Flat(notes), NoteChars)}" : "");
             if (text.Length + line.Length + 1 > NotesChars)
             {
                 break;
@@ -228,6 +258,11 @@ public static class RalphLog
                 text.Append("- stopped: ").Append(Flat(stopped)).Append('\n');
             }
 
+            if (head is { InPassStep: { Length: > 0 } inPass, InPassLine: >= 0 })
+            {
+                text.Append("- in pass: ").Append(N(head.InPassLine)).Append(" · ").Append(Flat(inPass)).Append('\n');
+            }
+
             text.Append('\n');
         }
 
@@ -243,6 +278,11 @@ public static class RalphLog
             text.Append("- step: ").Append(N(e.Step)).Append(" · ").Append(Flat(e.StepText)).Append('\n');
             text.Append("- outcome: ").Append(Flat(e.Outcome)).Append('\n');
             text.Append("- summary: ").Append(Flat(e.Summary)).Append('\n');
+            if (e.Notes is { Length: > 0 } notes)
+            {
+                text.Append("- notes: ").Append(Flat(notes)).Append('\n');
+            }
+
             text.Append("- verified: ").Append(e.Verified.Count == 0 ? "none" : string.Join(" | ", e.Verified.Select(Flat))).Append('\n');
             text.Append("- check: ").Append(Flat(e.Check)).Append('\n');
             if (e.Flags.Count > 0)
@@ -319,7 +359,8 @@ public static class RalphLog
                 List(fields.GetValueOrDefault("changed"), ", "),
                 fields.GetValueOrDefault("review") ?? "",
                 fields.GetValueOrDefault("checkpoint"),
-                when, elapsed, tokens));
+                when, elapsed, tokens,
+                fields.GetValueOrDefault("notes") is { Length: > 0 } notes ? notes : null));
             fields = null;
             tail = null;
         }
@@ -409,6 +450,12 @@ public static class RalphLog
                 DateTimeOffset.TryParseExact(headFields.GetValueOrDefault("started"), TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var started) ? started : DateTimeOffset.MinValue,
                 headFields.GetValueOrDefault("stopped"))
             : null;
+        if (head is not null && headFields.GetValueOrDefault("in pass") is { } inPass && inPass.IndexOf(" · ", StringComparison.Ordinal) is int at and > 0
+            && int.TryParse(inPass[..at], NumberStyles.Integer, CultureInfo.InvariantCulture, out int inPassLine) && inPassLine >= 0 && inPass[(at + 3)..].Trim() is { Length: > 0 } inPassStep)
+        {
+            head = head with { InPassLine = inPassLine, InPassStep = inPassStep };
+        }
+
         return new RalphLogDocument(head, learned, entries);
     }
 
@@ -426,18 +473,40 @@ public static class RalphLog
     /// <summary>This process as a lock names it (the screen's and headless's one owner, 2026-10-19, the second review: each kept a copy).</summary>
     public static LockOwner Me => s_me.Value;
 
-    /// <summary>Whether a lock's owner still runs: a process of its id started within 2 s of the time it wrote (an id reused later is another process).</summary>
+    /// <summary>
+    /// Whether a lock's owner still runs: a process of its id started within 2 s of the time it wrote (an id reused later is another process). A
+    /// process of that id whose start time cannot be read (another user's, an elevated one: access denied) counts as the owner (2026-10-19, the
+    /// third review: read as gone, a live loop's lock was taken over and two loops ran one plan); only a process that is gone frees the lock.
+    /// </summary>
     public static bool OwnerAlive(LockOwner owner)
     {
         ArgumentNullException.ThrowIfNull(owner);
+        System.Diagnostics.Process process;
         try
         {
-            using var process = System.Diagnostics.Process.GetProcessById(owner.ProcessId);
-            return Math.Abs((process.StartTime.ToUniversalTime() - owner.Started.UtcDateTime).TotalSeconds) < 2;
+            process = System.Diagnostics.Process.GetProcessById(owner.ProcessId);
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
+            // No process of that id runs.
             return false;
+        }
+
+        using (process)
+        {
+            try
+            {
+                return Math.Abs((process.StartTime.ToUniversalTime() - owner.Started.UtcDateTime).TotalSeconds) < 2;
+            }
+            catch (InvalidOperationException)
+            {
+                // It ended meanwhile.
+                return false;
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or NotSupportedException or UnauthorizedAccessException)
+            {
+                return true;
+            }
         }
     }
 
@@ -467,19 +536,21 @@ public static class RalphLog
                 return true;
             }
 
-            var held = ReadLock(files, path);
-            if (held == me)
+            var (state, held) = ReadLockAt(full);
+            if (state == LockRead.Missing)
             {
-                return true;
+                // Let go since: take it again.
+                continue;
             }
 
-            if (held is not null && alive(held))
+            // A lock that cannot be read is never taken for a stale one (2026-10-19, the third review: read as no owner, it matched "not a lock").
+            if (state == LockRead.Unreadable || (held is not null && (held == me || alive(held))))
             {
-                return false;
+                return held == me;
             }
 
             // Stale (its owner gone) or not a lock at all: removed while it still says so, then taken again.
-            if (!RemoveIfStill(files, path, full, held))
+            if (!RemoveIfStill(full, held))
             {
                 return false;
             }
@@ -516,27 +587,99 @@ public static class RalphLog
         }
     }
 
-    /// <summary>The lock at <paramref name="full"/> deleted when it still names <paramref name="held"/> (or is gone already); false when another took it meanwhile.</summary>
-    private static bool RemoveIfStill(WorkingDirectory files, string path, string full, LockOwner? held)
-    {
-        if (!File.Exists(full))
-        {
-            return true;
-        }
+    /// <summary>How old a take-over guard is before it counts as left by a process that died holding it.</summary>
+    private static readonly TimeSpan GuardStale = TimeSpan.FromSeconds(30);
 
-        if (ReadLock(files, path) != held)
+    /// <summary>
+    /// The lock at <paramref name="full"/> removed when it still names <paramref name="held"/> (or is gone already); false when another took it
+    /// meanwhile, or is taking it over now. Done under a take-over guard beside it (<c>ralph.lock.takeover</c>, created whole as the lock is), so one
+    /// taker at a time reads and removes (2026-10-19, the third review: a read then a delete let one of two instances taking over the same stale
+    /// lock delete the other's fresh one, and both ran). Under the guard the read and the delete cannot be raced: a fresh lock is only ever
+    /// created where none is, and only a guard holder removes one it did not write. A guard older than <see cref="GuardStale"/> was left by a crash
+    /// and goes.
+    /// </summary>
+    private static bool RemoveIfStill(string full, LockOwner? held)
+    {
+        string guard = full + ".takeover";
+        if (!TryCreate(guard, N(Environment.ProcessId) + "\n"))
         {
+            try
+            {
+                if (File.Exists(guard) && DateTime.UtcNow - File.GetLastWriteTimeUtc(guard) > GuardStale)
+                {
+                    File.Delete(guard);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Its holder lets it go.
+            }
+
             return false;
         }
 
         try
         {
+            var (state, now) = ReadLockAt(full);
+            if (state == LockRead.Missing)
+            {
+                return true;
+            }
+
+            if (state == LockRead.Unreadable || now != held)
+            {
+                return false;
+            }
+
             File.Delete(full);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
+        }
+        finally
+        {
+            DeleteQuietly(guard);
+        }
+    }
+
+    private static void DeleteQuietly(string full)
+    {
+        try
+        {
+            File.Delete(full);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A stray file beside the lock: never read as the lock.
+        }
+    }
+
+    /// <summary>What reading a lock file found: none there, one that could not be read, or one read (its owner null when it is not a lock).</summary>
+    private enum LockRead
+    {
+        Missing,
+        Unreadable,
+        Read,
+    }
+
+    /// <summary>The lock file at a full path read, sharing every access so a taker's read never stops another's delete.</summary>
+    private static (LockRead State, LockOwner? Owner) ReadLockAt(string full)
+    {
+        try
+        {
+            using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return (LockRead.Read, ParseLock(reader.ReadToEnd()));
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return (LockRead.Missing, null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (LockRead.Unreadable, null);
         }
     }
 
@@ -561,14 +704,14 @@ public static class RalphLog
     private static LockOwner? ReadLock(WorkingDirectory files, string path)
     {
         var read = files.ReadText(path, null, null);
-        if (read.Outcome != FileOutcome.Ok)
-        {
-            return null;
-        }
+        return read.Outcome == FileOutcome.Ok ? ParseLock(read.Text) : null;
+    }
 
+    private static LockOwner? ParseLock(string text)
+    {
         int pid = 0;
         DateTimeOffset started = DateTimeOffset.MinValue;
-        foreach (string line in read.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        foreach (string line in text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
         {
             if (line.StartsWith("pid: ", StringComparison.Ordinal))
             {
@@ -627,6 +770,8 @@ public static class RalphLog
     }
 
     private static string Flat(string text) => string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
 
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
 }

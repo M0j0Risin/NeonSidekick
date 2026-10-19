@@ -69,7 +69,7 @@ public static class RalphText
         string rules =
             "- First check whether the work is already done: search the code before building anything. If it is, verify it and call finish_step with outcome done.\n" +
             (finalFix ? "- Fix what the final check reports and nothing else.\n" : "- Work on this step only; the steps after it come in passes of their own.\n") +
-            "- Do not tick or untick boxes in the plan file: the app does that from finish_step and its own checks.\n" +
+            "- Do not tick or untick boxes in the plan file, nor reword, add or delete its steps: the app does that from finish_step and its own checks.\n" +
             "- Check your work with the project's own checks (its build, its tests) before you report done.\n" +
             "- Do not commit unless the step says to.\n" +
             (finalFix ? "" : "- If the step is too big for one pass, call finish_step with outcome split and 2 to 6 substeps, each with a done_when line, and do none of it.\n") +
@@ -341,6 +341,10 @@ public static class RalphText
     public static string SplitNotice(int count, string text) => $"{Glyph} Split into {N(count)} sub-steps: {Flatten(text)}";
     public static string PartialNotice(int changed) => $"{Glyph} Part of the step done ({Files(changed)} changed); the next pass goes on.";
     public const string NothingChangedNotice = Glyph + " The pass reported done but changed no file.";
+    public static string WordsPutBackNotice(int count) => $"{Glyph} The pass reworded {(count == 1 ? "a step" : N(count) + " steps")} of the plan: put back.";
+    public static string StepsRemovedNotice(IReadOnlyList<string> steps) =>
+        $"{Glyph} The pass deleted {(steps.Count == 1 ? "an unfinished step" : N(steps.Count) + " unfinished steps")} from the plan: " + string.Join("; ", steps.Take(5).Select(Flatten)) + (steps.Count > 5 ? $" … and {N(steps.Count - 5)} more" : "");
+    public static string InPassPutBackNotice(string text) => $"{Glyph} The last run ended in the middle of a pass on \"{Flatten(text)}\": its box is put back, unchecked.";
     public static string BoxesPutBackNotice(int count) => $"{Glyph} The pass changed {(count == 1 ? "another step's box" : N(count) + " other steps' boxes")}: put back.";
     public static string ParentTickedNotice(string text) => $"{Glyph} Every part done: {Flatten(text)}";
     public const string RetryNotice = Glyph + " The pass failed: trying the step once more.";
@@ -370,6 +374,7 @@ public static class RalphText
             RalphStop.WorkdirMoved => $"{Glyph} Ralph loop stopped: the working directory changed." + resume,
             RalphStop.Locked => $"{Glyph} Ralph loop not started: another NeonSidekick is running {path}.",
             RalphStop.UserStopped => $"{Glyph} Ralph loop stopped at the checkpoint ({N(done)} of {N(total)} steps done)." + resume,
+            RalphStop.StepsRemoved => $"{Glyph} Ralph loop stopped: the pass deleted unfinished steps from {path} ({N(done)} of {N(total)} steps done); put them back or edit the plan, then" + resume,
             _ => $"{Glyph} Ralph loop not started.",
         };
     }
@@ -416,6 +421,7 @@ public static class RalphText
         RalphStop.Paused => "paused",
         RalphStop.FinalFailed => "final failed",
         RalphStop.UserStopped => "stopped at the checkpoint",
+        RalphStop.StepsRemoved => "steps removed",
         _ => "stopped",
     };
 
@@ -498,6 +504,9 @@ public static class RalphText
     public const string FlagNothingChanged = "no file changed";
     public static string FlagNamedMissing(IReadOnlyList<string> paths) => "files the step names are missing: " + string.Join(", ", paths);
     public const string FlagTestsTouched = "test files were changed";
+
+    /// <summary>A secret-looking file's line in a pass's diff, in place of its text.</summary>
+    public static string SecretNotDiffed(string path) => $"({path} looks like a secrets file: changed, not shown)";
 
     // ── Helpers ────────────────────────────────────────────────────────────
 

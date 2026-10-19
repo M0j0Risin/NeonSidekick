@@ -218,9 +218,11 @@ internal sealed partial class ChatScreen
         }
 
         string body = PlanDocument.Body(text);
-        if (PlanSteps.FirstUnticked(PlanSteps.Parse(body)) is null && RalphSnapshot.FinalCheckOf(stored.Final, stored.Verify, stored.FinalOnly) is null)
+        if (PlanSteps.FirstUnticked(PlanSteps.Parse(body)) is null && RalphSnapshot.FinalCheckOf(stored.Final, stored.Verify, stored.FinalOnly) is null
+            && RalphLog.InPassOf(RalphLog.Read(_files, path)?.Head) is null)
         {
-            // Every step ticked while it was paused, and no final check owed (under final-only the verify command is one, 2026-10-19): nothing left to run.
+            // Every step ticked while it was paused, and no final check owed (under final-only the verify command is one, 2026-10-19): nothing left to
+            // run. Not after a run that ended mid-pass (2026-10-19, the third review): that pass's tick is unchecked, and the start puts it back.
             var counts = PlanSteps.Counts(PlanSteps.Parse(body));
             PlanFiles.MarkFile(_files, path, PlanStatus.Done, _time.GetLocalNow(), stored.Requirement, counts);
             _transcript.Notice(PlanText.DoneNotice(path));
@@ -256,9 +258,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The plan being planned approved for a Ralph loop (the pane's row, <c>/plan approve --ralph</c>, an idle-line verdict): the baseline while plan
-    /// mode is still on, then the loop. A plan with no steps is refused and stays refinable.
+    /// mode is still on, then the loop. A plan with no steps is refused and stays refinable. <paramref name="checksShown"/> is false for the typed
+    /// command (2026-10-19, the third review: the header's verify and final commands are model-written, a gap review's clean pass may change them with
+    /// no pane, and the typed command ran them as the baseline unseen): its commands are then confirmed as <c>/plan ralph &lt;name&gt;</c>'s are, the
+    /// fit's problems in the same question. The panes' rows show them on the check line already.
     /// </summary>
-    private async Task<bool> ApproveRalphAsync(int? passes, CancellationToken cancellationToken)
+    private async Task<bool> ApproveRalphAsync(int? passes, CancellationToken cancellationToken, bool checksShown = true)
     {
         if (_plan.Path is not { } path)
         {
@@ -281,7 +286,23 @@ internal sealed partial class ChatScreen
         }
 
         var header = PlanDocument.TryParse(text);
-        return await BeginRalphAsync(path, PlanDocument.Body(text), header?.Verify, header?.Final, _plan.Requirement, passes, resume: false, fromPlanning: true, cancellationToken).ConfigureAwait(false);
+        string body = PlanDocument.Body(text);
+        bool fitAsked = false;
+        if (!checksShown && (header?.Verify is { Length: > 0 } || header?.Final is { Length: > 0 }))
+        {
+            var effective = _effective();
+            string checks = RalphText.PaneCheckLine(new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask);
+            if (!await RalphConfirmAsync(RalphText.ConfirmQuestion(path, checks, PlanFit.Shape(body, RalphInlineLimit())), cancellationToken).ConfigureAwait(false))
+            {
+                _plan.ClearApproval();
+                _transcript.Notice(KeptNotice);
+                return false;
+            }
+
+            fitAsked = true;
+        }
+
+        return await BeginRalphAsync(path, body, header?.Verify, header?.Final, _plan.Requirement, passes, resume: false, fromPlanning: true, cancellationToken, fitAsked: fitAsked).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -319,6 +340,45 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // From the lock to the loop's own driver, a refusal, a no or a throw lets the lock go and clears the approval (2026-10-19, the third review: a
+        // throw from the baseline, the confirm or a write left the plan locked against every instance for the rest of the process).
+        bool begun = false;
+        try
+        {
+            return await BeginLockedRalphAsync(files, path, body, steps, verify, final, requirement, passes, resume, fromPlanning, stored, () => begun = true, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!begun)
+            {
+                if (_ralph is not null)
+                {
+                    StopRalphOnReset();
+                }
+                else
+                {
+                    RalphLog.Unlock(files, path, RalphLog.Me);
+                }
+
+                _plan.ClearApproval();
+            }
+        }
+    }
+
+    /// <summary><see cref="BeginRalphAsync"/> once the lock is held: <paramref name="begun"/> is called as the loop's driver takes it over.</summary>
+    private async Task<bool> BeginLockedRalphAsync(WorkingDirectory files, string path, string body, IReadOnlyList<PlanStep> steps, string? verify, string? final, string requirement, int? passes, bool resume, bool fromPlanning, StoredPlan? stored, Action begun, CancellationToken cancellationToken)
+    {
+        // A pass the last run left unjudged (a crash, a kill): its unchecked tick put back before anything reads the plan (2026-10-19, the third review).
+        if (RalphJudge.RecoverInPass(files, path) is { } putBack)
+        {
+            _transcript.Notice(RalphText.InPassPutBackNotice(putBack));
+            if (PlanFiles.ReadWhole(files, path) is { } fresh)
+            {
+                body = PlanDocument.Body(fresh);
+                steps = PlanSteps.Parse(body);
+            }
+        }
+
         var effective = _effective();
         var shell = stored?.Shell is { } storedShell && ShellKinds.TryParse(storedShell, out var kind) ? kind : ShellKinds.Resolve(effective);
         bool finalOnly = stored?.FinalOnly ?? false;
@@ -328,8 +388,6 @@ internal sealed partial class ChatScreen
         {
             if (RalphVerifier.Refusal(command, shell, files.Root, files, effective, _interpreters.Locate, out bool off) is { } police)
             {
-                RalphLog.Unlock(files, path, RalphLog.Me);
-                _plan.ClearApproval();
                 _transcript.Error(police);
                 return false;
             }
@@ -352,8 +410,6 @@ internal sealed partial class ChatScreen
             var baseline = await RunRalphCheckAsync(files, command, shell, effective, RalphText.BaselineLabel, cancellationToken).ConfigureAwait(false);
             if (baseline is null || baseline.Kind == RalphCheckKind.Cancelled)
             {
-                RalphLog.Unlock(files, path, RalphLog.Me);
-                _plan.ClearApproval();
                 _transcript.Notice(CancelledNotice);
                 return false;
             }
@@ -366,8 +422,6 @@ internal sealed partial class ChatScreen
             ShowTail(baseline.Tail);
             if (!await RalphConfirmAsync(RalphText.BaselineQuestion(command), cancellationToken).ConfigureAwait(false))
             {
-                RalphLog.Unlock(files, path, RalphLog.Me);
-                _plan.ClearApproval();
                 _transcript.Notice(RalphText.BaselineRefusedNotice);
                 return false;
             }
@@ -408,6 +462,7 @@ internal sealed partial class ChatScreen
         SavePlanState();
         _transcript.Notice(resume ? RalphText.ResumedNotice(path, remaining, loop.Cap) : RalphText.StartedNotice(path, remaining, loop.Cap, finalOnly));
         DiagnosticLog.Info(AppCategory, $"ralph: {(resume ? "resumed" : "started")} {path}, {remaining} steps, cap {loop.Cap}, reviewer {RalphReviewerMode.Name(snapshot.Reviewer)}, checkpoint {snapshot.Checkpoint}");
+        begun();
         return await RunRalphAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -446,7 +501,9 @@ internal sealed partial class ChatScreen
                 // The file whole (2026-10-19, the review): a step's line is the file's, so the loop's tick lands on that step and no other.
                 var steps = PlanSteps.Parse(text);
                 loop.SetChildren(steps);
-                var next = loop.Next(steps, QueueDrains && _queue.Count > 0);
+                // A message waiting pauses the loop: the PC's queue as it drains, and the page's, which the idle line takes whatever the queue mode
+                // (2026-10-19, the third review: a message sent from the Web UI during a pass never paused it).
+                var next = loop.Next(steps, (QueueDrains && _queue.Count > 0) || _webUi.LinesReady);
                 switch (next.Kind)
                 {
                     case RalphNextKind.Stop:
@@ -511,6 +568,10 @@ internal sealed partial class ChatScreen
         var log = RalphLog.Read(RalphFiles, path);
         ResetForPass(loop.Pass + 1, index, total, snapshot.Title);
         loop.BeginPass(step, PlanMeter());
+        if (step is not null && RalphLog.MarkInPass(RalphFiles, path, step) is { } unmarked)
+        {
+            DiagnosticLog.Info(AppCategory, "ralph: " + unmarked);
+        }
         string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text));
         bool reviewed = snapshot.Reviewer != RalphReviewer.Off;
         string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.StepCheck ?? (step is null ? snapshot.FinalCheck : null), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null);
@@ -559,7 +620,13 @@ internal sealed partial class ChatScreen
         if (!ReferenceEquals(_ralph, loop))
         {
             // A pane the pass ended under switched the profile or replaced the conversation (2026-10-19, the review): the loop went with it
-            // (StopRalphOnReset let its lock go), so nothing of the pass is judged or written, and the driver sends no more.
+            // (StopRalphOnReset let its lock go), so the pass is not judged and the driver sends no more. What it did to the plan's boxes and words
+            // is put back, its own tick too (2026-10-19, the third review: left, it stood unchecked and a resume passed the step by).
+            if (RalphJudge.PutBackUnjudged(files, path, lines, step))
+            {
+                DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass} ended with its loop; its plan edits put back");
+            }
+
             return (exit, RalphStop.Stopped);
         }
 
@@ -809,6 +876,7 @@ internal sealed partial class ChatScreen
         RalphStop.PlanGone => "plan gone",
         RalphStop.WorkdirMoved => "workdir moved",
         RalphStop.UserStopped => "stopped at the checkpoint",
+        RalphStop.StepsRemoved => "steps removed",
         _ => stop.ToString().ToLowerInvariant(),
     };
 
@@ -879,7 +947,13 @@ internal sealed partial class ChatScreen
         switch (answer.Choice)
         {
             case RalphCheckpointChoice.Redo:
-                SetBox(loop.Snapshot.Path, step, false);
+                // The step's line as the judge left it, and the parent it ticked (2026-10-19, the third review).
+                SetBox(loop.Snapshot.Path, judged.Target ?? step, false);
+                if (judged.Parent is { } parent)
+                {
+                    SetBox(loop.Snapshot.Path, parent, false);
+                }
+
                 loop.Redo(step, answer.Note);
                 MarkRalphProgress(loop.Snapshot.Path);
                 return null;

@@ -179,4 +179,69 @@ public sealed class RalphLogTests : IDisposable
         File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "not a lock");   // garbage: no owner, taken over
         Assert.True(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
     }
+
+    [Fact]
+    public async Task AStaleLock_TakenOverByMany_IsTakenByOne_AndLeavesNoStrayFiles()
+    {
+        // 2026-10-19, the third review: the stale lock was read, then deleted, so one taker could delete another's fresh lock and both ran.
+        var stale = new RalphLog.LockOwner(999, T0.AddHours(-1));
+        Assert.True(RalphLog.TryLock(_files, Plan, stale, _ => true));
+        for (int round = 0; round < 20; round++)
+        {
+            var owners = Enumerable.Range(1, 8).Select(i => new RalphLog.LockOwner(round * 100 + i, T0)).ToList();
+            using var start = new ManualResetEventSlim();
+            // Only the stale owner is gone: every taker sees it as stale, and every other taker as alive.
+            var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return RalphLog.TryLock(_files, Plan, owner, held => held != stale); })).ToList();
+            start.Set();
+            bool[] taken = await Task.WhenAll(takes);
+
+            Assert.Single(taken, t => t);
+            string folder = Path.Combine(_dir, ".neon", "plans", "guide");
+            Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
+            File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "pid: 999\nstarted: " + stale.Started.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
+        }
+    }
+
+    [Fact]
+    public void OwnerAlive_ThisProcess_IsAlive_AndAGoneOne_IsNot()
+    {
+        Assert.True(RalphLog.OwnerAlive(RalphLog.Me));
+        Assert.False(RalphLog.OwnerAlive(RalphLog.Me with { Started = RalphLog.Me.Started.AddMinutes(-5) }));   // its id, reused
+        Assert.False(RalphLog.OwnerAlive(new RalphLog.LockOwner(int.MaxValue - 7, T0)));
+    }
+
+    [Fact]
+    public void TheInPassMark_IsWritten_ReadBack_AndCleared()
+    {
+        // 2026-10-19, the third review: a run that ended mid-pass left the model's tick standing unchecked; the mark names the step to put back.
+        Assert.Null(RalphLog.SetHead(_files, Plan, Head));
+        var step = new PlanStep(1, 7, 0, "Write the outline", false, null, [], [], []);
+
+        Assert.Null(RalphLog.MarkInPass(_files, Plan, step));
+        var marked = RalphLog.Read(_files, Plan)!.Head!;
+        Assert.Equal(7, marked.InPassLine);
+        Assert.Equal("Write the outline", marked.InPassStep);
+        Assert.True(RalphLog.InPassOf(marked) is { Line: 7, Text: "Write the outline", Ticked: false, IsLeaf: true });
+
+        Assert.Null(RalphLog.MarkInPass(_files, Plan, null));
+        var cleared = RalphLog.Read(_files, Plan)!.Head!;
+        Assert.Equal(Head, cleared);
+        Assert.Null(RalphLog.InPassOf(cleared));
+    }
+
+    [Fact]
+    public void FinishStepsNotes_AreKept_Redacted_AndHandedToTheNextPassOnTheStep()
+    {
+        // 2026-10-19, the third review: finish_step's notes were parsed and dropped.
+        var entry = Entry(1, 1, "Write the body", "partial") with { Notes = "the migration is half applied; run X before Y (password=hunter2)" };
+        Assert.Null(RalphLog.Append(_files, Plan, Head, entry, []));
+        Assert.Null(RalphLog.Append(_files, Plan, Head, Entry(2, 2, "Write the index") with { Notes = new string('n', 2000) }, []));
+
+        var log = RalphLog.Read(_files, Plan)!;
+        Assert.Contains("the migration is half applied", log.Entries[0].Notes);
+        Assert.DoesNotContain("hunter2", log.Entries[0].Notes);
+        string notes = RalphLog.RecentNotes(log, "Write the body")!;
+        Assert.Contains("notes for the next pass: the migration is half applied", notes);
+        Assert.Contains("pass 2", notes);   // the latest too, its long note cut so both fit
+    }
 }

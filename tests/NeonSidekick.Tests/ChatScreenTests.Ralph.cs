@@ -5,6 +5,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using NeonSidekick.WebUi;
 
 namespace NeonSidekick.Tests;
 
@@ -341,9 +342,10 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Ralph_AnotherLineThePassReworded_HasItsBoxPutBack()
+    public async Task Ralph_AnotherLineThePassReworded_HasItsBoxAndItsWordsPutBack()
     {
-        // 2026-10-19, the second review: boxes were matched by their words, so a reworded line kept the tick the model gave it.
+        // 2026-10-19, the second review: boxes were matched by their words, so a reworded line kept the tick the model gave it; the third: its
+        // words stood too, so a pass could turn a later step into other work.
         RalphPlan();
         RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
         RalphEditDuringFirstPass(text => text.Replace("- [ ] Two", "- [x] Two, early", StringComparison.Ordinal));
@@ -353,7 +355,9 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(RalphText.BoxesPutBackNotice(1), output);
-        Assert.Contains("Two, early", LastUserText(_chat.Requests[2]));   // worked in a pass of its own
+        Assert.Contains(RalphText.WordsPutBackNotice(1), output);
+        Assert.Contains("\"Two\"", LastUserText(_chat.Requests[2]));   // worked in a pass of its own, as the plan said it
+        Assert.DoesNotContain("Two, early", RalphPlanText);
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
@@ -361,7 +365,8 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Ralph_ItsOwnStepReworded_IsUnticked_WhenItsCheckFails()
     {
-        // 2026-10-19, the second review: the step was looked for by its words, so a reworded one stayed ticked after its check failed.
+        // 2026-10-19, the second review: the step was looked for by its words, so a reworded one stayed ticked after its check failed; the third:
+        // its words are put back, so it keeps its counters and the checkpoint's Redo finds it.
         RalphPlan();
         RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
         _ralphVerifier.Pass().Fail("error CS1002: ; expected");
@@ -373,7 +378,9 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(RalphText.CheckFailedNotice(RalphVerify), output);
-        Assert.Contains("One, all of it", LastUserText(_chat.Requests[2]));   // worked again, not passed by
+        Assert.Contains(RalphText.WordsPutBackNotice(1), output);
+        Assert.Contains("\"One\"", LastUserText(_chat.Requests[2]));   // worked again, not passed by
+        Assert.DoesNotContain("One, all of it", RalphPlanText);
         Assert.Equal(6, _chat.Requests.Count);
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
@@ -568,6 +575,135 @@ public partial class ChatScreenTests
         Assert.Equal("how is it going?", LastUserText(_chat.Requests[2]));
         Assert.DoesNotContain(FinishStepTool.ToolName, OfferedNames(_chat.Options[2]));
         Assert.Contains("- [x] One", RalphPlanText);
+    }
+
+    [Fact]
+    public async Task Ralph_AMessageFromThePageDuringAPass_PausesTheLoopAfterIt_ThenRuns()
+    {
+        // 2026-10-19, the third review: only the PC's queue paused the loop, so the page's message waited out every pass to the cap.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _chat.BeforeUpdateOf = (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                Assert.Equal(WebOutcome.Ok, Web.Send(new WebSendRequest { Text = "how is it going?" }, null).Outcome);
+            }
+
+            return Task.CompletedTask;
+        };
+        RalphPass("1");
+        _chat.EnqueueText("Step one stands.");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(RalphText.StopNotice(RalphStop.Paused, PlanPath, 1, 2), output);
+        Assert.Equal("how is it going?", LastUserText(_chat.Requests[2]));
+        Assert.Contains("- [x] One", RalphPlanText);
+    }
+
+    [Fact]
+    public async Task Ralph_APassThatDeletesTheStepsLeft_StopsTheLoop_AndThePlanIsNotDone()
+    {
+        // 2026-10-19, the third review: the put-back saw only the lines still there, so a pass that deleted the rest of the plan ended it done.
+        RalphPlan();
+        _console.Profile.Width = 400;
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphEditDuringFirstPass(text => text.Replace("- [ ] Two\n  Done when: two.md exists", "", StringComparison.Ordinal));
+        RalphPass("1");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StepsRemovedNotice(["Two"]), output);
+        Assert.Contains(RalphText.StopNotice(RalphStop.StepsRemoved, PlanPath, 1, 1), output);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
+        Assert.False(File.Exists(RalphLockFile));
+    }
+
+    [Fact]
+    public async Task Ralph_APassUnderWay_IsMarkedInTheLog_AndTheMarkGoesOnceItIsJudged()
+    {
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        string? marked = null;
+        _chat.BeforeUpdateOf = (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                marked = RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head?.InPassStep;
+            }
+
+            return Task.CompletedTask;
+        };
+        RalphPass("1");
+        RalphPass("2");
+
+        await RunAsync();
+
+        Assert.Equal("One", marked);
+        Assert.Null(RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.InPassStep);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_ARunThatEndedMidPass_HasThatStepsTickPutBack_AsTheNextOneStarts()
+    {
+        // 2026-10-19, the third review: a crash or a kill after the model ticked its own step left the tick standing unchecked, and the next run
+        // began at the step after it.
+        RalphPlan(RalphSteps.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal));
+        var one = PlanSteps.Parse(RalphPlanText)[0];
+        Directory.CreateDirectory(Path.GetDirectoryName(RalphLogFile)!);
+        File.WriteAllText(RalphLogFile, RalphLog.Render(new RalphLogDocument(
+            new RalphLogHead(PlanPath, RalphVerify, null, false, "pwsh", new DateTimeOffset(2026, 10, 18, 9, 0, 0, TimeSpan.Zero), InPassLine: one.Line, InPassStep: "One"), [], [])));
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.InPassPutBackNotice("One"), output);
+        Assert.Contains("\"One\"", LastUserText(_chat.Requests[0]));
+        Assert.Contains(RalphText.StartedNotice(PlanPath, 2, 6, finalOnly: false), output);
+        Assert.Null(RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.InPassStep);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_TheCheckpoint_Redo_UnticksTheParentTheJudgeTicked_Too()
+    {
+        // 2026-10-19, the third review: the redone step's parent, ticked by the judge as its last child stood, stayed ticked.
+        RalphPlan("# Guide\n\n## Steps\n- [ ] Parent\n  - [ ] Child\n    Done when: child.md exists\n- [ ] Two\n  Done when: two.md exists\n");
+        _settings.Update(d => d.RalphLoopCheckpoint = 1);
+        RalphFixture(
+            Line("/plan ralph add-guide"), Yes,
+            Answer(Keys.Char('r'), Keys.Enter), Line("again, smaller"),
+            Answer(Keys.Char('k'), Keys.Enter),
+            Answer(Keys.Char('k'), Keys.Enter),
+            Line("/exit"));
+        string? afterRedo = null;
+        _chat.BeforeUpdateOf = (request, update, ct) =>
+        {
+            if (request == 2 && update == 0)
+            {
+                afterRedo = RalphPlanText;
+            }
+
+            return Task.CompletedTask;
+        };
+        RalphPass("1");
+        RalphPass("2");
+        RalphPass("3");
+
+        string output = await RunAsync();
+
+        // Ticked as the child stood, unticked with it by the redo, ticked again as it stood again.
+        Assert.Contains(RalphText.ParentTickedNotice("Parent"), output);
+        Assert.Contains("- [ ] Parent", afterRedo);
+        Assert.Contains("  - [ ] Child", afterRedo);
+        Assert.Contains("- [x] Parent", RalphPlanText);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 
     [Fact]
