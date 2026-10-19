@@ -146,10 +146,18 @@ public sealed partial class PresentAuditTool : AIFunction
             return AuditText.AlreadyConvergedResult;
         }
 
-        // 1. The report read fresh: an edit made in an editor meanwhile (a tick, a reworded detail, a finding deleted) survives.
-        if (AuditFiles.ReadWhole(_files, path) is not { } text)
+        // The working directory changed under the audit (2026-10-19): the files read since are another folder's, so nothing is recorded.
+        if (_session.Moved)
         {
-            return AuditFiles.Exists(_files, path) ? AuditText.CouldNotSaveResult(AuditText.ReportUnreadable(path)) : AuditText.ReportGoneResult(path);
+            return AuditText.WorkdirMovedResult;
+        }
+
+        // 1. The report read fresh: an edit made in an editor meanwhile (a tick, a reworded detail, a finding deleted) survives. The report is the
+        // audit's own folder's (_session.Files, pinned as it started); the code it cites is read through the working directory, the model's.
+        var reports = _session.Files;
+        if (AuditFiles.ReadWhole(reports, path) is not { } text)
+        {
+            return AuditFiles.Exists(reports, path) ? AuditText.CouldNotSaveResult(AuditText.ReportUnreadable(path)) : AuditText.ReportGoneResult(path);
         }
 
         var report = AuditReport.Parse(text);
@@ -571,7 +579,7 @@ public sealed partial class PresentAuditTool : AIFunction
             report.Summary = Cap(ToolRedaction.Text(summary), MaxSummaryChars);
         }
 
-        AuditFiles.MergeCoverage(_files, path, _session.ViewedNow());
+        AuditFiles.MergeCoverage(reports, path, _session.ViewedNow());
         var coverage = _session.Coverage();
         report.CoverageRead = coverage.Read;
         report.CoverageScope = coverage.Scope;
@@ -580,7 +588,7 @@ public sealed partial class PresentAuditTool : AIFunction
         report.Header = report.Header with { Passes = AuditText.PassesLine(pass, cleanNow, coverage.Read, coverage.Scope) };
 
         // 7. The size, 8. the save: a refusal or a failure records nothing.
-        if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
+        if (AuditFiles.Save(reports, path, report, _time.GetLocalNow()) is { } failed)
         {
             return failed == AuditText.ReportFullResult ? failed : AuditText.CouldNotSaveResult(failed);
         }

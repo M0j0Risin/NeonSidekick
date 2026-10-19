@@ -427,7 +427,7 @@ public sealed class PresentAuditToolTests : IDisposable
         Report1(FindingJson(line: 8, title: "Second"));
         File.WriteAllText(_box.Full(_path), File.ReadAllText(_box.Full(_path)).Replace("- [ ] **A1**", "- [x] **A1**", StringComparison.Ordinal));
         string directive = _audit.Turn(_tool, askUser: true, 40, 10_000)!.Directive;
-        Assert.Contains("A2 Second", directive);
+        Assert.Contains("A2 ⟪Second", directive);
         Assert.DoesNotContain("A1 SQL", directive);
         Assert.Contains("- Settled findings (ticked in the report): 1;", directive);
     }

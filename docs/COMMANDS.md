@@ -394,7 +394,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Its rules:** a finding needs its file read this session (a window is enough, a diff is not). You may edit the report during an audit: a ticked box settles a finding; reporting it again reopens it. `<name>.coverage.txt` keeps the files read, so `resume` carries on.
 * **Clean passes:** an audit ends after *LLM code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first.
   * *LLM code audit pass tool calls* is guidance, never a cut-off. The pane says how much of the scope was read.
-* **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a typed message or Esc, `/new`, `/clear` or a profile switch. Each stop says why; `/code-audit resume <name>` runs more passes.
+* **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a typed message or Esc, `/new`, `/clear`, a profile switch or a working directory change (its report stays in its own folder). Each stop says why; `/code-audit resume <name>` runs more passes.
 * **The pane:** the open findings, then its choices ([keys](INTERFACE.md#pane-keys)); the Web UI page gets the same ones.
   * **Fix via plan:** plan mode on the open findings, the report marked `fixing`.
   * **More passes…:** the reviewer page when advisors are offered.

@@ -25,6 +25,23 @@ public sealed class AuditSession
     /// <summary>The loop while an audit runs; null otherwise.</summary>
     public PlanGapLoop? Running { get; private set; }
 
+    /// <summary>
+    /// The folder the audit started in, null between audits (2026-10-19, after the Ralph loop's reviews: the audit read and wrote its report through
+    /// the working directory as the settings have it, so a change mid-audit sent its writes and coverage to another folder's <c>.neon/audits/</c>).
+    /// </summary>
+    public string? Root { get; private set; }
+
+    private WorkingDirectory? _pinned;
+
+    /// <summary>The working directory the report and its coverage sidecar are read and written through: pinned to <see cref="Root"/> while one runs.</summary>
+    public WorkingDirectory Files => _pinned ?? _files;
+
+    /// <summary>
+    /// The working directory is no longer the one the audit started in: its passes would read another folder's code, so <c>present_audit</c>
+    /// records nothing and the audit ends after the pass.
+    /// </summary>
+    public bool Moved => Root is not null && !RalphSnapshot.SameRoot(_files.Root, Root);
+
     /// <summary>The report's path, relative to the working directory.</summary>
     public string? Path { get; private set; }
 
@@ -57,6 +74,8 @@ public sealed class AuditSession
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(focus);
         Path = path;
+        Root = _files.Root;
+        _pinned = _files.PinnedAt(Root);
         Scope = scope;
         Focus = AuditFocus.Normalize(focus);
         Brief = brief ?? "";
@@ -68,6 +87,8 @@ public sealed class AuditSession
     {
         Running = null;
         Path = null;
+        Root = null;
+        _pinned = null;
         Scope = null;
         Focus = AuditFocus.Dimensions;
         Brief = "";
@@ -84,19 +105,21 @@ public sealed class AuditSession
             return new AuditCoverage(0, 0, [], []);
         }
 
-        var sidecar = AuditFiles.ReadCoverage(_files, path);
+        // A file viewed counts only in the audit's own folder: after a move, a read of the same name was another folder's file.
+        var sidecar = AuditFiles.ReadCoverage(Files, path);
+        bool here = !Moved;
         var read = new List<string>();
         var unread = new List<string>();
         foreach (string file in scope.Files)
         {
-            (sidecar.Contains(file) || _files.WasViewed(file) ? read : unread).Add(file);
+            (sidecar.Contains(file) || (here && _files.WasViewed(file)) ? read : unread).Add(file);
         }
 
         return new AuditCoverage(read.Count, scope.Files.Count + scope.MoreFiles, unread, read);
     }
 
     /// <summary>The scope's files viewed this session, to merge into the sidecar.</summary>
-    public IReadOnlyList<string> ViewedNow() => Scope is { } scope ? scope.Files.Where(_files.WasViewed).ToList() : [];
+    public IReadOnlyList<string> ViewedNow() => Scope is { } scope && !Moved ? scope.Files.Where(_files.WasViewed).ToList() : [];
 
     /// <summary>
     /// The turn's audit part while a pass is under way, else null: the directive (with the advisors and web lines through <c>Compose</c>) and
@@ -111,7 +134,7 @@ public sealed class AuditSession
             return null;
         }
 
-        var report = AuditFiles.Read(_files, path);
+        var report = AuditFiles.Read(Files, path);
         var coverage = Coverage();
         List<(string Id, string Title)> open = report?.Open.Select(f => (f.Id, f.Title)).ToList() ?? [];
         var passReviewer = loop.PassReviewer;

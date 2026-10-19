@@ -106,6 +106,41 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task CodeAudit_TheWorkingDirectoryChangedMidPass_RecordsNothing_AndStopsInItsOwnFolder()
+    {
+        // 2026-10-19, after the Ralph loop's reviews: the audit read and wrote its report through the working directory as the settings have it, so a
+        // change mid-audit sent its writes and coverage to the new folder's .neon/audits/, where an audit of the same name could be.
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        _chat.Enqueue(ReadCall("r1"));        // 0: pass 1 reads the file
+        _chat.Enqueue(FindingCall("a1"));     // 1: the working directory moves first; then present_audit
+        _chat.EnqueueText("Pass 1 done.");    // 2
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 1 && update == 0)
+            {
+                _settings.Update(d => d.WorkingDirectory = elsewhere);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);   // no second pass
+        string path = AuditPath;                 // the audit's own folder's report
+        string name = Path.GetFileNameWithoutExtension(path);
+        string moved = AuditText.WorkdirMovedNotice(name, "<root>");
+        Assert.Contains(moved[..moved.IndexOf("<root>", StringComparison.Ordinal)], output);
+        var report = AuditReportNow;
+        Assert.Equal(AuditStatus.Stopped, report.Header.Status);
+        Assert.Empty(report.Open);               // present_audit recorded nothing
+        Assert.Contains(_chat.Requests[2], m => m.Contents.OfType<FunctionResultContent>().Any(r => r.Result?.ToString() == AuditText.WorkdirMovedResult));
+        Assert.False(Directory.Exists(Path.Combine(elsewhere, ".neon")));   // nothing written in the new folder
+    }
+
+    [Fact]
     public async Task CodeAudit_FixViaPlan_EntersPlanMode_OnTheOpenFindings()
     {
         AuditFixture(Line("/code-audit src/"), Keys2(Keys.Char('p'), Keys.Enter), Line("/exit"));

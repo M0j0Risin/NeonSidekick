@@ -337,7 +337,7 @@ internal sealed partial class ChatScreen
     {
         bool offered = AdvisorPassOffered();
         string path = _audit.Path!;
-        loop.BeginPass(AuditFiles.Read(_files, path)?.StallBody(), PlanMeter(), offered);
+        loop.BeginPass(AuditFiles.Read(_audit.Files, path)?.StallBody(), PlanMeter(), offered);
         if (loop.Pass == 1 && loop.CleanLowered)
         {
             _transcript.Notice(AuditText.CleanLoweredNotice(loop.Limit, loop.CleanAsked));
@@ -366,13 +366,21 @@ internal sealed partial class ChatScreen
             return null;
         }
 
+        if (_audit.Moved)
+        {
+            // The working directory changed under it (2026-10-19): the next pass would read another folder's code. Ended in its own folder's report.
+            _transcript.Notice(AuditText.WorkdirMovedNotice(_audit.Name, _audit.Root!));
+            DiagnosticLog.Info(AppCategory, $"code audit: stopped {path}: the working directory moved from {_audit.Root}");
+            return EndAudit(loop, PlanGapStop.Stopped, moved: true);
+        }
+
         bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
-        if (AuditFiles.MergeCoverage(_files, path, _audit.ViewedNow()) is { } problem)
+        if (AuditFiles.MergeCoverage(_audit.Files, path, _audit.ViewedNow()) is { } problem)
         {
             DiagnosticLog.Info(AppCategory, "code audit: " + problem);
         }
 
-        string? body = AuditFiles.Read(_files, path)?.StallBody();
+        string? body = AuditFiles.Read(_audit.Files, path)?.StallBody();
         var stop = loop.Next(onItsOwn, QueueDrains && _queue.Count > 0, body, PlanMeter());
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(NeonAdvisorTool.ToolName, StringComparer.Ordinal);
@@ -391,12 +399,14 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// An audit over: the summary of its passes, the report's status and passes line, the stop's notice; for a stop that ended on its own
-    /// (converged, limit, stalled, unconfirmed) the report back on the done pane at the idle line. The loop is forgotten.
+    /// (converged, limit, stalled, unconfirmed) the report back on the done pane at the idle line. The loop is forgotten. <paramref name="moved"/>
+    /// (the working directory changed, its own notice said): no stop line and no pane, the report written in the audit's own folder.
     /// </summary>
-    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason)
+    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false)
     {
         string path = _audit.Path!;
         string name = _audit.Name;
+        var files = _audit.Files;
         foreach (string line in AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, _audit.Focus))
         {
             _transcript.Notice(line);
@@ -404,7 +414,7 @@ internal sealed partial class ChatScreen
 
         var coverage = _audit.Coverage();
         int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
-        if (AuditFiles.Read(_files, path) is { } report)
+        if (AuditFiles.Read(files, path) is { } report)
         {
             report.CoverageRead = coverage.Read;
             report.CoverageScope = coverage.Scope;
@@ -413,13 +423,18 @@ internal sealed partial class ChatScreen
                 Status = reason == PlanGapStop.Converged ? AuditStatus.Converged : AuditStatus.Stopped,
                 Passes = AuditText.PassesLine(loop.Pass, clean, coverage.Read, coverage.Scope, reason),
             };
-            if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
+            if (AuditFiles.Save(files, path, report, _time.GetLocalNow()) is { } failed)
             {
                 _transcript.Warning(failed);
             }
         }
 
         _audit.Stop();
+        if (moved)
+        {
+            return null;
+        }
+
         _transcript.Notice(reason == PlanGapStop.Converged
             ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope)
             : AuditText.StopNotice(reason, name, loop.Pass));

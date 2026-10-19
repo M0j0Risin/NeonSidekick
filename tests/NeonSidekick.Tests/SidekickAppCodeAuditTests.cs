@@ -61,6 +61,38 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_CodeAudit_TheWorkingDirectoryChangedMidPass_StopsInItsOwnFolder()
+    {
+        // 2026-10-19, after the Ralph loop's reviews: the report and its coverage followed the working directory as the settings have it.
+        ServerOn1234("llama");
+        HeadlessAuditFiles();
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));
+        _chat.Enqueue(HeadlessAuditCall("a1", "{\"findings\":[{\"severity\":\"high\",\"dimension\":\"security\",\"file\":\"src/a.cs\",\"line\":3,\"title\":\"SQL built from input\",\"detail\":\"Joined.\"}]}"));
+        _chat.EnqueueText("Pass 1.");
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 1 && update == 0)
+            {
+                _settings.Update(d => d.WorkingDirectory = elsewhere);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        string output = await Headless("/code-audit src\n");
+
+        Assert.Equal(3, _chat.Requests.Count);
+        var report = AuditFiles.Read(new WorkingDirectory(() => HeadlessAuditRoot, TimeProvider.System), HeadlessAuditPath)!;
+        Assert.Equal(AuditStatus.Stopped, report.Header.Status);
+        Assert.Empty(report.Open);
+        string moved = AuditText.WorkdirMovedNotice(Path.GetFileNameWithoutExtension(HeadlessAuditPath), "<root>");
+        Assert.Contains(moved[..moved.IndexOf("<root>", StringComparison.Ordinal)], output);
+        Assert.False(Directory.Exists(Path.Combine(elsewhere, ".neon")));
+    }
+
+    [Fact]
     public async Task Headless_CodeAudit_NoLimitMeansTheMost_AndAdvisorConfirmFallsBack()
     {
         ServerOn1234("llama");

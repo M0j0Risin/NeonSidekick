@@ -217,7 +217,7 @@ public sealed partial class SidekickApp
     private string HeadlessBeginAuditPass(AuditSession audit, WorkingDirectory files, PlanGapLoop loop, PlanPassMeter? meter)
     {
         bool offered = HeadlessAdvisorsOffered();
-        loop.BeginPass(AuditFiles.Read(files, audit.Path!)?.StallBody(), meter, offered);
+        loop.BeginPass(AuditFiles.Read(audit.Files, audit.Path!)?.StallBody(), meter, offered);
         string focus = AuditFocus.PassFocus(audit.Focus, loop.Confirmation).Short;
         return AuditText.PassMessage(audit.Scope!.Label, audit.Path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : PlanReviewer.Model, focus, loop.CleanStreak);
     }
@@ -234,9 +234,13 @@ public sealed partial class SidekickApp
             return null;
         }
 
+        // The report is the audit's own folder's, whatever the working directory is now (2026-10-19); a move ends the audit, as on the screen.
+        bool moved = audit.Moved;
+        string root = audit.Root!;
+        files = audit.Files;
         AuditFiles.MergeCoverage(files, path, audit.ViewedNow());
         string? body = AuditFiles.Read(files, path)?.StallBody();
-        var stop = loop.Next(!cancelled, userSpoke: false, body, meter);
+        var stop = moved ? PlanGapStop.Stopped : loop.Next(!cancelled, userSpoke: false, body, meter);
         bool advisorAsked = tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
         DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
         var coverage = audit.Coverage();
@@ -269,8 +273,8 @@ public sealed partial class SidekickApp
         }
 
         audit.Stop();
-        lines.Add(reason == PlanGapStop.Converged
-            ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope)
+        lines.Add(moved ? AuditText.WorkdirMovedNotice(name, root)
+            : reason == PlanGapStop.Converged ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope)
             : AuditText.StopNotice(reason, name, loop.Pass));
         if (reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed)
         {
