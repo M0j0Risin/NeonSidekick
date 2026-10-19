@@ -529,7 +529,7 @@ public static class HelpCommands
         ]),
         new("/youtube",
         [
-            new("/youtube", "Show what the video player is playing: the video, playing or paused, where it is and the volume."),
+            new("/youtube", "Show the saved videos on the pane, as `/youtube list` does."),
             new("/youtube <words>", "Search YouTube for the words and pick a video on the pane; Enter plays it where *YouTube open links in* says. It needs a *YouTube API key* (each search costs 100 of its 10,000 daily quota units) and lists only videos that play embedded. Words that start with a verb below search too, unless what follows fits the verb."),
             new("/youtube search <words>", "Search for the words, whatever they start with."),
             new("/youtube search [--switches] <words>", "Search with switches before the words; a line that starts with a switch searches too. The switches are `--playlists` or `--channels` (Enter plays a playlist from its start, a channel's uploads), `--order relevance|date|views|rating|title`, `--length short|medium|long`, `--since today|week|month|year|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions` and `--safe none|moderate|strict`. Without them, the order, region, language and safe search come from `/tools` › Apps › YouTube."),
@@ -544,7 +544,7 @@ public static class HelpCommands
             new("/youtube volume <level>", "Set the volume (0–100)."),
             new("/youtube mute|unmute", "Mute or unmute the video."),
             new("/youtube close", "Close the video player."),
-            new("/youtube status", "Show the status line, as the bare `/youtube` does."),
+            new("/youtube status", "Show what the video player is playing: the video, playing or paused, where it is and the volume."),
             new("/youtube save [<id>|<link>]", "Save the video playing, or the one named, to this profile's saved videos; a named one's title is looked up (YouTube's oEmbed, no key needed, then the Data API with a *YouTube API key*). A saved video resumes where it was left the next time it plays (a time you give wins), and starts over once seen to the end. `s` in a search's picker saves the highlighted hit."),
             new("/youtube list", "Show the saved videos on the pane, each with where it was left: Enter plays one from there, `d` removes the highlighted one and `c` clears the whole list, each after a yes. Shift+↑↓ and Shift+Home/End move a video; type to filter, Shift+letter starting with `d` or `c`. Missing titles are looked up first."),
             new("/youtube list --clear", "Take every saved video off the list, after a yes (headless: without asking). `d` on the pane or `/youtube unsave` takes one."),

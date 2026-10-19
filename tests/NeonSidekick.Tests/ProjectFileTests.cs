@@ -22,6 +22,8 @@ public class ProjectFileTests : IDisposable
 
     private string Agents => Path.Combine(_root, ProjectFile.SecondaryFileName);
 
+    private string Claude => Path.Combine(_root, ProjectFile.TertiaryFileName);
+
     private void Write(string path, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -33,9 +35,10 @@ public class ProjectFileTests : IDisposable
     [Fact]
     public void TheNames_TheCap_AndTheCategory_ArePinned()
     {
-        Assert.Equal(["NEON.md", "AGENTS.md"], ProjectFile.FileNames);
+        Assert.Equal(["NEON.md", "AGENTS.md", "CLAUDE.md"], ProjectFile.FileNames);   // CLAUDE.md third since 2026-10-18
         Assert.Equal("NEON.md", ProjectFile.PrimaryFileName);
         Assert.Equal("AGENTS.md", ProjectFile.SecondaryFileName);
+        Assert.Equal("CLAUDE.md", ProjectFile.TertiaryFileName);
         Assert.Equal(16_000, ProjectFile.MaxLength);
         Assert.Equal("Project", ProjectFile.Category);
     }
@@ -81,6 +84,44 @@ public class ProjectFileTests : IDisposable
 
         Write(Neon, "the neon file again");
         Assert.Equal(new ProjectNotes("NEON.md", "the neon file again"), project.ReadNotes());
+    }
+
+    /// <summary>Claude Code's <c>CLAUDE.md</c> (2026-10-18, the user's ask): read when alone, behind the other two, its imports plain text.</summary>
+    [Fact]
+    public void ClaudeMd_IsRead_WhenAlone_ItsImportsAsText()
+    {
+        Write(Claude, "Build with dotnet build.\n@docs/BUILD.md");
+        var project = File_();
+
+        Assert.Equal(new ProjectNotes("CLAUDE.md", "Build with dotnet build.\n@docs/BUILD.md"), project.ReadNotes());
+        Assert.True(project.IsActive);
+        Assert.Equal(Claude, project.FilePath);
+    }
+
+    [Fact]
+    public void AgentsMd_WinsOverClaudeMd_AndNeonMdOverBoth_AndClaudeMdTakesOverWhenAgentsMdGoes()
+    {
+        Write(Claude, "the claude file");
+        Write(Agents, "the agents file");
+        var project = File_();
+
+        Assert.Equal(new ProjectNotes("AGENTS.md", "the agents file"), project.ReadNotes());
+
+        Write(Neon, "the neon file");
+        Assert.Equal(new ProjectNotes("NEON.md", "the neon file"), project.ReadNotes());
+
+        File.Delete(Neon);
+        File.Delete(Agents);
+        Assert.Equal(new ProjectNotes("CLAUDE.md", "the claude file"), project.ReadNotes());
+    }
+
+    [Fact]
+    public void OnlyTheFoldersOwnClaudeMd_IsRead()
+    {
+        Write(Path.Combine(_root, ".claude", "CLAUDE.md"), "nested");
+        Write(Path.Combine(_root, "CLAUDE.local.md"), "local");
+
+        Assert.Null(File_().ReadNotes());
     }
 
     [Theory]
@@ -184,6 +225,10 @@ public class ProjectFileTests : IDisposable
     public void Locate_IsPure()
     {
         Assert.Equal(Path.Combine(_root, "AGENTS.md"), ProjectFile.Locate(_root));
+        Write(Claude, "x");
+        Assert.Equal(Claude, ProjectFile.Locate(_root));
+        Write(Agents, "x");
+        Assert.Equal(Agents, ProjectFile.Locate(_root));
         Write(Neon, "x");
         Assert.Equal(Neon, ProjectFile.Locate(_root));
         Assert.Throws<ArgumentNullException>(() => new ProjectFile(null!));

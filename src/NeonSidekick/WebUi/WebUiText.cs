@@ -801,8 +801,8 @@ public static class WebUiText
     /// <summary>A saved list's change from the page (audit, no titles): <paramref name="what"/> is <c>played</c>, <c>removed</c>, <c>cleared</c>, <c>moved</c> or <c>saved</c>.</summary>
     public static string SavedLogLine(string what, IPAddress? remote) => "Web UI: the YouTube tab " + what + " " + (what == "cleared" ? "the saved videos" : "a saved video") + " from " + Where(remote) + ".";
 
-    /// <summary><c>/youtube list</c> typed in the page's Chat (later on 2026-10-16): the YouTube tab's saved list does it.</summary>
-    public const string UseYouTubePage = "/youtube list is on the YouTube tab here: its saved list plays, moves and removes them.";
+    /// <summary><c>/youtube list</c> typed in the page's Chat (later on 2026-10-16), or the bare <c>/youtube</c> (2026-10-18): the YouTube tab's saved list does it.</summary>
+    public const string UseYouTubePage = "The saved videos (/youtube, /youtube list) are on the YouTube tab here: its saved list plays, moves and removes them.";
 
     /// <summary>
     /// The Resume button's words (2026-10-16): <c>Resume "Big Buck Bunny" at 3:12</c>; the id for a video with no title yet; a playlist's entry.

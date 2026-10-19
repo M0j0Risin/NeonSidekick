@@ -29,7 +29,7 @@ namespace NeonSidekick.App;
 /// <param name="FilesEnabled">The setting <c>File tools</c>: off means no file tool offered, no opening working-directory call, and the default rules without <see cref="Assistant.FileRule"/>.</param>
 /// <param name="SkillsEnabled">The setting <c>Agent skills</c> (2026-09-16): off means no skills block, no project notes and no skill tool.</param>
 /// <param name="Skills">The catalog as of the last scan (empty when off or none installed).</param>
-/// <param name="Project">The working directory's <c>NEON.md</c> / <c>AGENTS.md</c> notes, or null when neither is there (or skills or the project file are off).</param>
+/// <param name="Project">The working directory's <c>NEON.md</c> / <c>AGENTS.md</c> / <c>CLAUDE.md</c> notes (the third since 2026-10-18), or null when none is there (or skills or the project file are off).</param>
 /// <param name="DisabledTools">The tools switched off one by one on <c>/tools</c> (2026-09-19, <c>ToolsDisabled</c>): an opening call whose tool is here is not sent, and <c>recall_memory</c> here puts the list back into the prompt.</param>
 /// <param name="ProjectFile">The setting <c>Project file</c> (later on 2026-09-19, the Project tab of <c>/skills</c>; its Options tab since 2026-10-01): off means the notes are not read, whatever the working directory holds.</param>
 /// <param name="McpEnabled">The setting <c>MCP servers</c> (2026-09-20, the Options tab of <c>/mcp</c>): off means no server is started and no MCP tool offered.</param>

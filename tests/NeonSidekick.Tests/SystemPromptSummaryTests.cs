@@ -47,7 +47,7 @@ public class SystemPromptSummaryTests : IDisposable
         new(persona, operatingRules, voiceDirective, memoryEnabled, memories ?? [], speechOutput, speechReady, tools, files, skills, catalog, project, markdown, pane, disabled is null ? null : ToolsText.DisabledSet(disabled), projectFile, GitTools: gitTools, ShellTools: shellTools, ShellBridge: shellBridge, ShellPolice: shellPolice);
 
     /// <summary>The section heading for a working directory with neither notes file. Pinned.</summary>
-    private const string NoNotesHeading = "Project notes — none (NEON.md / AGENTS.md not in the working directory)";
+    private const string NoNotesHeading = "Project notes — none (NEON.md / AGENTS.md / CLAUDE.md not in the working directory)";
 
     /// <summary>The section heading with Agent skills on and nothing installed. Pinned.</summary>
     private const string NoSkillsHeading = "Skills — on, none installed";

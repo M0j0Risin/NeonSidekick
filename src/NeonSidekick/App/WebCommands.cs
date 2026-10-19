@@ -41,7 +41,7 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 /// <summary>
 /// The settings a verdict reads: <i>Web UI commands</i>, the switches <c>/tree</c> and <c>/vault</c> need, and whether the page has its Shopping
 /// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off) and (later on 2026-10-16) its
-/// YouTube tab, for <c>/youtube list</c>.
+/// YouTube tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18).
 /// </summary>
 public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false);
 
@@ -121,9 +121,9 @@ public static class WebCommands
         string text = args.Trim();
         string first = FirstWord(text);
 
-        // /youtube list (and list --clear) point at the YouTube tab's saved list (later on 2026-10-16), the Shopping tab's way; every other
-        // /youtube form stays the PC's.
-        if (command == SlashCommand.YouTube && Is(first, "list"))
+        // /youtube list (and list --clear) point at the YouTube tab's saved list (later on 2026-10-16), the Shopping tab's way, and so does
+        // the bare /youtube since 2026-10-18 (the user's ask: the bare word is the saved list now); every other /youtube form stays the PC's.
+        if (command == SlashCommand.YouTube && (text.Length == 0 || Is(first, "list")))
         {
             return Refused(settings.YouTubeTab ? WebUiText.UseYouTubePage : WebUiText.YouTubeTabOff);
         }

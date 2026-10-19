@@ -6982,7 +6982,7 @@ internal sealed partial class ChatScreen
     /// (<see cref="AskUserTool.Limits"/>: the rule quotes what the schema says); null (the setting or
     /// the pane off, headless): neither. The skills (<paramref name="skills"/>, 2026-09-16): with the
     /// setting <c>Agent skills</c> on the catalog is rescanned (the external root too under
-    /// <c>Use external skills</c>), the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> read
+    /// <c>Use external skills</c>), the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> / <c>CLAUDE.md</c> read
     /// into the prompt tools or not, and — tools on — <c>skill_editor</c> offered after the memory
     /// tool with <c>load_skill</c> ahead of it while any skill is installed, the catalog in the prompt
     /// (<see cref="Skills.SkillsPrompt"/>); off, none of it. With <paramref name="markdown"/> (2026-09-16:

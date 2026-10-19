@@ -42,7 +42,7 @@ public partial class ChatScreenTests
         _console.Input.PushKey(Keys.Enter);        // the first hit
         PushLine("/youtube pause");
         PushLine("/youtube volume 30");
-        PushLine("/youtube");
+        PushLine("/youtube status");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -143,6 +143,27 @@ public partial class ChatScreenTests
         Assert.Contains("  · " + YouTubeText.Cleared(1), output);
         Assert.Contains("▸ " + YouTubeText.NoneSaved + "\n", output);
         Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
+    }
+
+    /// <summary>The bare <c>/youtube</c> (2026-10-18, the user's ask): the saved videos' pane, as <c>/youtube list</c> opens it.</summary>
+    [Fact]
+    public async Task YouTube_Bare_OpensTheSavedPane()
+    {
+        YouTubeFixture(key: false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null);
+        new YouTubeLibrary(_settings.ProfileDirectory).Add("jNQXAC9IVRw", "Me at the zoo", "jawed");
+        PushLine("/youtube");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.SavedCaption(1), output);
+        Assert.Contains("Me at the zoo", output);
+        Assert.Empty(_videoPlayer!.Plays);
+        Assert.DoesNotContain(YouTubeText.NoVideo, output);   // not the status line
     }
 
     /// <summary><c>/youtube list --clear</c> (2026-10-08): a yes/no first; No keeps the list, Yes empties it, and an empty list asks nothing.</summary>

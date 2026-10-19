@@ -4695,7 +4695,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("off " + Theme.DimMarkup("replies are text only"), SettingsMenu.ToggleLabel(SettingsField.TtsOutput, false));
         Assert.Equal("no tools at all; a change starts a new conversation", SettingsMenu.ToggleDescribe(SettingsField.LlmOfferTools, false));
         Assert.Equal(OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too", SettingsMenu.ToggleDescribe(SettingsField.ExternalSkills, true));   // the Mac's home, 2026-10-06
-        Assert.Equal("use project file (NEON.md or AGENTS.md in the working directory)", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, true));   // the user's words, 2026-10-01
+        Assert.Equal("use the working directory's NEON.md, AGENTS.md or CLAUDE.md", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, true));   // the user's words, 2026-10-01; CLAUDE.md 2026-10-18
         Assert.Equal("project files in the working directory are ignored", SettingsMenu.ToggleDescribe(SettingsField.ProjectFile, false));
         // 2026-09-18: the user's own sentences for /copy, and the two new line switches.
         Assert.Equal("/copy copies user prompts and model replies", SettingsMenu.ToggleDescribe(SettingsField.CopyUserPrompt, true));

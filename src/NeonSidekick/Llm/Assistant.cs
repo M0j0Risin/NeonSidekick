@@ -803,7 +803,7 @@ public sealed class Assistant
     /// they lose <see cref="FileRule"/> (<see cref="OperatingRulesWithoutFiles"/>); with <paramref name="ask"/>
     /// set (<c>ask_user</c> offered under those caps: the setting <c>Ask user</c> on, the bottom pane on) they end with
     /// <see cref="AskRule"/>, after the web sentence. With <paramref name="project"/> set (the working
-    /// directory's <c>NEON.md</c> / <c>AGENTS.md</c>, <see cref="ProjectFile"/>) its notes follow the
+    /// directory's <c>NEON.md</c> / <c>AGENTS.md</c> / <c>CLAUDE.md</c>, <see cref="ProjectFile"/>) its notes follow the
     /// rules as their own block (<see cref="ProjectNotesSection"/>), tools or not; with
     /// <paramref name="skills"/> not null (the setting <c>Agent skills</c> on and tools offered) the skills
     /// block (<see cref="Skills.SkillsPrompt.Section"/>) follows the memory section — null means off,

@@ -5,7 +5,7 @@ namespace NeonSidekick.YouTube;
 /// <summary>A <c>/youtube</c> verb.</summary>
 public enum YouTubeVerb
 {
-    /// <summary>The bare word, or <c>status</c>: what the window plays.</summary>
+    /// <summary><c>status</c>: what the window plays (the bare word too until 2026-10-18, the user's ask: it is <see cref="Saved"/> now).</summary>
     Status,
 
     /// <summary>Words to search for: the picker of what YouTube found.</summary>
@@ -27,8 +27,8 @@ public enum YouTubeVerb
     Save,
 
     /// <summary>
-    /// <c>list</c>: the saved videos' pane (2026-10-07). The word was <c>saved</c> until 2026-10-08 (the user's call), which is now
-    /// words to search for like any other.
+    /// <c>list</c>, or the bare word: the saved videos' pane (2026-10-07; the bare word since 2026-10-18, the user's ask, the status
+    /// until then). The word was <c>saved</c> until 2026-10-08 (the user's call), which is now words to search for like any other.
     /// </summary>
     Saved,
 
@@ -126,7 +126,7 @@ public static class YouTubeCommand
         string text = (args ?? "").Trim();
         if (text.Length == 0)
         {
-            return new YouTubeCommandLine(YouTubeVerb.Status);
+            return new YouTubeCommandLine(YouTubeVerb.Saved);   // 2026-10-18 (the user's ask): the saved videos, as list; status names the window's
         }
 
         int space = text.IndexOf(' ', StringComparison.Ordinal);

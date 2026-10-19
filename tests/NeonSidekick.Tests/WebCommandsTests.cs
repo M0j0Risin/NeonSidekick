@@ -47,7 +47,12 @@ public sealed class WebCommandsTests
             Assert.False(string.IsNullOrWhiteSpace(verdict.Reason));
         }
 
-        if (WebCommands.Never.Contains(command))
+        if (command == SlashCommand.YouTube)
+        {
+            Assert.Equal(WebUiText.YouTubeTabOff, verdict.Reason);   // the bare word is the saved list (2026-10-18): the tab's, here off
+            Assert.False(WebCommands.Offers(command));
+        }
+        else if (WebCommands.Never.Contains(command))
         {
             Assert.Equal(WebUiText.PcOnly(WebCommands.Word(line)), verdict.Reason);
             Assert.False(WebCommands.Offers(command));
@@ -210,6 +215,10 @@ public sealed class WebCommandsTests
         Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube list", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube list --clear", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.YouTubeTabOff, WebCommands.Check("/youtube list", On).Reason);
+        // The bare /youtube (2026-10-18): the saved list as list is, so the same pointer.
+        Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube", On with { YouTubeTab = true }).Reason);
+        Assert.Equal(WebUiText.YouTubeTabOff, WebCommands.Check("/youtube", On).Reason);
+        Assert.Equal(WebUiText.PcOnly("/youtube"), WebCommands.Check("/youtube status", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.PcOnly("/youtube"), WebCommands.Check("/youtube play aqz-KE-bpKQ", On with { YouTubeTab = true }).Reason);
         Assert.Contains(SlashCommand.YouTube, WebCommands.Never);
     }

@@ -19,4 +19,17 @@ public partial class SidekickAppTests
         Assert.DoesNotContain("[error]", output);
         Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
     }
+
+    /// <summary>The bare <c>/youtube</c> (2026-10-18, the user's ask): the saved videos listed, as <c>/youtube list</c>; the window's error until then.</summary>
+    [Fact]
+    public async Task Headless_BareYouTube_ListsTheSavedVideos()
+    {
+        new YouTubeLibrary(_settings.ProfileDirectory).Add("jNQXAC9IVRw", "Me at the zoo", "jawed");
+
+        string output = await Headless("/youtube\n");
+
+        Assert.Contains("Me at the zoo", output);
+        Assert.DoesNotContain("[error]", output);
+        Assert.DoesNotContain(YouTubeText.NeedsScreen, output);
+    }
 }

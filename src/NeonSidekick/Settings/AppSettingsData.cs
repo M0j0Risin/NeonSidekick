@@ -1436,7 +1436,7 @@ public sealed class AppSettingsData
     /// Whether the model gets skills (2026-09-16): the Agent Skills folders under
     /// <c>&lt;profile&gt;\skills</c> and <c>&lt;home&gt;\skills</c> listed in the system prompt with
     /// <c>load_skill</c> and <c>skill_editor</c> offered, and the working directory's <c>NEON.md</c>
-    /// (else <c>AGENTS.md</c>) read into the prompt. Off = none of it. Read at each turn like
+    /// (else <c>AGENTS.md</c>, else <c>CLAUDE.md</c> since 2026-10-18) read into the prompt. Off = none of it. Read at each turn like
     /// <see cref="Memory"/>, no reconnect; the Options tab of <c>/skills</c>, first row. No variable.
     /// </summary>
     public bool AgentSkills { get; set; } = true;
@@ -1462,8 +1462,8 @@ public sealed class AppSettingsData
     public bool ExternalSkills { get; set; }
 
     /// <summary>
-    /// Whether the working directory's <c>NEON.md</c> (else <c>AGENTS.md</c>) is read into the
-    /// system prompt (later on 2026-09-19, the user's ask; always, under <see cref="AgentSkills"/>,
+    /// Whether the working directory's <c>NEON.md</c> (else <c>AGENTS.md</c>, else <c>CLAUDE.md</c> since 2026-10-18, the user's ask)
+    /// is read into the system prompt (later on 2026-09-19, the user's ask; always, under <see cref="AgentSkills"/>,
     /// until then). Off = the file is left alone whatever it holds; nothing either way while
     /// <see cref="AgentSkills"/> is off. Read at each turn, no reconnect, no conversation clear.
     /// The <c>Project file</c> row of <c>/skills</c>' Options tab since 2026-10-01 (the user's ask,

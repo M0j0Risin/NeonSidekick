@@ -162,7 +162,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Files.MentionFolderMode.Names"/>: what applying a folder from the line's @-mention list does (<see cref="Settings.AppSettingsData.FileMentionFolderMode"/>). The Files tab's last row (2026-09-17; General's row under Image thumbnail size before); no reconnect (read at each idle read).</summary>
     FileMentionFolderMode,
 
-    /// <summary>A toggle: whether the model gets the skills, the two skill tools and the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> (<see cref="Settings.AppSettingsData.AgentSkills"/>). The Options tab of <c>/skills</c>' first row (2026-09-16); no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether the model gets the skills, the two skill tools and the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> / <c>CLAUDE.md</c> (<see cref="Settings.AppSettingsData.AgentSkills"/>). The Options tab of <c>/skills</c>' first row (2026-09-16); no reconnect (read at each turn).</summary>
     AgentSkills,
 
     /// <summary>A toggle: whether <c>%USERPROFILE%\.agents\skills</c> is scanned too (<see cref="Settings.AppSettingsData.ExternalSkills"/>), read only while <see cref="AgentSkills"/> is on. The Options tab of <c>/skills</c>' second row (2026-09-16); no reconnect.</summary>
@@ -735,7 +735,7 @@ public enum SettingsField
     /// </summary>
     MenuMaxHeight,
 
-    /// <summary>A toggle: whether the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> is read into the prompt as project notes (<see cref="Settings.AppSettingsData.ProjectFile"/>), read only while <see cref="AgentSkills"/> is on. The Options tab of <c>/skills</c>' third row since 2026-10-01 (the user's ask: the one row of the Project tab from later on 2026-09-19 until then, which went); no reconnect (read at each turn). Last in the enum until <see cref="FileSearchMaxResults"/>.</summary>
+    /// <summary>A toggle: whether the working directory's <c>NEON.md</c> / <c>AGENTS.md</c> / <c>CLAUDE.md</c> (since 2026-10-18) is read into the prompt as project notes (<see cref="Settings.AppSettingsData.ProjectFile"/>), read only while <see cref="AgentSkills"/> is on. The Options tab of <c>/skills</c>' third row since 2026-10-01 (the user's ask: the one row of the Project tab from later on 2026-09-19 until then, which went); no reconnect (read at each turn). Last in the enum until <see cref="FileSearchMaxResults"/>.</summary>
     ProjectFile,
 
     /// <summary>Typed: the most rows one <c>search_files</c> or <c>unc_search</c> call returns, 1 to 5000 (<see cref="Settings.AppSettingsData.FileSearchMaxResults"/>). The Files tab of <c>/tools</c>' last row (2026-10-01, the user's ask; a constant 200 until then), <c>unc_search</c>'s too; no reconnect (read at each call).</summary>
@@ -8440,7 +8440,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiYouTubeControls => on ? "the YouTube tab plays videos and keeps the saved list" : "there is no YouTube tab; webui-window plays in the video window",
         SettingsField.WebUiProfileTheme => on ? "the pages wear the profile's theme" : "the pages keep their own look",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
-        SettingsField.ProjectFile => on ? "use project file (NEON.md or AGENTS.md in the working directory)" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01
+        SettingsField.ProjectFile => on ? "use the working directory's NEON.md, AGENTS.md or CLAUDE.md" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01; CLAUDE.md 2026-10-18 (reworded to fit the row's 72)
         SettingsField.SkillHashMention => on ? "# and part of a name lists the loaded skills on the line" : "# is ordinary text",
         SettingsField.ToolsDollarMention => on ? "$ and part of a name lists the offered tools on the line" : "$ is ordinary text",
         SettingsField.ShowFileDiffs => on ? "a file edit shows its diff under its line" : "a file edit shows its one line",

@@ -7,7 +7,7 @@ namespace NeonSidekick.Tests;
 public class YouTubeCommandTests
 {
     [Theory]
-    [InlineData("", YouTubeVerb.Status, "", null, null)]
+    [InlineData("", YouTubeVerb.Saved, "", null, null)]              // the bare word is the saved list (2026-10-18), as list is
     [InlineData("status", YouTubeVerb.Status, "", null, null)]
     [InlineData("lofi beats", YouTubeVerb.Search, "lofi beats", null, null)]
     [InlineData("close encounters", YouTubeVerb.Search, "close encounters", null, null)]      // a verb that takes nothing, with words after: a search
