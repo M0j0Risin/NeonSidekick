@@ -597,7 +597,7 @@ public sealed class PdfTests : IDisposable
         Assert.Equal(
             [
                 "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-                "--disable-background-networking", "--mute-audio", "--edge-skip-compat-layer-relaunch", "--no-pdf-header-footer", @"--print-to-pdf=C:\T\a b.pdf",
+                "--disable-background-networking", "--mute-audio", "--edge-skip-compat-layer-relaunch", "--disable-features=msImplicitSignin", "--no-pdf-header-footer", @"--print-to-pdf=C:\T\a b.pdf",
                 @"--user-data-dir=C:\T\browser", "file:///C:/T/a%20b.html",
             ],
             HeadlessBrowser.PdfArguments(new Uri(@"C:\T\a b.html"), @"C:\T\a b.pdf", @"C:\T\browser", isWeb: false, Chrome154));

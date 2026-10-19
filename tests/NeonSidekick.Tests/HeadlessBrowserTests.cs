@@ -87,7 +87,7 @@ public class HeadlessBrowserTests
             {
                 "--headless=new", "--remote-debugging-port=0", "--disable-blink-features=AutomationControlled", "--no-first-run",
                 "--no-default-browser-check", "--disable-extensions", "--disable-background-networking", "--mute-audio",
-                "--edge-skip-compat-layer-relaunch", "--blink-settings=imagesEnabled=false", "--window-size=1920,1080", "--screen-info={1920x1080}",
+                "--edge-skip-compat-layer-relaunch", "--disable-features=msImplicitSignin", "--blink-settings=imagesEnabled=false", "--window-size=1920,1080", "--screen-info={1920x1080}",
                 "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0",
                 @"--user-data-dir=C:\Temp\NeonSidekick\browser", "https://example.com/a?b=c",
             },

@@ -428,6 +428,12 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         // exits, and the copy outlived the app (not the process the app started, so no kill reached it) holding the profile
         // folder; given up front it never relaunches. Chrome and Brave ignore a switch they do not know.
         "--edge-skip-compat-layer-relaunch",
+        // 2026-10-19 (the CI-like runs): a fresh Edge profile signs in with the Windows account by itself, opening its sync prompt as a
+        // page (edge://sync-confirmation-dialog/, every launch of a new profile, listed before ours now and then) and now and then a
+        // "Microsoft account" window on the user's desktop, and starts sync, which the PDF reads' proxy then refuses. Measured on Edge
+        // 155: the dialog in 3 launches of 3 without this, 0 of 20 with it, and no sign-in or sync errors in its log. The only
+        // --disable-features any run gives (a second one would override this one). Chrome and Brave ignore a feature they do not know.
+        "--disable-features=msImplicitSignin",
     ];
 
     /// <summary>The command line after the executable for a page read over DevTools as <paramref name="identity"/>. Pinned.</summary>

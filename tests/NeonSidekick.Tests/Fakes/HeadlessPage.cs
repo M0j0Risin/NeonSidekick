@@ -44,7 +44,9 @@ public sealed class HeadlessPage : IAsyncDisposable
         Directory.CreateDirectory(profile);
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
         string[] cutOff = offline ? ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1", "--proxy-server=127.0.0.1:9"] : [];
-        foreach (string argument in (string[])["--headless=new", "--remote-debugging-port=0", "--disable-gpu", "--no-first-run", "--no-default-browser-check", .. cutOff, "--user-data-dir=" + profile, "about:blank"])
+        // --disable-features=msImplicitSignin as the app's runs (2026-10-19): a fresh Edge profile signs in by itself, opening its sync prompt
+        // and now and then a "Microsoft account" window on the desktop the tests run on.
+        foreach (string argument in (string[])["--headless=new", "--remote-debugging-port=0", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-features=msImplicitSignin", .. cutOff, "--user-data-dir=" + profile, "about:blank"])
         {
             start.ArgumentList.Add(argument);
         }
