@@ -181,17 +181,8 @@ public sealed class LanPolicy
             throw new NetworkRefusedException(host, admission.Refusal);
         }
 
-        var addresses = admission.Addresses as IPAddress[] ?? admission.Addresses.ToArray();
-        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-        try
-        {
-            await socket.ConnectAsync(addresses, context.DnsEndPoint.Port, cancellationToken).ConfigureAwait(false);
-            return new NetworkStream(socket, ownsSocket: true);
-        }
-        catch
-        {
-            socket.Dispose();
-            throw;
-        }
+        // Raced, not one after another (2026-10-19): a dead IPv6 route held the whole fetch on its first address (HappyEyeballs).
+        var socket = await HappyEyeballs.ConnectAsync(admission.Addresses, context.DnsEndPoint.Port, HappyEyeballs.AttemptDelay, HappyEyeballs.ConnectOneAsync, cancellationToken).ConfigureAwait(false);
+        return new NetworkStream(socket, ownsSocket: true);
     }
 }
