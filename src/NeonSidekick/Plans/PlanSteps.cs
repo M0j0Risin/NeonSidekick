@@ -303,7 +303,9 @@ public static class PlanSteps
     /// (2026-10-19, the second review of the Ralph loop: boxes matched by their words let a pass that reworded, added or deleted a line escape the
     /// put-back, and a reworded step could not be unticked). The longest run of lines with the same words in the same order is kept; between two
     /// kept lines (and before the first, after the last) a stretch with as many lines on both sides is paired in order — lines reworded in place;
-    /// -1 for a line that is new. Both lists are <see cref="Flat"/>, in the order of the text. Pure.
+    /// a stretch of unequal sides pairs, in order, the lines whose words are alike (<see cref="Alike"/>; 2026-10-19, the fourth review: a step
+    /// reworded beside an added line was left unpaired, read as deleted, and its words never put back); -1 for a line that is new. Both lists are
+    /// <see cref="Flat"/>, in the order of the text. Pure.
     /// </summary>
     public static int[] Align(IReadOnlyList<PlanStep> before, IReadOnlyList<PlanStep> after)
     {
@@ -336,6 +338,55 @@ public static class PlanSteps
                 {
                     pairs[gapA + k] = gapB + k;
                 }
+
+                return;
+            }
+
+            // Unequal sides: the order-keeping pairing of alike lines with the most likeness in all (a small table: a gap is a few lines).
+            int nb = endB - gapB;
+            int na = endA - gapA;
+            if (nb == 0 || na == 0)
+            {
+                return;
+            }
+
+            var sim = new double[nb, na];
+            for (int i = 0; i < nb; i++)
+            {
+                for (int j = 0; j < na; j++)
+                {
+                    sim[i, j] = Likeness(before[gapB + i].Text, after[gapA + j].Text);
+                }
+            }
+
+            var best = new double[nb + 1, na + 1];
+            for (int i = nb - 1; i >= 0; i--)
+            {
+                for (int j = na - 1; j >= 0; j--)
+                {
+                    double skip = Math.Max(best[i + 1, j], best[i, j + 1]);
+                    best[i, j] = sim[i, j] >= Alike ? Math.Max(skip, best[i + 1, j + 1] + sim[i, j]) : skip;
+                }
+            }
+
+            int x = 0;
+            int y = 0;
+            while (x < nb && y < na)
+            {
+                if (sim[x, y] >= Alike && best[x, y] == best[x + 1, y + 1] + sim[x, y])
+                {
+                    pairs[gapA + y] = gapB + x;
+                    x++;
+                    y++;
+                }
+                else if (best[x + 1, y] >= best[x, y + 1])
+                {
+                    x++;
+                }
+                else
+                {
+                    y++;
+                }
             }
         }
 
@@ -362,6 +413,65 @@ public static class PlanSteps
 
         CloseGap(n, m);
         return pairs;
+    }
+
+    /// <summary>How alike two lines' words must be (<see cref="Likeness"/>) for <see cref="Align"/> to pair them across a stretch of unequal sides.</summary>
+    public const double Alike = 0.5;
+
+    private static readonly Regex s_word = new(@"[\p{L}\p{N}]+", RegexOptions.CultureInvariant);
+
+    /// <summary>How alike two lines' words are: twice the words they share over the words of both (case aside), 0 to 1. Pure.</summary>
+    public static double Likeness(string a, string b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        var left = s_word.Matches(a).Select(m => m.Value.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        var right = s_word.Matches(b).Select(m => m.Value.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        return left.Count + right.Count == 0 ? 0 : 2.0 * left.Count(right.Contains) / (left.Count + right.Count);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> without the task lines of <paramref name="remove"/> and each one's own lines under it (deeper, no task line or heading:
+    /// its <c>Done when:</c> and notes), every other byte as it was (2026-10-19, the fourth review of the Ralph loop: the judge takes out the steps a
+    /// pass added). Each was parsed from this very text, so its <see cref="PlanStep.Line"/> is the line; a line whose task is not those words any
+    /// more is left. <c>Removed</c> holds the lines taken out, in order. Pure.
+    /// </summary>
+    public static (string Text, IReadOnlyList<int> Removed) WithoutTaskLines(string text, IEnumerable<PlanStep> remove)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(remove);
+        var lines = SplitKeepingEndings(text);
+        var gone = new SortedSet<int>();
+        foreach (var at in remove)
+        {
+            if (at.Line < 0 || at.Line >= lines.Count)
+            {
+                continue;
+            }
+
+            string content = lines[at.Line].Content.TrimEnd('\r');
+            string trimmed = content.TrimStart();
+            if (TaskBox(trimmed) is not { } task || !string.Equals(task.Text, at.Text, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            int indent = content.Length - trimmed.Length;
+            gone.Add(at.Line);
+            for (int i = at.Line + 1; i < lines.Count; i++)
+            {
+                string under = lines[i].Content.TrimEnd('\r');
+                string bare = under.TrimStart();
+                if (bare.Length == 0 || under.Length - bare.Length <= indent || HeadingLevel(bare) > 0 || TaskBox(bare) is not null)
+                {
+                    break;
+                }
+
+                gone.Add(i);
+            }
+        }
+
+        return gone.Count == 0 ? (text, []) : (Join(lines.Where((_, i) => !gone.Contains(i)).ToList()), gone.ToList());
     }
 
     private sealed class Builder(int line, int indent, string text, bool ticked)
@@ -474,7 +584,7 @@ public static class PlanSteps
         return rest.StartsWith(DoneWhenLabel, StringComparison.OrdinalIgnoreCase) && rest[DoneWhenLabel.Length..].Trim() is { Length: > 0 } words ? words : null;
     }
 
-    private static string Flat(string text) => string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    private static string Flat(string text) => PlanDocument.OneLine(text);
 
     /// <summary>The lines of <paramref name="text"/>, each with its own ending (<c>\r\n</c>, <c>\n</c>, or none on the last).</summary>
     private static List<(string Content, string Ending)> SplitKeepingEndings(string text)

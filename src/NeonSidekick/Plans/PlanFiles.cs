@@ -36,7 +36,8 @@ public sealed record PlanPick(PlanListing Plan, PlanPickMode Mode);
 /// The plan files under the working directory (2026-09-26, round two): saving a plan — for <c>present_plan</c>
 /// and <c>/plan save</c> alike —, rewriting a file's status, reading one whole, finding one by name and listing
 /// them all. Every path stays inside <see cref="PlanSlug.Folder"/>; every write goes through
-/// <see cref="WorkingDirectory.WriteText"/>, atomic and sandboxed.
+/// <see cref="WorkingDirectory.WriteText"/>, atomic and sandboxed. A plan another live process runs as a Ralph loop is never written
+/// (2026-10-19, the fourth review of the Ralph loop, <see cref="RalphLog.HeldElsewhere"/>): its lock is asked before each write.
 /// </summary>
 public static class PlanFiles
 {
@@ -61,6 +62,11 @@ public static class PlanFiles
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(markdown);
         var now = time.GetLocalNow();
+        if (session.Path is { } held && RalphLog.HeldElsewhere(files, held) is { } locked)
+        {
+            return (null, locked);
+        }
+
         string path = session.Path ?? PlanSlug.Choose(PlanSlug.From(string.IsNullOrWhiteSpace(name) ? title : name), p => Taken(files, p), now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         int revision = session.Path is null ? 1 : session.Revision + 1;
         // /plan chat (2026-10-17): while the requirement is only the conversation's opening, the plan's title is written in its place, and
@@ -89,6 +95,11 @@ public static class PlanFiles
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
+        if (RalphLog.HeldElsewhere(files, path) is { } locked)
+        {
+            return locked;
+        }
+
         if (ReadWhole(files, path) is not { } text)
         {
             // A file that is there but cannot be read whole is not "nothing at" it (2026-10-17).
@@ -110,6 +121,11 @@ public static class PlanFiles
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(review);
+        if (RalphLog.HeldElsewhere(files, path) is { } locked)
+        {
+            return locked;
+        }
+
         if (ReadWhole(files, path) is not { } text)
         {
             return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full)
@@ -130,6 +146,11 @@ public static class PlanFiles
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(step);
+        if (RalphLog.HeldElsewhere(files, path) is { } locked)
+        {
+            return locked;
+        }
+
         if (ReadWhole(files, path) is not { } text)
         {
             return FileText.Missing(path);

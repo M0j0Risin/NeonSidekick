@@ -172,7 +172,7 @@ public partial class SidekickAppTests
 
         Assert.Equal(["dotnet build"], _ralphVerifier.Commands);                // the baseline alone
         Assert.Contains("[notice] " + RalphText.CheckRefusedError("dotnet build", RalphText.PolicyOffNowReason), output);
-        Assert.Contains("[notice] " + RalphText.StopNotice(RalphStop.Stopped, HeadlessPlanPath, 0, 2), output);
+        Assert.Contains("[notice] " + RalphText.StopNotice(RalphStop.CheckRefused, HeadlessPlanPath, 0, 2), output);
         Assert.DoesNotContain("- [x] One", File.ReadAllText(HeadlessPlanFile));
     }
 
@@ -238,5 +238,26 @@ public partial class SidekickAppTests
 
         Assert.Contains("[error] " + RalphText.BadPassesError("999"), output);
         Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Headless_PlanRalph_OnlyTheFinalBaselineFails_IsSaid_AndTheLoopRunsChecked()
+    {
+        // 2026-10-19, the fourth review: headless refused every plan whose final check tests the work still to do.
+        ServerOn1234("llama");
+        Directory.CreateDirectory(Path.GetDirectoryName(HeadlessPlanFile)!);
+        var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+        File.WriteAllText(HeadlessPlanFile, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide", Verify: "dotnet build", Final: "dotnet test"), "Guide", HeadlessRalphSteps));
+        _settings.Update(d => { d.RalphLoopReviewer = "off"; d.ShellCommandAllowed = [.. Shell.CommandPrefix.All("dotnet build", Shell.ShellKinds.Resolve(d)), .. Shell.CommandPrefix.All("dotnet test", Shell.ShellKinds.Resolve(d))]; });
+        _ralphVerifier.Pass().Fail("FAILED NewFeature");
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Contains("[notice] " + RalphText.FinalBaselineFailedNotice("dotnet test"), output);
+        Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 7, finalOnly: false), output);
+        Assert.Equal(["dotnet build", "dotnet test", "dotnet build", "dotnet build", "dotnet test"], _ralphVerifier.Commands);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
     }
 }

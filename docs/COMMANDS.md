@@ -347,23 +347,26 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
 * **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*LLM Ralph loop reviewer*).
   * The diff the reviewer reads is redacted, and a secrets file (`.env`, a key) is named, never shown.
-  * Only the app ticks boxes. A box or a step's words a pass changed are put back, and a line it added is left unticked; a stopped pass decides nothing.
-  * A run that ends mid-pass (a crash, a profile switch) has that step's tick put back before the next pass.
+  * Only the app ticks boxes. A box or a step's words a pass changed are put back, and a step it added is taken out; a stopped pass decides nothing.
+  * The plan as the pass left it is kept in `as-left.md` beside the log, so an edit of your own made during a pass isn't lost. Type a message to pause the loop before you edit the plan.
+  * A run that ends mid-pass (a crash, a profile switch) has the plan put back the same way before the next pass. If that pass deleted unfinished steps, the loop won't start until you put them back.
   * The command is approved once with the loop; nothing runs under *Shell command policy* `off`, and a resume with it on runs the checks again.
   * The shell police judge it again before every run, so a script a pass rewrote can't slip past them; a refusal, or the policy turned `off`, stops the loop.
   * A failed check unticks the step, and the next pass gets its output.
 * **Before it starts:** the app asks "Start anyway?" on the PC and the Web UI when a plan doesn't suit a loop; a no leaves it presented, to revise.
   * That's one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
-* **The baseline:** the checks run once on the project as it is. If one fails you may start anyway; the steps then go unchecked and verify runs once at the end.
-* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan. Mind that folder before you commit `.neon/`.
+* **The baseline:** the checks run once on the project as it is. If `verify:` fails you may start anyway; the steps then go unchecked and verify runs once at the end.
+  * If only `final:` fails (say, a test of the work still to do), starting anyway keeps the steps checked.
+* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan: while the loop runs, the other can't run, open, revise or approve it. Mind that folder before you commit `.neon/`.
 * **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
   * Only then may a pass ask you anything (`ask_user`, the camera, the screen).
+  * Each answer goes in the log, so a Redo's note reaches the next pass after a pause or a restart too.
 * **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
 
 #### When a loop stops
 
 * **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
-* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, a pass that deleted unfinished steps, or an error.
+* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, a pass that deleted unfinished steps, a check refused as it was due, or an error.
 * **At a limit or by hand:** the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, or a working directory change.
 * **The stop tone:** a stop you didn't cause rings *LLM Ralph loop stop tone*.
 * **A message typed** during a pass, at the PC or on the Web UI, pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.

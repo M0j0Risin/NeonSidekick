@@ -1666,6 +1666,13 @@ public sealed partial class SidekickApp
                     return null;
                 }
 
+                // A plan another instance runs as a Ralph loop is never opened (2026-10-19, the fourth review): its writes would be the loop's to put back.
+                if (Plans.RalphLog.HeldElsewhere(files, found!) is { } held)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + held).ConfigureAwait(false);
+                    return null;
+                }
+
                 var header = Plans.PlanDocument.TryParse(opened);
                 string body = Plans.PlanDocument.Body(opened);
                 var (done, total) = Plans.PlanDocument.Progress(body);
@@ -1852,6 +1859,13 @@ public sealed partial class SidekickApp
                 if (Plans.PlanFiles.ReadWhole(files, path) is not { } text)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.PlanUnreadableError(path)).ConfigureAwait(false);
+                    return null;
+                }
+
+                // Another instance runs it as a Ralph loop (2026-10-19, the fourth review): never carried out here alongside it.
+                if (Plans.RalphLog.HeldElsewhere(files, path) is { } held)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + held).ConfigureAwait(false);
                     return null;
                 }
 

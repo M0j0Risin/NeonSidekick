@@ -18,6 +18,12 @@ public enum RalphCheckKind
 
     /// <summary>It could not start: its shell is not installed, the police refused it, the start failed.</summary>
     NotRun,
+
+    /// <summary>
+    /// The app would not run it when it was due (2026-10-19, the fourth review): the police, the policy turned off, a shell gone, or headless's allow
+    /// list. It came back as <see cref="Cancelled"/> before, so the loop stopped as if the user had stopped it, and the stop tone stayed silent.
+    /// </summary>
+    Refused,
 }
 
 /// <summary>A check's result: how it ended, its exit code, the last lines of its output (at most <see cref="RalphLog.TailLines"/>) and how long it ran.</summary>
@@ -32,6 +38,7 @@ public sealed record RalphCheckResult(RalphCheckKind Kind, int? ExitCode, string
         RalphCheckKind.Failed => "failed (exit " + (ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + ")",
         RalphCheckKind.TimedOut => "timed out",
         RalphCheckKind.Cancelled => "stopped",
+        RalphCheckKind.Refused => "refused",
         _ => "not run",
     };
 }

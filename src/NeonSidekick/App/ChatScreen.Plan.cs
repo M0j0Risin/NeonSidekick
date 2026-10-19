@@ -639,6 +639,14 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // Another instance runs it as a Ralph loop (2026-10-19, the fourth review): never carried out here alongside it.
+        if (RalphLog.HeldElsewhere(_files, path) is { } held)
+        {
+            _plan.ClearApproval();
+            _transcript.Error(held);
+            return false;
+        }
+
         if (PlanFiles.MarkFile(_files, path, PlanStatus.Approved, _time.GetLocalNow(), _plan.Requirement) is { } problem)
         {
             _transcript.Warning(problem);
@@ -921,6 +929,14 @@ internal sealed partial class ChatScreen
         if (PlanFiles.ReadWhole(_files, path) is not { } text)
         {
             _transcript.Error(PlanText.PlanUnreadableError(path));
+            return false;
+        }
+
+        // A plan another instance runs as a Ralph loop is never opened (2026-10-19, the fourth review: its draft status, a revision, an approve here
+        // were written under the loop, which put the step edits back as a pass's and wrote its own status over the draft).
+        if (RalphLog.HeldElsewhere(_files, path) is { } held)
+        {
+            _transcript.Error(held);
             return false;
         }
 

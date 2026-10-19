@@ -189,4 +189,32 @@ public sealed class PlanStepsTests
     {
         Assert.Equal(expected.Length == 0 ? [] : expected.Split('|'), PlanSteps.PathsIn(text));
     }
+
+    [Fact]
+    public void Align_AcrossAStretchOfUnequalSides_PairsTheAlikeLines()
+    {
+        // 2026-10-19, the fourth review: one line reworded and one added between two kept lines paired nothing, and the reworded step read as deleted.
+        var before = PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [ ] Update the unit tests\n- [ ] Four\n"));
+
+        Assert.Equal([0, 1, -1, 2], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [x] Update the unit tests first\n- [ ] run setup.ps1\n- [ ] Four\n"))));
+        Assert.Equal([0, -1, 1, 2], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [ ] run setup.ps1\n- [ ] Update unit tests\n- [ ] Four\n"))));
+        Assert.True(PlanSteps.Likeness("Update the unit tests", "update the unit tests first") > PlanSteps.Alike);
+        Assert.True(PlanSteps.Likeness("Update the unit tests", "run setup.ps1") < PlanSteps.Alike);
+    }
+
+    [Fact]
+    public void WithoutTaskLines_TakesALineOut_WithItsOwnLinesUnderIt_AndNothingElse()
+    {
+        const string text = "## Steps\r\n- [ ] One\r\n  Done when: one.md\r\n- [ ] New\r\n  Done when: new.md\r\n  a note\r\n  - [ ] Child\r\n- [ ] Two\r\n";
+        var steps = PlanSteps.Flat(PlanSteps.Parse(text));
+
+        var (left, removed) = PlanSteps.WithoutTaskLines(text, [steps.Single(s => s.Text == "New")]);
+
+        Assert.Equal("## Steps\r\n- [ ] One\r\n  Done when: one.md\r\n  - [ ] Child\r\n- [ ] Two\r\n", left);
+        Assert.Equal([3, 4, 5], removed);
+        // A line whose words are not those any more: left.
+        var (same, none) = PlanSteps.WithoutTaskLines(text, [steps[0] with { Text = "Other" }]);
+        Assert.Equal(text, same);
+        Assert.Empty(none);
+    }
 }

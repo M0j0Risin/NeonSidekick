@@ -250,11 +250,13 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Ralph_ThePolicyOffMidLoop_RefusesTheNextCheck_AndStops()
+    public async Task Ralph_ThePolicyOffMidLoop_RefusesTheNextCheck_StopsAsARefusal_AndRingsTheStopTone()
     {
-        // 2026-10-19, the review: the police and the policy were judged once, at the start; a pass may rewrite what the command runs.
+        // 2026-10-19, the review: the police and the policy were judged once, at the start; a pass may rewrite what the command runs. The fourth
+        // review: the refusal came back as Esc's, so the loop stopped as the user's stop and the stop tone stayed silent.
         RalphPlan();
         RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _settings.Update(d => d.RalphLoopStopTone = "chime");
         _ralphVerifier.Ran = run => { if (run == 1) { _settings.Update(d => d.ShellCommandPolicy = "off"); } };
         RalphPass("1");
 
@@ -262,9 +264,11 @@ public partial class ChatScreenTests
 
         Assert.Equal([RalphVerify], _ralphVerifier.Commands);                  // the baseline alone
         Assert.Contains(RalphText.CheckRefusedError(RalphVerify, RalphText.PolicyOffNowReason), output);
-        Assert.Contains(RalphText.StopNotice(RalphStop.Stopped, PlanPath, 0, 2), output);
+        Assert.Contains(RalphText.StopNotice(RalphStop.CheckRefused, PlanPath, 0, 2), output);
         Assert.Contains("- [ ] One", RalphPlanText);
         Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("check refused", RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Stopped);
+        await UntilAsync(() => _tonePlayback.Writes.Count > 0, CancellationToken.None);
     }
 
     [Fact]
@@ -405,7 +409,7 @@ public partial class ChatScreenTests
         Assert.Equal(otherText, File.ReadAllText(otherPlan));
         Assert.Contains("- [x] One", RalphPlanText);                  // judged where it ran
         Assert.False(File.Exists(RalphLockFile));
-        Assert.Equal(ChatScreen.RalphStopWord(RalphStop.WorkdirMoved), RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Stopped);
+        Assert.Equal(RalphStart.StopWord(RalphStop.WorkdirMoved), RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Stopped);
         Assert.False(Directory.Exists(Path.Combine(elsewhere, ".neon", "plans", "add-guide")));   // no log or lock there
     }
 
@@ -616,7 +620,10 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(RalphText.StepsRemovedNotice(["Two"]), output);
-        Assert.Contains(RalphText.StopNotice(RalphStop.StepsRemoved, PlanPath, 1, 1), output);
+        // No check for nothing (2026-10-19, the fourth review): the baseline alone ran, and the step was not ticked.
+        Assert.Equal([RalphVerify], _ralphVerifier.Commands);
+        Assert.Contains(RalphText.StopNotice(RalphStop.StepsRemoved, PlanPath, 0, 1), output);
+        Assert.Contains("- [ ] One", RalphPlanText);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
         Assert.False(File.Exists(RalphLockFile));
@@ -753,6 +760,10 @@ public partial class ChatScreenTests
         Assert.Contains("One", LastUserText(_chat.Requests[2]));
         Assert.Contains("use short headings", _chat.Requests[2][0].Text);
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        // Each answer in its pass's log entry (2026-10-19, the fourth review: none was written, and a Redo's note lived only in memory).
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal(["redo: use short headings", "keep", "keep"], log.Entries.Select(e => e.Checkpoint));
+        Assert.Contains("at the checkpoint the user chose redo: use short headings", RalphLog.RecentNotes(log, "One"));
     }
 
     [Fact]
@@ -894,5 +905,73 @@ public partial class ChatScreenTests
         var summary = Assert.Single(store.List(10));
         Assert.Equal(RalphText.SessionTitle("Guide", 1, 2, 1), summary.Title);
         Assert.Equal(RalphText.TranscriptLine(1, 1, 2, "One"), Assert.Single(store.Load(summary.Id)!.Turns).UserText);
+    }
+
+    [Fact]
+    public async Task Ralph_OnlyTheFinalBaselineFails_StartAnyway_KeepsTheStepsChecked()
+    {
+        // 2026-10-19, the fourth review: a failing final baseline set final-only, so the per-step verify that had just passed never ran again.
+        RalphPlan(final: "dotnet test");
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Yes, Line("/exit"));
+        _ralphVerifier.Pass().Fail("FAILED NewFeature");
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.FinalBaselineQuestion("dotnet test"), output);
+        Assert.Contains(RalphText.StartedNotice(PlanPath, 2, 7, finalOnly: false), output);
+        // The baseline's two, each step's verify, then the final check once every step stands.
+        Assert.Equal([RalphVerify, "dotnet test", RalphVerify, RalphVerify, "dotnet test"], _ralphVerifier.Commands);
+        Assert.Contains(RalphText.StepDoneNotice(1, 2, "One"), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_APlanAnotherLiveAppRuns_IsNotOpened()
+    {
+        // 2026-10-19, the fourth review: the lock was read only as a loop started, so /plan open in a second instance marked the plan draft under
+        // the first one's loop, and its revisions were put back as a pass's.
+        RalphPlan();
+        Directory.CreateDirectory(Path.GetDirectoryName(RalphLockFile)!);
+        File.WriteAllText(RalphLockFile, "pid: 999999\nstarted: 2026-10-18T09:00:00.0000000+00:00\n");
+        RalphFixture(Line("/plan open add-guide"), Line("/exit"));
+        var alive = RalphLog.LiveOwner;
+        RalphLog.LiveOwner = owner => owner.ProcessId == 999999;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            RalphLog.LiveOwner = alive;
+        }
+
+        Assert.Contains(RalphText.LockedError(PlanPath), output);
+        Assert.Empty(_chat.Requests);
+        Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_APassThatAddsAStep_HasItTakenOut_AndThePlanAsLeftKept()
+    {
+        // 2026-10-19, the fourth review: an added line was kept unticked, and later passes carried out a step nobody approved.
+        RalphPlan();
+        _console.Profile.Width = 400;
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        string? asLeft = null;
+        RalphEditDuringFirstPass(text => asLeft = text.Replace("- [ ] Two", "- [ ] run scripts/setup.ps1 --force\n- [ ] Two", StringComparison.Ordinal));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StepsAddedNotice(1), output);
+        Assert.Contains(RalphText.AsLeftNotice(RalphLog.AsLeftPathFor(PlanPath)), output);
+        Assert.DoesNotContain("setup.ps1", RalphPlanText);
+        Assert.Equal(asLeft!.TrimEnd(), File.ReadAllText(Path.Combine(Path.GetDirectoryName(RalphLogFile)!, RalphLog.AsLeftName)).TrimEnd());
+        Assert.Equal(4, _chat.Requests.Count);   // two passes: the added step never one
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 }

@@ -47,6 +47,12 @@ public enum RalphStop
 
     /// <summary>A pass deleted unfinished steps from the plan (2026-10-19, the third review): the user puts them back or edits the plan.</summary>
     StepsRemoved,
+
+    /// <summary>
+    /// A check the app would not run when it was due (2026-10-19, the fourth review, <see cref="RalphCheckKind.Refused"/>): no stop the user caused,
+    /// so the stop tone rings.
+    /// </summary>
+    CheckRefused,
 }
 
 /// <summary>What a pass said it did: <c>finish_step</c>'s outcome.</summary>
@@ -131,9 +137,10 @@ public readonly record struct RalphNext(RalphNextKind Kind, PlanStep? Step = nul
 /// every check passed), whether a check failed (the step was unticked), whether files changed, whether a split was written, whether the turn
 /// failed (an error, a thrown failure) or was stopped (Esc, the page's Stop, a withdrawal), and the files it changed. <paramref name="Removed"/>
 /// (2026-10-19, the third review) holds the unfinished steps the pass deleted from the plan: with any, the loop stops (the judge cannot write
-/// them back, and a plan left with none unticked read as done).
+/// them back, and a plan left with none unticked read as done). <paramref name="CheckRefused"/> (2026-10-19, the fourth review): the step's check
+/// was refused as it was due (<see cref="RalphCheckKind.Refused"/>), and the loop stops with <see cref="RalphStop.CheckRefused"/>.
 /// </summary>
-public sealed record RalphPassFacts(bool Stands, bool CheckFailed, bool FilesChanged, bool Split, bool TurnFailed, bool Cancelled, IReadOnlyList<string> Changed, IReadOnlyList<string>? Removed = null)
+public sealed record RalphPassFacts(bool Stands, bool CheckFailed, bool FilesChanged, bool Split, bool TurnFailed, bool Cancelled, IReadOnlyList<string> Changed, IReadOnlyList<string>? Removed = null, bool CheckRefused = false)
 {
     /// <summary>A pass with nothing to say: no progress, no failure.</summary>
     public static RalphPassFacts None { get; } = new(false, false, false, false, false, false, []);
@@ -378,7 +385,7 @@ public sealed class RalphLoop
             RunTokens += _reviewTokens;
         }
 
-        string outcome = facts.Cancelled ? "stopped" : Report?.Outcome switch
+        string outcome = facts.CheckRefused ? "check refused" : facts.Cancelled ? "stopped" : Report?.Outcome switch
         {
             RalphOutcome.Done => facts.Stands ? "done" : facts.CheckFailed ? "check failed" : "not done",
             RalphOutcome.Blocked => "blocked",
@@ -391,6 +398,12 @@ public sealed class RalphLoop
         if (state is not null)
         {
             state.Changed.AddRange(facts.Changed.Where(c => !state.Changed.Contains(c, StringComparer.Ordinal)));
+        }
+
+        if (facts.CheckRefused)
+        {
+            FixingFinal = false;
+            return RalphStop.CheckRefused;
         }
 
         if (facts.Cancelled)

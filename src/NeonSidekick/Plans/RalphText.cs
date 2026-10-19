@@ -78,7 +78,7 @@ public static class RalphText
             (finalFix
                 ? "- End the pass by calling finish_step: done (the check passes now), partial (some of it, files changed) or blocked (you cannot go on).\n"
                 : "- End the pass by calling finish_step: done (the step is finished and checked), partial (some of it, files changed), blocked (you cannot go on) or split.\n") +
-            "- " + (verify is { Length: > 0 } v ? $"After finish_step the app runs `{Flatten(v)}`" + (reviewed ? " and has your work reviewed" : "") + "; the step stands only if that passes." : reviewed ? "After finish_step your work is reviewed; the step stands only if the review passes." : "After finish_step the app looks at what changed.") + "\n";
+            "- " + (verify is { Length: > 0 } v ? $"After finish_step the app runs {Cmd(v)}" + (reviewed ? " and has your work reviewed" : "") + "; the step stands only if that passes." : reviewed ? "After finish_step your work is reviewed; the step stands only if the review passes." : "After finish_step the app looks at what changed.") + "\n";
         string learnedPart = learned is { Length: > 0 } l ? "Learned in earlier passes:\n" + l.Trim() + "\n" : "";
         string notesPart = notes is { Length: > 0 } n ? "Notes for this pass:\n" + n.Trim() + "\n" : "";
         int room = DirectiveBudget - head.Length - rules.Length - learnedPart.Length;
@@ -123,10 +123,10 @@ public static class RalphText
 
     /// <summary>The final fix pass's message, the failing check's tail inline. Pinned.</summary>
     public static string FinalFixMessage(string path, string command, string tail) =>
-        $"Every step of the plan in {path} is done, but the final check `{Flatten(command)}` fails. Make it pass, then call finish_step. Its output ends:\n\n" + Fence(tail);
+        $"Every step of the plan in {path} is done, but the final check {Cmd(command)} fails. Make it pass, then call finish_step. Its output ends:\n\n" + Fence(tail);
 
     /// <summary>A failed check's tail as the next pass's note. Pinned.</summary>
-    public static string CheckFailedNote(string command, string tail) => $"The last pass's check `{Flatten(command)}` failed; its output ends:\n" + Fence(tail);
+    public static string CheckFailedNote(string command, string tail) => $"The last pass's check {Cmd(command)} failed; its output ends:\n" + Fence(tail);
 
     /// <summary>A checkpoint's Redo as the next pass's note. Pinned.</summary>
     public static string RedoNote(string note) => "The user looked at the last pass's work and wants it redone: \"" + Flatten(note) + "\"";
@@ -147,12 +147,12 @@ public static class RalphText
         var parts = new List<string>();
         if (checks is { Verify.Length: > 0 } v)
         {
-            parts.Add($"verify `{Flatten(v.Verify!)}`");
+            parts.Add($"verify {Cmd(v.Verify!)}");
         }
 
         if (checks is { Final.Length: > 0 } f)
         {
-            parts.Add($"final `{Flatten(f.Final!)}`");
+            parts.Add($"final {Cmd(f.Final!)}");
         }
 
         if (parts.Count == 0)
@@ -176,36 +176,47 @@ public static class RalphText
     public const string BaselineLabel = "checking the project before the loop";
 
     /// <summary>A check's busy label while it runs.</summary>
-    public static string CheckLabel(string command) => "checking: " + Cut(Flatten(command), 60);
+    public static string CheckLabel(string command) => "checking: " + Cut(ShownCommand(command), 60);
 
-    /// <summary>The baseline failed: its question, on the PC and the page. Pinned.</summary>
+    /// <summary>The baseline's verify command failed: its question, on the PC and the page. Pinned.</summary>
     public static string BaselineQuestion(string command) =>
-        $"The check `{Flatten(command)}` fails before the loop starts. Start anyway? The steps then go unchecked and it runs once at the end.";
+        $"The check {Cmd(command)} fails before the loop starts. Start anyway? The steps then go unchecked and it runs once at the end.";
+
+    /// <summary>
+    /// Only the baseline's final command failed (2026-10-19, the fourth review: start anyway dropped the per-step verify that had just passed, though
+    /// a final check that tests the work still to do fails before the loop by design): its question; the steps stay checked. Pinned.
+    /// </summary>
+    public static string FinalBaselineQuestion(string command) =>
+        $"The final check {Cmd(command)} fails before the loop starts. Start anyway? The steps are still checked, and it runs once they are all done.";
+
+    /// <summary>Only the final command failed headless (2026-10-19, the fourth review: it refused every plan whose final check tests the new work): said, and the loop goes on. Pinned.</summary>
+    public static string FinalBaselineFailedNotice(string command) =>
+        $"{Glyph} The final check {Cmd(command)} fails before the loop starts: it runs once every step is done.";
 
     /// <summary>The baseline failed headless, where nobody can be asked. Pinned.</summary>
     public static string BaselineRefusedHeadless(string command) =>
-        $"The check `{Flatten(command)}` fails before the loop starts, and headless cannot ask: fix the project, or take the verify line out of the plan's header.";
+        $"The check {Cmd(command)} fails before the loop starts, and headless cannot ask: fix the project, or take the verify line out of the plan's header.";
 
     /// <summary>
     /// Headless, before the baseline (2026-10-19, the review: the plan's commands ran unannounced): the checks the loop will run, as the plan's header
     /// names them. Pinned.
     /// </summary>
     public static string HeadlessChecksNotice(string? verify, string? final) =>
-        $"{Glyph} The loop's checks: verify {(verify is null ? "none" : "`" + Flatten(verify) + "`")}, final {(final is null ? "none" : "`" + Flatten(final) + "`")}.";
+        $"{Glyph} The loop's checks: verify {(verify is null ? "none" : Cmd(verify))}, final {(final is null ? "none" : Cmd(final))}.";
 
     /// <summary>
     /// Headless under <c>Shell command policy</c> ask (2026-10-19, the review): a check not on the allow list is refused, as <c>run_command</c>'s
     /// would be, since nobody can be asked. Pinned.
     /// </summary>
     public static string HeadlessAskRefusedError(string command) =>
-        $"The check `{Flatten(command)}` is not on the shell allow list, and headless cannot ask: allow it, or run with NEONSIDEKICK_COMMAND_POLICY=yolo.";
+        $"The check {Cmd(command)} is not on the shell allow list, and headless cannot ask: allow it, or run with NEONSIDEKICK_COMMAND_POLICY=yolo.";
 
     /// <summary>
     /// A check refused when it was about to run (2026-10-19, the review: the police and the policy are asked again before every run, since a pass may
     /// rewrite the script a command runs): the loop stops. Pinned.
     /// </summary>
     public static string CheckRefusedError(string command, string reason) =>
-        $"The check `{Flatten(command)}` was refused: {reason.TrimEnd('.')}. The Ralph loop stops.";
+        $"The check {Cmd(command)} was refused: {reason.TrimEnd('.')}. The Ralph loop stops.";
 
     /// <summary>The policy turned <c>off</c> while a loop ran (2026-10-19): its next check is refused and the loop stops. Pinned.</summary>
     public const string PolicyOffNowReason = "Shell command policy is off now";
@@ -333,8 +344,8 @@ public static class RalphText
 
     public static string StepDoneNotice(int step, int steps, string text) => $"{Glyph} Step {N(step)} of {N(steps)} stands: {Flatten(text)}";
     public static string StepUncheckedNotice(int step, int steps, string text) => $"{Glyph} Step {N(step)} of {N(steps)} ticked, unchecked: {Flatten(text)}";
-    public static string CheckFailedNotice(string command) => $"{Glyph} The check `{Flatten(command)}` failed: the step is unticked, and the next pass gets its output.";
-    public static string CheckTimedOutNotice(string command, int seconds) => $"{Glyph} The check `{Flatten(command)}` ran past {N(seconds)} s and was stopped: the step is unticked.";
+    public static string CheckFailedNotice(string command) => $"{Glyph} The check {Cmd(command)} failed: the step is unticked, and the next pass gets its output.";
+    public static string CheckTimedOutNotice(string command, int seconds) => $"{Glyph} The check {Cmd(command)} ran past {N(seconds)} s and was stopped: the step is unticked.";
     public const string CheckStoppedNotice = Glyph + " The check was stopped: the step is unticked.";
     public static string ReviewFailedNotice(string reason) => $"{Glyph} The review found the step not done: {Flatten(reason)}";
     public const string ReviewUnclearNotice = Glyph + " The review gave no clear verdict: the step stands, unchecked.";
@@ -345,11 +356,32 @@ public static class RalphText
     public static string StepsRemovedNotice(IReadOnlyList<string> steps) =>
         $"{Glyph} The pass deleted {(steps.Count == 1 ? "an unfinished step" : N(steps.Count) + " unfinished steps")} from the plan: " + string.Join("; ", steps.Take(5).Select(Flatten)) + (steps.Count > 5 ? $" … and {N(steps.Count - 5)} more" : "");
     public static string InPassPutBackNotice(string text) => $"{Glyph} The last run ended in the middle of a pass on \"{Flatten(text)}\": its box is put back, unchecked.";
+
+    /// <summary>
+    /// The last run ended mid-pass and that pass deleted unfinished steps (2026-10-19, the fourth review: only its own box was put back): nothing
+    /// starts until the plan is put right; the next start runs. Pinned.
+    /// </summary>
+    public static string InPassRemovedError(string path, IReadOnlyList<string> steps) =>
+        $"The last run on {path} ended in the middle of a pass that deleted {(steps.Count == 1 ? "an unfinished step" : N(steps.Count) + " unfinished steps")} " +
+        $"({string.Join("; ", steps.Take(5).Select(Flatten))}{(steps.Count > 5 ? $" … and {N(steps.Count - 5)} more" : "")}): put them back or edit the plan, then start it again";
+
+    /// <summary>
+    /// A pass added task lines to the plan (2026-10-19, the fourth review: they were kept unticked, so later passes carried out steps nobody approved):
+    /// taken out. Pinned.
+    /// </summary>
+    public static string StepsAddedNotice(int count) => $"{Glyph} The pass added {(count == 1 ? "a step" : N(count) + " steps")} to the plan: taken out.";
+
+    /// <summary>
+    /// The plan as a pass left it, kept beside the log whenever the judge put lines back (2026-10-19, the fourth review: an edit the user made in an
+    /// editor during a pass was reverted with no trace, since the judge cannot tell it from the model's). Pinned.
+    /// </summary>
+    public static string AsLeftNotice(string path) =>
+        $"{Glyph} The plan as the pass left it is kept in {path}: copy back any edit of your own (a message pauses the loop before you edit the plan).";
     public static string BoxesPutBackNotice(int count) => $"{Glyph} The pass changed {(count == 1 ? "another step's box" : N(count) + " other steps' boxes")}: put back.";
     public static string ParentTickedNotice(string text) => $"{Glyph} Every part done: {Flatten(text)}";
     public const string RetryNotice = Glyph + " The pass failed: trying the step once more.";
     public const string PicturesDroppedNotice = Glyph + " The retry goes without the plan's pictures.";
-    public static string FinalFailedOnceNotice(string command) => $"{Glyph} The final check `{Flatten(command)}` fails: one pass to fix it.";
+    public static string FinalFailedOnceNotice(string command) => $"{Glyph} The final check {Cmd(command)} fails: one pass to fix it.";
     public static string BlockedNotice(string summary) => $"{Glyph} The pass is blocked: {Flatten(summary)}";
 
     // ── The stop ───────────────────────────────────────────────────────────
@@ -375,6 +407,7 @@ public static class RalphText
             RalphStop.Locked => $"{Glyph} Ralph loop not started: another NeonSidekick is running {path}.",
             RalphStop.UserStopped => $"{Glyph} Ralph loop stopped at the checkpoint ({N(done)} of {N(total)} steps done)." + resume,
             RalphStop.StepsRemoved => $"{Glyph} Ralph loop stopped: the pass deleted unfinished steps from {path} ({N(done)} of {N(total)} steps done); put them back or edit the plan, then" + resume,
+            RalphStop.CheckRefused => $"{Glyph} Ralph loop stopped: a check was refused ({N(done)} of {N(total)} steps done); allow it, or fix what it runs, then" + resume,
             _ => $"{Glyph} Ralph loop not started.",
         };
     }
@@ -422,6 +455,7 @@ public static class RalphText
         RalphStop.FinalFailed => "final failed",
         RalphStop.UserStopped => "stopped at the checkpoint",
         RalphStop.StepsRemoved => "steps removed",
+        RalphStop.CheckRefused => "check refused",
         _ => "stopped",
     };
 
@@ -473,6 +507,17 @@ public static class RalphText
     public const string RedoPrompt = "What should the next pass do differently? Type it below.";
     public static string CheckpointCaption(int step, int steps, string text, string summary) => $"Step {N(step)} of {N(steps)}: {Flatten(text)} — {Flatten(summary)}";
     public const string NoChangesLine = "(no file changed)";
+
+    /// <summary>
+    /// A checkpoint's answer as the pass's log entry keeps it (2026-10-19, the fourth review: it was never written, so a Redo's note was lost at a pause,
+    /// a crash or a resume, and the next pass read the entry as done). Pinned.
+    /// </summary>
+    public static string CheckpointLogText(App.RalphCheckpointChoice choice, string? note) => choice switch
+    {
+        App.RalphCheckpointChoice.Redo => note is { Length: > 0 } n ? "redo: " + Flatten(n) : "redo",
+        App.RalphCheckpointChoice.Stop => "stop",
+        _ => "keep",
+    };
 
     // ── The reviewer ───────────────────────────────────────────────────────
 
@@ -532,7 +577,51 @@ public static class RalphText
 
     private static string TokensPart(long tokens, string lead = ", ") => tokens <= 0 ? "" : lead + App.UsageText.Compact(tokens);
 
-    private static string Flatten(string text) => string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Replace('"', '\'');
+    /// <summary>Words on one line inside the directive's and the notices' double quotes: a double quote of their own written as a single one.</summary>
+    private static string Flatten(string text) => PlanDocument.OneLine(text).Replace('"', '\'');
+
+    /// <summary>
+    /// A check command as the user and the model are shown it, character for character as it runs (2026-10-19, the fourth review: <see cref="Flatten"/>
+    /// turned every double quote into a single one, so a PowerShell <c>"$(…)"</c>, which runs, was approved as an inert <c>'$(…)'</c>): quotes kept;
+    /// a line break written <c>\n</c>, a tab <c>\t</c>, and every other control or invisible formatting character as <c>\u{1B}</c> (an escape sequence
+    /// could hide part of the command on a terminal, a bidirectional override reorder it). Pinned.
+    /// </summary>
+    public static string ShownCommand(string command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var shown = new System.Text.StringBuilder(command.Length);
+        foreach (char c in command)
+        {
+            switch (c)
+            {
+                case '\n':
+                    shown.Append("\\n");
+                    break;
+                case '\r':
+                    shown.Append("\\r");
+                    break;
+                case '\t':
+                    shown.Append("\\t");
+                    break;
+                default:
+                    if (char.IsControl(c) || CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+                    {
+                        shown.Append("\\u{").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture)).Append('}');
+                    }
+                    else
+                    {
+                        shown.Append(c);
+                    }
+
+                    break;
+            }
+        }
+
+        return shown.ToString();
+    }
+
+    /// <summary>A check command in backticks, <see cref="ShownCommand"/>.</summary>
+    private static string Cmd(string command) => "`" + ShownCommand(command) + "`";
 
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
 

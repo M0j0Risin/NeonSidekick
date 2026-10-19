@@ -61,29 +61,31 @@ internal static class RalphJudge
             return new RalphJudged(RalphPassFacts.None with { Cancelled = cancelled, TurnFailed = failed }, "none", null, "off", [], "");
         }
 
-        // The task lines put back as they were (Restore: every other box, every step's words, the pass's own box too when it was stopped); the steps
-        // it deleted said, and the loop stops on them (2026-10-19, the third review: deleting the steps left let a plan read as done).
+        // The task lines put back as they were (Restore: every other box, every step's words, the pass's own box too when it was stopped, the lines it
+        // added taken out); the steps it deleted said, and the loop stops on them (2026-10-19, the third review: deleting the steps left let a plan read
+        // as done) with no check run and its own tick put back too (2026-10-19, the fourth review: the verify and the review ran first, for nothing).
         var restore = Restore(text, lines, step, ownBoxBack: cancelled);
+        if (restore.Removed.Count > 0 && !cancelled)
+        {
+            restore = Restore(text, lines, step, ownBoxBack: true);
+        }
+
         var removed = restore.Removed;
-        if (!string.Equals(restore.Text, text, StringComparison.Ordinal) && host.Files.WriteText(path, restore.Text, overwrite: true).Outcome == FileOutcome.Ok)
+        var (written, asLeft) = Apply(host.Files, path, text, restore);
+        if (written)
         {
             text = restore.Text;
-            if (restore.BoxesPutBack > 0)
+            foreach (string notice in RestoreNotices(restore, asLeft))
             {
-                host.Notice(RalphText.BoxesPutBackNotice(restore.BoxesPutBack));
-            }
-
-            if (restore.WordsPutBack > 0)
-            {
-                host.Notice(RalphText.WordsPutBackNotice(restore.WordsPutBack));
+                host.Notice(notice);
             }
 
             if (restore.OwnBoxPutBack)
             {
-                host.Log($"ralph: pass {loop.Pass} was stopped with its own box ticked; put back");
+                host.Log($"ralph: pass {loop.Pass} ended with its own box ticked and no judgment to stand on; put back");
             }
 
-            host.Log($"ralph: pass {loop.Pass} changed {restore.BoxesPutBack} other boxes and the words of {restore.WordsPutBack} steps; put back");
+            host.Log($"ralph: pass {loop.Pass} changed {restore.BoxesPutBack} other boxes and the words of {restore.WordsPutBack} steps, and added {restore.Added}; put back");
         }
 
         if (removed.Count > 0)
@@ -98,6 +100,11 @@ internal static class RalphJudge
         if (cancelled)
         {
             return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed, removed), "none", null, "off", delta.Flags, delta.Diff);
+        }
+
+        if (removed.Count > 0)
+        {
+            return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, false, delta.Changed, removed), "none", null, "off", delta.Flags, delta.Diff);
         }
 
         if (failed && report is null && hadPictures)
@@ -165,6 +172,13 @@ internal static class RalphJudge
                 {
                     var result = await host.CheckAsync(verify, ShellOf(snapshot), RalphText.CheckLabel(verify), cancellationToken).ConfigureAwait(false);
                     check = result?.Word ?? "not run";
+                    if (result is { Kind: RalphCheckKind.Refused })
+                    {
+                        // Refused as it was due (the host said why): unticked, and the loop stops as no stop the user caused (2026-10-19, the fourth review).
+                        SetBox(host, path, target, false);
+                        return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, false, delta.Changed, removed, CheckRefused: true), check, null, review, delta.Flags, delta.Diff);
+                    }
+
                     if (result is { Kind: RalphCheckKind.Cancelled } || cancellationToken.IsCancellationRequested)
                     {
                         SetBox(host, path, target, false);
@@ -249,16 +263,17 @@ internal static class RalphJudge
         }
     }
 
-    /// <summary>What <see cref="Restore"/> made of the plan after a pass.</summary>
-    internal sealed record RalphRestore(string Text, PlanStep? Own, int BoxesPutBack, int WordsPutBack, bool OwnBoxPutBack, IReadOnlyList<string> Removed);
+    /// <summary>What <see cref="Restore"/> made of the plan after a pass: <paramref name="Added"/> counts the task lines it took out.</summary>
+    internal sealed record RalphRestore(string Text, PlanStep? Own, int BoxesPutBack, int WordsPutBack, bool OwnBoxPutBack, IReadOnlyList<string> Removed, int Added = 0);
 
     /// <summary>
     /// The plan's task lines after a pass (<paramref name="text"/>) put back as they were before it (<paramref name="lines"/>, <see cref="PlanSteps.Flat"/>
     /// of the file whole), each line paired with the one it was (<see cref="PlanSteps.Align"/>, then a line still unpaired with one of the same words:
-    /// a moved line): every other step's box (the loop ticks; the model never decides another step), a new line's unticked, and every step's words
-    /// — the pass's own too (2026-10-19, the third review: a pass that reworded its line, or a later one, turned its step into other work, and gave
-    /// its step fresh counters, past its pass limit). The pass's own box stays as the model left it unless <paramref name="ownBoxBack"/> (a stopped
-    /// pass). <see cref="RalphRestore.Removed"/> holds the unfinished steps the pass deleted, which cannot be written back. Pure.
+    /// a moved line): every other step's box (the loop ticks; the model never decides another step), and every step's words — the pass's own too
+    /// (2026-10-19, the third review: a pass that reworded its line, or a later one, turned its step into other work, and gave its step fresh counters,
+    /// past its pass limit). A line the pass added is taken out with its own lines under it (2026-10-19, the fourth review: kept unticked, it became a
+    /// step nobody approved, which later passes carried out). The pass's own box stays as the model left it unless <paramref name="ownBoxBack"/> (a
+    /// stopped pass). <see cref="RalphRestore.Removed"/> holds the unfinished steps the pass deleted, which cannot be written back. Pure.
     /// </summary>
     internal static RalphRestore Restore(string text, IReadOnlyList<PlanStep> lines, PlanStep? step, bool ownBoxBack)
     {
@@ -292,12 +307,19 @@ internal static class RalphJudge
         }
 
         var edits = new List<(PlanStep At, bool Ticked, string Words)>();
+        var added = new List<PlanStep>();
         int boxes = 0;
         int words = 0;
         bool ownBack = false;
         for (int i = 0; i < now.Count; i++)
         {
             var line = now[i];
+            if (pairs[i] < 0 && i != own)
+            {
+                added.Add(line);
+                continue;
+            }
+
             var was = pairs[i] >= 0 ? lines[pairs[i]] : null;
             bool ticked = i == own && !ownBoxBack ? line.Ticked : was?.Ticked ?? false;
             string wording = was?.Text ?? line.Text;
@@ -326,8 +348,58 @@ internal static class RalphJudge
 
         var removed = lines.Where((line, k) => !paired.Contains(k) && !line.Ticked).Select(line => line.Text).ToList();
         string restored = edits.Count == 0 ? text : PlanSteps.WithTaskLines(text, edits);
-        var ownNow = own < 0 ? null : PlanSteps.Flat(PlanSteps.Parse(restored)).FirstOrDefault(s => s.Line == now[own].Line);
-        return new RalphRestore(restored, ownNow, boxes, words, ownBack, removed);
+        // The added lines go last: the edits were placed by line, and taking lines out moves those after them.
+        var (taken, gone) = added.Count == 0 ? (restored, (IReadOnlyList<int>)[]) : PlanSteps.WithoutTaskLines(restored, added);
+        int ownLine = own < 0 ? -1 : now[own].Line - gone.Count(g => g < now[own].Line);
+        var ownNow = own < 0 ? null : PlanSteps.Flat(PlanSteps.Parse(taken)).FirstOrDefault(s => s.Line == ownLine);
+        return new RalphRestore(taken, ownNow, boxes, words, ownBack, removed, gone.Count == 0 ? 0 : added.Count);
+    }
+
+    /// <summary>
+    /// <paramref name="restore"/> written over the plan (<paramref name="text"/> as the pass left it) when it changed anything; when it put back
+    /// another step's box, words or an added line, the plan as the pass left it is kept beside the log first (<see cref="RalphLog.KeepAsLeft"/>,
+    /// 2026-10-19, the fourth review: the judge cannot tell the user's own edits during a pass from the model's, and reverted them with no trace).
+    /// Whether it was written, and the copy's path.
+    /// </summary>
+    internal static (bool Written, string? AsLeft) Apply(WorkingDirectory files, string path, string text, RalphRestore restore)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(restore);
+        if (string.Equals(restore.Text, text, StringComparison.Ordinal))
+        {
+            return (false, null);
+        }
+
+        string? asLeft = restore.BoxesPutBack + restore.WordsPutBack + restore.Added > 0 ? RalphLog.KeepAsLeft(files, path, text) : null;
+        return (files.WriteText(path, restore.Text, overwrite: true).Outcome == FileOutcome.Ok, asLeft);
+    }
+
+    /// <summary>What a written <paramref name="restore"/> says: the boxes and words put back, the lines taken out, and where the plan as the pass left it is.</summary>
+    internal static IReadOnlyList<string> RestoreNotices(RalphRestore restore, string? asLeft)
+    {
+        ArgumentNullException.ThrowIfNull(restore);
+        var notices = new List<string>();
+        if (restore.BoxesPutBack > 0)
+        {
+            notices.Add(RalphText.BoxesPutBackNotice(restore.BoxesPutBack));
+        }
+
+        if (restore.WordsPutBack > 0)
+        {
+            notices.Add(RalphText.WordsPutBackNotice(restore.WordsPutBack));
+        }
+
+        if (restore.Added > 0)
+        {
+            notices.Add(RalphText.StepsAddedNotice(restore.Added));
+        }
+
+        if (asLeft is not null)
+        {
+            notices.Add(RalphText.AsLeftNotice(asLeft));
+        }
+
+        return notices;
     }
 
     /// <summary>
@@ -341,32 +413,62 @@ internal static class RalphJudge
         bool changed = false;
         if (PlanFiles.ReadWhole(files, path) is { } text)
         {
-            var restore = Restore(text, lines, step, ownBoxBack: true);
-            changed = !string.Equals(restore.Text, text, StringComparison.Ordinal) && files.WriteText(path, restore.Text, overwrite: true).Outcome == FileOutcome.Ok;
+            changed = Apply(files, path, text, Restore(text, lines, step, ownBoxBack: true)).Written;
         }
 
-        RalphLog.MarkInPass(files, path, null);
+        RalphLog.ClearInPass(files, path);
         return changed;
     }
 
+    /// <summary>What <see cref="RecoverInPass"/> did: the notices it has to say, whether the plan changed, and the unfinished steps the pass deleted.</summary>
+    internal sealed record RalphRecovered(IReadOnlyList<string> Notices, bool Changed, IReadOnlyList<string> Removed);
+
     /// <summary>
     /// A start on a plan whose last run ended in the middle of a pass (a crash, a kill: the log's in-pass mark, <see cref="RalphLog.InPassOf"/>;
-    /// 2026-10-19, the third review): that step's box, ticked by the model with no check, put back unticked, and the mark cleared. The step's words
-    /// when its box was put back, else null. A step the judge ticked just before the run ended is unticked too: the next pass finds it done and
-    /// says so.
+    /// 2026-10-19, the third review): the plan put back as the judge puts back a stopped pass (<see cref="Restore"/> over the task lines the mark keeps,
+    /// 2026-10-19, the fourth review: only the pass's own box went back, so other boxes it ticked, steps it reworded or added stood, and a resume passed
+    /// them by), and the mark cleared. A log the previous build wrote keeps no lines: its step's box alone goes back. The steps the pass deleted
+    /// (<see cref="RalphRecovered.Removed"/>) refuse that start; the next one runs. Null with no mark.
     /// </summary>
-    public static string? RecoverInPass(WorkingDirectory files, string path)
+    public static RalphRecovered? RecoverInPass(WorkingDirectory files, string path)
     {
         ArgumentNullException.ThrowIfNull(files);
-        if (RalphLog.InPassOf(RalphLog.Read(files, path)?.Head) is not { } stale)
+        var head = RalphLog.Read(files, path)?.Head;
+        var stale = RalphLog.InPassOf(head);
+        if (head?.InPassLines is not { } lines)
         {
-            return null;
+            if (stale is null)
+            {
+                return null;
+            }
+
+            bool putBack = PlanFiles.ReadWhole(files, path) is { } old && PlanSteps.Find(old, stale) is { Ticked: true, IsLeaf: true } ticked
+                && PlanFiles.SetStepBox(files, path, ticked, false) is null;
+            RalphLog.ClearInPass(files, path);
+            return new RalphRecovered(putBack ? [RalphText.InPassPutBackNotice(stale.Text)] : [], putBack, []);
         }
 
-        bool putBack = PlanFiles.ReadWhole(files, path) is { } text && PlanSteps.Find(text, stale) is { Ticked: true, IsLeaf: true } ticked
-            && PlanFiles.SetStepBox(files, path, ticked, false) is null;
-        RalphLog.MarkInPass(files, path, null);
-        return putBack ? stale.Text : null;
+        var notices = new List<string>();
+        IReadOnlyList<string> removed = [];
+        bool changed = false;
+        if (PlanFiles.ReadWhole(files, path) is { } text)
+        {
+            var restore = Restore(text, lines, stale, ownBoxBack: true);
+            removed = restore.Removed;
+            (changed, string? asLeft) = Apply(files, path, text, restore);
+            if (changed)
+            {
+                if (restore.OwnBoxPutBack && stale is not null)
+                {
+                    notices.Add(RalphText.InPassPutBackNotice(stale.Text));
+                }
+
+                notices.AddRange(RestoreNotices(restore, asLeft));
+            }
+        }
+
+        RalphLog.ClearInPass(files, path);
+        return new RalphRecovered(notices, changed, removed);
     }
 
     /// <summary>The header's status and progress over the loop's leaves: incomplete while any is left.</summary>

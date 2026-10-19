@@ -216,14 +216,18 @@ public sealed class RalphLogTests : IDisposable
         // 2026-10-19, the third review: a run that ended mid-pass left the model's tick standing unchecked; the mark names the step to put back.
         Assert.Null(RalphLog.SetHead(_files, Plan, Head));
         var step = new PlanStep(1, 7, 0, "Write the outline", false, null, [], [], []);
+        var lines = new[] { new PlanStep(0, 6, 0, "Gather notes", true, null, [], [], []), step };
 
-        Assert.Null(RalphLog.MarkInPass(_files, Plan, step));
+        Assert.Null(RalphLog.MarkInPass(_files, Plan, step, lines));
         var marked = RalphLog.Read(_files, Plan)!.Head!;
         Assert.Equal(7, marked.InPassLine);
         Assert.Equal("Write the outline", marked.InPassStep);
         Assert.True(RalphLog.InPassOf(marked) is { Line: 7, Text: "Write the outline", Ticked: false, IsLeaf: true });
+        // The task lines as the pass began (2026-10-19, the fourth review), read back.
+        Assert.Equal([(6, true, "Gather notes"), (7, false, "Write the outline")], marked.InPassLines!.Select(l => (l.Line, l.Ticked, l.Text)));
+        Assert.True(RalphLog.InPass(marked));
 
-        Assert.Null(RalphLog.MarkInPass(_files, Plan, null));
+        Assert.Null(RalphLog.ClearInPass(_files, Plan));
         var cleared = RalphLog.Read(_files, Plan)!.Head!;
         Assert.Equal(Head, cleared);
         Assert.Null(RalphLog.InPassOf(cleared));
@@ -243,5 +247,53 @@ public sealed class RalphLogTests : IDisposable
         string notes = RalphLog.RecentNotes(log, "Write the body")!;
         Assert.Contains("notes for the next pass: the migration is half applied", notes);
         Assert.Contains("pass 2", notes);   // the latest too, its long note cut so both fit
+    }
+
+    [Fact]
+    public void TheCheckpointsAnswer_IsWrittenIntoItsPass_AndHandedOn()
+    {
+        // 2026-10-19, the fourth review: the entry's checkpoint was never set, so a Redo's note was lost at a pause, a crash or a resume.
+        Assert.Null(RalphLog.Append(_files, Plan, Head, Entry(1, 1, "Write the body"), []));
+        Assert.Null(RalphLog.Append(_files, Plan, Head, Entry(2, 2, "Write the index"), []));
+
+        Assert.Null(RalphLog.SetCheckpoint(_files, Plan, 1, "redo: use the existing parser (password=hunter2)"));
+        Assert.Null(RalphLog.SetCheckpoint(_files, Plan, 9, "keep"));   // no such pass: nothing
+
+        var log = RalphLog.Read(_files, Plan)!;
+        Assert.StartsWith("redo: use the existing parser", log.Entries[0].Checkpoint);
+        Assert.DoesNotContain("hunter2", log.Entries[0].Checkpoint);
+        Assert.Null(log.Entries[1].Checkpoint);
+        Assert.Contains("at the checkpoint the user chose redo: use the existing parser", RalphLog.RecentNotes(log, "Write the body"));
+    }
+
+    [Fact]
+    public void APlanLockedByAnotherLiveProcess_IsNeverWritten_ThisProcesssOwnOrAStaleOneIs()
+    {
+        // 2026-10-19, the fourth review: the lock was read only as a loop started, so a second instance's /plan open, revision or approve wrote
+        // the plan the first one's loop was running.
+        Assert.Equal(FileOutcome.Ok, _files.WriteText(Plan, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 1, T0, T0, "Guide"), "Guide", "## Steps\n- [ ] One\n"), overwrite: true).Outcome);
+        var other = new RalphLog.LockOwner(424242, T0);
+        Assert.True(RalphLog.TryLock(_files, Plan, other, _ => false));
+        var alive = RalphLog.LiveOwner;
+        try
+        {
+            RalphLog.LiveOwner = owner => owner == other;
+            Assert.Equal(RalphText.LockedError(Plan), RalphLog.HeldElsewhere(_files, Plan));
+            Assert.Equal(RalphText.LockedError(Plan), PlanFiles.MarkFile(_files, Plan, PlanStatus.Draft, T0, "Guide"));
+            Assert.Equal(PlanStatus.Incomplete, PlanDocument.TryParse(File.ReadAllText(Path.Combine(_dir, ".neon", "plans", "guide.md")))!.Status);
+
+            RalphLog.LiveOwner = _ => false;   // its owner gone: stale
+            Assert.Null(RalphLog.HeldElsewhere(_files, Plan));
+            Assert.Null(PlanFiles.MarkFile(_files, Plan, PlanStatus.Draft, T0, "Guide"));
+        }
+        finally
+        {
+            RalphLog.LiveOwner = alive;
+        }
+
+        File.Delete(Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName));
+        Assert.True(RalphLog.TryLock(_files, Plan, RalphLog.Me, _ => true));
+        Assert.Null(RalphLog.HeldElsewhere(_files, Plan));   // this process's own
+        RalphLog.Unlock(_files, Plan, RalphLog.Me);
     }
 }

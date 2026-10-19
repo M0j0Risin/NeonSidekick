@@ -61,16 +61,105 @@ public sealed class RalphJudgeTests
     }
 
     [Fact]
-    public void AMovedLine_KeepsItsBox_AndANewLineIsUnticked()
+    public void AMovedLine_KeepsItsBox_AndANewLineIsTakenOut()
     {
-        string after = "# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n- [ ] Three\n- [ ] Four\n- [x] Zero\n- [x] Five, new\n";
+        // 2026-10-19, the fourth review: a new line was kept unticked, a step nobody approved that later passes carried out.
+        string after = "# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n- [ ] Three\n- [ ] Four\n- [x] Zero\n- [x] Five, new\n  Done when: five.md\n";
 
         var restore = RalphJudge.Restore(after, Lines(Before), Step(Before, "One"), ownBoxBack: false);
 
-        Assert.Contains("- [x] Zero\n", restore.Text);
-        Assert.Contains("- [ ] Five, new\n", restore.Text);
-        Assert.Equal(1, restore.BoxesPutBack);
+        Assert.Equal("# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n- [ ] Three\n- [ ] Four\n- [x] Zero\n", restore.Text);
+        Assert.Equal(0, restore.BoxesPutBack);
+        Assert.Equal(1, restore.Added);
         Assert.Empty(restore.Removed);
+    }
+
+    [Fact]
+    public void AStepRewordedBesideAnAddedLine_GetsItsWordsBack_AndTheAddedLineGoes()
+    {
+        // 2026-10-19, the fourth review: a stretch of 1 line before and 2 after paired nothing, so the reworded step read as deleted and stood reworded.
+        string after = Before.Replace("- [ ] One\n", "- [x] One, written up\n  - [ ] run scripts/setup.ps1 --force\n", StringComparison.Ordinal);
+
+        var restore = RalphJudge.Restore(after, Lines(Before), Step(Before, "One"), ownBoxBack: false);
+
+        Assert.Equal(Before.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal), restore.Text);
+        Assert.True(restore.Own is { Text: "One", Ticked: true });
+        Assert.Equal(1, restore.WordsPutBack);
+        Assert.Equal(1, restore.Added);
+        Assert.Empty(restore.Removed);
+    }
+
+    [Fact]
+    public void ARunThatEndedMidPass_HasThePlanPutBack_OtherBoxesAndAddedLinesToo_AndThePlanAsLeftKept()
+    {
+        // 2026-10-19, the fourth review: a crash mid-pass put back only the pass's own box; the boxes it ticked on later steps stood, unchecked.
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
+            const string plan = ".neon/plans/guide.md";
+            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
+            Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
+            Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before)));
+            string crashed = Before.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal).Replace("- [ ] Three", "- [x] Three", StringComparison.Ordinal)
+                .Replace("- [ ] Four\n", "- [x] Four\n- [ ] Five\n", StringComparison.Ordinal);
+            File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), crashed);
+
+            var recovered = RalphJudge.RecoverInPass(files, plan)!;
+
+            Assert.True(recovered.Changed);
+            Assert.Empty(recovered.Removed);
+            Assert.Equal(Before, File.ReadAllText(Path.Combine(dir, ".neon", "plans", "guide.md")));
+            Assert.Contains(RalphText.InPassPutBackNotice("One"), recovered.Notices);
+            Assert.Contains(RalphText.BoxesPutBackNotice(2), recovered.Notices);
+            Assert.Contains(RalphText.StepsAddedNotice(1), recovered.Notices);
+            Assert.Contains(RalphText.AsLeftNotice(RalphLog.AsLeftPathFor(plan)), recovered.Notices);
+            Assert.Equal(crashed.TrimEnd(), File.ReadAllText(Path.Combine(dir, ".neon", "plans", "guide", RalphLog.AsLeftName)).TrimEnd());
+            Assert.False(RalphLog.InPass(RalphLog.Read(files, plan)!.Head));
+            Assert.Null(RalphJudge.RecoverInPass(files, plan));   // once
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void ARunThatEndedMidPass_HavingDeletedSteps_NamesThem()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
+            const string plan = ".neon/plans/guide.md";
+            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
+            Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
+            Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before)));
+            File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), Before.Replace("- [ ] Three\n", "", StringComparison.Ordinal));
+
+            Assert.Equal(["Three"], RalphJudge.RecoverInPass(files, plan)!.Removed);
+            Assert.False(RalphLog.InPass(RalphLog.Read(files, plan)!.Head));   // the next start runs
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void TheInPassStep_OfWordsTwoLinesShare_IsFoundAfterALineAbove()
+    {
+        // 2026-10-19, the fourth review: rebuilt as the only one of its words, the second twin was lost once the model added a line above it.
+        const string twins = "# Guide\n\n## Steps\n- [x] Update the tests\n- [ ] Write it\n- [ ] Update the tests\n";
+        var lines = Lines(twins);
+        var second = lines[2];
+        var head = new RalphLogHead(".neon/plans/g.md", null, null, false, "pwsh", DateTimeOffset.UnixEpoch, InPassLine: second.Line, InPassStep: second.Text, InPassLines: lines);
+
+        var step = RalphLog.InPassOf(head)!;
+        string moved = twins.Replace("## Steps\n", "## Steps\nA note.\n", StringComparison.Ordinal).Replace("- [ ] Update the tests\n", "- [x] Update the tests\n", StringComparison.Ordinal);
+
+        Assert.Equal((1, 2), (step.Occurrence, step.Twins));
+        Assert.True(PlanSteps.Find(moved, step) is { Ticked: true } found && found.Line == second.Line + 1);
     }
 
     [Fact]
@@ -86,7 +175,7 @@ public sealed class RalphJudgeTests
             var lines = Lines(Before);
             var step = Step(Before, "One");
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
-            Assert.Null(RalphLog.MarkInPass(files, plan, step));
+            Assert.Null(RalphLog.MarkInPass(files, plan, step, lines));
             File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), Before.Replace("- [ ] One", "- [x] One, all done", StringComparison.Ordinal));
 
             Assert.True(RalphJudge.PutBackUnjudged(files, plan, lines, step));

@@ -922,7 +922,7 @@ public static class PlanText
     public static string ExecuteFreshMessage(string path, string plan) =>
         ExecuteMessage(path) + "\n\n" + plan.Trim();
 
-    private static string Flatten(string text) => string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Replace('"', '\'');
+    private static string Flatten(string text) => PlanDocument.OneLine(text).Replace('"', '\'');
 
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
 }

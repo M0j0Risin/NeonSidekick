@@ -9,9 +9,12 @@ namespace NeonSidekick.Plans;
 /// A Ralph log's head: what the run was fixed to, when it began, and how its last run stopped (null while one runs). <paramref name="InPassLine"/>
 /// and <paramref name="InPassStep"/> (2026-10-19, the third review: a crash, a kill or a reset mid-pass left a box the model ticked standing with no
 /// check, and a resume passed the step by) name the step a pass is working while it runs — its line in the plan file and its words — cleared once
-/// the pass is judged; a start that finds them set puts that step's box back first (<see cref="RalphLog.InPassOf"/>).
+/// the pass is judged; a start that finds them set puts that step's box back first (<see cref="RalphLog.InPassOf"/>). <paramref name="InPassLines"/>
+/// (2026-10-19, the fourth review: only the pass's own box went back, so other boxes it ticked, steps it reworded or deleted stood) are the plan's
+/// task lines as that pass began, its <c>## In pass</c> section: the start puts the whole plan back as the judge would (<c>RalphJudge.Restore</c>).
+/// Set for the final fix too, which has no step of its own; null with no pass under way (or a log the previous build wrote).
 /// </summary>
-public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null);
+public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null, IReadOnlyList<PlanStep>? InPassLines = null);
 
 /// <summary>
 /// One pass as the log keeps it (2026-10-18): its number, its step, the outcome and the model's summary, what it said it checked, the app's check
@@ -69,6 +72,7 @@ public static class RalphLog
 
     private const string TimeFormat = "yyyy-MM-dd'T'HH:mm:sszzz";
     private const string LearnedHeading = "## Learned";
+    private const string InPassHeading = "## In pass";
     private const string PassHeading = "## Pass ";
 
     /// <summary>The log of <paramref name="planPath"/>.</summary>
@@ -157,8 +161,30 @@ public static class RalphLog
         return problem ?? Write(files, planPath, document with { Head = head });
     }
 
-    /// <summary>The head's mark of a pass under way set (<paramref name="step"/>) or cleared (null), the rest as it was; null when written (or no head to mark).</summary>
-    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step)
+    /// <summary>
+    /// The head's mark of a pass under way set: its step (null for the final fix) and the plan's task lines as it began (<see cref="PlanSteps.Flat"/>
+    /// of the file whole), the rest as it was; null when written (or no head to mark).
+    /// </summary>
+    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step, IReadOnlyList<PlanStep> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var document = ReadFor(files, planPath, out string? problem);
+        if (problem is not null || document?.Head is not { } head)
+        {
+            return problem;
+        }
+
+        var marked = head with
+        {
+            InPassLine = step?.Line ?? -1,
+            InPassStep = step is null ? null : Flat(step.Text),
+            InPassLines = lines.Select(l => new PlanStep(0, l.Line, 0, Flat(l.Text), l.Ticked, null, [], [], [])).ToList(),
+        };
+        return Write(files, planPath, document with { Head = marked });
+    }
+
+    /// <summary>The head's mark of a pass under way cleared (the pass judged, or put back), the rest as it was; null when written (or nothing to clear).</summary>
+    public static string? ClearInPass(WorkingDirectory files, string planPath)
     {
         var document = ReadFor(files, planPath, out string? problem);
         if (problem is not null || document?.Head is not { } head)
@@ -166,16 +192,74 @@ public static class RalphLog
             return problem;
         }
 
-        var marked = step is null ? head with { InPassLine = -1, InPassStep = null } : head with { InPassLine = step.Line, InPassStep = Flat(step.Text) };
-        return marked == head ? null : Write(files, planPath, document with { Head = marked });
+        var cleared = head with { InPassLine = -1, InPassStep = null, InPassLines = null };
+        return cleared == head ? null : Write(files, planPath, document with { Head = cleared });
     }
 
     /// <summary>
     /// The step a pass was working when the run ended without judging it (its head's mark, <see cref="RalphLogHead.InPassStep"/>): a step of no
-    /// children, unticked as it began, at its line with its words (else the one task line of its words); null with no mark. Pure.
+    /// children, unticked as it began, at its line with its words, and — from the task lines kept beside it (2026-10-19, the fourth review: built as
+    /// the only one of its words, a step whose words two lines share was lost once its line moved) — its place among the lines of those words; null
+    /// with no mark. Pure.
     /// </summary>
-    public static PlanStep? InPassOf(RalphLogHead? head) =>
-        head is { InPassStep: { Length: > 0 } words, InPassLine: >= 0 } ? new PlanStep(0, head.InPassLine, 0, words, false, null, [], [], []) : null;
+    public static PlanStep? InPassOf(RalphLogHead? head)
+    {
+        if (head is not { InPassStep: { Length: > 0 } words, InPassLine: >= 0 })
+        {
+            return null;
+        }
+
+        var same = head.InPassLines?.Where(l => string.Equals(l.Text, words, StringComparison.Ordinal)).ToList() ?? [];
+        int occurrence = same.FindIndex(l => l.Line == head.InPassLine);
+        return occurrence >= 0
+            ? new PlanStep(0, head.InPassLine, 0, words, false, null, [], [], [], occurrence, same.Count)
+            : new PlanStep(0, head.InPassLine, 0, words, false, null, [], [], []);
+    }
+
+    /// <summary>Whether <paramref name="head"/> marks a pass the last run left unjudged (a step's, or the final fix's lines). Pure.</summary>
+    public static bool InPass(RalphLogHead? head) => head is not null && (head.InPassLines is not null || InPassOf(head) is not null);
+
+    /// <summary>
+    /// The checkpoint's answer written into pass <paramref name="pass"/>'s entry (2026-10-19, the fourth review: <see cref="RalphLogEntry.Checkpoint"/>
+    /// was never set, so a Redo's note lived only in memory); null when written (or no such entry), else the error sentence.
+    /// </summary>
+    public static string? SetCheckpoint(WorkingDirectory files, string planPath, int pass, string checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        var document = ReadFor(files, planPath, out string? problem);
+        if (problem is not null || document is null)
+        {
+            return problem;
+        }
+
+        var entries = document.Entries.ToList();
+        int at = entries.FindLastIndex(e => e.Pass == pass);
+        if (at < 0)
+        {
+            return null;
+        }
+
+        entries[at] = entries[at] with { Checkpoint = Flat(Clean(checkpoint)) };
+        return Write(files, planPath, document with { Entries = entries });
+    }
+
+    /// <summary>The copy of the plan as a pass left it, kept whenever the judge put lines back (2026-10-19, the fourth review).</summary>
+    public const string AsLeftName = "as-left.md";
+
+    /// <summary>Where <see cref="KeepAsLeft"/> keeps <paramref name="planPath"/>'s copy.</summary>
+    public static string AsLeftPathFor(string planPath) => PlanReferences.FolderOf(planPath) + "/" + AsLeftName;
+
+    /// <summary>
+    /// <paramref name="text"/>, the plan as a pass left it, kept beside the log (the last one only), so the edits the judge put back — the user's own
+    /// among them, which it cannot tell from the model's — are never lost; its path, or null when it could not be written.
+    /// </summary>
+    public static string? KeepAsLeft(WorkingDirectory files, string planPath, string text)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(text);
+        string path = AsLeftPathFor(planPath);
+        return files.WriteText(path, text, overwrite: true).Outcome == FileOutcome.Ok ? path : null;
+    }
 
     /// <summary>The learned facts with <paramref name="added"/> after them, redacted, once each, the oldest dropped past <see cref="LearnedChars"/>.</summary>
     public static IReadOnlyList<string> MergeLearned(IReadOnlyList<string> learned, IReadOnlyList<string> added)
@@ -217,7 +301,9 @@ public static class RalphLog
         {
             string line = $"- pass {N(entry.Pass)} (step {N(entry.Step)}): {entry.Outcome}; {Flat(entry.Summary)}" + (entry.Check is { Length: > 0 } c && c != "none" ? $"; check {c}" : "") +
                 (entry.Review is { Length: > 0 } r && r != "off" ? $"; review {Flat(r)}" : "") +
-                (entry.Notes is { Length: > 0 } notes ? $"; notes for the next pass: {Shorten(Flat(notes), NoteChars)}" : "");
+                (entry.Notes is { Length: > 0 } notes ? $"; notes for the next pass: {Shorten(Flat(notes), NoteChars)}" : "") +
+                // The checkpoint's answer (2026-10-19, the fourth review: a Redo's note never reached a pass after a pause, a crash or a resume).
+                (entry.Checkpoint is { Length: > 0 } checkpoint ? $"; at the checkpoint the user chose {Shorten(Flat(checkpoint), NoteChars)}" : "");
             if (text.Length + line.Length + 1 > NotesChars)
             {
                 break;
@@ -264,6 +350,17 @@ public static class RalphLog
             }
 
             text.Append('\n');
+            if (head.InPassLines is { } inPassLines)
+            {
+                // The plan's task lines as the pass under way began: its line, its box, its words.
+                text.Append(InPassHeading).Append('\n');
+                foreach (var line in inPassLines)
+                {
+                    text.Append("- ").Append(N(line.Line)).Append(line.Ticked ? " [x] " : " [ ] ").Append(Flat(line.Text)).Append('\n');
+                }
+
+                text.Append('\n');
+            }
         }
 
         text.Append(LearnedHeading).Append('\n');
@@ -331,6 +428,7 @@ public static class RalphLog
         int pass = 0;
         StringBuilder? tail = null;
         string? fence = null;
+        List<PlanStep>? inPassLines = null;
 
         void Flush()
         {
@@ -409,6 +507,14 @@ public static class RalphLog
                 continue;
             }
 
+            if (line.Equals(InPassHeading, StringComparison.OrdinalIgnoreCase))
+            {
+                Flush();
+                section = "inpass";
+                inPassLines ??= [];
+                continue;
+            }
+
             if (!line.StartsWith("- ", StringComparison.Ordinal))
             {
                 continue;
@@ -418,6 +524,19 @@ public static class RalphLog
             if (section == "learned")
             {
                 learned.Add(item.Trim());
+                continue;
+            }
+
+            if (section == "inpass")
+            {
+                // "12 [x] words": a line that does not read so is skipped (a hand edit).
+                int space = item.IndexOf(' ', StringComparison.Ordinal);
+                if (space > 0 && int.TryParse(item[..space], NumberStyles.Integer, CultureInfo.InvariantCulture, out int lineAt) && lineAt >= 0
+                    && item[(space + 1)..] is { Length: >= 3 } box && box[0] == '[' && box[2] == ']' && box[1] is ' ' or 'x' or 'X')
+                {
+                    inPassLines!.Add(new PlanStep(0, lineAt, 0, box[3..].Trim(), box[1] != ' ', null, [], [], []));
+                }
+
                 continue;
             }
 
@@ -454,6 +573,11 @@ public static class RalphLog
             && int.TryParse(inPass[..at], NumberStyles.Integer, CultureInfo.InvariantCulture, out int inPassLine) && inPassLine >= 0 && inPass[(at + 3)..].Trim() is { Length: > 0 } inPassStep)
         {
             head = head with { InPassLine = inPassLine, InPassStep = inPassStep };
+        }
+
+        if (head is not null && inPassLines is not null)
+        {
+            head = head with { InPassLines = inPassLines };
         }
 
         return new RalphLogDocument(head, learned, entries);
@@ -701,6 +825,28 @@ public static class RalphLog
         }
     }
 
+    /// <summary>Whether a lock's owner still runs, for <see cref="HeldElsewhere"/> (a seam for the tests: <see cref="OwnerAlive"/>).</summary>
+    internal static Func<LockOwner, bool> LiveOwner { get; set; } = OwnerAlive;
+
+    /// <summary>
+    /// The error sentence when another live process holds <paramref name="planPath"/>'s lock, else null (none, a stale one, or this process's own):
+    /// what every write of a plan file asks first (2026-10-19, the fourth review: the lock was read only as a loop started, so <c>/plan open</c>, a
+    /// revision or an approve in a second instance wrote the plan a loop was running in the first, and the loop put the edits back as a pass's). A
+    /// lock that cannot be read counts as held, as <see cref="TryLock"/> reads it.
+    /// </summary>
+    public static string? HeldElsewhere(WorkingDirectory files, string planPath)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(planPath);
+        if (files.Resolve(LockPathFor(planPath), forWrite: false, out string full) != FileOutcome.Ok)
+        {
+            return null;
+        }
+
+        var (state, owner) = ReadLockAt(full);
+        return state == LockRead.Missing || (state == LockRead.Read && (owner is null || owner == Me || !LiveOwner(owner))) ? null : RalphText.LockedError(planPath);
+    }
+
     private static LockOwner? ReadLock(WorkingDirectory files, string path)
     {
         var read = files.ReadText(path, null, null);
@@ -746,30 +892,11 @@ public static class RalphLog
     private static IReadOnlyList<string> List(string? text, string separator) =>
         text is null || text == "none" || text.Length == 0 ? [] : text.Split(separator, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-    private static string Quote(string text) => "\"" + Flat(text).Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    private static string Quote(string text) => PlanDocument.Quote(text);
 
-    private static string Unquote(string text)
-    {
-        if (text.Length < 2 || text[0] != '"' || text[^1] != '"')
-        {
-            return text;
-        }
+    private static string Unquote(string text) => PlanDocument.Unquote(text);
 
-        var sb = new StringBuilder(text.Length);
-        for (int i = 1; i < text.Length - 1; i++)
-        {
-            if (text[i] == '\\' && i + 1 < text.Length - 1)
-            {
-                i++;
-            }
-
-            sb.Append(text[i]);
-        }
-
-        return sb.ToString();
-    }
-
-    private static string Flat(string text) => string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    private static string Flat(string text) => PlanDocument.OneLine(text);
 
     private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
 

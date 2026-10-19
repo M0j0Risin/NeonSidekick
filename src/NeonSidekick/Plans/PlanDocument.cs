@@ -426,14 +426,23 @@ public static class PlanDocument
     private static DateTimeOffset? Time(string? text) =>
         DateTimeOffset.TryParseExact(text, TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) ? time : null;
 
-    /// <summary>A YAML double-quoted scalar on one line.</summary>
-    private static string Quote(string text)
+    /// <summary>
+    /// <paramref name="text"/> on one line: its lines trimmed and joined by a space, the empty ones dropped. The plans' and the Ralph loop's one
+    /// copy (2026-10-19, the fourth review of the Ralph loop: <c>RalphText</c>, <c>RalphLog</c>, <c>PlanSteps</c>, <c>PlanText</c> and this file each
+    /// had their own). Pure.
+    /// </summary>
+    public static string OneLine(string text)
     {
-        string flat = string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-        return "\"" + flat.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+        ArgumentNullException.ThrowIfNull(text);
+        return string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 
-    private static string Unquote(string text)
+    /// <summary>A YAML double-quoted scalar on one line (the Ralph log's head writes its commands so too, <see cref="RalphLog"/>).</summary>
+    internal static string Quote(string text) =>
+        "\"" + OneLine(text).Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+
+    /// <summary><see cref="Quote"/> undone; text not in quotes as it is.</summary>
+    internal static string Unquote(string text)
     {
         if (text.Length < 2 || text[0] != '"' || text[^1] != '"')
         {
