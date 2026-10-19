@@ -5,7 +5,14 @@ using NeonSidekick.Plans;
 namespace NeonSidekick.Audits;
 
 /// <summary>How much of a scope the passes have read (2026-10-18): the files read out of the scope's, and the ones no pass has read yet.</summary>
-public sealed record AuditCoverage(int Read, int Scope, IReadOnlyList<string> Unread, IReadOnlyList<string> ReadFiles);
+public sealed record AuditCoverage(int Read, int Scope, IReadOnlyList<string> Unread, IReadOnlyList<string> ReadFiles)
+{
+    /// <summary>
+    /// The scope's files viewed this session that the sidecar does not hold yet, to merge into it (2026-10-19, the second review: worked out by a
+    /// second pass over the scope, every file stat'ed again, on every <c>present_audit</c> call).
+    /// </summary>
+    public IReadOnlyList<string> Viewed { get; init; } = [];
+}
 
 /// <summary>
 /// A code audit's state (2026-10-18, <c>/code-audit</c>), one per screen and one per headless run: the loop while one runs
@@ -64,6 +71,13 @@ public sealed class AuditSession
 
     /// <summary>A pass under way: a loop past its first pass's start and not yet converged.</summary>
     public bool Reviewing => Running is { Pending: false, Converged: false };
+
+    /// <summary>
+    /// A pass started and the audit not stopped yet, the pass that converged included (2026-10-19, the second review: the tools' narrowing read
+    /// <see cref="Reviewing"/>, false the moment <c>present_audit</c> converged, so an advisor asked later in that turn was offered the web).
+    /// What the turn's tools and the asking tools' bar read; the directive still reads <see cref="Reviewing"/>.
+    /// </summary>
+    public bool InPass => Running is { Pending: false };
 
     /// <summary>An audit runs (its loop not stopped yet).</summary>
     public bool Active => Running is not null;
@@ -128,16 +142,29 @@ public sealed class AuditSession
         bool here = !Moved;
         var read = new List<string>();
         var unread = new List<string>();
+        var viewed = new List<string>();
         foreach (string file in scope.Files)
         {
-            (sidecar.Contains(file) || (here && _files.WasViewed(file)) ? read : unread).Add(file);
+            if (sidecar.Contains(file))
+            {
+                read.Add(file);
+            }
+            else if (here && _files.WasViewed(file))
+            {
+                read.Add(file);
+                viewed.Add(file);
+            }
+            else
+            {
+                unread.Add(file);
+            }
         }
 
-        return new AuditCoverage(read.Count, scope.Files.Count + scope.MoreFiles, unread, read);
+        return new AuditCoverage(read.Count, scope.Files.Count + scope.MoreFiles, unread, read) { Viewed = viewed };
     }
 
-    /// <summary>The scope's files viewed this session, to merge into the sidecar.</summary>
-    public IReadOnlyList<string> ViewedNow() => Scope is { } scope && !Moved ? scope.Files.Where(_files.WasViewed).ToList() : [];
+    /// <summary>The scope's files viewed this session that the sidecar does not hold yet, to merge into it (<see cref="AuditCoverage.Viewed"/>).</summary>
+    public IReadOnlyList<string> ViewedNow() => Coverage().Viewed;
 
     /// <summary>
     /// The turn's audit part while a pass is under way, else null: the directive (with the advisors and web lines through <c>Compose</c>) and

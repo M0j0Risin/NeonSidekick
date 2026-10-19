@@ -326,6 +326,30 @@ public sealed class PresentAuditToolTests : IDisposable
     }
 
     [Fact]
+    public void ASettledFinding_ReportedAgainElsewhere_TakesTheNewSeverityLineAndEvidence()
+    {
+        // 2026-10-19, the second review: the reopened finding kept its old severity, line and quote; the re-report's were checked and thrown away.
+        Read();
+        Report1(FindingJson(severity: "low", line: 7, evidence: "var sql = \"SELECT * FROM t WHERE n = '\" + name + \"'\";"));
+        File.WriteAllText(_box.Full(_path), File.ReadAllText(_box.Full(_path)).Replace("- [ ] **A1**", "- [x] **A1**", StringComparison.Ordinal));
+        Assert.StartsWith("Recorded in " + _path + ": A1 reopened.", Report1(FindingJson(severity: "critical", line: 8, detail: "Still joined.", evidence: "Execute(sql);")));
+        var finding = Report().Findings[0];
+        Assert.Equal((AuditSeverity.Critical, 8, "Execute(sql);", "Still joined."), (finding.Severity, finding.Line!.Value, finding.Evidence, finding.Detail));
+        Assert.Contains("reopened in pass 1: Still joined. (was low, line 7)", finding.Notes);
+    }
+
+    [Fact]
+    public void Revise_AFindingWithNoLine_TakesEvidenceFromAnywhereInTheFile()
+    {
+        // 2026-10-19, the second review: the target fell back to line 0, so a quote past line 6 was refused as elsewhere.
+        Read("src/y.cs");
+        Report1(FindingJson(file: "src/y.cs", line: null, title: "Whole file"));
+        Assert.StartsWith("Recorded", Call("{\"revise\":[{\"id\":\"A1\",\"evidence\":\"line 50\"}]}"));
+        Assert.Equal("line 50", Report().Findings[0].Evidence);
+        Assert.Null(Report().Findings[0].Line);
+    }
+
+    [Fact]
     public void EditsOnDisk_BetweenCalls_AreKept()
     {
         Read();

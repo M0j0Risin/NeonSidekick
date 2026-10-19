@@ -148,6 +148,41 @@ public sealed class AuditReportTests
     }
 
     [Fact]
+    public void Parse_KeepsAHandWrittenLine_UnderPass_OrBeforeTheFirstPart_AsANote()
+    {
+        // 2026-10-19, the second review: a line under Pass turned the pass to 0 and was lost at the next save; one before Detail was dropped.
+        string text = Sample().Render();
+        int pass1 = text.IndexOf("  Pass: 1\n", StringComparison.Ordinal) + "  Pass: 1\n".Length;
+        text = text[..pass1] + "  checked with Bob, real issue\n" + text[pass1..];
+        int a3 = text.IndexOf("**A3**", StringComparison.Ordinal);
+        int lineEnd = text.IndexOf('\n', a3);
+        text = text[..(lineEnd + 1)] + "  seen again in the admin page\n" + text[(lineEnd + 1)..];
+        var back = AuditReport.Parse(text);
+        Assert.Equal(1, back.Findings[0].Pass);
+        Assert.Equal(["checked with Bob, real issue"], back.Findings[0].Notes);
+        Assert.Equal(2, back.Findings[1].Pass);
+        Assert.Contains("seen again in the admin page", back.Findings[1].Notes);
+        string rendered = back.Render();
+        Assert.Contains("  Note: checked with Bob, real issue\n", rendered);
+        Assert.Contains("seen again in the admin page", rendered);
+        Assert.Equal(rendered, AuditReport.Parse(rendered).Render());
+    }
+
+    [Fact]
+    public void Parse_ReadsNextIdAndPass_PastAThousand()
+    {
+        // 2026-10-19, the second review: written as 1,004 and read as a plain integer, so they came back as 0.
+        var report = Sample();
+        report.Header = report.Header with { NextId = 1004 };
+        report.Findings[0] = report.Findings[0] with { Pass = 1200 };
+        string text = report.Render();
+        Assert.Contains("next-id: 1,004\n", text);
+        var back = AuditReport.Parse(text);
+        Assert.Equal(1004, back.Header.NextId);
+        Assert.Equal(1200, back.Findings[0].Pass);
+    }
+
+    [Fact]
     public void Parse_KeepsHandWrittenText_UnderTheTitle_TheLists_AndRetracted()
     {
         // 2026-10-19, the review: text the parser had no place for was dropped on the next save.

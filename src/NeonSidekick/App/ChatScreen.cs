@@ -7250,7 +7250,7 @@ internal sealed partial class ChatScreen
         Plan = _plan.Turn(_presentPlan, effective.PlanGapAskUser, PlanReferenceNames(effective)) ?? AuditTurn(effective),
         Pass = RalphPassTurn(),
         // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under LLM code audit web research; an advisor asked in it the same.
-        OnlyTools = _audit.Reviewing ? AuditTools.Allowed(effective) : null,
+        OnlyTools = _audit.InPass ? AuditTools.Allowed(effective) : null,
     }, effective);
 
     /// <summary>The turn's audit part while a pass is under way (2026-10-18, <see cref="AuditSession.Turn"/>), else null.</summary>
@@ -16116,6 +16116,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> RunMessageAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
+        bool passMessage = _passMessage is { } pass && ReferenceEquals(pass, text);
+        _passMessage = null;
         if (_session.Assistant is not { } assistant)
         {
             _transcript.Error(NoAssistantError);
@@ -16237,6 +16239,13 @@ internal sealed partial class ChatScreen
             if (outcome == TurnOutcome.Withdrawn && InRalphPass)
             {
                 // A Ralph pass withdrawn (2026-10-18): no draft comes back (the message was the loop's, the whole plan), and the loop stops.
+                _lastTurnCancelled = true;
+                return false;
+            }
+
+            if (outcome == TurnOutcome.Withdrawn && passMessage)
+            {
+                // An audit's or a gap review's pass withdrawn (2026-10-19): its message was the app's, and the loop has stopped above.
                 _lastTurnCancelled = true;
                 return false;
             }

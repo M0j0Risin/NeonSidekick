@@ -799,15 +799,22 @@ public sealed partial class AuditReport
                 continue;
             }
 
-            if (read.Count > 0)
+            string text = UnescapeLine(raw.StartsWith("    ", StringComparison.Ordinal) ? raw[4..] : raw.Trim());
+            if (read.Count > 0 && read[^1].Label != PassPart)
             {
-                read[^1].Lines.Add(UnescapeLine(raw.StartsWith("    ", StringComparison.Ordinal) ? raw[4..] : raw.Trim()));
+                read[^1].Lines.Add(text);
+            }
+            else if (text.Trim().Length > 0)
+            {
+                // A hand-written line with no text part to join (2026-10-19, the second review: one before the first part was dropped, one
+                // under Pass broke its number and was lost at the next save): kept as a note of its own.
+                read.Add((NotePart, [text]));
             }
         }
 
         var notes = read.Where(p => p.Label == NotePart).Select(p => string.Join('\n', p.Lines).Trim()).Where(n => n.Length > 0).ToList();
         string Part(string name) => string.Join('\n', read.Where(p => p.Label == name).SelectMany(p => p.Lines)).Trim();
-        int pass = int.TryParse(Part(PassPart), NumberStyles.Integer, CultureInfo.InvariantCulture, out int p) ? p : 0;
+        int pass = Number(Part(PassPart));
         bool settled = match.Groups["box"].Success && match.Groups["box"].Value is "x" or "X";
         string fix = Part(FixPart);
         string reason = Part(ReasonPart);
@@ -876,7 +883,8 @@ public sealed partial class AuditReport
     {
         var status = fields.TryGetValue("status", out var word) ? ParseStatus(word) : null;
         known = status is not null;
-        int nextId = fields.TryGetValue("next-id", out var next) && int.TryParse(next, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : 0;
+        // Read as written, thousands separators and all (2026-10-19, the second review: next-id 1,004 read back as 0, so a hand-deleted id came back).
+        int nextId = fields.TryGetValue("next-id", out var next) ? Number(next) : 0;
         var focus = fields.TryGetValue("focus", out var f) && f.Length > 0 && !f.Equals(AuditFocus.AllWord, StringComparison.OrdinalIgnoreCase)
             ? AuditFocus.Normalize(f.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             : AuditFocus.Dimensions;

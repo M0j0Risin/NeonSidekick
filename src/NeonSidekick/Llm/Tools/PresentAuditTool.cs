@@ -138,6 +138,7 @@ public sealed partial class PresentAuditTool : AIFunction
 
     private string Invoke(AIFunctionArguments arguments)
     {
+        var read = new Dictionary<string, List<string>?>(AuditPath.Comparer);
         if (_session.Running is not { Pending: false } loop || _session.Path is not { } path || _session.Scope is not { } scope)
         {
             return AuditText.NotAuditingResult;
@@ -321,8 +322,10 @@ public sealed partial class PresentAuditTool : AIFunction
                     return AuditText.ReadFirstResult(finding.File);
                 }
 
-                int at = line ?? finding.Line ?? 0;
-                if (FileLines(finding.File) is not { } lines)
+                // No line on either side: the quote may stand anywhere in the file (2026-10-19, the second review: a 0 here held a
+                // line-less finding's new quote to lines 1 to 6).
+                int? at = line ?? finding.Line;
+                if (FileLines(read, finding.File) is not { } lines)
                 {
                     return AuditText.NoFileResult(finding.File);
                 }
@@ -418,7 +421,7 @@ public sealed partial class PresentAuditTool : AIFunction
                     return AuditText.ReadFirstResult(file);
                 }
 
-                if (FileLines(file) is not { } lines)
+                if (FileLines(read, file) is not { } lines)
                 {
                     return AuditText.NoFileResult(file);
                 }
@@ -550,8 +553,32 @@ public sealed partial class PresentAuditTool : AIFunction
         foreach (var (sent, settled) in reopen)
         {
             int at = report.Findings.FindIndex(f => f.Id == settled.Id);
+            // The report as sent now stands (2026-10-19, the second review: the settled one's severity, line and quote were kept, so the done
+            // table and the fix plan pointed at the old place); what it said before is named in the note. An old quote goes with an old line.
             string first = AuditReport.Flatten(sent.Detail);
-            var again = settled with { Settled = false, Notes = [.. settled.Notes, $"reopened in pass {N(pass)}: " + Cap(first, MaxNoteChars)] };
+            var was = new List<string>();
+            if (sent.Severity != settled.Severity)
+            {
+                was.Add(AuditFinding.Word(settled.Severity));
+            }
+
+            if (sent.Line != settled.Line && settled.Line is { } oldLine)
+            {
+                was.Add("line " + N(oldLine));
+            }
+
+            string? evidence = sent.Evidence.Length > 0 ? sent.Evidence : sent.Line == settled.Line ? settled.Evidence : null;
+            var again = settled with
+            {
+                Settled = false,
+                Severity = sent.Severity,
+                Dimension = sent.Dimension,
+                Line = sent.Line,
+                Detail = sent.Detail,
+                Fix = sent.Fix.Length > 0 ? sent.Fix : settled.Fix,
+                Evidence = evidence,
+                Notes = [.. settled.Notes, $"reopened in pass {N(pass)}: " + Cap(first, MaxNoteChars) + (was.Count > 0 ? $" (was {string.Join(", ", was)})" : "")],
+            };
             report.Findings[at] = again;
             reopened.Add(again);
             keys.Add("reopen " + settled.Id);
@@ -613,7 +640,7 @@ public sealed partial class PresentAuditTool : AIFunction
 
         // 9. The coverage sidecar, the loop, and the seam. The report is saved: a sidecar that can't be written is logged, never a refusal
         // (the loop must follow the report), and the next call merges it again.
-        if (AuditFiles.MergeCoverage(reports, path, _session.ViewedNow()) is { } notSaved)
+        if (AuditFiles.MergeCoverage(reports, path, coverage.Viewed) is { } notSaved)
         {
             DiagnosticLog.Warn("App", AuditText.CoverageNotSavedLogLine(notSaved));
         }
@@ -657,11 +684,19 @@ public sealed partial class PresentAuditTool : AIFunction
             : flat;
     }
 
-    /// <summary>The file's lines (BOM dropped), or null when it cannot be read as text.</summary>
-    private List<string>? FileLines(string file)
+    /// <summary>
+    /// The file's lines (BOM dropped), or null when it cannot be read as text: read once per call into <paramref name="read"/> (2026-10-19, the
+    /// second review: twenty findings in one large file read it twenty times).
+    /// </summary>
+    private List<string>? FileLines(Dictionary<string, List<string>?> read, string file)
     {
-        var read = _files.ReadText(file, null, null, int.MaxValue);
-        return read.Outcome == FileOutcome.Ok ? WorkingDirectory.SplitLines(read.Text) : null;
+        if (!read.TryGetValue(file, out var lines))
+        {
+            var text = _files.ReadText(file, null, null, int.MaxValue);
+            read[file] = lines = text.Outcome == FileOutcome.Ok ? WorkingDirectory.SplitLines(text.Text) : null;
+        }
+
+        return lines;
     }
 
     /// <summary>

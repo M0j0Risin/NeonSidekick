@@ -352,8 +352,16 @@ internal sealed partial class ChatScreen
     private async Task<bool> SendPassAsync(string message, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
         _transcript.User(message);
+        _passMessage = message;
         return await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The pass message <see cref="SendPassAsync"/> is handing to <see cref="RunMessageAsync"/>, taken (by reference) at its top: a pass withdrawn
+    /// by Esc puts no draft back (2026-10-19, the second review: the audit had stopped, and Enter on the restored row sent "Code audit pass 3…"
+    /// as an ordinary turn with no audit running; the Ralph loop's pass had this rule already).
+    /// </summary>
+    private string? _passMessage;
 
     /// <summary>
     /// After a turn (<see cref="RunMessageAsync"/>, right after <see cref="TakeGapPass"/>, for every outcome) while an audit runs: the coverage

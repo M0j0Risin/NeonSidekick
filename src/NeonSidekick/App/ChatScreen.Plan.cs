@@ -367,11 +367,11 @@ internal sealed partial class ChatScreen
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        var turn = _plan.Active || _audit.Reviewing
+        var turn = _plan.Active || _audit.InPass
             ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
             : disabled;
         // A code audit's pass (2026-10-18) keeps its own tools alone, as the turn's OnlyTools does.
-        turn = _audit.Reviewing
+        turn = _audit.InPass
             ? DisableAllBut(turn, AuditTools.Allowed(effective).Contains, _clockTools, _timerTools, _helpTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _networkTools, _serviceTools, _taskTools, _directoryTools, _comfyTools, _haTools, _printTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _cameraTools, _screenTools, _neonAdvisorTools, _mcp.Tools)
             : turn;
         return GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(turn) : turn;
@@ -382,7 +382,7 @@ internal sealed partial class ChatScreen
     /// <see cref="AppSettingsData.PlanGapAskUser"/> off, read every turn. Such a pass is offered none of <see cref="PlanTools.AskingTools"/>;
     /// the turn whose pane chose <c>Close gaps…</c> (the loop still pending) and every other plan-mode turn keep them.
     /// </summary>
-    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !effective.PlanGapAskUser) || (_audit.Reviewing && !effective.CodeAuditAskUser);
+    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !effective.PlanGapAskUser) || (_audit.InPass && !effective.CodeAuditAskUser);
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;

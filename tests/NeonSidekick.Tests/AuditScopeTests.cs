@@ -104,6 +104,32 @@ public sealed class AuditScopeTests : IDisposable
     }
 
     [Fact]
+    public void ATreeScope_InARepository_AuditsAMonoreposPackages()
+    {
+        // 2026-10-19, the second review: every tracked file under packages/, build/, dist/ or target/ was judged vendored.
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "packages/app/src/index.ts", "a", "first");
+        GitAccessTests.CommitFile(_box.Root, "build/release.sh", "b", "second");
+        GitAccessTests.CommitFile(_box.Root, "node_modules/m/index.js", "m", "third");
+        var scope = Resolve(AuditScopeKind.Tree).Scope!;
+        Assert.Equal(["build/release.sh", "packages/app/src/index.ts"], scope.Files);
+        Assert.Equal(1, scope.Vendored);
+    }
+
+    [Fact]
+    public void ADiffScope_ListsTheUntrackedFiles_WithoutTheIndex()
+    {
+        // 2026-10-19, the second review: the untracked files were listed after the whole index, so past its cap a diff scope had none.
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        _box.Write("fresh.cs", "new");
+        var untracked = _box.Git.TrackedFiles("", includeUntracked: true, CancellationToken.None, includeTracked: false);
+        Assert.Empty(untracked.Tracked);
+        Assert.Equal(["fresh.cs"], untracked.Untracked);
+        Assert.Equal(["fresh.cs"], Resolve(AuditScopeKind.Diff).Scope!.Files);
+    }
+
+    [Fact]
     public void AFolderNamedLikeAScopeWord_IsKeptAsAPath_AndResumesAsOne()
     {
         // 2026-10-19, the review: `scope: diff` from a folder named diff resumed as the working changes.
@@ -257,7 +283,9 @@ public sealed class AuditScopeTests : IDisposable
     [InlineData("a/b/vendor/x.cs", true)]
     [InlineData("Cargo.lock", true)]
     [InlineData("x.g.i.cs", true)]
-    [InlineData("src/bin/x.cs", true)]
+    [InlineData("src/bin/x.cs", false)]   // 2026-10-19, the second review: a tracked bin/ or packages/ is first-party code; git's ignore keeps output out
+    [InlineData("packages/app/src/index.ts", false)]
+    [InlineData("web/node_modules/m/index.js", true)]
     [InlineData("src/main.cs", false)]
     public void LooksVendored(string path, bool expected) => Assert.Equal(expected, AuditScopes.LooksVendored(path));
 

@@ -105,6 +105,14 @@ public static class AuditScopes
     public static readonly IReadOnlyList<string> WalkSkips = [".git", ".neon", "bin", "obj", "node_modules", ".vs", "packages", "dist", "build", "target"];
 
     /// <summary>
+    /// The folders whose files a list judges vendored wherever they come from, beside <see cref="SkippedPatterns"/>' <c>vendor/</c>-style ones
+    /// (2026-10-19, the second review: judging by every <see cref="WalkSkips"/> folder dropped a monorepo's tracked <c>packages/&lt;name&gt;/src</c>,
+    /// and a repository's tracked <c>bin/</c> scripts or <c>build/</c> files; git's ignore rules already keep build output out of its lists, so
+    /// only a dependency folder is judged by name). Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DependencyFolders = ["node_modules"];
+
+    /// <summary>
     /// The vendored and generated files every scope's list leaves out unless the line names a path holding them (2026-10-18; this repository's
     /// <c>assets/pdflib/pdf-lib.min.js</c> would otherwise eat a pass): minified and map files, lockfiles, generated C#, and any path through a
     /// <c>vendor/</c>, <c>third_party/</c> or <c>external/</c> folder. Pinned.
@@ -137,7 +145,7 @@ public static class AuditScopes
         return SecretPatterns.Any(p => System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(p, name, ignoreCase: true));
     }
 
-    /// <summary>Whether a path is vendored or generated: a name pattern, a <c>vendor/</c>-style folder, or a folder <see cref="WalkSkips"/> names.</summary>
+    /// <summary>Whether a path is vendored or generated: a name pattern, a <c>vendor/</c>-style folder, or one <see cref="DependencyFolders"/> names.</summary>
     public static bool LooksVendored(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -145,14 +153,14 @@ public static class AuditScopes
         string[] folders = path.Split('/')[..^1];
         return SkippedPatterns.Where(p => !p.EndsWith('/')).Any(p => System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(p, name, ignoreCase: true))
             || folders.Any(f => SkippedPatterns.Any(p => p.EndsWith('/') && string.Equals(p[..^1], f, StringComparison.OrdinalIgnoreCase)))
-            || folders.Any(f => WalkSkips.Contains(f, StringComparer.OrdinalIgnoreCase));
+            || folders.Any(f => DependencyFolders.Contains(f, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>
     /// Whether <paramref name="path"/> is left out as vendored or generated under the paths named on the line (2026-10-19, the review: the
     /// walk let everything under a named folder through, a git scope nothing under one). Under the deepest of <paramref name="roots"/> holding
     /// it, a named path is taken whole as far as its files' names go (<c>assets/pdflib</c> audits its <c>.min.js</c>, <c>staged src/Gen</c> its
-    /// <c>.g.cs</c>), but a vendored folder below it — <c>vendor/</c>-style or one <see cref="WalkSkips"/> names — is still left out, so
+    /// <c>.g.cs</c>), but a vendored folder below it — <c>vendor/</c>-style or one <see cref="DependencyFolders"/> names — is still left out, so
     /// <c>vendor/mylib</c> named audits its files and <c>web</c> named still leaves out <c>web/node_modules</c>. No roots, or <c>""</c>, judge
     /// the whole path by <see cref="LooksVendored"/>.
     /// </summary>
@@ -173,7 +181,7 @@ public static class AuditScopes
 
         string[] folders = path[(root.Length + 1)..].Split('/')[..^1];
         return folders.Any(f => SkippedPatterns.Any(p => p.EndsWith('/') && string.Equals(p[..^1], f, StringComparison.OrdinalIgnoreCase))
-            || WalkSkips.Contains(f, StringComparer.OrdinalIgnoreCase));
+            || DependencyFolders.Contains(f, StringComparer.OrdinalIgnoreCase));
     }
 
     private static string Name(string path)
@@ -282,6 +290,7 @@ public static class AuditScopes
 
         var changed = new List<string>();
         var deleted = new List<string>();
+        bool cut = false;
         foreach (string path in request.Paths.Count > 0 ? request.Paths : [""])
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -304,8 +313,10 @@ public static class AuditScopes
                 }
             }
 
-            if (request.Kind == AuditScopeKind.Diff && git.TrackedFiles(path, includeUntracked: true, cancellationToken) is { Outcome: GitOutcome.Ok } known)
+            // The untracked files alone (2026-10-19, the second review: listed after the whole index, a large repository's cap left none), a cut said.
+            if (request.Kind == AuditScopeKind.Diff && git.TrackedFiles(path, includeUntracked: true, cancellationToken, includeTracked: false) is { Outcome: GitOutcome.Ok } known)
             {
+                cut |= known.Truncated;
                 changed.AddRange(known.Untracked.Select(AuditPath.FromRelative));
             }
         }
@@ -313,7 +324,7 @@ public static class AuditScopes
         // A file deleted and then made again (deleted in the index, untracked on disk) is a file; one gone from disk is deleted.
         var kept = new HashSet<string>(changed, AuditPath.Comparer);
         var gone = deleted.Where(d => !kept.Contains(d)).Distinct(AuditPath.Comparer).Where(d => !AuditPath.InAppFolder(d) && !LooksSecret(d) && !Vendored(d, request.Paths)).ToList();
-        var scope = Filter(files, request with { Base = @base }, changed, gone, cut: false, cancellationToken);
+        var scope = Filter(files, request with { Base = @base }, changed, gone, cut, cancellationToken);
         if (scope.Files.Count == 0 && scope.Deleted.Count == 0)
         {
             string why = changed.Count + deleted.Count == 0

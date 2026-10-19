@@ -296,6 +296,51 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task CodeAudit_APassWithdrawnByEsc_PutsNoDraftBack()
+    {
+        // 2026-10-19, the second review: the audit stopped, and the pass message came back on the row, so Enter sent it as an ordinary turn.
+        _settings.Update(d => d.TtsOutput = false);
+        AuditFixture(Line("/code-audit src/"), Key(Keys.Enter), Line("/exit"));
+        _chat.EnqueueText("Never shown.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 0 && _chat.Requests.Count == 1)
+            {
+                _scripted!.Push(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains(AuditText.StopNotice(PlanGapStop.Stopped, Path.GetFileNameWithoutExtension(AuditPath), 1), output);
+        Assert.Equal(AuditStatus.Stopped, AuditReportNow.Header.Status);
+    }
+
+    [Fact]
+    public void AuditSession_InPass_HoldsThroughTheConvergingPass()
+    {
+        // 2026-10-19, the second review: the tools' narrowing read Reviewing, false once present_audit converged, so an advisor asked later in that
+        // turn was offered the web. InPass holds until the audit stops.
+        var files = AuditFiles();
+        var session = new AuditSession(files);
+        var scope = new AuditScope(AuditScopeKind.Tree, [], null, ["src/a.cs"], 0, [], 0, 0, 0, false);
+        var loop = session.Start(".neon/audits/a.md", scope, AuditFocus.Dimensions, "", PlanReviewer.Model, 5, 1);
+        Assert.False(session.InPass);   // pending
+        loop.BeginPass("");
+        Assert.True(session.InPass && session.Reviewing);
+        loop.MarkConverged();
+        Assert.False(session.Reviewing);
+        Assert.True(session.InPass);
+        session.Stop();
+        Assert.False(session.InPass);
+    }
+
+    [Fact]
     public async Task CodeAudit_ANewMidPass_StopsIt_SayingHowToGoOn()
     {
         AuditFixture(Line("/code-audit src/"), Line("/exit"));

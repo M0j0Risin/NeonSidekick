@@ -526,8 +526,10 @@ public sealed class GitAccess
     /// native call no token reaches, so a large untracked, unignored folder ran for minutes after Esc (and blocked headless). Now status
     /// lists untracked folders unrecursed and each is walked by <see cref="WorkingDirectory.ListFiles"/> (its entry and time budget, the
     /// token, never into a reparse point), a nested repository's folder left out as status leaves it, an ignored file dropped.</para>
+    /// <para>2026-10-19, the second review: <paramref name="includeTracked"/> false skips the index (a <c>diff</c> scope wants the untracked
+    /// files alone; past the cap the index left them none, and nothing said so), the cap then the untracked files' alone.</para>
     /// </summary>
-    public GitTrackedReport TrackedFiles(string relative, bool includeUntracked, CancellationToken cancellationToken = default) =>
+    public GitTrackedReport TrackedFiles(string relative, bool includeUntracked, CancellationToken cancellationToken = default, bool includeTracked = true) =>
         Run(relative, GitTrackedReport.Refused, (repo, location, full) =>
     {
         if (RepoPath(location, full) is not { } prefix)
@@ -538,7 +540,7 @@ public sealed class GitAccess
         string under = prefix.Length == 0 ? "" : prefix + "/";
         var tracked = new List<string>();
         bool truncated = false;
-        foreach (var entry in repo.Index)
+        foreach (var entry in includeTracked ? repo.Index : Enumerable.Empty<IndexEntry>())
         {
             cancellationToken.ThrowIfCancellationRequested();
 
