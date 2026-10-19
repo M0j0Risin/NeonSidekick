@@ -65,7 +65,10 @@ public sealed record FinishReport(RalphOutcome Outcome, string Summary, IReadOnl
 /// What a Ralph loop is fixed to at its start (2026-10-18, snapshotted so a settings change or a rewrite of the plan mid-run changes nothing): the
 /// plan, the working directory's root, the checks (<paramref name="FinalOnly"/>: per-step checks skipped after a failing baseline the user started
 /// anyway), the shell, the reviewer, the checkpoint, the cap setting, the passes a step may take, the check timeout, the token budget, and the pass
-/// number to count on from (<see cref="RalphLog.PassCount"/> + 1 on a resume).
+/// number to count on from (<see cref="RalphLog.PassCount"/> + 1 on a resume). <paramref name="Unchecked"/> (2026-10-19, the second review: a start
+/// under <c>Shell command policy</c> off saved the plan's checks as none, so a resume after the policy came back ran none either) is this run's
+/// "the steps go unchecked": no check runs, while <paramref name="Verify"/> and <paramref name="Final"/> keep the approved commands for the stored
+/// state and the log.
 /// </summary>
 public sealed record RalphSnapshot(
     string Path,
@@ -81,13 +84,14 @@ public sealed record RalphSnapshot(
     int PassesPerStep,
     int CheckTimeoutSeconds,
     long TokenBudget,
-    int StartPass)
+    int StartPass,
+    bool Unchecked = false)
 {
-    /// <summary>The command run after each step: none while <see cref="FinalOnly"/>.</summary>
-    public string? StepCheck => FinalOnly ? null : Verify;
+    /// <summary>The command run after each step: none while <see cref="FinalOnly"/> or <see cref="Unchecked"/>.</summary>
+    public string? StepCheck => FinalOnly || Unchecked ? null : Verify;
 
-    /// <summary>The command run once every step stands: <see cref="Final"/>, else under <see cref="FinalOnly"/> the verify command.</summary>
-    public string? FinalCheck => FinalCheckOf(Final, Verify, FinalOnly);
+    /// <summary>The command run once every step stands: <see cref="Final"/>, else under <see cref="FinalOnly"/> the verify command; none while <see cref="Unchecked"/>.</summary>
+    public string? FinalCheck => Unchecked ? null : FinalCheckOf(Final, Verify, FinalOnly);
 
     /// <summary><see cref="FinalCheck"/> from a stored loop's fields (2026-10-19: a paused loop's resume asks it too).</summary>
     public static string? FinalCheckOf(string? final, string? verify, bool finalOnly) => final ?? (finalOnly ? verify : null);
@@ -154,6 +158,9 @@ public sealed class RalphLoop
         public readonly List<string> Changed = [];
     }
 
+    // Each step's state by its line (Key: its words and its place among the lines of those words), never its words alone (2026-10-19, the second
+    // review: two steps of the same words shared their passes, their failed checks and their split, and a top-level step was taken for a child of
+    // its words).
     private readonly Dictionary<string, StepState> _steps = new(StringComparer.Ordinal);
     private readonly HashSet<string> _split = new(StringComparer.Ordinal);
     private readonly List<RalphPassRecord> _history = [];
@@ -295,7 +302,7 @@ public sealed class RalphLoop
                 return RalphText.SplitFinalResult;
             }
 
-            if (Current is not { } step || step.Index == 0 || !step.IsLeaf || _split.Contains(step.Text) || IsChild(step))
+            if (Current is not { } step || step.Index == 0 || !step.IsLeaf || _split.Contains(Key(step)) || IsChild(step))
             {
                 return RalphText.SplitRefusedResult;
             }
@@ -315,11 +322,14 @@ public sealed class RalphLoop
         _children.Clear();
         foreach (var child in steps.SelectMany(s => s.Children))
         {
-            _children.Add(child.Text);
+            _children.Add(Key(child));
         }
     }
 
-    private bool IsChild(PlanStep step) => _children.Contains(step.Text);
+    private bool IsChild(PlanStep step) => _children.Contains(Key(step));
+
+    /// <summary>A step's key: its words and its <see cref="PlanStep.Occurrence"/>, which together name one task line of the plan.</summary>
+    private static string Key(PlanStep step) => step.Text + "\n" + step.Occurrence.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Tokens a review spent, kept for the pass's record. A pass metered at both ends already counts them (the review ran before its end meter,
@@ -346,7 +356,7 @@ public sealed class RalphLoop
         ArgumentNullException.ThrowIfNull(facts);
         InPass = false;
         var step = Current;
-        string key = step?.Text ?? "";
+        string key = step is null ? "" : Key(step);
         var state = step is null ? null : _steps.TryGetValue(key, out var known) ? known : _steps[key] = new StepState();
         TimeSpan? elapsed = null;
         long? tokens = null;
@@ -398,7 +408,7 @@ public sealed class RalphLoop
         bool split = facts.Split && Report?.Outcome == RalphOutcome.Split;
         if (split && step is not null)
         {
-            _split.Add(step.Text);
+            _split.Add(Key(step));
             if (_autoCap)
             {
                 Cap += 3 * Math.Max(0, Report!.Substeps.Count - 1);
@@ -441,7 +451,7 @@ public sealed class RalphLoop
     public void Redo(PlanStep step, string? note)
     {
         ArgumentNullException.ThrowIfNull(step);
-        _steps.Remove(step.Text);
+        _steps.Remove(Key(step));
         _noProgress = 0;
         PendingNotes = string.IsNullOrWhiteSpace(note) ? null : RalphText.RedoNote(note);
     }
@@ -482,9 +492,9 @@ public sealed class RalphLoop
     public IReadOnlyList<string> ChangedBy(PlanStep step)
     {
         ArgumentNullException.ThrowIfNull(step);
-        return _steps.TryGetValue(step.Text, out var state) ? state.Changed : [];
+        return _steps.TryGetValue(Key(step), out var state) ? state.Changed : [];
     }
 
     /// <summary>The passes <paramref name="step"/> has taken this run.</summary>
-    public int PassesOn(PlanStep step) => _steps.TryGetValue(step.Text, out var state) ? state.Passes : 0;
+    public int PassesOn(PlanStep step) => _steps.TryGetValue(Key(step), out var state) ? state.Passes : 0;
 }

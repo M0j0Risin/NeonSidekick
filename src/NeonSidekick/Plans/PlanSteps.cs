@@ -259,14 +259,78 @@ public static class PlanSteps
         return Join(lines);
     }
 
+    /// <summary>Every task line of <paramref name="steps"/>, a parent before its children: the order of the text.</summary>
+    public static IReadOnlyList<PlanStep> Flat(IReadOnlyList<PlanStep> steps)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        return steps.SelectMany(s => s.Children.Prepend(s)).ToList();
+    }
+
     /// <summary>
-    /// The boxes of <paramref name="text"/>'s task lines (every task line, children too) by their words, each word's boxes in the order of the text
-    /// (<see cref="PlanStep.Occurrence"/>), for telling which boxes a pass changed: two steps of the same words are two entries (2026-10-19, the
-    /// review: the first one's box stood for both).
+    /// Each of <paramref name="after"/>'s task lines paired with the one of <paramref name="before"/> it was, for telling which boxes a pass changed
+    /// (2026-10-19, the second review of the Ralph loop: boxes matched by their words let a pass that reworded, added or deleted a line escape the
+    /// put-back, and a reworded step could not be unticked). The longest run of lines with the same words in the same order is kept; between two
+    /// kept lines (and before the first, after the last) a stretch with as many lines on both sides is paired in order — lines reworded in place;
+    /// -1 for a line that is new. Both lists are <see cref="Flat"/>, in the order of the text. Pure.
     /// </summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<bool>> Boxes(string text) =>
-        Parse(text).SelectMany(s => s.Children.Prepend(s)).GroupBy(s => s.Text, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => (IReadOnlyList<bool>)g.OrderBy(s => s.Occurrence).Select(s => s.Ticked).ToList(), StringComparer.Ordinal);
+    public static int[] Align(IReadOnlyList<PlanStep> before, IReadOnlyList<PlanStep> after)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        int n = before.Count;
+        int m = after.Count;
+        // The longest common run by words, from the ends (lcs[i, j]: of before[i..] and after[j..]).
+        var lcs = new int[n + 1, m + 1];
+        for (int i = n - 1; i >= 0; i--)
+        {
+            for (int j = m - 1; j >= 0; j--)
+            {
+                lcs[i, j] = string.Equals(before[i].Text, after[j].Text, StringComparison.Ordinal) ? lcs[i + 1, j + 1] + 1 : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+            }
+        }
+
+        var pairs = new int[m];
+        Array.Fill(pairs, -1);
+        int b = 0;
+        int a = 0;
+        int gapB = 0;
+        int gapA = 0;
+
+        void CloseGap(int endB, int endA)
+        {
+            if (endB - gapB == endA - gapA)
+            {
+                for (int k = 0; k < endA - gapA; k++)
+                {
+                    pairs[gapA + k] = gapB + k;
+                }
+            }
+        }
+
+        while (b < n && a < m)
+        {
+            if (string.Equals(before[b].Text, after[a].Text, StringComparison.Ordinal))
+            {
+                CloseGap(b, a);
+                pairs[a] = b;
+                b++;
+                a++;
+                gapB = b;
+                gapA = a;
+            }
+            else if (lcs[b + 1, a] >= lcs[b, a + 1])
+            {
+                b++;
+            }
+            else
+            {
+                a++;
+            }
+        }
+
+        CloseGap(n, m);
+        return pairs;
+    }
 
     private sealed class Builder(int line, int indent, string text, bool ticked)
     {

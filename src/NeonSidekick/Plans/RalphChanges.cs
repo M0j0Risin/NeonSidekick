@@ -11,9 +11,10 @@ public sealed record RalphFileMark(long Length, DateTime Written, string? Text, 
 /// <summary>
 /// The working tree before or after a pass (2026-10-18, <see cref="RalphChanges.Snapshot"/>): in a repository the changed files with their text (so a
 /// pass's own changes are told apart from what was dirty before it), else every file's size and time; paths relative to the working directory,
-/// spelled with <c>/</c>, <c>.neon/</c> never in it.
+/// spelled with <c>/</c>, <c>.neon/</c> never in it. <paramref name="Head"/> is HEAD's commit in a repository (null outside one, or with no commit
+/// yet): a pass that commits its work moves it (2026-10-19, the second review: a file changed and committed was in neither snapshot).
 /// </summary>
-public sealed record RalphSnapshotOfFiles(bool Git, IReadOnlyDictionary<string, RalphFileMark> Files, bool Cut);
+public sealed record RalphSnapshotOfFiles(bool Git, IReadOnlyDictionary<string, RalphFileMark> Files, bool Cut, string? Head = null);
 
 /// <summary>What a pass changed (2026-10-18): the files, the diff (cut to <see cref="RalphChanges.MaxDiffChars"/>), and the evidence's flags.</summary>
 public sealed record RalphDelta(IReadOnlyList<string> Changed, string Diff, bool NothingChanged, IReadOnlyList<string> NamedMissing, bool TestsTouched)
@@ -30,7 +31,8 @@ public sealed record RalphDelta(IReadOnlyList<string> Changed, string Diff, bool
 /// <summary>
 /// A Ralph pass's evidence (2026-10-18): a snapshot of the working tree before the pass and after it, and the delta — the files the pass changed and a
 /// unified diff of them (<see cref="UnifiedDiff"/>, the HEAD text through <see cref="GitAccess.Show"/> for a file that was clean before). In a repository
-/// the changed paths come from <see cref="GitAccess.ChangedPaths"/> (an untracked folder walked), filtered under the working directory; outside one,
+/// the changed paths come from <see cref="GitAccess.ChangedPaths"/> (an untracked folder walked), filtered under the working directory, and the files
+/// of any commit the pass made (HEAD before to HEAD after, diffed from HEAD as the pass began; 2026-10-19, the second review); outside one,
 /// every file's size and time (at most <see cref="MaxFiles"/>), with no diff. A binary file is listed with its size, never diffed; a file past
 /// <see cref="UnifiedDiff.MaxDistinctLines"/> is "too large to diff" with its line counts. The flags (nothing changed, a file the step names missing,
 /// test files touched) go to the log, the notices and the reviewer, and never untick a step on their own.
@@ -62,7 +64,8 @@ public static class RalphChanges
                 }
             }
 
-            return new RalphSnapshotOfFiles(true, marks, changed.Truncated);
+            string? head = git.MergeBase("", "HEAD", "HEAD") is { Outcome: GitOutcome.Ok, Head: { } tip } ? tip : null;
+            return new RalphSnapshotOfFiles(true, marks, changed.Truncated, head);
         }
 
         var listed = files.ListFiles("", MaxFiles, name => name is PlanSlug.AppFolder or ".git", cancellationToken);
@@ -91,13 +94,15 @@ public static class RalphChanges
         ArgumentNullException.ThrowIfNull(named);
         var changed = new List<string>();
         var diff = new StringBuilder();
-        foreach (string path in before.Files.Keys.Union(after.Files.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        var committed = Committed(before, after, git);
+        foreach (string path in before.Files.Keys.Union(after.Files.Keys, StringComparer.Ordinal).Union(committed, StringComparer.Ordinal).Order(StringComparer.Ordinal))
         {
             before.Files.TryGetValue(path, out var was);
             after.Files.TryGetValue(path, out var now);
             bool differs = (was, now) switch
             {
-                (null, null) => false,
+                // In neither snapshot: clean before and clean again, changed only when a commit of the pass's holds it.
+                (null, null) => committed.Contains(path),
                 (null, _) or (_, null) => true,
                 _ => was.Length != now.Length || was.Written != now.Written || !string.Equals(was.Text, now.Text, StringComparison.Ordinal),
             };
@@ -112,8 +117,8 @@ public static class RalphChanges
                 continue;
             }
 
-            // The text before the pass: the dirty file's own, else HEAD's (a file clean before, made dirty by the pass).
-            string? oldText = was is not null ? was.Text : HeadText(git, path);
+            // The text before the pass: the dirty file's own, else HEAD's as the pass began (a file clean before, made dirty or committed by the pass).
+            string? oldText = was is not null ? was.Text : HeadText(git, before.Head ?? "HEAD", path);
             // A file the pass cleaned again (back to HEAD's) is no longer in the after snapshot: its text now is HEAD's or the disk's.
             var current = now ?? Mark(files, path, withText: true);
             if ((was?.Binary ?? false) || current.Binary)
@@ -122,7 +127,7 @@ public static class RalphChanges
                 continue;
             }
 
-            string newText = current.Text ?? (now is null && !Exists(files, path) ? "" : HeadText(git, path) ?? "");
+            string newText = current.Text ?? (now is null && !Exists(files, path) ? "" : HeadText(git, "HEAD", path) ?? "");
             var hunks = UnifiedDiff.Hunks(UnifiedDiff.Split(oldText ?? ""), UnifiedDiff.Split(newText));
             if (hunks is null)
             {
@@ -192,8 +197,37 @@ public static class RalphChanges
         }
     }
 
-    private static string? HeadText(GitAccess? git, string path) =>
-        git?.Show("HEAD", path) is { Outcome: GitOutcome.Ok, Text: { } text } ? text : null;
+    private static string? HeadText(GitAccess? git, string reference, string path) =>
+        git?.Show(reference, path) is { Outcome: GitOutcome.Ok, Text: { } text } ? text : null;
+
+    /// <summary>
+    /// The files the commits a pass made hold (HEAD moved from <paramref name="before"/>'s to <paramref name="after"/>'s): a range diff's paths, both
+    /// sides of a rename, <c>.neon/</c> left out; none when HEAD stayed or either end is unknown.
+    /// </summary>
+    private static HashSet<string> Committed(RalphSnapshotOfFiles before, RalphSnapshotOfFiles after, GitAccess? git)
+    {
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        if (git is null || before.Head is not { } from || after.Head is not { } to || string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return paths;
+        }
+
+        if (git.Diff(new GitDiffRequest(GitDiffKind.Range, "", From: from, To: to), 1) is { Outcome: GitOutcome.Ok } range)
+        {
+            foreach (var change in range.Files)
+            {
+                foreach (string path in change.OldPath is { } old ? [change.Path, old] : new[] { change.Path })
+                {
+                    if (Slash(path) is var slashed && !Skipped(slashed))
+                    {
+                        paths.Add(slashed);
+                    }
+                }
+            }
+        }
+
+        return paths;
+    }
 
     private static bool Exists(WorkingDirectory files, string path) =>
         files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full);

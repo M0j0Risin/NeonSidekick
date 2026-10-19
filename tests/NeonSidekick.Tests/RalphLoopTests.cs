@@ -52,6 +52,46 @@ public sealed class RalphLoopTests
     }
 
     [Fact]
+    public void StepsOfTheSameWords_KeepTheirOwnCounts_AndATopLevelStepIsNoChildOfItsWords()
+    {
+        // 2026-10-19, the second review: the per-step state was keyed by the words, so twins shared their passes, failed checks and split.
+        const string twins = "## Steps\n- [ ] Run the tests\n- [ ] Run the tests\n- [ ] Parent\n  - [ ] Write it\n- [ ] Write it\n";
+        var loop = new RalphLoop(Snapshot(perStep: 2), 4);
+        var steps = Steps(twins);
+        loop.SetChildren(steps);
+        var first = steps[0];
+        var second = steps[1];
+
+        loop.BeginPass(first, null);
+        Assert.Null(loop.EndPass(Failed, null));          // the first twin: one failed check, one pass
+        loop.BeginPass(first, null);
+        Assert.Null(loop.EndPass(Stood, null));           // then it stands, at its second pass
+        loop.BeginPass(second, null);
+        Assert.Null(loop.EndPass(Failed, null));          // the second's first pass: its own count, no stop
+        Assert.Equal(1, loop.PassesOn(second));
+        Assert.Equal(2, loop.PassesOn(first));
+
+        // The top-level "Write it" is not the child of the same words: it may split.
+        loop.BeginPass(steps[3], null);
+        Assert.Null(loop.Record(new FinishReport(RalphOutcome.Split, "too big", [], null, [], [new PlanSubstep("a", "a"), new PlanSubstep("b", "b")])));
+        loop.EndPass(RalphPassFacts.None, null);
+        loop.BeginPass(steps[2].Children[0], null);
+        Assert.Equal(RalphText.SplitRefusedResult, loop.Record(new FinishReport(RalphOutcome.Split, "too big", [], null, [], [new PlanSubstep("a", "a"), new PlanSubstep("b", "b")])));
+    }
+
+    [Fact]
+    public void AnUncheckedRun_RunsNoCheck_ButKeepsTheApprovedCommands()
+    {
+        // 2026-10-19, the second review: a start under the policy off saved the checks as none, so a resume with it on ran none.
+        var snapshot = Snapshot(final: "dotnet test") with { Unchecked = true };
+
+        Assert.Null(snapshot.StepCheck);
+        Assert.Null(snapshot.FinalCheck);
+        Assert.Equal(("dotnet build", "dotnet test"), (snapshot.Verify, snapshot.Final));
+        Assert.Equal("dotnet build", Snapshot().StepCheck);
+    }
+
+    [Fact]
     public void TwoPassesInARowWithoutProgress_Stall_AFailedTurnIsRetriedOnce()
     {
         var loop = new RalphLoop(Snapshot(), 3);

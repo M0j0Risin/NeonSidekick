@@ -51,6 +51,43 @@ public sealed class RalphLogTests : IDisposable
     }
 
     [Fact]
+    public void ALongLog_KeepsItsNewestPasses_WithinTheCap()
+    {
+        // 2026-10-19, the second review: the log only grew, was read cut at 200,000 characters (its newest passes lost), and then every write was refused.
+        string tail = string.Join('\n', Enumerable.Range(1, RalphLog.TailLines).Select(i => new string('x', 100) + i));
+        var entries = Enumerable.Range(1, 120).Select(p => Entry(p, 1, "Write the body", "check failed", tail)).ToList();
+        string big = RalphLog.Render(new RalphLogDocument(Head, ["a fact"], entries));
+        Assert.True(big.Length > WorkingDirectory.MaxWriteChars);
+        Directory.CreateDirectory(Path.Combine(_dir, ".neon", "plans", "guide"));
+        File.WriteAllText(Path.Combine(_dir, ".neon", "plans", "guide", "ralph.md"), big);   // as an older build left it
+
+        Assert.Equal(120, RalphLog.PassCount(RalphLog.Read(_files, Plan)));   // read whole
+        Assert.Null(RalphLog.Append(_files, Plan, Head, Entry(121, 2, "Write the end"), ["another fact"]));
+
+        var log = RalphLog.Read(_files, Plan)!;
+        Assert.True(File.ReadAllText(Path.Combine(_dir, ".neon", "plans", "guide", "ralph.md")).Length <= RalphLog.MaxLogChars);
+        Assert.Equal(121, RalphLog.PassCount(log));
+        Assert.Equal(121, log.Entries[^1].Pass);
+        Assert.True(log.Entries.Count < 121);
+        Assert.Equal(["a fact", "another fact"], log.Learned);
+        Assert.Equal(Head, log.Head);
+    }
+
+    [Fact]
+    public void ALogThatCannotBeRead_IsNeverWrittenOver()
+    {
+        string file = Path.Combine(_dir, ".neon", "plans", "guide", "ralph.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        byte[] binary = [0, 1, 2, 0, 3, 0, 0, 4];
+        File.WriteAllBytes(file, binary);
+
+        Assert.Null(RalphLog.Read(_files, Plan));
+        Assert.NotNull(RalphLog.Append(_files, Plan, Head, Entry(1, 1, "x"), []));
+        Assert.NotNull(RalphLog.SetHead(_files, Plan, Head));
+        Assert.Equal(binary, File.ReadAllBytes(file));
+    }
+
+    [Fact]
     public void ACheckTail_IsCut_Scrubbed_AndRedacted()
     {
         string tail = string.Join('\n', Enumerable.Range(1, 60).Select(i => "line " + i + (i == 59 ? "\u0007" : ""))) + "\nconnect --password hunter2";
@@ -126,16 +163,16 @@ public sealed class RalphLogTests : IDisposable
     }
 
     [Fact]
-    public void TheLock_RacedFor_IsTakenByOne_AndLeavesNoTempFiles()
+    public async Task TheLock_RacedFor_IsTakenByOne_AndLeavesNoTempFiles()
     {
         // 2026-10-19, the review: read-then-write let two instances starting together both take it.
         var owners = Enumerable.Range(1, 8).Select(i => new RalphLog.LockOwner(1000 + i, T0)).ToList();
         using var start = new ManualResetEventSlim();
         var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return RalphLog.TryLock(_files, Plan, owner, _ => true); })).ToList();
         start.Set();
-        Task.WaitAll([.. takes]);
+        bool[] taken = await Task.WhenAll(takes);
 
-        Assert.Single(takes, t => t.Result);
+        Assert.Single(taken, t => t);
         string folder = Path.Combine(_dir, ".neon", "plans", "guide");
         Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
 

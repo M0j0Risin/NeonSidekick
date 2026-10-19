@@ -211,6 +211,33 @@ public static class RalphText
     public const string PolicyOffNowReason = "Shell command policy is off now";
 
     /// <summary>
+    /// A loop started under <c>Shell command policy</c> off (2026-10-19, the second review: the screen and headless each built it inline, and it
+    /// read "…ask or yolo.: the steps go unchecked."): no check runs this run, and a resume under ask or yolo runs the plan's again. Pinned.
+    /// </summary>
+    public const string PolicyOffUncheckedNotice =
+        Glyph + " Shell command policy is off, so the steps go unchecked this run; a resume with it on runs the plan's checks. /tools shell sets it to ask or yolo.";
+
+    /// <summary>The 🔁 line a recorded <c>finish_step</c> writes: its outcome and summary, cut at 200 characters. Pinned.</summary>
+    public static string FinishStepLine(RalphOutcome outcome, string summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        return $"{Glyph} finish_step: {outcome.ToString().ToLowerInvariant()} — {(summary.Length <= 200 ? summary : summary[..199] + "…")}";
+    }
+
+    /// <summary>The prefix of the error a failed Ralph confirm pane writes (the pane's own message after it).</summary>
+    public const string ConfirmPaneFailed = "The Ralph loop's confirm pane failed: ";
+
+    /// <summary>The prefix of the error a failed Ralph checkpoint pane writes (the pane's own message after it).</summary>
+    public const string CheckpointPaneFailed = "The Ralph checkpoint pane failed: ";
+
+    /// <summary>
+    /// A pass or its judgment threw (2026-10-19, the second review: the loop was left running with its pass "under way", its lock held and the
+    /// asking tools withheld from every turn after): the loop stops, the plan paused. Pinned.
+    /// </summary>
+    public static string LoopFailedError(string reason) =>
+        $"{Glyph} The Ralph loop failed: {Flatten(reason).TrimEnd('.')}. It stops here; /plan ralph resumes it.";
+
+    /// <summary>
     /// <c>/plan ralph</c> on a paused loop started in another folder (2026-10-19, the review: its approved commands would have run in this one).
     /// Pinned.
     /// </summary>

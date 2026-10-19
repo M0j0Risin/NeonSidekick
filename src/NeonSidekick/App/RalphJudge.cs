@@ -42,9 +42,11 @@ internal static class RalphJudge
     /// unticks and stops, <c>split</c> writes the children (no checks), <c>done</c> ticks and checks, <c>partial</c> or none with the model's own tick
     /// still checked. The checks: the verify command (a failure, a timeout or Esc unticks, its tail the next pass's note), the evidence, the review
     /// (a fail unticks). A parent whose children all stand is ticked. The header's progress follows. <paramref name="step"/> was parsed from the
-    /// plan file whole (<see cref="PlanSteps.Parse"/>), so its line is the file's; <paramref name="boxes"/> are <see cref="PlanSteps.Boxes"/> before the pass.
+    /// plan file whole (<see cref="PlanSteps.Parse"/>), so its line is the file's; <paramref name="lines"/> are the file's task lines before the pass
+    /// (<see cref="PlanSteps.Flat"/> of that same parse). A stopped pass decides nothing: its own box goes back as well (2026-10-19, the second review:
+    /// a tick the model wrote before Esc stood with no check, and a resume passed the step by).
     /// </summary>
-    public static async Task<RalphJudged> JudgeAsync(IRalphHost host, RalphLoop loop, PlanStep? step, int total, IReadOnlyDictionary<string, IReadOnlyList<bool>> boxes, RalphSnapshotOfFiles before, bool hadPictures, bool cancelled, bool failed, string requirement, TimeProvider time, CancellationToken cancellationToken)
+    public static async Task<RalphJudged> JudgeAsync(IRalphHost host, RalphLoop loop, PlanStep? step, int total, IReadOnlyList<PlanStep> lines, RalphSnapshotOfFiles before, bool hadPictures, bool cancelled, bool failed, string requirement, TimeProvider time, CancellationToken cancellationToken)
     {
         var snapshot = loop.Snapshot;
         string path = snapshot.Path;
@@ -55,22 +57,31 @@ internal static class RalphJudge
             return new RalphJudged(RalphPassFacts.None with { Cancelled = cancelled, TurnFailed = failed }, "none", null, "off", [], "");
         }
 
-        // Another step's box the pass changed: put back (the loop ticks; the model never decides another step). Steps of the same words are told
-        // apart by their order (2026-10-19, the review), and only while the pass left as many of them as there were.
+        // The task lines now, each paired with the one it was (2026-10-19, the second review: matched by their words, a line the pass reworded,
+        // added or deleted escaped the put-back, and a reworded step of its own could not be unticked). The pass's own line is the one its step's
+        // became, else the step found by its words.
+        var now = PlanSteps.Flat(PlanSteps.Parse(text));
+        var pairs = PlanSteps.Align(lines, now);
+        PlanStep? own = step is null ? null : OwnLine(lines, now, pairs, step) ?? PlanSteps.Find(text, step);
+
+        // Another step's box the pass changed: put back (the loop ticks; the model never decides another step), a new line's unticked (the loop
+        // never ticked it). One write for them all.
         int putBack = 0;
-        foreach (var other in PlanSteps.Parse(text).SelectMany(s => s.Children.Prepend(s)).ToList())
+        string restored = text;
+        for (int i = 0; i < now.Count; i++)
         {
-            bool own = step is not null && other.Text == step.Text && other.Occurrence == step.Occurrence;
-            if (!own && boxes.TryGetValue(other.Text, out var was) && was.Count == other.Twins && was[other.Occurrence] != other.Ticked
-                && PlanFiles.ReadWhole(host.Files, path) is { } current && PlanSteps.WithBox(current, other, was[other.Occurrence]) is { } restored)
+            var line = now[i];
+            bool was = pairs[i] >= 0 && lines[pairs[i]].Ticked;
+            if ((own is null || line.Line != own.Line) && line.Ticked != was && PlanSteps.WithBox(restored, line, was) is { } next)
             {
-                host.Files.WriteText(path, restored, overwrite: true);
+                restored = next;
                 putBack++;
             }
         }
 
-        if (putBack > 0)
+        if (putBack > 0 && host.Files.WriteText(path, restored, overwrite: true).Outcome == FileOutcome.Ok)
         {
+            text = restored;
             host.Notice(RalphText.BoxesPutBackNotice(putBack));
             host.Log($"ralph: pass {loop.Pass} changed {putBack} other boxes; put back");
         }
@@ -79,6 +90,12 @@ internal static class RalphJudge
         var delta = RalphChanges.Delta(before, after, host.Files, host.Git, step?.NamedPaths ?? []);
         if (cancelled)
         {
+            if (own is { Ticked: true } && step is { Ticked: false })
+            {
+                SetBox(host, path, own, false);
+                host.Log($"ralph: pass {loop.Pass} was stopped with its own box ticked; put back");
+            }
+
             return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed), "none", null, "off", delta.Flags, delta.Diff);
         }
 
@@ -106,20 +123,21 @@ internal static class RalphJudge
         string check = "none";
         string? tail = null;
         string review = "off";
-        var found = PlanSteps.Find(text, step);
-        bool modelTicked = found?.Ticked ?? false;
+        // The step's line as the pass left it (reworded, it is still this step's): every box below is set there.
+        var target = own ?? step;
+        bool modelTicked = own?.Ticked ?? false;
         switch (report?.Outcome)
         {
             case RalphOutcome.Blocked:
-                SetBox(host, path, step, false);
+                SetBox(host, path, target, false);
                 host.Notice(RalphText.BlockedNotice(report.Summary));
                 break;
             case RalphOutcome.Split:
-                if (PlanFiles.ReadWhole(host.Files, path) is { } whole && PlanSteps.WithChildren(whole, step, report.Substeps) is { } withChildren
+                if (PlanFiles.ReadWhole(host.Files, path) is { } whole && PlanSteps.WithChildren(whole, target, report.Substeps) is { } withChildren
                     && host.Files.WriteText(path, withChildren, overwrite: true).Outcome == FileOutcome.Ok)
                 {
                     split = true;
-                    SetBox(host, path, step, false);
+                    SetBox(host, path, target, false);
                     host.Notice(RalphText.SplitNotice(report.Substeps.Count, step.Text));
                 }
 
@@ -136,7 +154,7 @@ internal static class RalphJudge
                     break;
                 }
 
-                SetBox(host, path, step, true);
+                SetBox(host, path, target, true);
                 if (delta.NothingChanged && report?.Outcome == RalphOutcome.Done)
                 {
                     host.Notice(RalphText.NothingChangedNotice);
@@ -148,14 +166,14 @@ internal static class RalphJudge
                     check = result?.Word ?? "not run";
                     if (result is { Kind: RalphCheckKind.Cancelled } || cancellationToken.IsCancellationRequested)
                     {
-                        SetBox(host, path, step, false);
+                        SetBox(host, path, target, false);
                         host.Notice(RalphText.CheckStoppedNotice);
                         return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed), check, null, review, delta.Flags, delta.Diff);
                     }
 
                     if (result is not { Passed: true })
                     {
-                        SetBox(host, path, step, false);
+                        SetBox(host, path, target, false);
                         checkFailed = true;
                         tail = result?.Tail;
                         host.Notice(result is { Kind: RalphCheckKind.TimedOut } ? RalphText.CheckTimedOutNotice(verify, snapshot.CheckTimeoutSeconds) : RalphText.CheckFailedNotice(verify));
@@ -171,7 +189,7 @@ internal static class RalphJudge
                     if (reviewed is not { } verdict || cancellationToken.IsCancellationRequested)
                     {
                         // Esc under the review stops the loop, the step unticked.
-                        SetBox(host, path, step, false);
+                        SetBox(host, path, target, false);
                         host.Notice(RalphText.CheckStoppedNotice);
                         return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed), check, tail, "stopped", delta.Flags, delta.Diff);
                     }
@@ -185,7 +203,7 @@ internal static class RalphJudge
 
                     if (verdict.Kind == RalphVerdictKind.Fail)
                     {
-                        SetBox(host, path, step, false);
+                        SetBox(host, path, target, false);
                         host.Notice(RalphText.ReviewFailedNotice(verdict.Reason));
                         loop.PendingNotes = RalphText.ReviewFailedNote(verdict.Reason);
                         break;
@@ -208,7 +226,7 @@ internal static class RalphJudge
         if (stands && PlanFiles.ReadWhole(host.Files, path) is { } latest)
         {
             var parsed = PlanSteps.Parse(latest);
-            if (PlanSteps.Find(latest, step) is { } standing && PlanSteps.ParentOf(parsed, standing) is { Ticked: false } parent && parent.Children.All(c => c.Ticked))
+            if (PlanSteps.Find(latest, target) is { } standing && PlanSteps.ParentOf(parsed, standing) is { Ticked: false } parent && parent.Children.All(c => c.Ticked))
             {
                 SetBox(host, path, parent, true);
                 host.Notice(RalphText.ParentTickedNotice(parent.Text));
@@ -226,6 +244,20 @@ internal static class RalphJudge
         {
             host.Log("ralph: " + problem);
         }
+    }
+
+    /// <summary>The line <paramref name="step"/>'s became under the pass (<see cref="PlanSteps.Align"/>'s pair of its line); null when it went or cannot be told.</summary>
+    private static PlanStep? OwnLine(IReadOnlyList<PlanStep> lines, IReadOnlyList<PlanStep> now, int[] pairs, PlanStep step)
+    {
+        for (int i = 0; i < now.Count; i++)
+        {
+            if (pairs[i] >= 0 && lines[pairs[i]].Line == step.Line)
+            {
+                return now[i];
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The header's status and progress over the loop's leaves: incomplete while any is left.</summary>

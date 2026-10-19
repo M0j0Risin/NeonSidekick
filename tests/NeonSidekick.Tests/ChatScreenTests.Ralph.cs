@@ -302,6 +302,167 @@ public partial class ChatScreenTests
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 
+    /// <summary>
+    /// The plan file rewritten by <paramref name="edit"/> as the first pass's reply begins (the model's own edit, as a write tool would make it);
+    /// <paramref name="then"/> at its second update, the reply held until the turn is cancelled.
+    /// </summary>
+    private void RalphEditDuringFirstPass(Func<string, string> edit, Action? then = null) =>
+        _chat.BeforeUpdateOf = async (request, update, token) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                File.WriteAllText(PlanFile, edit(RalphPlanText));
+            }
+
+            if (request == 0 && update == 1 && then is not null)
+            {
+                then();
+                while (!token.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+
+    [Fact]
+    public async Task Ralph_AStoppedPass_PutsBackTheTickItsModelWrote()
+    {
+        // 2026-10-19, the second review: the stopped pass's own box was skipped by the put-back, so a resume passed the step by, never checked.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _chat.EnqueueText("Working on it. ", "Still going.");
+        RalphEditDuringFirstPass(text => text.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal), () => Scripted().Push(Keys.Escape));
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StopNotice(RalphStop.Stopped, PlanPath, 0, 2), output);
+        Assert.Contains("- [ ] One", RalphPlanText);
+        Assert.Equal([RalphVerify], _ralphVerifier.Commands);   // the baseline alone
+    }
+
+    [Fact]
+    public async Task Ralph_AnotherLineThePassReworded_HasItsBoxPutBack()
+    {
+        // 2026-10-19, the second review: boxes were matched by their words, so a reworded line kept the tick the model gave it.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphEditDuringFirstPass(text => text.Replace("- [ ] Two", "- [x] Two, early", StringComparison.Ordinal));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.BoxesPutBackNotice(1), output);
+        Assert.Contains("Two, early", LastUserText(_chat.Requests[2]));   // worked in a pass of its own
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_ItsOwnStepReworded_IsUnticked_WhenItsCheckFails()
+    {
+        // 2026-10-19, the second review: the step was looked for by its words, so a reworded one stayed ticked after its check failed.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _ralphVerifier.Pass().Fail("error CS1002: ; expected");
+        RalphEditDuringFirstPass(text => text.Replace("- [ ] One", "- [x] One, all of it", StringComparison.Ordinal));
+        RalphPass("1");
+        RalphPass("2");
+        RalphPass("3");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.CheckFailedNotice(RalphVerify), output);
+        Assert.Contains("One, all of it", LastUserText(_chat.Requests[2]));   // worked again, not passed by
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_TheWorkingDirectoryMovedMidPass_TheLoopEndsInItsOwnFolder()
+    {
+        // 2026-10-19, the second review: the judge, the stop's writes and the unlock followed the setting to the new folder.
+        RalphPlan();
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        string otherPlan = Path.Combine(elsewhere, PlanPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(otherPlan)!);
+        File.WriteAllText(otherPlan, RalphPlanText);   // a plan of the same name there
+        string otherText = File.ReadAllText(otherPlan);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphEditDuringFirstPass(text => { _settings.Update(d => d.WorkingDirectory = elsewhere); return text; });
+        RalphPass("1");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StopNotice(RalphStop.WorkdirMoved, PlanPath, 1, 2), output);
+        Assert.Equal(otherText, File.ReadAllText(otherPlan));
+        Assert.Contains("- [x] One", RalphPlanText);                  // judged where it ran
+        Assert.False(File.Exists(RalphLockFile));
+        Assert.Equal(ChatScreen.RalphStopWord(RalphStop.WorkdirMoved), RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Stopped);
+        Assert.False(Directory.Exists(Path.Combine(elsewhere, ".neon", "plans", "add-guide")));   // no log or lock there
+    }
+
+    [Fact]
+    public async Task Ralph_ACheckThatThrows_EndsTheLoop_AndTheNextTurnMayAsk()
+    {
+        // 2026-10-19, the second review: a throw skipped the loop's end, leaving its pass under way (the asking tools withheld), the lock held.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("hello"), Line("/exit"));
+        _ralphVerifier.Ran = run => { if (run == 2) { throw new InvalidOperationException("the disk went away"); } };
+        RalphPass("1");
+        _chat.EnqueueText("Hi.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.LoopFailedError("InvalidOperationException: the disk went away"), output);
+        Assert.Contains(RalphText.StopNotice(RalphStop.Stopped, PlanPath, 1, 2), output);
+        Assert.False(File.Exists(RalphLockFile));
+        Assert.Contains(AskUserTool.ToolName, OfferedNames(_chat.Options[2]));
+    }
+
+    [Fact]
+    public async Task Ralph_AReviewThatTimesOut_IsUnclear_AndTheLoopGoesOn()
+    {
+        // 2026-10-19, the second review: an HTTP client's timeout is a TaskCanceledException, which the review let out as a stop of its own.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _settings.Update(d => d.RalphLoopReviewer = "model");
+        RalphPass("1");
+        _chat.EnqueueText("never seen");
+        RalphPass("2");
+        _chat.Enqueue(VerdictCall("v2", "pass", "fine"));
+        _chat.BeforeUpdateOf = (request, _, _) =>
+            request == 2 ? throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.") : Task.CompletedTask;
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.ReviewUnclearNotice, output);
+        Assert.Contains(RalphText.StepDoneNotice(1, 2, "One"), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_StartedWithThePolicyOff_ResumedWithItOn_RunsThePlansChecks()
+    {
+        // 2026-10-19, the second review: the start saved the checks as none, so the resume ran none either.
+        RalphPlan();
+        string? kept = null;
+        RalphFixture(Line("/plan ralph add-guide"), Yes,
+            input => { kept = RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Verify; _settings.Update(d => d.ShellCommandPolicy = "yolo"); Line("/plan ralph")(input); },
+            Line("/exit"));
+        _settings.Update(d => d.ShellCommandPolicy = "off");
+        RalphPass("1", "blocked", "Need a name.");
+        RalphPass("2");
+        RalphPass("3");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.PolicyOffUncheckedNotice, output);
+        Assert.Equal(RalphVerify, kept);                                         // the log kept the approved command
+        Assert.Equal([RalphVerify, RalphVerify, RalphVerify], _ralphVerifier.Commands);   // none at the start; the resume's baseline and each step's
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
     [Fact]
     public async Task Ralph_FinalOnly_PausedBeforeTheFinalCheck_ResumesIntoIt()
     {

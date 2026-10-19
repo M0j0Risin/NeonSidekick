@@ -177,6 +177,58 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanRalph_StartedWithThePolicyOff_ResumedWithItOn_RunsThePlansChecks()
+    {
+        // 2026-10-19, the second review: the start saved the checks as none, so the resume ran none either.
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        _settings.Update(d => d.ShellCommandPolicy = "off");
+        _chat.BeforeUpdateOf = (request, _, _) =>
+        {
+            if (request == 0)
+            {
+                _settings.Update(d => d.ShellCommandPolicy = "ask");
+            }
+
+            return Task.CompletedTask;
+        };
+        HeadlessRalphPass("1", "blocked", "Need a name.");
+        HeadlessRalphPass("2");
+        HeadlessRalphPass("3");
+
+        string output = await Headless("/plan ralph add-guide\n/plan ralph\n");
+
+        Assert.Contains("[notice] " + RalphText.PolicyOffUncheckedNotice, output);
+        Assert.Equal(["dotnet build", "dotnet build", "dotnet build"], _ralphVerifier.Commands);   // none at the start; the resume's baseline and each step's
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
+    [Fact]
+    public async Task Headless_PlanRalph_AStepsCheck_TakesTheTimeoutTheLoopStartedWith()
+    {
+        // 2026-10-19, the second review: headless read the live setting, the screen the loop's snapshot.
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        _settings.Update(d => d.RalphLoopCheckTimeoutSeconds = 120);
+        _chat.BeforeUpdateOf = (request, _, _) =>
+        {
+            if (request == 0)
+            {
+                _settings.Update(d => d.RalphLoopCheckTimeoutSeconds = 45);
+            }
+
+            return Task.CompletedTask;
+        };
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
+
+        await Headless("/plan ralph add-guide\n");
+
+        Assert.Equal(3, _ralphVerifier.Timeouts.Count);
+        Assert.All(_ralphVerifier.Timeouts, t => Assert.Equal(TimeSpan.FromSeconds(120), t));
+    }
+
+    [Fact]
     public async Task Headless_PlanRalph_ABadCount_IsRefused()
     {
         ServerOn1234("llama");

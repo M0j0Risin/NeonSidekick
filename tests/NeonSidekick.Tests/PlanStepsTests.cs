@@ -105,13 +105,27 @@ public sealed class PlanStepsTests
 
         Assert.Equal([0, 0, 1], steps.Select(s => s.Occurrence));
         Assert.Equal([2, 1, 2], steps.Select(s => s.Twins));
-        Assert.Equal([true, false], PlanSteps.Boxes(text)["Run the tests"]);
+        Assert.Equal([true, false, false], PlanSteps.Flat(steps).Select(s => s.Ticked));
         Assert.Equal("## Steps\n- [x] Run the tests\n- [ ] Write it\n- [x] Run the tests\n", PlanSteps.WithBox(text, steps[2], ticked: true));
 
         // Moved under the pass (a note above): the second is still the second, while there are two.
         string moved = "Intro\n\n" + text;
         Assert.Equal("Intro\n\n## Steps\n- [x] Run the tests\n- [ ] Write it\n- [x] Run the tests\n", PlanSteps.WithBox(moved, steps[2], ticked: true));
         Assert.Null(PlanSteps.WithBox("Intro\n\n## Steps\n- [ ] Run the tests\n" + text[9..], steps[2], ticked: true));   // a third: cannot be told
+    }
+
+    [Fact]
+    public void Align_PairsEachLineWithTheOneItWas_RewordedInPlace_OrNew()
+    {
+        // 2026-10-19, the second review: lines matched by their words let a reworded, added or deleted line escape the Ralph loop's put-back.
+        var before = PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [ ] Two\n- [ ] Three\n- [ ] Four\n"));
+
+        Assert.Equal([0, 1, 2, 3], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("Intro\n\n## Steps\n- [ ] One\n- [x] Two\n- [ ] Three\n- [ ] Four\n"))));
+        Assert.Equal([0, 1, 2, 3], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [x] Two, early\n- [ ] Three\n- [ ] Four\n"))));
+        Assert.Equal([0, -1, 1, 2, 3], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [x] New\n- [ ] Two\n- [ ] Three\n- [ ] Four\n"))));
+        Assert.Equal([0, 2, 3], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [ ] Three\n- [ ] Four\n"))));
+        // Two reworded and one added between the same kept lines: no telling which is which, all new.
+        Assert.Equal([0, -1, -1, -1, 3], PlanSteps.Align(before, PlanSteps.Flat(PlanSteps.Parse("## Steps\n- [ ] One\n- [ ] 2\n- [ ] 3\n- [ ] 3b\n- [ ] Four\n"))));
     }
 
     [Fact]

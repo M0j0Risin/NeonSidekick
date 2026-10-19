@@ -34,7 +34,7 @@ internal sealed partial class ChatScreen
             {
                 (verdict, tokens) = byAdvisor
                     ? await RalphReviewers.ByAdvisorAsync(_neonAdvisor, _session.Usage, request, effective, token).ConfigureAwait(false)
-                    : await RalphReviewers.ByModelAsync(_session, _files, snapshot, step, request, effective.LlmPictureKeep, effective.LlmPictureMegabytes, ModelSeesPictures(), token).ConfigureAwait(false);
+                    : await RalphReviewers.ByModelAsync(_session, RalphFiles, snapshot, step, request, effective.LlmPictureKeep, effective.LlmPictureMegabytes, ModelSeesPictures(), token).ConfigureAwait(false);
             }
         }, KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false);
         loop.AddReviewTokens(tokens);
@@ -103,7 +103,9 @@ internal static class RalphReviewers
             var call = response.Calls.FirstOrDefault(c => string.Equals(c.Name, RalphReview.ToolName, StringComparison.Ordinal));
             return (call is not null && RalphReview.FromCall(call.Arguments) is { } called ? called : RalphReview.FromText(response.Text), tokens);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // A cancellation that is not the caller's (an HTTP client's timeout is a TaskCanceledException) is a failed review, not a stop
+        // (2026-10-19, the second review: it ran out through the judge and left the loop running).
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: the review failed: " + Assistant.Explain(ex));
             return (RalphVerdict.Unclear(Assistant.Explain(ex)), 0);

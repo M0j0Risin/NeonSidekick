@@ -62,6 +62,28 @@ public sealed class RalphChangesTests : IDisposable
     }
 
     [Fact]
+    public void WorkThePassCommitted_IsListedAndDiffed_FromHeadAsThePassBegan()
+    {
+        // 2026-10-19, the second review: only the working tree's status was read, so a file changed and committed was in neither snapshot.
+        var (files, git, root) = Repo();
+        var before = RalphChanges.Snapshot(files, git);
+        Assert.NotNull(before.Head);
+
+        GitAccessTests.CommitFile(Path.Combine(_dir, "repo"), "app.cs", "one\nTWO\n", "the pass's work");
+        GitAccessTests.CommitFile(Path.Combine(_dir, "repo"), "added.cs", "new\n", "and a file");
+        Write(root, "dirty.cs", "a\nleft dirty\n");
+        var after = RalphChanges.Snapshot(files, git);
+        var delta = RalphChanges.Delta(before, after, files, git, []);
+
+        Assert.NotEqual(before.Head, after.Head);
+        Assert.Equal(["added.cs", "app.cs", "dirty.cs"], delta.Changed);
+        Assert.Contains("--- a/app.cs\n+++ b/app.cs\n@@ -1,2 +1,2 @@\n one\n-two\n+TWO\n", delta.Diff);
+        Assert.Contains("--- /dev/null\n+++ b/added.cs", delta.Diff);
+        Assert.Contains("+left dirty", delta.Diff);
+        Assert.False(delta.NothingChanged);
+    }
+
+    [Fact]
     public void AWorkingDirectoryInASubfolder_SeesOnlyItsOwn()
     {
         var (files, git, root) = Repo("sub");

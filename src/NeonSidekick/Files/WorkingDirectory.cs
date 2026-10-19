@@ -516,6 +516,26 @@ public sealed class WorkingDirectory
         _options = options ?? WorkingDirectoryOptions.Sandbox;
     }
 
+    /// <summary>
+    /// A working directory whose root stays <paramref name="root"/> whatever the settings say later, with this one's options and guards (read live,
+    /// as this one's are) and no files seen (2026-10-19, the second review of the Ralph loop: a loop's plan, log and lock are its own folder's, and a
+    /// <c>/cwd</c> save or a profile switch mid-run sent its stop's writes, its judge and its unlock to the new root).
+    /// </summary>
+    public WorkingDirectory PinnedAt(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        return new WorkingDirectory(() => root, _time, _options)
+        {
+            Databases = Databases,
+            ShoppingListGuard = ShoppingListGuard,
+            RecycleDeletes = RecycleDeletes,
+            ServerDatabases = ServerDatabases,
+            AdminFamilies = AdminFamilies,
+            ImagesFolder = ImagesFolder,
+            SkillFolders = SkillFolders,
+        };
+    }
+
     /// <summary>How this instance treats its root (<see cref="WorkingDirectoryOptions"/>).</summary>
     public WorkingDirectoryOptions Options => _options;
 

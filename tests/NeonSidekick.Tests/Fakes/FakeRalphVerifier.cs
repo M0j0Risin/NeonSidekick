@@ -14,6 +14,9 @@ public sealed class FakeRalphVerifier : IRalphVerifier
     /// <summary>The commands run, in order.</summary>
     public List<string> Commands { get; } = [];
 
+    /// <summary>Each run's timeout, in order (2026-10-19: headless read the live setting, not the loop's snapshot).</summary>
+    public List<TimeSpan> Timeouts { get; } = [];
+
     /// <summary>A run waits for its token (the next one only), as a long build would.</summary>
     public bool Hold { get; set; }
 
@@ -46,6 +49,7 @@ public sealed class FakeRalphVerifier : IRalphVerifier
         lock (_results)
         {
             Commands.Add(command);
+            Timeouts.Add(timeout);
             run = Commands.Count;
         }
 

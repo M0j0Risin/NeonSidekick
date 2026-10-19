@@ -68,22 +68,58 @@ public static class RalphLog
     /// <summary>The lock of <paramref name="planPath"/>.</summary>
     public static string LockPathFor(string planPath) => PlanReferences.FolderOf(planPath) + "/" + LockName;
 
-    /// <summary>The log of <paramref name="planPath"/> read back; null when there is none.</summary>
-    public static RalphLogDocument? Read(WorkingDirectory files, string planPath)
+    /// <summary>
+    /// The most characters the log keeps (2026-10-19, the second review: it only grew, and past <see cref="WorkingDirectory.MaxWriteChars"/> it was
+    /// read cut off, its newest passes lost, and every write refused): the oldest passes go first, the newest always kept.
+    /// </summary>
+    public const int MaxLogChars = 150_000;
+
+    /// <summary>The log of <paramref name="planPath"/> read back whole; null when there is none, or it cannot be read.</summary>
+    public static RalphLogDocument? Read(WorkingDirectory files, string planPath) => ReadFor(files, planPath, out _);
+
+    /// <summary>
+    /// The log read whole (its size bounded by <see cref="WorkingDirectory.MaxReadFileBytes"/>, never a window); null with
+    /// <paramref name="problem"/> the error sentence when a file is there that cannot be read, so a write never replaces it.
+    /// </summary>
+    private static RalphLogDocument? ReadFor(WorkingDirectory files, string planPath, out string? problem)
     {
         ArgumentNullException.ThrowIfNull(files);
-        var read = files.ReadText(PathFor(planPath), null, null, WorkingDirectory.MaxWriteChars);
+        string path = PathFor(planPath);
+        var read = files.ReadText(path, null, null, int.MaxValue);
+        problem = read.Outcome is FileOutcome.Ok or FileOutcome.Missing ? null : FileText.Error(read.Outcome, path, "read", read.Detail);
         return read.Outcome == FileOutcome.Ok ? Parse(read.Text) : null;
     }
 
-    /// <summary>The log written whole; null when written, else the error sentence.</summary>
+    /// <summary>The log written whole (its oldest passes left out past <see cref="MaxLogChars"/>); null when written, else the error sentence.</summary>
     public static string? Write(WorkingDirectory files, string planPath, RalphLogDocument document)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(document);
         string path = PathFor(planPath);
-        var written = files.WriteText(path, Render(document), overwrite: true);
+        var written = files.WriteText(path, Render(Bounded(document)), overwrite: true);
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
+    }
+
+    /// <summary><paramref name="document"/> with its oldest passes dropped until it renders within <see cref="MaxLogChars"/>; the newest pass always kept. Pure.</summary>
+    public static RalphLogDocument Bounded(RalphLogDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        int length = Render(document).Length;
+        if (length <= MaxLogChars || document.Entries.Count <= 1)
+        {
+            return document;
+        }
+
+        // Each entry's own share of the text (rendered alone, less the empty document's), dropped from the oldest.
+        int bare = Render(document with { Entries = [] }).Length;
+        int drop = 0;
+        while (length > MaxLogChars && drop < document.Entries.Count - 1)
+        {
+            length -= Render(new RalphLogDocument(document.Head, document.Learned, [document.Entries[drop]])).Length - bare;
+            drop++;
+        }
+
+        return document with { Entries = document.Entries.Skip(drop).ToList() };
     }
 
     /// <summary>
@@ -94,7 +130,12 @@ public static class RalphLog
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(learned);
-        var document = Read(files, planPath) ?? RalphLogDocument.Empty;
+        var document = ReadFor(files, planPath, out string? problem) ?? RalphLogDocument.Empty;
+        if (problem is not null)
+        {
+            return problem;
+        }
+
         var entries = document.Entries.ToList();
         entries.Add(entry with { Summary = Clean(entry.Summary), Verified = entry.Verified.Select(Clean).ToList(), Tail = entry.Tail is { } tail ? CleanTail(tail) : null });
         return Write(files, planPath, new RalphLogDocument(head, MergeLearned(document.Learned, learned), entries));
@@ -103,8 +144,8 @@ public static class RalphLog
     /// <summary>The head set (a start, a resume, a stop), the rest as it was; null when written.</summary>
     public static string? SetHead(WorkingDirectory files, string planPath, RalphLogHead head)
     {
-        var document = Read(files, planPath) ?? RalphLogDocument.Empty;
-        return Write(files, planPath, document with { Head = head });
+        var document = ReadFor(files, planPath, out string? problem) ?? RalphLogDocument.Empty;
+        return problem ?? Write(files, planPath, document with { Head = head });
     }
 
     /// <summary>The learned facts with <paramref name="added"/> after them, redacted, once each, the oldest dropped past <see cref="LearnedChars"/>.</summary>
@@ -376,6 +417,30 @@ public static class RalphLog
     /// <summary>What a lock says: the process and when it started.</summary>
     public sealed record LockOwner(int ProcessId, DateTimeOffset Started);
 
+    private static readonly Lazy<LockOwner> s_me = new(() =>
+    {
+        using var me = System.Diagnostics.Process.GetCurrentProcess();
+        return new LockOwner(Environment.ProcessId, new DateTimeOffset(me.StartTime.ToUniversalTime(), TimeSpan.Zero));
+    });
+
+    /// <summary>This process as a lock names it (the screen's and headless's one owner, 2026-10-19, the second review: each kept a copy).</summary>
+    public static LockOwner Me => s_me.Value;
+
+    /// <summary>Whether a lock's owner still runs: a process of its id started within 2 s of the time it wrote (an id reused later is another process).</summary>
+    public static bool OwnerAlive(LockOwner owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(owner.ProcessId);
+            return Math.Abs((process.StartTime.ToUniversalTime() - owner.Started.UtcDateTime).TotalSeconds) < 2;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// The lock of <paramref name="planPath"/> taken for <paramref name="me"/>: true when it was free, stale (<paramref name="alive"/> says its owner is
     /// gone) or already this process's; false while another live process holds it. Taken by creating the file whole, never over one that is there
@@ -519,6 +584,10 @@ public static class RalphLog
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>A pass's notes from two places (the loop's pending one, the log's recent ones), a line apart; null with neither.</summary>
+    public static string? JoinNotes(string? first, string? second) =>
+        first is null ? second : second is null ? first : first + "\n" + second;
 
     /// <summary>A check's output as the log keeps it: its last <see cref="TailLines"/> lines, scrubbed and redacted.</summary>
     public static string CleanTail(string tail)

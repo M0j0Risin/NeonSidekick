@@ -345,14 +345,15 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 `/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, held together by the plan file and a log. **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, its checks named.
 
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
-* **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed) and a review (*LLM Ralph loop reviewer*).
-  * The command is approved once with the loop; nothing runs under *Shell command policy* `off`.
+* **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*LLM Ralph loop reviewer*).
+  * Only the app ticks boxes. A box a pass changed, on a line it reworded or added too, is put back; a stopped pass decides nothing.
+  * The command is approved once with the loop; nothing runs under *Shell command policy* `off`, and a resume with it on runs the checks again.
   * The shell police judge it again before every run, so a script a pass rewrote can't slip past them; a refusal, or the policy turned `off`, stops the loop.
   * A failed check unticks the step, and the next pass gets its output.
 * **Before it starts:** the app asks "Start anyway?" on the PC and the Web UI when a plan doesn't suit a loop; a no leaves it presented, to revise.
   * That's one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
 * **The baseline:** the checks run once on the project as it is. If one fails you may start anyway; the steps then go unchecked and verify runs once at the end.
-* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); a `ralph.lock` keeps a second Neon Sidekick off the plan. Mind that folder before you commit `.neon/`.
+* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan. Mind that folder before you commit `.neon/`.
 * **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
   * Only then may a pass ask you anything (`ask_user`, the camera, the screen).
 * **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
@@ -360,7 +361,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 #### When a loop stops
 
 * **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
-* **When it can't go on:** a blocked step, two passes with no progress, or a step failing its checks twice or using *LLM Ralph loop passes per step*.
+* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, or an error.
 * **At a limit or by hand:** the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, or a working directory change.
 * **The stop tone:** a stop you didn't cause rings *LLM Ralph loop stop tone*.
 * **A message typed** during a pass pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.

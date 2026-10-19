@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Git;
@@ -45,27 +44,20 @@ internal sealed partial class ChatScreen
     private readonly FinishStepTool _finishStep;
     private readonly IRalphVerifier _ralphVerifier;
 
-    /// <summary>Whether a lock's owner still runs (a seam for the tests: by default the process and its start time).</summary>
-    internal Func<RalphLog.LockOwner, bool> RalphLockAlive { get; set; } = OwnerAlive;
+    /// <summary>Whether a lock's owner still runs (a seam for the tests: by default the process and its start time, <see cref="RalphLog.OwnerAlive"/>).</summary>
+    internal Func<RalphLog.LockOwner, bool> RalphLockAlive { get; set; } = RalphLog.OwnerAlive;
 
-    private static readonly Lazy<RalphLog.LockOwner> s_lockOwner = new(() =>
-    {
-        using var me = Process.GetCurrentProcess();
-        return new RalphLog.LockOwner(Environment.ProcessId, new DateTimeOffset(me.StartTime.ToUniversalTime(), TimeSpan.Zero));
-    });
+    /// <summary>
+    /// The loop's working directory and repository, pinned to the folder it started in (2026-10-19, the second review: <see cref="_files"/> follows
+    /// the settings, so a <c>/cwd</c> save or a profile switch mid-run sent the judge, the stop's writes and the unlock to the new folder, where a plan
+    /// of the same name could be marked, and left the old lock behind); null between loops.
+    /// </summary>
+    private WorkingDirectory? _ralphFiles;
 
-    private static bool OwnerAlive(RalphLog.LockOwner owner)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(owner.ProcessId);
-            return Math.Abs((process.StartTime.ToUniversalTime() - owner.Started.UtcDateTime).TotalSeconds) < 2;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
-        {
-            return false;
-        }
-    }
+    private GitAccess? _ralphGit;
+
+    /// <summary>The running loop's pinned working directory, else the sandbox.</summary>
+    private WorkingDirectory RalphFiles => _ralphFiles ?? _files;
 
     /// <summary>A pass is under way: the turn's slot, the guards in <see cref="RunMessageAsync"/>, the session row's title.</summary>
     private bool InRalphPass => _ralph is { InPass: true };
@@ -105,10 +97,7 @@ internal sealed partial class ChatScreen
     private Task<bool> RalphPickedAsync(string path, CancellationToken cancellationToken) => RalphNamedAsync(path, null, cancellationToken);
 
     /// <summary>The 🔁 line a recorded <c>finish_step</c> writes (on the turn task, the tool's seam).</summary>
-    private void RalphReported(FinishReport report) =>
-        _transcript.Notice(RalphText.Glyph + " finish_step: " + report.Outcome.ToString().ToLowerInvariant() + " — " + Truncate(report.Summary, 200));
-
-    private static string Truncate(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
+    private void RalphReported(FinishReport report) => _transcript.Notice(RalphText.FinishStepLine(report.Outcome, report.Summary));
 
     /// <summary>The known context window in characters, 0 when unknown: what a pass's message measures the plan against.</summary>
     private int RalphWindowChars() => (_session.ContextLength?.Tokens ?? 0) * ConversationCompactor.CharsPerToken;
@@ -261,7 +250,7 @@ internal sealed partial class ChatScreen
         }
 
         var outcome = await RaceAsync<bool>(ConfirmSpec(question), async token => await _menu.ConfirmAsync(question, token).ConfigureAwait(false), a => a.Choice == "yes",
-            "The Ralph loop's confirm pane failed: ", cancellationToken, bothSides: true).ConfigureAwait(false);
+            RalphText.ConfirmPaneFailed, cancellationToken, bothSides: true).ConfigureAwait(false);
         return outcome.Value;
     }
 
@@ -321,7 +310,9 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!RalphLog.TryLock(_files, path, s_lockOwner.Value, RalphLockAlive))
+        // The folder from the lock on (2026-10-19, the second review): everything the loop writes and checks is this one's, whatever the settings say later.
+        var files = _files.PinnedAt(_files.Root);
+        if (!RalphLog.TryLock(files, path, RalphLog.Me, RalphLockAlive))
         {
             _plan.ClearApproval();
             _transcript.Error(RalphText.LockedError(path));
@@ -335,9 +326,9 @@ internal sealed partial class ChatScreen
         // The baseline (later the per-step checks): the policy off runs nothing, the police refuse before anything starts.
         foreach (string command in new[] { verify, final }.OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
         {
-            if (RalphVerifier.Refusal(command, shell, _files.Root, _files, effective, _interpreters.Locate, out bool off) is { } police)
+            if (RalphVerifier.Refusal(command, shell, files.Root, files, effective, _interpreters.Locate, out bool off) is { } police)
             {
-                RalphLog.Unlock(_files, path, s_lockOwner.Value);
+                RalphLog.Unlock(files, path, RalphLog.Me);
                 _plan.ClearApproval();
                 _transcript.Error(police);
                 return false;
@@ -352,17 +343,16 @@ internal sealed partial class ChatScreen
 
         if (noChecks)
         {
-            _transcript.Notice(RalphText.Glyph + " " + ShellText.CmdPolicyOff + ": the steps go unchecked.");
-            verify = null;
-            final = null;
+            // This run goes unchecked (the snapshot's Unchecked); the approved commands stay in the stored state and the log for a resume.
+            _transcript.Notice(RalphText.PolicyOffUncheckedNotice);
         }
 
-        foreach (string command in new[] { finalOnly ? null : verify, final }.OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
+        foreach (string command in (noChecks ? Array.Empty<string?>() : new[] { finalOnly ? null : verify, final }).OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
         {
-            var baseline = await RunRalphCheckAsync(command, shell, effective, RalphText.BaselineLabel, cancellationToken).ConfigureAwait(false);
+            var baseline = await RunRalphCheckAsync(files, command, shell, effective, RalphText.BaselineLabel, cancellationToken).ConfigureAwait(false);
             if (baseline is null || baseline.Kind == RalphCheckKind.Cancelled)
             {
-                RalphLog.Unlock(_files, path, s_lockOwner.Value);
+                RalphLog.Unlock(files, path, RalphLog.Me);
                 _plan.ClearApproval();
                 _transcript.Notice(CancelledNotice);
                 return false;
@@ -376,7 +366,7 @@ internal sealed partial class ChatScreen
             ShowTail(baseline.Tail);
             if (!await RalphConfirmAsync(RalphText.BaselineQuestion(command), cancellationToken).ConfigureAwait(false))
             {
-                RalphLog.Unlock(_files, path, s_lockOwner.Value);
+                RalphLog.Unlock(files, path, RalphLog.Me);
                 _plan.ClearApproval();
                 _transcript.Notice(RalphText.BaselineRefusedNotice);
                 return false;
@@ -394,25 +384,27 @@ internal sealed partial class ChatScreen
             SyncPlanChrome();
         }
 
-        if (PlanFiles.MarkFile(_files, path, PlanStatus.Approved, _time.GetLocalNow(), requirement) is { } problem)
+        if (PlanFiles.MarkFile(files, path, PlanStatus.Approved, _time.GetLocalNow(), requirement) is { } problem)
         {
             _transcript.Warning(problem);
         }
 
-        var log = RalphLog.Read(_files, path);
+        var log = RalphLog.Read(files, path);
         string title = PlanDocument.FirstHeading(body) ?? System.IO.Path.GetFileNameWithoutExtension(path);
-        var snapshot = new RalphSnapshot(path, _files.Root, title, verify, final, finalOnly, ShellKinds.Name(shell), RalphReviewerMode.Resolve(effective),
+        var snapshot = new RalphSnapshot(path, files.Root, title, verify, final, finalOnly, ShellKinds.Name(shell), RalphReviewerMode.Resolve(effective),
             Math.Clamp(effective.RalphLoopCheckpoint, AppSettingsData.MinRalphLoopCheckpoint, AppSettingsData.MaxRalphLoopCheckpoint),
             passes ?? Math.Clamp(effective.RalphLoopPasses, AppSettingsData.MinRalphLoopPasses, AppSettingsData.MaxRalphLoopPasses),
             Math.Clamp(effective.RalphLoopPassesPerStep, AppSettingsData.MinRalphLoopPassesPerStep, AppSettingsData.MaxRalphLoopPassesPerStep),
             Math.Clamp(effective.RalphLoopCheckTimeoutSeconds, AppSettingsData.MinRalphLoopCheckTimeoutSeconds, AppSettingsData.MaxRalphLoopCheckTimeoutSeconds),
-            Math.Max(0, effective.RalphLoopTokenBudget), RalphLog.PassCount(log) + 1);
+            Math.Max(0, effective.RalphLoopTokenBudget), RalphLog.PassCount(log) + 1, Unchecked: noChecks);
         int remaining = PlanSteps.Leaves(steps).Count(s => !s.Ticked);
         var loop = new RalphLoop(snapshot, remaining);
         _ralph = loop;
+        _ralphFiles = files;
+        _ralphGit = new GitAccess(files, _time);
         _executingPlan = new StoredPlan { Path = path, Requirement = requirement, Ralph = true, Verify = verify, Final = final, FinalOnly = finalOnly, Shell = snapshot.Shell, Root = snapshot.Root };
         _executingShown = null;
-        RalphLog.SetHead(_files, path, new RalphLogHead(path, verify, final, finalOnly, snapshot.Shell, _time.GetLocalNow()));
+        RalphLog.SetHead(files, path, new RalphLogHead(path, verify, final, finalOnly, snapshot.Shell, _time.GetLocalNow()));
         SavePlanState();
         _transcript.Notice(resume ? RalphText.ResumedNotice(path, remaining, loop.Cap) : RalphText.StartedNotice(path, remaining, loop.Cap, finalOnly));
         DiagnosticLog.Info(AppCategory, $"ralph: {(resume ? "resumed" : "started")} {path}, {remaining} steps, cap {loop.Cap}, reviewer {RalphReviewerMode.Name(snapshot.Reviewer)}, checkpoint {snapshot.Checkpoint}");
@@ -438,7 +430,7 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
-                if (PlanFiles.ReadWhole(_files, path) is not { } text)
+                if (PlanFiles.ReadWhole(RalphFiles, path) is not { } text)
                 {
                     stop = RalphStop.PlanGone;
                     break;
@@ -480,6 +472,18 @@ internal sealed partial class ChatScreen
                 }
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            stop = RalphStop.Stopped;
+        }
+        catch (Exception ex)
+        {
+            // A pass, its judgment or a check threw (2026-10-19, the second review: the loop was left with its pass under way — the asking tools
+            // withheld from every turn after —, its lock held and the plan never paused): said, and the loop ends as a stop does.
+            DiagnosticLog.Error(AppCategory, "ralph: the loop failed", ex);
+            _transcript.Error(RalphText.LoopFailedError(Assistant.Explain(ex)));
+            stop = RalphStop.Stopped;
+        }
         finally
         {
             _ralphTurn = null;
@@ -504,10 +508,10 @@ internal sealed partial class ChatScreen
         int total = leaves.Count;
         int index = step?.Index ?? total;
         string? finalTail = step is null ? loop.TakeFinalTail() : null;
-        var log = RalphLog.Read(_files, path);
+        var log = RalphLog.Read(RalphFiles, path);
         ResetForPass(loop.Pass + 1, index, total, snapshot.Title);
         loop.BeginPass(step, PlanMeter());
-        string? notes = JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text));
+        string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text));
         bool reviewed = snapshot.Reviewer != RalphReviewer.Off;
         string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.StepCheck ?? (step is null ? snapshot.FinalCheck : null), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null);
         _ralphTurn = new PlanTurn(directive, _finishStep);
@@ -518,7 +522,7 @@ internal sealed partial class ChatScreen
         IReadOnlyList<ImageAttachment> images = [];
         if (!loop.DropPicturesNext)
         {
-            images = PlanReferences.ForRun(_files, path, body, step, effective.LlmPictureKeep, effective.LlmPictureMegabytes, ModelSeesPictures(), out string? unseen);
+            images = PlanReferences.ForRun(RalphFiles, path, body, step, effective.LlmPictureKeep, effective.LlmPictureMegabytes, ModelSeesPictures(), out string? unseen);
             if (unseen is not null && loop.Pass == snapshot.StartPass)
             {
                 _transcript.Notice(unseen);
@@ -526,8 +530,11 @@ internal sealed partial class ChatScreen
         }
 
         loop.DropPicturesNext = false;
-        var before = await Task.Run(() => RalphChanges.Snapshot(_files, _git, cancellationToken), cancellationToken).ConfigureAwait(false);
-        var boxes = PlanSteps.Boxes(body);
+        var files = RalphFiles;
+        var git = _ralphGit ?? _git;
+        var before = await Task.Run(() => RalphChanges.Snapshot(files, git, cancellationToken), cancellationToken).ConfigureAwait(false);
+        // The task lines as the pass begins, the file's (steps was parsed from it whole): what the judge pairs the lines after with.
+        var lines = PlanSteps.Flat(steps);
         string line = step is null ? RalphText.FinalFixLine(loop.Pass) : RalphText.TranscriptLine(loop.Pass, index, total, step.Text);
         _ralphPass = (line, RalphText.SessionTitle(snapshot.Title, index, total, loop.Pass));
         _ralphStrip = RalphText.StripText(index, total, loop.Pass, final: step is null);
@@ -556,7 +563,7 @@ internal sealed partial class ChatScreen
             return (exit, RalphStop.Stopped);
         }
 
-        var judged = await JudgeRalphPassAsync(loop, step, total, boxes, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
+        var judged = await JudgeRalphPassAsync(loop, step, total, lines, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
         var stop = loop.EndPass(judged.Facts, PlanMeter());
         RalphLogPass(loop, step, judged);
         _ralphTurn = null;
@@ -576,9 +583,9 @@ internal sealed partial class ChatScreen
     /// <summary>The screen as the judge's host (<see cref="IRalphHost"/>): the transcript, the watch over a check, the review.</summary>
     private sealed class ScreenRalphHost(ChatScreen screen) : IRalphHost
     {
-        public WorkingDirectory Files => screen._files;
+        public WorkingDirectory Files => screen.RalphFiles;
 
-        public GitAccess? Git => screen._git;
+        public GitAccess? Git => screen._ralphGit ?? screen._git;
 
         public void Notice(string text) => screen._transcript.Notice(text);
 
@@ -587,26 +594,26 @@ internal sealed partial class ChatScreen
         public void Log(string line) => DiagnosticLog.Info(AppCategory, line);
 
         public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken) =>
-            screen.RunRalphCheckAsync(command, shell, screen._effective(), label, cancellationToken);
+            screen.RunRalphCheckAsync(screen.RalphFiles, command, shell, screen._effective(), label, cancellationToken);
 
         public Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken) =>
             screen.ReviewRalphStepAsync(loop, step, report, delta, cancellationToken);
     }
 
     /// <summary>After a pass's turn: <see cref="RalphJudge.JudgeAsync"/> over the screen.</summary>
-    private Task<RalphJudged> JudgeRalphPassAsync(RalphLoop loop, PlanStep? step, int total, IReadOnlyDictionary<string, IReadOnlyList<bool>> boxes, RalphSnapshotOfFiles before, bool hadPictures, CancellationToken cancellationToken) =>
-        RalphJudge.JudgeAsync(new ScreenRalphHost(this), loop, step, total, boxes, before, hadPictures, _lastTurnCancelled, _lastTurnFailed, _executingPlan?.Requirement ?? "", _time, cancellationToken);
+    private Task<RalphJudged> JudgeRalphPassAsync(RalphLoop loop, PlanStep? step, int total, IReadOnlyList<PlanStep> lines, RalphSnapshotOfFiles before, bool hadPictures, CancellationToken cancellationToken) =>
+        RalphJudge.JudgeAsync(new ScreenRalphHost(this), loop, step, total, lines, before, hadPictures, _lastTurnCancelled, _lastTurnFailed, _executingPlan?.Requirement ?? "", _time, cancellationToken);
 
     /// <summary>A step's box set in the file (the loop's own tick), quietly.</summary>
     private void SetBox(string path, PlanStep step, bool ticked) => RalphJudge.SetBox(new ScreenRalphHost(this), path, step, ticked);
 
     /// <summary>The header's status and progress over the loop's leaves.</summary>
-    private void MarkRalphProgress(string path) => RalphJudge.MarkProgress(_files, path, _executingPlan?.Requirement ?? "", _time);
+    private void MarkRalphProgress(string path) => RalphJudge.MarkProgress(RalphFiles, path, _executingPlan?.Requirement ?? "", _time);
 
     /// <summary>The pass's entry in the log, its learned facts merged (<see cref="RalphJudge.LogPass"/>), and a log line.</summary>
     private void RalphLogPass(RalphLoop loop, PlanStep? step, RalphJudged judged)
     {
-        if (RalphJudge.LogPass(_files, loop, step, judged, _time) is { } problem)
+        if (RalphJudge.LogPass(RalphFiles, loop, step, judged, _time) is { } problem)
         {
             _transcript.Warning(problem);
         }
@@ -622,7 +629,7 @@ internal sealed partial class ChatScreen
             return RalphStop.Done;
         }
 
-        var result = await RunRalphCheckAsync(final, ShellOf(loop.Snapshot), _effective(), RalphText.CheckLabel(final), cancellationToken).ConfigureAwait(false);
+        var result = await RunRalphCheckAsync(RalphFiles, final, ShellOf(loop.Snapshot), _effective(), RalphText.CheckLabel(final), cancellationToken).ConfigureAwait(false);
         if (result is null or { Kind: RalphCheckKind.Cancelled })
         {
             return RalphStop.Stopped;
@@ -645,9 +652,9 @@ internal sealed partial class ChatScreen
     /// it could not run. The command's police and policy are judged again before every run (2026-10-19, the review: a pass may rewrite the script the
     /// command runs, and the policy may have turned off): a refusal is said and reads as a stop.
     /// </summary>
-    private async Task<RalphCheckResult?> RunRalphCheckAsync(string command, ShellKind shell, AppSettingsData effective, string label, CancellationToken cancellationToken)
+    private async Task<RalphCheckResult?> RunRalphCheckAsync(WorkingDirectory files, string command, ShellKind shell, AppSettingsData effective, string label, CancellationToken cancellationToken)
     {
-        string? refused = RalphVerifier.Refusal(command, shell, _files.Root, _files, effective, _interpreters.Locate, out bool off);
+        string? refused = RalphVerifier.Refusal(command, shell, files.Root, files, effective, _interpreters.Locate, out bool off);
         if (refused is not null || off)
         {
             _transcript.Error(RalphText.CheckRefusedError(command, refused ?? RalphText.PolicyOffNowReason));
@@ -664,11 +671,11 @@ internal sealed partial class ChatScreen
         string workdir;
         try
         {
-            workdir = _files.EnsureExists();
+            workdir = files.EnsureExists();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
-            _transcript.Error(Files.FileText.CouldNot("create", _files.Root, ex.Message));
+            _transcript.Error(Files.FileText.CouldNot("create", files.Root, ex.Message));
             return null;
         }
 
@@ -698,9 +705,6 @@ internal sealed partial class ChatScreen
             }
         }
     }
-
-    private static string? JoinNotes(string? first, string? second) =>
-        first is null ? second : second is null ? first : first + "\n" + second;
 
     // ── The light reset and the stop ───────────────────────────────────────
 
@@ -733,7 +737,11 @@ internal sealed partial class ChatScreen
         }
 
         string path = loop.Snapshot.Path;
+        // The loop's own folder, whatever the settings say now (2026-10-19, the second review).
+        var files = RalphFiles;
         _ralph = null;
+        _ralphFiles = null;
+        _ralphGit = null;
         _ralphTurn = null;
         _ralphStrip = null;
         _webUi.StatusNudge();
@@ -742,7 +750,7 @@ internal sealed partial class ChatScreen
             _transcript.Notice(line);
         }
 
-        var counts = PlanFiles.ReadWhole(_files, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
+        var counts = PlanFiles.ReadWhole(files, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
         if (stop == RalphStop.StepFailing && loop.Current is { } failing && loop.ChangedBy(failing) is { Count: > 0 } changed)
         {
             _transcript.Notice(RalphText.LeftChangedLine(changed));
@@ -750,7 +758,7 @@ internal sealed partial class ChatScreen
 
         if (stop == RalphStop.Done)
         {
-            if (PlanFiles.MarkFile(_files, path, PlanStatus.Done, _time.GetLocalNow(), _executingPlan?.Requirement ?? "", counts) is { } problem)
+            if (PlanFiles.MarkFile(files, path, PlanStatus.Done, _time.GetLocalNow(), _executingPlan?.Requirement ?? "", counts) is { } problem)
             {
                 _transcript.Warning(problem);
             }
@@ -769,7 +777,7 @@ internal sealed partial class ChatScreen
         {
             if (counts.Item2 > 0)
             {
-                PlanFiles.MarkFile(_files, path, PlanStatus.Incomplete, _time.GetLocalNow(), _executingPlan?.Requirement ?? "", counts);
+                PlanFiles.MarkFile(files, path, PlanStatus.Incomplete, _time.GetLocalNow(), _executingPlan?.Requirement ?? "", counts);
             }
 
             _transcript.Notice(RalphText.StopNotice(stop, path, counts.Item1, counts.Item2));
@@ -779,12 +787,12 @@ internal sealed partial class ChatScreen
             }
         }
 
-        if (RalphLog.Read(_files, path)?.Head is { } head)
+        if (RalphLog.Read(files, path)?.Head is { } head)
         {
-            RalphLog.SetHead(_files, path, head with { Stopped = RalphStopWord(stop) });
+            RalphLog.SetHead(files, path, head with { Stopped = RalphStopWord(stop) });
         }
 
-        RalphLog.Unlock(_files, path, s_lockOwner.Value);
+        RalphLog.Unlock(files, path, RalphLog.Me);
         SavePlanState();
         DiagnosticLog.Info(AppCategory, $"ralph: stopped {path}: {RalphStopWord(stop)} after {loop.PassesThisRun} passes");
         if (stop is not (RalphStop.Stopped or RalphStop.Paused or RalphStop.UserStopped))
@@ -809,8 +817,10 @@ internal sealed partial class ChatScreen
     {
         if (_ralph is { } loop)
         {
-            RalphLog.Unlock(_files, loop.Snapshot.Path, s_lockOwner.Value);
+            RalphLog.Unlock(RalphFiles, loop.Snapshot.Path, RalphLog.Me);
             _ralph = null;
+            _ralphFiles = null;
+            _ralphGit = null;
             _ralphTurn = null;
             _ralphPass = null;
             _ralphStrip = null;
@@ -834,8 +844,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        var counts = PlanFiles.ReadWhole(_files, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
-        int pass = _ralph?.Pass ?? RalphLog.PassCount(RalphLog.Read(_files, path));
+        var counts = PlanFiles.ReadWhole(RalphFiles, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
+        int pass = _ralph?.Pass ?? RalphLog.PassCount(RalphLog.Read(RalphFiles, path));
         foreach (string line in RalphText.ShowLines(path, counts.Item1, counts.Item2, pass, _ralph is null || stored.Paused, RalphLog.PathFor(path)))
         {
             _transcript.Notice(line);
@@ -863,7 +873,7 @@ internal sealed partial class ChatScreen
             "redo" => new RalphCheckpointAnswer(RalphCheckpointChoice.Redo, (a.Text ?? "").Trim()),
             "stop" => new RalphCheckpointAnswer(RalphCheckpointChoice.Stop, null),
             _ => new RalphCheckpointAnswer(RalphCheckpointChoice.Keep, null),
-        }, "The Ralph checkpoint pane failed: ", cancellationToken, bothSides: true).ConfigureAwait(false);
+        }, RalphText.CheckpointPaneFailed, cancellationToken, bothSides: true).ConfigureAwait(false);
         var answer = outcome.Value ?? new RalphCheckpointAnswer(RalphCheckpointChoice.Keep, null);
         DiagnosticLog.Info(AppCategory, $"ralph: checkpoint after pass {loop.Pass}: {answer.Choice.ToString().ToLowerInvariant()}");
         switch (answer.Choice)
@@ -881,5 +891,5 @@ internal sealed partial class ChatScreen
     }
 
     private int PlanStepsCount(RalphLoop loop) =>
-        PlanFiles.ReadWhole(_files, loop.Snapshot.Path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))).Total : 0;
+        PlanFiles.ReadWhole(RalphFiles, loop.Snapshot.Path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))).Total : 0;
 }
