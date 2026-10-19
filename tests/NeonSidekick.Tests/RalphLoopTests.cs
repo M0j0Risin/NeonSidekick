@@ -135,11 +135,20 @@ public sealed class RalphLoopTests
         var t0 = DateTimeOffset.UnixEpoch;
         budget.BeginPass(steps[0], new PlanPassMeter(t0, 100, 0));
         budget.Record(Done);
-        budget.EndPass(Stood, new PlanPassMeter(t0.AddSeconds(30), 900, 0));
-        Assert.Equal(800, budget.RunTokens);
-        budget.AddReviewTokens(300);
+        budget.AddReviewTokens(300);                                          // the review ran inside the pass: the end meter holds it
+        budget.EndPass(Stood, new PlanPassMeter(t0.AddSeconds(30), 1200, 0));
+        Assert.Equal(1100, budget.RunTokens);                                 // once, not 1400 (2026-10-19, the review)
         Assert.Equal(RalphStop.Budget, budget.Next(steps, false).Stop);
         Assert.Equal((TimeSpan?)TimeSpan.FromSeconds(30), budget.History[0].Elapsed);
+        Assert.Equal(800, budget.History[0].Tokens);                          // the pass's own share
+        Assert.Equal(300, budget.History[0].ReviewTokens);                    // and the review's, added back by the summary
+
+        var unmetered = new RalphLoop(Snapshot(budget: 1000), 3);
+        unmetered.BeginPass(steps[0], null);
+        unmetered.Record(Done);
+        unmetered.AddReviewTokens(1200);
+        unmetered.EndPass(Stood, null);
+        Assert.Equal(1200, unmetered.RunTokens);                              // no meter: the review's still count
     }
 
     [Fact]

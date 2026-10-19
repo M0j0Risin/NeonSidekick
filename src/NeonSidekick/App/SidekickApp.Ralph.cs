@@ -19,8 +19,8 @@ namespace NeonSidekick.App;
 /// </summary>
 public sealed partial class SidekickApp
 {
-    /// <summary>What a headless loop works with, set once per run (the headless loop's locals).</summary>
-    private sealed record HeadlessRalphContext(LlmSession Session, GitAccess Git, NeonAdvisorTool Advisor, Interpreters Interpreters, IRalphVerifier Verifier);
+    /// <summary>What a headless loop works with, set once per run (the headless loop's locals); the shell's allow list too (2026-10-19, <see cref="HeadlessCheckRefusal"/>).</summary>
+    private sealed record HeadlessRalphContext(LlmSession Session, GitAccess Git, NeonAdvisorTool Advisor, Interpreters Interpreters, IRalphVerifier Verifier, CommandAllowList AllowList);
 
     /// <summary>A headless loop and the pass under way.</summary>
     private sealed class HeadlessRalph(RalphLoop loop, FinishStepTool tool, string requirement)
@@ -32,7 +32,7 @@ public sealed partial class SidekickApp
         public PlanStep? Step { get; set; }
         public int Total { get; set; }
         public RalphSnapshotOfFiles? Before { get; set; }
-        public IReadOnlyDictionary<string, bool> Boxes { get; set; } = new Dictionary<string, bool>();
+        public IReadOnlyDictionary<string, IReadOnlyList<bool>> Boxes { get; set; } = new Dictionary<string, IReadOnlyList<bool>>();
         public bool HadPictures { get; set; }
         public string Line { get; set; } = "";
         public string Title { get; set; } = "";
@@ -56,6 +56,14 @@ public sealed partial class SidekickApp
 
         public async Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken)
         {
+            // The police, the policy and the allow list again before every run (2026-10-19, the review): a pass may rewrite what the command runs.
+            string? refused = HeadlessCheckRefusal(command, shell, files, app.EffectiveSettings, context, out bool off);
+            if (refused is not null || off)
+            {
+                notices.Add(RalphText.CheckRefusedError(command, refused ?? RalphText.PolicyOffNowReason));
+                return new RalphCheckResult(RalphCheckKind.Cancelled, null, "", TimeSpan.Zero);
+            }
+
             int seconds = Math.Clamp(app.EffectiveSettings.RalphLoopCheckTimeoutSeconds, AppSettingsData.MinRalphLoopCheckTimeoutSeconds, AppSettingsData.MaxRalphLoopCheckTimeoutSeconds);
             return await context.Verifier.RunAsync(command, shell, files.EnsureExists(), TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
         }
@@ -116,6 +124,13 @@ public sealed partial class SidekickApp
                 ChatScreen.RalphArgs(rest, out string name, out int? passes, out _);
                 if (name.Length == 0)
                 {
+                    if (state.Executing is { Ralph: true, Path: { } elsewhere } away && !RalphSnapshot.SameRoot(away.Root, files.Root))
+                    {
+                        // Its approved commands are the folder's it ran in (2026-10-19, the review): never run here.
+                        await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.ResumeElsewhereError(elsewhere, away.Root ?? "?")).ConfigureAwait(false);
+                        return true;
+                    }
+
                     if (state.Executing is { Ralph: true, Path: { } paused } stored && PlanFiles.ReadWhole(files, paused) is { } pausedText)
                     {
                         await HeadlessRalphBeginAsync(plan, state, files, paused, PlanDocument.Body(pausedText), stored.Verify, stored.Final, stored.Requirement, passes, fromPlanning: false, stored, cancellationToken).ConfigureAwait(false);
@@ -149,7 +164,8 @@ public sealed partial class SidekickApp
 
                 string body = PlanDocument.Body(text);
                 string requirement = header is { Requirement.Length: > 0 } ? header.Requirement : PlanDocument.FirstHeading(body) ?? path;
-                var resumed = state.Executing is { Ralph: true, Path: { } same } held && string.Equals(same, path, StringComparison.Ordinal) ? held : null;
+                // A paused loop on it resumes only in the folder it ran in (2026-10-19); elsewhere the plan is this folder's, its header read afresh.
+                var resumed = state.Executing is { Ralph: true, Path: { } same } held && string.Equals(same, path, StringComparison.Ordinal) && RalphSnapshot.SameRoot(held.Root, files.Root) ? held : null;
                 await HeadlessRalphBeginAsync(plan, state, files, path, body, resumed?.Verify ?? header?.Verify, resumed?.Final ?? header?.Final, requirement, passes, fromPlanning: false, resumed, cancellationToken).ConfigureAwait(false);
                 return true;
             }
@@ -191,7 +207,7 @@ public sealed partial class SidekickApp
         bool finalOnly = stored?.FinalOnly ?? false;
         foreach (string command in new[] { verify, final }.OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
         {
-            if (RalphVerifier.Refusal(command, shell, files.Root, files, effective, context.Interpreters.Locate, out bool off) is { } police)
+            if (HeadlessCheckRefusal(command, shell, files, effective, context, out bool off) is { } police)
             {
                 RalphLog.Unlock(files, path, owner);
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + police).ConfigureAwait(false);
@@ -205,6 +221,12 @@ public sealed partial class SidekickApp
                 final = null;
                 break;
             }
+        }
+
+        if (verify is { Length: > 0 } || final is { Length: > 0 })
+        {
+            // Said before anything runs (2026-10-19, the review): the plan's header is model-written, and headless has no confirm to show it on.
+            await HeadlessNoticeLineAsync("[notice] " + RalphText.HeadlessChecksNotice(verify, final)).ConfigureAwait(false);
         }
 
         foreach (string command in new[] { finalOnly ? null : verify, final }.OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
@@ -283,14 +305,15 @@ public sealed partial class SidekickApp
                 return;
             }
 
-            if (!string.Equals(files.Root, loop.Snapshot.Root, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            if (!RalphSnapshot.SameRoot(files.Root, loop.Snapshot.Root))
             {
                 await HeadlessRalphEndAsync(state, files, RalphStop.WorkdirMoved).ConfigureAwait(false);
                 return;
             }
 
             string body = PlanDocument.Body(text);
-            var steps = PlanSteps.Parse(body);
+            // The file whole (2026-10-19, the review): a step's line is the file's, so the loop's tick lands on that step and no other.
+            var steps = PlanSteps.Parse(text);
             loop.SetChildren(steps);
             var next = loop.Next(steps, userSpoke: false);
             if (next.Kind == RalphNextKind.Stop)
@@ -304,6 +327,14 @@ public sealed partial class SidekickApp
                 if (loop.Snapshot.FinalCheck is not { } final)
                 {
                     await HeadlessRalphEndAsync(state, files, RalphStop.Done).ConfigureAwait(false);
+                    return;
+                }
+
+                string? refused = HeadlessCheckRefusal(final, RalphJudge.ShellOf(loop.Snapshot), files, EffectiveSettings, context, out bool policyOff);
+                if (refused is not null || policyOff)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + RalphText.CheckRefusedError(final, refused ?? RalphText.PolicyOffNowReason)).ConfigureAwait(false);
+                    await HeadlessRalphEndAsync(state, files, RalphStop.Stopped).ConfigureAwait(false);
                     return;
                 }
 
@@ -456,6 +487,26 @@ public sealed partial class SidekickApp
             state.Ralph = null;
             state.Next = null;
         }
+    }
+
+    /// <summary>
+    /// Why a check may not run headless now (2026-10-19, the review): the police's refusal, a shell not installed, or — under <c>Shell command
+    /// policy</c> ask, where nobody can be asked — a command not on the allow list, as <c>run_command</c>'s would be; null when it may.
+    /// <paramref name="off"/> says the policy is off (no refusal: the loop's start reads it as "the steps go unchecked").
+    /// </summary>
+    private static string? HeadlessCheckRefusal(string command, ShellKind shell, WorkingDirectory files, AppSettingsData effective, HeadlessRalphContext context, out bool off)
+    {
+        if (RalphVerifier.Refusal(command, shell, files.Root, files, effective, context.Interpreters.Locate, out off) is { } police)
+        {
+            return police;
+        }
+
+        if (!off && CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask && CommandPrefix.All(command, shell) is var prefixes && (prefixes.Count == 0 || !context.AllowList.AllowsAll(prefixes)))
+        {
+            return RalphText.HeadlessAskRefusedError(command);
+        }
+
+        return null;
     }
 
     private static RalphLog.LockOwner HeadlessLockOwner()

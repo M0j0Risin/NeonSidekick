@@ -87,7 +87,17 @@ public sealed record RalphSnapshot(
     public string? StepCheck => FinalOnly ? null : Verify;
 
     /// <summary>The command run once every step stands: <see cref="Final"/>, else under <see cref="FinalOnly"/> the verify command.</summary>
-    public string? FinalCheck => Final ?? (FinalOnly ? Verify : null);
+    public string? FinalCheck => FinalCheckOf(Final, Verify, FinalOnly);
+
+    /// <summary><see cref="FinalCheck"/> from a stored loop's fields (2026-10-19: a paused loop's resume asks it too).</summary>
+    public static string? FinalCheckOf(string? final, string? verify, bool finalOnly) => final ?? (finalOnly ? verify : null);
+
+    /// <summary>
+    /// Whether two working-directory roots are the same folder (case aside on Windows): a loop runs only where it was started, and a paused one
+    /// resumes only there (2026-10-19, the review: its approved commands are that folder's).
+    /// </summary>
+    public static bool SameRoot(string? a, string? b) =>
+        a is not null && b is not null && string.Equals(a, b, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }
 
 /// <summary>What the next pass works on (<see cref="RalphLoop.Next"/>).</summary>
@@ -311,12 +321,15 @@ public sealed class RalphLoop
 
     private bool IsChild(PlanStep step) => _children.Contains(step.Text);
 
-    /// <summary>Tokens a review spent, counted against the budget and into the pass's record.</summary>
+    /// <summary>
+    /// Tokens a review spent, kept for the pass's record. A pass metered at both ends already counts them (the review ran before its end meter,
+    /// in the session's or the advisors' tally), so they reach the budget once (2026-10-19, the review: they were counted twice); an unmetered
+    /// pass counts them at its end.
+    /// </summary>
     public void AddReviewTokens(long tokens)
     {
         if (tokens > 0)
         {
-            RunTokens += tokens;
             _reviewTokens += tokens;
         }
     }
@@ -340,8 +353,14 @@ public sealed class RalphLoop
         if (_passStart is { } start && meter is { } end)
         {
             elapsed = end.At - start.At;
-            tokens = Math.Max(0, end.Tokens - start.Tokens) + Math.Max(0, end.AdvisorTokens - start.AdvisorTokens);
-            RunTokens += tokens.Value;
+            long spent = Math.Max(0, end.Tokens - start.Tokens) + Math.Max(0, end.AdvisorTokens - start.AdvisorTokens);
+            RunTokens += spent;
+            // The record keeps the pass's own share and the review's apart: the summary adds them back together.
+            tokens = Math.Max(0, spent - _reviewTokens);
+        }
+        else
+        {
+            RunTokens += _reviewTokens;
         }
 
         string outcome = facts.Cancelled ? "stopped" : Report?.Outcome switch

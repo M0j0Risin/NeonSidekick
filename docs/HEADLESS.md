@@ -101,6 +101,7 @@ They need no server unless the row says so.
 - **A gap review** stops as on the screen; a clean pass cut short at the limit names `/plan approve`.
 - **An audit** prints each `present_audit` call as any tool's, and at its end the way on: `/code-audit fix <name>` (plan mode on the open findings) and `/code-audit open <name>`. `open`, `fix` and `resume` work as on the screen.
 - **`/plan ralph [<name>] [<passes>]`** runs a [Ralph loop](COMMANDS.md#ralph-loop): typing it is the consent. Each pass is sent without waiting, echoed as its short line, its checks and notices as `[notice]` lines. A plan that may not suit a loop gets a `[notice]`, and the loop goes on.
+- **A Ralph loop names its checks** in a `[notice]` before running any. Under *Shell command policy* `ask` a check runs only if it's on the allow list, as `run_command`'s would; `NEONSIDEKICK_COMMAND_POLICY=yolo` runs it.
 - **A Ralph loop refuses to start** when a check fails on the project first, printing its output. There's no checkpoint and no `ask_user`. Bare `/plan ralph` resumes a loop stopped earlier in the run.
 
 ### Everything else goes to the model as text

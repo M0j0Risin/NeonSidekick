@@ -61,6 +61,26 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes, bool Do
     }
 
     /// <summary>
+    /// <see cref="LeftOutFor"/> as the part that takes <paramref name="picture"/>'s place in the history (2026-10-19, the review): it keeps the
+    /// picture's camera, screenshot and reference marks, so what reads a taken-out picture again (<c>PlanReferences.FromHistory</c>) still knows
+    /// a camera photo or a screenshot the keep-in-sessions settings leave out.
+    /// </summary>
+    public static TextContent LeftOutPart(DataContent picture)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+        var part = new TextContent(LeftOutFor(picture));
+        foreach (string key in (string[])[ConversationHistory.CameraKey, ConversationHistory.ScreenKey, ConversationHistory.ReferenceKey])
+        {
+            if (picture.AdditionalProperties?.TryGetValue(key, out object? value) == true)
+            {
+                (part.AdditionalProperties ??= [])[key] = value;
+            }
+        }
+
+        return part;
+    }
+
+    /// <summary>
     /// The bytes a picture costs on the wire: its data as base64, which is what a data URL or a media block carries. An attached PDF
     /// (2026-10-14) the same, or its text's bytes when <paramref name="documentsAsText"/> (the endpoint gets the text).
     /// </summary>

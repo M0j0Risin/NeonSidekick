@@ -73,6 +73,24 @@ public sealed class PlanReferencesTests : IDisposable
     }
 
     [Fact]
+    public void FromHistory_ReadsNoCameraOrScreenPictureAgain_ThatACompactionTookOut()
+    {
+        // 2026-10-19, the review: the stand-in lost the marks, and a photo the keep settings leave out was read from disk and saved beside the plan.
+        var messages = new List<ChatMessage>
+        {
+            UserWith(PictureBudget.LeftOutPart(Picture(Other, "cam.jpg", ConversationHistory.CameraKey))),
+            UserWith(PictureBudget.LeftOutPart(Picture(Other, "shot.png", ConversationHistory.ScreenKey))),
+            UserWith(PictureBudget.LeftOutPart(Picture(Other, ".neon/plans/x/ref-1.png", ConversationHistory.ReferenceKey))),
+            UserWith(PictureBudget.LeftOutPart(Picture(Red, "pasted.png"))),
+        };
+        Func<string, PlanPicture?> reload = path => new PlanPicture(Other, "image/png", path);
+
+        Assert.Equal(["pasted.png"], PlanReferences.FromHistory(messages, keepCamera: false, keepScreen: false, reload).Select(p => p.Source));
+        Assert.Equal(["cam.jpg", "shot.png", "pasted.png"], PlanReferences.FromHistory(messages, keepCamera: true, keepScreen: true, reload).Select(p => p.Source));
+        Assert.Equal(PictureBudget.LeftOut("cam.jpg"), ((TextContent)messages[0].Contents[0]).Text);
+    }
+
+    [Fact]
     public void Sync_SavesEachPictureOnce_NumberedOnward_AndNamesFollowsIt()
     {
         var pictures = new[] { new PlanPicture(Red, "image/png", null), new PlanPicture(Red, "image/png", null), new PlanPicture(Other, "image/jpeg", null) };

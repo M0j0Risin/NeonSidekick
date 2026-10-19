@@ -761,15 +761,46 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<PlanPicture> ConversationPictures(AppSettingsData effective) =>
         PlanReferences.FromHistory(_session.History.Messages, effective.CameraKeepInSessions, effective.ScreenKeepInSessions, ReloadPicture);
 
-    /// <summary>A pruned picture read again from its path: an absolute one as it is, a relative one under the working directory.</summary>
+    /// <summary>
+    /// A pruned picture read again from its path: an absolute one as it is, a relative one under the working directory. Never one in the camera's or
+    /// the screen capture's output folder that its keep-in-sessions setting leaves out (2026-10-19, the review: a stand-in restored from a session
+    /// has lost its mark, and the folder still tells).
+    /// </summary>
     private PlanPicture? ReloadPicture(string path)
     {
-        if (System.IO.Path.IsPathFullyQualified(path))
+        string? full = System.IO.Path.IsPathFullyQualified(path) ? path : _files.Resolve(path, forWrite: false, out string resolved) == FileOutcome.Ok ? resolved : null;
+        if (full is null)
         {
-            return PlanReferences.Reload(path);
+            return null;
         }
 
-        return _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok ? PlanReferences.Reload(full) : null;
+        var effective = _effective();
+        if ((!effective.CameraKeepInSessions && InPictureFolder(full, effective.CameraOutputFolder)) || (!effective.ScreenKeepInSessions && InPictureFolder(full, effective.ScreenOutputFolder)))
+        {
+            return null;
+        }
+
+        return PlanReferences.Reload(full);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="full"/> lies in the profile's picture folder <paramref name="setting"/> names (the camera's or the screen capture's):
+    /// under it, or directly in it when the setting is the images folder itself (which holds the other folders too).
+    /// </summary>
+    private bool InPictureFolder(string full, string? setting)
+    {
+        string folder = NeonSidekick.Comfy.ComfyStudio.OutputFolder(setting);
+        if (_images.Resolve(folder, forWrite: false, out string root) != FileOutcome.Ok)
+        {
+            return false;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        string file = System.IO.Path.GetFullPath(full);
+        root = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(root));
+        return folder == "."
+            ? string.Equals(System.IO.Path.GetDirectoryName(file), root, comparison)
+            : file.StartsWith(root + System.IO.Path.DirectorySeparatorChar, comparison);
     }
 
     /// <summary>

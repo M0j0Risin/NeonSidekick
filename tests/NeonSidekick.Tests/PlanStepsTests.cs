@@ -98,6 +98,39 @@ public sealed class PlanStepsTests
     }
 
     [Fact]
+    public void StepsOfTheSameWords_AreToldApartByTheirOrder()
+    {
+        const string text = "## Steps\n- [x] Run the tests\n- [ ] Write it\n- [ ] Run the tests\n";
+        var steps = PlanSteps.Parse(text);
+
+        Assert.Equal([0, 0, 1], steps.Select(s => s.Occurrence));
+        Assert.Equal([2, 1, 2], steps.Select(s => s.Twins));
+        Assert.Equal([true, false], PlanSteps.Boxes(text)["Run the tests"]);
+        Assert.Equal("## Steps\n- [x] Run the tests\n- [ ] Write it\n- [x] Run the tests\n", PlanSteps.WithBox(text, steps[2], ticked: true));
+
+        // Moved under the pass (a note above): the second is still the second, while there are two.
+        string moved = "Intro\n\n" + text;
+        Assert.Equal("Intro\n\n## Steps\n- [x] Run the tests\n- [ ] Write it\n- [x] Run the tests\n", PlanSteps.WithBox(moved, steps[2], ticked: true));
+        Assert.Null(PlanSteps.WithBox("Intro\n\n## Steps\n- [ ] Run the tests\n" + text[9..], steps[2], ticked: true));   // a third: cannot be told
+    }
+
+    [Fact]
+    public void AStepParsedFromTheFileWhole_IsWrittenBackOnItsOwnLine()
+    {
+        // 2026-10-19, the review: a step parsed from the body had the body's line, not the file's, and a twin could not be ticked at all.
+        var at = new DateTimeOffset(2026, 10, 19, 9, 0, 0, TimeSpan.Zero);
+        string file = PlanDocument.Render(new PlanHeader(PlanStatus.Approved, 1, at, at, "x", Verify: "dotnet build"), "Guide", "## Steps\n- [ ] Add tests\n- [ ] Add tests\n").Replace("\n", "\r\n");
+        var steps = PlanSteps.Parse(file);
+
+        string? ticked = PlanSteps.WithBox(file, steps[1], ticked: true);
+
+        Assert.NotNull(ticked);
+        Assert.Equal([false, true], PlanSteps.Parse(ticked!).Select(s => s.Ticked));
+        Assert.Equal(file.Length, ticked!.Length);
+        Assert.Equal(PlanDocument.TryParse(file), PlanDocument.TryParse(ticked));
+    }
+
+    [Fact]
     public void WithChildren_WritesIndentedSubstepsWithTheirChecks_AfterTheStepsOwnLines()
     {
         string text = "## Steps\r\n- [ ] Big step\r\n  Done when: it all works\r\n  A note.\r\n- [ ] Next\r\n";

@@ -507,7 +507,7 @@ public static partial class ConversationCompactor
             {
                 // An older turn's own pictures (2026-10-03: pasted, /imagine's, the camera's), each its line naming the file, the text kept.
                 var kept = message.Clone();
-                kept.Contents = message.Contents.Select(c => c is DataContent picture ? new TextContent(PictureBudget.LeftOutFor(picture)) : c).ToList();
+                kept.Contents = message.Contents.Select(c => c is DataContent picture ? PictureBudget.LeftOutPart(picture) : c).ToList();
                 int pictures = message.Contents.Count(c => c is DataContent);
                 into.Add(kept);
                 pruned += pictures;

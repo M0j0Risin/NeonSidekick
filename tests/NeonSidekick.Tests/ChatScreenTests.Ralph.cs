@@ -249,6 +249,85 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task Ralph_ThePolicyOffMidLoop_RefusesTheNextCheck_AndStops()
+    {
+        // 2026-10-19, the review: the police and the policy were judged once, at the start; a pass may rewrite what the command runs.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _ralphVerifier.Ran = run => { if (run == 1) { _settings.Update(d => d.ShellCommandPolicy = "off"); } };
+        RalphPass("1");
+
+        string output = await RunAsync();
+
+        Assert.Equal([RalphVerify], _ralphVerifier.Commands);                  // the baseline alone
+        Assert.Contains(RalphText.CheckRefusedError(RalphVerify, RalphText.PolicyOffNowReason), output);
+        Assert.Contains(RalphText.StopNotice(RalphStop.Stopped, PlanPath, 0, 2), output);
+        Assert.Contains("- [ ] One", RalphPlanText);
+        Assert.Equal(2, _chat.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Ralph_APausedLoop_ResumesOnlyInTheFolderItRanIn()
+    {
+        // 2026-10-19, the review: its approved commands would have run in whatever folder the working directory had become.
+        RalphPlan();
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, input => { _settings.Update(d => d.WorkingDirectory = elsewhere); Line("/plan ralph")(input); }, Line("/exit"));
+        RalphPass("1", "blocked", "Need a name.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StopNotice(RalphStop.Blocked, PlanPath, 0, 2), output);
+        string refused = RalphText.ResumeElsewhereError(PlanPath, "<root>");
+        Assert.Contains(refused[..refused.IndexOf("<root>", StringComparison.Ordinal)], output);   // the error up to the folder it ran in
+        Assert.Equal([RalphVerify], _ralphVerifier.Commands);                  // nothing run again
+        Assert.Equal(2, _chat.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Ralph_StepsOfTheSameWords_AreEachTickedOnTheirOwnLine()
+    {
+        // 2026-10-19, the review: a step was found by its body line in the whole file, and a twin could not be ticked (run again to the cap).
+        RalphPlan("# Guide\n\n## Steps\n- [ ] Add tests\n  Done when: a passes\n- [ ] Add tests\n  Done when: b passes\n");
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(2, RalphPlanText.Split('\n').Count(l => l.TrimEnd('\r') == "- [x] Add tests"));
+        Assert.Contains(RalphText.StopNotice(RalphStop.Done, PlanPath, 2, 2), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_FinalOnly_PausedBeforeTheFinalCheck_ResumesIntoIt()
+    {
+        // 2026-10-19, the review: the resume read Final alone, and under final-only (start anyway) the verify command is the final check.
+        RalphPlan("# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n");
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Yes, Line("/plan ralph"), Line("/exit"));
+        _ralphVerifier.Fail("error CS0103: the name 'x' does not exist");
+        _chat.BeforeUpdateOf = async (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                PushLine("how is it going?");
+                await UntilAsync(() => _running!.QueuedCount == 1, ct);
+            }
+        };
+        RalphPass("1");
+        _chat.EnqueueText("Step one stands.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StopNotice(RalphStop.Paused, PlanPath, 1, 1), output);
+        Assert.Equal([RalphVerify, RalphVerify], _ralphVerifier.Commands);    // the baseline, then the final check on the resume
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
     public async Task Ralph_ABlockedStep_StopsTheLoop_UntickedWithTheReason_AndRingsTheStopTone()
     {
         RalphPlan();

@@ -8,9 +8,11 @@ namespace NeonSidekick.Plans;
 /// (<paramref name="Line"/>, 0-based over the text parsed, and its <paramref name="Indent"/> in characters), its words after the box, whether
 /// it is ticked, its indented <c>Done when:</c> line, the paths and <c>ref-N</c> pictures it names, and the task lines indented under it
 /// (<paramref name="Children"/>, one level). <paramref name="Index"/> is its number among the leaves, 1-based (a parent's is 0: a parent is
-/// never a step the loop works; it is ticked once its children all stand).
+/// never a step the loop works; it is ticked once its children all stand). <paramref name="Occurrence"/> (2026-10-19, the review: two steps of the
+/// same words were told apart by nothing) is its place among the task lines with its words, 0-based in the order of the text, and
+/// <paramref name="Twins"/> how many there are, 1 for words used once.
 /// </summary>
-public sealed record PlanStep(int Index, int Line, int Indent, string Text, bool Ticked, string? DoneWhen, IReadOnlyList<string> NamedPaths, IReadOnlyList<string> NamedRefs, IReadOnlyList<PlanStep> Children)
+public sealed record PlanStep(int Index, int Line, int Indent, string Text, bool Ticked, string? DoneWhen, IReadOnlyList<string> NamedPaths, IReadOnlyList<string> NamedRefs, IReadOnlyList<PlanStep> Children, int Occurrence = 0, int Twins = 1)
 {
     /// <summary>A step with no children: the kind the loop works.</summary>
     public bool IsLeaf => Children.Count == 0;
@@ -26,6 +28,8 @@ public sealed record PlanSubstep(string Text, string DoneWhen);
 /// <c>Done when:</c> line, a bullet or not, joins the step above it. Fenced code is never read (<see cref="PlanDocument.Walk"/>), and a
 /// <c>Done when:</c> line is never a box, so <see cref="PlanDocument.Progress"/> is unchanged. <see cref="WithBox"/> and
 /// <see cref="WithChildren"/> rewrite the text in place, keeping each line's own ending (CRLF or LF, a mixed file's per line). Pure.
+/// A step's <see cref="PlanStep.Line"/> counts over the text it was parsed from: a step that will be written back is parsed from the plan
+/// file whole (header and all), never from <see cref="PlanDocument.Body"/>, whose lines are not the file's (2026-10-19, the review).
 /// </summary>
 public static class PlanSteps
 {
@@ -95,6 +99,17 @@ public static class PlanSteps
             }
         }
 
+        // Each task line's place among those with its words, in the order of the text (a parent before its children).
+        var order = tops.SelectMany(t => t.Children.Prepend(t)).ToList();
+        var twins = order.GroupBy(b => b.Text, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var builder in order)
+        {
+            builder.Occurrence = seen.GetValueOrDefault(builder.Text);
+            builder.Twins = twins[builder.Text];
+            seen[builder.Text] = builder.Occurrence + 1;
+        }
+
         int leaf = 0;
         var steps = new List<PlanStep>(tops.Count);
         foreach (var top in tops)
@@ -146,20 +161,24 @@ public static class PlanSteps
 
     /// <summary>
     /// The step at <paramref name="step"/>'s place in <paramref name="text"/> again (the file may have moved under a pass): the task on its line
-    /// with its words, else the one task anywhere with its words; null when it cannot be told.
+    /// with its words (for words used more than once, the same one of them), else the one task anywhere with its words, else the one at its
+    /// <see cref="PlanStep.Occurrence"/> while there are as many as there were; null when it cannot be told.
     /// </summary>
     public static PlanStep? Find(string text, PlanStep step)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(step);
         var all = Parse(text).SelectMany(s => s.Children.Prepend(s)).ToList();
-        if (all.FirstOrDefault(s => s.Line == step.Line && s.Text == step.Text) is { } there)
+        // A twin on its line must be the same twin: after a move the other one may stand on that line.
+        if (all.FirstOrDefault(s => s.Line == step.Line && s.Text == step.Text && (step.Twins <= 1 || (s.Occurrence == step.Occurrence && s.Twins == step.Twins))) is { } there)
         {
             return there;
         }
 
         var same = all.Where(s => s.Text == step.Text).ToList();
-        return same.Count == 1 ? same[0] : null;
+        return same.Count == 1 ? same[0]
+            : same.Count > 1 && same.Count == step.Twins && step.Occurrence < same.Count ? same[step.Occurrence]
+            : null;
     }
 
     /// <summary>
@@ -240,9 +259,14 @@ public static class PlanSteps
         return Join(lines);
     }
 
-    /// <summary>The task lines of <paramref name="text"/> with their boxes, by line (every task line, children too), for telling which boxes a pass changed.</summary>
-    public static IReadOnlyDictionary<string, bool> Boxes(string text) =>
-        Parse(text).SelectMany(s => s.Children.Prepend(s)).GroupBy(s => s.Text, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Ticked, StringComparer.Ordinal);
+    /// <summary>
+    /// The boxes of <paramref name="text"/>'s task lines (every task line, children too) by their words, each word's boxes in the order of the text
+    /// (<see cref="PlanStep.Occurrence"/>), for telling which boxes a pass changed: two steps of the same words are two entries (2026-10-19, the
+    /// review: the first one's box stood for both).
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<bool>> Boxes(string text) =>
+        Parse(text).SelectMany(s => s.Children.Prepend(s)).GroupBy(s => s.Text, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<bool>)g.OrderBy(s => s.Occurrence).Select(s => s.Ticked).ToList(), StringComparer.Ordinal);
 
     private sealed class Builder(int line, int indent, string text, bool ticked)
     {
@@ -251,12 +275,14 @@ public static class PlanSteps
         public string Text { get; } = text;
         public bool Ticked { get; } = ticked;
         public string? DoneWhen { get; set; }
+        public int Occurrence { get; set; }
+        public int Twins { get; set; } = 1;
         public List<Builder> Children { get; } = [];
 
         public PlanStep Build(int index, IReadOnlyList<PlanStep> children)
         {
             string words = Text + (DoneWhen is { } d ? " " + d : "");
-            return new PlanStep(index, Line, Indent, Text, Ticked, DoneWhen, PathsIn(words), RefsIn(words), children);
+            return new PlanStep(index, Line, Indent, Text, Ticked, DoneWhen, PathsIn(words), RefsIn(words), children, Occurrence, Twins);
         }
     }
 

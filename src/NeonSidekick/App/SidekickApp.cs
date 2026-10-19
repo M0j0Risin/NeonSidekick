@@ -923,7 +923,7 @@ public sealed partial class SidekickApp
             inlineLimit: () => Plans.RalphText.InlineLimit((session.ContextLength?.Tokens ?? 0) * Llm.ConversationCompactor.CharsPerToken));
         var planState = new HeadlessPlanState();
         // The Ralph loop headless (2026-10-18): what its passes are judged with.
-        planState.RalphContext = new HeadlessRalphContext(session, git, neonAdvisor, interpreters, _ralphVerifier ?? new Plans.RalphVerifier(runner, interpreters.Locate));
+        planState.RalphContext = new HeadlessRalphContext(session, git, neonAdvisor, interpreters, _ralphVerifier ?? new Plans.RalphVerifier(runner, interpreters.Locate), allowList);
         // The code audit (2026-10-18): no seam, so each present_audit call prints as any tool's; its passes ride the gap review's slot.
         var audit = new Audits.AuditSession(files);
         var presentAudit = new Llm.Tools.PresentAuditTool(audit, files, _time);

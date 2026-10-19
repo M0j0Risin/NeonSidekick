@@ -47,7 +47,9 @@ public static class PlanReferences
     /// <summary>
     /// The conversation's pictures a plan may keep, in order, from <paramref name="messages"/>: the user messages' image parts (never a carrier's, a
     /// PDF's, a PDF page's or a reference's), a camera picture only with <paramref name="keepCamera"/>, a screenshot only with <paramref name="keepScreen"/>,
-    /// and a picture a compaction took out read again through <paramref name="reload"/> (its path; null skips them).
+    /// and a picture a compaction took out read again through <paramref name="reload"/> (its path; null skips them) — never one whose stand-in
+    /// carries a reference's mark, nor a camera photo's or a screenshot's the keep settings leave out (2026-10-19, the review: they were read
+    /// from disk again and saved beside the plan; <see cref="PictureBudget.LeftOutPart"/> keeps the marks).
     /// </summary>
     public static IReadOnlyList<PlanPicture> FromHistory(IReadOnlyList<ChatMessage> messages, bool keepCamera, bool keepScreen, Func<string, PlanPicture?>? reload = null)
     {
@@ -72,7 +74,9 @@ public static class PlanReferences
 
                     found.Add(new PlanPicture(data.Data.ToArray(), data.MediaType, ConversationHistory.PicturePath(data)));
                 }
-                else if (content is TextContent text && reload is not null && LeftOutPath(text.Text) is { } path && reload(path) is { } again)
+                else if (content is TextContent text && reload is not null && LeftOutPath(text.Text) is { } path
+                    && !Marked(text, ConversationHistory.ReferenceKey) && (keepCamera || !Marked(text, ConversationHistory.CameraKey)) && (keepScreen || !Marked(text, ConversationHistory.ScreenKey))
+                    && reload(path) is { } again)
                 {
                     found.Add(again);
                 }
@@ -81,6 +85,8 @@ public static class PlanReferences
 
         return found;
     }
+
+    private static bool Marked(AIContent content, string key) => content.AdditionalProperties?.ContainsKey(key) == true;
 
     /// <summary>The path a <see cref="PictureBudget.LeftOut"/> stand-in names, or null.</summary>
     private static string? LeftOutPath(string text)

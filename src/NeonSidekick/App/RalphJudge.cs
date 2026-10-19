@@ -41,9 +41,10 @@ internal static class RalphJudge
     /// After a pass's turn: the plan read again, another step's box changed during the pass put back; then the report's outcome — <c>blocked</c>
     /// unticks and stops, <c>split</c> writes the children (no checks), <c>done</c> ticks and checks, <c>partial</c> or none with the model's own tick
     /// still checked. The checks: the verify command (a failure, a timeout or Esc unticks, its tail the next pass's note), the evidence, the review
-    /// (a fail unticks). A parent whose children all stand is ticked. The header's progress follows.
+    /// (a fail unticks). A parent whose children all stand is ticked. The header's progress follows. <paramref name="step"/> was parsed from the
+    /// plan file whole (<see cref="PlanSteps.Parse"/>), so its line is the file's; <paramref name="boxes"/> are <see cref="PlanSteps.Boxes"/> before the pass.
     /// </summary>
-    public static async Task<RalphJudged> JudgeAsync(IRalphHost host, RalphLoop loop, PlanStep? step, int total, IReadOnlyDictionary<string, bool> boxes, RalphSnapshotOfFiles before, bool hadPictures, bool cancelled, bool failed, string requirement, TimeProvider time, CancellationToken cancellationToken)
+    public static async Task<RalphJudged> JudgeAsync(IRalphHost host, RalphLoop loop, PlanStep? step, int total, IReadOnlyDictionary<string, IReadOnlyList<bool>> boxes, RalphSnapshotOfFiles before, bool hadPictures, bool cancelled, bool failed, string requirement, TimeProvider time, CancellationToken cancellationToken)
     {
         var snapshot = loop.Snapshot;
         string path = snapshot.Path;
@@ -54,12 +55,14 @@ internal static class RalphJudge
             return new RalphJudged(RalphPassFacts.None with { Cancelled = cancelled, TurnFailed = failed }, "none", null, "off", [], "");
         }
 
-        // Another step's box the pass changed: put back (the loop ticks; the model never decides another step).
+        // Another step's box the pass changed: put back (the loop ticks; the model never decides another step). Steps of the same words are told
+        // apart by their order (2026-10-19, the review), and only while the pass left as many of them as there were.
         int putBack = 0;
         foreach (var other in PlanSteps.Parse(text).SelectMany(s => s.Children.Prepend(s)).ToList())
         {
-            if ((step is null || other.Text != step.Text) && boxes.TryGetValue(other.Text, out bool was) && was != other.Ticked
-                && PlanFiles.ReadWhole(host.Files, path) is { } current && PlanSteps.WithBox(current, other, was) is { } restored)
+            bool own = step is not null && other.Text == step.Text && other.Occurrence == step.Occurrence;
+            if (!own && boxes.TryGetValue(other.Text, out var was) && was.Count == other.Twins && was[other.Occurrence] != other.Ticked
+                && PlanFiles.ReadWhole(host.Files, path) is { } current && PlanSteps.WithBox(current, other, was[other.Occurrence]) is { } restored)
             {
                 host.Files.WriteText(path, restored, overwrite: true);
                 putBack++;
@@ -103,7 +106,7 @@ internal static class RalphJudge
         string check = "none";
         string? tail = null;
         string review = "off";
-        var found = PlanSteps.Find(PlanDocument.Body(text), step);
+        var found = PlanSteps.Find(text, step);
         bool modelTicked = found?.Ticked ?? false;
         switch (report?.Outcome)
         {
@@ -201,11 +204,11 @@ internal static class RalphJudge
                 break;
         }
 
-        // A parent whose children all stand is ticked by the app.
+        // A parent whose children all stand is ticked by the app (found by the step's own line, the file's: never another parent's child of the same words).
         if (stands && PlanFiles.ReadWhole(host.Files, path) is { } latest)
         {
-            var parsed = PlanSteps.Parse(PlanDocument.Body(latest));
-            if (parsed.FirstOrDefault(s => s.Children.Any(c => c.Text == step.Text)) is { Ticked: false } parent && parent.Children.All(c => c.Ticked))
+            var parsed = PlanSteps.Parse(latest);
+            if (PlanSteps.Find(latest, step) is { } standing && PlanSteps.ParentOf(parsed, standing) is { Ticked: false } parent && parent.Children.All(c => c.Ticked))
             {
                 SetBox(host, path, parent, true);
                 host.Notice(RalphText.ParentTickedNotice(parent.Text));

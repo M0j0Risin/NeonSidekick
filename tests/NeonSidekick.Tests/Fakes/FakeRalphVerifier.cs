@@ -23,6 +23,9 @@ public sealed class FakeRalphVerifier : IRalphVerifier
     /// <summary>Raised as a held run begins to wait, so a test can press Esc or Stop then.</summary>
     public Action? Holding { get; set; }
 
+    /// <summary>Raised as each run ends, with its number (1 for the first): what a test changes between checks (2026-10-19).</summary>
+    public Action<int>? Ran { get; set; }
+
     public FakeRalphVerifier Pass(string tail = "ok") => Queue(new RalphCheckResult(RalphCheckKind.Passed, 0, tail, TimeSpan.FromSeconds(1)));
 
     public FakeRalphVerifier Fail(string tail = "error: it broke", int exit = 1) => Queue(new RalphCheckResult(RalphCheckKind.Failed, exit, tail, TimeSpan.FromSeconds(1)));
@@ -60,9 +63,13 @@ public sealed class FakeRalphVerifier : IRalphVerifier
             }
         }
 
+        RalphCheckResult ended;
         lock (_results)
         {
-            return _results.TryDequeue(out var result) ? result : new RalphCheckResult(RalphCheckKind.Passed, 0, "ok", TimeSpan.FromSeconds(1));
+            ended = _results.TryDequeue(out var result) ? result : new RalphCheckResult(RalphCheckKind.Passed, 0, "ok", TimeSpan.FromSeconds(1));
         }
+
+        Ran?.Invoke(run);
+        return ended;
     }
 }

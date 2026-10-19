@@ -186,6 +186,37 @@ public static class RalphText
     public static string BaselineRefusedHeadless(string command) =>
         $"The check `{Flatten(command)}` fails before the loop starts, and headless cannot ask: fix the project, or take the verify line out of the plan's header.";
 
+    /// <summary>
+    /// Headless, before the baseline (2026-10-19, the review: the plan's commands ran unannounced): the checks the loop will run, as the plan's header
+    /// names them. Pinned.
+    /// </summary>
+    public static string HeadlessChecksNotice(string? verify, string? final) =>
+        $"{Glyph} The loop's checks: verify {(verify is null ? "none" : "`" + Flatten(verify) + "`")}, final {(final is null ? "none" : "`" + Flatten(final) + "`")}.";
+
+    /// <summary>
+    /// Headless under <c>Shell command policy</c> ask (2026-10-19, the review): a check not on the allow list is refused, as <c>run_command</c>'s
+    /// would be, since nobody can be asked. Pinned.
+    /// </summary>
+    public static string HeadlessAskRefusedError(string command) =>
+        $"The check `{Flatten(command)}` is not on the shell allow list, and headless cannot ask: allow it, or run with NEONSIDEKICK_COMMAND_POLICY=yolo.";
+
+    /// <summary>
+    /// A check refused when it was about to run (2026-10-19, the review: the police and the policy are asked again before every run, since a pass may
+    /// rewrite the script a command runs): the loop stops. Pinned.
+    /// </summary>
+    public static string CheckRefusedError(string command, string reason) =>
+        $"The check `{Flatten(command)}` was refused: {reason.TrimEnd('.')}. The Ralph loop stops.";
+
+    /// <summary>The policy turned <c>off</c> while a loop ran (2026-10-19): its next check is refused and the loop stops. Pinned.</summary>
+    public const string PolicyOffNowReason = "Shell command policy is off now";
+
+    /// <summary>
+    /// <c>/plan ralph</c> on a paused loop started in another folder (2026-10-19, the review: its approved commands would have run in this one).
+    /// Pinned.
+    /// </summary>
+    public static string ResumeElsewhereError(string path, string root) =>
+        $"The paused Ralph loop on {path} ran in {root}, not the working directory now: go back there to resume it, or /plan ralph <name> to start this folder's plan anew";
+
     /// <summary>The baseline failed and the user would not start: the plan stays as it was. Pinned.</summary>
     public const string BaselineRefusedNotice = Glyph + " Not started: the plan stays as it was. Fix the check, or approve it again.";
 

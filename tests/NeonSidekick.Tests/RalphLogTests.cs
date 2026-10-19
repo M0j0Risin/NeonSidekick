@@ -124,4 +124,22 @@ public sealed class RalphLogTests : IDisposable
         RalphLog.Unlock(_files, Plan, me);
         Assert.False(File.Exists(Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName)));
     }
+
+    [Fact]
+    public void TheLock_RacedFor_IsTakenByOne_AndLeavesNoTempFiles()
+    {
+        // 2026-10-19, the review: read-then-write let two instances starting together both take it.
+        var owners = Enumerable.Range(1, 8).Select(i => new RalphLog.LockOwner(1000 + i, T0)).ToList();
+        using var start = new ManualResetEventSlim();
+        var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return RalphLog.TryLock(_files, Plan, owner, _ => true); })).ToList();
+        start.Set();
+        Task.WaitAll([.. takes]);
+
+        Assert.Single(takes, t => t.Result);
+        string folder = Path.Combine(_dir, ".neon", "plans", "guide");
+        Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
+
+        File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "not a lock");   // garbage: no owner, taken over
+        Assert.True(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
+    }
 }

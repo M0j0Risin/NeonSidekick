@@ -132,8 +132,14 @@ internal sealed partial class ChatScreen
 
         if (name.Length == 0)
         {
-            if (_executingPlan is { Ralph: true, Path: { } paused })
+            if (_executingPlan is { Ralph: true, Path: { } paused } stored)
             {
+                if (!RalphSnapshot.SameRoot(stored.Root, _files.Root))
+                {
+                    _transcript.Error(RalphText.ResumeElsewhereError(paused, stored.Root ?? "?"));
+                    return false;
+                }
+
                 return await ResumeRalphAsync(paused, passes, cancellationToken).ConfigureAwait(false);
             }
 
@@ -152,12 +158,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/plan ralph &lt;name&gt;</c> (and the picker's <c>l</c>): a plan not done or canceled, its checks confirmed on both sides (a draft approved
-    /// by the same yes), the baseline, then the loop. A paused loop on the same plan resumes instead. Since later on 2026-10-18 the same question
+    /// by the same yes), the baseline, then the loop. A paused loop on the same plan resumes instead, only in the folder it ran in (2026-10-19, the
+    /// review: elsewhere the plan is this folder's, asked about afresh). Since later on 2026-10-18 the same question
     /// names the plan's fit problems (<see cref="PlanFit.Shape"/>, the check line already saying <c>unchecked</c>), so it is asked once.
     /// </summary>
     private async Task<bool> RalphNamedAsync(string path, int? passes, CancellationToken cancellationToken)
     {
-        if (_executingPlan is { Ralph: true, Path: { } paused } && string.Equals(paused, path, StringComparison.Ordinal))
+        if (_executingPlan is { Ralph: true, Path: { } paused } stored && string.Equals(paused, path, StringComparison.Ordinal) && RalphSnapshot.SameRoot(stored.Root, _files.Root))
         {
             return await ResumeRalphAsync(path, passes, cancellationToken).ConfigureAwait(false);
         }
@@ -206,6 +213,13 @@ internal sealed partial class ChatScreen
         }
 
         var stored = _executingPlan!;
+        if (!RalphSnapshot.SameRoot(stored.Root, _files.Root))
+        {
+            // Its approved commands are the folder's it ran in (2026-10-19, the review): never run here unasked.
+            _transcript.Error(RalphText.ResumeElsewhereError(path, stored.Root ?? "?"));
+            return false;
+        }
+
         if (PlanFiles.ReadWhole(_files, path) is not { } text)
         {
             _transcript.Notice(RalphText.StopNotice(RalphStop.PlanGone, path, 0, 0));
@@ -215,9 +229,9 @@ internal sealed partial class ChatScreen
         }
 
         string body = PlanDocument.Body(text);
-        if (PlanSteps.FirstUnticked(PlanSteps.Parse(body)) is null && stored.Final is null)
+        if (PlanSteps.FirstUnticked(PlanSteps.Parse(body)) is null && RalphSnapshot.FinalCheckOf(stored.Final, stored.Verify, stored.FinalOnly) is null)
         {
-            // Every step ticked while it was paused: nothing left to run.
+            // Every step ticked while it was paused, and no final check owed (under final-only the verify command is one, 2026-10-19): nothing left to run.
             var counts = PlanSteps.Counts(PlanSteps.Parse(body));
             PlanFiles.MarkFile(_files, path, PlanStatus.Done, _time.GetLocalNow(), stored.Requirement, counts);
             _transcript.Notice(PlanText.DoneNotice(path));
@@ -430,14 +444,15 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
-                if (!string.Equals(_files.Root, loop.Snapshot.Root, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                if (!RalphSnapshot.SameRoot(_files.Root, loop.Snapshot.Root))
                 {
                     stop = RalphStop.WorkdirMoved;
                     break;
                 }
 
                 string body = PlanDocument.Body(text);
-                var steps = PlanSteps.Parse(body);
+                // The file whole (2026-10-19, the review): a step's line is the file's, so the loop's tick lands on that step and no other.
+                var steps = PlanSteps.Parse(text);
                 loop.SetChildren(steps);
                 var next = loop.Next(steps, QueueDrains && _queue.Count > 0);
                 switch (next.Kind)
@@ -456,6 +471,12 @@ internal sealed partial class ChatScreen
                         }
 
                         break;
+                }
+
+                if (!ReferenceEquals(_ralph, loop))
+                {
+                    // The loop left with the conversation (StopRalphOnReset: a profile switch, a replaced conversation): nothing more is sent.
+                    stop ??= RalphStop.Stopped;
                 }
             }
         }
@@ -528,6 +549,13 @@ internal sealed partial class ChatScreen
             _ralphPass = null;
         }
 
+        if (!ReferenceEquals(_ralph, loop))
+        {
+            // A pane the pass ended under switched the profile or replaced the conversation (2026-10-19, the review): the loop went with it
+            // (StopRalphOnReset let its lock go), so nothing of the pass is judged or written, and the driver sends no more.
+            return (exit, RalphStop.Stopped);
+        }
+
         var judged = await JudgeRalphPassAsync(loop, step, total, boxes, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
         var stop = loop.EndPass(judged.Facts, PlanMeter());
         RalphLogPass(loop, step, judged);
@@ -566,7 +594,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>After a pass's turn: <see cref="RalphJudge.JudgeAsync"/> over the screen.</summary>
-    private Task<RalphJudged> JudgeRalphPassAsync(RalphLoop loop, PlanStep? step, int total, IReadOnlyDictionary<string, bool> boxes, RalphSnapshotOfFiles before, bool hadPictures, CancellationToken cancellationToken) =>
+    private Task<RalphJudged> JudgeRalphPassAsync(RalphLoop loop, PlanStep? step, int total, IReadOnlyDictionary<string, IReadOnlyList<bool>> boxes, RalphSnapshotOfFiles before, bool hadPictures, CancellationToken cancellationToken) =>
         RalphJudge.JudgeAsync(new ScreenRalphHost(this), loop, step, total, boxes, before, hadPictures, _lastTurnCancelled, _lastTurnFailed, _executingPlan?.Requirement ?? "", _time, cancellationToken);
 
     /// <summary>A step's box set in the file (the loop's own tick), quietly.</summary>
@@ -614,10 +642,18 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A check run under the busy row and the watch (Esc, the page's Stop and the kill switch end it: a <see cref="KillScopeKind.Work"/> scope); null when
-    /// it could not run. The command's police and policy were judged at the start.
+    /// it could not run. The command's police and policy are judged again before every run (2026-10-19, the review: a pass may rewrite the script the
+    /// command runs, and the policy may have turned off): a refusal is said and reads as a stop.
     /// </summary>
     private async Task<RalphCheckResult?> RunRalphCheckAsync(string command, ShellKind shell, AppSettingsData effective, string label, CancellationToken cancellationToken)
     {
+        string? refused = RalphVerifier.Refusal(command, shell, _files.Root, _files, effective, _interpreters.Locate, out bool off);
+        if (refused is not null || off)
+        {
+            _transcript.Error(RalphText.CheckRefusedError(command, refused ?? RalphText.PolicyOffNowReason));
+            return new RalphCheckResult(RalphCheckKind.Cancelled, null, "", TimeSpan.Zero);
+        }
+
         RalphCheckResult? result = null;
         int seconds = Math.Clamp(effective.RalphLoopCheckTimeoutSeconds, AppSettingsData.MinRalphLoopCheckTimeoutSeconds, AppSettingsData.MaxRalphLoopCheckTimeoutSeconds);
         if (_ralph is { } running)

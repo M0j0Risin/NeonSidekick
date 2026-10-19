@@ -378,7 +378,10 @@ public static class RalphLog
 
     /// <summary>
     /// The lock of <paramref name="planPath"/> taken for <paramref name="me"/>: true when it was free, stale (<paramref name="alive"/> says its owner is
-    /// gone) or already this process's; false while another live process holds it.
+    /// gone) or already this process's; false while another live process holds it. Taken by creating the file whole, never over one that is there
+    /// (2026-10-19, the review: read-then-write let two instances starting together both take it): its text is written beside it and moved into
+    /// place without overwriting, so of two racing for it one fails, and a reader never sees it half written. A stale lock is removed only while it
+    /// still says what was read, then the take tried again.
     /// </summary>
     public static bool TryLock(WorkingDirectory files, string planPath, LockOwner me, Func<LockOwner, bool> alive)
     {
@@ -386,13 +389,90 @@ public static class RalphLog
         ArgumentNullException.ThrowIfNull(me);
         ArgumentNullException.ThrowIfNull(alive);
         string path = LockPathFor(planPath);
-        if (ReadLock(files, path) is { } held && held != me && alive(held))
+        if (files.Resolve(path, forWrite: true, out string full) != FileOutcome.Ok)
         {
             return false;
         }
 
         string text = "pid: " + N(me.ProcessId) + "\nstarted: " + me.Started.ToString("O", CultureInfo.InvariantCulture) + "\n";
-        return files.WriteText(path, text, overwrite: true).Outcome == FileOutcome.Ok;
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            if (TryCreate(full, text))
+            {
+                return true;
+            }
+
+            var held = ReadLock(files, path);
+            if (held == me)
+            {
+                return true;
+            }
+
+            if (held is not null && alive(held))
+            {
+                return false;
+            }
+
+            // Stale (its owner gone) or not a lock at all: removed while it still says so, then taken again.
+            if (!RemoveIfStill(files, path, full, held))
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary><paramref name="text"/> as a new file at <paramref name="full"/>: false when one is there (or it could not be written).</summary>
+    private static bool TryCreate(string full, string text)
+    {
+        string temp = full + "." + N(Environment.ProcessId) + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(temp, text);
+            File.Move(temp, full, overwrite: false);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temp);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A stray temp file: harmless, never read as the lock.
+            }
+        }
+    }
+
+    /// <summary>The lock at <paramref name="full"/> deleted when it still names <paramref name="held"/> (or is gone already); false when another took it meanwhile.</summary>
+    private static bool RemoveIfStill(WorkingDirectory files, string path, string full, LockOwner? held)
+    {
+        if (!File.Exists(full))
+        {
+            return true;
+        }
+
+        if (ReadLock(files, path) != held)
+        {
+            return false;
+        }
+
+        try
+        {
+            File.Delete(full);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The lock let go when it is <paramref name="me"/>'s (a stop, a profile switch, the app's exit).</summary>
