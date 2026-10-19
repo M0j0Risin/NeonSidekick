@@ -58,19 +58,24 @@ public static class NativeRedirect
     /// prefix is in <see cref="Table"/> and whose tool is among <paramref name="offered"/> (the names the turn offers —
     /// a tool switched off, or a group not offered, leaves the shell its line).
     /// </summary>
-    public static (string Prefix, string Tool)? For(string command, IReadOnlySet<string> offered)
+    public static (string Prefix, string Tool)? For(string command, IReadOnlySet<string> offered) => For(command, offered, ShellKind.PowerShell, macAware: false);
+
+    private static (string Prefix, string Tool)? For(string command, IReadOnlySet<string> offered, ShellKind kind, bool macAware)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(offered);
-        var segments = CommandPrefix.Segments(command);
+        var segments = CommandPrefix.Segments(command, kind);
         if (segments.Count != 1)
         {
             return null;
         }
 
         // The verb straight after the program alone (2026-10-12): git -C sub status runs in sub, where git_status never looks.
-        string prefix = CommandPrefix.Of(segments[0], skipOptions: false);
-        return Table.TryGetValue(prefix, out string? tool) && offered.Contains(tool) ? (prefix, tool) : null;
+        string prefix = CommandPrefix.Of(segments[0], skipOptions: false, kind);
+        return Table.TryGetValue(prefix, out string? tool) && offered.Contains(tool)
+            && !(macAware && OperatingSystem.IsMacOS() && DescribesCommand(prefix, kind))
+            ? (prefix, tool)
+            : null;
     }
 
     /// <summary>
@@ -80,7 +85,7 @@ public static class NativeRedirect
     /// <c>type</c> is sent back there, Git Bash's too, as before.
     /// </summary>
     public static (string Prefix, string Tool)? For(string command, IReadOnlySet<string> offered, ShellKind kind) =>
-        For(command, offered) is { } native && !(OperatingSystem.IsMacOS() && DescribesCommand(native.Prefix, kind)) ? native : null;
+        For(command, offered, kind, macAware: true);
 
     /// <summary>Whether <paramref name="prefix"/> in <paramref name="kind"/> is the Unix shells' <c>type</c>, a command's description. Pure.</summary>
     public static bool DescribesCommand(string prefix, ShellKind kind) =>

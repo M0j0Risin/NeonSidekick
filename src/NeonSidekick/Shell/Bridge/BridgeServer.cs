@@ -33,6 +33,7 @@ public sealed class BridgeServer : IAsyncDisposable
     private readonly BridgeDispatch _dispatch;
     private readonly int _maxCalls;
     private readonly int _maxRequestBytes;
+    private readonly SemaphoreSlim _slots;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _accepting;
     private int _calls;
@@ -44,6 +45,7 @@ public sealed class BridgeServer : IAsyncDisposable
         _dispatch = dispatch;
         _maxCalls = maxCalls;
         _maxRequestBytes = maxRequestBytes;
+        _slots = new SemaphoreSlim(Math.Clamp(maxCalls + 4, 8, MaxConnections), Math.Clamp(maxCalls + 4, 8, MaxConnections));
         _accepting = AcceptAsync();
     }
 
@@ -65,6 +67,21 @@ public sealed class BridgeServer : IAsyncDisposable
     /// <see cref="ShellText.RequestTooLarge"/> and the connection closed. Pinned.
     /// </summary>
     public const int MaxRequestBytes = 32 * 1024 * 1024;
+
+    /// <summary>
+    /// The most connections served at once (2026-10-19, the code review): the per-request <see cref="MaxRequestBytes"/> cap bounds one
+    /// connection, but nothing bounded how many a local process could open and hold during a run, so the app could keep N × 32 MB. The
+    /// slots are <c>maxCalls + 4</c>, clamped here, so legitimate parallel calls run unthrottled while a flood past the cap waits for a
+    /// slot and is dropped on <see cref="ReadTimeout"/>. Pinned.
+    /// </summary>
+    public const int MaxConnections = 64;
+
+    /// <summary>
+    /// How long one connection has to deliver its request line (2026-10-19, the code review): the token is only checked once the whole
+    /// line is read, so a connection that opens and sends slowly or never held its slot and its buffer for the whole run. Past this it is
+    /// closed, freeing both. Pinned.
+    /// </summary>
+    public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>Binds the listener and starts accepting.</summary>
     public static BridgeServer Start(BridgeDispatch dispatch, int maxCalls) => Start(dispatch, maxCalls, MaxRequestBytes);
@@ -95,6 +112,25 @@ public sealed class BridgeServer : IAsyncDisposable
                 return;
             }
 
+            // A slot per in-flight connection (2026-10-19): a flood past the cap waits here rather than buffering, and a connection that
+            // never frees its slot within the read timeout is dropped below, so the held memory and the open count both stay bounded.
+            bool got;
+            try
+            {
+                got = await _slots.WaitAsync(ReadTimeout, _stop.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+            {
+                client.Dispose();
+                return;
+            }
+
+            if (!got)
+            {
+                client.Dispose();
+                continue;
+            }
+
             _ = ServeAsync(client);
         }
     }
@@ -103,10 +139,13 @@ public sealed class BridgeServer : IAsyncDisposable
     {
         using (client)
         {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
+            deadline.CancelAfter(ReadTimeout);
             try
             {
                 using var stream = client.GetStream();
-                var response = await ReadLineAsync(stream, _maxRequestBytes, _stop.Token).ConfigureAwait(false) is { } line
+                // The read is bounded by both the byte cap and the time: a connection that opens and sends nothing holds nothing for long.
+                var response = await ReadLineAsync(stream, _maxRequestBytes, deadline.Token).ConfigureAwait(false) is { } line
                     ? await AnswerAsync(line, _stop.Token).ConfigureAwait(false)
                     : new BridgeResponse { Error = ShellText.RequestTooLarge(_maxRequestBytes) };
                 byte[] bytes = Encoding.UTF8.GetBytes(Serialize(response) + "\n");
@@ -115,7 +154,19 @@ public sealed class BridgeServer : IAsyncDisposable
             }
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or OperationCanceledException)
             {
-                // The client went, or the run ended: nothing to answer to.
+                // The client went, the read timed out, or the run ended: nothing to answer to.
+            }
+            finally
+            {
+                // The serve tasks are not awaited on dispose, so the slot's release can race the semaphore's own dispose.
+                try
+                {
+                    _slots.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The run ended under us; the port is closing anyway.
+                }
             }
         }
     }
@@ -224,6 +275,7 @@ public sealed class BridgeServer : IAsyncDisposable
             // The accept loop's own exit.
         }
 
+        _slots.Dispose();
         _stop.Dispose();
     }
 }

@@ -433,6 +433,22 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(32 * 1024 * 1024, BridgeServer.MaxRequestBytes);
     }
 
+    /// <summary>The connection cap and read timeout (2026-10-19, the code review): bounded, and legitimate parallel calls up to the cap still run.</summary>
+    [Fact]
+    public async Task Bridge_BoundsConcurrentConnections_AndStillServesParallelCalls()
+    {
+        Assert.Equal(64, BridgeServer.MaxConnections);
+        Assert.Equal(TimeSpan.FromSeconds(30), BridgeServer.ReadTimeout);
+
+        int calls = 0;
+        await using var bridge = BridgeServer.Start((tool, _, _) => { Interlocked.Increment(ref calls); return Task.FromResult("ok"); }, maxCalls: 20);
+        string line = "{\"token\":\"" + bridge.Token + "\",\"tool\":\"echo\",\"arguments\":{}}";
+
+        var answers = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => SendAsync(bridge, line)));
+        Assert.All(answers, a => Assert.Equal("{\"result\":\"ok\"}", a));
+        Assert.Equal(16, calls);
+    }
+
     [Fact]
     public async Task Bridge_AThrowingDispatch_IsTheFailedSentence_AndTheArgumentsAreJsonElements()
     {

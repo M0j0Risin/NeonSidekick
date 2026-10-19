@@ -475,6 +475,18 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.All(output.Lines(), l => Assert.False(l.IsError));
     }
 
+    /// <summary>A line ending \r\r\n keeps its text (2026-10-19, the code review): Python on Windows writes \r\n to a text-mode stdout as \r\r\n, and the second \r used to clear the line.</summary>
+    [Fact]
+    public async Task Pump_ALineEndingWithTwoCarriageReturns_KeepsItsText()
+    {
+        var output = new OutputBuffer();
+        var reader = new ChunkedReader(output, "a,b,c\r\r\nd,e,f\r\r\n", "tail\r\r");
+
+        await ShellRunner.PumpAsync(reader, output, isError: false);
+
+        Assert.Equal(["a,b,c", "d,e,f", "tail"], output.Lines().Select(l => l.Text));
+    }
+
     [Fact]
     public async Task Pump_HoldsAHugeLineToTheCap_AsItArrives()
     {

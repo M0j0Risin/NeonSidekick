@@ -27,7 +27,7 @@ internal abstract class ShellChild : IDisposable
     /// <summary>Whether a job of its own holds it (Windows).</summary>
     public virtual bool InJob => false;
 
-    /// <summary>Whether it has exited but what it left can still be killed (a Mac's kept group leader, <see cref="GroupChild"/>).</summary>
+    /// <summary>Whether it has exited but what it left can still be killed: a Mac's kept group leader (<see cref="GroupChild"/>), or a Windows job that still holds a child (<see cref="ProcessChild"/>).</summary>
     public virtual bool HoldsLeftovers => false;
 
     public abstract Task WaitForExitAsync();
@@ -70,6 +70,12 @@ internal sealed class ProcessChild : ShellChild
     public override int ExitCode => _process.ExitCode;
 
     public override bool InJob => _job != 0;
+
+    // While a job still holds something after the shell itself exited, the kill must reach it (the code review, 2026-10-19;
+    // 709bd39a fixed only the Mac's GroupChild): a background `server & exit` whose server inherits stdout keeps the output pipe
+    // open, so the pumps never drain and the session never completes, and ProcessSession.Kill skips a child whose HasExited is true
+    // unless it HoldsLeftovers. The caller already guards on the session not having exited, so this is the job's "not yet closed".
+    public override bool HoldsLeftovers => InJob;
 
     public override Task WaitForExitAsync() => _process.WaitForExitAsync(CancellationToken.None);
 

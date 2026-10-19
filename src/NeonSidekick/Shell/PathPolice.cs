@@ -126,7 +126,7 @@ public static partial class PathPolice
 
         // Every folder the next segment may run in (rule 11): one, until a cd leaves it in doubt whether it moved.
         List<string> folders = [baseFolder];
-        foreach (var (piece, join) in isScript ? [(text, "")] : CommandPrefix.JoinedSegments(text))
+        foreach (var (piece, join) in isScript ? [(text, "")] : CommandPrefix.JoinedSegments(text, shell))
         {
             string joined = JoinQuotedInside(piece, judging, folders);
             var tokens = Tokens(joined).Select(Unjoin).ToList();

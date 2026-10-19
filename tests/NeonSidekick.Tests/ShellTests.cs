@@ -51,10 +51,15 @@ public sealed class ShellTests
     [Theory]
     [InlineData("git push origin main", "git push")]
     [InlineData("git -C x status", "git status")]   // an option and its value skipped on the way to the verb (2026-10-12)
-    [InlineData("git -c alias.x=y push", "git push")]
+    [InlineData("git -c alias.x=y push", CommandPrefix.Unreadable)]   // -c can set config that runs a program (2026-10-19): the line asks
     [InlineData("git --no-pager -C x log -5", "git log")]
     [InlineData("git --git-dir=.git log", "git log")]   // --name=value is one word
     [InlineData("git --version", "git")]
+    [InlineData("git \"push\" origin", "git push")]   // a quoted verb is unquoted and read, never left as a bare git (2026-10-19)
+    [InlineData("docker -H tcp://evil rm y", CommandPrefix.Unreadable)]   // -H aims docker at another daemon (2026-10-19)
+    [InlineData("make -f /tmp/x test", CommandPrefix.Unreadable)]   // -f runs an arbitrary makefile
+    [InlineData("kubectl --kubeconfig /tmp/k get pods", CommandPrefix.Unreadable)]
+    [InlineData("PATH=/tmp/x make test", CommandPrefix.Unreadable)]   // a leading PATH assignment can redirect which make runs
     [InlineData("kubectl -n prod delete pod x", "kubectl delete")]
     [InlineData("docker --context remote rm -f x", "docker rm")]
     [InlineData("npm --prefix web run build", "npm run")]
@@ -148,6 +153,20 @@ public sealed class ShellTests
     [InlineData("zsh", "files=(rm x) && ls", new[] { "x)", "ls" })]   // an array, not a command: read as bash reads it
     [InlineData("bash", "files=(rm x) && ls", new[] { "x)", "ls" })]
     [InlineData("bash", "diff =(sort a) b", new[] { "diff" })]   // bash has no =(…)
+    // An escaped quote no longer desyncs the segmenter and hides a separator (2026-10-19, the code review):
+    [InlineData("bash", "echo \\\" ; rm x", new[] { "echo", "rm" })]
+    [InlineData("powershell", "Write-Output `\" ; Remove-Item x", new[] { "write-output", "remove-item" })]
+    // bash/zsh $'…': the \' does not close it, so the $(…) after it is still read:
+    [InlineData("bash", "echo $'a\\'b' $(rm x)", new[] { "echo", "rm" })]
+    // a # after an escaped blank is part of a word, not a comment, so the $(…) in it is read:
+    [InlineData("bash", "echo \\ #$(rm x)", new[] { "echo", "rm" })]
+    // a segment of only assignments can set PATH/LD_* for a later command, so it asks:
+    [InlineData("bash", "x=$(rm y)", new[] { CommandPrefix.Unreadable, "rm" })]
+    // a method call on a $ value runs code, unlike a property read:
+    [InlineData("powershell", "Write-Output $($x.Delete())", new[] { "write-output", CommandPrefix.Unreadable })]
+    // expansions that evaluate a variable's content as code ask:
+    [InlineData("bash", "echo ${x@P}", new[] { "echo", CommandPrefix.Unreadable })]
+    [InlineData("zsh", "echo ${(e)x}", new[] { "echo", CommandPrefix.Unreadable })]
     public void CommandPrefix_All_ReadsTheCommandsSubstitutionsRun(string shell, string command, string[] prefixes)
     {
         Assert.True(ShellKinds.TryParse(shell, out var kind));

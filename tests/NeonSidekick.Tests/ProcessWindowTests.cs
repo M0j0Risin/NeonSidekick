@@ -314,11 +314,13 @@ public sealed class ProcessWindowTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task StopByUser_AChildGoneWhileItsOutputDrains_IsNotStopped_NorNotified()
+    public async Task StopByUser_AChildGoneWhileItsLeftoverHoldsThePipe_StopsTheLeftoverThroughTheJob()
     {
-        // cmd exits at once while the ping it started holds the output pipe open: the session is not HasExited until the ping ends,
-        // but there is nothing left to kill. The stop must say so and leave Notify alone (2026-10-05, the code review).
-        var session = Start("start /b ping -n 4 127.0.0.1 & exit /b 3");
+        // cmd exits at once while the ping it started holds the output pipe open: the session is not HasExited until the ping ends.
+        // The ping is in the command's job (2026-10-12), so the stop reaches it through the job even with the shell gone — until
+        // 2026-10-19 the Windows side skipped a child that had exited and the leftover could not be stopped until the session closed
+        // (the code review; 709bd39a had fixed only the Mac's GroupChild).
+        var session = Start("start /b ping -n 20 127.0.0.1 & exit /b 3");
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!ParentGone(session.Pid) && DateTime.UtcNow < deadline)
         {
@@ -326,15 +328,17 @@ public sealed class ProcessWindowTests : IDisposable
         }
 
         Assert.True(ParentGone(session.Pid));
-        Assert.False(session.HasExited);                // the ping still drains into the pipe
-        Assert.False(_registry.StopByUser(session));
-        Assert.False(session.Notify);
+        Assert.False(session.HasExited);                // the ping still holds the pipe
+        Assert.True(_registry.StopByUser(session));     // the job kill reaches the leftover
+        Assert.True(session.Notify);
 
         await Exit(session);
-        Assert.False(session.StoppedByUser);
-        Assert.Equal(3, session.ExitCode);
-        Assert.False(_registry.TryTakeAlert(out _));
-        Assert.Empty(_registry.TakeNotes());
+        Assert.True(session.StoppedByUser);
+        Assert.True(_registry.TryTakeAlert(out var alert));
+        Assert.True(alert.ByUser);
+        Assert.Equal([session.Id], _registry.TakeNotes());
+        Assert.Equal(1, _signals);
+        Assert.False(_registry.StopByUser(session));    // stopped already
 
         static bool ParentGone(int pid)
         {

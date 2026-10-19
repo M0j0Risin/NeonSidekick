@@ -155,8 +155,12 @@ public sealed class ShellRunner
                     if (carriage)
                     {
                         carriage = false;
-                        if (c != '\n')
+                        if (c != '\n' && c != '\r')
                         {
+                            // A second \r keeps the carriage pending and leaves the line: Python on Windows writes \r\n
+                            // to a text-mode stdout as \r\r\n (the csv module does by default), and clearing here on the
+                            // second \r lost every such line's text (the code review, 2026-10-19). A real redraw (\r then
+                            // text) still clears, as a terminal overwrites the line.
                             line.Clear();
                         }
                     }
