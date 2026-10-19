@@ -51,4 +51,6 @@ printf "dn: CN=Frank Ode,OU=Sales,OU=Neon,$B\nchangetype: modify\nreplace: manag
 
 `frank`'s account ends 10 days after seeding, so `account_expiring` finds him only within that time; run `samba-tool user setexpiry frank --days=10` again after.
 
-Then a `krb5.conf` holding `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`, named by `KRB5_CONFIG` in the shell that runs the tests or the app, and `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=localhost;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).
+Then, in the shell that runs the tests or the app:
+* `KRB5_CONFIG` names a `krb5.conf` holding `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`.
+* `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=localhost;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).

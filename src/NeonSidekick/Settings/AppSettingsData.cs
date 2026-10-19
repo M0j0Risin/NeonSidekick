@@ -2473,12 +2473,12 @@ public sealed class AppSettingsData
 
     // ─── Event logs ─────────────────────────────────────────────────────────────
     // The event-log tools and /eventlog (2026-10-15, the event-log plan: what Windows itself recorded, read in-process over
-    // wevtapi.dll — no process-start site, no shipped DLL, no new package; Windows only).
+    // wevtapi.dll — no process-start site, no shipped DLL, no new package; Windows only, and a Mac's own logs since 2026-10-18, mac-pass2).
 
     /// <summary>
     /// Whether a turn offers the event-log tools (2026-10-15): <c>eventlog_logs</c>, <c>eventlog_search</c>, <c>eventlog_summary</c> and
     /// <c>eventlog_event</c>, read-only, over the computers ticked in <see cref="EventLogComputersOffered"/> and the working directory's
-    /// <c>.evtx</c> files. Windows only. Read at each turn. Off by default, as every tool group. No variable. <c>/eventlog</c> works either way.
+    /// <c>.evtx</c> files. Windows only (a Mac's own logs since 2026-10-18, mac-pass2: no <c>.evtx</c>, no remote computer). Read at each turn. Off by default, as every tool group. No variable. <c>/eventlog</c> works either way.
     /// </summary>
     public bool EventLogTools { get; set; }
 
@@ -2584,12 +2584,13 @@ public sealed class AppSettingsData
     public List<string>? TaskComputersOffered { get; set; }
 
     // ─── Active Directory ───────────────────────────────────────────────────────
-    // The directory tools and /ad (2026-10-15, the admin-tools plan: on-premises Active Directory over wldap32, read-only by construction; Windows only).
+    // The directory tools and /ad (2026-10-15, the admin-tools plan: on-premises Active Directory over wldap32, read-only by construction; Windows only,
+    // and a Mac's since 2026-10-18, mac-pass2, over Kerberos).
 
     /// <summary>
     /// Whether a turn offers the directory tools (2026-10-15): <c>ad_user</c>, <c>ad_group</c>, <c>ad_computer</c>, <c>ad_find</c>, <c>ad_ou</c> (the AD gaps
     /// plan, the same day) and <c>ad_domain</c>. The directory is never written; a list's <c>to</c> writes a CSV in the working directory, only with
-    /// <see cref="FileTools"/> on and never in plan mode. Windows only. Off by default. No variable.
+    /// <see cref="FileTools"/> on and never in plan mode. Windows only (a Mac's too since 2026-10-18, mac-pass2: Kerberos, no <c>current</c>). Off by default. No variable.
     /// </summary>
     public bool DirectoryTools { get; set; }
 

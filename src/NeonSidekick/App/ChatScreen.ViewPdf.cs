@@ -10,8 +10,9 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/view report.pdf</c>: the PDF shown in the Browser window's own PDF viewer — a copy staged on the window's virtual host
     /// (<see cref="PdfView.Stage"/>), the window opened through the one open every caller uses (<see cref="OpenInBrowser"/>, no notice of its
-    /// own: its "close it to hand its cookies" line is a site's, gap 59) — and where the window cannot take it (macOS, no WebView2 runtime,
-    /// a bot check waiting in it, the copy refused) the file goes to its own program, as <c>/open</c> sends one (Preview on a Mac). A sandbox
+    /// own: its "close it to hand its cookies" line is a site's, gap 59) — and where the window cannot take it (a Mac before macOS 14 or
+    /// over SSH, no WebView2 runtime, a bot check waiting in it, the copy refused; "macOS" alone until 2026-10-18, mac-pass2 gave a Mac the
+    /// window) the file goes to its own program, as <c>/open</c> sends one (Preview on a Mac). A sandbox
     /// path, as every <c>/view</c>. Everything through the flow sink, so it is safe under a reply. Any thread.
     /// </summary>
     private void OpenPdf(string path)

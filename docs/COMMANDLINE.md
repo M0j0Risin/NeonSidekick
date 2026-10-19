@@ -2,7 +2,9 @@
 
 Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command line. Back to the [README](../README.md).
 
-Options apply to this launch only and are never saved. Both `--option value` and `--option=value` work; use the `=` form for a value that starts with `-`. A flag outranks its environment variable and the saved setting. [HEADLESS.md](HEADLESS.md) shows them in scripted runs, and [ENVIRONMENT.md](ENVIRONMENT.md) lists the variables.
+* **For this launch only:** options are never saved, and a flag outranks its environment variable and the saved setting.
+* **Two spellings:** `--option value` or `--option=value`; use the `=` form for a value that starts with `-`.
+* **See also:** [HEADLESS.md](HEADLESS.md) for scripted runs, and [ENVIRONMENT.md](ENVIRONMENT.md) for the variables.
 
 | Option | What it does |
 |---|---|
@@ -11,9 +13,9 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--model <id>` | Uses this model. |
 | `--cwd <path>` | Uses this working directory; a relative path starts from where you launch. |
 | `--profile <name>` | Opens this profile for this launch; a launch without it opens `neon`. An unknown name lists the profiles and exits with code 2. |
-| `--yolo` | Runs every shell command and script without asking. The path police still applies unless you also pass `--no-police`. |
+| `--yolo` | Runs every shell command and script without asking. The shell police still applies unless you also pass `--no-police`. |
 | `--no-police` | Turns off the shell police: commands may name paths outside the working directory, and the forbidden strings and database checks stop. |
-| `--log <path>` | Appends every diagnostic line to a file, making its folder if needed. `{ts}` in the path becomes the start time, so each run gets its own log (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). `/log file` opens it. |
+| `--log <path>` | Appends every diagnostic line to a file, making its folder if needed; `/log file` opens it. `{ts}` in the path becomes the start time (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). |
 | `--headless` | A plain text prompt over stdin/stdout, no TUI; it loads the profile `neon` unless `--profile` or `NEONSIDEKICK_PROFILE` names another. See [HEADLESS.md](HEADLESS.md). |
 | `--smoke` | Checks that the native parts load, then exits. |
 | `--audio-check` | Plays a 440 Hz test tone through the speech output, then exits. |
@@ -24,11 +26,11 @@ Options apply to this launch only and are never saved. Both `--option value` and
 | `--sqlite-check <database>` | The same for a database in `sqlite.json`, or a SQLite file in the working directory. |
 | `--postgres-check <connection>` | The same for a connection in `postgres.json`. |
 | `--unc-check <share>` | The same for a share in `unc.json`. On a Mac it mounts the network share and unmounts it on exit. |
-| `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: its session and sign-in, its newest System event, and whether its Security log is readable. On a Mac only `local`: the unified log's store, a read, every filter, stderr kept quiet, both crash folders, the newest report, install.log, and a missing archive's refusal. |
+| `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: the sign-in, the newest System event, and whether the Security log is readable. On a Mac only `local`: the unified log, the crash reports and install.log. |
 | `--network-check <host>` | Tests the network tools against a host: a DNS lookup, a ping, port 443 and a TLS handshake, and opens a certificate store. Reads only. |
-| `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed under its account, and one read in full. Changes nothing. Windows only. |
+| `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed and one read in full. Changes nothing. Windows only. |
 | `--tasks-check <computer>` | The same for a computer in `tasks.json`, or `local`: the Task Scheduler connected, the tasks listed and one read. Windows only. |
-| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's root object and policy, and one user read. On a Mac the bind line also says how it connected (`389, Kerberos as ldap/<dc>, sealed`), and there is no `current`. |
+| `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's root object and policy, and one user read. On a Mac the bind line says how it connected, and there's no `current`. |
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac it needs macOS 14 or later and the terminal app's Camera permission. |
 | `--version` | Prints the version and exits. |

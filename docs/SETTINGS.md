@@ -1,13 +1,18 @@
 # Settings & menus
 
-Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, with what it does and its default, and what `/sys` shows. How to move around the panes, the keys, the bars and the app's windows are in [Using the app](INTERFACE.md); the basics are in the [README](../README.md#settings--menus).
+Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, with what it does and its default, and what `/sys` shows. Moving around the panes, the keys, the bars and the windows are in [Using the app](INTERFACE.md); the basics are in the [README](../README.md#settings--menus).
 
-Inside the app, the highlighted row of any pane explains itself, and the model's `neon_help` tool answers questions about any setting. Settings an environment variable or flag can override for one launch are listed in [Environment variables](ENVIRONMENT.md). Paths here use Windows' `\`; on a Mac read `/`.
+* In the app, the highlighted row of any pane explains itself, and the model's `neon_help` tool answers questions about any setting.
+* Settings a variable or flag can override for one launch are listed in [Environment variables](ENVIRONMENT.md).
+* Paths here use Windows' `\`; on a Mac read `/`.
 
 ## Contents
 
 - [Panes](#panes)
-- [App settings (`/settings`)](#app-settings-settings): [Client](#client) ([Chat](#chat), [Sessions](#sessions), [Botchat](#botchat), [Web UI](#web-ui)) · [Servers](#servers) ([Common](#common), [Http](#http), [Embedded](#embedded), [Docker](#docker), [Anthropic](#anthropic), [OpenAI](#openai)) · [Advisors](#advisors) · [Voice](#voice) ([TTS](#tts), [STT](#stt))
+- [App settings (`/settings`)](#app-settings-settings):
+  - [Client](#client): [Chat](#chat), [Sessions](#sessions), [Botchat](#botchat), [Web UI](#web-ui)
+  - [Servers](#servers): [Common](#common), [Http](#http), [Embedded](#embedded), [Docker](#docker), [Anthropic](#anthropic), [OpenAI](#openai)
+  - [Advisors](#advisors) · [Voice](#voice): [TTS](#tts), [STT](#stt)
 - [Skills settings (`/skills`)](#skills-settings-skills): Offered, Reflection, Options, and managing skills
 - [Tools settings (`/tools`)](#tools-settings-tools): Offered · [Core](#core) · [Files](#files) · [Apps](#apps) · [Admin](#admin) · [Databases](#databases) · [Devices](#devices) · [Home](#home)
 - [MCP servers (`/mcp`)](#mcp-servers-mcp)
@@ -34,36 +39,36 @@ The app itself, this side of the connection.
 |---|---|---|
 | Profile | Switches to another profile for this run, each with its own settings, persona, memory, skills and sessions. | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets a typed path. | empty (the profile's `files\` folder) |
-| Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: it recalls only (your `/remember` still saves). `off`: no memory, and `/remember` is refused. | `read-write` |
-| Model avatar | The profile's emoji, at the start of its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
-| User avatar | Your emoji, at the start of each of your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🧿 |
-| Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when the reply ends. `manual`: every message waits until you press `➤ send` (`s`) on `/queue`. `off`: no list. | `automatic` |
-| Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. Under `hold` a message from the Web UI counts as your next message too, and the page's **Resume** sends what was held. | `empty` |
-| Keep message history | Saves the ↑/↓ history (the newest 100 lines, the Web UI's sent lines among them) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
-| Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* before it is sent as text. | on |
+| Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: it only recalls (your `/remember` still saves). `off`: no memory, and `/remember` is refused. | `read-write` |
+| Model avatar | The profile's emoji, leading its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
+| User avatar | Your emoji, leading your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🧿 |
+| Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when the reply ends. `manual`: each waits for `➤ send` (`s`) on `/queue`. `off`: no list. | `automatic` |
+| Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next at once, `empty` drops them all. Under `hold` a Web UI message counts too, and the page's **Resume** sends what was held. | `empty` |
+| Keep message history | Saves the ↑/↓ history (the newest 100 lines, the Web UI's included) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
+| Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* before it goes as text. | on |
 | Show /exit in autocomplete | Lists `/exit` in the `/` list. Typed in full, it works either way. | off |
-| Emoji picker | Shows a dim ☺ at the right end of the input row; a click opens the emoji picker at the cursor. Ctrl+J opens it too, shown or not (not on a Mac). | on |
-| Transcript markdown | Renders replies as Markdown, with code blocks highlighted for common languages. | on |
-| Paste preview lines | How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200). | 25 |
-| Show image thumbnails | Draws a small thumbnail of each picture you send, a tool fetches or makes, or `/botchat` draws. | on |
+| Emoji picker | A dim ☺ at the right end of the input row; a click opens the emoji picker. Ctrl+J opens it too, shown or not (not on a Mac). | on |
+| Transcript markdown | Renders replies as Markdown, code blocks highlighted for common languages. | on |
+| Paste preview lines | Lines of a long paste shown dim under its `[Pasted text #n]` placeholder (0–200). | 25 |
+| Show image thumbnails | A small thumbnail of each picture you send, a tool fetches or makes, or `/botchat` draws. | on |
 | Image thumbnail size | In columns × rows: `tiny` 32×8, `small` 48×12, `medium` 64×16, `large` 80×20, `xlarge` 96×24, or `fullsize`. | `small` |
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
-| User line style | How your sent line looks: `quiet` (plain), `slab` (on a faint fill) or `bold` (bold in the user color). | `bold` |
-| Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder (see [Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
+| User line style | Your sent line: `quiet` (plain), `slab` (on a faint fill) or `bold` (bold in the user color). | `bold` |
+| Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
-| Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `off`. `/splash view` opens the profile's own pictures' folder. See [The welcome splash](INTERFACE.md#the-welcome-splash). | `fullsize` |
-| Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
+| Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `off`. `/splash view` opens the profile's pictures; see [The welcome splash](INTERFACE.md#the-welcome-splash). | `fullsize` |
+| Show header | The banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
-| Hints bar | Whether the keys' hints get a bar of their own over the status bar: `auto` (a row while there is a hint, held until the next send), `always`, or `off` (the hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
-| Status bar | Which sections the status bar shows, their order, and which side each is pinned to. Enter opens the checklist; see [The status bar](INTERFACE.md#the-status-bar) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | Which icons the toolbar shows, their order, and which side each is pinned to. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (14 of 47), with three dividers |
-| Performance bar | Which meters the performance bar shows, and where. Enter (or `/perfbar edit`) opens the checklist, whose **look:** button (`l`) steps the look; `/perfbar text`, `gauge` or `led` picks it too. See [The performance bar](INTERFACE.md#the-performance-bar). | CPU, RAM, GPU, VRAM, `led` |
+| Hints bar | `auto` (a bar of its own over the status bar while there is a hint, held until the next send), `always`, or `off` (the hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
+| Status bar | The status bar's sections, order and sides. Enter opens the checklist; see [The status bar](INTERFACE.md#the-status-bar) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
+| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (14 of 47), with three dividers |
+| Performance bar | The performance bar's meters and their places. Enter (or `/perfbar edit`) opens the checklist; **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look. See [The performance bar](INTERFACE.md#the-performance-bar). | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on a row of their own. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar). | off |
 | Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. | empty (the system's editor for `.txt` files) |
-| Image viewer | Where a double-clicked picture opens: empty for the built-in [picture viewer](INTERFACE.md#the-picture-viewer), `system` for the system's app, or a command the path is added to (`mspaint`). | empty (the picture viewer) |
+| Image viewer | Where a double-clicked picture opens: empty for the built-in [picture viewer](INTERFACE.md#the-picture-viewer), `system` for the system's app, or a command given the path (`mspaint`). | empty (the picture viewer) |
 
 #### Sessions
 
@@ -71,9 +76,9 @@ The app itself, this side of the connection.
 |---|---|---|
 | Session logging | Saves every turn to the profile's `sessions.db`, for `/sessions` to list, search and restore. | on |
 | Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
-| Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 keeps them forever). | 0 |
+| Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 keeps them forever). | 0 (forever) |
 | Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
-| Session show name | Which titles show on the line above the input row: `all`, `model-written` (a name the model wrote or you typed) or `none`. | `all` |
+| Session show name | Which titles show above the input row: `all`, `model-written` (a name the model wrote or you typed) or `none`. | `all` |
 | Session tool | Offers the model `session_manager`, to search, list and read earlier sessions (never to restore or purge them). | on |
 | Session search max results | Sessions one search or list returns (1–20). | 10 |
 
@@ -83,21 +88,21 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 | Setting | What it does | Default |
 |---|---|---|
-| Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's server, model and reasoning (a blank URL borrows this profile's server). | `single` |
-| Botchat embedded mode | Under `multi`, for bots that want another embedded model. `parent-server`: they share the running model. `multi-server`: one extra `llama-server` per model (more memory). | `parent-server` |
+| Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's (a blank URL borrows this profile's server). | `single` |
+| Botchat embedded mode | Under `multi`, for bots on another embedded model: `parent-server` shares the running model; `multi-server` runs one more `llama-server` per model (more memory). | `parent-server` |
 | Botchat stop extra servers | Stops the bots' `multi-server` extras when the chat ends (never an advisor's). Off, they run until `/botchat --kill` or you quit. | on |
 | Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
 | Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get (a checklist). None ticked: no pictures. | none |
 | Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See [Botchat pictures](#botchat-pictures). | `automatic` |
-| Botchat rework source | Which pictures a rework may start from: the `latest`, or any in `chat-history` (the last 8). Needs an image → image workflow. | `latest` |
+| Botchat rework source | Which pictures a rework may start from: the `latest`, or any of the last 8 (`chat-history`). Needs an image → image workflow. | `latest` |
 | Botchat image mention mode | Shown as *Image mention mode*. Under `autonomous`: `generate` draws a picture a bot mentions but never drew; `off` ignores it. | `off` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture. | on |
-| Botchat reading pause (s) | A pause after each reply when *TTS output* is off, to read it (0–30). A line you send ends it. | 5 |
+| Botchat reading pause (s) | A pause after each reply to read it, when *TTS output* is off (0–30). A line you send ends it. | 5 |
 | Botchat tools enabled | Offers every bot the tools a turn of this chat would get, with the same approvals. Off, *Botchat limited tools* decides. | off |
 | Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get (a checklist grouped as on `/tools`). None ticked: no tools. | none |
-| Botchat skills enabled | Offers every bot `load_skill` over the skills this chat sees. Needs *Agent skills*. Off, *Botchat limited skills* decides. | off |
+| Botchat skills enabled | Offers every bot `load_skill` over this chat's skills. Needs *Agent skills*. Off, *Botchat limited skills* decides. | off |
 | Botchat limited skills | With *Botchat skills enabled* off, the skills the bots may load (a checklist). None ticked: no skill tool. | none |
-| Botchat memory enabled | Gives every bot memories (`save_memory`, `recall_memory`). Inside `/botchat` this overrides every profile's *Memory mode*. | on |
+| Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`. Inside `/botchat` this overrides every profile's *Memory mode*. | on |
 | Botchat memory mode | Whose memories: `shared-parent` (the starting profile's) or `independent` (each bot's own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot the newest 4 pictures since it last spoke. Needs models that read images. | off |
 | Botchat camera | Each bot turn gets a fresh camera picture of you, kept in memory only. Needs models that read images. | off |
@@ -105,30 +110,29 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 ##### Botchat pictures
 
-* **Workflows:** the bots use this profile's offered workflows (*Botchat ComfyUI enabled*) or the ticked ones (*Botchat ComfyUI limited workflows*). Text → image workflows draw new pictures; image → image ones rework the chat's pictures.
-* **`automatic`:** after each reply the model writes an image prompt and the app draws it. The bots get no tool. With skills on, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
-* **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call a bot writes out as text still runs, and if a call fails, the app draws the picture itself.
+* **Workflows:** this profile's offered ones (*Botchat ComfyUI enabled*) or the ticked ones (*Botchat ComfyUI limited workflows*). Text → image workflows draw new pictures; image → image ones rework the chat's pictures.
+* **`automatic`:** after each reply the model writes an image prompt and the app draws it; the bots get no tool. With skills on, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
+* **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call written out as text still runs, and if a call fails, the app draws the picture itself.
 * **Reworks:** once there's a picture and an image → image workflow, the prompt writer chooses between a new picture and a rework.
-* **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders.
-* **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips the picture.
+* **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders. **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips the picture.
 
 #### Web UI
 
-A browser front end for this profile: the chat and the questions it asks you, the Home Assistant controls and the shopping list, from a phone on the home network. Each tab shows only while its controls are on, the YouTube tab too (while *Web UI YouTube controls* is on). See [the Web UI](INTERFACE.md#web-ui).
+A browser front end for this profile, for a phone on the home network: the chat and its questions, Home Assistant, the shopping list and YouTube. Each tab shows only while its *… controls* setting is on; see [the Web UI](INTERFACE.md#web-ui).
 
 | Setting | What it does | Default |
 |---|---|---|
-| Web UI | Serves the pages for this profile. `/webui` shows the sign-in link. After a profile switch, the server follows the new profile's settings. Refused while a reply runs. | off |
-| Web UI port | The TCP port it listens on (1024–65535). A port in use, or one Windows reserves, keeps it off with a notice. Changing it signs browsers out. | 8765 |
-| Web UI reach | `local` (localhost only) or `lan` (your home network and your tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
-| Web UI commands | The Chat tab only. Lets the page run slash commands: the ones that work from a phone run, `/model`, `/reasoning` and `/rewind` show as cards, the lists show on the page, and its dropdown completes commands. See [Commands from the page](INTERFACE.md#commands-from-the-page). Off, the page can only send messages. | off |
-| Web UI connection details | The Chat tab only. Shows the `%` and `*` connections' notes (their server and database) in the page's dropdown. Off, it shows only their names. This affects only the dropdown; the chat shows whatever the model says. | off |
-| Web UI bot check control | The Chat tab only. While a bot check runs in the Browser window, its card on the page shows the window live, and your taps, holds, scrolls and typing go into it, so a check can be passed from the phone. See [A bot check from the page](INTERFACE.md#a-bot-check-from-the-page). Off, the card answers the allow question and *Give up* only. | on |
+| Web UI | Serves the pages for this profile; `/webui` shows the sign-in link. A profile switch follows the new profile's settings. Refused while a reply runs. | off |
+| Web UI port | The TCP port it listens on (1024–65535). A port in use or reserved by Windows keeps it off with a notice. A change signs browsers out. | 8765 |
+| Web UI reach | `local` (localhost only) or `lan` (your home network and your Tailscale tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
+| Web UI commands | The Chat tab only: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, the page only sends messages. | off |
+| Web UI connection details | The Chat tab only: the page's dropdown shows the `%` and `*` connections' server and database, not just their names. The chat shows whatever the model says either way. | off |
+| Web UI bot check control | The Chat tab only: the page shows a running bot check live, and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off, the page only answers the allow question and *Give up*. | on |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once. Off, they keep their own look. | on |
-| Web UI chat controls | Shows the Chat tab: the transcript, the message line, and the app's questions, answered from the phone. Off, there is no Chat tab: the page opens on Home, else Shopping, else YouTube, or says none is on. The app on the PC is unchanged. | on |
-| Web UI home controls | Shows the Home tab and lets it act: tiles toggle, sheets run a device's actions, the rooms' switches and rows act, scenes run, *Ask the house* asks Assist, the video remote plays and pauses. Unlocking, opening a garage, gate or door, and disarming still ask on the page. Off, there is no Home tab. `/ha` from the chat follows *Web UI commands*. | off |
-| Web UI shopping controls | Shows the Shopping tab: the list, where you can add, tick, change and remove lines and change the store from the phone. Off (the default), there is no Shopping tab; `/shopping` at the PC is unchanged. | off |
-| Web UI YouTube controls | Shows the YouTube tab: it plays videos and keeps the saved list (play, resume, move, remove, save the playing one). A video started on the tab plays there, whatever *YouTube open links in* says. Off, there is no YouTube tab, and *YouTube open links in* `webui-window` plays in the PC's video window. There is no tab where the app has no video window (before macOS 14). | off |
+| Web UI chat controls | Shows the Chat tab: the transcript, the message line and the app's questions. Off, the page opens on another tab ([the tabs](INTERFACE.md#web-ui)); the PC is unchanged. | on |
+| Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask on the page; `/ha` from the chat follows *Web UI commands*. | off |
+| Web UI shopping controls | Shows the Shopping tab: add, tick, change and remove lines and change the store from the phone. `/shopping` at the PC is unchanged. | off |
+| Web UI YouTube controls | Shows the [YouTube tab](INTERFACE.md#the-youtube-tab): it plays videos and keeps the saved list; a video started there plays there. Off, *YouTube open links in* `webui-window` plays in the PC's video window. | off |
 
 ### Servers
 
@@ -144,36 +148,36 @@ Settings every server reads, whatever its kind.
 | LLM model | The model id. Empty takes the first the server lists; `/model` picks one. | empty (first listed) |
 | LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh`. `/reasoning` opens the same list. | `none` |
 | LLM show thinking | Streams a reasoning model's thinking as a dim block, folded to one line when the answer starts (click it, Ctrl+O or `/expand`). Thinking is never spoken or logged. | on |
-| LLM offer tools | Whether the model gets any tools. Turn it off for chat templates with no tool role. A change starts a new conversation. | on |
+| LLM offer tools | Whether the model gets any tools; turn it off for chat templates with no tool role. A change starts a new conversation. | on |
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs before the plan comes back with gaps left (0–50; 0 is no cap, or 50 in a headless run). Esc stops it. A count on `/plan gaps` overrides it for that run. | 5 |
-| LLM plan gap clean passes | How many passes in a row must find no gaps before plan mode's **Close gaps…** review ends (1–5; 1 ends on the first pass with none). A pass limit below it lowers it to the limit for that review; `/plan gaps confirm` needs at least 2. | 2 |
-| LLM plan gap ask user | Whether a gap pass may stop to ask you (`ask_user`), take a photo (`camera_capture`) or capture the screen (`screen_capture`). Off, a pass is offered none of the three, whatever *Ask user* and the camera and screen settings say, and a decision only you can make goes into the plan's `## Risks` as an open question. Read every turn, so it applies from the next pass. | on |
-| LLM Ralph loop reviewer | Who looks at a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request, no conversation), `advisor` (the first advisor, its thread left alone) or `any` (an advisor when one is offered, else the model). A fail unticks the step. | `any` |
+| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs (0–50; 0 is no cap, or 50 headless). Esc stops it; a count on `/plan gaps` overrides it for that run. | 5 |
+| LLM plan gap clean passes | Passes in a row with no gaps that end the review (1–5). A lower pass limit lowers it for that review; `/plan gaps confirm` needs at least 2. | 2 |
+| LLM plan gap ask user | Whether a gap pass may use `ask_user`, `camera_capture` and `screen_capture`. Off, it gets none whatever their own settings say, and a decision only you can make goes into `## Risks` as an open question. | on |
+| LLM Ralph loop reviewer | Who reviews a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request), `advisor` (the first advisor, its thread untouched) or `any` (an advisor if offered, else the model). A fail unticks the step. | `any` |
 | LLM Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you. | 0 (off) |
-| LLM Ralph loop passes | The most passes a loop runs (0–200; 0 is three a step, and one more for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
+| LLM Ralph loop passes | The most passes a loop runs (0–200; 0 is three a step, plus one for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
 | LLM Ralph loop passes per step | The most passes one step may take before the loop stops (1–20). | 4 |
 | LLM Ralph loop check timeout | How long a check command may run before it's stopped and the step unticked (30–3600 seconds). | 600 |
-| LLM Ralph loop token budget | The tokens a loop may spend, its passes and reviews together (0 is no budget). | 0 (none) |
+| LLM Ralph loop token budget | The tokens a loop may spend, passes and reviews together (0 is no budget). | 0 (none) |
 | LLM Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…), never on Esc: silent, chime, bell, beep or alarm. | chime |
-| LLM code audit passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane comes back (0–50; 0 is no cap, or 50 in a headless run). Esc stops it. A count on `/code-audit` overrides it for that run. | 5 |
-| LLM code audit clean passes | How many passes in a row must find nothing new before a code audit ends (1–5). A pass after a clean one looks first at the files no pass has read; `/code-audit confirm` needs at least 2. | 2 |
-| LLM code audit ask user | Whether an audit's pass may stop to ask you, take a photo or capture the screen. Off, a pass is offered none of the three and puts a question only you can answer in the report's Open questions. Read every turn. | on |
-| LLM code audit focus | The dimensions a `/code-audit` with none named covers: security, correctness, performance, maintainability and tests. At least one stays ticked. | all |
-| LLM code audit web research | Whether an audit's passes get `web_search`, `web_fetch` and `web_links`. Off by default: audited code may carry instructions that would send code out; off, an advisor asked in a pass gets none either. | off |
-| LLM code audit pass tool calls | The tool calls an audit's pass is asked to report within (0–500; 0 is no budget). Guidance, never a cut-off: what a pass leaves, the next one reads. A lower *LLM max tool iterations* is named instead. | 40 |
+| LLM code audit passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane (0–50; 0 is no cap, or 50 headless). Esc stops it; a count on `/code-audit` overrides it for that run. | 5 |
+| LLM code audit clean passes | Passes in a row that find nothing new before an audit ends (1–5). A pass after a clean one reads the files no pass has read first; `/code-audit confirm` needs at least 2. | 2 |
+| LLM code audit ask user | Whether an audit's pass may ask you, take a photo or capture the screen. Off, it gets none of the three and puts a question only you can answer in the report's Open questions. | on |
+| LLM code audit focus | What a `/code-audit` with none named covers: security, correctness, performance, maintainability and tests. At least one stays ticked. | all |
+| LLM code audit web research | Gives an audit's passes `web_search`, `web_fetch` and `web_links`. Off by default, since audited code may carry instructions that would send code out; off, an advisor asked in a pass gets none either. | off |
+| LLM code audit pass tool calls | The tool calls a pass is asked to report within (0–500; 0 is no budget). Guidance, not a cut-off: the next pass reads what one leaves. A lower *LLM max tool iterations* is named instead. | 40 |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
-| LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's figures). | `last-known` |
+| LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |
-| LLM auto compact (%) | How full the context may get before the next message compacts it first (1–100; 0 is off). This check and the one during a reply leave room for the next reply: the largest so far, or the plan file's size while a plan is written, at most a quarter of the window. | 90 |
-| LLM compact mode | What `/compact` does: `summary` folds older turns into a summary the model writes; `prune` swaps their bulky tool results and long call arguments (a written file's text, a skill's body) for stubs. Either mode first stubs a plan's earlier revisions and the reads of its file; the latest presentation stays whole. | `summary` |
+| LLM auto compact (%) | How full the context may get before the next message compacts it first (1–100; 0 is off). This and the check during a reply leave room for a reply as large as the largest so far (or the plan file), at most a quarter of the window. | 90 |
+| LLM compact mode | What `/compact` does: `summary` folds older turns into a summary the model writes; `prune` swaps bulky tool results and long call arguments for stubs. Either first stubs a plan's earlier revisions and reads of its file. | `summary` |
 | LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows the summary (or the pruned results) and how many messages were kept. | off |
-| LLM tool compact mode | What happens when one turn's tool calls fill the context to the auto-compact share: `compact` (prune, then summarize), `prune` (the turn's earlier results and long call arguments, and a plan's earlier revisions and their reads; never the last step's call), `stop` the turn, or `off` (no check). | `compact` |
-| LLM max images | The most pictures one request carries, an attached PDF counting as one (0–500; 0 is no cap). Past it the oldest leave the conversation, and `view_image` can show one again; a PDF that drops out keeps its text in the conversation. | 20 |
-| LLM max images (MB) | The most megabytes of pictures and attached PDFs one request carries (0–1000; 0 is no cap), and what one message may attach. Past it the oldest leave. | 24 |
+| LLM tool compact mode | When one turn's tool calls fill the context to the auto-compact share: `compact` (prune, then summarize), `prune` (earlier results, long arguments and old plan revisions; never the last step's call), `stop` the turn, or `off`. | `compact` |
+| LLM max images | The most pictures one request carries, an attached PDF counting as one (0–500; 0 is no cap). Past it the oldest leave (`view_image` can show one again); a PDF that leaves keeps its text. | 20 |
+| LLM max images (MB) | The most megabytes of pictures and attached PDFs one request carries, and one message may attach (0–1000; 0 is no cap). Past it the oldest leave. | 24 |
 | LLM fun verbs | The thinking spinner shows a random verb in place of `thinking` / `writing`. | off |
 
 #### Http
@@ -183,7 +187,7 @@ Settings only an OpenAI-compatible HTTP server reads: a local or LAN server (LM 
 | Setting | What it does | Default |
 |---|---|---|
 | LLM server scan mode | Where to look for a server while *LLM URL* is blank: `local` (the usual ports here), `lan` (the same ports across the LAN), `both`, or `off`. | `off` |
-| LLM API key | The bearer token the server expects (`empty` for none), saved encrypted for your Windows account, or on a Mac under a key kept in the Keychain. | `empty` |
+| LLM API key | The bearer token the server expects (`empty` for none), saved encrypted for your Windows account (on a Mac, under a key kept in the Keychain). | `empty` |
 | LLM preserve thinking | Sends earlier turns' thinking back to a local server and asks the chat template to keep it. It costs context. | off |
 | LLM reasoning estimate | How `/usage` counts thinking a server streams but doesn't count: `chars` (characters ÷ 4), `tokenize` (llama.cpp's exact count) or `off`. | `chars` |
 | LLM sampling | Sampling overrides per model; Enter opens the `/sampling` pane. See [Sampling per model](#sampling-per-model). | empty (the server's defaults) |
@@ -193,8 +197,8 @@ Settings only an OpenAI-compatible HTTP server reads: a local or LAN server (LM 
 
 Until you set something, sampling is left to the server and the model's defaults.
 
-* `/sampling` (or the *LLM sampling* row) has one tab per model: the connected model, then **any model (`*`)**, then every other model you have set something for.
-* Each field comes from the model's tab, else from `*`, else isn't sent. Changes apply at the next turn. A blank value clears a field; an out-of-range one is refused.
+* `/sampling` (or the *LLM sampling* row) has a tab per model: the connected one, then **any model (`*`)**, then each other model you have set something for.
+* Each field comes from the model's tab, else from `*`, else isn't sent. Changes apply at the next turn; a blank value clears a field, an out-of-range one is refused.
 
 | Field | Accepts | Sent as | Servers that honor it |
 |---|---|---|---|
@@ -216,13 +220,16 @@ Until you set something, sampling is left to the server and the model's defaults
 
 A model the app downloads and runs itself on llama.cpp's `llama-server`, for when no other server is around. It runs on Windows x64 and on Apple Silicon Macs.
 
-* **Install:** pick *Install* on **Embedded models**. It downloads in the background (📥 on the status bar; a double-click pauses it), then switches to the model. With no URL, no scan and nothing installed, the app opens straight to this list.
-* **Use:** `/server` and the startup picker list one **Embedded** row per installed model; `/model` picks between them.
+* **Install:** *Install* on **Embedded models** downloads it in the background (📥 on the status bar; a double-click pauses it), then switches to it. With no URL, no scan and nothing installed, the app opens straight to this list.
+* **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
 * **Loading:** the status bar shows `🦙 loading <model>`; Ctrl+C or a double-click on the spinner cancels.
-* **Each row** shows the size, the state (`installed`, `download`, `partial · 42%`) and the quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls, and ⛓️‍💥 an uncensored build.
-* **The title row's buttons** combine: **size** (`s`: any, up to 8GB, up to 16GB), **show** (`i`: all, installed, uninstalled), **drafter** (`d`), **sort** (`o`: name or size) and **uncensored** (`x`: only the uncensored builds, hidden otherwise).
+* **Each row** shows the size, the state (`installed`, `download`, `partial · 42%`) and the quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls and ⛓️‍💥 an uncensored build.
+* **The buttons** filter by size (any, up to 8 GB, up to 16 GB), installed or not and drafter, and sort by name or size; the uncensored builds show only under **uncensored** (`x`). Keys: [Pane keys](INTERFACE.md#pane-keys).
 
-The catalog, one row per model; the pane lists each build with its own size. An id's suffix names the quantization: none is UD-Q4_K_XL, `-q5`, `-q6` and `-q8` are UD-Q5_K_XL, UD-Q6_K_XL and UD-Q8_K_XL, `-bf16` is BF16, and `-qat` is a QAT build at UD-Q4_K_XL (all Unsloth's). The uncensored builds are HauhauCS's.
+The catalog, one row per model; the pane lists each build with its own size.
+
+* **An id's suffix** names the quantization: none is UD-Q4_K_XL; `-q5`, `-q6` and `-q8` are UD-Q5_K_XL, UD-Q6_K_XL and UD-Q8_K_XL; `-bf16` is BF16; `-qat` is a QAT build at UD-Q4_K_XL.
+* **Builds:** the quantized ones are Unsloth's, the uncensored ones HauhauCS's.
 
 | Model | Ids | Download | Drafter |
 |---|---|---|---|
@@ -249,7 +256,7 @@ The catalog, one row per model; the pane lists each build with its own size. An 
 | Setting | What it does | Default |
 |---|---|---|
 | Embedded servers enabled | Offers the embedded models. Off, `/server` lists none and a running embedded server stops; installed models stay on disk. | on |
-| Embedded models | The catalog. Enter on an installed model offers *Use now* and *Remove*; on any other, *Install*. *Remove* asks first, then deletes the model's folder. | — |
+| Embedded models | The catalog. Enter on an installed model offers *Use now* and *Remove* (which asks, then deletes its folder); on any other, *Install*. | — |
 | Embedded download mode | `parallel` fetches each file over 8 connections (about twice as fast); `single` uses one. | `parallel` |
 | Embedded backend | The llama.cpp build: `auto` (CUDA with NVIDIA driver 580 or newer, else Vulkan, else CPU), `cuda`, `vulkan` or `cpu`. On a Mac, `auto` and `metal` both pick Metal. | `auto` |
 | Embedded context length | The context window in tokens. 0 (**fit**) is the largest that fits on the GPU within *Embedded VRAM budget (%)*; otherwise 512–262,144. | 0 (fit) |
@@ -260,13 +267,13 @@ The catalog, one row per model; the pane lists each build with its own size. An 
 | Embedded drafter | Speeds up replies by drafting tokens ahead and checking them; the text is the same. Turn it off if a model misbehaves with it. | on |
 
 * **NVFP4 builds** need the CUDA backend on an NVIDIA Blackwell GPU (RTX 50 series or newer). A Mac's catalog leaves them out.
-* **Downloads** are checked against Hugging Face's SHA-256. A stopped download resumes when you pick the model again.
+* **Downloads** are checked against Hugging Face's SHA-256; a stopped one resumes when you pick the model again.
 * **llama.cpp** downloads on first start (577 MB for CUDA, 33 MB for Vulkan, 19 MB for CPU, 12 MB for Metal). If CUDA won't start under `auto`, the app tries Vulkan.
 * **The server** listens on `127.0.0.1` only, with a fresh key, and stops when you pick another server or quit. One runs at a time, apart from a `multi-server` botchat's or advisor's extras.
-* **Files:** the weights in `models\llm\<id>\`, shared projectors and drafters in `models\llm\_shared\`, llama.cpp in `llama\`, all under the home folder. `/about` shows them.
+* **Files** (under the home folder): the weights in `models\llm\<id>\`, shared projectors and drafters in `models\llm\_shared\`, llama.cpp in `llama\`. `/about` shows them.
 * **Sampling** follows each model card; `/sampling` overrides it.
-* **Memory:** a model needs roughly its download size in VRAM, plus the context. The 26B A4B and Qwen3.6 35B A3B are mixture-of-experts, so they run faster than their size suggests. The small models (E2B, E4B) call tools less reliably.
-* **Never in system RAM:** in NVIDIA Control Panel › *Manage 3D settings* › *Program Settings*, add `llama-server.exe` (under `llama\`) and set *CUDA - Sysmem Fallback Policy* to *Prefer No Sysmem Fallback*.
+* **Memory:** a model needs roughly its download size in VRAM, plus the context. The 26B A4B and Qwen3.6 35B A3B are mixture-of-experts, so they run faster than their size suggests; the small E2B and E4B call tools less reliably.
+* **Never in system RAM (Windows, NVIDIA):** in NVIDIA Control Panel › *Manage 3D settings* › *Program Settings*, add `llama-server.exe` (under `llama\`) and set *CUDA - Sysmem Fallback Policy* to *Prefer No Sysmem Fallback*.
 
 #### Docker
 
@@ -276,7 +283,7 @@ Your own LLM containers (vLLM, SGLang, anything serving `/v1/models`) as `/serve
 |---|---|---|
 | Docker servers enabled | Offers the chosen containers in `/server`. | off |
 | Docker server containers | A checklist of the LLM servers the engine lists: containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. | empty |
-| Docker server match words | Words, matched in a container's image or command, that mark it as an LLM server. `r` restores the defaults; empty lists every container. | `aphrodite`, `koboldcpp`, `llama-server`, `llama.cpp`, `lmdeploy`, `localai`, `nvcr.io/nim`, `ollama`, `sglang`, `text-generation`, `trtllm`, `vllm` |
+| Docker server match words | Words in a container's image or command that mark it as an LLM server. `r` restores the defaults; empty lists every container. | `aphrodite`, `koboldcpp`, `llama-server`, `llama.cpp`, `lmdeploy`, `localai`, `nvcr.io/nim`, `ollama`, `sglang`, `text-generation`, `trtllm`, `vllm` |
 | Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
 | Docker server post-stop delay (s) | The wait between stopping the others and starting this one, so GPU memory frees up (0–60). | 2 |
 | Docker server ready timeout (s) | How long a started container may take to answer on `/v1/models` (30–3600). | 900 |
@@ -299,14 +306,14 @@ Claude Code (for `/claude` and as a `/server` choice), then the Anthropic API.
 | Anthropic API prompt caching | Uses Anthropic's prompt cache, so each request re-reads the last one's content cheaply. | on |
 
 **The Anthropic API** is the **Anthropic API** row in `/server`, with the account's models.
-* Every message is billed to the key's account. The key goes only to Anthropic.
+* Every message is billed to the key's account; the key goes only to Anthropic.
 * *LLM reasoning* `low` to `xhigh` turns on thinking at that effort; `none` turns it off where the model allows.
 * `/usage` adds *Cache* and *Cost* rows (an estimate at list price).
 
 **Claude Code** is last in `/server` (or `/server claude-code`), with `fable`, `opus`, `sonnet` and `haiku`.
 * One `claude` process runs for the session; `/clear`, `/new` and a profile switch start a new one. Messages count against your Claude Code plan.
-* It runs with its own tools off and gets the app's tools instead, so approvals and `ask_user` apply as for any model.
-* Esc interrupts the reply. Claude Code compacts its own conversation (a 200,000-token context window), so *LLM auto compact* does nothing.
+* Its own tools are off and it gets the app's tools instead, so approvals and `ask_user` apply as for any model.
+* Esc interrupts the reply. Claude Code compacts its own conversation (a 200,000-token window), so *LLM auto compact* does nothing.
 
 #### OpenAI
 
@@ -321,14 +328,16 @@ The OpenAI API as a `/server` choice, over the Responses API (nothing is stored 
 | OpenAI API project | The `OpenAI-Project` header. Empty sends none. | empty |
 
 **The OpenAI API** is the **OpenAI API** row in `/server`, with the account's chat models, newest first.
-* Every message is billed to the key's account. The key goes only to api.openai.com.
+* Every message is billed to the key's account; the key goes only to api.openai.com.
 * *LLM reasoning* is sent as the model's reasoning effort; the thinking shows as OpenAI's summary.
-* *LLM sampling* is not sent. *LLM context length* sets the context window the app counts for the model.
+* *LLM sampling* is not sent. *LLM context length* sets the window the app counts for the model.
 * `/usage` adds *Cache* and *Cost* rows (an estimate at list price).
 
 ### Advisors
 
-Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [Advisors](TOOLS.md#advisors) and [Advisor](COMMANDS.md#advisor)). An advisor answers on its own profile's server, model and persona, may use this chat's read-only tools, and remembers its earlier questions for the session.
+Other profiles this one consults, each in a role you give it: `neon_advisor` for the model, `/advisor` for you (see [Advisors](TOOLS.md#advisors) and [Advisor](COMMANDS.md#advisor)).
+
+An advisor answers on its own profile's server, model and persona, may use this chat's read-only tools, and remembers its earlier questions for the session.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -339,7 +348,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Advisor max tool iterations | Tool round trips an advisor may make before answering (0–10; 0 is text only). | 4 |
 | Advisor confirm | Each call waits for your yes. Headless runs refuse the calls. | off |
 | Advisor thread length | Earlier questions and answers each advisor remembers (1–50). `/new` starts them over. | 10 |
-| Advisor embedded mode | For an advisor on another embedded model than the one running. `parent-server`: it answers on the running model. `multi-server`: an extra `llama-server` for its model. | `parent-server` |
+| Advisor embedded mode | For an advisor on another embedded model than the one running: `parent-server` answers on the running model; `multi-server` runs an extra `llama-server` for its model. | `parent-server` |
 
 * **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server. An embedded advisor needs *Embedded servers enabled*.
 * **On the Claude Code server** each advisor runs in a `claude` process of its own, beside this chat's. It stays until the conversation ends or this chat's server or model changes; the next question resumes it.
@@ -371,7 +380,7 @@ Voice input sets up in the background (🎙️ on the status bar).
 | Setting | What it does | Default |
 |---|---|---|
 | STT input | Turns the microphone on: the push-to-talk key records a message (`/stt`). On a Mac, macOS asks once whether your terminal may use the microphone. | off |
-| STT destination | `chat` sends what you say straight to the model; `draft` puts it on the input line for you to edit. | `chat` |
+| STT destination | `chat` sends what you say straight to the model; `draft` puts it on the input line to edit. | `chat` |
 | STT push-to-talk key | `F1`–`F8`, `Insert`, `Home`, `End`, `PageUp` or `PageDown`. | `F4` |
 | STT Whisper model | `ggml-tiny.en.bin`, `ggml-base.en.bin` or `ggml-small.en.bin` (downloaded on first use). | `ggml-base.en.bin` |
 | STT wake | Saying the wake phrase at the idle line starts listening (`/stt wake`). | off |
@@ -387,13 +396,11 @@ Skills are folders of instructions the model can load (see [Skills](TOOLS.md#ski
 
 ### Offered
 
-The loaded skills with their scope (`profile`, `global` or `external`), version, last change and description, then any shadowed duplicates and skipped folders with the reason. A second row of tabs narrows the list to one scope. Enter on a skill can:
+The loaded skills with their scope (`profile`, `global` or `external`), version, last change and description, then shadowed duplicates and skipped folders with the reason. A second row of tabs narrows the list to one scope. Enter on a skill can:
 
-* move it between the profile and global folders (while *Global skills* is on), move a profile skill to another profile, or rename it;
-* edit its `SKILL.md` in your editor;
-* revert it to a kept version (see [Skill history](#skill-history));
-* lock or unlock it (shown as `🔒 v4`; see [Locking a skill](#locking-a-skill));
-* disable or enable it (shown as `⛔ v4` on a dim row; see [Disabling a skill](#disabling-a-skill));
+* move it between the profile and global folders (while *Global skills* is on) or to another profile, or rename it;
+* edit its `SKILL.md` in your editor, or revert it to a kept version ([Skill history](#skill-history));
+* lock it (`🔒 v4`; [Locking a skill](#locking-a-skill)) or disable it (`⛔ v4` on a dim row; [Disabling a skill](#disabling-a-skill));
 * delete it, after a yes.
 
 ### Reflection
@@ -409,8 +416,8 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Reflection cooldown (min) | How long automatic reflections wait after one wrote a skill (0–1440; 0 is off). | 5 |
 | Reflection cooldown mode | `last-written-skill`: only turns that used the skill just written wait. `all-skills`: every automatic reflection waits. | `last-written-skill` |
 | Reflection yield to turns | A message sent during a reflection pauses it, so the reply gets the server. Turn it off if your server handles parallel requests. | on |
-| Reflection mode | What a reflection may write: `create-update` a new skill or an improvement to one; `update-only` only an improvement to a skill that exists, never a new one. With no skill to update, no reflection runs and `/learn` says so. | `create-update` |
-| Reflection confirm mode | Whether a reflection asks before it writes: `none` never, `all` always, `new` before a new skill, `edit` before an edit. It asks at the idle line: **Keep**, **View** or **Discard**. With the Web UI on, the page asks at once too, with the summary, Keep, Discard and the proposal under View; the first answer wins. | `new` |
+| Reflection mode | `create-update`: a new skill or an improvement to one. `update-only`: only an improvement to a skill that exists; with none to update, no reflection runs and `/learn` says so. | `create-update` |
+| Reflection confirm mode | When a reflection asks before it writes: `none`, `all`, `new` (a new skill) or `edit` (an edit). It asks **Keep**, **View** or **Discard** at the idle line and on a connected Web UI page; the first answer wins. | `new` |
 | Reflection edit supporting files | Lets a reflection change a skill's supporting files too, not just its `SKILL.md`. | off |
 | Reflection edit downloaded skills | For skills from `/skills add`: `read-only` makes the reflection write a companion skill instead (unless *Reflection mode* is `update-only`); `allow-and-mark` lets it change the skill, and a later update warns first. | `allow-and-mark` |
 
@@ -421,7 +428,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 | Agent skills | Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Off also turns off *Project file*. | on |
 | Global skills | Reads the global skills, the home folder's `skills` folder every profile shares. Off, this profile sees and writes only its own, and `/skills add --global` is refused. | on |
 | External skills (.agents\skills) | Also reads `%USERPROFILE%\.agents\skills` (`~/.agents/skills` on a Mac), read-only. | off |
-| Project file | Reads `NEON.md` (or `AGENTS.md`) in the working directory into the prompt as project notes. Needs *Agent skills*. | on |
+| Project file | Reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md` (the first that exists, cut at 16,000 characters) into the prompt as project notes. Only the folder's own `CLAUDE.md`, never `.claude\CLAUDE.md` or `CLAUDE.local.md`; its `@path` imports read as plain text. Needs *Agent skills*. | on |
 | Skill compact mode | `protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result. | `protected` |
 | #-mention enabled | `#` and part of a name on the input line lists the skills; a pick writes `#name`. | on |
 
@@ -432,22 +439,22 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 * **Sources:** search words (`/skills add pdf`) look on [skills.sh](https://skills.sh); `owner/repo` offers every skill in a GitHub repository and `owner/repo/skill` names one; a GitHub `tree/…` or `blob/…/SKILL.md` link narrows to a folder; any `https://…/*.zip` link is downloaded as is.
 * **Network:** *Web browser network mode* applies (nothing is fetched under `lan`); the *Web tools* switch doesn't.
 * **Preview first:** you see the description, source, file list and any scripts before installing. Unsafe paths and very large skills (over 200 files or 20 MB) are refused.
-* **Where it goes:** the profile's or the global `skills` folder (global only while *Global skills* is on), with a `.neon-source.json` that records where it came from. Bundled scripts run only through `run_command` and its approval.
+* **Where it goes:** the profile's or the global `skills` folder (global only while *Global skills* is on), with a `.neon-source.json` recording its source. Bundled scripts run only through `run_command` and its approval.
 * **Name clashes** are refused, except the same source installed again, which updates it in place.
 
 ### Skill records and purging unused skills
 
 * `skills.db`, in the home folder's `db\skills`, records every global and profile skill: its scope and when it was created, last changed and last used. External skills are not recorded and never purged.
 * `/skills purge list <age>` lists skills unused for that long; `/skills purge commit <age>` deletes them after a yes. The age is days (`30`) or a duration (`12h`, `1d 6h`).
-* Only the global skills (while *Global skills* is on) and the loaded profile's skills are counted. A global skill used in any profile counts as used.
+* Only the global skills (while *Global skills* is on) and the loaded profile's are counted. A global skill used in any profile counts as used.
 
 ### Skill history
 
 `skills.db` also keeps each skill's history, which reflection reads: who changed it (the model, a reflection, an install, a revert or you), and each turn that loaded it, with any errors after.
 
 * **Earlier versions:** before a skill file is overwritten, the old text is kept (the last 10 per skill).
-* **Reverting:** Enter on a skill, then `revert`, lists the kept versions, newest first. Enter puts one back after a yes; the current text is kept first, so you can go back and forth.
-* **Removing versions:** on the version list, `d` removes one and `c` clears them all, each after a yes.
+* **Reverting:** Enter on a skill, then `revert`, lists the kept versions, newest first. Putting one back asks first and keeps the current text, so you can go back and forth.
+* **Removing versions:** the list can remove one or clear them all, each after a yes ([Pane keys](INTERFACE.md#pane-keys)).
 
 ### Locking a skill
 
@@ -482,14 +489,14 @@ The tools most profiles use, and the pane's own options.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Web tools | Offers `web_search`, `web_fetch`, `open_url`, `web_links`, `web_save_link` and `download_file`. The link tools read and change the profile's saved links (see [Web](TOOLS.md#web)). | off |
-| Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page, a PDF excepted (fetched over HTTP). | `auto` |
-| Web browser path | The Chromium-based browser for headless fetches and for making, reading and editing PDFs. Empty finds Edge, Chrome or Brave. | empty (found) |
-| Web browser botcheck window | A bot check the web tools can't pass: `ask` asks (at the PC and on a connected Web UI page), then opens it in the Browser window for you to solve; `automatic` opens it unasked; `off` never does. Windows, and a Mac on macOS 14 or later. | `ask` |
-| Web browser home page | Where the Browser window's home button and a bare `/browser` go: a web address (`example.com`, `localhost:3000`), or empty for a blank page. | empty |
-| Web browser privacy | `keep-history` keeps the pages the Browser window visited, for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). | `clear-history` |
-| Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time). With no window to open, as headless or on a Mac before macOS 14, they go to your default browser. A YouTube video or playlist link follows *YouTube open links in* instead while *YouTube tools* is on. | `default-browser` |
-| Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link sign your default browser in to the Web UI: `one-time-link` (a link good once, for a minute, so the browser's history keeps no token) or `url-with-token` (the usual sign-in link, which the history and the browser's launch may keep). The Browser window uses the usual link, or a one-time link under *Web browser privacy* `keep-history`. | `one-time-link` |
+| Web tools | Offers `web_search`, `web_fetch`, `open_url`, `web_links`, `web_save_link` and `download_file`. The link tools read and change the profile's saved links ([Web](TOOLS.md#web)). | off |
+| Web browser mode | `auto` uses HTTP and falls back to a headless browser for a blocked or empty page; `http` never falls back; `browser` uses the browser for every page but a PDF (fetched over HTTP). | `auto` |
+| Web browser path | The Chromium-based browser for headless fetches and for making, reading and editing PDFs. Empty finds Edge, Chrome or Brave (on a Mac, Chromium too, in `/Applications`). | empty (found) |
+| Web browser botcheck window | A bot check the web tools can't pass: `ask` asks (at the PC and on a connected Web UI page), then opens it in the Browser window for you to solve; `automatic` opens it unasked; `off` never. Windows and macOS 14+. | `ask` |
+| Web browser home page | Where the Browser window's home button and a bare `/browser` go: an address (`example.com`, `localhost:3000`), or empty for a blank page. | empty |
+| Web browser privacy | `keep-history` keeps the Browser window's visited pages for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). | `clear-history` |
+| Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* while *YouTube tools* is on. | `default-browser` |
+| Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link sign your default browser in: `one-time-link` (good once, for a minute, so its history keeps no token) or `url-with-token` (the usual link, which it may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
@@ -501,7 +508,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks first) or `yolo` (everything runs). See [Shell guards](#shell-guards). | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`). The approval pane's *Allow … always* adds one; Enter removes one; `p` steps *Shell command policy* (`yolo` after a yes). | empty |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list can remove one or step the policy ([Pane keys](INTERFACE.md#pane-keys)). | empty |
 | Shell police | Refuses a command, script or process input that names a path outside the working directory. Turning it off asks first, and also stops the forbidden strings and the database rules. | on |
 | Shell police forbidden strings | Strings the police refuses outright, ignoring case and spacing. A new profile starts with a list of harmful actions; `r` restores it. `/profile push policestrings` copies the list. | the starter list |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers, once a turn. | on |
@@ -516,16 +523,19 @@ The tools most profiles use, and the pane's own options.
 
 ##### Shell guards
 
-* **Approval (`ask`):** the app asks you first, offering Deny, Allow once, Allow for this session, or Allow always; **≡ view** (`v`) shows the whole command. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` set the policy for one launch.
-* **Prefixes:** a command is allowed by its program, plus the verb for programs that take one (`git status`, `npm run`). Every command in the line must be allowed: each part of a pipe or `&&` chain, and each command a substitution runs. A substitution the app can't read always asks.
+* **Approval (`ask`):** the app asks first: Deny, Allow once, Allow for this session, or Allow always; **≡ view** (`v`) shows the whole command. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` set the policy for one launch.
+* **Prefixes:** a command is allowed by its program, plus the verb for programs that take one (`git status`, `npm run`).
+* **Every command in the line** must be allowed: each part of a pipe or `&&` chain, and each command a substitution runs. A substitution the app can't read always asks.
 * **Path police:** refuses an absolute path (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~` or a folder variable (`%USERPROFILE%`, `$HOME`), in switches and URLs too. The transcript shows 👮.
-* **What the police sees:** it reads text, not what runs, so a computed path gets past it. `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` doesn't.
-* **Forbidden strings:** while the police is on, anything containing a listed string is refused, even under `yolo`, and even when the command only searches for it. Case is ignored and runs of spaces count as one (`rm -rf` catches `RM   -RF`). It is a tripwire, not a sandbox.
-  * **The starter list** holds actions that do harm anywhere, such as `reset --hard`, `push --force`, `| iex` and `.ssh/id_`; on Windows also `Format-Volume` and `diskpart`, and on a Mac `diskutil erase` and `dump-keychain`.
+* **What the police sees:** it reads only the text written, not what runs, so a computed path gets past it. `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` doesn't.
+* **Forbidden strings:** while the police is on, a line containing a listed string is refused, even under `yolo` and even when it only searches for it. Case is ignored and runs of spaces count as one (`rm -rf` catches `RM   -RF`). It is a tripwire, not a sandbox.
+  * **The starter list** holds actions that do harm anywhere, such as `reset --hard`, `push --force`, `| iex` and `.ssh/id_`; on Windows also `Format-Volume` and `diskpart`, on a Mac `diskutil erase` and `dump-keychain`.
   * **Stricter entries you can add:** `rm -rf`, `Remove-Item -Recurse -Force`, `git clean`, `taskkill /f`, upload sites (`pastebin.com`, `ngrok`), and on a Mac `osascript` or `.zshrc`.
-* **Databases:** while the police and a database family's tools are both on, a command or script that reaches that family is refused, even under `yolo`. For SQLite that is the word `sqlite`, a `.db` or `.sqlite` file, or a file `sqlite.json` names; for the server families, their clients and drivers (`sqlcmd`, `sqlplus`, `mysql`, `psql`…) and their connections' hosts.
+* **Databases:** while the police and a database family's tools are both on, a command or script that reaches that family is refused, even under `yolo`.
+  * **SQLite:** the word `sqlite`, a `.db` or `.sqlite` file, or a file `sqlite.json` names.
+  * **The server families:** their clients and drivers (`sqlcmd`, `sqlplus`, `mysql`, `psql`…) and their connections' hosts.
 * **Package commands:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`) isn't judged by the database rules.
-* **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval pane.
+* **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval.
 
 #### Clock
 
@@ -537,8 +547,8 @@ The tools most profiles use, and the pane's own options.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the model has none and its prompt drops the timer sentence; `/timer` and timers already running keep working. `/tools timers` opens its on/off page. | on |
-| Timer tone | The tone a timer rings with when it goes off: `silent`, `chime`, `bell`, `beep` or `alarm`. It rings at each repeat until you silence or stop the timer, mid-reply too, for `/timer`'s countdowns and the model's alike, even with *Timer tools* off; a stopwatch never rings. The picker plays the highlighted tone. On this PC only, not on the Web UI. | silent |
+| Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the model has none and its prompt drops the timer sentence; `/timer` and running timers keep working. `/tools timers` opens its on/off page. | on |
+| Timer tone | What a timer rings, at each repeat until you silence or stop it, mid-reply too: `silent`, `chime`, `bell`, `beep` or `alarm`. It rings for `/timer`'s and the model's timers, even with *Timer tools* off; never a stopwatch, never on the Web UI. The picker plays each tone. | silent |
 
 #### Ask
 
@@ -576,7 +586,7 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
-| File deletes to Recycle bin | Files deleted by `delete`, the picture viewer, the thumbnail browser, the picture menu or the Web UI go to the Recycle bin (*File deletes to Trash* on a Mac), where you can restore it. Off, they delete directly. A network share or removable drive has no bin, so a delete there is direct either way; something too big for the bin is deleted for good, as Windows does. The purges (`/comfy`, `/camera`, `/screen`, `/splash` and `/pasted purge`) follow it too. A command's or script's own deletes aren't covered. | on |
+| File deletes to Recycle bin | Deletes by `delete`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive, one too big for the bin, and a command's or script's deletes. | on |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `remain` opens it in the list; `apply` writes `@folder/` and closes the list. | `remain` |
@@ -588,12 +598,12 @@ The file tools and the places beyond the working directory they reach.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Image tools | Offers `view_image`, `image_info`, `image_edit` and `set_splash_image`, whether *File tools* is on or not. They reach pictures in the working directory and the profile's `images` folder. | off |
-| Image edit quality | The JPEG (or JPEG XL, HEIF) quality `image_edit` uses when the model gives none (1–100). On a Mac it applies to JPEG and HEIF (a Mac writes no JPEG XL). | 90 |
+| Image tools | Offers `view_image`, `image_info`, `image_edit` and `set_splash_image`, whether *File tools* is on or not, over pictures in the working directory and the profile's `images` folder. | off |
+| Image edit quality | The JPEG (or JPEG XL, HEIF) quality `image_edit` uses when the model gives none (1–100). A Mac writes no JPEG XL. | 90 |
 | Image edit metadata | What metadata `image_edit` keeps: `none`, `basic` (author, date taken, camera…) or `all` (basic plus the GPS position). | `none` |
-| Image edit mode | Where an edited picture goes: `beside-original` writes a new file beside the source; `overwrite-original` replaces the source, without asking. It rules `image_edit` and the picture windows' right-click menu. | `beside-original` |
+| Image edit mode | `beside-original` writes an edited picture to a new file beside the source; `overwrite-original` replaces the source without asking. It rules `image_edit` and the picture windows' right-click menu. | `beside-original` |
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the profile's `images` folder. Empty writes beside the source. | empty (beside the source) |
-| Pasted images folder | Where a picture pasted from the clipboard is saved, under the profile's `images` folder, so the model's picture tools can use it. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted_images` |
+| Pasted images folder | Where a picture pasted from the clipboard is saved, under the profile's `images` folder, so the picture tools can use it. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted_images` |
 
 #### UNC
 
@@ -638,28 +648,28 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 |---|---|---|
 | ComfyUI tools | Offers `generate_image` once *ComfyUI URL* is set and a workflow is installed. | off |
 | ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). | empty |
-| ComfyUI workflows offered | A checklist of the workflows the model is offered; none is offered until you tick it. `/imagine <name>` can still use a hidden one. | none |
+| ComfyUI workflows offered | A checklist of the workflows the model is offered; none until you tick it. `/imagine <name>` can still use a hidden one. | none |
 | ComfyUI add workflow | A wizard that **builds** a workflow from your server's checkpoints or **imports** a ComfyUI export. See [Adding a workflow](TOOLS.md#adding-a-workflow). | — |
 | ComfyUI ^-mention enabled | `^` and part of a name lists the offered workflows; a pick writes `^name`. | on |
 | ComfyUI timeout (s) | How long to wait for one generation, queue included (10–3600). | 300 |
 | ComfyUI max images per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). | 5 |
 | ComfyUI reinforce negatives | When the model writes the prompt, adds a few tags to the negative where the image model tends to drift. | on |
 | ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
-| ComfyUI picture strip | Keeps the session's pictures as thumbnails above the input line. With the line empty, ←/→ highlight one and Enter opens it; **×** hides the strip until **🎞️** on the line above the input row brings it back. It also governs the Web UI's strip, the chat page's drawer under its own 🎞️. | on |
+| ComfyUI picture strip | The session's pictures as thumbnails above the input line: with the line empty, ←/→ highlight one and Enter opens it; **×** hides the strip until **🎞️** brings it back. It also rules the Web UI's picture drawer. | on |
 | ComfyUI output folder | Where pictures are saved, under the profile's `images` folder. | `comfy_images` |
 
 #### YouTube
 
 | Setting | What it does | Default |
 |---|---|---|
-| YouTube tools | Offers the [YouTube tools](TOOLS.md#youtube): search (with an API key), and playback where *YouTube open links in* says (the [video window](INTERFACE.md#the-video-window) needs Windows with WebView2 or macOS 14 or later). Playing by id or link needs no key. | off |
-| YouTube API key | A YouTube Data API v3 key, for searching; create one in the [Google Cloud Console](https://console.cloud.google.com/) with *YouTube Data API v3* enabled. About 100 free searches a day. Saved encrypted. | empty |
+| YouTube tools | Offers the [YouTube tools](TOOLS.md#youtube): search (needs an API key) and playback where *YouTube open links in* says (playing by id or link needs no key). The [video window](INTERFACE.md#the-video-window) needs WebView2 on Windows, or macOS 14+. | off |
+| YouTube API key | A YouTube Data API v3 key for searching, made in the [Google Cloud Console](https://console.cloud.google.com/) with *YouTube Data API v3* enabled; about 100 free searches a day. Saved encrypted. | empty |
 | YouTube search max results | How many results a search lists (1–20). | 8 |
 | YouTube search order | `relevance`, `date` (newest first), `views`, `rating` or `title`, unless a search names one. | `relevance` |
 | YouTube safe search | How much restricted content a search leaves out: `none`, `moderate` or `strict`. | `moderate` |
 | YouTube region | A two-letter country code (`US`, `GB`) a search asks for. Empty for any region. | empty (any region) |
 | YouTube language | A language code (`en`, `es`) whose results rank higher. Empty for any language. | empty (any language) |
-| YouTube open links in | Where a video plays: `youtube-window` (the app's video window), `browser-window` (the app's Browser window), `default-browser`, or `webui-window` (the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab), on your phone or browser). It covers `youtube_play`, `/youtube play` and its lists, `open_url` on a video or playlist link while *YouTube tools* is on, and the video window's own video and playlist links. In a browser the model can't see or control the video. `webui-window` plays in the video window while the Web UI isn't serving or *Web UI YouTube controls* is off, and goes to the tab shown most recently (with none in view the video waits for one); `browser-window` uses your default browser where there is no Browser window (headless, a Mac before macOS 14). The YouTube tab runs YouTube's player script in the Web UI's page, so while it is open that script can do what the page can, though never read the sign-in cookie. | `youtube-window` |
+| YouTube open links in | Where videos play: `youtube-window`, `browser-window` (else the default browser), `default-browser` or `webui-window` (the [YouTube tab](INTERFACE.md#the-youtube-tab)). For `youtube_play`, `/youtube play` and its lists, the video window's links, and `open_url` on a video link under *YouTube tools*. The model can't see or steer a video in a browser. | `youtube-window` |
 | YouTube autoplay | Whether a played video starts at once or waits for play. | on |
 | YouTube while speaking | What a playing video does while the app speaks or listens: `pause`, `duck` (to 15 %) or `none`. | `pause` |
 
@@ -673,7 +683,9 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 
 ### Admin
 
-Network checks, then Windows' own records and machinery. The network checks work everywhere; the rest are Windows only: on a Mac their rows are there but the tools are never offered. See [Admin](TOOLS.md#admin).
+Network checks, event logs, services, scheduled tasks and Active Directory; see [Admin](TOOLS.md#admin).
+
+On a Mac, Network, EventLog (the Mac's own logs) and Directory work. Services and Tasks are Windows only: their rows show, but their tools are never offered.
 
 #### Network
 
@@ -681,7 +693,7 @@ See [Network](TOOLS.md#network).
 
 | Setting | What it does | Default |
 |---|---|---|
-| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls`, each on one host, judged by the reach and the host lists and counted against the turn's budget; `net_certs` too with *Network certificate stores*. `/net` works either way. | off |
+| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls` (and `net_certs` with *Network certificate stores*), one host a call, held to the reach, the host lists and the turn's budget. `/net` works either way. | off |
 | Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
 | Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). | 8 |
 | Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
@@ -695,11 +707,11 @@ See [Event logs](TOOLS.md#event-logs). On a Mac only *Event log tools*, the max 
 
 | Setting | What it does | Default |
 |---|---|---|
-| Event log tools | Offers the read-only event-log tools (`eventlog_logs`, `eventlog_search`, `eventlog_summary`, `eventlog_event`) over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way. The page's `o` button opens *Event log computers offered*. | off |
+| Event log tools | Offers `eventlog_logs`, `eventlog_search`, `eventlog_summary` and `eventlog_event`, read-only, over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way; the on/off page's `o` opens *Event log computers offered*. | off |
 | Event log computers offered | A checklist: `local` (this PC) first, then the computers of both `eventlog.json` files. Untick everything and the tools read `.evtx` files alone. | `local` |
-| Event log set password | Pick a runas computer and type its password, masked; it goes to its store (encrypted in `eventlog.json`, or Windows Credential Manager). | — |
-| Event log add/edit computer | A wizard for a new computer or a saved one; it can test the draft by reading the newest System event. For `local`, it asks only for the logs, detail and description. | — |
-| Event log max events | How many events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
+| Event log set password | Pick a runas computer and type its password, masked; it is stored encrypted in `eventlog.json` or in Windows Credential Manager. | — |
+| Event log add/edit computer | A wizard for a new or saved computer; its test reads the newest System event. For `local`, it asks only for the logs, detail and description. | — |
+| Event log max events | Events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
 | Event log scan limit | The most events one search looks at before it stops and says how far back it got (1,000–30,000); a quarter of it on a remote computer. | 20,000 |
 | Event log computers (profile) | Enter opens this profile's `eventlog.json` (made with commented examples when missing). | — |
 | Event log computers (global) | Enter opens the home's `eventlog.json`, which every profile reads; the profile's entry wins on a name clash. | — |
@@ -711,10 +723,10 @@ See [Services](TOOLS.md#services). The computer rows work like the EventLog tab'
 | Setting | What it does | Default |
 |---|---|---|
 | Service tools | Offers `service_list` and `service_info`, read-only, over the ticked computers; with *Service writes* also `service_control` and `service_start_type`. `/services` works either way. | off |
-| Service writes | The master switch for the model's changes: start, stop, restart and the start type, each call asking first, only on a `readwrite` computer, within its `control` and `controlActions`; never a driver or a protected service. Never headless. `service_start_type` is off in a new profile's Offered tab even then. | off |
+| Service writes | The master switch for start, stop, restart and the start type. Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`; never a driver or protected service, never headless. | off |
 | Service computers offered | A checklist: `local` (this PC) first, then the computers of both `services.json` files. | `local` |
 | Service set password | As *Event log set password*, for runas computers. | — |
-| Service add/edit computer | A wizard for a new or saved computer: host, sign-in, access, the services visible, and under `readwrite` what may be changed, the actions allowed and its own protected list; its test lists the services under its account. | — |
+| Service add/edit computer | A wizard: host, sign-in, access, the services visible, and under `readwrite` what may be changed, the actions allowed and its own protected list. Its test lists the services under its account. | — |
 | Service computers (profile) | Enter opens this profile's `services.json` (made with commented examples when missing). | — |
 | Service computers (global) | Enter opens the home's `services.json`, which every profile reads. | — |
 
@@ -725,23 +737,23 @@ See [Scheduled tasks](TOOLS.md#scheduled-tasks). The same rows over `tasks.json`
 | Setting | What it does | Default |
 |---|---|---|
 | Task tools | Offers `task_list` and `task_info`, read-only; with *Task writes* also `task_control`. `/tasks` works either way. | off |
-| Task writes | The master switch for `task_control` (run, end, enable, disable), each call asking first, only on a `readwrite` computer, within its `control` and `controlActions`; a privileged task's run or end only where the entry says `privileged`. Never headless. | off |
+| Task writes | The master switch for `task_control` (run, end, enable, disable). Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`, never headless; a privileged task's run or end needs `privileged` in the entry. | off |
 | Task computers offered | As *Service computers offered*. | `local` |
 | Task set password | As *Event log set password*. | — |
-| Task add/edit computer | The wizard, with the folders visible in place of the services and *Privileged* in place of the protected list; its test connects and lists the tasks. | — |
+| Task add/edit computer | The wizard, with the folders visible in place of the services and *Privileged* in place of the protected list; its test lists the tasks. | — |
 | Task computers (profile) | Enter opens this profile's `tasks.json`. | — |
 | Task computers (global) | Enter opens the home's `tasks.json`. | — |
 
 #### Directory
 
-See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac, see [Active Directory on a Mac](TOOLS.md#active-directory-on-a-mac): Kerberos only, and no `current`.
+See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac: Kerberos only, and no `current` ([Active Directory on a Mac](TOOLS.md#active-directory-on-a-mac)).
 
 | Setting | What it does | Default |
 |---|---|---|
-| Directory tools | Offers `ad_user`, `ad_group`, `ad_computer`, `ad_find`, `ad_ou` and `ad_domain` over the ticked domains. The directory is never written; a list's `to` writes a CSV, only with *File tools* on and never in plan mode. `/ad` works either way. | off |
+| Directory tools | Offers `ad_user`, `ad_group`, `ad_computer`, `ad_find`, `ad_ou` and `ad_domain` over the ticked domains; the directory is never written. A list's `to` writes a CSV, only with *File tools* on and not in plan mode. `/ad` works either way. | off |
 | Directory domains offered | A checklist: `current` (this PC's own domain, when it is joined) first, then the domains of both `ad.json` files. | `current` when joined, else none |
 | Directory set password | As *Event log set password*, for runas domains. | — |
-| Directory add/edit domain | A wizard for a new or saved domain: its name, server, base, LDAPS, sign-in and detail; its test binds, reads the domain's root object and finds a user. | — |
+| Directory add/edit domain | A wizard: the domain's name, server, base, LDAPS, sign-in and detail. Its test binds, reads the domain's root object and finds a user. | — |
 | Directory domains (profile) | Enter opens this profile's `ad.json`. | — |
 | Directory domains (global) | Enter opens the home's `ad.json`. | — |
 
@@ -749,16 +761,17 @@ See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac, 
 
 The five database families. Each is read-only unless you choose `read-write` and the connection's entry allows it; see [How the database tools work](TOOLS.md#how-the-database-tools-work).
 
-**Statement kinds** (the *… statements allowed* checklists): changing data, deleting, creating, changing structure, dropping, upkeep, procedures and triggers (for SQLite, settings), and reading. A statement needs the kind of every change in it, and with none ticked the `_execute` tool isn't offered.
+* **Statement kinds** (the *… statements allowed* checklists): changing data, deleting, creating, changing structure, dropping, upkeep, procedures and triggers (for SQLite, settings), and reading.
+* **A statement** needs the kind of every change in it; with none ticked, the `_execute` tool isn't offered.
 
 #### SQL
 
 | Setting | What it does | Default |
 |---|---|---|
 | SQL tools | Offers the SQL Server tools (connections, tables, columns, describe, relationships, indexes, query) over `sql.json`'s connections, each held to its own database. | off |
-| SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` is offered too, on connections marked `"access": "readwrite"`, and each change asks you. See [Read-write mode](TOOLS.md#read-write-mode). | `read-only` |
+| SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` too, on connections marked `"access": "readwrite"`, each change asking you. See [Read-write mode](TOOLS.md#read-write-mode). | `read-only` |
 | SQL statements allowed | Under `read-write`, the kinds of statement `sql_execute` may run (a checklist). | changing data, creating, reading |
-| SQL connections offered | A checklist of the connections in both `sql.json` files; none is offered until you tick it. A hidden connection is invisible to every tool. | empty |
+| SQL connections offered | A checklist of the connections in both `sql.json` files; none until you tick it. A hidden connection is invisible to every tool. | empty |
 | SQL set password | Pick a connection and type its password, masked; it is stored encrypted. | — |
 | SQL add/edit connection | A wizard for a new or saved connection, which can **test** it before saving. The database is required. See [Managing connections](TOOLS.md#managing-connections). | — |
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
@@ -790,8 +803,8 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `p
 
 | Setting | What it does | Default |
 |---|---|---|
-| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases `sqlite.json` names. While on, the shell and file tools keep out of SQLite files (see [SQLite](TOOLS.md#sqlite)). | off |
-| SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` is offered too, one change per call, each one asking you first. | `read-only` |
+| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases `sqlite.json` names. While on, the shell and file tools keep out of SQLite files ([SQLite](TOOLS.md#sqlite)). | off |
+| SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` too, one change per call, each asking you first. | `read-only` |
 | SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run (a checklist). | changing data, creating, reading |
 | SQLite databases offered | Which databases of `sqlite.json` the model sees; none until you tick it. | empty |
 | SQLite sandbox files | The model may also open any SQLite file in the working directory by its path, and create one there. | on |
@@ -843,7 +856,7 @@ The camera, screen and printer tools.
 | Setting | What it does | Default |
 |---|---|---|
 | Camera tool | Offers `camera_capture`, so the model can ask you for a photo; never headless or to an embedded model without vision. `/camera` works either way. On a Mac: macOS 14 or later. | off |
-| Camera shutter | `user`: the app shows you the request; Space takes the photo, `r` retakes, Enter sends, Esc declines. The Web UI offers **Take and send** (no preview) or **Cancel** at once. `model`: you allow or deny, and the app takes it. | `user` |
+| Camera shutter | `user`: the app shows you the request and you take, retake, send or decline the photo ([keys](INTERFACE.md#pane-keys)); the Web UI offers **Take and send** (no preview) or **Cancel**. `model`: you allow or deny, and the app takes it. | `user` |
 | Camera preview | `live`: a [camera window](INTERFACE.md#the-camera-window) shows the picture while you frame it. `post`: the picture viewer opens on the photo. `off`: no window. | `live` |
 | Camera device | The camera, by its system name. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
@@ -872,7 +885,7 @@ The camera, screen and printer tools.
 | Print action policy | `off`: list printers only. `ask`: each print waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
 | Print default printer | Where a print goes when none is named. | empty (the system default) |
 | Print font size (pt) | The body text size for printed listings and Markdown (6–24). | 10 |
-| PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer`. On a Mac only the browser makes PDFs. Editing a PDF needs the browser whatever this says. See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
+| PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer` (Windows only). Editing a PDF needs the browser whatever this says. See [Making PDFs](TOOLS.md#making-pdfs). | `auto` |
 
 ### Home
 
@@ -886,17 +899,17 @@ The household's tools.
 | Home Assistant URL | Your server (`http://localhost:8123`, or one on your LAN). | empty |
 | Home Assistant API key | A long-lived access token (your Home Assistant profile › Security), saved encrypted. Empty clears it. | empty |
 | Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
-| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run, and anything else (a switch, a script, an automation, a sentence for Assist) asks first, refused headless. `allow`: everything runs. `/ha` never asks. | `ask` |
+| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run; anything else (a switch, a script, an automation, a sentence for Assist) asks first, refused headless. `allow`: everything runs. `/ha` never asks. | `ask` |
 | Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use. | empty (Home Assistant's default) |
 | Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
 
-The services that run unasked under `ask` can be changed in `profile.json` (`HomeAssistantSafeServices`); `conversation.process` there lets `ha_assist` run unasked.
+The services that run unasked under `ask` can be changed in `profile.json` (`HomeAssistantSafeServices`); adding `conversation.process` there lets `ha_assist` run unasked.
 
 #### Shopping
 
 | Setting | What it does | Default |
 |---|---|---|
-| Shopping tools | Offers the shopping list's tools (see [Shopping list](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. | off |
+| Shopping tools | Offers the shopping list's tools ([Shopping list](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. | off |
 | Shopping list | Enter opens the shopping list, the same pane as `/shopping` and the toolbar's 🛒. | — |
 | Shopping stores | Enter opens the stores' manager: add, rename or remove a store, choose the store the list is ordered for, and edit its layout (`l`). | — |
 
@@ -906,7 +919,7 @@ MCP servers are outside programs that give the model more tools.
 
 ### Servers
 
-One row per server in `mcp.json` (the profile's, then the home folder's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off, and Enter on a failed one retries. Below them: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
+One row per server in `mcp.json` (the profile's, then the home folder's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries. Below them: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
 
 ### Tools
 
@@ -929,7 +942,7 @@ The system prompt section by section, each with its status:
 
 * **Persona** (built in, or `persona.md`)
 * **Operating rules** (built in, or `operata.md`)
-* **Project notes** (`NEON.md` / `AGENTS.md`)
+* **Project notes** (`NEON.md`, else `AGENTS.md`, else `CLAUDE.md`; see *Project file*)
 * **Memory**
 * **Skills** (the catalog)
 * **Voice directive** (`vocalia.md`, when it has text; spoken turns only)

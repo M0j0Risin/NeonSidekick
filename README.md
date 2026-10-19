@@ -7,7 +7,7 @@
 
 Neon Sidekick is an agentic terminal client built first and foremost for local LLMs. Point it at LM Studio, Ollama, vLLM, SGLang or llama.cpp, or let it download a model and run it itself. When you want a frontier model too, it connects to the OpenAI and Anthropic APIs with your own key, or to your Claude Code install.
 
-It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing together features I liked from each and adding many of my own. It runs on Windows and Apple Silicon Macs. Use it for IT and admin work, to run your smart home, or for creative projects like images and storytelling. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
+Inspired by Claude Code, Hermes Agent and Cline, it brings together features I liked from each and adds many of my own. It runs on Windows and Apple Silicon Macs, for IT and admin work, your smart home, or creative projects like images and storytelling. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
@@ -36,62 +36,63 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 ## Features
 
 ### The app
-* **No installer:** unzip and run. It is compiled to native code (NativeAOT), so it starts fast and needs no .NET runtime.
-* **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, mouse support, and sixty color themes (or your own).
-* **Pictures as input:** paste or drop one on the input line, or take one with the webcam (`/camera`) or of the screen (`/screen`).
-* **Its own windows:** a picture viewer and thumbnail browser (`/view`), a live camera view (`/camera live`), the log (`/log`), a background process's output (`/process`), a YouTube player (`/youtube`) and a web browser (`/browser`), where you can sign in to a site or pass its bot check and lend its cookies to the web tools.
+* **No installer:** unzip and run. It's compiled to native code, so it starts fast and needs no .NET runtime.
+* **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, the mouse, and sixty color themes or your own.
+* **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`).
+* **Its own windows:** pictures and thumbnails (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`) and a YouTube player (`/youtube play`).
+* **A web browser** (`/browser`): sign in to a site or pass its bot check there, and the web tools borrow its cookies.
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order.
-* **Saved prompts:** keep the messages you send often and pick one from a list, or save, send and delete them from your phone through the Web UI (`/prompts`).
-* **Voice in and out:** Whisper speech-to-text with push-to-talk or a wake word ("hey neon"), and Kokoro text-to-speech with voice presets you can mix; both run in-process (or speech through a Kokoro server).
+* **Saved prompts:** messages you send often, picked from a list (`/prompts`) or from your phone.
+* **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with voices you can mix, both in-process or through a Kokoro server.
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
-* **Web UI:** the chat, the model's questions and the shopping list in a browser, from a phone on your home network or your tailnet (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
+* **Web UI:** the chat, the model's questions and the shopping list on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network, or takes a URL.
-* **Embedded model:** a model the app downloads and runs itself, with no server to set up. Gemma, Qwen and Muse models, all reading pictures and calling tools, run on a built-in llama.cpp (CUDA, Vulkan or CPU; Metal on a Mac).
-* **Model sizes:** Q4 and larger builds for 8–32 GB of VRAM, plus NVFP4 builds (not on a Mac) for NVIDIA's newest (Blackwell) cards.
+* **Embedded model:** the app downloads a Gemma, Qwen or Muse model (all read pictures and call tools) and runs it on a built-in llama.cpp.
+* **Model sizes:** Q4 and larger builds for 8–32 GB of VRAM, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
 * **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
-* **Cloud models:** the Anthropic and OpenAI APIs with your own key, or your Claude Code install as the chat's server (`/claude` also sends it a single message); all off until you turn them on.
-* **Advisors:** other profiles (named setups, each with its own model and persona) in a role you give them. The model, or you with `/advisor`, asks one for a second opinion; it answers using the chat's read-only tools.
+* **Cloud models:** the Anthropic and OpenAI APIs with your own key, or Claude Code as the chat's server (`/claude` sends it one message); all off until you turn them on.
+* **Advisors:** other profiles the model (or you, with `/advisor`) asks for a second opinion; they answer with the chat's read-only tools.
 
 ### Conversations, memory & skills
 * **Profiles:** each has its own settings, persona, memory, sessions and working directory (the folder the model works in).
 * **Sessions:** resume, search and learn from past conversations.
 * **Memory:** facts you can edit, added to every conversation.
-* **Context control:** automatic compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand. `/sys` shows exactly what the model is sent.
-* **Skills:** the profile's own, global ones every profile shares, and the read-only `~/.agents/skills` other agent tools use. `/skills add` installs more from [skills.sh](https://skills.sh) or GitHub.
-* **Managing skills:** on `/skills`, edit, move, lock or disable a skill, or revert it to one of its last 10 versions. The model's `skill_editor` tool never deletes one.
+* **Context control:** compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand, and `/sys` shows what the model is sent.
+* **Skills:** the profile's own, global ones, and the read-only `~/.agents/skills` other agents use; `/skills add` installs more from [skills.sh](https://skills.sh) or GitHub.
+* **Managing skills:** edit, move, lock, disable or revert a skill (its last 10 versions) on `/skills`. The model's `skill_editor` never deletes one.
 * **Self-learning:** a background reflection writes new skills and improves existing ones from your work.
 
 ### Tools & guardrails
-* **Built-in tools:** files, Git, shell (PowerShell, cmd, bash; zsh on a Mac), scripts (PowerShell, Python, Node), web search and pages, asking you questions, clock, timers and `neon_help`, the app's own manual.
-* **MCP servers:** add Model Context Protocol servers for more tools and data.
-* **Integrations:** the IT, smart home and creative tools below are offered once you switch them on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
+* **Built-in tools:** files, Git, shell (PowerShell, cmd, bash, zsh), scripts (PowerShell, Python, Node), web search and pages, questions to you, clock, timers and `neon_help`, the app's own manual.
+* **MCP servers:** add Model Context Protocol servers, outside programs with more tools and data.
+* **Integrations:** the IT, smart home and creative tools below, once you switch them on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
 * **Sandboxed:** file tools reach only the working directory; shell commands go through an approval pane (once, this session, or always).
-* **Shell police (👮):** refuses a command that names a path outside the working directory or holds a forbidden string (disk wipes, shutdowns…), even under `--yolo`. It keeps the shell off the database tools' databases too ([Shell guards](docs/SETTINGS.md#shell-guards)).
+* **Shell police (👮):** refuses a command naming a path outside the working directory, a forbidden string (disk wipes, shutdowns…) or the database tools' databases, even under `--yolo` ([Shell guards](docs/SETTINGS.md#shell-guards)).
 * **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve.
 * **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
 
 ### IT & admin
 * **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
-* **Files elsewhere:** `\\server\share` paths (`smb://server/share` on a Mac) and folders outside the working directory, as you or another account.
-* **Docker:** Docker Desktop's containers (on a Mac, OrbStack, Colima and Rancher Desktop too): logs, health and resource use. Starting, stopping and cleaning up are opt-in and ask first; `/docker` does it by hand.
+* **Files elsewhere:** network shares (`\\server\share` or `//server/share`, and `smb://` on a Mac) and outside folders, as you or another account.
+* **Docker:** containers' logs, health and resource use. Starting, stopping and cleaning up are opt-in and ask first; `/docker` does it by hand.
 * **Network checks:** DNS lookups, ping, traceroute, open ports and TLS certificates, one host at a time; `/net` does it by hand.
-* **Event logs:** what Windows recorded (crashes, failed service starts, failed sign-ins) on this PC, in `.evtx` files or on computers you name; on a Mac, its own unified log, crash reports and install.log. Read-only; `/eventlog` does it by hand.
-* **Services & scheduled tasks (Windows only):** read them on this PC or computers you name. Starting, stopping, running or disabling one is opt-in and asks first; `/services` and `/tasks` do it by hand.
-* **Active Directory:** users, groups, computers and OUs, and the locked, expiring, stale and privileged accounts among them. It never writes to the directory; `/ad` does it by hand.
-* **Printing & PDFs:** `/print` to any installed printer, on Windows or a Mac, and `/pdf` from Markdown, text, pictures or a web page. The model reads PDFs (local or on the web), you can attach one to a message or `/view` it, and PDFs can be merged, split, rotated and filled in.
+* **Event logs:** crashes, failed service starts and sign-ins, on this PC, in `.evtx` files or on computers you name. Read-only; `/eventlog` does it by hand.
+* **Services & scheduled tasks (Windows only):** read them here or on computers you name; changes are opt-in and ask first (`/services`, `/tasks`).
+* **Active Directory:** users, groups, computers and OUs, and the locked, expiring, stale and privileged accounts. It never writes to the directory; `/ad` does it by hand.
+* **Printing & PDFs:** `/print` to any printer, and `/pdf` from Markdown, text, pictures or a web page. The model reads PDFs; attach, `/view`, merge, split, rotate and fill them in.
 
 ### Smart home
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"); `/ha` drives the house directly.
-* **Shopping list:** one list per profile, sorted into your store's aisle order, that learns where things are; on your phone too through the Web UI (`/shopping`).
+* **Shopping list:** one per profile, in your store's aisle order, learning where things are; on your phone too (`/shopping`).
 
 ### Creative
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.
 * **Picture editing:** resize, crop, rotate, recolor, convert or strip metadata, by the model or with a right-click in the viewer.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own voices, optionally illustrated by ComfyUI.
-* **YouTube:** search (with your API key) and play videos in the app's video window, a browser or the Web UI's YouTube tab; saved videos resume where you left off.
+* **YouTube:** search (with your API key) and play videos in the app, a browser or the Web UI; saved videos resume where you left off.
 * **Obsidian:** search, read, write and link notes in your vault.
 
 ### Extras
@@ -100,14 +101,14 @@ It's inspired by tools like Claude Code, Hermes Agent and Cline, bringing togeth
 ## Getting started
 
 ### What you need
-* **A 64-bit Windows PC** (or an Apple Silicon Mac; see below) with a processor from about 2015 or later (Intel or AMD with AVX2). There's nothing else to install.
-* **Windows Terminal**, which comes with Windows 11; the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
+* **A 64-bit Windows PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac. Nothing else to install.
+* **Windows Terminal:** it comes with Windows 11, and the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
 * **A language model:** the app can download one for you, or use one you already run.
 
-**On a Mac?** It runs on Apple Silicon (M1 and later). Docker servers, the services and scheduled tasks tools, the `printer` PDF engine and the NVFP4 models need Windows (event logs read the Mac's own, and Active Directory signs in with Kerberos), and the camera, screen capture, YouTube playback and the Browser window need macOS 14 or later. [On a Mac](docs/MAC.md) covers setup and every difference.
+**On a Mac?** It runs on Apple Silicon (M1 and later); a few features need Windows or macOS 14, and [On a Mac](docs/MAC.md) covers setup and every difference.
 
 Only for some features:
-* **Running a model inside the app:** an NVIDIA card (driver 580 or newer) or any Vulkan card; without one it works, but slowly. 16 GB of VRAM runs the smaller models, and 32 GB runs the biggest of the included models.
+* **Running a model inside the app:** an NVIDIA card (driver 580 or newer), any Vulkan card, or Apple Silicon (Metal); without one it works, but slowly. 16 GB of VRAM runs the smaller models, 32 GB the biggest.
 * **Web pages that need a real browser, and PDFs:** Edge, Chrome or Brave (or Chromium on a Mac).
 * **`/claude` and the Claude Code server:** Claude Code installed.
 * **Scripts in Python or Node:** Python or Node installed.
@@ -132,7 +133,7 @@ If no model server answers when the app starts, it opens **Connect a model**:
 
 | Choice | When to pick it |
 |---|---|
-| Scan for local servers | You run LM Studio, Ollama, llama.cpp or vLLM on this machine or your network. |
+| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on this machine or your network. |
 | Enter a server's URL | You know the address of an OpenAI-compatible server. |
 | Download an embedded model | You have no server: the app runs a model itself. |
 | Connect Docker container | You run vLLM or SGLang in Docker Desktop (Windows only). |
@@ -171,7 +172,7 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 | `/usage` | Ctrl+U | Speed and token statistics. |
 
 ### Getting around
-* **Keyboard:** ←/→ switch tabs, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes. ←/→ also step through a tab's sub-tabs on the second row; Tab skips to the next main tab.
+* **Keyboard:** ←/→ switch tabs (and the sub-tabs on a second row), Tab skips to the next main tab, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes.
 * **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
 * **Lost?** Ask the model where a setting is; its `neon_help` tool knows them all.
 
@@ -199,7 +200,9 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys and [Keyboard shortcuts](docs/INTERFACE.md#keyboard-shortcuts) list every key.
 
 ### Status bar, hints and toolbar
-The [hints bar](docs/INTERFACE.md#the-hints-bar) under the input line shows the keys that apply right now, while there are any. The [status bar](docs/INTERFACE.md#the-status-bar) under it shows the model, the context used and what runs in the background; double-click the model to switch. The [toolbar](docs/INTERFACE.md#the-toolbar) below has an icon per pane and tool group: click to see what it is, double-click to open it. `/toolbar` hides it.
+* **The [hints bar](docs/INTERFACE.md#the-hints-bar)**, under the input line, shows the keys that apply right now.
+* **The [status bar](docs/INTERFACE.md#the-status-bar)** shows the model, the context used and what runs in the background; double-click the model to switch.
+* **The [toolbar](docs/INTERFACE.md#the-toolbar)** has an icon per pane and tool group: click to see what it is, double-click to open it. `/toolbar` hides it.
 
 ### Settings worth knowing first
 

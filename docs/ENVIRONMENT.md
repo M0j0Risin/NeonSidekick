@@ -100,7 +100,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 | `NEONSIDEKICK_YOUTUBE_API_KEY` | *YouTube API key* | A YouTube Data API v3 key as issued. Never logged. Each search costs 100 of its daily quota units. |
 | `NEONSIDEKICK_DOCKER_PIPE` | *Docker engine pipe* (*Docker engine socket* on a Mac) | A pipe name, `\\.\pipe\name` or `npipe:////./pipe/name`; on a Mac a socket's path or `unix:///path`. See the notes below. |
 
-On a Mac, with neither `NEONSIDEKICK_DOCKER_PIPE` nor the setting, the app reads `DOCKER_HOST` (but not a `tcp://` or `ssh://` one) and then the Docker CLI's current context (`DOCKER_CONTEXT`, `DOCKER_CONFIG`); see [the order](TOOLS.md#docker-on-a-mac).
+On a Mac, with neither `NEONSIDEKICK_DOCKER_PIPE` nor the setting, the app finds the socket as the `docker` command does, from `DOCKER_HOST` (never a `tcp://` or `ssh://` one) or the CLI's current context (`DOCKER_CONTEXT`, `DOCKER_CONFIG`); see [the order](TOOLS.md#docker-on-a-mac).
 
 ## Set by the app
 
@@ -120,13 +120,14 @@ Only for running the tests from source. Each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_ORACLE_CONNECTION`: an ODP.NET connection string (`User Id=…;Password=…;Data Source=localhost:1521/FREEPDB1`) for a user that may create tables (`gvenzl/oracle-free` works).
 * `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a database the user owns (`mysql:8.4` and `mariadb:11` work).
 * `NEONSIDEKICK_TEST_POSTGRES_CONNECTION`: an Npgsql connection string (`Host=127.0.0.1;Port=5432;Username=…;Password=…;Database=…`).
-* `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); on a Mac, `smb://server/share` (your Public share with File Sharing on works), mounted and unmounted by each test. `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD` add a second account for the runas path. Reads only.
+* `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); on a Mac, `smb://server/share` (your Public share with File Sharing on works), mounted and unmounted by each test. `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD` add an account for the runas path. Reads only.
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe (a socket's path on a Mac). Reads only.
 * `NEONSIDEKICK_TEST_EVENTLOG_COMPUTER`: a computer's host whose event logs are read over RPC as you (`localhost` is a loopback session). Windows only; reads only.
 * `NEONSIDEKICK_TEST_NETWORK_HOST`: a host to look up, ping and (when 443 answers) shake hands with (`example.com`). Reads only.
 * `NEONSIDEKICK_TEST_SERVICES_COMPUTER`: a computer whose services are read as you (`localhost` works). With `NEONSIDEKICK_TEST_SERVICE_CONTROL` naming a harmless service on this PC, the test restarts it, only when run elevated. Windows only.
-* `NEONSIDEKICK_TEST_TASKS_COMPUTER`: a computer whose scheduled tasks are read as you (`localhost` needs an elevated run: UAC filters a local administrator's network sign-in). With `NEONSIDEKICK_TEST_TASK_CONTROL` naming a task you made on this PC, the test runs it, disables it and enables it again. Windows only.
-* `NEONSIDEKICK_TEST_AD_DOMAIN`: `Domain=…;Server=…;User=DOMAIN\name;Password=…`, written into a scratch home's `ad.json` and read through it (the `samba_ad_dev` container: `Domain=lab.neon.test;Server=localhost;User=LAB\reader` and its password). Reads only. On a Mac the user is `name@REALM` (`User=reader@LAB.NEON.TEST`), and a test realm with no DNS records needs its KDC named in a `krb5.conf` that `KRB5_CONFIG` points at, exported in the shell that runs the tests (macOS's Kerberos reads it; the app never does).
+* `NEONSIDEKICK_TEST_TASKS_COMPUTER`: a computer whose scheduled tasks are read as you (`localhost` needs an elevated run). With `NEONSIDEKICK_TEST_TASK_CONTROL` naming a task you made on this PC, the test runs, disables and re-enables it. Windows only.
+* `NEONSIDEKICK_TEST_AD_DOMAIN`: `Domain=…;Server=…;User=DOMAIN\name;Password=…`, read through a scratch home's `ad.json`. For the `samba_ad_dev` container: `Domain=lab.neon.test;Server=localhost;User=LAB\reader` and its password. Reads only.
+  * On a Mac the user is `name@REALM` (`User=reader@LAB.NEON.TEST`), and the test realm needs a `krb5.conf` ([TESTCONTAINERS.md](TESTCONTAINERS.md)).
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`: a folder to keep the test photo in.
 * `NEONSIDEKICK_TEST_RECYCLE`: `1` runs the real Recycle bin test (the Trash on a Mac), which leaves a temp file in it.
 * `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). Jobs are held and canceled, so nothing prints.

@@ -8,7 +8,8 @@ namespace NeonSidekick.App;
 /// <summary>
 /// The EventLog menu of <c>/tools</c> › Apps (2026-10-15, the event-log plan), the UNC menu's rows over <c>eventlog.json</c>: the switch, the
 /// computers offered (a checklist, <c>local</c> first), the masked password prompt for a runas computer, the wizard
-/// (<c>SettingsMenu.EventLogWizard.cs</c>), the two numbers and the two edit rows. Windows only, as the tools are.
+/// (<c>SettingsMenu.EventLogWizard.cs</c>), the two numbers and the two edit rows. Windows only, as the tools are (a Mac's own logs too since
+/// 2026-10-18, mac-pass2).
 /// </summary>
 internal sealed partial class SettingsMenu
 {

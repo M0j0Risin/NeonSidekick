@@ -2,43 +2,24 @@
 
 Every command and its forms, grouped by topic, then the details of the longer ones. Back to the [README](../README.md#useful-first-commands); in the app, `/help` lists them all.
 
-Type `/` to list the commands; after a command and a space, the app offers its arguments. `//` is a shortcut for `/settings`.
+Type `/` to list the commands; after a command and a space, the app offers its arguments. `//` is a shortcut for `/settings`. Forms are written as: words typed as they are, `<placeholders>` to fill in, `[optional]` parts, and `a|b` for a choice.
 
-Forms are written as: words typed as they are, `<placeholders>` to fill in, `[optional]` parts, and `a|b` for a choice.
+Elsewhere:
 
-Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands that work while a reply runs under [Commands typed during a reply](INTERFACE.md#commands-typed-during-a-reply).
+* **Each pane's keys:** [Pane keys](INTERFACE.md#pane-keys).
+* **What works while a reply runs:** [Commands typed during a reply](INTERFACE.md#commands-typed-during-a-reply).
+* **What each command does headless:** [HEADLESS.md](HEADLESS.md#slash-commands-in-headless-mode).
 
 ## Contents
 
 - [All commands](#all-commands)
-  - [Help and the app](#help-and-the-app)
-  - [Conversation](#conversation)
-  - [Models and servers](#models-and-servers)
-  - [Profiles and settings](#profiles-and-settings)
-  - [Files and folders](#files-and-folders)
-  - [Pictures, camera and screen](#pictures-camera-and-screen)
-  - [Voice](#voice)
-  - [Web and video](#web-and-video)
-  - [Integrations](#integrations)
-  - [Admin](#admin)
-  - [Display and windows](#display-and-windows)
-  - [Automation](#automation)
+  - [Help and the app](#help-and-the-app) · [Conversation](#conversation) · [Models and servers](#models-and-servers) · [Profiles and settings](#profiles-and-settings)
+  - [Files and folders](#files-and-folders) · [Pictures, camera and screen](#pictures-camera-and-screen) · [Voice](#voice) · [Web and video](#web-and-video)
+  - [Integrations](#integrations) · [Admin](#admin) · [Display and windows](#display-and-windows) · [Automation](#automation)
 - [Command details](#command-details)
-  - [Plan mode](#plan-mode)
-  - [Code audit](#code-audit)
-  - [Bot conversations](#bot-conversations)
-  - [Claude Code from the chat](#claude-code-from-the-chat)
-  - [Advisor](#advisor)
-  - [Your own shell line](#your-own-shell-line)
-  - [Loops](#loops)
-  - [Benchmark tests](#benchmark-tests)
-  - [Imagine options](#imagine-options)
-  - [Camera](#camera)
-  - [Screen capture](#screen-capture)
-  - [Profiles](#profiles)
-  - [Desktop shortcuts](#desktop-shortcuts)
-  - [Custom themes](#custom-themes)
-  - [Voice presets](#voice-presets)
+  - [Plan mode](#plan-mode) · [Ralph loop](#ralph-loop) · [Code audit](#code-audit) · [Bot conversations](#bot-conversations) · [Claude Code from the chat](#claude-code-from-the-chat)
+  - [Advisor](#advisor) · [Your own shell line](#your-own-shell-line) · [Loops](#loops) · [Benchmark tests](#benchmark-tests) · [Imagine options](#imagine-options) · [Camera](#camera)
+  - [Screen capture](#screen-capture) · [Profiles](#profiles) · [Desktop shortcuts](#desktop-shortcuts) · [Custom themes](#custom-themes) · [Voice presets](#voice-presets)
 - The app's windows, pasting a picture, the folder picker and the file browser: [Using the app](INTERFACE.md).
 
 ## All commands
@@ -48,9 +29,9 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | Command | What it does |
 |---|---|
 | `/help` | The commands (everyday ones on Basic, the rest on Advanced) and the keys; on the Keys tab, `k` swaps in `/keycheck`'s list. |
-| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`) and answer. With no model, or `neon_help` off on `/tools`, the manual's own answer shows instead. During a reply, it waits. |
+| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`); with no model, or `neon_help` off, the manual answers. Waits during a reply. |
 | `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the license. |
-| `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac it also names macOS shortcuts and an Option key that types characters. |
+| `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac, also macOS shortcuts and an Option key that types characters. |
 | `/exit` | Exits the app. |
 
 ### Conversation
@@ -60,10 +41,10 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/new` | Starts a new conversation, keeping the screen. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
-| `/splash view`, `/splash thumbs` | Opens the picture viewer or the thumbnail browser on the profile's `images\splash_images` folder; an empty one means the built-in pictures show. |
-| `/splash purge` | Deletes every splash picture of the profile, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes; the built-in pictures show again. |
+| `/splash view`, `/splash thumbs` | The picture viewer or thumbnail browser on the profile's `images\splash_images` folder; while it's empty, the built-in pictures show. |
+| `/splash purge` | Deletes every splash picture of the profile, after a yes, per *File deletes to Recycle bin*; the built-in pictures show again. |
 | `/compact [<focus>]` | Shrinks the context (*LLM compact mode*); a focus tells the summary what to keep. |
-| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and everything after it leave the conversation and the stored session, and its text goes back on the input row. What tools changed stays. |
+| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and all after it leave the conversation and stored session, its text back on the input row. What tools changed stays. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
 | `/draft` | Writes the next message in your editor; it is sent when you save and close. |
 | `/echo <text>` | Prints a line as a reply, spoken when *TTS output* is on. |
@@ -72,9 +53,9 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/queue [clear]` | Lists the messages queued during a reply, to remove, clear or send them; `clear` drops them all. |
 | `/queue mode automatic\|manual\|off` | Sets *Queue mode*: queued messages go when the reply ends, wait for **➤ send**, or aren't kept. |
 | `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
-| `/prompts` | Your saved prompts, kept per profile (`prompts.json`) and never shown to the model; Enter sends one as if typed (queued while a reply runs), `d` puts it on the draft line instead, the old draft going to the input history. |
+| `/prompts` | Your saved prompts (`prompts.json`, per profile, never shown to the model): a pick sends one as if typed (queued during a reply) or puts it on the draft line, the old draft going to the input history. Keys: [Pane keys](INTERFACE.md#pane-keys). |
 | `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Sends prompt *n* as if typed, saves the rest of the line (a pasted block too), or removes prompt *n*. |
-| `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes (headless: without asking). |
+| `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes. |
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
@@ -82,7 +63,7 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
-| `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes. From the Web UI too, asking on the page and the PC. |
+| `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI too, asking on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 
 ### Models and servers
@@ -100,17 +81,19 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 ### Profiles and settings
 
+The push and pull forms copy to (`push`) or from (`pull`) another profile, after a yes. With `overwrite`, a list replaces the target's instead of adding to it, and a file replaces one already there.
+
 | Command | What it does |
 |---|---|
 | `/profile [<name>]` | Switches profiles for this run: a picker, or the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars unless `--all`. |
-| `/profile push\|pull <name>` | Copies every setting but the working directory to (`push`) or from (`pull`) another profile; a pull clears the conversation. |
+| `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the five API keys; one the source lacks is cleared in the target, and one set only by a variable isn't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings (server, model, reasoning, sampling, the Embedded, Docker, Anthropic and OpenAI tabs but the keys), replacing the target's. |
-| `/profile push\|pull allowed <name> [overwrite]`, `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell allowed commands* or *Shell police forbidden strings*, after a yes: added to the target's, or replacing them with `overwrite`. |
-| `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history, the memories or the saved prompts, the same way; history is refused while the target has *Keep message history* off. |
-| `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive); one already there is replaced only with `overwrite`. |
+| `/profile push\|pull allowed <name> [overwrite]`, `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell allowed commands* or *Shell police forbidden strings*. |
+| `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history, the memories or the saved prompts; history is refused while the target has *Keep message history* off. |
+| `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
 | `/profile edit\|reload` | Opens `profile.json` in your editor, or reads it back and reconnects what changed. |
 | `/settings`, `//` | Opens the settings; a letter typed on a tab searches them all. |
@@ -119,25 +102,25 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
 | `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
-| `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings. Its **loaded** tab shows the skills in this conversation. |
+| `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings; its **loaded** tab shows the skills in this conversation. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |
-| `/mcp` | Connects MCP servers and switches their tools on or off. |
+| `/mcp` | Connects [MCP servers](INTERFACE.md#words-used-here) (outside programs that offer the model more tools) and switches their tools on or off. |
 | `/sys` | Shows the system prompt and the tools sent to the model. |
 | `/sys persona [reset]`, `/sys operata [reset]`, `/sys vocalia [reset]` | Edits `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (added to every spoken reply) in your editor, or resets it after a yes. |
 | `/avatar` | Opens the emoji picker for the *Model avatar*; see [The avatar picker](INTERFACE.md#the-avatar-picker). |
-| `/avatar <emoji>`, `/avatar <words>`, `/avatar clear` | Sets that emoji, opens the picker searching for the words (headless: sets the best match), or clears it (replies open with ● again). |
+| `/avatar <emoji>`, `/avatar <words>`, `/avatar clear` | Sets that emoji, opens the picker searching for the words, or clears it (replies open with ● again). |
 | `/avatar model [<emoji>\|<words>\|clear]` | The same, naming the *Model avatar* outright. |
 | `/avatar user`, `/avatar user <emoji>\|<words>`, `/avatar user clear` | The same for your *User avatar*, the emoji that opens each line you send (› when cleared). |
-| `/shortcut [<profile>] [--log]` | Puts a shortcut on the desktop that starts the app on this profile, or the one named; `--log` adds a log. See [Desktop shortcuts](#desktop-shortcuts). |
+| `/shortcut [<profile>] [--log]` | Puts a desktop shortcut that starts the app on this profile, or the one named; `--log` adds a log. See [Desktop shortcuts](#desktop-shortcuts). |
 
 ### Files and folders
 
 | Command | What it does |
 |---|---|
-| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created; quotes around the path, as Explorer's *Copy as path* adds, are dropped); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
+| `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created, quotes around the path dropped); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
 | `/tree [<path>]` | A tree of the working directory in a pane; hidden entries per *File browser/tree mode*, `.git` only when named. |
-| `/browse [<folder>]` | Browses the working directory as a tree; Enter or a double-click opens a file in its default app. See [File browser](INTERFACE.md#file-browser). |
+| `/browse [<folder>]` | Browses the working directory as a tree, opening a file in its default app. See [File browser](INTERFACE.md#file-browser). |
 | `/explore [<folder>]` | Opens the working directory, or a folder in it, in your file browser. |
 | `/open <file>` | Opens a file from the working directory in its default app. |
 | `/vault [<path>]` | A tree of the *Obsidian vault*, like `/tree`; needs *Obsidian tools* on. |
@@ -149,9 +132,11 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 
 ### Pictures, camera and screen
 
+Each purge asks first and follows *File deletes to Recycle bin*: to the Recycle bin (the Trash on a Mac), else for good.
+
 | Command | What it does |
 |---|---|
-| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window)'s own PDF viewer (on a Mac before macOS 14, in Preview). |
+| `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window) (on a Mac before macOS 14, in Preview). |
 | `/view <image> --chat` | Draws it in the transcript instead. |
 | `/view <image>\|<folder> --thumbs` | Opens the folder in the [thumbnail browser](INTERFACE.md#the-thumbnail-browser), in step with the viewer. |
 | `/camera`, `/camera snap` | Opens the camera pane to take a photo, or takes one at once, and puts it on the input line. See [Camera](#camera). |
@@ -159,17 +144,17 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/camera live` | Shows the camera live in the [camera window](INTERFACE.md#the-camera-window) until you close it. |
 | `/camera watch [<seconds>\|off]` | Checks the camera every *Camera watch interval (s)* (or the 2–3600 seconds given); a changed picture goes with your next message. |
 | `/camera off` | Ends live view and watch mode. |
-| `/camera view`, `/camera thumbs` | Opens the picture viewer or the thumbnail browser on *Camera output folder*. |
-| `/camera purge` | Deletes everything in *Camera output folder*, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
+| `/camera view`, `/camera thumbs` | The picture viewer or thumbnail browser on *Camera output folder*. |
+| `/camera purge` | Deletes everything in *Camera output folder*. |
 | `/screen` | Captures the app's monitor onto the input line; *Screen tools* and *Screen policy* don't apply. See [Screen capture](#screen-capture). |
 | `/screen all\|desktop`, `/screen monitor:<n>` | Captures every monitor as one picture, or monitor *n*. |
 | `/screen window:<id>\|<title-words>` | Captures one window, even when covered, by id or words of its title or program. |
 | `/screen behind` | Captures the window right behind the app's own. |
 | `/screen list` | Lists the monitors and windows, front to back, with their targets. |
-| `/screen view`, `/screen thumbs` | Opens the picture viewer or the thumbnail browser on *Screen output folder*. |
-| `/screen purge` | Deletes everything in *Screen output folder*, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
-| `/pasted view`, `/pasted thumbs` | Opens the picture viewer or the thumbnail browser on *Pasted images folder*, where pasted pictures are saved as their messages are sent. |
-| `/pasted purge` | Deletes everything in *Pasted images folder*, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
+| `/screen view`, `/screen thumbs` | The picture viewer or thumbnail browser on *Screen output folder*. |
+| `/screen purge` | Deletes everything in *Screen output folder*. |
+| `/pasted view`, `/pasted thumbs` | The picture viewer or thumbnail browser on *Pasted images folder*, where pasted pictures are saved as their messages are sent. |
+| `/pasted purge` | Deletes everything in *Pasted images folder*. |
 
 ### Voice
 
@@ -179,37 +164,38 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/stt [on\|off]` | Turns voice input on or off (*STT input*). |
 | `/stt wake [on\|off]` | Turns the wake word on or off; off turns the interrupt off too. |
 | `/stt interrupt [on\|off]` | Turns the wake-word interrupt during a spoken reply on or off; needs the wake word. |
-| `/read [<file> [<n>]\|<n>]` | Reads a text file or a PDF aloud; alone it resumes, a number starts at that sentence. Space pauses and ←/→ step a sentence. A PDF's first 40 pages are read with your browser, its printed lines joined back into sentences and a repeated header or footer left out. |
+| `/read [<file> [<n>]\|<n>]` | Reads a text file or a PDF aloud; alone it resumes, a number starts at that sentence ([keys](INTERFACE.md#the-input-line)). A PDF's first 40 pages are read with your browser, a repeated header or footer left out. |
 
 ### Web and video
 
-* **The Browser window** (Windows; a Mac on macOS 14 or later, with Safari's keys): its bar, history and saved links are in [Using the app](INTERFACE.md#the-browser-window), its bot checks in [TOOLS.md](TOOLS.md#the-browser-window).
-* **YouTube:** saved videos and quota are in [TOOLS.md](TOOLS.md#youtube), the window's keys in [The video window](INTERFACE.md#the-video-window). On a Mac, playing needs macOS 14 or later.
+* **The Browser window** (macOS 14+ on a Mac): its bar, keys, history and saved links are in [Using the app](INTERFACE.md#the-browser-window), its bot checks in [TOOLS.md](TOOLS.md#the-browser-window).
+* **YouTube** (playing needs macOS 14+ on a Mac): saved videos and quota are in [TOOLS.md](TOOLS.md#youtube), the window's keys in [The video window](INTERFACE.md#the-video-window).
 
 | Command | What it does |
 |---|---|
-| `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. Not headless. |
+| `/browser [<url>]` | Opens a page (or *Web browser home page*) in the Browser window, to sign in or pass a bot check; on close its cookies go to the web tools. |
 | `/browser clear history\|all` | Clears its history, or after a yes everything it keeps (cookies and sign-ins too); saved links stay. |
 | `/browser <n>` | Opens saved link *n* in the Browser window; with no window (headless, a Mac before macOS 14), in your default browser. |
-| `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. Headless, give the address. |
-| `/browser list`, `/browser list --clear` | The saved links in a pane, where Enter opens one (with no window, in your default browser); `--clear` removes them all after a yes (headless: without asking). |
-| `/browser unsave <n>\|<url>` | Removes one saved link. Works headless too. |
-| `/youtube`, `/youtube status` | Says what the video player is playing. |
-| `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (needs a *YouTube API key*; 100 quota units a search); use `search` when the words start with one of `/youtube`'s own words (`play`, `list`…). |
+| `/browser save [<url> [<name>]]` | Saves a link (the words after the address name it), or with no address the page the window shows. |
+| `/browser list`, `/browser list --clear` | The saved links in a pane (with no window, they open in your default browser); `--clear` removes them all after a yes. |
+| `/browser unsave <n>\|<url>` | Removes one saved link. |
+| `/youtube` | The saved videos in a pane, as `/youtube list`. |
+| `/youtube status` | Says what the video player is playing. |
+| `/youtube <words>`, `/youtube search <words>` | Searches YouTube and opens a picker (needs a *YouTube API key*; 100 quota units a search); use `search` when the words start with one of `/youtube`'s own (`play`, `list`…). |
 | `/youtube search [--switches] <words>` | Searches with `--playlists`, `--channels`, `--order relevance\|date\|views\|rating\|title`, `--length short\|medium\|long`, `--since today\|week\|month\|year\|<date>`, `--region <cc>`, `--lang <code>`, `--live`, `--captions`, `--safe none\|moderate\|strict`. |
 | `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given or the link's own, where *YouTube open links in* says; no key needed. |
-| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*, where *YouTube open links in* says; no key needed. |
+| `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*, the same way. |
 | `/youtube next\|previous`, `/youtube entry <n>` | Plays the playlist's next, previous or *n*th video. |
-| `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (a key: 1 unit, plus 1 per 50 videos); alone, the one playing. |
+| `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (with a key: 1 unit, plus 1 per 50 videos); alone, the one playing. |
 | `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resumes, pauses, seeks, sets the volume (0–100), mutes or unmutes, or closes the player. |
 | `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
-| `/youtube list`, `/youtube list --clear` | The saved videos in a pane; `--clear` removes them all after a yes (headless: without asking). The Web UI's YouTube tab shows the same list under its player, and an open pane follows a change made there. |
+| `/youtube list`, `/youtube list --clear` | The saved videos in a pane, as on the Web UI's YouTube tab (each follows the other's changes); `--clear` removes them all after a yes. |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
-| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui): on or off, its port and reach, and a tab per address with a QR code to scan with a phone and the sign-in link. Its buttons: `e` turns it on or off, `l` switches the reach between `lan` and `local`, `r` makes a new token after a yes, `c` copies the shown tab's link. A double-click on the link opens it on this PC, as `/webui browser` does. Opens over a reply too. Not headless. |
+| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui) (the app's page for a phone or browser): on or off, port, reach, its buttons, and a tab per address with a QR code and sign-in link. Opens over a reply too. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
 | `/webui copy` | Puts the first sign-in link (Tailscale's when there is one) on the clipboard. It holds the token: paste it only where you trust. |
-| `/webui reset` | Makes a new sign-in token after a yes; every browser signed in will be signed out. |
-| `/webui browser [--external]` | Opens the Web UI on this PC, already signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says. `--external` always uses the default browser. The Web UI must be on. Runs at once under a reply. |
+| `/webui reset` | Makes a new sign-in token after a yes; every browser signed in is signed out. |
+| `/webui browser [--external]` | Opens the Web UI on this PC, already signed in ([how](INTERFACE.md#web-ui)); `--external` always uses the default browser. The Web UI must be on. |
 
 Which commands the Web UI's page may send, and how each shows there: [Commands from the page](INTERFACE.md#commands-from-the-page).
 
@@ -221,7 +207,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/docker ps [<filter>]`, `/docker status` | Lists the containers (or those whose name or image holds the filter), or the versions and container counts. |
 | `/docker logs <container> [<lines>]` | A container's last lines (50, up to 2000). |
 | `/docker stats [<container>]` | CPU, memory, network and disk use of one or every running container. |
-| `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container. Nothing is asked and *Docker writes* doesn't apply; every change is logged. |
+| `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container without asking; *Docker writes* doesn't apply, and every change is logged. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries, to-do lists. See [Home Assistant](TOOLS.md#home-assistant). |
 | `/ha on\|off\|toggle <name> [<brightness>]` | Switches a room, light, switch or the TV (`/ha on den 40%`, `/ha off kitchen and hallway`). |
 | `/ha scene <name>` | Activates a scene. |
@@ -233,48 +219,53 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/comfy` | Opens the ComfyUI tools' page, as `/tools comfy` does. |
 | `/comfy status`, `/comfy offered` | The ComfyUI server's status and workflows, or the workflows offered to the model. See [ComfyUI](TOOLS.md#comfyui). |
 | `/comfy edit json\|markdown\|md <workflow>` | Opens a workflow's graph, or its `.md` (made if missing), in your editor. |
-| `/comfy view`, `/comfy thumbs` | Opens the picture viewer or the thumbnail browser on the output folder. |
-| `/comfy purge` | Deletes everything in the output folder, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
-| `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file (*Print action policy* never applies). On a Mac a PDF prints as it is and Office files are refused. See [Printing](TOOLS.md#printing). |
+| `/comfy view`, `/comfy thumbs` | The picture viewer or thumbnail browser on the output folder. |
+| `/comfy purge` | Deletes everything in the output folder after a yes, per *File deletes to Recycle bin*. |
+| `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file (*Print action policy* never applies). See [Printing](TOOLS.md#printing); a Mac's differences are in [MAC.md](MAC.md#what-differs). |
 | `/print reply [<options>]`, `/print printers` | Prints the last reply, or lists the printers. |
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF of a file, beside it unless `to=` says (*PDF engine*; on a Mac, a browser). See [Making PDFs](TOOLS.md#making-pdfs). |
 | `/pdf <url> [to=<path>] [overwrite]`, `/pdf reply [<options>]` | Makes a PDF of a web page (*Web browser network mode* applies; a link that is a PDF already is refused) or of the last reply. |
-| `/pdf merge <file> <file>…`, `/pdf extract\|delete <file> pages=<pages>`, `/pdf rotate <file> angle=90\|180\|270 [pages=…]`, each `[to=<path>] [overwrite]` | Joins PDFs in order, copies pages into a new PDF or writes one without them, or rotates pages, into a new PDF beside the first. A browser is needed whatever *PDF engine* says. See [Editing PDFs](TOOLS.md#editing-pdfs). |
+| `/pdf merge <file> <file>… [to=<path>] [overwrite]`, `/pdf extract\|delete <file> pages=<pages> [to=<path>] [overwrite]`, `/pdf rotate <file> angle=90\|180\|270 [pages=<pages>] [to=<path>] [overwrite]` | Joins PDFs, copies pages out, writes a copy without them, or rotates pages, into a new PDF beside the first. Needs a browser whatever *PDF engine* says. See [Editing PDFs](TOOLS.md#editing-pdfs). |
 | `/claude <message>`, `/claude new` | Asks Claude Code and streams its reply, or starts a new Claude Code conversation. See [Claude Code from the chat](#claude-code-from-the-chat). |
 | `/gituser [force]` | Writes *GitLib user email* and *GitLib user name* into the repository's config; `force` replaces a `[user]` already there. Needs *GitLib tools*. |
-| `/shopping` | The shopping list in a pane, in the active store's aisle order; headless, it prints. See [Shopping list](TOOLS.md#shopping-list). |
+| `/shopping` | The shopping list in a pane, in the active store's aisle order. See [Shopping list](TOOLS.md#shopping-list). |
 | `/shopping add [<items>]` | Adds comma-separated items (`milk, 2 eggs, bread x2`); alone, the add page with past purchases. |
 | `/shopping check\|uncheck\|remove <item>`, `/shopping rename <item> to <new-name>` | Ticks, unticks, removes or renames an item, by name or number. |
 | `/shopping list [<store>]`, `/shopping print [<store>] [verbose]` | Prints the list in a store's order to the screen, or to the printer. |
 | `/shopping export [<store>] [verbose]` | Writes what's left to buy to a new `shopping-list-<time>.md` in the working directory. |
-| `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes (headless: without asking). |
-| `/shopping store [<name>]`, `/shopping store rename <name> to <new-name>`, `/shopping store add\|remove <name>` | Lists the stores or makes one the active store, renames one, or adds or removes one (after a yes; its folder stays). |
+| `/shopping clear [all]` | Removes the ticked items; `all` empties the list after a yes. |
+| `/shopping store [<name>]`, `/shopping store rename <name> to <new-name>`, `/shopping store add\|remove <name>` | Lists the stores or makes one active, renames one, or adds or removes one (after a yes; its folder stays). |
 | `/shopping reindex [<store>]` | Reads a store's reference documents again. |
 
 ### Admin
 
-Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#network) among them: each works with its tools off and reaches only the computers or domains ticked for them. All but `/net` are Windows only.
+Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#network) among them.
+
+* **Reach:** each command works with its tools off and reaches only the computers or domains ticked for them.
+* **The `/net` checks** ignore *Network tools reach*, the host lists and the per-turn budget; a dim line says when the model's own call would be refused.
+* **On a Mac:** `/services` and `/tasks` are Windows only; `/eventlog` reads the Mac's own logs ([MAC.md](MAC.md#what-works)).
+* **Keys:** the `/eventlog`, `/services`, `/tasks` and `/ad` panes' keys are in [Pane keys](INTERFACE.md#pane-keys).
 
 | Command | What it does |
 |---|---|
-| `/net ping <host> [<count>]` | Pings one host (4 echoes, 10 at most): answered or not, the loss and the round trips. Never judged by *Network tools reach*, the host lists or the budget; when the model's call would be refused, a dim line says so. |
+| `/net ping <host> [<count>]` | Pings one host (4 echoes, 10 at most): answered or not, the loss and the round trips. |
 | `/net trace <host> [names]` | The route, hop by hop (30 at most), with each hop's name when `names` is given. |
-| `/net port <host> <port>…` | Whether TCP ports (16 at most) are open, refused or silent on each of the host's addresses. |
-| `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server you name. |
-| `/net tls <host> [<port>] [smtp\|imap\|pop3\|ldap\|rdp\|none]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
+| `/net port <host> <port>...` | Whether TCP ports (16 at most) are open, refused or silent on each of the host's addresses. |
+| `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server named. |
+| `/net tls <host> [<port>] [smtp\|imap\|pop3\|ldap\|rdp\|none]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; ports 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
 | `/net certs [<store>] [user\|machine] [<words>]` | One of this machine's certificate stores (`my` by default), soonest to end first; nothing exported. On a Mac, `root` reads the system's trust unless `user` is named. |
-| `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane: Application, System, Security and Setup as tabs, newest first. `r` reads the tab again, `m` adds the next page, `c` picks another ticked computer; Enter opens an event with **copy** and **ask** (a draft asking the model about it). Works with *Event log tools* off; full text. See [Event logs](TOOLS.md#event-logs). On a Mac the tabs are `system`, `crashes` and `install` ([Event logs on a Mac](TOOLS.md#event-logs-on-a-mac)). |
-| `/eventlog <log>\|<file.evtx> [<term>…] [<words>]` | Opens on that log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:dc01`, `level:error,warning`, `id:41,1074`, `provider:<name>`, `field:<Name>=<value>`, `since:2h`, `until:<time>`, `audit:failure\|success` and words to find. On a Mac: `system`, `crashes`, `install` or a `.logarchive`, narrowed by `level:fault,error`, `process:`, `subsystem:`, `category:`, `pid:`, `exclude:`, `since:` and `until:`. Without the pane, and from the Web UI, it lists the events. |
-| `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane: Running, Stopped, Failed and All as tabs, `r` reads again, `c` another ticked computer; type to filter. Enter opens a service with **copy**, **ask** and, on a `readwrite` computer, the actions its `controlActions` allow (start, stop, restart, start type), each asking first. It ignores *Service writes* but still follows the rest of the [order of checks](TOOLS.md#services). Without the pane, and from the Web UI, it lists them. |
-| `/tasks [computer:<name>] [folder:<path>] [state:ready\|running\|disabled\|all] [microsoft] [<words>]` | A computer's scheduled tasks in a pane: Ready, Running, Disabled and All as tabs, `r` reads again, `c` another computer, `f` a folder, `w` Windows' own under `\Microsoft\`. Enter opens a task (its triggers in words, actions, who it runs as, last result) with **copy**, **ask**, **history** (its runs on `/eventlog`, when Task Scheduler's log is on) and the actions its computer allows (run, end, enable, disable), each asking first; privileged tasks are guarded. See [Scheduled tasks](TOOLS.md#scheduled-tasks). |
-| `/ad <name>` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card in columns with **copy** and **ask**; a double-click on a row opens its card. Read-only. See [Active Directory](TOOLS.md#active-directory). |
-| `/ad user <name>` | A user's card: enabled, locked and when (with a **Search 4740** button when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
-| `/ad group <name> [nested] [members:users\|computers\|groups] [to:<file-or-folder>]` | A group's card and members, direct or nested (each with the group it comes through); `n` and `u` on the card switch. |
+| `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane, a tab per log, newest first; an event opens with **copy** and **ask** (a draft asking about it). Full text, with *Event log tools* off too. See [Event logs](TOOLS.md#event-logs). |
+| `/eventlog <log>\|<evtx-file> [<term>…] [<words>]` | Opens on a log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:`, `level:`, `id:`, `provider:`, `field:<Name>=<value>`, `since:`, `until:`, `audit:` and words. On a Mac: `system`, `crashes`, `install` or a `.logarchive`, with `level:`, `process:`, `subsystem:`, `category:`, `pid:`, `exclude:`, `since:`, `until:` ([on a Mac](TOOLS.md#event-logs-on-a-mac)). Without the pane, and from the Web UI, it lists the events. |
+| `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane, a tab per state. Each opens with **copy**, **ask** and, on a `readwrite` computer, the actions `controlActions` allow, each asking; the [checks](TOOLS.md#services) but *Service writes* apply. Elsewhere (the Web UI, no pane), a list. |
+| `/tasks [computer:<name>] [folder:<path>] [state:ready\|running\|disabled\|all] [microsoft] [<words>]` | A computer's scheduled tasks, a tab per state; `microsoft` adds Windows' own. Each opens (triggers, actions, account, last result) with **copy**, **ask**, **history** (Task Scheduler's log on) and the allowed actions, each asking; privileged tasks guarded. |
+| `/ad <name> [domain:<name>]` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card with **copy** and **ask**. Read-only. See [Active Directory](TOOLS.md#active-directory). |
+| `/ad user <name>` | A user's card: enabled, locked and when (**Search 4740** when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
+| `/ad group <name> [nested] [members:users\|computers\|groups] [to:<file-or-folder>]` | A group's card and members, direct or nested (each with the group it comes through). |
 | `/ad computer <name>` | A computer's card, or a managed service account's. |
 | `/ad ou [<path>] [to:<file-or-folder>]` | The OU tree, or one OU (`Neon/Engineering`, a DN or a name): its owner, linked GPOs and objects. |
 | `/ad find <kind> [<days>] [<words>] [type:<type>] [field:<field>] [ou:<path>] [to:<file-or-folder>]` | The kinds of `ad_find`: `locked`, `password_expiring`, `disabled`, `stale_users`, `stale_computers`, `name`, `field`, `os`, `password_never_expires`, `account_expiring`, `created`, `privileged`, `empty_groups`. |
 | `/ad domain` | The domain controllers, functional levels, password and lockout policy, fine-grained policies, and the role holders. |
-| `domain:<name>`, `to:<file-or-folder>` | Anywhere on an `/ad` line: the domain (a ticked name or its DNS name), and a CSV of the list saved in the working directory (never over a file). Quote a value with spaces: `/ad group "Domain Users"`, `to:"my list.csv"`. |
+| `domain:<name>`, `to:<file-or-folder>` | Anywhere on an `/ad` line: the domain (a ticked name or its DNS name), and a CSV of the list saved in the working directory (never over a file). Quote a value with spaces: `to:"my list.csv"`. |
 
 ### Display and windows
 
@@ -282,13 +273,13 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 |---|---|
 | `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview. |
 | `/theme export <name> [<new-name>]` | Writes a theme to a file to edit. See [Custom themes](#custom-themes). |
-| `/mark [<color>\|default]` | Colors the rules around the input line for this conversation: red, orange, yellow, green, cyan, blue, purple, pink, white or gray; `default` takes it off. Kept with the session; alone, it says the mark and the choices. |
+| `/mark`, `/mark <color>`, `/mark default` | Colors the rules around the input line for this conversation (red, orange, yellow, green, cyan, blue, purple, pink, white or gray), kept with the session; `default` takes it off, and alone it lists the choices. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear. |
 | `/toolbar [on\|off]`, `/toolbar edit` | Hides or shows the [toolbar](INTERFACE.md#the-toolbar), or opens its checklist (*Tool bar*). |
 | `/perfbar [off\|text\|gauge\|led]`, `/perfbar edit` | Hides or shows the [performance bar](INTERFACE.md#the-performance-bar) in a look, or opens its checklist (*Performance bar*). |
 | `/homebar [on\|off]`, `/homebar edit` | Hides or shows the [home bar](INTERFACE.md#the-home-bar), or opens its picker. |
 | `/homebar tap <item>`, `/homebar show <item>` | Does what a double-click or a right-click on a chip does; unlocking and opening ask first. |
-| `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip a name or emoji of your own (nothing after `=` shows the emoji alone); `default` puts its own back. See [The home bar](INTERFACE.md#the-home-bar). |
+| `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip your own name or emoji (nothing after `=` shows the emoji alone); `default` puts its own back. |
 | `/log` | Opens the [log window](INTERFACE.md#the-log-window). |
 | `/log file`, `/log path` | Opens the `--log` file in your editor, or copies its path (only when started with `--log`). |
 | `/window` | Shows the terminal window's size. |
@@ -299,15 +290,15 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 |---|---|
 | `/plan <requirement>` | Has the model research with read-only tools and present a plan before anything changes. See [Plan mode](#plan-mode). |
 | `/plan [show]`, `/plan <detail>` | While planning, says where the plan stands, or adds detail. |
-| `/plan approve [--fresh \| --ralph [<passes>]]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first, `--ralph` runs it as a [Ralph loop](#ralph-loop). |
+| `/plan approve [--fresh\|--ralph [passes]]` | Approves the plan by typing (you may edit the file first); `--fresh` clears the context first, `--ralph` runs a [Ralph loop](#ralph-loop) of at most that many passes. |
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
-| `/plan gaps [model\|advisor\|any\|confirm] [passes]` | Reviews the plan pass after pass until passes in a row find no gaps. |
-| `/plan chat` | Starts plan mode to talk a plan through first: nothing is sent, and the model writes the plan only when you ask. While planning, it turns talking back on. |
+| `/plan gaps [model\|advisor\|any\|confirm] [passes]` | Reviews the plan pass after pass until passes in a row find no gaps; a count caps this run. See [Closing gaps](#closing-gaps). |
+| `/plan chat` | Starts plan mode to talk a plan through, nothing sent; the model writes the plan when you ask. While planning, it turns talking back on. |
 | `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
-| `/plan open <name>`, `/plan open` | Picks a plan up again (approving runs only the unticked steps); alone, it lists the plans to pick one: Enter or `o` opens, `c` talks it through, `l` runs it as a Ralph loop. |
-| `/plan open <name> --chat`, `/plan open --chat` | Picks a plan up to talk it through: plan mode over that file with nothing sent. |
-| `/plan ralph [<name>] [<passes>]` | Runs a plan as a Ralph loop, a step a pass, each checked before it stands; alone, it resumes a paused loop, else lists the plans. See [Ralph loop](#ralph-loop). |
+| `/plan open <name>` | Picks a plan up again; approving runs only the unticked steps. |
+| `/plan open <name> --chat`, `/plan open [--chat]` | Picks a plan up to talk it through (nothing sent); with no name, lists the plans to open, talk through or run as a Ralph loop ([keys](INTERFACE.md#pane-keys)). |
+| `/plan ralph [<name>] [passes]` | Runs a plan as a Ralph loop, a step a pass, each checked before it stands; alone, it resumes a paused loop, else lists the plans. See [Ralph loop](#ralph-loop). |
 | `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
 | `/code-audit open [<name>]` | Lists the reports, or shows one. |
 | `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). |
@@ -316,78 +307,100 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
 | `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
-| `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or from stored sessions (the newest 5, *n* up to 20, or a search); under *Reflection mode* `update-only` it only improves an existing skill. Needs *Agent skills* and *LLM offer tools* on. |
-| `/timer [<duration> [<name>]]`, `/timer stopwatch [<name>]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), starts a stopwatch that counts up (`stopwatch` without a name; again, it says how long it has run), or stops one or all (a stopwatch says its time). Works with *Timer tools* off. A timer going off rings *Timer tone* (silent by default); a stopwatch never rings. |
+| `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or stored sessions (the newest 5, *n* up to 20, or a search); *Reflection mode* `update-only` only improves one. Needs *Agent skills* and *LLM offer tools*. |
+| `/timer [<duration> [<name>]]`, `/timer stopwatch [<name>]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), starts a stopwatch (again, it says its time), or stops one or all. A timer rings *Timer tone*, a stopwatch never; works with *Timer tools* off. |
 
 ## Command details
 
 ### Plan mode
 
-`/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply.
+`/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply; `/new`, `/clear` and a profile switch leave plan mode.
 
 * **Tools:** only read-only ones (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
-* **Advisors:** while `neon_advisor` is offered, the model consults the relevant [advisors](#advisor) first.
-* **The web:** while `web_search` or `web_fetch` is offered, the model is told to look up the APIs, versions and specifications the plan depends on rather than guess, and to name its sources in the plan's Context; a gap pass also counts an unchecked one as a gap.
-* **The plan** is saved as `.neon/plans/<name>.md` in the working directory; 📝 shows while planning.
-* **Approving:** the pane offers **Approve & run** (`a`), **Approve, clear context & run** (`f`), **Approve & Ralph loop** (`l`, see [Ralph loop](#ralph-loop)), **Keep refining…** (`r`), **Close gaps…** (`g`) and **Cancel plan** (`c`). The run ticks the plan's steps; the file ends `done`, or `incomplete`.
-* **Steps and checks:** each step is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check in one sitting (a big job split into steps, not listed under one), with a `Done when:` line saying how to tell it's done, a command where one can tell. The plan is asked to stay under 20,000 characters, with no history of its review; a gap pass counts a step too big for one pass or a plan too long as a gap, and its result names what the app measured. The plan may carry a `verify:` command (run after each step by a Ralph loop) and a `final:` command (run once at the end) in its header; the approval pane's caption shows them.
-* **Reference pictures:** pictures in the conversation while planning are saved beside the plan as `.neon/plans/<name>/ref-1.png`… and listed under `## References`. A run sends them with its first message (a Ralph pass, the ones its step names, else all), when the model can see pictures.
-* **Picking one up:** `/plan open` alone lists the plans to pick one; `/plan open <name> --chat` turns plan mode on over the file with nothing sent, to talk it through.
-* **Talking it through:** `/plan chat` opens plan mode with nothing sent. Your first message opens the conversation, and the model discusses, asks and researches but doesn't present a plan until you ask for it, in your own words or with `/plan ready`; the plan's title then becomes its requirement. The plan-like-reply hint stays quiet meanwhile (`/plan save` still works). `/plan ready` in any plan mode asks for the plan, or, once one is presented, opens its approval pane with no new turn.
-* **Closing gaps:** **Close gaps…** (or `/plan gaps`) reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file) and saves a revision. A number (`/plan gaps 3`, `/plan gaps advisor 3`) caps this run's passes instead of *LLM plan gap passes*.
-* **Clean passes:** a review ends only after *LLM plan gap clean passes* in a row find no gaps (2 by default). A pass after a clean one is told the last pass found none and to look again, each such pass pointed at a different area (the steps' order, how each is verified, the risks, what the plan assumes, then each step's size and the plan's length). A pass with no gaps must say what it checked, and the notices list it. Small fixes that aren't gaps (wording, formatting) go in `present_plan`'s `minor` and don't break a clean streak.
-* **Unattended:** with *LLM plan gap ask user* off, a pass asks nothing, takes no photo and captures no screen; a decision only you can make goes into the plan's `## Risks` as an "Open question (your call):" bullet, which isn't a gap, and the pass's notice lists it.
-* **Who reviews:** with advisors offered, the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or the model closing the gaps and an advisor checking once it finds none (`c`, `/plan gaps confirm`, at least 2 clean passes).
-* **When it stops:** after the clean passes in a row (the approval pane comes back), at its pass limit (the count given to `/plan gaps`, else *LLM plan gap passes*; a clean pass there brings the pane back unconfirmed), when a pass changes nothing or repeats itself, when you type a message, or on Esc. Every pass counts toward the limit, and a limit below the clean count lowers it to the limit for that run, with a notice.
-* **The summary:** when a review stops, a notice lists its passes: each one's gaps, minor fixes, focus, time and tokens.
-* **The record:** a review that ends on its own (clean, at its limit, or stalled) writes a `review:` line into the plan's header with a fingerprint of its text. `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`; ticking steps is no edit, and a new revision drops the line.
-* **Done:** when every step is ticked, the done line is followed by "📝 I ❤️ it when a plan comes together."
-* `/new`, `/clear` and a profile switch leave plan mode.
+  * With `neon_advisor` offered, the model consults the relevant [advisors](#advisor) first.
+  * With the web tools, it checks the APIs and versions the plan depends on, and names its sources.
+* **The file:** `.neon/plans/<name>.md` in the working directory; 📝 shows while planning. Pictures in the conversation are saved beside it (`<name>/ref-1.png`…, under `## References`).
+  * A run sends them with its first message when the model can see pictures (a Ralph pass, the ones its step names).
+* **Steps:** each is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check, with a `Done when:` line (a command where one can tell). The plan stays under 20,000 characters.
+  * Its header may carry a `verify:` command (run after each Ralph step) and a `final:` one (run once at the end).
+* **Approving:** **Approve & run**, **Approve, clear context & run**, **Approve & Ralph loop**, **Keep refining…**, **Close gaps…** or **Cancel plan** ([keys](INTERFACE.md#pane-keys)).
+  * The run ticks the steps; the file ends `done` ("📝 I ❤️ it when a plan comes together.") or `incomplete`.
+* **Talking it through:** `/plan chat`, or `/plan open <name> --chat`, opens plan mode with nothing sent. The model discusses, asks and researches, and presents a plan only when you ask (in your words or with `/plan ready`); its title then becomes the requirement.
+
+#### Closing gaps
+
+**Close gaps…** or `/plan gaps` reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file, an unchecked source, a step too big, a plan too long) and saves a revision.
+
+* **Clean passes:** a review ends after *LLM plan gap clean passes* in a row find no gaps. Small fixes (wording, formatting) don't break a streak.
+  * Each pass after a clean one looks at another area (the steps' order, verification, risks, assumptions, size) and must say what it checked.
+* **Who reviews** (with advisors offered): the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
+* **Unattended:** with *LLM plan gap ask user* off, a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, which isn't a gap.
+* **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on a typed message or Esc.
+  * At the limit, the count given or *LLM plan gap passes*; a clean pass there returns the pane unconfirmed. A limit below the clean count lowers that count for the run.
+* **The record:** a stop lists every pass (gaps, minor fixes, focus, time, tokens). A review that ends on its own writes a `review:` line into the header.
+  * `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`. Ticking steps is no edit; a new revision drops the line.
 
 ### Ralph loop
 
-`/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, the plan file and a log holding it together. **Approve & Ralph loop** on the approval pane, `/plan approve --ralph` and `l` on the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, with its checks named.
+`/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, held together by the plan file and a log. **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, its checks named.
 
-* **A pass:** the model gets the plan, its step and the step's `Done when:` line, the notes and facts earlier passes left, every tool, and `finish_step`, which it calls once to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, a top-level step once).
-* **Whether a step stands** is the app's call, not the model's: the plan's `verify:` command runs after each step (asked once, as you confirm the loop: it never asks again, and runs nothing under *Shell command policy* `off`), then the evidence (files changed, the files the step names there) and a review (*LLM Ralph loop reviewer*). A failed check unticks the step, and the next pass gets its output.
-* **Before it starts:** the app measures the plan: one step in a long plan (one pass would do it all), steps with no `Done when:` line, a plan longer than a pass sends whole (24,000 characters, or a quarter of a smaller context window), and no check at all with the reviewer off. Any of them and it asks "Start anyway?" (on the PC and the Web UI at once); a no leaves the plan presented, to revise (`/plan gaps` tightens it). The approval pane's caption names them beside the checks, and `/plan ralph <name>` names them in its one confirm.
-* **First:** the checks run once on the project as it is. If one fails, you may start anyway: the steps then go unchecked and the verify command runs once at the end.
-* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (the step, the outcome, the check and the end of its output, redacted, the review, the files changed, the time, the tokens and what the pass learned); a `ralph.lock` beside it keeps a second Neon Sidekick off the same plan. With the reference pictures, that's all the folder holds: worth knowing before you commit `.neon/`.
-* **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui) at once. Only then may a pass ask you anything (`ask_user`, the camera, the screen).
-* **When it stops:** every step standing (and the `final:` command passing, with one pass to fix it), a blocked step, two passes in a row with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, or the working directory changing. A message typed during a pass pauses the loop after that pass. A stop you didn't cause rings *LLM Ralph loop stop tone*.
-* **Afterwards:** `/plan ralph` resumes a paused loop (the checks run first again), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
-* **Shell policy `ask`:** a pass's own commands still ask, so an unattended loop waits on each; the confirm says so. For a long run, allow the commands it needs, or use `yolo`.
-* 🔁 leads the Status bar with the step and the pass; each pass is a session of its own.
+* **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
+* **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed) and a review (*LLM Ralph loop reviewer*).
+  * The command is approved once with the loop; nothing runs under *Shell command policy* `off`.
+  * A failed check unticks the step, and the next pass gets its output.
+* **Before it starts:** the app asks "Start anyway?" on the PC and the Web UI when a plan doesn't suit a loop; a no leaves it presented, to revise.
+  * That's one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
+* **The baseline:** the checks run once on the project as it is. If one fails you may start anyway; the steps then go unchecked and verify runs once at the end.
+* **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); a `ralph.lock` keeps a second Neon Sidekick off the plan. Mind that folder before you commit `.neon/`.
+* **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
+  * Only then may a pass ask you anything (`ask_user`, the camera, the screen).
+* **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
+
+#### When a loop stops
+
+* **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
+* **When it can't go on:** a blocked step, two passes with no progress, or a step failing its checks twice or using *LLM Ralph loop passes per step*.
+* **At a limit or by hand:** the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, or a working directory change.
+* **The stop tone:** a stop you didn't cause rings *LLM Ralph loop stop tone*.
+* **A message typed** during a pass pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
 
 ### Code audit
 
 `/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply.
 
-* **Scope:** the whole working directory by default. A path narrows it (quote one with a blank: `/code-audit "My Folder"`); `diff` audits the working changes (unstaged, staged and untracked), `staged` the staged ones, and `branch [<base>]` the branch's commits since its base (`main`, else `master`). Inside a repository the scope is git's files, ignored ones left out; elsewhere a walk that skips `bin`, `obj`, `node_modules`, `dist` and the like. Minified, map and lock files, generated C# and `vendor/`-style folders are left out unless the line names a path holding them; secret-looking files (`.env`, keys, certificates) are always left out. `.neon/` is the app's own and is refused. Past 5,000 files the list is cut and the rest counted.
-* **Focus:** security, correctness, performance, maintainability and tests, in any mix on the line (`all` for the five); none named means *LLM code audit focus*. A pass covers every dimension chosen; a pass after a clean one takes one in turn (with one chosen, an angle in turn: edge cases, error paths, concurrency, input from outside).
-* **The brief:** the first word that is none of the above starts it, or everything after `--` (`/code-audit src -- tests are flaky`). A word that looks like a path but names nothing is refused, so a typo never becomes the brief.
-* **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies every line it cites), `any` (the model, asking advisors where a role fits) or `confirm` (the model, with an advisor on each pass after a clean one; at least 2 clean passes). A number (0–50, 0 for no cap) caps this run instead of *LLM code audit passes*.
-* **Tools:** the file, picture, PDF and git reads, the advisors, the manual, the clock, skills, memory's recall and `ask_user`, plus `present_audit`. The web's reads only under *LLM code audit web research* (off by default: audited code may carry instructions, and the web is the one way a pass could send code out).
-* **The report:** `.neon/audits/<name>.md`, written by the app from each `present_audit` call: findings by severity with stable ids (`A3`, never reused), each with its file and line, detail, fix and the quoted evidence the app checked against the file, then nits, open questions, coverage, what clean passes checked and the retracted findings. A finding needs its file read this session (a window is enough; a diff is not). You may edit the report during an audit: a ticked box settles a finding (reporting it again reopens it), and every call reads the file fresh. The files the passes read are kept beside it in `<name>.coverage.txt`, so `resume` carries on where they left off.
-* **Clean passes and coverage:** an audit ends after *LLM code audit clean passes* in a row find nothing new (2 by default); a pass after a clean one looks first at the files no pass has read. A pass is asked to report within *LLM code audit pass tool calls* (40); it is guidance, never a cut-off. The passes line, the converged notice and the pane say how much of the scope was read.
+* **Scope:** the working directory, or a path (quote one with a blank); `diff` the working changes (unstaged, staged, untracked), `staged` the staged ones, `branch [<base>]` the commits since its base (`main`, else `master`). Past 5,000 files the list is cut.
+* **Left out:** git's ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` folders unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.
+* **Focus:** security, correctness, performance, maintainability and tests, any mix (`all`; none means *LLM code audit focus*). A pass after a clean one takes one in turn (with one chosen, an angle: edge cases, error paths, concurrency, outside input).
+* **The brief:** the first other word, or all after `--`, starts the brief (`/code-audit src -- tests are flaky`); a path-like word that names nothing is refused.
+* **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies each line it cites), `any` (asking advisors where a role fits) or `confirm` (an advisor on each pass after a clean one; at least 2 clean passes).
+  * A number (0–50, 0 for no cap) replaces *LLM code audit passes* for the run.
+* **Tools:** the file, picture, PDF and git reads, advisors, the manual, the clock, skills, memory's recall, `ask_user` and `present_audit`. The web's reads only under *LLM code audit web research* (off: audited code may carry instructions, and the web could send code out).
 * **Unattended:** with *LLM code audit ask user* off, a pass asks nothing, takes no photo and captures no screen; a question only you can answer goes into the report's Open questions.
-* **When it stops:** after the clean passes in a row, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, when you type a message, or on Esc. Each stop says why, and `/code-audit resume <name>` runs more passes; `/new`, `/clear` and a profile switch stop it too.
-* **The pane:** the open findings as a short table first, then **Fix via plan** (`p`, only with a finding open: plan mode on the open findings, the report marked `fixing`), **More passes…** (`g`, the reviewer page when advisors are offered), **Keep report** (`k`, where the cursor starts; Esc is Keep too) and **Discard report** (`d`, after a yes; to the Recycle bin when *File deletes to Recycle bin* is on). The Web UI's page gets the same choices but the reviewer page.
-* **Picking up again:** `/code-audit open` lists the reports (newest first, a report left `auditing` after a restart as `stopped`, a fix in progress as `fixing 3/7`, every box ticked as `fixed`); `/code-audit fix` and `resume` take the newest without a name, and say which.
-* **Not during a botchat:** a form that would start passes is refused at once while `/botchat` runs (`/code-audit open` waits for the chat's end); for several voices, use the advisor reviewers.
+
+#### The report
+
+* **What it holds:** `.neon/audits/<name>.md`, written by the app. Findings come by severity with stable ids (`A3`, never reused), each with its file and line, fix and quoted evidence the app checked against the file.
+  * Then nits, open questions, coverage, what clean passes checked, and the retracted findings.
+* **Its rules:** a finding needs its file read this session (a window is enough, a diff is not). You may edit the report during an audit: a ticked box settles a finding; reporting it again reopens it. `<name>.coverage.txt` keeps the files read, so `resume` carries on.
+* **Clean passes:** an audit ends after *LLM code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first.
+  * *LLM code audit pass tool calls* is guidance, never a cut-off. The pane says how much of the scope was read.
+* **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a typed message or Esc, `/new`, `/clear` or a profile switch. Each stop says why; `/code-audit resume <name>` runs more passes.
+* **The pane:** the open findings, then its choices ([keys](INTERFACE.md#pane-keys)); the Web UI page gets the same ones.
+  * **Fix via plan:** plan mode on the open findings, the report marked `fixing`.
+  * **More passes…:** the reviewer page when advisors are offered.
+  * **Keep report**, or **Discard report** after a yes (to the Recycle bin, the Trash on a Mac, when *File deletes to Recycle bin* is on).
+* **Picking up again:** `/code-audit open` lists the reports (`stopped`, `fixing 3/7`, `fixed`…); `fix` and `resume` take the newest without a name, and say which. While `/botchat` runs, a form that would start passes is refused (`open` waits for the chat's end).
 
 ### Bot conversations
 
 `/botchat` lets profiles talk to each other until you stop them. Its settings are on `/settings` › Client › [Botchat](SETTINGS.md#botchat).
 
-* **Cast:** the profiles named, or all of them; the loaded one speaks first.
-* **Topic:** the first word that isn't a profile starts it (`/botchat ada max the best pizza`); after `--`, the rest is the topic. Without one, the bots pick.
-* **Turns:** each bot speaks in its persona and, with speech on, its own voice. A bot named in the last line speaks next, else a random one.
+* **Cast and topic:** the profiles named, or all of them; the loaded one speaks first. The first word that isn't a profile starts the topic (`/botchat ada max the best pizza`), or the rest after `--`; without one, the bots pick.
+* **Turns:** each bot speaks in its persona and, with speech on, its own voice; its pronouns come from its first TTS voice (`am_`, `bm_`… male, else female). A bot named in the last line speaks next, else a random one.
 * **Servers:** bots use this profile's server, or their own under *Botchat LLM mode* `multi`. `/botchat --kill` stops the extra embedded servers (*Botchat embedded mode*).
 * **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), tools, skills and memory, per the Botchat settings. Advisors are never offered; bots on the Claude Code server get no tools.
-* **Joining in:** a line you type joins before the next reply; with *STT input* on, push-to-talk cuts in.
-* **Stopping:** Esc stops the voice, then the current bot, then the chat. `/botchat --resume` carries on.
-* Each bot's pronouns come from its first TTS voice (`am_`, `bm_`… male, else female). The chat is saved as its own session under *Session logging*.
+* **Joining in:** a line you type joins before the next reply; with *STT input* on, push-to-talk cuts in. Esc stops the voice, then the current bot, then the chat; `/botchat --resume` carries on.
+* The chat is saved as its own session under *Session logging*.
 
 ### Claude Code from the chat
 
@@ -416,10 +429,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **The same checks:** *Shell command policy* `off` refuses it, the shell police refuse what they always refuse, and under `ask` a line not on *Shell allowed commands* asks.
 * **Time:** *Shell default timeout (s)*, at most *Shell max timeout (s)*. Esc stops the line and everything it started.
 * **Output** past *Shell output max chars* isn't drawn; the whole goes to a log in the working directory's `.shell` folder.
-* **The model sees it**, tagged `[I ran in the shell (<shell>)]` and `[shell output]`.
+* **The model sees it**, tagged `[I ran in the shell (<shell>)]` and `[shell output]`. Plan mode doesn't stop `/cmd`.
 * **In the background:** `/cmd --bg` gives the chat back at once, with no timeout, up to 16 at a time. Ctrl+K twice in its process window stops it.
-* Closing the app stops a background line and all it started, even after a crash. On a Mac, a program that starts its own session can slip away.
-* Plan mode doesn't stop `/cmd`. Headless has none: the line goes to the model as text.
+* Closing the app stops a background line and all it started, even after a crash (on a Mac, see [Shell](TOOLS.md#shell)).
 
 ### Loops
 
@@ -459,39 +471,35 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 ### Camera
 
-A USB or built-in webcam, through Media Foundation on Windows or AVFoundation on a Mac (macOS 14 or later); nothing to install. The model's camera tool is in [TOOLS.md](TOOLS.md#camera).
+A USB or built-in webcam, nothing to install (macOS 14 or later on a Mac). The model's camera tool is in [TOOLS.md](TOOLS.md#camera).
 
-* **The pane:** Space takes the photo, `r` retakes, Enter attaches it as `[Image #N]`, Esc drops it. Under *Camera preview* `live`, a window shows the shot as you frame it.
-* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go. 📷 shows on the status bar while it is on.
-* **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder; a retaken or dropped one is deleted. Botchat and watch pictures aren't saved.
-* **Stored sessions** keep a line instead of the picture unless *Camera keep in sessions* is on.
+* **The pane** takes, retakes, attaches (`[Image #N]`) or drops a photo ([keys](INTERFACE.md#pane-keys)). Under *Camera preview* `live`, a window shows the shot as you frame it.
+* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go; 📷 shows on the status bar while it's on.
+* **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder; a retaken or dropped one is deleted. Botchat and watch pictures aren't saved. Stored sessions keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Watching** compares each picture, on your machine, with the last one the model saw, and sends it only when enough changed.
-* **On Windows** a failure says why: the camera privacy setting, another app holding it, unplugged, or no Media Foundation (Windows N needs the Media Feature Pack).
-* **On a Mac** the permission is your terminal's: macOS asks at the first photo; a refusal is changed in System Settings › Privacy & Security › Camera. A MacBook's camera is off while its lid is closed; an iPhone works as a Continuity Camera.
-* **Known issue:** the pane's "The camera is opening…" stays until the next key after the camera is on.
+* **When it fails** the app says why: the camera privacy setting, another app holding it, unplugged, or a Windows N edition without the Media Feature Pack.
+* **On a Mac:** the camera permission, a MacBook's lid and the iPhone camera are in [MAC.md](MAC.md).
+* **Known issue:** see [Known issues](TOOLS.md#known-issues).
 
 ### Screen capture
 
-A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureKit on a Mac (macOS 14 or later); nothing to install. The model's screen tools are in [TOOLS.md](TOOLS.md#screen).
+A monitor, every monitor or one window, nothing to install (macOS 14 or later on a Mac). The model's screen tools are in [TOOLS.md](TOOLS.md#screen).
 
 * **Targets:** `screen` (the app's monitor, the default), `all`, `monitor:N`, `window:<id or title words>` and `behind` (the window right behind the app's).
 * **A window** comes out whole even when covered; a minimized one must be restored first. Protected video comes out black.
 * **Screenshots** are JPEGs in *Screen output folder* under the profile's `images` folder, at most 2048 pixels on the longer side.
-* **Asking:** under *Screen policy* `ask`, the app asks you before each of the model's captures; **Allow for this session** lasts until the session ends.
+* **Asking:** under *Screen policy* `ask`, the app asks before each of the model's captures; **Allow for this session** lasts until the session ends.
 * **Stored sessions** keep a line instead of the picture unless *Screen keep in sessions* is on: a screenshot can hold anything.
-* **On a Mac** the terminal needs the Screen Recording permission (System Settings › Privacy & Security › Screen & System Audio Recording; reopen the terminal after). Without it nothing is captured.
-* On a Mac, windows on another desktop or minimized aren't listed, and `behind` is the window behind the terminal.
+* **On a Mac:** the Screen Recording permission and which windows are listed are in [MAC.md](MAC.md#what-works); `behind` is the window behind the terminal.
 
 ### Profiles
 
-* A name is 1 to 32 letters, digits, `-` or `_`, and not one of `/profile`'s words (`add`, `push`, `keys`…). The default profile is `neon`.
-* Each profile is a folder in the home's `profiles` folder: `profile.json`, `persona.md`, `operata.md` and `vocalia.md` at its top, its other settings files (memories, MCP servers, connections, saved prompts, videos and links) in `configs`.
-* A name starting with `_` is temporary: off the picker.
-* Every start opens `neon`; a switch lasts until the app closes. A desktop shortcut, `--profile` or `NEONSIDEKICK_PROFILE` opens another.
-* `--profile <name>` (or `NEONSIDEKICK_PROFILE`) opens a profile for one launch; an unknown name exits with code 2.
-* A reset keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.
-* `push` and `pull` ask first; the bare forms copy only `profile.json`.
-* The API keys in `profile.json` are encrypted (DPAPI on Windows, a key in the Keychain on a Mac), one typed in by hand at the next load. Only you, on this machine, can read them.
+* **Names:** 1 to 32 letters, digits, `-` or `_`, and not one of `/profile`'s words (`add`, `push`, `keys`…). A name starting with `_` is temporary, off the picker. The default profile is `neon`.
+* **Files:** each profile is a folder in the home's `profiles` folder: `profile.json`, `persona.md`, `operata.md` and `vocalia.md` at its top, its other settings files (memories, MCP servers, connections, saved prompts, videos and links) in `configs`.
+* **Starting:** every start opens `neon`, and a switch lasts until the app closes. A desktop shortcut, `--profile <name>` or `NEONSIDEKICK_PROFILE` opens another for a launch; an unknown name exits with code 2.
+* **Reset:** keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.
+* **Push and pull** ask first; the bare forms copy only `profile.json`.
+* **API keys** in `profile.json` are encrypted (DPAPI on Windows, a key in the Keychain on a Mac), one typed in by hand at the next load. Only you, on this machine, can read them.
 
 ### Desktop shortcuts
 
@@ -503,7 +511,7 @@ A monitor, every monitor or one window, through GDI on Windows or ScreenCaptureK
 | `/shortcut jason --log` | `NeonSidekick.exe --profile jason --log "<exe folder>\logs\neon-jason-{ts}.log"` |
 
 * One already there is replaced. `{ts}` becomes each launch's start time, so every run gets its own log.
-* It points at the running exe, so make it from the copy you mean to keep. Headless has no `/shortcut`.
+* It points at the running exe, so make it from the copy you mean to keep.
 * **Each profile offers one** (**No**, **Yes** or **Yes, with a log (--log)**) once, at start or on switching to it. Set `"ShortcutOffered": false` in that profile's `profile.json` (`/profile edit`) to be asked again.
 * **On a Mac** it is `NeonSidekick (<profile>).command`, with the app's icon: a zsh script Finder opens in iTerm2 when the app runs there, else Terminal. The log goes to `logs/` beside the app.
 
@@ -521,7 +529,7 @@ The sixty built-in themes are JSON files in [`assets/themes`](../assets/themes),
 | `nights` | cyberpunk, kowloon, lighthouse, miami, sakura, synthwave, witchhour |
 | `solid` | blueprint, carbon, chalkboard, espresso, fieldradio, glacier, matcha, signal, ultraviolet, velvet (one color, no gradient) |
 
-Your own are JSON files in the home's `themes` folder (and subfolders one level deep), shared by every profile. They are read again whenever a theme list opens; a file named like a built-in replaces it.
+Your own are JSON files in the home's `themes` folder (and subfolders one level deep), shared by every profile and read again whenever a theme list opens; one named like a built-in replaces it.
 
 Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in, and never overwrites a file.
 
@@ -575,12 +583,13 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 * **Menus and help:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`, `menuFooter`, `helpForm` (`/help`'s forms), `helpSlot` (their placeholders).
 * **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownHeading3`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.
-* **File diffs:** `diffAdded`, `diffRemoved` (the background colors the whole line).
-* **Tip:** a row keeps its own colors on `menuHighlight`'s fill (a setting's value, a check mark), so keep that fill dark; a diff's code keeps its colors on `diffAdded`'s and `diffRemoved`'s fill too.
+* **File diffs:** `diffAdded`, `diffRemoved` (the background colors the whole line). Keep these fills and `menuHighlight`'s dark: a diff's code, and a menu row's value or check mark, keep their own colors on them.
 
 ### Voice presets
 
-*TTS voice preset* (`/settings` › Voice › [TTS](SETTINGS.md#tts)) picks from the seven built-ins (amanda, neon, richard, hunter, larry, jack, willow) and your own. Yours are JSON files in the home's `voices` folder (and subfolders one level deep), named for the preset; one named like a built-in replaces it. Changes apply without a restart.
+*TTS voice preset* (`/settings` › Voice › [TTS](SETTINGS.md#tts)) picks from the seven built-ins (amanda, neon, richard, hunter, larry, jack, willow) and your own.
+
+Yours are JSON files in the home's `voices` folder (and subfolders one level deep), named for the preset. One named like a built-in replaces it; changes apply without a restart.
 
 ```jsonc
 {

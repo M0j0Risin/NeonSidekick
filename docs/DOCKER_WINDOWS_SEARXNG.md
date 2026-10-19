@@ -1,10 +1,10 @@
-# SearXNG with Docker (Windows)
+# SearXNG with Docker
 
-A local SearXNG for the web tools. Back to the [README](../README.md).
+A local SearXNG search engine for the web tools, on Windows or a Mac. Back to the [README](../README.md).
 
 ## Prerequisite
 
-- Docker Desktop (Windows, or a Mac)
+- Docker Desktop
 
 ## Prepare directory
 
@@ -100,7 +100,7 @@ curl -s "http://localhost:8888/search?q=cheese&format=rss" | head -c 300
 
 ## (optional) Boot guard `docker-compose.yml`
 
-Without this, SearXNG can fall back to its default settings after a Windows boot, until you restart the container by hand.
+On Windows, without this, SearXNG can fall back to its default settings after a boot, until you restart the container by hand.
 
 ```yaml
 # Read the documentation before using the `docker-compose.yml` file:

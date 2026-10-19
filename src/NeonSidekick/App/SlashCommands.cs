@@ -150,7 +150,8 @@ public enum SlashCommand
     /// page, for the user to browse; its cookies go to the web tools when they close it (<c>ChatScreen.HandleBrowser</c>). <c>/browser clear
     /// history|all</c> (later on 2026-10-13) clears what the window keeps for the loaded profile. The saved links (later still,
     /// <c>BrowserCommand</c>): <c>save [url [name]]</c>, <c>list [--clear]</c>, <c>unsave &lt;n|url&gt;</c> and <c>/browser &lt;n&gt;</c>; they
-    /// need no window, so they work headless and off Windows. The window itself is Windows only, never headless.
+    /// need no window, so they work headless and off Windows. The window itself is Windows only, never headless (and a Mac's on macOS 14
+    /// or later, WebKit, since 2026-10-18, mac-pass2).
     /// </summary>
     Browser,
 
@@ -278,7 +279,8 @@ public enum SlashCommand
     /// <c>/eventlog</c> (2026-10-15, the event-log plan): a computer's events on a pane (<see cref="EventLogMenu"/>) — the logs as tabs, an
     /// event's page with copy and ask —, <c>/eventlog &lt;log|file.evtx&gt; [computer:x] [level:…] [id:…] [provider:…] [field:N=v]
     /// [since:…] [until:…] [audit:…] [text]</c> narrowing it (<see cref="EventLog.EventLogCommand"/>). The user's own hand: it works with
-    /// <c>Event log tools</c> off, reaches only the ticked computers, and shows full text. Windows only.
+    /// <c>Event log tools</c> off, reaches only the ticked computers, and shows full text. Windows only (a Mac's own logs too since
+    /// 2026-10-18, mac-pass2: the unified log, crashes and install.log, no remote computer).
     /// </summary>
     EventLog,
 
@@ -291,7 +293,7 @@ public enum SlashCommand
     /// <summary><c>/tasks [computer:x] [folder:\x] [state:…] [words]</c> (2026-10-15): a computer's scheduled tasks on a pane, run/end/enable/disable under <c>readwrite</c>. Windows only.</summary>
     Tasks,
 
-    /// <summary><c>/ad &lt;words&gt;</c> or <c>/ad user|group|computer|find|domain …</c> (2026-10-15): the directory, read-only. Windows only.</summary>
+    /// <summary><c>/ad &lt;words&gt;</c> or <c>/ad user|group|computer|find|domain …</c> (2026-10-15): the directory, read-only. Windows only (a Mac's too since 2026-10-18, mac-pass2, over Kerberos).</summary>
     Ad,
 
     /// <summary>

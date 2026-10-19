@@ -50,8 +50,8 @@ The native exe lands in `publish\output\NeonSidekick.exe`. Close it before a pub
 The build is strict on purpose:
 * **Zero warnings.** Any compiler warning fails the build, and so does any NativeAOT warning about the app's own code. Warnings from other libraries are listed and tolerated.
 * **Coverage.** The tests must cover at least 80% of the lines.
-* **Smoke test.** After publishing, the script runs the native exe with `--smoke` to check that every native library loads and works, and that the trimmed web server (`webui:kestrel`) still serves. `dotnet build` and `dotnet test` can't catch a missing native DLL; this can.
-* **ASP.NET Core.** The Web UI uses the ASP.NET Core shared framework, which the .NET SDK carries; a NativeAOT publish restores its runtime pack (`Microsoft.AspNetCore.App.Runtime.<rid>`) from NuGet.
+* **Smoke test.** After publishing, the script runs the native exe with `--smoke`: every native library must load and work, and the Web UI's server must still serve. `dotnet build` and `dotnet test` can't catch a missing native DLL; this can.
+* **ASP.NET Core.** The Web UI uses its shared framework, which the .NET SDK carries; a native publish restores its runtime pack (`Microsoft.AspNetCore.App.Runtime.<rid>`) from NuGet.
 * **Version check.** `-Package` checks that the published exe's `--version` matches the project's `<Version>`.
 
 ## Tests
@@ -71,12 +71,16 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 
 * The tests run one at a time, by design.
 * **Live tests** (a real LLM server, database, camera, microphone, speech model…) are skipped unless their resource is there. [ENVIRONMENT.md](ENVIRONMENT.md#test-suite) lists the variables that turn each one on, and [TESTCONTAINERS.md](TESTCONTAINERS.md) the Docker containers they run against.
-* **Browser PDF tests** read hand-written PDFs (an outline, a locked file, Japanese text, a form) in this machine's Edge, Chrome or Brave, headless, and edit them with pdf-lib (merge, split, rotate, fill in forms). Without one installed they pass without proving anything; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
+* **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in this machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass without proving anything; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
 * **GPU tests:** two tests load an embedded model onto the GPU, so `build.ps1` leaves them out. Run them with `dotnet test tests/NeonSidekick.Tests -c Release --filter Category=LoadsEmbeddedModel` while no other model holds the GPU.
 
 ## Checking the native exe
 
-Besides `--smoke`, the published exe has checks for real hardware and servers: `--audio-check`, `--voice-check`, `--camera-check`, `--docker-check`, `--unc-check`, and one per database family (`--sql-check`, `--oracle-check`, `--mysql-check`, `--postgres-check`, `--sqlite-check`). [COMMANDLINE.md](COMMANDLINE.md) lists them all.
+Besides `--smoke`, the published exe has checks for real hardware and servers. [COMMANDLINE.md](COMMANDLINE.md) says what each one does.
+
+* **Hardware:** `--audio-check`, `--voice-check`, `--camera-check`.
+* **Databases:** `--sql-check`, `--oracle-check`, `--mysql-check`, `--postgres-check`, `--sqlite-check`.
+* **Admin and the rest:** `--unc-check`, `--docker-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`.
 
 ## Building on a Mac
 
