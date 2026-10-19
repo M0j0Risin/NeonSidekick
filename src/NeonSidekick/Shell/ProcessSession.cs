@@ -67,6 +67,9 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     /// <summary>How many lines the last <c>poll</c> had seen; the registry's cursor into <see cref="Output"/>.</summary>
     public long PollCursor { get; set; }
 
+    /// <summary>The streams' unfinished lines that poll showed as it set <see cref="PollCursor"/> (2026-10-19, the second shell review): what <c>wait</c>'s <c>until</c> passes over.</summary>
+    public IReadOnlyList<OutputLine> ShownUnfinished { get; set; } = [];
+
     /// <summary>Whether <see cref="Kill"/> ended it (a timeout, a <c>kill</c>, the app's exit) rather than its own exit.</summary>
     public bool Killed { get; private set; }
 

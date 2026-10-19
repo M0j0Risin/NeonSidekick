@@ -59,6 +59,15 @@ public sealed class ShellTests
     [InlineData("docker -H tcp://evil rm y", CommandPrefix.Unreadable)]   // -H aims docker at another daemon (2026-10-19)
     [InlineData("make -f /tmp/x test", CommandPrefix.Unreadable)]   // -f runs an arbitrary makefile
     [InlineData("kubectl --kubeconfig /tmp/k get pods", CommandPrefix.Unreadable)]
+    // An option the lists don't know may take the next word as its value, so the verb can't be told (2026-10-19, the second review):
+    [InlineData("dotnet --roll-forward test x.dll", CommandPrefix.Unreadable)]
+    [InlineData("npm --registry test publish", CommandPrefix.Unreadable)]
+    [InlineData("npm --script-shell=/tmp/x test", CommandPrefix.Unreadable)]
+    [InlineData("git --attr-source test push", CommandPrefix.Unreadable)]
+    [InlineData("go -C test build", CommandPrefix.Unreadable)]
+    [InlineData("dotnet --info", "dotnet")]   // a last word is only an option
+    [InlineData("npm -g install x", "npm install")]   // a known flag
+    [InlineData("git --git-dir .git --no-pager log", "git log")]
     [InlineData("PATH=/tmp/x make test", CommandPrefix.Unreadable)]   // a leading PATH assignment can redirect which make runs
     [InlineData("kubectl -n prod delete pod x", "kubectl delete")]
     [InlineData("docker --context remote rm -f x", "docker rm")]
@@ -167,10 +176,44 @@ public sealed class ShellTests
     // expansions that evaluate a variable's content as code ask:
     [InlineData("bash", "echo ${x@P}", new[] { "echo", CommandPrefix.Unreadable })]
     [InlineData("zsh", "echo ${(e)x}", new[] { "echo", CommandPrefix.Unreadable })]
+    // A comment's quotes are text to the segmenter too, so an apostrophe in one no longer hides the lines after it (the second review):
+    [InlineData("powershell", "git log # it's\nRemove-Item x\n# it's", new[] { "git log", "remove-item" })]
+    [InlineData("bash", "git log # it's\nrm -rf x\n# it's", new[] { "git log", "rm" })]
+    [InlineData("bash", "git log;# it's\nrm -rf x\n#'", new[] { "git log", "rm" })]   // a # after a separator opens one too
+    [InlineData("powershell", "git log;# it's\nRemove-Item x\n#'", new[] { "git log", "remove-item" })]
+    [InlineData("powershell", "Get-Item x <# it's #> ; Remove-Item y", new[] { "get-item", "remove-item" })]
+    [InlineData("powershell", "Write-Output a<#x; Remove-Item y #>b", new[] { "write-output", "remove-item" })]   // mid-word: no comment (measured)
+    [InlineData("bash", "echo \"a\"#it's; rm x; '", new[] { "echo" })]   // mid-word: no comment, so the ' is a quote (as bash reads it)
+    [InlineData("powershell", "Write-Output \"a\"#it's\nRemove-Item x\n#'", new[] { "write-output", CommandPrefix.Unreadable })]   // in doubt: asks
+    [InlineData("bash", "echo $(echo a)#it's\nrm x\n#'", new[] { "echo", CommandPrefix.Unreadable })]
+    // PowerShell's typographic quotes, cmd's lack of single ones:
+    [InlineData("powershell", "git log 'a’; Remove-Item x; '", new[] { "git log", "remove-item" })]
+    [InlineData("powershell", "git log “a\"; Remove-Item x", new[] { "git log", "remove-item" })]
+    [InlineData("bash", "git log 'a’; rm x; '", new[] { "git log" })]   // text to bash
+    [InlineData("cmd", "git status ' & del x & '", new[] { "git status", "del" })]
+    // A statement that opens with a value and calls a method on it runs code:
+    [InlineData("powershell", "(Get-Item src).Delete()", new[] { CommandPrefix.Unreadable, "get-item" })]
+    [InlineData("powershell", "$(Get-Item src).Delete()", new[] { CommandPrefix.Unreadable, "get-item" })]
+    [InlineData("powershell", "@(Get-Item src).'Delete'()", new[] { CommandPrefix.Unreadable, "get-item" })]
+    [InlineData("powershell", "(Get-Date).Year", new[] { "get-date" })]   // a property read is a value
     public void CommandPrefix_All_ReadsTheCommandsSubstitutionsRun(string shell, string command, string[] prefixes)
     {
         Assert.True(ShellKinds.TryParse(shell, out var kind));
         Assert.Equal(prefixes, CommandPrefix.All(command, kind));
+    }
+
+    /// <summary>A here-string's or a here-document's quotes close only at a line of their own, which no scan follows: the line asks (2026-10-19).</summary>
+    [Theory]
+    [InlineData("powershell", "git log @'\nit's\n'@; Remove-Item x")]
+    [InlineData("powershell", "git log @\"  \r\nit's\n\"@; Remove-Item x")]
+    [InlineData("bash", "git log <<EOF\nit's\nEOF\nrm -rf x")]
+    [InlineData("zsh", "git log <<-'EOF'\nit's\nEOF\nrm -rf x")]
+    public void CommandPrefix_HereStrings_AreUnreadable(string shell, string command)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Contains(CommandPrefix.Unreadable, CommandPrefix.All(command, kind));
+        Assert.DoesNotContain(CommandPrefix.Unreadable, CommandPrefix.All("git log <<< 'x'", ShellKind.Bash));   // <<< is a plain string
+        Assert.DoesNotContain(CommandPrefix.Unreadable, CommandPrefix.All("git log @'x'@", ShellKind.PowerShell));
     }
 
     [Fact]
@@ -447,6 +490,10 @@ public sealed class ShellTests
         start.Environment["NEONSIDEKICK_LLM_API_KEY"] = "secret";
         start.Environment["NEONSIDEKICK_HA_TOKEN"] = "secret";
         start.Environment["NEONSIDEKICK_TEST_LLM_URL"] = "http://x";
+        start.Environment["NEONSIDEKICK_TEST_OPENAI_API_KEY"] = "secret";
+        start.Environment["NEONSIDEKICK_TEST_SQL_CONNECTION"] = "Password=secret";
+        start.Environment["NEONSIDEKICK_TEST_UNC_PASSWORD"] = "secret";
+        start.Environment["NEONSIDEKICK_WEBUI_TOKEN"] = "secret";
         var launch = new ProcessLaunch("x.exe", [], null, ".", "x", "cmd", new Dictionary<string, string> { ["TERM"] = "xterm", ["NEONSIDEKICK_BRIDGE_TOKEN"] = "t" });
 
         ChildEnvironment.Apply(start, launch);
@@ -457,10 +504,23 @@ public sealed class ShellTests
         Assert.Equal("t", start.Environment["NEONSIDEKICK_BRIDGE_TOKEN"]);
         Assert.Equal("utf-8", start.Environment["PYTHONIOENCODING"]);
         Assert.Equal("cat", start.Environment["GIT_PAGER"]);
-        // The app's secrets are withheld (2026-10-12); a test's variable is the developer's and goes through.
+        // The app's secrets are withheld (2026-10-12), and since 2026-10-19 every secret-named one, the tests' too; a test's URL goes through.
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_LLM_API_KEY"));
         Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_HA_TOKEN"));
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_OPENAI_API_KEY"));
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_SQL_CONNECTION"));
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_TEST_UNC_PASSWORD"));
+        Assert.False(start.Environment.ContainsKey("NEONSIDEKICK_WEBUI_TOKEN"));
         Assert.Equal("http://x", start.Environment["NEONSIDEKICK_TEST_LLM_URL"]);
+        Assert.True(ChildEnvironment.IsWithheld("neonsidekick_test_ha_token"));
+        Assert.False(ChildEnvironment.IsWithheld("GITHUB_TOKEN"));   // the user's own, not the app's
+        Assert.False(ChildEnvironment.IsWithheld("NEONSIDEKICK_TEST_UNC_SHARE"));
+        Assert.Equal(["KEY", "TOKEN", "SECRET", "PASSWORD", "CONNECTION", "CREDENTIAL"], ChildEnvironment.SecretWords);
+        // An MCP stdio server: every withheld name in the app's environment removed (a null), its own env entries on top.
+        var mcp = NeonSidekick.App.McpSession.McpEnvironment(new Dictionary<string, string> { ["NEONSIDEKICK_HA_TOKEN"] = "mine", ["X"] = "1" });
+        Assert.Equal("mine", mcp["NEONSIDEKICK_HA_TOKEN"]);
+        Assert.Equal("1", mcp["X"]);
+        Assert.All(mcp.Where(p => p.Key is not ("NEONSIDEKICK_HA_TOKEN" or "X")), p => Assert.True(p.Value is null && ChildEnvironment.IsWithheld(p.Key)));
         Assert.Equal(["NEONSIDEKICK_LLM_API_KEY", "NEONSIDEKICK_ANTHROPIC_API_KEY", "NEONSIDEKICK_OPENAI_API_KEY", "NEONSIDEKICK_HA_TOKEN", "NEONSIDEKICK_YOUTUBE_API_KEY"], ChildEnvironment.Withheld);
         Assert.Equal(["NO_COLOR", "FORCE_COLOR", "CLICOLOR", "TERM", "PYTHONIOENCODING", "PYTHONUTF8", "PYTHONUNBUFFERED", "GIT_TERMINAL_PROMPT", "GIT_PAGER", "PAGER", "DOTNET_NOLOGO", "DOTNET_CLI_TELEMETRY_OPTOUT"], ChildEnvironment.Overrides.Select(p => p.Key));
     }
@@ -589,6 +649,35 @@ public sealed class ShellTests
         }
     }
 
+    /// <summary>A repository's own .shell folder (2026-10-19, the second shell review): its files are never counted or deleted, and it gets no .gitignore.</summary>
+    [Fact]
+    public void Spill_LeavesAFolderOfTheUsersAlone()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            string folder = Path.Combine(root, ShellText.SpillFolderName);
+            Directory.CreateDirectory(folder);
+            for (int i = 0; i < ShellPoliceChecks.SpillKept + 3; i++)
+            {
+                File.WriteAllText(Path.Combine(folder, "mine" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".log"), "x");
+            }
+
+            File.WriteAllText(Path.Combine(folder, "run_00000.log"), "five digits: not ours");
+            ShellPoliceChecks.Spill(root, "run_abcdef", "body");
+            Assert.Equal(ShellPoliceChecks.SpillKept + 5, Directory.GetFiles(folder, "*.log").Length);
+            Assert.False(File.Exists(Path.Combine(folder, ".gitignore")));
+            Assert.True(ShellPoliceChecks.IsSpillName(ShellRunner.NewId(new Random(1), NeonSidekick.Llm.Tools.RunCommandTool.IdPrefix) + ".log"));
+            Assert.True(ShellPoliceChecks.IsSpillName(ShellRunner.NewId(new Random(1), ProcessRegistry.IdPrefix) + ".log"));
+            Assert.True(ShellPoliceChecks.IsSpillName(ShellRunner.NewId(new Random(1), NeonSidekick.Llm.Tools.ExecuteCodeTool.IdPrefix) + ".log"));
+            Assert.True(ShellPoliceChecks.IsSpillName(ShellRunner.NewId(new Random(1), NeonSidekick.App.ChatScreen.CmdIdPrefix) + ".log"));
+        }
+        finally
+        {
+            GitAccessTests.DeleteTree(root);
+        }
+    }
+
     /// <summary>The review of 2026-10-11: a /cmd --bg report shows the end of the output, the earlier lines counted and the spill named.</summary>
     [Fact]
     public void ACmdReport_ShowsTheTail()
@@ -654,5 +743,39 @@ public sealed class ShellTests
         Assert.Equal("12  print(12)", numbered[11]);
         Assert.Equal("Run this command? › cmd", ShellText.WholeCommandLabel(new CommandRequest("cmd", "echo hi", ["echo"])));
         Assert.Equal(["echo hi"], ShellText.WholeCommandLines(new CommandRequest("cmd", "echo hi", ["echo"])));
+    }
+
+    /// <summary>
+    /// Leftovers (2026-10-19, the second shell review): only a background command's job counts as holding them, and only while a process
+    /// is still in it, so a foreground command's programs outlive a kill after its shell exits and an emptied job is no kill to report.
+    /// </summary>
+    [WindowsFact]
+    public void ProcessChild_HoldsLeftovers_OnlyABackgroundJobStillRunningSomething()
+    {
+        static Process Ping() => Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })!;
+
+        using var foreground = new ProcessChild(Ping(), killOnClose: false);
+        using var background = new ProcessChild(Ping(), killOnClose: true);
+        try
+        {
+            Assert.True(foreground.InJob && background.InJob);
+            Assert.False(foreground.HoldsLeftovers);
+            Assert.True(background.HoldsLeftovers);
+        }
+        finally
+        {
+            foreground.Kill();
+            background.Kill();
+        }
+
+        Assert.True(background.WaitForExit(10_000));
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (background.HoldsLeftovers && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(20);
+        }
+
+        Assert.False(background.HoldsLeftovers);   // the job emptied: nothing left to kill
+        Assert.False(NeonSidekick.EmbeddedLlm.ChildJob.HoldsProcesses(0));
     }
 }

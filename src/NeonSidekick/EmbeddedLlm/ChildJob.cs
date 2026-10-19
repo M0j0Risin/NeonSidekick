@@ -481,6 +481,27 @@ public static class ChildJob
         return false;
     }
 
+    /// <summary>
+    /// Whether <paramref name="job"/> still holds a running process (2026-10-19, the second shell review: an empty job read as holding
+    /// leftovers, so a child gone on its own was reported killed). False for 0, off Windows, and when the count could not be read (logged).
+    /// </summary>
+    public static bool HoldsProcesses(nint job)
+    {
+        if (job == 0 || !OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var info = new JobObjectNative.JobObjectBasicAccountingInformationStruct();
+        if (JobObjectNative.QueryInformationJobObject(job, JobObjectNative.JobObjectBasicAccountingInformation, ref info, (uint)Unsafe.SizeOf<JobObjectNative.JobObjectBasicAccountingInformationStruct>(), out _))
+        {
+            return info.ActiveProcesses > 0;
+        }
+
+        DiagnosticLog.Debug(Category, LastError("QueryInformationJobObject"));
+        return false;
+    }
+
     private static (nint Job, string Error) Create(bool killOnClose)
     {
         if (!OperatingSystem.IsWindows())

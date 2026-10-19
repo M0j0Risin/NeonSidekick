@@ -110,10 +110,26 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             Name = name,
             Command = config.Command!.Trim(),
             Arguments = config.Args,
-            EnvironmentVariables = config.Env is null ? null : new Dictionary<string, string?>(config.Env.Select(p => new KeyValuePair<string, string?>(p.Key, p.Value)), StringComparer.Ordinal),
+            EnvironmentVariables = McpEnvironment(config.Env),
             WorkingDirectory = string.IsNullOrWhiteSpace(config.Cwd) ? null : config.Cwd,
             StandardErrorLines = line => DiagnosticLog.Debug(Category, McpText.StderrLogLine(name, line)),
         });
+    }
+
+    /// <summary>
+    /// A stdio server's environment over the app's (2026-10-19, the second shell review: a third-party server inherited the app's API keys
+    /// and tokens): every <see cref="Shell.ChildEnvironment.IsWithheld"/> name removed, then the server's own <c>env</c> entries on top,
+    /// so a key the user hands a server on purpose still reaches it.
+    /// </summary>
+    public static Dictionary<string, string?> McpEnvironment(IReadOnlyDictionary<string, string>? own)
+    {
+        var environment = Shell.ChildEnvironment.WithheldForMcp();
+        foreach (var (name, value) in own ?? new Dictionary<string, string>())
+        {
+            environment[name] = value;
+        }
+
+        return environment;
     }
 
     /// <summary>The two files merged as they stand on disk.</summary>

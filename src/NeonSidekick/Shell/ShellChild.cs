@@ -49,11 +49,13 @@ internal abstract class ShellChild : IDisposable
 internal sealed class ProcessChild : ShellChild
 {
     private readonly Process _process;
+    private readonly bool _killOnClose;
     private nint _job;
 
     public ProcessChild(Process process, bool killOnClose)
     {
         _process = process ?? throw new ArgumentNullException(nameof(process));
+        _killOnClose = killOnClose;
         _job = EmbeddedLlm.ChildJob.CreateOwn(process, killOnClose);
     }
 
@@ -74,8 +76,11 @@ internal sealed class ProcessChild : ShellChild
     // While a job still holds something after the shell itself exited, the kill must reach it (the code review, 2026-10-19;
     // 709bd39a fixed only the Mac's GroupChild): a background `server & exit` whose server inherits stdout keeps the output pipe
     // open, so the pumps never drain and the session never completes, and ProcessSession.Kill skips a child whose HasExited is true
-    // unless it HoldsLeftovers. The caller already guards on the session not having exited, so this is the job's "not yet closed".
-    public override bool HoldsLeftovers => InJob;
+    // unless it HoldsLeftovers. The caller already guards on the session not having exited. Since 2026-10-19 (the second shell review)
+    // only a background command's job, and only while a process is still in it: a foreground command's programs (start notepad, code .)
+    // outlive it as ChildJob.CreateOwn promises, even when they hold its output pipe to the timeout, and a child gone on its own with an
+    // empty job is no longer reported killed.
+    public override bool HoldsLeftovers => _killOnClose && EmbeddedLlm.ChildJob.HoldsProcesses(_job);
 
     public override Task WaitForExitAsync() => _process.WaitForExitAsync(CancellationToken.None);
 

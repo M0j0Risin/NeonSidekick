@@ -15,11 +15,45 @@ namespace NeonSidekick.Shell;
 ///
 /// <para>The app's own secrets are the exception (2026-10-12, the shell review): <see cref="Withheld"/>, the API keys and the
 /// Home Assistant token a user may hand the app through the environment, are taken out first, so a model's
-/// <c>Get-ChildItem env:</c> or <c>env</c> never reads them. Only those: the <c>NEONSIDEKICK_TEST_*</c> variables are the
-/// developer's own setup for a <c>dotnet test</c> the model or <c>/cmd</c> runs, and the rest are settings, not secrets.</para>
+/// <c>Get-ChildItem env:</c> or <c>env</c> never reads them. Since 2026-10-19 (the second shell review) also every other
+/// <c>NEONSIDEKICK_*</c> variable whose name says it holds a secret (<see cref="IsWithheld"/>: a key, a token, a password, a
+/// connection string), the <c>NEONSIDEKICK_TEST_*</c> ones among them — a decrypted OpenAI key, the live databases' connection
+/// strings — so a <c>dotnet test</c> the model runs skips those live gates; the rest (model paths, URLs, switches) still reach it.
+/// MCP stdio servers, third-party code, get the same cut (<see cref="WithheldForMcp"/>).</para>
 /// </summary>
 public static class ChildEnvironment
 {
+    /// <summary>The words that make a <c>NEONSIDEKICK_*</c> variable a secret by its name. Pinned.</summary>
+    public static readonly IReadOnlyList<string> SecretWords = ["KEY", "TOKEN", "SECRET", "PASSWORD", "CONNECTION", "CREDENTIAL"];
+
+    /// <summary>Whether <paramref name="name"/> is never handed to a child: one of <see cref="Withheld"/>, or a <c>NEONSIDEKICK_*</c> name holding one of <see cref="SecretWords"/>.</summary>
+    public static bool IsWithheld(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return Withheld.Contains(name, StringComparer.OrdinalIgnoreCase)
+            || (name.StartsWith(EnvironmentOverrides.Prefix, StringComparison.OrdinalIgnoreCase)
+                && SecretWords.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// The variables an MCP stdio server is started without, as the SDK's <c>EnvironmentVariables</c> takes a removal (a null value):
+    /// every <see cref="IsWithheld"/> name in the app's environment, read from a <see cref="ProcessStartInfo"/>'s snapshot. A server's own
+    /// <c>env</c> entries go on top.
+    /// </summary>
+    public static Dictionary<string, string?> WithheldForMcp()
+    {
+        var removals = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (string name in new ProcessStartInfo().Environment.Keys)
+        {
+            if (IsWithheld(name))
+            {
+                removals[name] = null;
+            }
+        }
+
+        return removals;
+    }
+
     /// <summary>The variables set on every child, in the order they are applied. Pinned.</summary>
     public static readonly IReadOnlyList<KeyValuePair<string, string>> Overrides =
     [
@@ -47,12 +81,12 @@ public static class ChildEnvironment
         EnvironmentOverrides.YouTubeApiKeyVariable,
     ];
 
-    /// <summary>Takes out <see cref="Withheld"/>, applies <see cref="Overrides"/>, then <paramref name="launch"/>'s own variables, to <paramref name="start"/>.</summary>
+    /// <summary>Takes out every <see cref="IsWithheld"/> name, applies <see cref="Overrides"/>, then <paramref name="launch"/>'s own variables, to <paramref name="start"/>.</summary>
     public static void Apply(ProcessStartInfo start, ProcessLaunch launch)
     {
         ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(launch);
-        foreach (string name in Withheld)
+        foreach (string name in start.Environment.Keys.Where(IsWithheld).ToList())
         {
             start.Environment.Remove(name);
         }

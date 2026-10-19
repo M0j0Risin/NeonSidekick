@@ -64,6 +64,27 @@ internal static partial class JobObjectNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool QueryInformationJobObject(nint job, int infoClass, ref JobObjectExtendedLimitInformationStruct info, uint length, out uint returnLength);
 
+    /// <summary><c>JOBOBJECTINFOCLASS.JobObjectBasicAccountingInformation</c>.</summary>
+    internal const int JobObjectBasicAccountingInformation = 1;
+
+    /// <summary><c>JOBOBJECT_BASIC_ACCOUNTING_INFORMATION</c> (48 bytes): how many processes the job still holds (2026-10-19).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct JobObjectBasicAccountingInformationStruct
+    {
+        public long TotalUserTime;
+        public long TotalKernelTime;
+        public long ThisPeriodTotalUserTime;
+        public long ThisPeriodTotalKernelTime;
+        public uint TotalPageFaultCount;
+        public uint TotalProcesses;
+        public uint ActiveProcesses;
+        public uint TotalTerminatedProcesses;
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool QueryInformationJobObject(nint job, int infoClass, ref JobObjectBasicAccountingInformationStruct info, uint length, out uint returnLength);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool AssignProcessToJobObject(nint job, nint process);

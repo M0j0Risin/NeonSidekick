@@ -280,6 +280,12 @@ public sealed class ProcessTool : AIFunction
     /// <see cref="Found"/> completes once a line the model has not polled, or a stream's unfinished line, contains the text, case
     /// ignored. It reads on each <see cref="OutputBuffer.Appended"/>, from the newest end (<see cref="OutputBuffer.CopyFrom"/>) and
     /// only past what it read before, so a chatty child costs a line a line; the pumps raise it from two threads, hence the lock.
+    ///
+    /// <para>What the last poll showed is passed over (2026-10-19, the second shell review): a <c>Password:</c> seen, answered, then waited
+    /// for again matched at once on the old prompt. A stream's unfinished line poll showed (<see cref="ProcessSession.ShownUnfinished"/>)
+    /// counts only for what it grew since, and so does the first new line on that stream, the one its newline made of it; a line after
+    /// that, a prompt drawn again, counts whole. (A line ending in the instant between poll's read of the lines and of the unfinished
+    /// ones can leave the new prompt read as the old: the wait then runs to its timeout.)</para>
     /// </summary>
     private sealed class UntilMatch : IDisposable
     {
@@ -288,6 +294,7 @@ public sealed class ProcessTool : AIFunction
         private readonly TaskCompletionSource _found = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Lock _lock = new();
         private readonly List<OutputLine> _fresh = new();
+        private readonly Dictionary<bool, string> _shown = new();
         private long _next;
 
         public UntilMatch(ProcessSession session, string text)
@@ -295,6 +302,11 @@ public sealed class ProcessTool : AIFunction
             _session = session;
             _text = text;
             _next = session.PollCursor + 1;
+            foreach (var line in session.ShownUnfinished)
+            {
+                _shown[line.IsError] = line.Text;
+            }
+
             session.Output.Appended += Check;
             Check();
         }
@@ -313,14 +325,30 @@ public sealed class ProcessTool : AIFunction
                 _fresh.Clear();
                 long first = Math.Max(_next, _session.Output.CopyFrom(_next, _fresh));
                 _next = first + _fresh.Count;
-                if (_fresh.Any(Holds) || _session.Output.Unfinished().Any(Holds))
+                bool found = false;
+                foreach (var line in _fresh)
+                {
+                    // The first new line on a stream is its shown unfinished line ended: only what came after counts.
+                    found |= _shown.Remove(line.IsError, out string? shown) ? Holds(Past(line.Text, shown)) : Holds(line.Text);
+                }
+
+                foreach (var line in _session.Output.Unfinished())
+                {
+                    found |= Holds(_shown.TryGetValue(line.IsError, out string? shown) ? Past(line.Text, shown) : line.Text);
+                }
+
+                if (found)
                 {
                     _found.TrySetResult();
                 }
             }
         }
 
-        private bool Holds(OutputLine line) => line.Text.Contains(_text, StringComparison.OrdinalIgnoreCase);
+        /// <summary><paramref name="text"/> past <paramref name="shown"/> when it starts with it; whole when it was drawn over.</summary>
+        private static string Past(string text, string shown) =>
+            text.StartsWith(shown, StringComparison.Ordinal) ? text[shown.Length..] : text;
+
+        private bool Holds(string text) => text.Contains(_text, StringComparison.OrdinalIgnoreCase);
 
         public void Dispose() => _session.Output.Appended -= Check;
     }
@@ -335,6 +363,7 @@ public sealed class ProcessTool : AIFunction
         var lines = session.Output.Since(session.PollCursor, out long next);
         session.PollCursor = next;
         var unfinished = session.Output.Unfinished();
+        session.ShownUnfinished = unfinished;
         return unfinished.Count == 0 ? lines : [.. lines, .. unfinished];
     }
 }

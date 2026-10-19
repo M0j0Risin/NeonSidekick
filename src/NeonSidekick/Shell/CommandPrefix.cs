@@ -108,6 +108,35 @@ public static partial class CommandPrefix
         "BASH_ENV", "ENV", "ZDOTDIR", "PYTHONPATH", "PYTHONSTARTUP", "NODE_OPTIONS", "PERL5LIB", "PERL5OPT", "IFS",
     };
 
+    /// <summary>
+    /// The options a verb program takes ahead of its verb with no value (2026-10-19, the second shell review): skipped alone on the way to
+    /// the verb. An option in neither this list nor <see cref="ValueOptions"/> (by its name, before any <c>=value</c>) reads as
+    /// <see cref="Unreadable"/> when a word follows it, since an unknown one may take that word as its value: <c>dotnet --roll-forward test
+    /// x.dll</c> ran <c>x.dll</c> under an allowed <c>dotnet test</c>, <c>npm --registry test publish</c> was <c>npm test</c>, and npm's
+    /// <c>--script-shell=…</c> picks the shell its scripts run in. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> FlagOptions = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+    {
+        ["git"] = Set("--no-pager", "-p", "--paginate", "-P", "--bare", "--no-replace-objects", "--literal-pathspecs", "--glob-pathspecs",
+            "--noglob-pathspecs", "--icase-pathspecs", "--no-optional-locks", "--no-advice", "--version", "--help"),
+        ["docker"] = Set("-D", "--debug", "--tls", "--tlsverify"),
+        ["podman"] = Set("--remote", "-r"),
+        ["kubectl"] = Set("--insecure-skip-tls-verify"),
+        ["npm"] = Set("-g", "--global", "-s", "--silent", "-q", "--quiet", "-ws", "--workspaces", "-y", "--yes"),
+        ["pnpm"] = Set("-r", "--recursive", "-w", "--workspace-root", "-s", "--silent"),
+        ["yarn"] = Set("-s", "--silent"),
+        ["dotnet"] = Set("-d", "--diagnostics"),
+        ["cargo"] = Set("-q", "--quiet", "-v", "--verbose", "--frozen", "--locked", "--offline"),
+        ["uv"] = Set("-q", "--quiet", "-v", "--verbose", "--offline", "--no-cache"),
+        ["poetry"] = Set("-q", "--quiet", "-v", "--verbose", "-n", "--no-interaction", "--ansi", "--no-ansi"),
+        ["pip"] = Set("-q", "--quiet", "-v", "--verbose", "--isolated", "--no-cache-dir", "--disable-pip-version-check"),
+        ["pip3"] = Set("-q", "--quiet", "-v", "--verbose", "--isolated", "--no-cache-dir", "--disable-pip-version-check"),
+        ["make"] = Set("-s", "--silent", "-k", "--keep-going", "-n", "--dry-run", "-B", "--always-make"),
+        ["aws"] = Set("--debug", "--no-cli-pager", "--no-paginate"),
+        ["gcloud"] = Set("-q", "--quiet"),
+        ["terraform"] = Set("-chdir"),
+    };
+
     private static IReadOnlySet<string> Set(params string[] options) => new HashSet<string>(options, StringComparer.Ordinal);
 
     /// <summary>The character that escapes the next one in <paramref name="shell"/>: PowerShell's backtick, cmd's caret, else a backslash. Matches <see cref="Substitutions"/>.</summary>
@@ -117,6 +146,122 @@ public static partial class CommandPrefix
         ShellKind.Cmd => '^',
         _ => '\\',
     };
+
+    /// <summary>
+    /// The kind of quote <paramref name="c"/> is in <paramref name="shell"/>: <c>'</c>, <c>"</c>, or <c>\0</c> for none (2026-10-19, the
+    /// second shell review). PowerShell takes the typographic ones too (U+2018–U+201B single, U+201C–U+201E double), any of a kind closing
+    /// any other, so a <c>'…’</c> string closed where the old ASCII-only reading saw it still open and hid a <c>;</c>. cmd has no single
+    /// quote: a <c>'…&amp; x &amp;…'</c> was read as quoted while cmd split on each <c>&amp;</c>. Every scan here goes through this.
+    /// </summary>
+    private static char QuoteKind(char c, ShellKind shell) => c switch
+    {
+        '"' => '"',
+        '\'' => shell == ShellKind.Cmd ? '\0' : '\'',
+        '\u2018' or '\u2019' or '\u201A' or '\u201B' => shell == ShellKind.PowerShell ? '\'' : '\0',
+        '\u201C' or '\u201D' or '\u201E' => shell == ShellKind.PowerShell ? '"' : '\0',
+        _ => '\0',
+    };
+
+    /// <summary>
+    /// Whether <paramref name="c"/> is a blank between words in <paramref name="shell"/> (2026-10-19, measured): bash and zsh only a space, a
+    /// tab and a line break (a no-break space is part of a word); PowerShell .NET's white space but U+001C–U+001F, which it reads as text.
+    /// </summary>
+    private static bool IsBlank(char c, ShellKind shell) => shell switch
+    {
+        ShellKind.PowerShell => char.IsWhiteSpace(c) && c is not ('\u001C' or '\u001D' or '\u001E' or '\u001F'),
+        _ => c is ' ' or '\t' or '\n',
+    };
+
+    /// <summary>Whether a line ends at <paramref name="c"/> in <paramref name="shell"/>: a line feed, and in PowerShell a carriage return too (measured).</summary>
+    private static bool EndsLine(char c, ShellKind shell) => c == '\n' || (c == '\r' && shell == ShellKind.PowerShell);
+
+    // A PowerShell here-string's head: @' or @" (a typographic quote too) with nothing but blanks after it on its line.
+    [GeneratedRegex("@[\"'\u2018-\u201E][^\\S\\r\\n]*[\\r\\n]", RegexOptions.CultureInvariant)]
+    private static partial Regex HereStringPattern();
+
+    // A bash or zsh here-document (<<, <<-, not the here-string <<<): its body's quotes are text up to a line naming its end, which no scan here follows.
+    [GeneratedRegex("(?<!<)<<(?!<)", RegexOptions.CultureInvariant)]
+    private static partial Regex HereDocumentPattern();
+
+    private enum Comment
+    {
+        None,
+        Opens,
+        /// <summary>A <c>#</c> whose reading turns on what came before (measured): in PowerShell after a <c>)</c>, <c>}</c>, <c>=</c>, a quote or a substitution (<c>"a"#x</c> is a comment, <c>a"b"#x</c> isn't; <c>$y=#x</c> is, <c>a=#x</c> isn't); in bash and zsh after a <c>)</c>, a subshell's or a substitution's (<c>$(…)#x</c> isn't).</summary>
+        Maybe,
+    }
+
+    /// <summary>
+    /// Whether a comment opens at <paramref name="at"/> outside quotes, and <paramref name="end"/> the index just past it (a line comment
+    /// stops before its line break) — one rule for every scan here (2026-10-19, the second shell review: <see cref="JoinedSegments"/> read a
+    /// comment's apostrophe as a quote that hid the line breaks after it, while <see cref="Substitutions"/> passed over it). A <c>#</c> (or
+    /// PowerShell's <c>&lt;#</c>) opens one at a word's start, measured per shell: after the line's start or a blank; in bash and zsh after
+    /// <c>; &amp; | ( &lt; &gt;</c>; in PowerShell after <c>; &amp; | , ( {</c>, with <see cref="Comment.Maybe"/> for the predecessors it
+    /// depends on. Never after an escaped character (<paramref name="escapedAt"/>); cmd has none.
+    /// </summary>
+    private static Comment CommentAt(string text, int at, ShellKind shell, int escapedAt, out int end)
+    {
+        end = at;
+        bool powerShell = shell == ShellKind.PowerShell;
+        bool block = powerShell && text[at] == '<' && at + 1 < text.Length && text[at + 1] == '#';
+        if (shell == ShellKind.Cmd || (text[at] != '#' && !block))
+        {
+            return Comment.None;
+        }
+
+        Comment kind;
+        if (at == 0)
+        {
+            kind = Comment.Opens;
+        }
+        else if (at - 1 == escapedAt)
+        {
+            return Comment.None;
+        }
+        else
+        {
+            char before = text[at - 1];
+            kind = IsBlank(before, shell) || EndsLine(before, shell) ? Comment.Opens
+                : !powerShell ? (before is ';' or '&' or '|' or '(' or '<' or '>' ? Comment.Opens : before is ')' or Hole ? Comment.Maybe : Comment.None)
+                : before is ';' or '&' or '|' or ',' or '(' or '{' ? Comment.Opens
+                : before is ')' or '}' or '=' or Hole || QuoteKind(before, shell) != '\0' ? Comment.Maybe
+                : Comment.None;
+        }
+
+        if (kind == Comment.None)
+        {
+            return kind;
+        }
+
+        if (block)
+        {
+            int close = text.IndexOf("#>", at + 2, StringComparison.Ordinal);
+            end = close >= 0 ? close + 2 : text.Length;
+            return kind;
+        }
+
+        end = at;
+        while (end < text.Length && !EndsLine(text[end], shell))
+        {
+            end++;
+        }
+
+        return kind;
+    }
+
+    /// <summary>Whether any of <paramref name="text"/>[<paramref name="from"/>..<paramref name="to"/>] is a quote in <paramref name="shell"/>.</summary>
+    private static bool HasQuote(string text, int from, int to, ShellKind shell)
+    {
+        for (int i = from; i < to; i++)
+        {
+            if (QuoteKind(text[i], shell) != '\0')
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static string OptionName(string option)
     {
@@ -149,6 +294,7 @@ public static partial class CommandPrefix
         var segments = new List<(string, string)>();
         var current = new StringBuilder();
         char quote = '\0';
+        int escapedAt = -1;
         for (int i = 0; i < command.Length; i++)
         {
             char c = command[i];
@@ -158,13 +304,14 @@ public static partial class CommandPrefix
             if (c == escape && i + 1 < command.Length && quote != '\'' && (shell != ShellKind.Cmd || quote == '\0'))
             {
                 current.Append(c).Append(command[++i]);
+                escapedAt = i;
                 continue;
             }
 
             if (quote != '\0')
             {
                 current.Append(c);
-                if (c == quote)
+                if (QuoteKind(c, shell) == quote)
                 {
                     quote = '\0';
                 }
@@ -172,13 +319,24 @@ public static partial class CommandPrefix
                 continue;
             }
 
+            // A comment runs nothing and its quotes are text: left out of the segment, the line break after it still a separator (2026-10-19,
+            // the second shell review). One whose reading is in doubt (PowerShell's Maybe) is read as code: Collect asks for it when it holds a quote.
+            if (CommentAt(command, i, shell, escapedAt, out int commentEnd) == Comment.Opens)
+            {
+                current.Append(' ');
+                i = commentEnd - 1;
+                continue;
+            }
+
+            if (QuoteKind(c, shell) is var kind and not '\0')
+            {
+                quote = kind;
+                current.Append(c);
+                continue;
+            }
+
             switch (c)
             {
-                case '"':
-                case '\'':
-                    quote = c;
-                    current.Append(c);
-                    break;
                 case '&':
                 case '|':
                     bool doubled = i + 1 < command.Length && command[i + 1] == c;
@@ -251,29 +409,40 @@ public static partial class CommandPrefix
         if (VerbPrograms.Contains(program))
         {
             var values = ValueOptions.GetValueOrDefault(program);
+            var flags = FlagOptions.GetValueOrDefault(program);
             var dangerous = DangerousOptions.GetValueOrDefault(program);
             for (int i = first + 1; i < tokens.Count; i++)
             {
                 string verb = tokens[i];
                 if (verb.Length > 1 && verb[0] == '-' && skipOptions)
                 {
-                    if (dangerous is not null && dangerous.Contains(OptionName(verb)))
+                    string name = OptionName(verb);
+                    if (dangerous is not null && dangerous.Contains(name))
                     {
                         // -c / --config-env / -H / --kubeconfig / -f …: the option itself lets the verb run another program, so the verb
                         // is no longer what the line does. The pane shows the whole line (2026-10-19, the code review).
                         return Unreadable;
                     }
 
-                    // An option ahead of the verb (2026-10-12): skipped, and its value with it when it takes one as the next word.
-                    i += values is not null && values.Contains(verb) ? 1 : 0;
+                    // An option ahead of the verb (2026-10-12): skipped, and its value with it when it takes one as the next word. One
+                    // this list doesn't know may take the next word as its value, so the verb can't be told and the line asks; a last
+                    // word (git --version) is only an option (2026-10-19, the second shell review).
+                    bool takesValue = values is not null && values.Contains(verb);
+                    bool known = takesValue || (values is not null && values.Contains(name)) || (flags is not null && flags.Contains(name));
+                    if (!known)
+                    {
+                        return i + 1 < tokens.Count ? Unreadable : program;
+                    }
+
+                    i += takesValue ? 1 : 0;
                     continue;
                 }
 
-                if (verb.Length > 0 && (verb[0] == '"' || verb[0] == '\''))
+                if (verb.Length > 0 && QuoteKind(verb[0], shell) != '\0')
                 {
                     // A quoted verb (git "push"): the quotes stripped and read, so a bare `git` never covers it (2026-10-19, the code
                     // review; it used to stop the scan and leave the prefix the bare program). A quoted option-looking word asks.
-                    string unquoted = verb.Replace("\"", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal);
+                    string unquoted = string.Concat(verb.Where(ch => QuoteKind(ch, shell) == '\0'));
                     return unquoted.Length > 0 && unquoted[0] != '-' && unquoted[0] != '/'
                         ? program + " " + unquoted.ToLowerInvariant()
                         : Unreadable;
@@ -314,6 +483,9 @@ public static partial class CommandPrefix
         var bodies = new List<string>();
         string outer = Substitutions(text, shell, bodies, out bool unreadable);
         unreadable |= ExpandsCode(text, shell);
+        // A PowerShell here-string's or a bash/zsh here-document's quotes are text up to a line of their own, which no scan here follows:
+        // such a line asks (2026-10-19, the second shell review; an apostrophe in either hid the commands after it).
+        unreadable |= shell == ShellKind.PowerShell ? HereStringPattern().IsMatch(text) : shell != ShellKind.Cmd && HereDocumentPattern().IsMatch(text);
         foreach (string segment in Segments(outer, shell))
         {
             if ((depth > 0 && shell == ShellKind.PowerShell ? StatementPrefix(segment) : Of(segment, shell: shell)) is not { Length: > 0 } prefix)
@@ -336,6 +508,9 @@ public static partial class CommandPrefix
                 program = program[..program.IndexOf(Hole)];
                 if (program.Length == 0)
                 {
+                    // A statement that opens with a (…), $(…) or @(…) is a value, unless it calls a method on it: (Get-Item src).Delete()
+                    // ran with only get-item read (2026-10-19, the second shell review).
+                    unreadable |= InvokesMethodPattern().IsMatch(segment);
                     continue;
                 }
 
@@ -389,12 +564,13 @@ public static partial class CommandPrefix
             return InvokesMethodPattern().IsMatch(statement) ? Unreadable : null;
         }
 
-        return char.IsAsciiDigit(statement[0]) || statement[0] is '"' or '\'' or '-' or '!' or '@' ? null : Of(statement);
+        return char.IsAsciiDigit(statement[0]) || QuoteKind(statement[0], ShellKind.PowerShell) != '\0' || statement[0] is '-' or '!' or '@' ? null : Of(statement);
     }
 
     // A method call on a value: .Name( or ::Name( — the paren is a substitution by the time this runs (replaced by Hole), so match
-    // either. A bare property read ($_.Length, $_.Name -like …) has neither and stays a value.
-    [GeneratedRegex("(?:\\.|::)[A-Za-z_]\\w*\\s*[(\u0002]", RegexOptions.CultureInvariant)]
+    // either. A bare property read ($_.Length, $_.Name -like …) has neither and stays a value. The name is any word up to the paren
+    // (2026-10-19, the second shell review), so a quoted or variable one (.'Delete'(), .$m()) is a call too.
+    [GeneratedRegex("(?:\\.|::)[^\\s.(\u0002]+[(\u0002]", RegexOptions.CultureInvariant)]
     private static partial Regex InvokesMethodPattern();
 
     // $name = , $a.b += , $x ??= … : an assignment and the space after it; never == or -eq.
@@ -410,7 +586,7 @@ public static partial class CommandPrefix
     private static string Substitutions(string text, ShellKind shell, List<string> bodies, out bool unreadable)
     {
         unreadable = false;
-        if (shell == ShellKind.Cmd || text.IndexOfAny(['$', '@', '(', '{', '`', '&']) < 0)
+        if (shell == ShellKind.Cmd || text.IndexOfAny(['$', '@', '(', '{', '`', '&', '#']) < 0)
         {
             return text;
         }
@@ -426,7 +602,7 @@ public static partial class CommandPrefix
             if (quote == '\'')
             {
                 outer.Append(c);
-                quote = c == '\'' ? '\0' : quote;
+                quote = QuoteKind(c, shell) == '\'' ? '\0' : quote;
                 continue;
             }
 
@@ -464,25 +640,32 @@ public static partial class CommandPrefix
                 continue;
             }
 
-            if (quote == '\0' && (c == '"' || c == '\''))
+            if (quote == '\0' && QuoteKind(c, shell) is var kind and not '\0')
             {
-                quote = c;
+                quote = kind;
                 outer.Append(c);
                 continue;
             }
 
-            if (quote == '"' && c == '"')
+            if (quote == '"' && QuoteKind(c, shell) == '"')
             {
                 quote = '\0';
                 outer.Append(c);
                 continue;
             }
 
-            if (quote == '\0' && IsCommentStart(text, i, powerShell, escapedAt, out int commentEnd))
+            if (quote == '\0' && CommentAt(text, i, shell, escapedAt, out int commentEnd) is var comment and not Comment.None)
             {
-                outer.Append(text, i, commentEnd - i);
-                i = commentEnd - 1;
-                continue;
+                if (comment == Comment.Opens)
+                {
+                    outer.Append(text, i, commentEnd - i);
+                    i = commentEnd - 1;
+                    continue;
+                }
+
+                // Read as code, as JoinedSegments reads it; a quote in it may be a comment's text to PowerShell, and then the two
+                // readings part, so the line asks (2026-10-19, the second shell review).
+                unreadable |= HasQuote(text, i, commentEnd, shell);
             }
 
             if (powerShell && quote == '\0' && c == '&' && CallsAValue(text, i))
@@ -586,24 +769,30 @@ public static partial class CommandPrefix
         char opener = closer == ')' ? '(' : '{';
         int depth = 0;
         char quote = '\0';
+        int escapedAt = -1;
         for (int i = from; i < text.Length; i++)
         {
             char c = text[i];
             if (quote != '\'' && c == escape)
             {
-                i++;
+                escapedAt = ++i;
                 continue;
             }
 
             if (quote != '\0')
             {
-                quote = c == quote ? '\0' : quote;
+                quote = QuoteKind(c, shell) == quote ? '\0' : quote;
                 continue;
             }
 
-            if (c == '"' || c == '\'')
+            if (CommentAt(text, i, shell, escapedAt, out int commentEnd) == Comment.Opens)
             {
-                quote = c;
+                // A comment's parens and quotes are text (2026-10-19, the second shell review): the scans agree on where a body ends.
+                i = commentEnd - 1;
+            }
+            else if (QuoteKind(c, shell) is var kind and not '\0')
+            {
+                quote = kind;
             }
             else if (c == opener)
             {
@@ -621,27 +810,6 @@ public static partial class CommandPrefix
         }
 
         return -1;
-    }
-
-    /// <summary>A comment from <paramref name="at"/>: a <c>#</c> opening a word, to its line's end; PowerShell's <c>&lt;# … #&gt;</c> to its close. A <c>#</c> after an <em>escaped</em> blank (<paramref name="escapedBefore"/>) is part of a word, not a comment (2026-10-19).</summary>
-    private static bool IsCommentStart(string text, int at, bool powerShell, int escapedBefore, out int end)
-    {
-        end = at;
-        if (text[at] == '#' && (at == 0 || (char.IsWhiteSpace(text[at - 1]) && at - 1 != escapedBefore)))
-        {
-            int line = text.IndexOf('\n', at);
-            end = line >= 0 ? line : text.Length;
-            return true;
-        }
-
-        if (powerShell && text[at] == '<' && at + 1 < text.Length && text[at + 1] == '#')
-        {
-            int close = text.IndexOf("#>", at + 2, StringComparison.Ordinal);
-            end = close >= 0 ? close + 2 : text.Length;
-            return true;
-        }
-
-        return false;
     }
 
     /// <summary>
@@ -788,14 +956,14 @@ public static partial class CommandPrefix
             if (quote != '\0')
             {
                 current.Append(c);
-                if (c == quote)
+                if (QuoteKind(c, shell) == quote)
                 {
                     quote = '\0';
                 }
             }
-            else if (c == '"' || c == '\'')
+            else if (QuoteKind(c, shell) is var kind and not '\0')
             {
-                quote = c;
+                quote = kind;
                 current.Append(c);
             }
             else if (char.IsWhiteSpace(c))

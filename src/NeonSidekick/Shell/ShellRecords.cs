@@ -89,10 +89,16 @@ public static class ShellRecords
     /// The guard's work as its app dies (see the class): every group the records under <paramref name="folder"/> show
     /// <paramref name="ownerPid"/> started is killed through <paramref name="killGroup"/>, and its record removed. The groups killed.
     /// Never throws.
+    ///
+    /// <para>Not a group whose leader's pid now runs a process started at another time (2026-10-19, the second shell review): a record
+    /// whose removal failed as its leader was reaped outlives it, and its pid may since lead a stranger's group. Our leader is alive and
+    /// started at the recorded time, or a zombie or gone, whose start <paramref name="startTicks"/> cannot read (a leader recorded as 0
+    /// was a zombie from the first), so a readable start that is not the recorded one is never ours.</para>
     /// </summary>
-    public static IReadOnlyList<int> KillOwned(string folder, int ownerPid, Action<int> killGroup)
+    public static IReadOnlyList<int> KillOwned(string folder, int ownerPid, Action<int> killGroup, Func<int, long?>? startTicks = null)
     {
         ArgumentNullException.ThrowIfNull(killGroup);
+        startTicks ??= RecordFiles.StartTicks;
         var killed = new List<int>();
         foreach (var (file, record) in RecordFiles.ReadAll(folder, Parse, ShellKinds.Category))
         {
@@ -101,8 +107,12 @@ public static class ShellRecords
                 continue;
             }
 
-            killGroup(record.LeaderPid);
-            killed.Add(record.LeaderPid);
+            if (startTicks(record.LeaderPid) is not { } now || (record.LeaderStartTicks != 0 && RecordFiles.SameStart(now, record.LeaderStartTicks)))
+            {
+                killGroup(record.LeaderPid);
+                killed.Add(record.LeaderPid);
+            }
+
             Remove(file);
         }
 

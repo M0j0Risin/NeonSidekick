@@ -85,7 +85,10 @@ public static class RecordFiles
         return records;
     }
 
-    /// <summary>Removes a record; nothing when it is gone already or <paramref name="path"/> is null.</summary>
+    /// <summary>
+    /// Removes a record; nothing when it is gone already or <paramref name="path"/> is null. A failure is a warning (2026-10-19, the second
+    /// shell review): the record now outlives its process, and the readers' start rule is all that keeps its pid from naming a stranger.
+    /// </summary>
     public static void Remove(string? path, string category)
     {
         if (path is null)
@@ -99,7 +102,7 @@ public static class RecordFiles
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Debug(category, "Removing " + path + ": " + ex.Message);
+            DiagnosticLog.Warn(category, "Removing " + path + ": " + ex.Message);
         }
     }
 

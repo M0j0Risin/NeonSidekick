@@ -7,7 +7,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 * **Precedence:** command-line flag > variable > saved setting > default. A settings row a variable overrides says so.
 * **Values:** blank means unset, and word values ignore case. **on/off** also takes `true`/`false`, `1`/`0` and `yes`/`no`. A value that doesn't parse is logged and ignored.
 * **Logging:** with `--log`, the log lists the variables in force, the keys only as `(set)`.
-* **Children:** a command or script the shell tools or `/cmd` start inherits the environment, except the five secrets (`NEONSIDEKICK_LLM_API_KEY`, `…_ANTHROPIC_API_KEY`, `…_OPENAI_API_KEY`, `…_HA_TOKEN`, `…_YOUTUBE_API_KEY`), which are withheld.
+* **Children:** a command or script the shell tools or `/cmd` start, and an MCP stdio server, inherit the environment except the secrets: every `NEONSIDEKICK_*` variable whose name holds `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CONNECTION` or `CREDENTIAL`, the `NEONSIDEKICK_TEST_*` ones too. An MCP server's own `env` entries still reach it.
 
 ## Contents
 

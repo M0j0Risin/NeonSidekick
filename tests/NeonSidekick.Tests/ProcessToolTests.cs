@@ -233,7 +233,18 @@ public sealed class ProcessToolTests : IDisposable
         var prompt = Start("set /p name=Your name? && call echo hello %name%");
         Assert.EndsWith("'name?' seen (cmd): set /p name=Your name? && call echo hello %name% — 1 new line\nYour name? ", await Invoke(("action", "wait"), ("session_id", prompt.Id), ("timeout", 60), ("until", "name?")));
         Assert.Equal("Error: timeout must be 1 to 600 for wait", await Invoke(("action", "wait"), ("session_id", prompt.Id), ("timeout", 0), ("until", "x")));
-        foreach (var running in new[] { session, early, prompt })
+
+        // Shown once, a prompt is no match for the next wait (2026-10-19, the second shell review); one drawn again after an answer is.
+        var shown = _tool.InvokeAsync(Args(("action", "wait"), ("session_id", prompt.Id), ("timeout", 5), ("until", "name?")));
+        await Task.Delay(100);
+        Assert.False(shown.IsCompleted);
+        _time.Advance(TimeSpan.FromSeconds(6));
+        Assert.StartsWith(prompt.Id + " still running after 5 s", (string)(await shown.AsTask().WaitAsync(TimeSpan.FromSeconds(30)))!);
+        var twice = Start("set /p a=Pass? && set /p b=Pass? && echo done");
+        Assert.Contains("'Pass?' seen", await Invoke(("action", "wait"), ("session_id", twice.Id), ("timeout", 60), ("until", "Pass?")));
+        await Invoke(("action", "submit"), ("session_id", twice.Id), ("data", "x"));
+        Assert.Contains("'Pass?' seen", await Invoke(("action", "wait"), ("session_id", twice.Id), ("timeout", 60), ("until", "Pass?")));
+        foreach (var running in new[] { session, early, prompt, twice })
         {
             running.Kill();
         }

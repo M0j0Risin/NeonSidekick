@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Settings;
@@ -17,7 +18,7 @@ public sealed record ShellPoliceRefusal(string ModelText, string? Shown);
 /// while a server family's tools are on) and a path outside the working directory (<see cref="PathPolice"/>) — all under the
 /// <c>Shell police</c> switch and whatever the policy. Each refusal logs its line; noting it for the gate's refusals is the caller's.
 /// </summary>
-public static class ShellPoliceChecks
+public static partial class ShellPoliceChecks
 {
     /// <summary>The first check <paramref name="command"/> fails, run from <paramref name="workdir"/>; null when it passes them all, or the police are off.</summary>
     public static ShellPoliceRefusal? Judge(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective)
@@ -83,7 +84,9 @@ public static class ShellPoliceChecks
     /// The whole output into <c>.shell\&lt;id&gt;.log</c> under <paramref name="root"/> (<c>run_command</c>'s, <c>execute_code</c>'s and
     /// <c>/cmd</c>'s cut output); the relative path, or null when it could not be written (logged). Since 2026-10-12 (the shell
     /// review: the folder grew a file a long run, for good, in what is often the user's repository) it keeps the newest
-    /// <see cref="SpillKept"/> and holds a <c>.gitignore</c> of <c>*</c>, so <c>git status</c> never lists it.
+    /// <see cref="SpillKept"/> and holds a <c>.gitignore</c> of <c>*</c>, so <c>git status</c> never lists it. Since 2026-10-19 (the second
+    /// shell review: a repository's own <c>.shell</c> folder lost its older logs and was hidden from git) only the app's own logs
+    /// (<see cref="IsSpillName"/>) are counted and deleted, and the <c>.gitignore</c> goes only into a folder holding nothing else.
     /// </summary>
     public static string? Spill(string root, string id, string body)
     {
@@ -107,26 +110,55 @@ public static class ShellPoliceChecks
         return relative;
     }
 
-    /// <summary>The spill folder's <c>.gitignore</c> written when missing and the logs past <see cref="SpillKept"/> deleted, oldest first; a failure is logged and the spill stands.</summary>
+    /// <summary>
+    /// Whether <paramref name="fileName"/> is a spill this app writes: <c>run_</c>, <c>proc_</c>, <c>code_</c> or <c>cmd_</c> and six hex
+    /// digits (<see cref="ShellRunner.NewId"/>), then <c>.log</c>. Pinned against each prefix.
+    /// </summary>
+    public static bool IsSpillName(string fileName) => SpillNamePattern().IsMatch(fileName);
+
+    [GeneratedRegex(@"^(?:run|proc|code|cmd)_[0-9a-f]{6}\.log$", RegexOptions.CultureInvariant)]
+    private static partial Regex SpillNamePattern();
+
+    /// <summary>The spill folder's <c>.gitignore</c> written when missing and nothing but spills is there, and the spills past <see cref="SpillKept"/> deleted, oldest first; each failure is logged and the rest go on.</summary>
     private static void Tidy(string folder)
     {
+        FileInfo[] files;
+        bool hasFolders;
         try
         {
-            string ignore = Path.Combine(folder, ".gitignore");
-            if (!File.Exists(ignore))
-            {
-                File.WriteAllText(ignore, "*\n");
-            }
-
-            var logs = new DirectoryInfo(folder).GetFiles("*.log").OrderByDescending(f => f.LastWriteTimeUtc).Skip(SpillKept);
-            foreach (var old in logs)
-            {
-                old.Delete();
-            }
+            var directory = new DirectoryInfo(folder);
+            files = directory.GetFiles();
+            hasFolders = directory.EnumerateDirectories().Any();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             DiagnosticLog.Debug(ShellKinds.Category, $"could not tidy {folder} ({ex.Message})");
+            return;
+        }
+
+        string ignore = Path.Combine(folder, ".gitignore");
+        if (!hasFolders && files.All(f => IsSpillName(f.Name)))
+        {
+            try
+            {
+                File.WriteAllText(ignore, "*\n");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                DiagnosticLog.Debug(ShellKinds.Category, $"could not write {ignore} ({ex.Message})");
+            }
+        }
+
+        foreach (var old in files.Where(f => IsSpillName(f.Name)).OrderByDescending(f => f.LastWriteTimeUtc).Skip(SpillKept))
+        {
+            try
+            {
+                old.Delete();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                DiagnosticLog.Debug(ShellKinds.Category, $"could not delete {old.FullName} ({ex.Message})");
+            }
         }
     }
 }

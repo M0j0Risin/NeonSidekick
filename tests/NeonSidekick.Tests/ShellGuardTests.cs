@@ -86,9 +86,12 @@ public sealed class ShellGuardTests : IDisposable
         Put(new ShellRecord(100, 10, 200, 20));
         Put(new ShellRecord(100, 10, 201, 21));
         Put(new ShellRecord(777, 70, 300, 30));
+        Put(new ShellRecord(100, 10, 202, 22));   // a stale record: its pid now runs a stranger started later (2026-10-19)
+        Put(new ShellRecord(100, 10, 203, 0));    // a zombie from the first: a readable start there is a stranger's too
         var killed = new List<int>();
+        var running = new Dictionary<int, long> { [201] = 21, [202] = 99 * TimeSpan.TicksPerSecond, [203] = 5 };   // 200: a zombie, unreadable
 
-        Assert.Equal([200, 201], ShellRecords.KillOwned(_folder, 100, killed.Add).Order());
+        Assert.Equal([200, 201], ShellRecords.KillOwned(_folder, 100, killed.Add, pid => running.TryGetValue(pid, out long t) ? t : null).Order());
         Assert.Equal([200, 201], killed.Order());
         Assert.Equal(["300.txt"], Directory.GetFiles(_folder).Select(Path.GetFileName));
         Assert.Empty(ShellRecords.KillOwned(Path.Combine(_dir, "none"), 100, killed.Add));
