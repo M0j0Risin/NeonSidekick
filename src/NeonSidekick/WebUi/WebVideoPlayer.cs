@@ -504,7 +504,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
 
             bool was = stream.Visible;
             stream.Visible = visible;
-            if (visible)
+            if (visible && !was)
             {
                 stream.SeenAt = _time.GetUtcNow();
             }
@@ -512,7 +512,10 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             outbox.Debug.Add(WebUiText.YouTubeSeenDebug(page, remote, visible, was));
             if (visible)
             {
-                if (page != _owner && OwnerIdle())
+                // Coming into view only (2026-10-19, the CI-like runs): a page says it is in view again on every reconnect, and a page already
+                // in view repeating it must not take the idle player back from another's Play here a moment before (the page told "taken" then
+                // owned it again, "Nothing is playing here" where Play here belonged). Nor is it "shown more recently" for saying so twice.
+                if (page != _owner && !was && OwnerIdle())
                 {
                     Transfer(stream, outbox, WebUiText.YouTubeMovedLogLine(remote), flash: null, attaching: false);   // rule 2
                 }

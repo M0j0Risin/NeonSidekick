@@ -86,6 +86,30 @@ public partial class WebVideoPlayerTests
         Assert.Equal(Id('b'), player.Owner);   // b plays: a coming into view moves nothing
     }
 
+    /// <summary>
+    /// A page says it is in view again on every reconnect (2026-10-19, the CI-like runs): one already in view saying so after another page's
+    /// Play here took the idle player back, its page told "taken" and then owner again, and showed "Nothing is playing here" for Play here.
+    /// </summary>
+    [Fact]
+    public void SeenInView_Again_FromAPageAlreadyInView_TakesNothingBack_AfterAnothersPlayHere()
+    {
+        var player = Player();
+        var a = Attach(player, Id('a'), Id('1'));
+        _time.Advance(TimeSpan.FromSeconds(1));
+        var b = Attach(player, Id('b'), Id('2'), claim: true);   // Play here, nothing playing
+        Assert.Equal(Id('b'), player.Owner);
+        Assert.Contains("taken", Names(a));
+
+        Assert.Equal(WebOutcome.Ok, player.Seen(Id('a'), true, null));   // a's repeat: it never left view
+        Assert.Equal(Id('b'), player.Owner);
+        Assert.DoesNotContain("owner", Names(a));
+        Assert.DoesNotContain("taken", Names(b));
+
+        player.Seen(Id('a'), false, null);
+        player.Seen(Id('a'), true, null);   // hidden, then really back in view: rule 2 as before
+        Assert.Equal(Id('a'), player.Owner);
+    }
+
     [Fact]
     public void Seen_FromAPageWithNoStream_IsAConflict()
     {

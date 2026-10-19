@@ -222,6 +222,10 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
     [WindowsFact]
     public async Task AReload_KeepsThePagesId_AndShowsResume_NotPlayHere()
     {
+        // YouTube's script given a minute, not the class's 1.5 s (2026-10-19, the CI-like runs): offline it never loads, and on a slow machine
+        // the page's "failed" report came before the reload and turned the video Failed, which leaves no Resume offer, as it should.
+        Player.Dispose();
+        _backend.VideoPlayer = new WebVideoPlayer(apiWaitMs: 60_000);
         if (await SignedInAsync("/youtube") is not { } page)
         {
             return;
