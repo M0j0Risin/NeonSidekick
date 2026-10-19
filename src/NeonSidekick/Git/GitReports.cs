@@ -111,6 +111,27 @@ public sealed record GitBlameReport(GitOutcome Outcome, string Detail, string Pa
 /// <summary>One branch or tag: its name, the short sha it points at, its subject, and for a local branch its upstream and whether it is checked out.</summary>
 public sealed record GitRef(string Name, string Short, string Subject, bool Current = false, string? Upstream = null);
 
+/// <summary>
+/// The files git knows under a path (2026-10-18, <see cref="GitAccess.TrackedFiles"/>): the index's entries and the untracked files, sandbox-relative,
+/// with the repository's working tree as the sandbox spells it.
+/// </summary>
+public sealed record GitTrackedReport(GitOutcome Outcome, string Detail, IReadOnlyList<string> Tracked, IReadOnlyList<string> Untracked, string WorkTree)
+{
+    public static GitTrackedReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], [], "");
+}
+
+/// <summary>The working tree's changed paths (2026-10-18, <see cref="GitAccess.ChangedPaths"/>), in the sandbox's spelling, and whether the list was cut.</summary>
+public sealed record GitChangedReport(GitOutcome Outcome, string Detail, IReadOnlyList<string> Paths, bool Truncated)
+{
+    public static GitChangedReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], false);
+}
+
+/// <summary>Two commits' merge base (2026-10-18, <see cref="GitAccess.MergeBase"/>): its sha, null when they share none, and HEAD's.</summary>
+public sealed record GitMergeBaseReport(GitOutcome Outcome, string Detail, string? Sha, string? Head)
+{
+    public static GitMergeBaseReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, null, null);
+}
+
 /// <summary>The branches and tags (<c>gitlib_branch list</c>): the local branches, the remote-tracking ones, the tags, each capped.</summary>
 public sealed record GitRefsReport(GitOutcome Outcome, string Detail, string? Current, bool Detached, IReadOnlyList<GitRef> Local, IReadOnlyList<GitRef> Remote, IReadOnlyList<GitRef> Tags, bool Truncated)
 {

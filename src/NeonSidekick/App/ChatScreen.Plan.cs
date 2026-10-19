@@ -1,5 +1,7 @@
+using NeonSidekick.Audits;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Sessions;
@@ -64,6 +66,30 @@ internal sealed partial class ChatScreen
 
         /// <summary><c>/plan ready</c> alone while planning (2026-10-17): the plan asked for now, or its pane opened on the current revision.</summary>
         Ready,
+
+        /// <summary>
+        /// <c>/plan open &lt;name&gt; --chat</c> (2026-10-18, the user's ask; <c>--chat</c> first too): the plan opened to talk it through, nothing
+        /// sent; the name is the rest. <see cref="Open"/>'s resolve and fallback.
+        /// </summary>
+        OpenChat,
+
+        /// <summary><c>/plan open --chat</c> alone (2026-10-18): the plans to pick one to talk through.</summary>
+        ListChat,
+
+        /// <summary>
+        /// <c>/plan approve --ralph [passes]</c> while planning (later on 2026-10-18, the Ralph loop; the words in either order): the presented plan approved
+        /// and run as a Ralph loop; the count as typed is the rest (empty for none).
+        /// </summary>
+        ApproveRalph,
+
+        /// <summary>
+        /// <c>/plan ralph [name] [passes]</c> (2026-10-18): the paused loop resumed, or the plan named run as one; the words after <c>ralph</c> are the
+        /// rest. Refused while planning (the handler names <c>/plan approve --ralph</c>).
+        /// </summary>
+        Ralph,
+
+        /// <summary><c>/plan ralph x 500</c> or <c>/plan approve --ralph 500</c>: a pass count out of range; the number as typed is the rest.</summary>
+        BadRalphPasses,
     }
 
     /// <summary>The <c>/plan</c> list while planning: the subcommands, each with its note. Pinned.</summary>
@@ -71,6 +97,7 @@ internal sealed partial class ChatScreen
     [
         new(PlanText.ApproveWord, "approve the presented plan and carry it out here"),
         new(PlanText.ApproveWord + " " + PlanText.FreshSwitch, "approve it and carry it out in a new conversation"),
+        new(PlanText.ApproveWord + " " + RalphText.RalphSwitch, "approve it and run it as a Ralph loop, one step per fresh conversation: /plan approve --ralph [passes]"),
         new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked canceled"),
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
         new(PlanText.SaveWord, "keep the last reply as the plan and ask for approval: /plan save [name]"),
@@ -94,12 +121,29 @@ internal sealed partial class ChatScreen
     [
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
         new(PlanText.ChatWord, "talk a plan through before it's written; /plan ready when you want it"),
+        new(RalphText.RalphWord, "run a plan as a Ralph loop, or resume the paused one: /plan ralph [name] [passes]"),
     ];
 
     /// <summary>The /sys Tools tab's name for the group that holds <c>present_plan</c>.</summary>
     public const string PlanGroupName = "Plan";
 
     public const string PlanVerdictLogPrefix = "present_plan: ";
+
+    /// <summary>
+    /// The least room the compact checks leave for the next reply while a plan is being written (2026-10-18, the user's pick: a reopened
+    /// plan's first presentation gets room too): the plan file's size over <see cref="ConversationCompactor.CharsPerToken"/>, since
+    /// <c>present_plan</c> sends the plan back whole. 0 with no plan, an approved one (<c>present_plan</c> is then refused), no file yet
+    /// or one the sandbox will not stat. Bytes over-count non-ASCII a little, the safe side. A file stat, so each site calls it: the
+    /// top-of-message check and the turn's guard (<see cref="Assistant.TurnContextGuard.ReplyFloor"/>), headless's too.
+    /// </summary>
+    public static long PlanReplyFloor(PlanSession plan, WorkingDirectory files)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(files);
+        return plan.Active && plan.Approved is null && plan.Path is { } path && files.TryStamp(path) is { } stamp
+            ? stamp.Length / ConversationCompactor.CharsPerToken
+            : 0;
+    }
 
     /// <summary>
     /// What <paramref name="args"/> asks for: the subcommands (<c>show</c>, <c>approve</c>, <c>approve --fresh</c>,
@@ -124,10 +168,26 @@ internal sealed partial class ChatScreen
         int space = trimmed.IndexOfAny([' ', '\t']);
         string first = (space < 0 ? trimmed : trimmed[..space]).ToLowerInvariant();
         string after = space < 0 ? "" : trimmed[(space + 1)..].Trim();
+        // /plan ralph [name] [passes] (later on 2026-10-18): at most a name and a count, in either order; more words are a requirement or detail.
+        if (first == RalphText.RalphWord && RalphArgs(after, out _, out _, out string badCount) is { } ralphForm)
+        {
+            rest = ralphForm ? after : badCount;
+            return ralphForm ? PlanCommand.Ralph : PlanCommand.BadRalphPasses;
+        }
+
+        // /plan approve --ralph [passes] (later on 2026-10-18): the three words in any order, while planning.
+        if (ApproveRalphArgs(trimmed, out string? ralphCount, out bool ralphBad))
+        {
+            rest = ralphCount ?? "";
+            return !planning ? PlanCommand.NotPlanning : ralphBad ? PlanCommand.BadRalphPasses : PlanCommand.ApproveRalph;
+        }
+
         if (first == PlanText.OpenWord)
         {
+            // --chat (2026-10-18): a whole word at either end of the rest, case aside; "open chat" is still a plan named chat.
+            bool chat = TakeSwitch(ref after, PlanText.ChatSwitch);
             rest = after;
-            return after.Length == 0 ? PlanCommand.List : PlanCommand.Open;
+            return after.Length == 0 ? chat ? PlanCommand.ListChat : PlanCommand.List : chat ? PlanCommand.OpenChat : PlanCommand.Open;
         }
 
         if (planning && first == PlanText.SaveWord && !after.Contains(' ', StringComparison.Ordinal) && !after.Contains('\t', StringComparison.Ordinal))
@@ -183,6 +243,116 @@ internal sealed partial class ChatScreen
         };
     }
 
+    /// <summary>
+    /// <c>/plan ralph</c>'s words (2026-10-18): none, a name, a count, or one of each in either order is true (<paramref name="name"/> empty for none,
+    /// <paramref name="passes"/> null for none); a count out of <see cref="AppSettingsData.MinRalphLoopPasses"/>–<see cref="AppSettingsData.MaxRalphLoopPasses"/>
+    /// is false with the word in <paramref name="badCount"/>; anything else (more words, two names) is null — not this form. Pure.
+    /// </summary>
+    internal static bool? RalphArgs(string after, out string name, out int? passes, out string badCount)
+    {
+        name = "";
+        passes = null;
+        badCount = "";
+        string[] words = after.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length > 2)
+        {
+            return null;
+        }
+
+        foreach (string word in words)
+        {
+            bool number = word.TrimStart('-', '+').Length > 0 && word.TrimStart('-', '+').All(char.IsAsciiDigit);
+            if (number && passes is null && badCount.Length == 0)
+            {
+                if (!int.TryParse(word, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int count)
+                    || count < AppSettingsData.MinRalphLoopPasses || count > AppSettingsData.MaxRalphLoopPasses)
+                {
+                    badCount = word;
+                    continue;
+                }
+
+                passes = count;
+            }
+            else if (!number && name.Length == 0)
+            {
+                name = word;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return badCount.Length == 0;
+    }
+
+    /// <summary>
+    /// <c>/plan approve --ralph [passes]</c>'s words in any order (2026-10-18): true when the line is <c>approve</c>, <c>--ralph</c> and at most one
+    /// count; <paramref name="passes"/> the count as typed, <paramref name="bad"/> when it is out of range. Pure.
+    /// </summary>
+    internal static bool ApproveRalphArgs(string line, out string? passes, out bool bad)
+    {
+        passes = null;
+        bad = false;
+        var words = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length is < 2 or > 3
+            || !words.Any(w => string.Equals(w, PlanText.ApproveWord, StringComparison.OrdinalIgnoreCase))
+            || !words.Any(w => string.Equals(w, RalphText.RalphSwitch, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var others = words.Where(w => !string.Equals(w, PlanText.ApproveWord, StringComparison.OrdinalIgnoreCase) && !string.Equals(w, RalphText.RalphSwitch, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (others.Count != words.Length - 2 || others.Count > 1)
+        {
+            return false;
+        }
+
+        if (others.Count == 1)
+        {
+            string word = others[0];
+            if (!(word.TrimStart('-', '+').Length > 0 && word.TrimStart('-', '+').All(char.IsAsciiDigit)))
+            {
+                return false;
+            }
+
+            passes = word;
+            bad = !int.TryParse(word, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int count)
+                || count < AppSettingsData.MinRalphLoopPasses || count > AppSettingsData.MaxRalphLoopPasses;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="text"/> starts or ends with <paramref name="word"/> as a whole word, case aside (2026-10-18, <c>--chat</c>); when
+    /// it does, the word is taken off and the rest trimmed. Pure.
+    /// </summary>
+    internal static bool TakeSwitch(ref string text, string word)
+    {
+        string trimmed = text.Trim();
+        if (string.Equals(trimmed, word, StringComparison.OrdinalIgnoreCase))
+        {
+            text = "";
+            return true;
+        }
+
+        if (trimmed.StartsWith(word, StringComparison.OrdinalIgnoreCase) && trimmed.Length > word.Length && char.IsWhiteSpace(trimmed[word.Length]))
+        {
+            text = trimmed[word.Length..].Trim();
+            return true;
+        }
+
+        if (trimmed.EndsWith(word, StringComparison.OrdinalIgnoreCase) && trimmed.Length > word.Length && char.IsWhiteSpace(trimmed[^(word.Length + 1)]))
+        {
+            text = trimmed[..^word.Length].Trim();
+            return true;
+        }
+
+        text = trimmed;
+        return false;
+    }
+
     /// <summary>The strip with plan mode's glyph ahead of the rest while planning. Pinned.</summary>
     public static string PlanStrip(bool planning, string strip)
     {
@@ -197,10 +367,14 @@ internal sealed partial class ChatScreen
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        var turn = _plan.Active
+        var turn = _plan.Active || _audit.Reviewing
             ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.Tools)
             : disabled;
-        return GapAsksBarred(effective) ? PlanTools.WithoutAsking(turn) : turn;
+        // A code audit's pass (2026-10-18) keeps its own tools alone, as the turn's OnlyTools does.
+        turn = _audit.Reviewing
+            ? DisableAllBut(turn, AuditTools.Allowed(effective).Contains, _clockTools, _timerTools, _helpTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _networkTools, _serviceTools, _taskTools, _directoryTools, _comfyTools, _haTools, _printTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _cameraTools, _screenTools, _neonAdvisorTools, _mcp.Tools)
+            : turn;
+        return GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(turn) : turn;
     }
 
     /// <summary>
@@ -208,7 +382,7 @@ internal sealed partial class ChatScreen
     /// <see cref="AppSettingsData.PlanGapAskUser"/> off, read every turn. Such a pass is offered none of <see cref="PlanTools.AskingTools"/>;
     /// the turn whose pane chose <c>Close gaps…</c> (the loop still pending) and every other plan-mode turn keep them.
     /// </summary>
-    private bool GapAsksBarred(AppSettingsData effective) => _plan.Reviewing && !effective.PlanGapAskUser;
+    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !effective.PlanGapAskUser) || (_audit.Reviewing && !effective.CodeAuditAskUser);
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
@@ -216,7 +390,26 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<ToolGroup> WithPlanGroup(IReadOnlyList<ToolGroup> groups)
     {
-        if (!_plan.Active || !_effective().LlmOfferTools)
+        if (!_effective().LlmOfferTools)
+        {
+            return groups;
+        }
+
+        if (RalphPassTurn() is { } pass && !_plan.Active)
+        {
+            // finish_step's group during a Ralph pass (2026-10-18), so /sys says what the turn sends.
+            var ralph = new ToolGroup(SystemPromptSummary.GroupName(RalphGroupName, 1, 1), "", [pass.Tool], true) { Label = RalphGroupName };
+            return SystemPromptSummary.SortedGroups([.. groups, ralph]);
+        }
+
+        if (_audit.Reviewing && !_plan.Active)
+        {
+            // present_audit's group during a code audit's pass (2026-10-18), so /sys says what the turn sends.
+            var audit = new ToolGroup(SystemPromptSummary.GroupName(AuditGroupName, 1, 1), "", [_presentAudit], true) { Label = AuditGroupName };
+            return SystemPromptSummary.SortedGroups([.. groups, audit]);
+        }
+
+        if (!_plan.Active)
         {
             return groups;
         }
@@ -229,14 +422,13 @@ internal sealed partial class ChatScreen
     private async Task<bool> HandlePlanAsync(string args, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
         var command = ParsePlanArgs(args, _plan.Active, out string rest);
-        if (command == PlanCommand.Open && PlanFiles.Resolve(_files, rest) is null)
+        if (command is PlanCommand.Open or PlanCommand.OpenChat && PlanFiles.Resolve(_files, rest) is null)
         {
             if (!rest.Any(char.IsWhiteSpace))
             {
                 _transcript.Error(PlanText.NoSuchPlanError(rest));
                 // From the Web UI's page (later on 2026-10-14) the list under the error is notices: no card for a typo's help.
-                await ListPlansAsync(cancellationToken, asNotices: FromWebNow).ConfigureAwait(false);
-                return false;
+                return await ListPlansAsync(command == PlanCommand.OpenChat ? PlanPickMode.Talk : PlanPickMode.Open, cancellationToken, asNotices: FromWebNow).ConfigureAwait(false);
             }
 
             // Several words and no such plan: "/plan open the pod bay doors" is a requirement (or, while planning, detail).
@@ -245,12 +437,11 @@ internal sealed partial class ChatScreen
 
         switch (command)
         {
-            case PlanCommand.List:
-                await ListPlansAsync(cancellationToken).ConfigureAwait(false);
-                return false;
+            case PlanCommand.List or PlanCommand.ListChat:
+                return await ListPlansAsync(command == PlanCommand.ListChat ? PlanPickMode.Talk : PlanPickMode.Open, cancellationToken).ConfigureAwait(false);
 
-            case PlanCommand.Open:
-                return await OpenPlanAsync(PlanFiles.Resolve(_files, rest)!, cancellationToken).ConfigureAwait(false);
+            case PlanCommand.Open or PlanCommand.OpenChat:
+                return await OpenPlanAsync(PlanFiles.Resolve(_files, rest)!, command == PlanCommand.OpenChat, cancellationToken).ConfigureAwait(false);
 
             case PlanCommand.Save:
                 return await SavePlanReplyAsync(rest.Length == 0 ? null : rest, cancellationToken).ConfigureAwait(false);
@@ -276,6 +467,23 @@ internal sealed partial class ChatScreen
             case PlanCommand.Chat:
                 return EnterPlanChat();
 
+            case PlanCommand.BadRalphPasses:
+                _transcript.Error(RalphText.BadPassesError(rest));
+                return false;
+
+            case PlanCommand.Ralph:
+            {
+                RalphArgs(rest, out string ralphName, out int? ralphPasses, out _);
+                return await HandleRalphAsync(ralphName, ralphPasses, cancellationToken).ConfigureAwait(false);
+            }
+
+            case PlanCommand.ApproveRalph when _plan.Path is null:
+                _transcript.Error(PlanText.NothingPresentedError);
+                return false;
+
+            case PlanCommand.ApproveRalph:
+                return await ApproveRalphAsync(rest.Length == 0 ? null : int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
+
             case PlanCommand.Ready:
                 return await PlanReadyAsync(cancellationToken).ConfigureAwait(false);
 
@@ -284,7 +492,12 @@ internal sealed partial class ChatScreen
                 return false;
 
             case PlanCommand.NotPlanning:
-                _transcript.Error(PlanText.NotPlanningError);
+                // /plan show outside plan mode (2026-10-18): a running or paused Ralph loop says where it stands; else the error as ever.
+                if (!(string.Equals(args.Trim(), PlanText.ShowWord, StringComparison.OrdinalIgnoreCase) && ShowRalph()))
+                {
+                    _transcript.Error(PlanText.NotPlanningError);
+                }
+
                 return false;
 
             case PlanCommand.Show:
@@ -310,26 +523,7 @@ internal sealed partial class ChatScreen
                 return await CarryOutPlanAsync(fresh: true, cancellationToken).ConfigureAwait(false);
 
             case PlanCommand.Enter:
-                if (!_effective().LlmOfferTools)
-                {
-                    _transcript.Error(PlanText.NeedsToolsError);
-                    return false;
-                }
-
-                if (_session.Assistant is null)
-                {
-                    _transcript.Error(NoAssistantError);
-                    return false;
-                }
-
-                _plan.Enter(args);
-                _executingPlan = null;
-                _planDraftReply = null;
-                SyncPlanChrome();
-                SavePlanState();
-                _transcript.Notice(PlanText.EnteredNotice);
-                _transcript.User(_plan.Requirement);
-                return await RunMessageAsync(_plan.Requirement, images, cancellationToken).ConfigureAwait(false);
+                return await EnterPlanAsync(args, images, cancellationToken).ConfigureAwait(false);
 
             default:
                 // More detail while planning: a message like any other, echoed since the typed line was the command.
@@ -354,7 +548,7 @@ internal sealed partial class ChatScreen
         }
 
         // On the PC's pane and the Web UI's page at once (2026-10-14, AskBothAsync), the first answer winning; Close gaps stays the PC's.
-        var outcome = await AskBothAsync<PlanVerdict?>(PlanSpec(plan), async token => await _planMenu.AskAsync(plan, token).ConfigureAwait(false),
+        var outcome = await AskBothAsync<PlanVerdict?>(PlanSpec(plan, PlanCheckLine(plan)), async token => await _planMenu.AskAsync(plan, token).ConfigureAwait(false),
             answer => PlanVerdictOf(answer), "The plan approval pane failed: ", turnToken).ConfigureAwait(false);
         if (outcome.NeverAsked)
         {
@@ -378,6 +572,17 @@ internal sealed partial class ChatScreen
         return result;
     }
 
+    /// <summary>
+    /// The Ralph loop's check line for <paramref name="plan"/> (2026-10-18, the pane's caption and the page's body): its checks (the presentation's,
+    /// else the file's header), the reviewer, the budget, and the warning under <c>Shell command policy</c> ask.
+    /// </summary>
+    private string PlanCheckLine(PlanPresentation plan)
+    {
+        var effective = _effective();
+        var checks = plan.Checks ?? (PlanFiles.ReadWhole(_files, plan.Path) is { } text && PlanDocument.TryParse(text) is { } header ? new PlanChecks(header.Verify, header.Final) : null);
+        return RalphText.PaneCheckLine(checks, RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, Shell.CommandPolicy.Resolve(effective) == Shell.CommandPolicyMode.Ask);
+    }
+
     /// <summary><c>present_plan: approve</c> for the --log file. Pinned.</summary>
     public static string PlanVerdictLogLine(PlanChoice choice) => PlanVerdictLogPrefix + choice.ToString().ToLowerInvariant();
 
@@ -390,23 +595,24 @@ internal sealed partial class ChatScreen
     /// only when the reply ended on its own; a stopped one drops the approval with a notice, and <c>/plan approve</c>
     /// is left to start it. The placeholder follows plan mode either way (a cancel on the pane ended it).
     /// </summary>
-    private bool TakePlanApproval(TurnOutcome outcome, out bool fresh)
+    private bool TakePlanApproval(TurnOutcome outcome, out PlanChoice choice)
     {
         SyncPlanChrome();
-        fresh = false;
+        choice = PlanChoice.Approve;
         if (_plan.Approved is not { } approval)
         {
             return false;
         }
 
-        fresh = approval == PlanChoice.ApproveFresh;
+        choice = approval;
         if (outcome == TurnOutcome.Continue && !_lastTurnCancelled)
         {
             return true;
         }
 
         _plan.ClearApproval();
-        _transcript.Notice(PlanText.ApprovalInterruptedNotice);
+        // The form that was chosen (2026-10-18): a Ralph approval names /plan approve --ralph.
+        _transcript.Notice(approval == PlanChoice.ApproveRalph ? RalphText.ApprovalInterruptedNotice : PlanText.ApprovalInterruptedNotice);
         return false;
     }
 
@@ -442,10 +648,19 @@ internal sealed partial class ChatScreen
         SyncPlanChrome();
         _transcript.Notice(PlanText.ApprovedNotice(path, fresh));
         string message;
+        IReadOnlyList<ImageAttachment> images = [];
         if (fresh)
         {
             StartNewConversation();
-            message = PlanText.ExecuteFreshMessage(path, PlanDocument.Body(text));
+            string body = PlanDocument.Body(text);
+            message = PlanText.ExecuteFreshMessage(path, body);
+            // The plan's reference pictures (2026-10-18): a new conversation has nothing of the planning, so they go with the message.
+            var effective = _effective();
+            images = PlanReferences.ForRun(_files, path, body, null, effective.LlmPictureKeep, effective.LlmPictureMegabytes, ModelSeesPictures(), out string? unseen);
+            if (unseen is not null)
+            {
+                _transcript.Notice(unseen);
+            }
         }
         else
         {
@@ -458,7 +673,12 @@ internal sealed partial class ChatScreen
         SavePlanState();
 
         _transcript.User(message);
-        return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
+        if (images.Count > 0)
+        {
+            _transcript.Notice(PlanText.ReferencesAttachedNotice(images.Count));
+        }
+
+        return await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary><c>/plan cancel</c>: the file (when one was presented) marked cancelled, plan mode off.</summary>
@@ -480,7 +700,8 @@ internal sealed partial class ChatScreen
     /// <summary>The conversation forgotten (<c>/new</c>, <c>/clear</c>, a profile switch …): plan mode goes with it, the file kept as it was.</summary>
     private void LeavePlanOnReset()
     {
-        // The plan being carried out goes with the conversation too: nothing is left to tick it.
+        // The plan being carried out goes with the conversation too: nothing is left to tick it. A Ralph loop's with it (2026-10-18).
+        StopRalphOnReset();
         _executingPlan = null;
         _executingShown = null;
         _planDraftReply = null;
@@ -497,7 +718,14 @@ internal sealed partial class ChatScreen
     /// <summary>A restored session's plan mode, said on the transcript when it was on.</summary>
     private void RestorePlan(StoredPlan? stored, StoredPlan? executing)
     {
+        StopRalphOnReset();
         _executingPlan = executing is { Path.Length: > 0 } ? executing : null;
+        if (_executingPlan is { Ralph: true } ralph)
+        {
+            // A restored Ralph state is always paused (2026-10-18): a crash mid-pass resumes cleanly with /plan ralph.
+            ralph.Paused = true;
+        }
+
         _executingShown = null;
         _planDraftReply = null;
         _plan.Restore(stored);
@@ -525,39 +753,125 @@ internal sealed partial class ChatScreen
     /// <summary>The chat log's length when the last planning reply was looked at, so a reply is hinted once.</summary>
     private int _planLogSeen = -1;
 
+    // ── Plan reference pictures (2026-10-18) ──
+
+    /// <summary>The conversation's pictures a plan may keep (<see cref="PlanReferences.FromHistory"/>), under the keep-in-sessions settings.</summary>
+    private IReadOnlyList<PlanPicture> ConversationPictures(AppSettingsData effective) =>
+        PlanReferences.FromHistory(_session.History.Messages, effective.CameraKeepInSessions, effective.ScreenKeepInSessions, ReloadPicture);
+
+    /// <summary>A pruned picture read again from its path: an absolute one as it is, a relative one under the working directory.</summary>
+    private PlanPicture? ReloadPicture(string path)
+    {
+        if (System.IO.Path.IsPathFullyQualified(path))
+        {
+            return PlanReferences.Reload(path);
+        }
+
+        return _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok ? PlanReferences.Reload(full) : null;
+    }
+
+    /// <summary>
+    /// The pictures of the message whose turn is being prepared (2026-10-18): not in the history yet when the directive is built, so the
+    /// directive names them with the rest. Set around <see cref="PrepareTurn"/> on the turn task; empty otherwise.
+    /// </summary>
+    private IReadOnlyList<ImageAttachment> _turnPictures = [];
+
+    /// <summary>The <c>ref-N</c> names the planning directive gives the conversation's pictures (the turn's own too); null outside plan mode or with none.</summary>
+    private IReadOnlyList<string>? PlanReferenceNames(AppSettingsData effective)
+    {
+        if (!_plan.Active)
+        {
+            return null;
+        }
+
+        var pictures = ConversationPictures(effective).Concat(_turnPictures
+            .Where(i => !i.IsDocument && i.PdfPage is null && !i.Reference && (effective.CameraKeepInSessions || !i.Camera) && (effective.ScreenKeepInSessions || !i.Screen))
+            .Select(i => new PlanPicture(i.Bytes, i.MediaType, i.Path))).ToList();
+        return pictures.Count == 0 ? null : PlanReferences.Names(_files, _plan.Path, pictures);
+    }
+
+    /// <summary>
+    /// <c>present_plan</c>'s and <c>/plan save</c>'s pictures seam (<see cref="PlanFiles.Save"/>): the conversation's pictures saved beside the plan,
+    /// then the body's <c>## References</c> reconciled with them. On the turn task (the tool) or the idle line.
+    /// </summary>
+    private string SavePlanReferences(string path, string body)
+    {
+        var pictures = ConversationPictures(_effective());
+        var saved = PlanReferences.Sync(_files, path, pictures);
+        return PlanReferences.ReconcileSection(body, saved);
+    }
+
+    /// <summary>
+    /// Whether the model in use can see pictures (2026-10-18, a run's reference pictures): not the embedded model without its projector, and not
+    /// without image codecs.
+    /// </summary>
+    private bool ModelSeesPictures() => ImageCodecs.Available && _session.EmbeddedServer is not { Vision: false };
+
     /// <summary>The <c>/plan open</c> completion list: every plan under <c>.neon/plans/</c>, newest first, with its status and steps.</summary>
     private IReadOnlyList<CompletionItem> PlanChoices() =>
         PlanFiles.List(_files).Select(plan => new CompletionItem(plan.Name, PlanText.CompletionNote(plan))).ToList();
 
-    /// <summary><c>/plan open</c> alone: the plans under <c>.neon/plans/</c>, one notice each, or that there are none.</summary>
-    private Task ListPlansAsync(CancellationToken cancellationToken, bool asNotices = false)
+    /// <summary>
+    /// <c>/plan open</c> alone (<paramref name="mode"/> <see cref="PlanPickMode.Open"/>), <c>/plan open --chat</c> (<see cref="PlanPickMode.Talk"/>)
+    /// and, with nothing paused, bare <c>/plan ralph</c> (<see cref="PlanPickMode.Ralph"/>): the plans on <see cref="PlansMenu"/> (2026-10-18, the
+    /// user's ask; a list on the info pane since 2026-10-04 until then), the pick opened, talked through or run in its mode. From the Web UI's
+    /// page the pick is a card there too (<see cref="PickBothAsync"/>): a page pick goes in the typed mode, a PC pick keeps its button's. No
+    /// plans is one line; no pane, or <paramref name="asNotices"/> (the typo path from the page), a notice per plan. True when the shell should exit.
+    /// </summary>
+    private async Task<bool> ListPlansAsync(PlanPickMode mode, CancellationToken cancellationToken, bool asNotices = false)
     {
         var plans = PlanFiles.List(_files);
         if (plans.Count == 0)
         {
             _transcript.Notice(PlanText.NoPlansNotice);
-            return Task.CompletedTask;
+            return false;
         }
 
-        if (asNotices)
+        if (asNotices || (!_pane.Enabled && !FromWebNow))
         {
             foreach (var plan in plans)
             {
                 _transcript.Notice(PlanText.ListLine(plan));
             }
 
-            return Task.CompletedTask;
+            return false;
         }
 
-        // On the info pane since 2026-10-04 (the user's pick); none is still the one line.
-        return ShowLinesAsync("/plan " + PlanText.OpenWord, plans.Select(PlanText.ListLine).ToList(), _transcript, cancellationToken);
+        PlanPick? pcPick = null;
+        var menu = new PlansMenu(plans, _menuPane, mode, RalphButtonOffered(), _plan.Path, RalphLines(plans));
+        string? chosen;
+        if (FromWebNow)
+        {
+            var options = plans.Select(p => new PickOption(p.Path, p.Name, PlanText.CompletionNote(p))).ToList();
+            chosen = await PickBothAsync(PlanText.PickerTitle, options, _plan.Path, async token =>
+            {
+                pcPick = await menu.ShowAsync(token).ConfigureAwait(false);
+                return pcPick?.Plan.Path;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            pcPick = await menu.ShowAsync(cancellationToken).ConfigureAwait(false);
+            chosen = pcPick?.Plan.Path;
+        }
+
+        if (chosen is null)
+        {
+            return false;
+        }
+
+        var picked = pcPick is { } pc && pc.Plan.Path == chosen ? pc.Mode : mode;
+        return picked == PlanPickMode.Ralph
+            ? await RalphPickedAsync(chosen, cancellationToken).ConfigureAwait(false)
+            : await OpenPlanAsync(chosen, picked == PlanPickMode.Talk, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// <c>/plan open &lt;name&gt;</c>: plan mode on over the file (a plan in progress left as it stands), its status back to
     /// draft, where it stood said, and — the user's call — a turn asking the model to read it and ask what should change.
+    /// With <paramref name="chat"/> (2026-10-18, <c>--chat</c>) nothing is sent: plan mode talks it through (<see cref="PlanSession.ResumeTalking"/>).
     /// </summary>
-    private async Task<bool> OpenPlanAsync(string path, CancellationToken cancellationToken)
+    private async Task<bool> OpenPlanAsync(string path, bool chat, CancellationToken cancellationToken)
     {
         if (!_effective().LlmOfferTools)
         {
@@ -587,10 +901,17 @@ internal sealed partial class ChatScreen
             _transcript.Notice(PlanText.SwitchedNotice(_plan.Path));
         }
 
+        // A paused Ralph loop on this plan is left (2026-10-18): the file and its log keep everything for a later /plan ralph <name>.
+        LeaveRalphOnOpen(path);
         _executingPlan = null;
         _executingShown = null;
         _planDraftReply = null;
         _plan.Open(path, title, requirement, header?.Revision ?? 1, header is { Created: var created } && created != DateTimeOffset.MinValue ? created : null);
+        if (chat)
+        {
+            _plan.ResumeTalking();
+        }
+
         if (PlanFiles.MarkFile(_files, path, PlanStatus.Draft, _time.GetLocalNow(), requirement) is { } problem)
         {
             _transcript.Warning(problem);
@@ -599,6 +920,12 @@ internal sealed partial class ChatScreen
         SyncPlanChrome();
         SavePlanState();
         _transcript.Notice(PlanText.OpenedNotice(path, header?.Status, done, total));
+        if (chat)
+        {
+            _transcript.Notice(PlanText.OpenChatNotice);
+            return false;
+        }
+
         string message = PlanText.OpenMessage(path, done, total);
         _transcript.User(message);
         return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
@@ -619,7 +946,7 @@ internal sealed partial class ChatScreen
         }
 
         string title = PlanDocument.FirstHeading(reply) ?? _plan.Requirement;
-        var (saved, error) = PlanFiles.Save(_plan, _files, _time, title, reply, name);
+        var (saved, error) = PlanFiles.Save(_plan, _files, _time, title, reply, name, references: SavePlanReferences);
         if (saved is null)
         {
             _transcript.Error(PlanText.CouldNotSaveResult(error ?? ""));
@@ -647,6 +974,8 @@ internal sealed partial class ChatScreen
                 return await CarryOutPlanAsync(fresh: false, cancellationToken).ConfigureAwait(false);
             case PlanChoice.ApproveFresh:
                 return await CarryOutPlanAsync(fresh: true, cancellationToken).ConfigureAwait(false);
+            case PlanChoice.ApproveRalph:
+                return await ApproveRalphAsync(null, cancellationToken).ConfigureAwait(false);
             case PlanChoice.Cancel:
                 CancelPlan();
                 return false;
@@ -674,9 +1003,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether <c>neon_advisor</c> is what the turn would offer (2026-10-13): <c>Advisors enabled</c>, an advisor listed, and the tool
-    /// not off on <c>/tools</c> — the test the directive's advisors bullet uses. The reviewer page is shown only then.
+    /// not off on <c>/tools</c> — the test the directive's advisors bullet uses. The reviewer page is shown only then. Shared by the gap
+    /// review and the code audit since 2026-10-18 (<c>PlanAdvisorsOffered</c> until then).
     /// </summary>
-    private bool PlanAdvisorsOffered()
+    private bool AdvisorPassOffered()
     {
         var effective = _effective();
         return AdvisorsOffered(effective) && Without(_neonAdvisorTools, TurnDisabled(effective)).Count > 0;
@@ -705,7 +1035,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private GapAfterTurn BeginGapPass(PlanGapLoop loop, string path, string? body)
     {
-        bool offered = PlanAdvisorsOffered();
+        bool offered = AdvisorPassOffered();
         loop.BeginPass(body, PlanMeter(), offered);
         if (loop.Pass == 1 && loop.CleanLowered)
         {
@@ -724,12 +1054,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>A pass's message sent as a turn, the <see cref="CarryOutPlanAsync"/> shape.</summary>
-    private async Task<bool> SendGapPassAsync(GapAfterTurn pass, CancellationToken cancellationToken)
-    {
-        string message = pass.Message!;
-        _transcript.User(message);
-        return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
-    }
+    private async Task<bool> SendGapPassAsync(GapAfterTurn pass, CancellationToken cancellationToken) =>
+        await SendPassAsync(pass.Message!, [], cancellationToken).ConfigureAwait(false);
 
     /// <summary>The plan file's body, header aside; null when it cannot be read.</summary>
     private string? ReadPlanBody(string path) => PlanFiles.ReadWhole(_files, path) is { } text ? PlanDocument.Body(text) : null;
@@ -959,7 +1285,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<PlanVerdict?> AskPlanAtIdleAsync(PlanPresentation plan, CancellationToken cancellationToken)
     {
-        var outcome = await RaceAsync<PlanVerdict?>(PlanSpec(plan), async token => await _planMenu.AskAsync(plan, token).ConfigureAwait(false),
+        var outcome = await RaceAsync<PlanVerdict?>(PlanSpec(plan, PlanCheckLine(plan)), async token => await _planMenu.AskAsync(plan, token).ConfigureAwait(false),
             answer => PlanVerdictOf(answer), "The plan pane failed: ", cancellationToken).ConfigureAwait(false);
         return outcome.Value;
     }
@@ -971,7 +1297,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void CheckPlanProgress(bool interrupted)
     {
-        if (_executingPlan is not { Path: { } path } executing)
+        // A Ralph loop's plan is the loop's to mark (2026-10-18): this would mark it done before its final check.
+        if (_executingPlan is not { Path: { } path, Ralph: false } executing)
         {
             return;
         }

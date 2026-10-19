@@ -169,7 +169,8 @@ public class PlanRoundTwoTests : IDisposable
         var plans = PlanFiles.List(_files);
 
         Assert.Equal(["new", "old", "bare"], plans.Select(p => p.Name));
-        Assert.Equal(new PlanListing(".neon/plans/new.md", "New plan", PlanStatus.Incomplete, 1, 2, T0.AddDays(1)), plans[0]);
+        Assert.Equal(new PlanListing(".neon/plans/new.md", "New plan", PlanStatus.Incomplete, 1, 2, T0.AddDays(1), Requirement: "r"), plans[0]);   // the requirement since 2026-10-18 (the picker's footer)
+        Assert.Equal("", plans[2].Requirement);
         Assert.Equal(("bare", null), (plans[2].Title, plans[2].Status));
         Assert.Equal("  new — New plan (incomplete · 1/2 · 2026-09-27 10:00)", PlanText.ListLine(plans[0]));
         Assert.Equal("  bare — bare (no header)", PlanText.ListLine(plans[2]));
@@ -199,7 +200,7 @@ public class PlanRoundTwoTests : IDisposable
         Assert.EndsWith("The last line.", marked.TrimEnd());
 
         var listed = Assert.Single(PlanFiles.List(_files));
-        Assert.Equal(new PlanListing(".neon/plans/long.md", "Long plan", PlanStatus.Approved, 1, 2, T0.AddDays(1)), listed);
+        Assert.Equal(new PlanListing(".neon/plans/long.md", "Long plan", PlanStatus.Approved, 1, 2, T0.AddDays(1), Requirement: "r"), listed);
 
         // read_file keeps its window.
         var window = _files.ReadText(".neon/plans/long.md", null, null);
@@ -239,6 +240,28 @@ public class PlanRoundTwoTests : IDisposable
     [InlineData("save the file first", true, "Detail", "")]
     [InlineData("save", false, "Enter", "")]
     [InlineData("save the whales", false, "Enter", "")]
+    // --chat (2026-10-18): a whole word at either end of open's rest, case aside; alone it is the picker to talk.
+    [InlineData("open x --chat", false, "OpenChat", "x")]
+    [InlineData("open --chat x", true, "OpenChat", "x")]
+    [InlineData("open --CHAT x", false, "OpenChat", "x")]
+    [InlineData("open --chat", false, "ListChat", "")]
+    [InlineData("open  --chat  ", true, "ListChat", "")]
+    [InlineData("open chat", false, "Open", "chat")]
+    [InlineData("open my--chat", false, "Open", "my--chat")]
+    [InlineData("open the --chat doors", false, "Open", "the --chat doors")]
+    [InlineData("chat x", false, "Enter", "")]
+    // ralph and approve --ralph (later on 2026-10-18): a name and a count in either order, never read as each other or as open --chat.
+    [InlineData("ralph", false, "Ralph", "")]
+    [InlineData("ralph add-guide", false, "Ralph", "add-guide")]
+    [InlineData("RALPH 5 add-guide", false, "Ralph", "5 add-guide")]
+    [InlineData("ralph add-guide 201", false, "BadRalphPasses", "201")]
+    [InlineData("ralph the whole requirement here", false, "Enter", "")]
+    [InlineData("approve --ralph", true, "ApproveRalph", "")]
+    [InlineData("--ralph approve 5", true, "ApproveRalph", "5")]
+    [InlineData("approve --ralph 201", true, "BadRalphPasses", "201")]
+    [InlineData("approve --ralph", false, "NotPlanning", "")]
+    [InlineData("open x --ralph", false, "Open", "x --ralph")]
+    [InlineData("ralph x --chat", false, "Enter", "")]   // two names: a requirement
     public void ParsePlanArgs_OpenAndSave(string args, bool planning, string expected, string expectedRest)
     {
         Assert.Equal(expected, ChatScreen.ParsePlanArgs(args, planning, out string rest).ToString());

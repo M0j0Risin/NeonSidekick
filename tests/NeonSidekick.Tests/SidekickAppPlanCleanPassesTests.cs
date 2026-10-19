@@ -26,7 +26,7 @@ public partial class SidekickAppTests
         string output = await Headless("/plan Add a guide\n/plan gaps\n");
 
         Assert.Equal(6, _chat.Requests.Count);
-        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Unconfirmed, 2, 1) + " — /plan approve [--fresh] starts it", output);
+        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Unconfirmed, 2, 1) + " — /plan approve [--fresh | --ralph] starts it", output);
         Assert.Contains("pass 2: clean, cut short", output);
         Assert.EndsWith("cut short at the limit (body " + PlanDocument.Fingerprint(PlanDocument.Body(File.ReadAllText(HeadlessPlanFile))) + ")", PlanDocument.TryParse(File.ReadAllText(HeadlessPlanFile))!.Review);
     }
@@ -44,7 +44,7 @@ public partial class SidekickAppTests
 
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Contains("[notice] " + PlanText.CleanLoweredNotice(1, 2), output);
-        Assert.Contains("[notice] " + PlanText.ConvergedNotice(HeadlessPlanPath, 1, 0) + " — /plan approve [--fresh] starts it", output);
+        Assert.Contains("[notice] " + PlanText.ConvergedNotice(HeadlessPlanPath, 1, 0) + " — /plan approve [--fresh | --ralph] starts it", output);
         Assert.Contains("[notice] · checked: the steps", output);
     }
 
@@ -109,7 +109,7 @@ public partial class SidekickAppTests
         Assert.Contains("The conversation began with: \"Let's plan a guide\"", _chat.Requests[0][0].Text);
         Assert.Contains(PlanText.TalkingLine, _chat.Requests[0][0].Text);
         Assert.Equal(PlanText.ReadyMessage, HeadlessLastUser(_chat.Requests[1]));
-        Assert.Contains("[notice] Plan: " + HeadlessPlanPath + " (revision 1) — /plan approve [--fresh] starts it", output);
+        Assert.Contains("[notice] Plan: " + HeadlessPlanPath + " (revision 1) — /plan approve [--fresh | --ralph] starts it", output);
         Assert.Equal("Guide", PlanDocument.TryParse(File.ReadAllText(HeadlessPlanFile))!.Requirement);
     }
 

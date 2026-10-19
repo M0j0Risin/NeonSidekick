@@ -19,6 +19,9 @@ public static partial class SmokeChecks
     /// <c>Repository.Discover</c>), the first commit's message carries whitespace the app's own
     /// <see cref="GitAccess.Prettify"/> tidies, and a remote-tracking ref with the branch's config gives
     /// <c>ahead 1 of origin/main</c> from the config and the history, never <c>Branch.TrackedBranch</c>.
+    /// Since 2026-10-18 the code audit's two reads too: <see cref="GitAccess.TrackedFiles"/> lists the committed file and
+    /// <see cref="GitAccess.MergeBase"/> finds where the side branch left main; and the Ralph loop's evidence (later on 2026-10-18):
+    /// <see cref="GitAccess.ChangedPaths"/> walks a new untracked folder to its file.
     /// The library declares no AOT support: the JIT proves nothing, this line does.
     /// </summary>
     public static SmokeCheck ProbeGit()
@@ -174,6 +177,32 @@ public static partial class SmokeChecks
             }
 
             legs.Add("ahead 1 of origin/main");
+            // The code audit's two reads (2026-10-18): the index's files, and where feature left main (the first commit).
+            var known = git.TrackedFiles("", includeUntracked: true);
+            if (known.Outcome != GitOutcome.Ok || known.Tracked.Count != 1 || known.Tracked[0] != "notes.txt")
+            {
+                return Fail(name, "tracked files", known.Outcome, known.Detail + " " + string.Join(",", known.Tracked));
+            }
+
+            var fork = git.MergeBase("", "feature", "main");
+            if (fork.Outcome != GitOutcome.Ok || fork.Sha is null || !fork.Sha.StartsWith(first.Short, StringComparison.Ordinal))
+            {
+                return Fail(name, "merge base", fork.Outcome, fork.Detail + " sha=" + fork.Sha);
+            }
+
+            legs.Add("1 tracked file, merge base found");
+            // The Ralph loop's evidence (2026-10-18): a new folder of files is walked, not one entry.
+            Directory.CreateDirectory(Path.Combine(root, "fresh", "deep"));
+            File.WriteAllText(Path.Combine(root, "fresh", "deep", "new.txt"), "new");
+            var changedPaths = git.ChangedPaths("");
+            File.Delete(Path.Combine(root, "fresh", "deep", "new.txt"));
+            Directory.Delete(Path.Combine(root, "fresh"), recursive: true);
+            if (changedPaths.Outcome != GitOutcome.Ok || !changedPaths.Paths.Any(p => p.Replace('\\', '/') == "fresh/deep/new.txt"))
+            {
+                return Fail(name, "changed paths", changedPaths.Outcome, changedPaths.Detail + " " + string.Join(",", changedPaths.Paths));
+            }
+
+            legs.Add("an untracked folder walked");
             var deleted = git.Delete("", GitDeleteKind.Branch, "feature", 0);
             if (deleted.Outcome != GitOutcome.Ok || git.Refs("").Local.Count != 1)
             {

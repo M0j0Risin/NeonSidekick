@@ -936,4 +936,237 @@ public class ConversationCompactorTests
         Assert.Equal(["user", "user", "assistant", "tool", "assistant", "tool"], Roles(twice));
         Assert.Equal("\n\n(The work on this request so far was compacted into this progress note; carry on from it:)\n\n", ConversationCompactor.TurnProgressPreamble);
     }
+
+    // ── Room for the next reply (2026-10-18) ───────────────────────────────
+
+    [Theory]
+    [InlineData(7500, 0, false)]          // 75 % of the window, under the 90 % share alone
+    [InlineData(7500, 1500, true)]        // with room for a 1,500-token reply
+    [InlineData(7500, 1499, false)]
+    [InlineData(6400, 5000, false)]       // 5,000 capped at a quarter (2,500): 8,900
+    [InlineData(6500, 5000, true)]        // 9,000
+    [InlineData(0, 5000, false)]          // nothing sent yet, or just compacted: never, reserve or not
+    public void ShouldAutoCompact_LeavesRoomForTheLargestReply(long inUse, long largestReply, bool expected)
+    {
+        var last = new TokenUsage(inUse, 0, inUse, 1, TimeSpan.Zero, TimeSpan.Zero);
+        Assert.Equal(expected, ConversationCompactor.ShouldAutoCompact(last, new ContextLength(10_000, "test"), 90, largestReply));
+    }
+
+    [Fact]
+    public void ReplyReserve_IsTheLargestReply_UpToAQuarterOfTheWindow()
+    {
+        Assert.Equal(25, ConversationCompactor.MaxReplyReservePercent);
+        Assert.Equal(28_095, ConversationCompactor.ReplyReserve(28_095, 151_427));     // the gap chain's: under the cap
+        Assert.Equal(37_856, ConversationCompactor.ReplyReserve(50_000, 151_427));     // a quarter of the window
+        Assert.Equal(0, ConversationCompactor.ReplyReserve(0, 151_427));
+    }
+
+    // ── Superseded plan copies (2026-10-18) ────────────────────────────────
+
+    private static ChatMessage Present(string callId, string markdown) =>
+        CallWith(callId, NeonSidekick.Llm.Tools.PresentPlanTool.ToolName, ("title", "T"), ("markdown", markdown));
+
+    private static ChatMessage ReadPlan(string callId, string path) =>
+        CallWith(callId, NeonSidekick.Llm.Tools.ReadFileTool.ToolName, ("path", path));
+
+    private static string ArgumentOf(ChatMessage message, string key) =>
+        message.Contents.OfType<FunctionCallContent>().Single().Arguments![key]?.ToString()!;
+
+    private static string ResultOf(ChatMessage message, string callId) =>
+        (string)message.Contents.OfType<FunctionResultContent>().Single(r => r.CallId == callId).Result!;
+
+    /// <summary>Three presentations and two plan reads: only the latest presentation and what follows it stay whole.</summary>
+    [Fact]
+    public void StubSupersededPlans_KeepsOnlyTheLatestPresentation_AndWhatFollows()
+    {
+        List<ChatMessage> messages =
+        [
+            User("plan it"),
+            ReadPlan("r1", ".neon/plans/x.md"), Result("r1", Long(3000)),
+            Present("p1", Long(3000)), Result("p1", "saved"),
+            User("more"),
+            Present("p2", Long(3100)), Result("p2", "saved"),
+            ReadPlan("r2", ".neon/plans/x.md"), Result("r2", Long(3100)),
+            Present("p3", Long(3200)), Result("p3", "saved"),
+            Assistant("presented"),
+        ];
+        messages[3].RawRepresentation = new object();
+        var entries = new List<ConversationCompactor.PrunedEntry>();
+
+        var (stubbed, pruned, arguments) = ConversationCompactor.StubSupersededPlans(messages, entries);
+
+        Assert.Equal((2, 2), (pruned, arguments));
+        Assert.Equal(messages.Count, stubbed.Count);
+        Assert.Equal(ConversationCompactor.PrunedStub(3000), ResultOf(stubbed[2], "r1"));
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), ArgumentOf(stubbed[3], "markdown"));
+        Assert.Equal("T", ArgumentOf(stubbed[3], "title"));
+        Assert.Null(stubbed[3].RawRepresentation);
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3100), ArgumentOf(stubbed[6], "markdown"));
+        Assert.Equal(ConversationCompactor.PrunedStub(3100), ResultOf(stubbed[9], "r2"));
+        for (int i = 10; i < messages.Count; i++)
+        {
+            Assert.Same(messages[i], stubbed[i]);
+        }
+
+        Assert.Same(messages[4], stubbed[4]);
+        Assert.Equal(Long(3000), ArgumentOf(messages[3], "markdown"));                // the held list untouched
+        Assert.Equal(4, entries.Count);
+        Assert.Equal(2, entries.Count(e => e.Argument == "markdown"));
+        Assert.All(entries.Where(e => e.Argument is null), e => Assert.Equal("read_file", e.Tool));
+    }
+
+    [Fact]
+    public void StubSupersededPlans_AbsoluteAndDotPaths_AndASharedToolMessage()
+    {
+        List<ChatMessage> messages =
+        [
+            User("plan it"),
+            new(ChatRole.Assistant,
+            [
+                new FunctionCallContent("r1", "read_file", new Dictionary<string, object?> { ["path"] = @"C:\work\.neon\plans\x.md" }),
+                new FunctionCallContent("r2", "read_file", new Dictionary<string, object?> { ["path"] = "./.neon/plans/x.md" }),
+                new FunctionCallContent("r3", "read_file", new Dictionary<string, object?> { ["path"] = "notes.md" }),
+            ]),
+            new(ChatRole.Tool, [new FunctionResultContent("r1", Long(900)), new FunctionResultContent("r2", Long(800)), new FunctionResultContent("r3", Long(700))]),
+            Present("p1", Long(3000)), Result("p1", "saved"),
+        ];
+
+        var (stubbed, pruned, arguments) = ConversationCompactor.StubSupersededPlans(messages);
+
+        Assert.Equal((2, 0), (pruned, arguments));
+        Assert.Equal(ConversationCompactor.PrunedStub(900), ResultOf(stubbed[2], "r1"));
+        Assert.Equal(ConversationCompactor.PrunedStub(800), ResultOf(stubbed[2], "r2"));
+        Assert.Equal(Long(700), ResultOf(stubbed[2], "r3"));                            // not a plan read: kept
+        Assert.Same(messages[3], stubbed[3]);
+    }
+
+    [Theory]
+    [InlineData(".neon/plans/x.md", true)]
+    [InlineData(@".neon\plans\x.md", true)]
+    [InlineData("./.neon/plans/x.md", true)]
+    [InlineData(@"C:\work\.NEON\Plans\x.md", true)]
+    [InlineData("/Users/me/work/.neon/plans/x.md", true)]
+    [InlineData("plans/x.md", false)]
+    [InlineData("work/neon/plans/x.md", false)]
+    [InlineData(".neon/plansx/x.md", false)]
+    public void IsPlanPath_TakesRelativeAbsoluteAndDotPaths(string path, bool expected) =>
+        Assert.Equal(expected, ConversationCompactor.IsPlanPath(path));
+
+    /// <summary>One presentation: a plan read before it (as after <c>/plan open</c>) is stubbed; with none, nothing changes.</summary>
+    [Fact]
+    public void StubSupersededPlans_OnePresentation_StubsAReadBeforeIt_ElseNothing()
+    {
+        List<ChatMessage> read =
+        [
+            User("plan it"),
+            ReadPlan("r1", ".neon/plans/x.md"), Result("r1", Long(3000)),
+            Present("p1", Long(3000)), Result("p1", "saved"),
+        ];
+        var (stubbed, pruned, arguments) = ConversationCompactor.StubSupersededPlans(read);
+        Assert.Equal((1, 0), (pruned, arguments));
+        Assert.Equal(ConversationCompactor.PrunedStub(3000), ResultOf(stubbed[2], "r1"));
+        Assert.Same(read[3], stubbed[3]);
+
+        List<ChatMessage> bare = [User("plan it"), Present("p1", Long(3000)), Result("p1", "saved")];
+        var (same, none, noArguments) = ConversationCompactor.StubSupersededPlans(bare);
+        Assert.Equal((0, 0), (none, noArguments));
+        Assert.Equal(bare, same);
+
+        List<ChatMessage> noPlan = [User("hi"), ReadPlan("r1", ".neon/plans/x.md"), Result("r1", Long(3000))];
+        var (untouched, zero, zeroArguments) = ConversationCompactor.StubSupersededPlans(noPlan);
+        Assert.Equal((0, 0), (zero, zeroArguments));
+        Assert.Equal(noPlan, untouched);
+    }
+
+    /// <summary>A non-plan read, a call that failed to parse and an opening call stay; a stubbed latest presentation does not count as the latest.</summary>
+    [Fact]
+    public void StubSupersededPlans_LeavesWhatItMustNotTouch()
+    {
+        var broken = new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("pb", NeonSidekick.Llm.Tools.PresentPlanTool.ToolName) { Exception = new System.Text.Json.JsonException("cut") }]);
+        var opening = ReadPlan(NeonSidekick.Llm.Assistant.OpeningCwdCallId, ".neon/plans/x.md");
+        List<ChatMessage> messages =
+        [
+            opening, Result(NeonSidekick.Llm.Assistant.OpeningCwdCallId, Long(500)),
+            User("plan it"),
+            ReadPlan("r1", "src/app.cs"), Result("r1", Long(3000)),
+            broken, Result("pb", "Error: could not be parsed"),
+            Present("p1", Long(3000)), Result("p1", "saved"),
+            Present("p2", Long(3100)), Result("p2", "saved"),
+            Present("p3", ConversationCompactor.PrunedArgumentStub(3000)), Result("p3", "Error: markdown is a pruned stub"),
+        ];
+
+        var (stubbed, pruned, arguments) = ConversationCompactor.StubSupersededPlans(messages);
+
+        Assert.Equal((0, 1), (pruned, arguments));
+        Assert.Same(messages[0], stubbed[0]);
+        Assert.Same(messages[1], stubbed[1]);
+        Assert.Same(messages[4], stubbed[4]);
+        Assert.Same(broken, stubbed[5]);
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), ArgumentOf(stubbed[7], "markdown"));
+        Assert.Same(messages[9], stubbed[9]);                                            // p2 is the latest real presentation
+        Assert.Same(messages[11], stubbed[11]);
+    }
+
+    /// <summary>A refused presentation with real text (a review's checked missing) is the latest: kept, and the saved one before it stubbed.</summary>
+    [Fact]
+    public void StubSupersededPlans_ARefusedLatestPresentation_IsKept()
+    {
+        List<ChatMessage> messages =
+        [
+            User("close the gaps"),
+            Present("p1", Long(3000)), Result("p1", "saved"),
+            Present("p2", Long(3100)), Result("p2", NeonSidekick.Plans.PlanText.CheckedRequiredResult),
+        ];
+
+        var (stubbed, _, arguments) = ConversationCompactor.StubSupersededPlans(messages);
+
+        Assert.Equal(1, arguments);
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), ArgumentOf(stubbed[1], "markdown"));
+        Assert.Same(messages[3], stubbed[3]);
+    }
+
+    /// <summary>Two turns, each with a presentation: the older turn's.</summary>
+    private static List<ChatMessage> TwoPresentations() =>
+    [
+        User("plan it"), Present("p1", Long(3000)), Result("p1", "saved"), Assistant("presented"),
+        User("revise"), Present("p2", Long(3100)), Result("p2", "saved"), Assistant("presented again"),
+    ];
+
+    [Fact]
+    public async Task RunAsync_Summary_StubsSupersededPlansFirst_TheSummariserReadsTheStub()
+    {
+        var (client, assistant, tally) = Build(TwoPresentations());
+        client.Enqueue(FakeChatClient.Text("A summary."), FakeChatClient.Usage(100, 5));
+
+        var result = await ConversationCompactor.RunAsync(assistant, tally, CompactMode.Summary, keepRecent: 1, focus: null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.True(result.Summarised);
+        Assert.Equal(1, result.ArgumentsPruned);
+        Assert.Contains(result.Entries, e => e.Argument == "markdown" && e.Characters == 3000);
+        var request = Assert.Single(client.Requests);
+        Assert.Contains(request.SelectMany(m => m.Contents).OfType<FunctionCallContent>(), c => c.CallId == "p1" && c.Arguments!["markdown"]?.ToString() == ConversationCompactor.PrunedArgumentStub(3000));
+        Assert.Equal(Long(3100), assistant.History.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Single(c => c.CallId == "p2").Arguments!["markdown"]?.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_Prune_StubsSupersededPlans_AndTheyAloneAreAResult()
+    {
+        var (client, assistant, tally) = Build(TwoPresentations());
+
+        var result = await ConversationCompactor.RunAsync(assistant, tally, CompactMode.Prune, keepRecent: 1, focus: null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ArgumentsPruned);
+        Assert.Empty(client.Requests);
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), assistant.History.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Single(c => c.CallId == "p1").Arguments!["markdown"]?.ToString());
+
+        // Nothing older to compact: the superseded copy alone is still a result, not "nothing to do".
+        var (_, kept, keptTally) = Build(TwoPresentations());
+        var alone = await ConversationCompactor.RunAsync(kept, keptTally, CompactMode.Summary, keepRecent: 5, focus: null, CancellationToken.None);
+        Assert.NotNull(alone);
+        Assert.False(alone.Summarised);
+        Assert.Equal(1, alone.ArgumentsPruned);
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), kept.History.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().Single(c => c.CallId == "p1").Arguments!["markdown"]?.ToString());
+    }
 }

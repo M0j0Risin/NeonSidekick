@@ -115,7 +115,9 @@ public sealed class WebCommandsTests
     [InlineData("/rewind 2", WebCommandKind.Pick)]
     [InlineData("/ha states light", WebCommandKind.List)]
     [InlineData("/docker logs mysql_dev", WebCommandKind.List)]
-    [InlineData("/plan open", WebCommandKind.List)]
+    [InlineData("/plan open", WebCommandKind.Pick)]   // the plans picker since 2026-10-18, a list until then
+    [InlineData("/plan open --chat", WebCommandKind.Pick)]
+    [InlineData("/plan open x --chat", WebCommandKind.Run)]
     [InlineData("/print", WebCommandKind.List)]
     [InlineData("/print printers", WebCommandKind.List)]
     [InlineData("/camera list", WebCommandKind.List)]

@@ -97,6 +97,29 @@ public sealed class GitAccessTests : IDisposable
         File.WriteAllText(full, content);
     }
 
+    // ---- ChangedPaths (2026-10-18, a Ralph pass's evidence) ----
+
+    [Fact]
+    public void ChangedPaths_ListsEveryChangedFile_AnUntrackedFolderWalked()
+    {
+        Init();
+        CommitFile(_root, "kept.txt", "a", "first");
+        CommitFile(_root, "gone.txt", "b", "second");
+        Write("kept.txt", "changed");
+        File.Delete(Path.Combine(_root, "gone.txt"));
+        Write(Path.Combine("fresh", "deep", "one.txt"), "1");
+        Write(Path.Combine("fresh", "two.txt"), "2");
+        File.WriteAllText(Path.Combine(_root, ".gitignore"), "ignored.log\n");
+        Write("ignored.log", "x");
+
+        var report = _git.ChangedPaths("");
+
+        Assert.Equal(GitOutcome.Ok, report.Outcome);
+        Assert.Equal([".gitignore", "fresh/deep/one.txt", "fresh/two.txt", "gone.txt", "kept.txt"], report.Paths.Select(p => p.Replace('\\', '/')).Order(StringComparer.Ordinal));
+        Assert.False(report.Truncated);
+        Assert.NotEqual(GitOutcome.Ok, new GitAccess(new Files.WorkingDirectory(() => _dir, _time), _time).ChangedPaths("").Outcome);
+    }
+
     // ---- discovery ----
 
     [Fact]

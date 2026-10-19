@@ -36,6 +36,18 @@ public static class PlanText
     public const string ChatWord = "chat";
     public const string ReadyWord = "ready";
 
+    /// <summary>
+    /// <c>/plan open &lt;name&gt; --chat</c> (2026-10-18, the user's ask): the plan opened to talk it through, nothing sent; a whole word at
+    /// either end of what follows <c>open</c>, case aside. <c>/plan open --chat</c> alone opens the picker to talk.
+    /// </summary>
+    public const string ChatSwitch = "--chat";
+
+    /// <summary>
+    /// <c>/plan open &lt;name&gt; --chat</c>'s line after <see cref="OpenedNotice"/> (2026-10-18): nothing was sent; the first message talks it
+    /// through. Pinned.
+    /// </summary>
+    public const string OpenChatNotice = Glyph + " Talking it through: nothing was sent. Say what should change; /plan ready asks for the plan, /plan approve starts it as it stands.";
+
     /// <summary>The input row's placeholder while planning.</summary>
     public const string Placeholder = "Planning — add detail, or /plan approve · /plan cancel";
 
@@ -95,7 +107,7 @@ public static class PlanText
 
     /// <summary>
     /// The words after <c>/plan gaps</c> (2026-10-17): none, a reviewer, a pass count, or one of each in either order is
-    /// <see cref="GapsArgs.Ok"/>; one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–20 (a sign, an overflow)
+    /// <see cref="GapsArgs.Ok"/>; one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–50 (a sign, an overflow)
     /// <see cref="GapsArgs.OutOfRange"/>; anything else <see cref="GapsArgs.NotGaps"/>, plan detail. <paramref name="word"/> is the
     /// word at fault, else empty. Pure.
     /// </summary>
@@ -194,6 +206,50 @@ public static class PlanText
         string when = plan.Updated is { } u && u != DateTimeOffset.MinValue ? " · " + u.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "";
         return $"  {plan.Name} — {plan.Title} ({status}{steps}{when})";
     }
+
+    // ── The plans picker (2026-10-18, bare /plan open, /plan open --chat, bare /plan ralph) ──
+
+    /// <summary>The picker's title.</summary>
+    public const string PickerTitle = Glyph + " Plans";
+
+    /// <summary>The picker's buttons and their keys: open, talk it through, and outside plan mode run it as a Ralph loop.</summary>
+    public const string OpenButton = "↗ open";
+    public const char OpenKey = 'o';
+    public const string TalkButton = "💬 talk";
+    public const char TalkKey = 'c';
+    public const string RalphButton = "🔁 Ralph loop";
+    public const char RalphKey = 'l';
+
+    /// <summary>
+    /// The picker's hint row (2026-10-18): what Enter does in <paramref name="mode"/>, then the buttons that do something else, <c>l</c> only with
+    /// <paramref name="ralphButton"/>. Each within 119 cells (<c>ConsistencyPassTests</c>). Pinned.
+    /// </summary>
+    public static string PickerKeys(PlanPickMode mode, bool ralphButton)
+    {
+        string ralph = ralphButton ? "l = Ralph loop · " : "";
+        return mode switch
+        {
+            PlanPickMode.Talk => "Enter = talk · o = open · " + ralph + UI.MenuFilter.TypeOrShiftAndCloseKeys,
+            PlanPickMode.Ralph => "Enter = Ralph loop · o = open · c = talk · " + UI.MenuFilter.TypeOrShiftAndCloseKeys,
+            _ => "Enter = open · c = talk · " + ralph + UI.MenuFilter.TypeOrShiftAndCloseKeys,
+        };
+    }
+
+    /// <summary>
+    /// The picker's footer for <paramref name="plan"/>: its requirement (else its title), the line <paramref name="ralph"/> when it has run as a
+    /// Ralph loop, and its path last.
+    /// </summary>
+    public static UI.MenuFooter PickerFooter(PlanListing plan, string? ralph = null)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        string requirement = plan.Requirement.Length > 0 ? "Requirement: " + Flatten(plan.Requirement) : plan.Title;
+        return ralph is { Length: > 0 }
+            ? new UI.MenuFooter(requirement + "\n" + ralph, plan.Path) { KeepLines = true }
+            : new UI.MenuFooter(requirement, plan.Path);
+    }
+
+    /// <summary>A plan picked that cannot be read whole (2026-10-18): said on the picker's status line, which stays open. Pinned.</summary>
+    public static string PickerUnreadableError(string path) => $"{path} could not be read whole: open it in an editor to see why";
 
     /// <summary>The note beside a plan on the <c>/plan open</c> completion list.</summary>
     public static string CompletionNote(PlanListing plan)
@@ -331,9 +387,9 @@ public static class PlanText
         PlanGapStop.Limit => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed; the last pass still found some.",
         PlanGapStop.Unconfirmed => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed: the last pass found no gaps, but there was no pass left to check it again.",
         PlanGapStop.Stalled => $"{Glyph} Gap review stopped after {Passes(passes)}, {Gaps(closed)} closed: the plan stopped changing or the same gaps came back.",
-        PlanGapStop.NoRevision => $"{Glyph} Gap review stopped: pass {N(passes)} saved no revision. /plan gaps starts a new review; /plan approve starts the plan.",
+        PlanGapStop.NoRevision => $"{Glyph} Gap review stopped: pass {N(passes)} saved no revision. /plan gaps starts a new review; /plan approve [--ralph] starts the plan.",
         PlanGapStop.UserSpoke => $"{Glyph} Gap review stopped after {Passes(passes)} for your message. /plan gaps starts a new review.",
-        _ => $"{Glyph} Gap review stopped at pass {N(passes)}, {Gaps(closed)} closed. /plan gaps starts a new review; /plan approve starts the plan.",
+        _ => $"{Glyph} Gap review stopped at pass {N(passes)}, {Gaps(closed)} closed. /plan gaps starts a new review; /plan approve [--ralph] starts the plan.",
     };
 
     public const string GapsDroppedNotice = Glyph + " The gap review was chosen but the reply was stopped: /plan gaps starts it.";
@@ -452,7 +508,8 @@ public static class PlanText
     /// <summary>A review that converged on one clean pass, as its <c>review:</c> line says it (2026-10-17): "reviewed", not "confirmed".</summary>
     public const string ReviewOneCleanPass = "no gaps left after 1 clean pass";
 
-    private static string PassOf(int pass, int limit) => limit > 0 ? $"{N(pass)} of {N(limit)}" : N(pass);
+    /// <summary><c>2 of 5</c>, or <c>2</c> with no limit; shared with the code audit's words since 2026-10-18 (<see cref="Audits.AuditText"/>).</summary>
+    internal static string PassOf(int pass, int limit) => limit > 0 ? $"{N(pass)} of {N(limit)}" : N(pass);
 
     private static string Passes(int passes) => passes == 1 ? "1 pass" : $"{N(passes)} passes";
 
@@ -489,7 +546,7 @@ public static class PlanText
         }
 
         lines.Add(session.Path is { } path
-            ? $"  Plan: {path} (revision {N(session.Revision)}) — /plan approve [--fresh] starts it"
+            ? $"  Plan: {path} (revision {N(session.Revision)}) — /plan approve [--fresh | --ralph] starts it"
             : "  Plan: not presented yet");
         if (session.Closing is { Pending: false } loop)
         {
@@ -510,7 +567,10 @@ public static class PlanText
 
     /// <summary>The gap-closing loop's row (2026-10-13), after Keep refining.</summary>
     public const string CloseGapsRow = "Close gaps…";
-    public const string ApprovalKeys = "a / f / r / g / c = pick · Enter = choose · Esc = keep refining";
+    public const string ApprovalKeys = "a / f / l / r / g / c = pick · Enter = choose · Esc = keep refining";
+
+    /// <summary>The words ahead of the Ralph loop's check line on the approval pane's caption (2026-10-18).</summary>
+    public const string RalphCaptionLead = "Ralph loop: ";
 
     /// <summary>The second page Close gaps… opens while advisors are offered: who reviews.</summary>
     public const string ReviewerTitle = "Close gaps: who reviews?";
@@ -566,20 +626,33 @@ public static class PlanText
     /// conversation began with, or that nothing is said yet) and <see cref="TalkingLine"/> replaces the present bullet; the default, the
     /// directive as before. Pinned.
     /// </summary>
-    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap, IReadOnlyList<string>? research, PlanTalk talk)
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap, IReadOnlyList<string>? research, PlanTalk talk) =>
+        Directive(requirement, path, revision, advisors, gap, research, talk, null);
+
+    /// <summary>
+    /// <see cref="Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?, PlanGapState?, IReadOnlyList{string}?, PlanTalk)"/> with
+    /// <paramref name="references"/> (2026-10-18, plan reference pictures): the <c>ref-N</c> names the conversation's pictures are saved as beside the
+    /// plan, named by <see cref="ReferencesLine"/>; null or none, no such bullet. Pinned.
+    /// </summary>
+    public static string Directive(string requirement, string? path, int revision, IReadOnlyList<Settings.AdvisorEntry>? advisors, PlanGapState? gap, IReadOnlyList<string>? research, PlanTalk talk, IReadOnlyList<string>? references)
     {
         ArgumentNullException.ThrowIfNull(requirement);
         bool offered = advisors is { Count: > 0 };
         bool web = research is { Count: > 0 };
         string state = path is null
             ? "No plan has been presented yet."
-            : $"The plan so far is in {path} (revision {N(revision)}); present_plan overwrites it with the next revision.";
+            : $"The plan so far is in {path} (revision {N(revision)}); present_plan overwrites it with the next revision."
+              // Talking over a plan already written (2026-10-18, /plan open <name> --chat): it may be a file the conversation never saw.
+              + (talk.Talking ? " Read it before you discuss it if its text isn't in this conversation." : "");
         string opening = talk.Talking && requirement.Trim().Length == 0
             ? "PLAN MODE is on. The user wants to talk a plan through before anything is done; they haven't said what it is for yet.\n"
             : talk.Opening
                 ? (talk.Talking ? "PLAN MODE is on. The user wants to talk a plan through before anything is done." : "PLAN MODE is on. The user asked for a plan before anything is done.")
                   + " The conversation began with: \"" + Flatten(requirement) + "\"\n"
-                : "PLAN MODE is on. The user asked for a plan before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n";
+                : talk.Talking
+                    // A settled requirement while talking (2026-10-18): a reopened plan's, or one presented before /plan chat.
+                    ? "PLAN MODE is on. The user wants to talk the plan through before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n"
+                    : "PLAN MODE is on. The user asked for a plan before anything is done. Their requirement: \"" + Flatten(requirement) + "\"\n";
         return
             opening +
             "- Do not change anything: write no file, change no repository, run no command that changes state, send no message and change no setting. Only read-only tools are offered; use them to research what the plan needs.\n" +
@@ -588,7 +661,9 @@ public static class PlanText
             "- Never claim anything was done: nothing is carried out until the user approves.\n" +
             (talk.Talking
                 ? TalkingLine + "\n"
-                : "- When no open question is left, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.\n") +
+                : "- When no open question is left, call present_plan with the whole plan as Markdown: " + PlanShape + "\n") +
+            VerifyLine + "\n" +
+            (references is { Count: > 0 } pictures ? ReferencesLine(pictures) + "\n" : "") +
             "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
             (offered && gap?.Who is not PlanReviewer.Model ? AdvisorsLine(advisors!) + "\n" : "") +
@@ -617,10 +692,48 @@ public static class PlanText
     /// </summary>
     public const string GapOpenQuestionException = " (except an open question written into ## Risks as the user's call)";
 
+    /// <summary>
+    /// The plan's shape as the directive asks for it (2026-10-18, the Ralph loop: each step carries its own check, and the only checkboxes are the
+    /// steps', so a loop and the progress line count the same things). Pinned.
+    /// </summary>
+    public const string PlanShape =
+        "a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each with an indented Done when: line saying how to tell it is done), " +
+        "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.";
+
+    /// <summary>
+    /// The check commands' bullet (2026-10-18, the Ralph loop: the app runs them after each step and at the end): only commands seen in the project,
+    /// the examples generic, never a guess. Pinned.
+    /// </summary>
+    public const string VerifyLine =
+        "- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) " +
+        "and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess.";
+
+    /// <summary>
+    /// The pictures' bullet (2026-10-18, plan reference pictures): the conversation's pictures are saved beside the plan as <paramref name="names"/>;
+    /// the plan lists each under <c>## References</c> with what it shows, and a step that relies on one names it. Pinned.
+    /// </summary>
+    public static string ReferencesLine(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return "- The pictures in this conversation are saved beside the plan as " + string.Join(", ", names) + ": list each under ## References as - ref-N: what it shows, " +
+            "and name the ref-N a step relies on in that step, so whoever carries it out is shown the picture.";
+    }
+
+    /// <summary>A reference picture as a stored session keeps it (2026-10-18): the file beside the plan, not its bytes. Pinned.</summary>
+    public static string ReferenceNotKept(string path) => $"(reference picture {path}, kept beside the plan)";
+
+    /// <summary>The dim line under a run's message for the reference pictures it carries (2026-10-18): they are not drawn again. Pinned.</summary>
+    public static string ReferencesAttachedNotice(int count) =>
+        count == 1 ? Glyph + " 1 reference picture attached." : $"{Glyph} {N(count)} reference pictures attached.";
+
+    /// <summary>A run whose server cannot see pictures (2026-10-18): the plan's references left out. Pinned.</summary>
+    public static string ReferencesUnseenNotice(int count) =>
+        $"{Glyph} The plan lists {(count == 1 ? "a reference picture" : N(count) + " reference pictures")}, but the model in use cannot see pictures: sent without.";
+
     /// <summary>The present bullet's place while talking a plan through (2026-10-17, <c>/plan chat</c>). Pinned.</summary>
     public const string TalkingLine =
         "- The user wants to talk this through first: discuss, ask and research, but do not call present_plan and do not write the whole plan out until they ask for it, in their own words or with /plan ready. " +
-        "When they do, call present_plan with the whole plan as Markdown: a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order), ## Files and areas, ## Risks, ## Verification.";
+        "When they do, call present_plan with the whole plan as Markdown: " + PlanShape;
 
     /// <summary>
     /// The gap-closing pass's rules (2026-10-13, the user's ask): what a gap is and is not, how to research and ask, and how to
@@ -659,7 +772,7 @@ public static class PlanText
                 : "") +
             "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? "" : GapOpenQuestionException) + ", " +
             (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
-            ", a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
+            ", a step with no Done when: line, a risk with no answer, no way to verify. Wording and style are not gaps.\n" +
             (web
                 ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
                 : "- Research what you need with the read-only tools. " + decision + "\n") +
@@ -703,6 +816,12 @@ public static class PlanText
 
     public const string NotPlanningResult = "Error: plan mode is not on; there is no plan to present";
     public const string MarkdownRequired = "Error: markdown is required: the whole plan as Markdown";
+
+    /// <summary>
+    /// <c>present_plan</c>'s answer to a pruned stub sent as <c>markdown</c> (2026-10-18): a compaction stubs the earlier presentations
+    /// (<c>ConversationCompactor.StubSupersededPlans</c>), and one copied back would pass the blank check and be saved as the plan. Pinned.
+    /// </summary>
+    public const string MarkdownStubSent = "Error: markdown is a pruned stub, not the plan; read the plan file again and send the whole plan";
     public const string TitleRequired = "Error: title is required: a short title for the plan";
     public const string AlreadyApprovedResult = "The plan is already approved; it starts when this reply ends. Reply with one short line and call no more tools.";
 

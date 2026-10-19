@@ -184,6 +184,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private Func<string> _ruleTitle = static () => "";
     private string _drawnRuleTitle = "";
 
+    // The rules' mark (2026-10-18, /mark) and the one last drawn, for the tick: set from the screen's task, read by the draw.
+    // A boxed Style (a struct cannot be volatile); the box drawn last is compared by reference.
+    private volatile object? _ruleMark;
+    private object? _drawnRuleMark;
+
     // The upper rule's ⤡ (2026-09-28 as ↘️↖️, one glyph since 2026-09-29): whether the last draw put it there, and the column
     // it landed at (-1 = none drawn), for TryHitFoldButton and the tick.
     private bool _drawnFolds;
@@ -956,6 +961,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// tick, which repaints the pane when it changes; empty = the bare rule. The screen puts the
     /// session's name there: <see cref="RuleWithTitle"/> is the row.
     /// </summary>
+    /// <summary>
+    /// The color the rules around the draft line are drawn in (2026-10-18, the user's ask: <c>/mark &lt;color&gt;</c>, a window told apart at a
+    /// glance; <see cref="RuleMarks"/>): the rule glyphs of the upper and lower rule take it, the session's name, ⤡, 🎞️ and the lower rule's
+    /// title keep their own styles; null is <see cref="Theme.PaneRule"/>, the theme's (so a <c>/theme</c> change keeps a mark). Set from any
+    /// thread; a change redraws at the next tick, as a new rule title does.
+    /// </summary>
+    public Style? RuleMark
+    {
+        get => _ruleMark as Style?;
+        set => _ruleMark = value;
+    }
+
     public Func<string> RuleTitle
     {
         get => _ruleTitle;
@@ -6154,16 +6171,18 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteLowerRule(int width)
     {
         _drawnLowerRuleTitle = _lowerRuleTitle();
+        _drawnRuleMark = _ruleMark;
+        var rule = _drawnRuleMark is Style marked ? marked : Theme.PaneRule;
         (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
         if (FitRuleTitle(_drawnLowerRuleTitle, width) is var (fitted, left))
         {
-            _inner.Write(new RawText(new string(RuleGlyph, left) + " ", Theme.PaneRule));
+            _inner.Write(new RawText(new string(RuleGlyph, left) + " ", rule));
             _inner.Write(new RawText(fitted, Theme.AccentSecondary));
-            _inner.Write(new RawText(" " + RuleGlyph, Theme.PaneRule));
+            _inner.Write(new RawText(" " + RuleGlyph, rule));
         }
         else
         {
-            _inner.Write(new RawText(new string(RuleGlyph, Math.Max(0, width)), Theme.PaneRule));
+            _inner.Write(new RawText(new string(RuleGlyph, Math.Max(0, width)), rule));
         }
 
         _inner.WriteLine();
@@ -6245,17 +6264,32 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         _drawnRuleTitle = _ruleTitle();
         _drawnFolds = FoldsWanted();
         _drawnReopen = ReopenWanted();
+        _drawnRuleMark = _ruleMark;
+        var rule = _drawnRuleMark is Style marked ? marked : Theme.PaneRule;
         var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width, _drawnReopen);
         _foldColumn = parts.FoldColumn;
         _reopenColumn = parts.ReopenColumn;
         _ruleTitleColumn = parts.TitleColumn;
         _ruleTitleCells = parts.TitleCells;
-        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Button, Theme.AccentSecondary), (parts.Reopen, Theme.AccentSecondary), (parts.Rest, Theme.PaneRule) })
+        foreach (var (text, style) in new[] { (parts.Lead, rule), (parts.Button, Theme.AccentSecondary), (parts.Reopen, Theme.AccentSecondary) })
         {
             if (text.Length > 0)
             {
                 _inner.Write(new RawText(text, style));
             }
+        }
+
+        // The rest: the glyphs in the rule's style (a mark's, 2026-10-18), the session's name between them in the theme's as ever.
+        int restWidth = width - TextCells.Width(parts.Lead + parts.Button + parts.Reopen);
+        if (_drawnRuleMark is not null && FitRuleTitle(_drawnRuleTitle, restWidth) is var (fitted, left))
+        {
+            _inner.Write(new RawText(new string(RuleGlyph, left), rule));
+            _inner.Write(new RawText(" " + fitted + " ", Theme.PaneRule));
+            _inner.Write(new RawText(RuleGlyph.ToString(), rule));
+        }
+        else if (parts.Rest.Length > 0)
+        {
+            _inner.Write(new RawText(parts.Rest, rule));
         }
 
         _inner.WriteLine();
@@ -6377,7 +6411,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule, or <see cref="LowerRuleTitle"/>'s not the lower one's (2026-10-12).</summary>
     private bool RuleTitleChanged() =>
-        !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal);
+        !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal)
+        || !ReferenceEquals(_ruleMark, _drawnRuleMark);   // a /mark (2026-10-18)
 
     private void WriteHintRow()
     {

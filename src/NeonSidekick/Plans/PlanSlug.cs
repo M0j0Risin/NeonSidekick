@@ -91,29 +91,40 @@ public static class PlanSlug
     }
 
     /// <summary>The relative path of <paramref name="slug"/>'s file, with a numbered suffix when <paramref name="suffix"/> is over 1.</summary>
-    public static string PathFor(string slug, int suffix = 1)
+    public static string PathFor(string slug, int suffix = 1) => PathFor(Folder, slug, suffix);
+
+    /// <summary>
+    /// <see cref="PathFor(string, int)"/> under <paramref name="folder"/> (2026-10-18, the code audit's reports under <c>.neon/audits</c>):
+    /// the plans' form passes <see cref="Folder"/>.
+    /// </summary>
+    public static string PathFor(string folder, string slug, int suffix)
     {
+        ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(slug);
-        return suffix <= 1 ? $"{Folder}/{slug}{Extension}" : $"{Folder}/{slug}-{suffix.ToString(CultureInfo.InvariantCulture)}{Extension}";
+        return suffix <= 1 ? $"{folder}/{slug}{Extension}" : $"{folder}/{slug}-{suffix.ToString(CultureInfo.InvariantCulture)}{Extension}";
     }
 
     /// <summary>
     /// The first of <c>.neon/plans/&lt;slug&gt;.md</c>, <c>.neon/plans/&lt;slug&gt;-2.md</c> … that <paramref name="taken"/>
     /// says is free; past <see cref="MaxSuffix"/>, the name gains <paramref name="stamp"/>.
     /// </summary>
-    public static string Choose(string slug, Func<string, bool> taken, string stamp)
+    public static string Choose(string slug, Func<string, bool> taken, string stamp) => Choose(Folder, slug, taken, stamp);
+
+    /// <summary><see cref="Choose(string, Func{string, bool}, string)"/> under <paramref name="folder"/> (2026-10-18, the code audit's reports).</summary>
+    public static string Choose(string folder, string slug, Func<string, bool> taken, string stamp)
     {
+        ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(slug);
         ArgumentNullException.ThrowIfNull(taken);
         for (int suffix = 1; suffix <= MaxSuffix; suffix++)
         {
-            string path = PathFor(slug, suffix);
+            string path = PathFor(folder, slug, suffix);
             if (!taken(path))
             {
                 return path;
             }
         }
 
-        return PathFor(slug + "-" + stamp);
+        return PathFor(folder, slug + "-" + stamp, 1);
     }
 }

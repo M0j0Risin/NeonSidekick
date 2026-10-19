@@ -117,7 +117,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var response = await _wrapped.GetResponseAsync(WithReasoningBack(ConversationHistory.DocumentsAsText(messages), PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false);
+        var response = await _wrapped.GetResponseAsync(WithReasoningBack(WithCallArguments(ConversationHistory.DocumentsAsText(messages)), PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false);
         if (response.Usage is { } usage)
         {
             var thinking = new StringBuilder();
@@ -152,7 +152,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
         var thinking = new StringBuilder();
         ThinkTagFilter? tags = null;
         // An attached PDF goes as its text (2026-10-14, the PDF plan's phase 3): the adapter would send a file part this wire's servers refuse.
-        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(ConversationHistory.DocumentsAsText(messages), PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false))
+        await foreach (var update in _wrapped.GetStreamingResponseAsync(WithReasoningBack(WithCallArguments(ConversationHistory.DocumentsAsText(messages)), PreservesThinking(options)), WithRawFields(options), cancellationToken).ConfigureAwait(false))
         {
             FillTopLevelReasoningTokens(update);
             FillReasoningField(update);
@@ -612,6 +612,49 @@ public sealed class OpenAICompatibleChatClient : IChatClient
                 shaped ??= list.Take(i).ToList();
                 var clone = message.Clone();
                 clone.RawRepresentation = AssistantWithThinking(message, thinking);
+                shaped.Add(clone);
+            }
+            else
+            {
+                shaped?.Add(message);
+            }
+        }
+
+        return shaped ?? list;
+    }
+
+    /// <summary>
+    /// A call whose arguments never parsed goes out as <c>{}</c> (2026-10-18, a gap chain's log: the model ran out of context
+    /// mid-way through <c>present_plan</c>'s arguments, M.E.AI kept the call with null <see cref="FunctionCallContent.Arguments"/>,
+    /// and the next message's request said <c>"arguments":"null"</c>, which SGLang refuses with HTTP 400 "Assistant tool call
+    /// function.arguments must be a JSON object", ending the chain). In the turn in flight a call with thinking was already safe,
+    /// since <see cref="AssistantWithThinking"/> writes its arguments through <see cref="Assistant.SerializeArguments"/>; once
+    /// the turn had settled, or with no thinking at all, the message went through the adapter, which writes <c>null</c>. So an
+    /// assistant message holding such a call goes out as a clone with a new contents list, the call an empty dictionary and
+    /// its <see cref="ChatMessage.RawRepresentation"/> cleared (a raw SDK message would go out as it is, as in
+    /// <see cref="ConversationCompactor"/>'s stubs). The fix sits at the wire because every history reaches it: the chat's,
+    /// bots', advisors', reflections' and a restored session's. The history's own messages are never changed (the stored
+    /// session already writes <c>{}</c>, and the parse error stays on the original call); with nothing to change the same list
+    /// comes back.
+    /// </summary>
+    internal static IEnumerable<ChatMessage> WithCallArguments(IEnumerable<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var list = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+        List<ChatMessage>? shaped = null;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var message = list[i];
+            if (message.Role == ChatRole.Assistant && message.Contents.Any(c => c is FunctionCallContent { Arguments: null }))
+            {
+                shaped ??= list.Take(i).ToList();
+                var clone = message.Clone();
+                clone.Contents = message.Contents
+                    .Select(c => c is FunctionCallContent { Arguments: null } call
+                        ? new FunctionCallContent(call.CallId, call.Name, new Dictionary<string, object?>()) { InformationalOnly = call.InformationalOnly }
+                        : c)
+                    .ToList();
+                clone.RawRepresentation = null;
                 shaped.Add(clone);
             }
             else

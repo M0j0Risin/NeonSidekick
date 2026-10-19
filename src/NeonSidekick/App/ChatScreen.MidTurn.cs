@@ -202,7 +202,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Copy
             or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browser or SlashCommand.Prompts or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
-            or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,
+            or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Mark or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,   // /mark (2026-10-18): the rules' color, display only
         SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
     };
@@ -732,6 +732,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Header:
                 HandleHeader(args);
                 break;
+            case SlashCommand.Mark:
+                HandleMark(args, midTurn: true);
+                break;
             case SlashCommand.Sampling:
                 // /sampling <field> <value> (2026-09-28): the connected model's entry, read at the next turn.
                 _samplingMenu.Quick(args);
@@ -834,8 +837,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A read-only list on the info pane, one tab under <paramref name="label"/> (later on 2026-09-27 for <c>/tree</c> and <c>/vault</c>
     /// under a reply; 2026-10-04, the user's pick, for every list one reads and dismisses: the trees at the idle line too,
-    /// <c>/docker logs</c>, <c>/ha states</c>, <c>/comfy</c>, <c>/comfy offered</c>, <c>/print printers</c>, <c>/plan open</c>,
-    /// <c>/camera list</c>, <c>/screen list</c>); one tab, so the strip is the label alone (<see cref="InfoPane.SingleTabHintText"/>).
+    /// <c>/docker logs</c>, <c>/ha states</c>, <c>/comfy</c>, <c>/comfy offered</c>, <c>/print printers</c>, <c>/plan open</c> (a picker of its own
+    /// since 2026-10-18, <see cref="PlansMenu"/>), <c>/camera list</c>, <c>/screen list</c>); one tab, so the strip is the label alone (<see cref="InfoPane.SingleTabHintText"/>).
     /// Without the pane (a redirected console) the lines as notices through
     /// <paramref name="sink"/>, as before. A failure never comes here: it stays an error line in the chat.
     /// </summary>

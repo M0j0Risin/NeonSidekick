@@ -672,14 +672,17 @@ internal sealed partial class ChatScreen
             : UsageText.BusyHintParts(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read());
         // The reflection's 🧠 (2026-10-17, the user's ask): the PC's strip shows it while one runs, so the page does too.
         bool learning = _session.IsLearning;
+        // A Ralph loop's place (2026-10-18): one volatile string the screen's task publishes, read here off a request's thread.
+        string? loop = _ralphStrip;
         var status = new WebStatus(
             busy?.Label,
             busy is { } running ? (long)running.Elapsed.TotalMilliseconds : null,
             step ? (long)busy!.Value.Step.TotalMilliseconds : null,
             parts is null ? null : new WebUsage(parts.Tokens, parts.Percent, parts.Speed),
-            learning);
+            learning,
+            loop);
         string key = (busy is { } r ? r.Label + "\n" + r.Since.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" + (step ? r.StageSince : 0).ToString(System.Globalization.CultureInfo.InvariantCulture) : "")
-            + "\n" + parts?.Joined + (learning ? "\n🧠" : "");
+            + "\n" + parts?.Joined + (learning ? "\n🧠" : "") + (loop is null ? "" : "\n" + loop);
         return (status, key);
     }
 

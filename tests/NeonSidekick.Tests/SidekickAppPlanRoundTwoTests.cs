@@ -29,6 +29,27 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_Plan_OpenChat_SendsNothing_TalksIt_AndAloneLists()
+    {
+        // 2026-10-18: /plan open <name> --chat headless, the screen's words; the next line talks it through; --chat alone lists.
+        ServerOn1234("llama");
+        Directory.CreateDirectory(HeadlessPlansFolder);
+        var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+        File.WriteAllText(Path.Combine(HeadlessPlansFolder, "add-guide.md"), PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide"), "Guide", "# Guide\n- [x] One\n- [ ] Two"));
+        _chat.EnqueueText("Step two needs tests.");
+
+        string output = await Headless("/plan open --chat\n/plan open add-guide --chat\nWhat about tests?\n");
+
+        Assert.Contains("[notice] add-guide — Guide (incomplete · 1/2", output);
+        Assert.Contains("[notice] " + PlanText.OpenedNotice(".neon/plans/add-guide.md", PlanStatus.Incomplete, 1, 2), output);
+        Assert.Contains("[notice] " + PlanText.OpenChatNotice, output);
+        var request = Assert.Single(_chat.Requests);
+        Assert.Equal("What about tests?", request.Last(m => m.Role == ChatRole.User).Text);
+        Assert.Contains("The user wants to talk the plan through before anything is done. Their requirement: \"Add a guide\"", request[0].Text);
+        Assert.Contains(PresentPlanTool.ToolName, Offered(_chat.Options[0]));
+    }
+
+    [Fact]
     public async Task Headless_Plan_Open_ALongPlan_IsListed_AndReopens()
     {
         // 2026-10-17, the user's report: a plan past read_file's 32,000 characters "could not be read".

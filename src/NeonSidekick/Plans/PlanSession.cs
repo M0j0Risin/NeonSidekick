@@ -26,6 +26,9 @@ public enum PlanChoice
     /// in <see cref="PlanVerdict.Reviewer"/>; it comes back to the pane once a pass finds no gaps.
     /// </summary>
     CloseGaps,
+
+    /// <summary>Approved: carried out as a Ralph loop (2026-10-18), one step per fresh conversation, the app checking each.</summary>
+    ApproveRalph,
 }
 
 /// <summary>The user's answer to a presented plan, with what they want changed when they said, and the reviewer of a <see cref="PlanChoice.CloseGaps"/>.</summary>
@@ -38,6 +41,9 @@ public sealed record PlanVerdict(PlanChoice Choice, string? Feedback = null, Pla
 public sealed record PlanPresentation(string Title, string Path, int Revision, string Markdown)
 {
     public string? Note { get; init; }
+
+    /// <summary>The plan's check commands as its header holds them (2026-10-18), for the pane's check line (<c>RalphText.PaneCheckLine</c>); null for none read.</summary>
+    public PlanChecks? Checks { get; init; }
 }
 
 /// <summary>
@@ -111,7 +117,7 @@ public sealed class PlanSession
 
     public DateTimeOffset? Created { get; private set; }
 
-    /// <summary>An approval given on the pane, waiting for its turn to end: <see cref="PlanChoice.Approve"/> or <see cref="PlanChoice.ApproveFresh"/>.</summary>
+    /// <summary>An approval given on the pane, waiting for its turn to end: <see cref="PlanChoice.Approve"/>, <see cref="PlanChoice.ApproveFresh"/> or (2026-10-18) <see cref="PlanChoice.ApproveRalph"/>.</summary>
     public PlanChoice? Approved { get; private set; }
 
     /// <summary>
@@ -272,6 +278,9 @@ public sealed class PlanSession
     /// <summary>The approval noted, to act on when the turn ends.</summary>
     public void Approve(bool fresh) => Approved = fresh ? PlanChoice.ApproveFresh : PlanChoice.Approve;
 
+    /// <summary>The approval <paramref name="choice"/> noted (2026-10-18: a Ralph loop's too); any other choice notes none.</summary>
+    public void Approve(PlanChoice choice) => Approved = choice is PlanChoice.Approve or PlanChoice.ApproveFresh or PlanChoice.ApproveRalph ? choice : Approved;
+
     /// <summary>A noted approval dropped (the reply that gave it was stopped): the plan stays presented, for <c>/plan approve</c>.</summary>
     public void ClearApproval() => Approved = null;
 
@@ -318,9 +327,10 @@ public sealed class PlanSession
     /// <summary>
     /// The turn's plan-mode part while planning, else null. <paramref name="gapAsks"/> is
     /// <see cref="Settings.AppSettingsData.PlanGapAskUser"/> (2026-10-18): false, a gap pass's directive tells the model to ask
-    /// nothing and to write the user's calls into the plan as open questions.
+    /// nothing and to write the user's calls into the plan as open questions. <paramref name="references"/> (2026-10-18) are the <c>ref-N</c>
+    /// names the conversation's pictures are saved under beside the plan (<see cref="PlanReferences.Names"/>), for the directive's pictures bullet.
     /// </summary>
-    public PlanTurn? Turn(AIFunction tool, bool gapAsks = true)
+    public PlanTurn? Turn(AIFunction tool, bool gapAsks = true, IReadOnlyList<string>? references = null)
     {
         ArgumentNullException.ThrowIfNull(tool);
         if (!Active)
@@ -338,6 +348,7 @@ public sealed class PlanSession
             : null;
         // /plan chat (2026-10-17): the talking form while talking, the opening labeled while the requirement is only that.
         var talk = new PlanTalk(Talking, RequirementIsOpening);
-        return new PlanTurn(PlanText.Directive(requirement, path, revision, null, gap, null, talk), tool) { Compose = (advisors, research) => PlanText.Directive(requirement, path, revision, advisors, gap, research, talk) };
+        var pictures = references is { Count: > 0 } ? references : null;
+        return new PlanTurn(PlanText.Directive(requirement, path, revision, null, gap, null, talk, pictures), tool) { Compose = (advisors, research) => PlanText.Directive(requirement, path, revision, advisors, gap, research, talk, pictures) };
     }
 }

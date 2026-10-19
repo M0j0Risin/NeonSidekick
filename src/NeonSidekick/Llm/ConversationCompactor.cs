@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Llm;
 
@@ -34,10 +35,19 @@ public static partial class ConversationCompactor
     public const int ArgumentPruneThreshold = 2_000;
 
     /// <summary>
-    /// The tools whose arguments are never stubbed (2026-10-17): <c>present_plan</c>'s <c>markdown</c> is the plan an approved plan is
-    /// carried out from in this conversation. Pinned.
+    /// The tools whose arguments are never stubbed by a prune (2026-10-17): <c>present_plan</c>'s <c>markdown</c> is the plan an approved
+    /// plan is carried out from in this conversation. Since 2026-10-18 only the latest presentation is kept whole: the earlier ones are
+    /// stubbed by <see cref="StubSupersededPlans"/>, the first step of every compaction. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> KeepsArguments = [Tools.PresentPlanTool.ToolName];
+
+    /// <summary>
+    /// The tools whose list arguments are recorded elsewhere (2026-10-18, the code audit): <c>present_audit</c>'s findings, retractions,
+    /// revisions, nits, questions and coverage are in the report on disk, so a long array of them is stubbed too, as a long string is;
+    /// no other tool's arrays are touched. Only a <see cref="System.Text.Json.JsonElement"/> array is measured (by its JSON's length): any other
+    /// shape is left alone rather than serialized, since serializing an unknown type is the reflection path NativeAOT forbids. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> RecordedArguments = [Tools.PresentAuditTool.ToolName];
 
     /// <summary>The stub a pruned argument becomes: <c>(a 27,610-character argument, pruned by /compact)</c> (2026-10-17). Pinned.</summary>
     public static string PrunedArgumentStub(int length) =>
@@ -563,23 +573,25 @@ public static partial class ConversationCompactor
     /// <c>write_file</c> bodies and several 10 KB skill bodies stayed in the history while their results were pruned, and the context
     /// reached 94%, then 100%): a value over <see cref="ArgumentPruneThreshold"/> becomes <see cref="PrunedArgumentStub"/>, the keys kept
     /// so the call still names its path, its action, its skill. The opening calls, a call that failed to parse (no arguments) and
-    /// <see cref="KeepsArguments"/>' are left; null when nothing changed. Each stub is counted and, with <paramref name="entries"/>, logged.
+    /// <see cref="KeepsArguments"/>' are left; with <paramref name="plansOnly"/> (<see cref="StubSupersededPlans"/>, 2026-10-18) it is the other
+    /// way round, only <see cref="KeepsArguments"/>' stubbed. Null when nothing changed. Each stub is counted and, with <paramref name="entries"/>, logged.
     /// </summary>
-    private static List<AIContent>? StubArguments(IList<AIContent> contents, List<PrunedEntry>? entries, ref int count)
+    private static List<AIContent>? StubArguments(IList<AIContent> contents, List<PrunedEntry>? entries, ref int count, bool plansOnly = false)
     {
         List<AIContent>? rebuilt = null;
         for (int i = 0; i < contents.Count; i++)
         {
             if (contents[i] is not FunctionCallContent { Arguments: { } arguments } call || Assistant.IsOpeningCallId(call.CallId)
-                || KeepsArguments.Contains(call.Name, StringComparer.Ordinal))
+                || KeepsArguments.Contains(call.Name, StringComparer.Ordinal) != plansOnly)
             {
                 continue;
             }
 
             Dictionary<string, object?>? stubbed = null;
+            bool recorded = !plansOnly && RecordedArguments.Contains(call.Name, StringComparer.Ordinal);
             foreach (var (key, value) in arguments)
             {
-                if (ArgumentText(value) is { Length: > ArgumentPruneThreshold } text)
+                if ((ArgumentText(value) ?? (recorded ? ArrayText(value) : null)) is { Length: > ArgumentPruneThreshold } text)
                 {
                     stubbed ??= new Dictionary<string, object?>(arguments, StringComparer.Ordinal);
                     stubbed[key] = PrunedArgumentStub(text.Length);
@@ -597,6 +609,132 @@ public static partial class ConversationCompactor
 
         return rebuilt;
     }
+
+    /// <summary>
+    /// The list with every copy of a plan the latest presentation superseded stubbed (2026-10-18, a gap chain's log: each pass read the
+    /// whole plan file and sent it back whole through <c>present_plan</c>, whose arguments a prune never stubs, adding 25–30k tokens a
+    /// pass until a request ran out of context). It finds the message holding the latest <c>present_plan</c> call whose <c>markdown</c>
+    /// is real text (not a stub) and copies that message and everything after it untouched: the latest presentation, the last
+    /// iteration's calls and the Anthropic API's signed thinking riding that message. Before it, every <c>present_plan</c> call's long
+    /// string arguments become <see cref="PrunedArgumentStub"/> and every <c>read_file</c> result of a plan file
+    /// (<see cref="IsPlanPath"/>) over <see cref="PruneThreshold"/> becomes <see cref="PrunedStub"/>, result by result in a shared tool
+    /// message. Opening calls and a call that failed to parse are never touched. A refused presentation with real text still counts as
+    /// the latest (its text is the model's newest; the revision it would have replaced is the file on disk): the pass reads calls, never
+    /// results. Keyed on any plan, since one plan session runs at a time and an earlier plan's file is on disk. Not run every turn
+    /// (rewriting old messages costs the server its prompt cache from the first stub on), only as the first step of a compaction: the
+    /// mid-turn guard's and <see cref="RunAsync"/>'s. A copy, with zeros when nothing changed; each stub goes into <paramref name="entries"/>.
+    /// </summary>
+    public static (List<ChatMessage> Messages, int Pruned, int Arguments) StubSupersededPlans(IReadOnlyList<ChatMessage> messages, List<PrunedEntry>? entries = null)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        int latest = -1;
+        for (int i = messages.Count - 1; i >= 0 && latest < 0; i--)
+        {
+            if (messages[i].Role == ChatRole.Assistant && messages[i].Contents.Any(IsRealPresentation))
+            {
+                latest = i;
+            }
+        }
+
+        var result = new List<ChatMessage>(messages.Count);
+        if (latest < 0)
+        {
+            result.AddRange(messages);
+            return (result, 0, 0);
+        }
+
+        // The read_file calls before the latest presentation that name a plan file, by call id.
+        var planReads = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < latest; i++)
+        {
+            if (messages[i].Role != ChatRole.Assistant)
+            {
+                continue;
+            }
+
+            foreach (var call in messages[i].Contents.OfType<FunctionCallContent>())
+            {
+                if (call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } readArguments && !Assistant.IsOpeningCallId(call.CallId)
+                    && readArguments.TryGetValue(Tools.FileTool.PathArgument, out object? path) && ArgumentText(path) is { } text && IsPlanPath(text))
+                {
+                    planReads.Add(call.CallId);
+                }
+            }
+        }
+
+        int pruned = 0;
+        int arguments = 0;
+        for (int index = 0; index < latest; index++)
+        {
+            var message = messages[index];
+            if (message.Role == ChatRole.Assistant && StubArguments(message.Contents, entries, ref arguments, plansOnly: true) is { } stubbed)
+            {
+                var kept = message.Clone();
+                kept.Contents = stubbed;
+
+                // A raw SDK message would go out as it was, its arguments whole.
+                kept.RawRepresentation = null;
+                result.Add(kept);
+                continue;
+            }
+
+            if (message.Role == ChatRole.Tool && planReads.Count > 0)
+            {
+                List<AIContent>? rebuilt = null;
+                for (int i = 0; i < message.Contents.Count; i++)
+                {
+                    if (message.Contents[i] is FunctionResultContent { Result: string text } read && text.Length > PruneThreshold && planReads.Contains(read.CallId))
+                    {
+                        rebuilt ??= new List<AIContent>(message.Contents);
+                        rebuilt[i] = new FunctionResultContent(read.CallId, PrunedStub(text.Length));
+                        pruned++;
+                        entries?.Add(new PrunedEntry(Tools.ReadFileTool.ToolName, text.Length));
+                    }
+                }
+
+                if (rebuilt is not null)
+                {
+                    result.Add(new ChatMessage(ChatRole.Tool, rebuilt));
+                    continue;
+                }
+            }
+
+            result.Add(message);
+        }
+
+        for (int index = latest; index < messages.Count; index++)
+        {
+            result.Add(messages[index]);
+        }
+
+        return (result, pruned, arguments);
+    }
+
+    /// <summary>A <c>present_plan</c> call (not an opening one) whose <c>markdown</c> is real text, not missing and not a stub (2026-10-18).</summary>
+    private static bool IsRealPresentation(AIContent content) =>
+        content is FunctionCallContent { Name: Tools.PresentPlanTool.ToolName, Arguments: { } arguments } call && !Assistant.IsOpeningCallId(call.CallId)
+        && arguments.TryGetValue(Tools.PresentPlanTool.MarkdownArgument, out object? markdown) && ArgumentText(markdown) is { } text && !IsPrunedStub(text);
+
+    /// <summary>
+    /// Whether <paramref name="path"/> names a plan file (2026-10-18): with <c>\</c> read as <c>/</c> and a leading <c>./</c> dropped, it
+    /// starts with <see cref="Plans.PlanSlug.Folder"/> and a slash, or holds it between slashes (an absolute path); any case.
+    /// </summary>
+    public static bool IsPlanPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string normal = path.Trim().Replace('\\', '/');
+        while (normal.StartsWith("./", StringComparison.Ordinal))
+        {
+            normal = normal[2..];
+        }
+
+        return normal.StartsWith(Plans.PlanSlug.Folder + "/", StringComparison.OrdinalIgnoreCase)
+            || normal.Contains("/" + Plans.PlanSlug.Folder + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A <see cref="System.Text.Json.JsonElement"/> array's JSON (2026-10-18, <see cref="RecordedArguments"/>); null for any other shape, never serialized.</summary>
+    private static string? ArrayText(object? value) =>
+        value is System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Array } element ? element.GetRawText() : null;
 
     private static string? ArgumentText(object? value) => value switch
     {
@@ -725,8 +863,46 @@ public static partial class ConversationCompactor
     /// window, and the last request's context (<see cref="TokenTally.LastRequest"/>) at or past
     /// that share of it. A zeroed last request — nothing sent yet, or just compacted — never fires.
     /// </summary>
-    public static bool ShouldAutoCompact(TokenUsage lastRequest, ContextLength? window, int percent) =>
-        percent > 0 && window is { Tokens: > 0 } w && lastRequest.Total > 0 && lastRequest.Total * 100L >= (long)w.Tokens * percent;
+    /// <remarks>Since 2026-10-18 the check leaves room for the next reply (<paramref name="largestReply"/>: the largest reply this
+    /// conversation has produced, or the plan file's size while planning, <see cref="ReplyReserve"/> capping it): a gap chain's pass
+    /// started at 75% of the window, under the 90% share, and its reply, the plan sent back whole, ran out of context. The notice keeps
+    /// the plain share.</remarks>
+    public static bool ShouldAutoCompact(TokenUsage lastRequest, ContextLength? window, int percent, long largestReply = 0)
+    {
+        if (percent <= 0 || window is not { Tokens: > 0 } w || lastRequest.Total <= 0)
+        {
+            return false;
+        }
+
+        long share = (long)w.Tokens * percent;
+        long reserve = ReplyReserve(largestReply, w.Tokens);
+        bool fires = (lastRequest.Total + reserve) * 100L >= share;
+        if (fires && reserve > 0 && lastRequest.Total * 100L < share)
+        {
+            DiagnosticLog.Debug(LogCategory, string.Create(CultureInfo.InvariantCulture,
+                $"Auto compact at {lastRequest.Total * 100L / w.Tokens}% of {w.Tokens} tokens, leaving room for a {reserve}-token reply."));
+        }
+
+        return fires;
+    }
+
+    /// <summary>The <c>--log</c> category of the compactor's own lines (2026-10-18).</summary>
+    private const string LogCategory = "Compact";
+
+    /// <summary>
+    /// The most of the window the room for the next reply may take (2026-10-18, <see cref="ReplyReserve"/>): a quarter, so one huge reply
+    /// (a plan) does not make a small window compact constantly.
+    /// </summary>
+    public const int MaxReplyReservePercent = 25;
+
+    /// <summary>
+    /// The room both compact checks leave for the next reply (2026-10-18): <paramref name="largestReply"/> (the larger of
+    /// <see cref="ConversationHistory.LargestReplyTokens"/> and the plan's floor) up to <see cref="MaxReplyReservePercent"/> of the window.
+    /// The one place the cap lives. The trade-off: one huge reply lowers the effective share for the rest of the conversation, by at most
+    /// that quarter, until <c>/clear</c> or a session load.
+    /// </summary>
+    public static long ReplyReserve(long largestReply, int windowTokens) =>
+        Math.Max(0, Math.Min(largestReply, (long)windowTokens * MaxReplyReservePercent / 100));
 
     /// <summary>
     /// One compact of <paramref name="assistant"/>'s history: null when there is nothing to do (no
@@ -745,8 +921,12 @@ public static partial class ConversationCompactor
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(tally);
         var history = assistant.History;
-        var plan = Split(history.Messages, keepRecent);
         int before = history.Messages.Count;
+
+        // The earlier copies of a plan first (2026-10-18): no model call, so the cheap first step; a summary then reads the stubbed older part.
+        var supersededEntries = new List<PrunedEntry>();
+        var (current, supersededPruned, supersededArguments) = StubSupersededPlans(history.Messages, supersededEntries);
+        var plan = Split(current, keepRecent);
         int recentPruned = 0;
         int recentArguments = 0;
         var recentEntries = new List<PrunedEntry>();
@@ -760,6 +940,9 @@ public static partial class ConversationCompactor
             }
         }
 
+        // What the superseded plans' stubs add to every result: they come first in the message order.
+        recentPruned += supersededPruned;
+        recentArguments += supersededArguments;
         if (!plan.HasOlderTurns)
         {
             if (recentPruned + recentArguments == 0)
@@ -772,7 +955,7 @@ public static partial class ConversationCompactor
             shrunk.AddRange(plan.Recent);
             history.Replace(shrunk);
             tally.AddCompaction(null);
-            return new Result(before, shrunk.Count, recentPruned, null) { Entries = recentEntries, OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = recentArguments };
+            return new Result(before, shrunk.Count, recentPruned, null) { Entries = [.. supersededEntries, .. recentEntries], OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = recentArguments };
         }
 
         if (mode == CompactMode.Prune)
@@ -790,14 +973,14 @@ public static partial class ConversationCompactor
 
             history.Replace(older);
             tally.AddCompaction(null);
-            return new Result(before, older.Count, count, null) { Entries = [.. olderEntries, .. recentEntries], OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = arguments };
+            return new Result(before, older.Count, count, null) { Entries = [.. supersededEntries, .. olderEntries, .. recentEntries], OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = arguments };
         }
 
         var (summary, usage) = await assistant.SummarizeAsync(plan.Older, focus, cancellationToken).ConfigureAwait(false);
         var messages = Summarised(summary, plan);
         history.Replace(messages);
         tally.AddCompaction(usage);
-        return new Result(before, messages.Count, recentPruned, usage, Summarised: true) { Summary = summary.Trim(), Entries = recentEntries, OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = recentArguments };
+        return new Result(before, messages.Count, recentPruned, usage, Summarised: true) { Summary = summary.Trim(), Entries = [.. supersededEntries, .. recentEntries], OpeningKept = plan.Opening.Count, RecentKept = plan.Recent.Count, ArgumentsPruned = recentArguments };
     }
 
     /// <summary>The opening call id an assistant message carries, or null.</summary>

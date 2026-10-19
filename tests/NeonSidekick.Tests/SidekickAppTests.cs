@@ -116,7 +116,11 @@ public partial class SidekickAppTests : IDisposable
             eventLogSystem: _eventLogSystem,
             // A Mac's unified log (2026-10-18): none unless a test hands in the fake.
             unifiedLog: _unifiedLog,
-            headlessNarrow: headlessNarrow);
+            headlessNarrow: headlessNarrow,
+            // The Ralph loop's checks (2026-10-18): a script, never a real shell.
+            ralphVerifier: _ralphVerifier);
+
+    private readonly Fakes.FakeRalphVerifier _ralphVerifier = new();
 
     private Fakes.FakeEventLogSystem? _eventLogSystem;
 
@@ -1449,6 +1453,35 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[notice] (🗜️ auto-compacted at 25%: 10 messages → 9 · 30 → 4 tokens)", output);
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[2][0].Text);
+    }
+
+    /// <summary>
+    /// The plan's floor headless (2026-10-18): 610 of a 1,000-token window is under the 80 % share alone, but a 2,000+ character plan
+    /// file while planning leaves room for its presentation, so the next message compacts first.
+    /// </summary>
+    [Fact]
+    public async Task Headless_AutoCompact_PlanFloor_FiresForALargePlanFile()
+    {
+        ServerOn1234("llama");
+        _http.Map("http://127.0.0.1:1234/api/v0/models", HttpStatusCode.OK,
+            "{\"object\":\"list\",\"data\":[{\"id\":\"llama\",\"object\":\"model\",\"state\":\"loaded\",\"max_context_length\":4096,\"loaded_context_length\":1000}]}");
+        _settings.Update(d => { d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 80; });
+        _chat.Enqueue(FakeChatClient.Text("one"), FakeChatClient.Usage(10, 15));
+        _chat.Enqueue(FakeChatClient.Call("p1", PresentPlanTool.ToolName, new Dictionary<string, object?>
+        {
+            [PresentPlanTool.TitleArgument] = "Guide",
+            [PresentPlanTool.NameArgument] = "add-guide",
+            [PresentPlanTool.MarkdownArgument] = "# Guide\n\n- [ ] Write it\n" + new string('x', 2000),
+        }));
+        _chat.Enqueue(FakeChatClient.Text("Saved."), FakeChatClient.Usage(600, 10));
+        _chat.Enqueue(FakeChatClient.Text("A summary."), FakeChatClient.Usage(30, 4));
+        _chat.EnqueueText("ok");
+
+        string output = await Headless("first\n/plan Add a guide\nmore\n");
+
+        Assert.Contains("[notice] (🗜️ auto-compacted at 61%", output);
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[3][0].Text);
     }
 
     [Fact]

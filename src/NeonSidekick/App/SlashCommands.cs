@@ -25,6 +25,12 @@ public enum SlashCommand
     /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change starts over the way <c>/splash</c> does — the conversation forgotten, the screen wiped, the splash shown in the new colours. Refused while a reply runs.</summary>
     Theme,
 
+    /// <summary>
+    /// <c>/mark &lt;color&gt;|default</c> (2026-10-18, the user's ask): the rules around the draft line in one of ten colors, kept per session, so a
+    /// window is told apart at a glance; bare, the mark in force and the choices. The PC's alone; quick under a reply.
+    /// </summary>
+    Mark,
+
     /// <summary><c>/compact</c>: shrink the history the model re-reads (a summary and the recent turns, or pruned tool results), or <c>/compact &lt;focus&gt;</c>.</summary>
     Compact,
 
@@ -180,8 +186,16 @@ public enum SlashCommand
     /// <summary><c>/botchat [profile …] [topic]</c> (2026-09-24, the user's ask): the profiles talk to each other — the named ones, or every profile when none is named — each reply in the speaker's own persona and voice, on this profile's LLM server and model (or, under <c>Botchat LLM mode</c> <c>multi</c>, each on its own profile's), one turn after another, a random speaker each time but never the same one twice running, until ESC or Ctrl+C. The tools are the Botchat tab's (none by default). A line typed meanwhile joins the chat as the user's; the chat is saved as a session. Refused mid-turn like <see cref="Loop"/>.</summary>
     BotChat,
 
-    /// <summary><c>/plan &lt;requirement&gt;</c> (2026-09-26, the user's ask): plan mode — the model researches with read-only tools, asks what it needs and presents a plan saved as <c>.neon/plans/&lt;name&gt;.md</c>; nothing changes until the user approves it on the pane or with <c>/plan approve [--fresh]</c>. While planning, <c>/plan</c> or <c>/plan show</c> says where it stands, <c>/plan cancel</c> leaves, anything else is more detail. Refused mid-turn like <see cref="Loop"/>.</summary>
+    /// <summary><c>/plan &lt;requirement&gt;</c> (2026-09-26, the user's ask): plan mode — the model researches with read-only tools, asks what it needs and presents a plan saved as <c>.neon/plans/&lt;name&gt;.md</c>; nothing changes until the user approves it on the pane or with <c>/plan approve [--fresh]</c>. While planning, <c>/plan</c> or <c>/plan show</c> says where it stands, <c>/plan cancel</c> leaves, anything else is more detail. Outside it, <c>/plan ralph [name] [passes]</c> (and <c>/plan approve --ralph</c> while planning, 2026-10-18) runs a plan as a Ralph loop, one step a fresh pass. Refused mid-turn like <see cref="Loop"/>.</summary>
     Plan,
+
+    /// <summary>
+    /// <c>/code-audit [model|advisor|any|confirm] [passes] [diff|staged|branch [base]|path …] [focus …] [--] [brief]</c> (2026-10-18, the user's idea:
+    /// <c>/plan gaps</c>' engine for code): read-only passes over the tree, a path or the git changes, each reporting through <c>present_audit</c> into
+    /// <c>.neon/audits/&lt;name&gt;.md</c>, until enough passes in a row find nothing new; <c>open</c>, <c>fix</c> and <c>resume</c> work on a kept report.
+    /// Waits for the idle line under a reply; refused under a running <c>/botchat</c> (but <c>open</c>).
+    /// </summary>
+    CodeAudit,
 
     /// <summary><c>/expand</c>: every folded tool run, code block, diff (2026-10-04) and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
     Expand,
@@ -420,6 +434,7 @@ public static class SlashCommands
             new("/clear", "start over and clear the screen"),
             new(RewindText.Word, RewindText.HelpSummary),
             new("/cmd", "run a shell line yourself"),
+            new(Audits.AuditText.Word, Audits.AuditText.HelpSummary),
             new("/collapse", "fold every item in the transcript"),
             new("/comfy", "manage ComfyUI and its workflows"),
             new("/compact", "shrink the conversation's context"),
@@ -477,6 +492,7 @@ public static class SlashCommands
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
             new("/theme", "switch or export the color theme"),
+            new(UI.MarkText.Word, UI.MarkText.HelpSummary),
             new("/timer", "set, list and stop timers, stopwatches"),
             new("/toolbar", ToolbarItems.HelpSummary),
             new("/tools", "switch the model's tools on or off"),
@@ -580,7 +596,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -631,6 +647,7 @@ public static class SlashCommands
             "/splash" => SlashCommand.Splash,
             "/rewind" => SlashCommand.Rewind,
             "/theme" => SlashCommand.Theme,
+            "/mark" => SlashCommand.Mark,
             "/avatar" => SlashCommand.Avatar,
             "/compact" => SlashCommand.Compact,
             "/server" => SlashCommand.Server,
@@ -691,6 +708,7 @@ public static class SlashCommands
             "/draft" => SlashCommand.Draft,
             "/loop" => SlashCommand.Loop,
             "/plan" => SlashCommand.Plan,
+            "/code-audit" => SlashCommand.CodeAudit,
             "/botchat" => SlashCommand.BotChat,
             "/claude" => SlashCommand.Claude,
             "/advisor" => SlashCommand.Advisor,
@@ -724,13 +742,13 @@ public static class SlashCommands
     /// (the user's ask): the model looks the words up with <c>neon_help</c>, or the manual answers itself.
     /// </summary>
     public static bool TakesArgument(SlashCommand command) => command is
-        SlashCommand.Help or SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme or SlashCommand.Avatar
+        SlashCommand.Help or SlashCommand.Compact or SlashCommand.Server or SlashCommand.Model or SlashCommand.Reasoning or SlashCommand.Sampling or SlashCommand.Theme or SlashCommand.Mark or SlashCommand.Avatar
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Read or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
-        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
+        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi;
 }

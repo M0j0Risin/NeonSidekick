@@ -21,12 +21,13 @@ internal sealed partial class SettingsMenu
     /// observed). Opening the picker, Enter and Esc play nothing (<c>MenuPane.PickAsync</c> fires the highlight only on a move);
     /// <c>silent</c> plays nothing. True when a pick changed it.
     /// </summary>
-    private async Task<bool> PickTimerToneAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    /// <remarks><paramref name="field"/> (2026-10-18): the Ralph loop's stop tone over the same picker, its preview the same.</remarks>
+    private async Task<bool> PickTimerToneAsync(AppSettingsData saved, CancellationToken cancellationToken, SettingsField field = SettingsField.TimerTone)
     {
         IReadOnlyList<string> values = TimerTones.Names;
         var rows = values.Select(n => CameraModeLabel(n, TimerTones.Describe(n))).ToList();
-        var page = new MenuPage(Crumb(FieldName(SettingsField.TimerTone)), rows, PickKeys);
-        int at = Math.Max(0, values.ToList().IndexOf(TimerTones.Normalize(saved.TimerTone)));
+        var page = new MenuPage(Crumb(FieldName(field)), rows, PickKeys);
+        int at = Math.Max(0, values.ToList().IndexOf(TimerTones.Normalize(field == SettingsField.RalphLoopStopTone ? saved.RalphLoopStopTone : saved.TimerTone)));
         Action<int>? highlighted = PreviewTone is { } preview
             ? row => _ = preview(values[row], cancellationToken).ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default)
             : null;
@@ -37,6 +38,12 @@ internal sealed partial class SettingsMenu
         }
 
         string value = values[index];
+        if (field == SettingsField.RalphLoopStopTone)
+        {
+            Apply(field, d => d.RalphLoopStopTone = value);
+            return true;
+        }
+
         Apply(SettingsField.TimerTone, d => d.TimerTone = value);
         return true;
     }

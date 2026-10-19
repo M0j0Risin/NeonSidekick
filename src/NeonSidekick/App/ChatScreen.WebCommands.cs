@@ -1,3 +1,4 @@
+using NeonSidekick.Audits;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.UI;
 using NeonSidekick.WebUi;
@@ -108,9 +109,13 @@ internal sealed partial class ChatScreen
     /// on its cancel (<see cref="WebAskHandle.TryClaim"/>). Without menus the page alone asks. <paramref name="noticeAnswer"/> false keeps the
     /// "answered from the Web UI" line out (a list card's close).
     /// </summary>
-    private async Task<AskOutcome<T>> RaceAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken cancellationToken, bool noticeAnswer = true)
+    /// <remarks>
+    /// <paramref name="bothSides"/> (2026-10-18, the Ralph loop's checkpoint and its baseline question: a loop runs unattended, so the page may be
+    /// where the user is) asks the page too whoever started the command, while the Web UI is on; with no pane here and no Web UI, never asked.
+    /// </remarks>
+    private async Task<AskOutcome<T>> RaceAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken cancellationToken, bool noticeAnswer = true, bool bothSides = false)
     {
-        if (!FromWebNow)
+        if (!FromWebNow && !(bothSides && _effective().WebUi))
         {
             return new AskOutcome<T>(await pane(cancellationToken).ConfigureAwait(false), AskSource.Pc, NeverAsked: false);
         }
@@ -289,9 +294,28 @@ internal sealed partial class ChatScreen
         pc();
     }
 
-    /// <summary>Leaves <paramref name="line"/> for the idle line; always taken.</summary>
+    /// <summary>
+    /// Leaves <paramref name="line"/> for the idle line; always taken. Under a running <c>/botchat</c> a <c>/code-audit</c> that would start passes
+    /// is refused here instead (2026-10-18, the user's pick: a held audit would start an unattended chain of passes long after it was typed):
+    /// every held line passes through this one place, the botchat drain's own interjections included. A line sent as text, and a multi-line
+    /// or pasted draft (no <c>CommandText</c>), stays a message as everywhere else.
+    /// </summary>
     private bool Pend(SubmittedLine line)
     {
+        if (_botChatRunning && !line.AsText && line.CommandText is { } text && ParseLine(text) is (SlashCommand.CodeAudit, var args) && AuditCommand.StartsPasses(args))
+        {
+            Post(() => _transcript.Error(AuditText.BotChatError));
+            return true;
+        }
+
+        // A Ralph loop the same way (later on 2026-10-18): held under a botchat, it would start an unattended chain of passes long after it was typed.
+        if (_botChatRunning && !line.AsText && line.CommandText is { } ralphText && ParseLine(ralphText) is (SlashCommand.Plan, var planArgs)
+            && ParsePlanArgs(planArgs, planning: true) is PlanCommand.Ralph or PlanCommand.ApproveRalph)
+        {
+            Post(() => _transcript.Error(Plans.RalphText.UnderBotChatError));
+            return true;
+        }
+
         lock (_pendingGate)
         {
             _pendingLines.Enqueue(line);
@@ -353,6 +377,7 @@ internal sealed partial class ChatScreen
         var skillList = SkillChoices();
         var workflowList = WorkflowChoices();
         var plans = PlanChoices();
+        var audits = AuditChoices();
         var ha = _ha.Last;
         var docker = _docker.Last;
         var printers = _printerNames.Last;
@@ -381,7 +406,8 @@ internal sealed partial class ChatScreen
             Net: NetChoices,
             Services: ServiceChoices,
             Tasks: TaskChoices,
-            Ad: AdChoices);
+            Ad: AdChoices,
+            Audits: () => audits);
         var sources = new CompletionSources(
             () => commands,
             (command, argText) => ArgumentPaths(command, argText, arguments) is { } paths

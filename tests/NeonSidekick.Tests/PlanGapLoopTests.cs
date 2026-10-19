@@ -260,7 +260,9 @@ public class PlanGapLoopTests : IDisposable
     [Fact]
     public void Pane_CloseGapsIsTheFourthRow_TheOldLettersKeepTheirRows()
     {
-        Assert.Equal([PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.Refine, PlanChoice.CloseGaps, PlanChoice.Cancel], PlanApprovalMenu.Choices);
+        // Ralph loop after Approve fresh since 2026-10-18 (l), the later rows one down.
+        Assert.Equal([PlanChoice.Approve, PlanChoice.ApproveFresh, PlanChoice.ApproveRalph, PlanChoice.Refine, PlanChoice.CloseGaps, PlanChoice.Cancel], PlanApprovalMenu.Choices);
+        Assert.Equal(PlanChoice.ApproveRalph, PlanApprovalMenu.Choices[PlanApprovalMenu.Hotkeys['l']]);
         Assert.Equal(PlanChoice.Approve, PlanApprovalMenu.Choices[PlanApprovalMenu.Hotkeys['a']]);
         Assert.Equal(PlanChoice.ApproveFresh, PlanApprovalMenu.Choices[PlanApprovalMenu.Hotkeys['f']]);
         Assert.Equal(PlanChoice.Refine, PlanApprovalMenu.Choices[PlanApprovalMenu.Hotkeys['r']]);

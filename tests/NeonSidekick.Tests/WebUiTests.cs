@@ -454,6 +454,24 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(Plans.PlanChoice.ApproveFresh, App.ChatScreen.PlanVerdictOf(new WebAnswerRequest { Choice = "fresh" }).Choice);
     }
 
+    /// <summary>The Ralph loop on the page (2026-10-18): the plan's ask offers its row and says the loop's checks; the status row carries the 🔁 strip.</summary>
+    [Fact]
+    public void ThePlansAsk_OffersTheRalphLoop_WithItsChecks_AndTheStatusCarriesTheLoop()
+    {
+        var plan = new Plans.PlanPresentation("Guide", ".neon/plans/guide.md", 1, "# Guide\n- [ ] One\n");
+
+        var spec = App.ChatScreen.PlanSpec(plan, "verify `dotnet build` · reviewer any");
+
+        Assert.Equal(["approve", "fresh", "ralph", "refine", "cancel"], spec.Choices.Select(c => c.Id));
+        Assert.Equal(Plans.RalphText.ApproveRalphRow, spec.Choices[2].Label);
+        Assert.Equal(Plans.PlanText.RalphCaptionLead + "verify `dotnet build` · reviewer any", spec.Body);
+        Assert.Null(App.ChatScreen.PlanSpec(plan).Body);
+        Assert.Equal(Plans.PlanChoice.ApproveRalph, App.ChatScreen.PlanVerdictOf(new WebAnswerRequest { Choice = "ralph" }).Choice);
+
+        string json = System.Text.Json.JsonSerializer.Serialize(new WebStatus("working", 1, 1, null, Loop: Plans.RalphText.StripText(2, 5, 3)), WebUiJsonContext.Default.WebStatus);
+        Assert.Contains("\"loop\":\"🔁 step 2/5 · pass 3\"", System.Text.RegularExpressions.Regex.Unescape(json));
+    }
+
     [Fact]
     public void AnApproval_OnThePage_IsTheWholeCommand_InThePcsWords()
     {

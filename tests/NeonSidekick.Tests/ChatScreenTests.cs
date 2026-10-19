@@ -57,6 +57,8 @@ public partial class ChatScreenTests : IDisposable
     private readonly List<LlmEndpoint> _endpoints = new();
     private readonly FakeSynthesizer _synth = new();
     private readonly FakeAudioPlayback _playback = new();
+    // The Ralph loop's checks (2026-10-18): a script, never a real shell.
+    private readonly FakeRalphVerifier _ralphVerifier = new();
     private readonly FakeAudioCapture _capture = new();
     private readonly FakeRecognizer _recognizer = new();
     private readonly FakeVad _vad = new();
@@ -147,6 +149,9 @@ public partial class ChatScreenTests : IDisposable
         // A turn pauses a running reflection by default (Reflection yields to turns, 2026-09-24): the slot tests hold a reflection
         // across the next turn on purpose, so the fixture opts out and the yield tests opt in.
         _settings.Update(d => d.ReflectionYieldsToTurns = false);
+        // Reflection confirm mode is new by default (2026-10-18, the user's call): a learned skill would wait on the pane at the idle
+        // line, so the fixture opts out as it does of the other reflection defaults and the confirm tests opt in.
+        _settings.Update(d => d.ReflectionConfirmMode = "none");
         // The model-written session title is the default (2026-09-18, the user's call); the same shape — the title request
         // would dequeue the next scripted reply — so the fixture opts out and the titling tests opt in.
         _settings.Update(d => d.SessionNamingMode = "first-line");
@@ -316,7 +321,7 @@ public partial class ChatScreenTests : IDisposable
     private async Task<string> RunAsync(IAnsiConsoleInput input, CancellationToken cancellationToken = default)
     {
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
-        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, macLogPlaces: _macLogPlaces, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null, tonePlayback: _ => _tonePlayback);
+        var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, macLogPlaces: _macLogPlaces, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null, tonePlayback: _ => _tonePlayback, ralphVerifier: _ralphVerifier);
         screen.UserProfileFolder = _userProfile;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
@@ -6587,7 +6592,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, PresentAuditTool.ToolName, FinishStepTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools; finish_step 2026-10-18 (its 🔁 line says the report)
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -6597,7 +6602,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools_Unix()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, PresentAuditTool.ToolName, FinishStepTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Distinct().Order(), ChatScreen.QuietTools.Order());   // FileToolNames.All holds the picture tools where there are codecs (a Mac since 2026-10-07)
     }
@@ -10678,7 +10683,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 152;   // /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 161;   // /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -13067,6 +13072,56 @@ public partial class ChatScreenTests : IDisposable
         PushLine("a");
         PushLine("b");
         PushLine("c");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("compacted", output);
+        Assert.Equal(3, _chat.Requests.Count);
+    }
+
+    /// <summary>
+    /// The plan's floor at the top of a message (2026-10-18): the last request at 61 % of a 1,000-token window is under the 80 % share
+    /// alone, but a plan file of 2,000+ characters while planning leaves room for its presentation (capped at 250 tokens), so the next
+    /// message compacts first; the notice keeps the plain share.
+    /// </summary>
+    [Fact]
+    public async Task AutoCompact_PlanFloor_FiresForALargePlanFile_UnderTheShareAlone()
+    {
+        PlanFixture([[Keys.Char('r'), Keys.Enter, .. PlanTyped("Mention tests")]], "a", "/plan Add a guide", "more", "/exit");
+        _settings.Update(d => { d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 80; });
+        LmStudioWindow(1000);
+        _chat.Enqueue(FakeChatClient.Text("noted"), FakeChatClient.Usage(10, 15));                              // 0: a
+        _chat.Enqueue(FakeChatClient.Call("p1", PresentPlanTool.ToolName, new Dictionary<string, object?>
+        {
+            [PresentPlanTool.TitleArgument] = "Guide",
+            [PresentPlanTool.NameArgument] = "add-guide",
+            [PresentPlanTool.MarkdownArgument] = PlanMarkdown + new string('x', 2000),
+        }));                                                                                                     // 1: presented, refined
+        _chat.Enqueue(FakeChatClient.Text("I will revise it."), FakeChatClient.Usage(600, 10));                // 2: 610 in use
+        _chat.Enqueue(FakeChatClient.Text("A summary."), FakeChatClient.Usage(30, 4));                         // 3: the compact before "more"
+        _chat.EnqueueText("ok");                                                                                 // 4
+
+        string output = await RunAsync();
+
+        Assert.Contains("auto-compacted at 61%", output);
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[3][0].Text);
+        Assert.Equal("more", LastUserText(_chat.Requests[4]));
+    }
+
+    /// <summary>The same conversation without a plan: 610 plus the largest reply (15) stays under the share, so nothing compacts.</summary>
+    [Fact]
+    public async Task AutoCompact_PlanFloor_NotWithoutAPlan()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmCompactKeepRecent = 1; d.LlmAutoCompactPercent = 80; });
+        LmStudioWindow(1000);
+        _chat.Enqueue(FakeChatClient.Text("noted"), FakeChatClient.Usage(10, 15));
+        _chat.Enqueue(FakeChatClient.Text("I will revise it."), FakeChatClient.Usage(600, 10));
+        _chat.EnqueueText("ok");
+        PushLine("a");
+        PushLine("b");
+        PushLine("more");
         PushLine("/exit");
 
         string output = await RunAsync();

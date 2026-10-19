@@ -94,6 +94,13 @@ public sealed class StoredHistory
     /// <summary>The Claude Code server's conversation of each Claude Code advisor's thread (2026-10-10): absent until the first such call.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, string>? AdvisorSessions { get; set; }
+
+    /// <summary>
+    /// The rules' mark the session had (2026-10-18, <c>/mark</c>, the user's pick: kept per session, back on resume): one of
+    /// <see cref="UI.RuleMarks.Names"/>; absent with none, so an older row reads as unmarked.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Mark { get; set; }
 }
 
 /// <summary>
@@ -114,6 +121,33 @@ public sealed class StoredPlan
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool RequirementIsOpening { get; set; }
+
+    /// <summary>
+    /// The plan being carried out runs as a Ralph loop (2026-10-18): one step per fresh conversation, the app checking each; with the checks it was
+    /// approved with (<see cref="Verify"/>, <see cref="Final"/>, <see cref="FinalOnly"/>), the shell, the working directory's root, and whether it
+    /// is <see cref="Paused"/>. A restored Ralph state is always paused (a crash mid-pass resumes cleanly with <c>/plan ralph</c>). An older row
+    /// reads none of them.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Ralph { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Verify { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Final { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool FinalOnly { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Shell { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Root { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Paused { get; set; }
 }
 
 /// <summary>
@@ -140,10 +174,10 @@ public static class SessionHistory
     /// screenshot (<see cref="ConversationHistory.ScreenKey"/>) likewise unless <paramref name="keepScreen"/> (<c>Screen capture keep
     /// in sessions</c>, 2026-10-04).
     /// </summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null, string? mark = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads, AdvisorSessions = advisorSessions };
+        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads, AdvisorSessions = advisorSessions, Mark = mark };
         foreach (var message in messages)
         {
             document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen));
@@ -159,6 +193,20 @@ public static class SessionHistory
         try
         {
             return JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory)?.AdvisorThreads;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The rules' mark <paramref name="json"/> stored (2026-10-18, <c>/mark</c>); null when it holds none or is not a document.</summary>
+    public static string? MarkOf(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        try
+        {
+            return JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory)?.Mark;
         }
         catch (JsonException)
         {
@@ -233,6 +281,11 @@ public static class SessionHistory
                     break;
                 case DataContent data when !keepScreen && ConversationHistory.ScreenPath(data) is { } screenPath:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Screen.ScreenText.NotKept(screenPath) });
+                    break;
+                // A plan's reference picture the app attached (2026-10-18): a line naming its file beside the plan, never its bytes again in each
+                // pass's row; the file is still there for the next run.
+                case DataContent data when ConversationHistory.ReferencePath(data) is { } referencePath:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Plans.PlanText.ReferenceNotKept(referencePath) });
                     break;
                 // An attached PDF (2026-10-14, the PDF plan's gaps 12 and 50): its text as a text part — never its bytes (the session is
                 // written whole at every save), and a resumed session reads what the PDF said, the session search finds its words. Simpler

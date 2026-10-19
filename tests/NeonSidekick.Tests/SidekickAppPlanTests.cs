@@ -45,6 +45,41 @@ public partial class SidekickAppTests
         Assert.Contains("[notice] " + PlanText.IncompleteNotice(".neon/plans/add-guide.md", 0, 1), output);
     }
 
+    [WindowsFact]   // the picture decodes through WIC
+    public async Task Headless_Plan_ApproveFresh_SendsThePlansReferencePictures()
+    {
+        // 2026-10-18, plan reference pictures: a plan listing ref-1 (saved beside it, as the screen does) goes to the fresh run with it.
+        ServerOn1234("llama");
+        string folder = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, ".neon", "plans", "add-guide");
+        _chat.BeforeUpdateOf = (request, _, _) =>
+        {
+            // Once the plan is saved (a folder there before would have taken its name): its picture beside it.
+            if (request == 1 && !Directory.Exists(folder))
+            {
+                Directory.CreateDirectory(folder);
+                File.WriteAllBytes(Path.Combine(folder, "ref-1.png"), FakeHeadlessBrowser.TinyPng);
+            }
+
+            return Task.CompletedTask;
+        };
+        _chat.Enqueue(FakeChatClient.Call("p1", PresentPlanTool.ToolName, new Dictionary<string, object?>
+        {
+            [PresentPlanTool.TitleArgument] = "Guide",
+            [PresentPlanTool.NameArgument] = "add-guide",
+            [PresentPlanTool.MarkdownArgument] = "# Guide\n\n## Steps\n- [ ] Write it\n\n## References\n- ref-1: the layout\n",
+        }));
+        _chat.EnqueueText("Saved.");
+        _chat.EnqueueText("Done.");
+
+        string output = await Headless("/plan Add a guide\n/plan approve --fresh\n");
+
+        Assert.Equal(3, _chat.Requests.Count);
+        var user = _chat.Requests[2].Last(m => m.Role == ChatRole.User);
+        var sent = Assert.Single(user.Contents.OfType<DataContent>());
+        Assert.Equal(".neon/plans/add-guide/ref-1.png", NeonSidekick.Llm.ConversationHistory.ReferencePath(sent));
+        Assert.Contains("[notice] " + PlanText.ReferencesAttachedNotice(1), output);
+    }
+
     [Fact]
     public async Task Headless_Plan_TheWordsThatCannotRun_AndCancel()
     {

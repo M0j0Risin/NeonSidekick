@@ -217,6 +217,49 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
+    /// <c>/mark</c> (2026-10-18): the rules' glyphs in the mark's color, the session's name and the lower rule's title in their own styles, null
+    /// the theme's rule again, and a change picked up on the tick.
+    /// </summary>
+    [Fact]
+    public void RuleMark_ColorsTheRuleGlyphs_KeepsTheTitles_AndRedrawsOnTheTick()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.RuleTitle = () => "my-session";
+        pane.LowerRuleTitle = () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
+        pane.Show();
+        Color rule = Theme.PaneRule.Foreground;
+        Color green = RuleMarks.ColorOf("green");
+        Assert.Contains(Fg(rule) + "─", Output);
+        Assert.DoesNotContain(Fg(green), Output);
+
+        int mark = Output.Length;
+        pane.RuleMark = RuleMarks.StyleOf("green");
+        _time.Advance(ScreenPane.Tick);
+        string marked = Output[mark..];
+        Assert.Contains(Fg(green) + "─", marked);
+        Assert.Contains(Fg(rule) + " my-session ", marked);   // the name keeps the theme's rule style
+        Color secondary = Theme.AccentSecondary.Foreground;
+        Assert.Contains(Fg(secondary) + "▶ 3", marked);       // the lower rule's title keeps its own
+        Assert.Equal(green, pane.RuleMark!.Value.Foreground);
+
+        // Unchanged: nothing redrawn.
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("", Output[mark..]);
+
+        // Taken off: the theme's rule again.
+        pane.RuleMark = null;
+        _time.Advance(ScreenPane.Tick);
+        string plain = Output[mark..];
+        Assert.Contains(Fg(rule) + "─", plain);
+        Assert.DoesNotContain(Fg(green), plain);
+    }
+
+    /// <summary>A truecolor foreground's parameters and their end, however Spectre opens the sequence.</summary>
+    private static string Fg(Color color) => $"38;2;{color.R};{color.G};{color.B}m";
+
+    /// <summary>
     /// The upper rule's ⤡ (2026-09-29, the user's glyph, in place of the ↘️↖️ pair): after the rule's first glyph with a
     /// space either side, then the titled rule over the rest; without folds, or too narrow to keep the title's least rule
     /// after it, the rule as before.

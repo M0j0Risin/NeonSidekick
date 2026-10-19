@@ -431,6 +431,8 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .status .usage::after { content: ""; position: absolute; inset: -12px -6px; }   /* a finger-sized target on a 20px row */
 /* The reflection's 🧠 (2026-10-17, the user's ask): first on the status row while one runs, pulsing; two taps cancel it, as the PC's
    double-click does. Armed, it stands still on the error colour until the second tap or three seconds. */
+/* A Ralph loop's place on the status row (2026-10-18). */
+.loop-strip { flex: none; white-space: nowrap; font-size: 13px; opacity: 0.85; }
 .learn-button { flex: none; position: relative; min-height: 0; padding: 0 4px; background: none; border: 0; border-radius: 6px; font-size: 15px; line-height: 20px; animation: pulse 1.6s ease-in-out infinite; }
 .learn-button::after { content: ""; position: absolute; inset: -12px -6px; }
 .learn-button.armed { animation: none; background: var(--error, #c0392b); }

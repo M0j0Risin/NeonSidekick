@@ -183,7 +183,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_TheWordsThatCannotRun()
     {
-        PlanFixture([], "/plan gaps", "/plan Add a guide", "/plan gaps", "/plan gaps advsior", "/plan gaps 25", "/exit");
+        PlanFixture([], "/plan gaps", "/plan Add a guide", "/plan gaps", "/plan gaps advsior", "/plan gaps 51", "/exit");
         _chat.EnqueueText("What should it cover?");
 
         string output = await RunAsync();
@@ -192,7 +192,7 @@ public partial class ChatScreenTests
         Assert.Contains(PlanText.NotPlanningError, output);
         Assert.Contains(PlanText.NothingPresentedError, output);
         Assert.Contains(PlanText.UnknownReviewerError("advsior"), output);
-        Assert.Contains(PlanText.GapPassesRangeError("25"), output);
+        Assert.Contains(PlanText.GapPassesRangeError("51"), output);
     }
 
     [Fact]

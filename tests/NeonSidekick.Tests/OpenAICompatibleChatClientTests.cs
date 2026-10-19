@@ -360,6 +360,140 @@ public class OpenAICompatibleChatClientTests
         Assert.Contains("\"chat_template_kwargs\":{\"enable_thinking\":false,\"preserve_thinking\":true,\"clear_thinking\":false}", body);
     }
 
+    // ── A call that never parsed goes out as {} (2026-10-18) ────────────────
+
+    /// <summary>A call M.E.AI kept with null arguments after its JSON failed to parse (the reply was cut off mid-way).</summary>
+    private static FunctionCallContent BrokenCall(string id = "bad") =>
+        new(id, "present_plan", null) { Exception = new System.Text.Json.JsonException("cut off") };
+
+    /// <summary>The arguments string of the call with <paramref name="id"/> in <paramref name="body"/>'s messages.</summary>
+    private static string WireArguments(string body, string id)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(body);
+        foreach (var message in document.RootElement.GetProperty("messages").EnumerateArray())
+        {
+            if (message.TryGetProperty("tool_calls", out var calls))
+            {
+                foreach (var call in calls.EnumerateArray())
+                {
+                    if (call.GetProperty("id").GetString() == id)
+                    {
+                        return call.GetProperty("function").GetProperty("arguments").GetString()!;
+                    }
+                }
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("No call " + id + " in the body.");
+    }
+
+    /// <summary>SGLang's 400 ("function.arguments must be a JSON object"): a broken call in a settled turn, thinking beside it, the next message after.</summary>
+    [Fact]
+    public async Task ACallThatNeverParsed_InAnEarlierTurn_GoesOutAsAnEmptyObject()
+    {
+        var broken = BrokenCall();
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.System, "sys"),
+            new(ChatRole.User, "plan it"),
+            new(ChatRole.Assistant, [new TextReasoningContent("writing the plan"), broken]),
+            new(ChatRole.Tool, [new FunctionResultContent("bad", "Error: the arguments for 'present_plan' could not be parsed")]),
+            new(ChatRole.Assistant, "done"),
+            new(ChatRole.User, "next"),
+        ];
+
+        string body = await BodyFor(messages);
+
+        Assert.Equal("{}", WireArguments(body, "bad"));
+        Assert.DoesNotContain("\"arguments\":\"null\"", body);
+
+        // The history's call keeps its null arguments and its parse error.
+        Assert.Null(broken.Arguments);
+        Assert.NotNull(broken.Exception);
+        Assert.Same(broken, messages[2].Contents[1]);
+    }
+
+    /// <summary>In the turn in flight, with thinking (the raw message path) and without it (the adapter's), through both entry points.</summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task ACallThatNeverParsed_InTheTurnInFlight_GoesOutAsAnEmptyObject(bool thinking, bool streaming)
+    {
+        List<AIContent> reply = thinking ? [new TextReasoningContent("musing"), BrokenCall()] : [BrokenCall()];
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.User, "plan it"),
+            new(ChatRole.Assistant, reply),
+            new(ChatRole.Tool, [new FunctionResultContent("bad", "Error")]),
+        ];
+
+        var stub = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/chat/completions", HttpStatusCode.OK, StubHttpMessageHandler.CompletionJson("pong", "my-model"));
+        using var http = new HttpClient(stub);
+        using var client = new OpenAICompatibleChatClient(Endpoint(), TimeSpan.FromSeconds(5), http);
+        if (streaming)
+        {
+            // The stub answers with a non-streamed body; the adapter may fail to parse it as SSE, which is not what this test is about.
+            try
+            {
+                await foreach (var _ in client.GetStreamingResponseAsync(messages)) { }
+            }
+            catch (Exception) { /* see above */ }
+        }
+        else
+        {
+            await client.GetResponseAsync(messages);
+        }
+
+        string body = Assert.Single(stub.Requests).Body!;
+        Assert.Equal("{}", WireArguments(body, "bad"));
+        if (thinking)
+        {
+            Assert.Contains("\"reasoning_content\":\"musing\"", body);
+        }
+    }
+
+    [Fact]
+    public void WithCallArguments_LeavesAListWithNoBrokenCallAlone()
+    {
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.User, "q"),
+            new(ChatRole.Assistant, [new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" })]),
+            new(ChatRole.Tool, [new FunctionResultContent("c1", "hi")]),
+        ];
+
+        Assert.Same(messages, OpenAICompatibleChatClient.WithCallArguments(messages));
+    }
+
+    [Fact]
+    public void WithCallArguments_CopiesOnlyTheBrokenCallsMessage_WithNoRawMessage()
+    {
+        var good = new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" });
+        var broken = BrokenCall();
+        var assistant = new ChatMessage(ChatRole.Assistant, [new TextContent("both"), good, broken]) { RawRepresentation = new object() };
+        var user = new ChatMessage(ChatRole.User, "q");
+        List<ChatMessage> messages = [user, assistant];
+
+        var sent = OpenAICompatibleChatClient.WithCallArguments(messages).ToList();
+
+        Assert.Same(user, sent[0]);
+        Assert.NotSame(assistant, sent[1]);
+        Assert.Null(sent[1].RawRepresentation);
+        Assert.NotSame(assistant.Contents, sent[1].Contents);
+        Assert.Same(good, sent[1].Contents[1]);
+        var fixedCall = Assert.IsType<FunctionCallContent>(sent[1].Contents[2]);
+        Assert.Equal("bad", fixedCall.CallId);
+        Assert.Equal("present_plan", fixedCall.Name);
+        Assert.Empty(fixedCall.Arguments!);
+
+        // The history's own message is unchanged.
+        Assert.Same(broken, assistant.Contents[2]);
+        Assert.Null(broken.Arguments);
+        Assert.NotNull(assistant.RawRepresentation);
+    }
+
     /// <summary>A message with no thinking, or only the Anthropic API's signed thinking, goes through the adapter as before.</summary>
     [Fact]
     public void WithReasoningBack_LeavesMessagesWithoutThinkingAlone()

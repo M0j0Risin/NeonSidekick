@@ -65,7 +65,7 @@ public partial class SidekickAppTests
         Assert.True(output.IndexOf("[notice] " + PlanText.CleanPassNotice(2, 5, 1, 2), StringComparison.Ordinal) < output.IndexOf("You: " + PlanText.GapPassMessage(HeadlessPlanPath, 3, 5, PlanReviewer.Model, cleanSoFar: 1), StringComparison.Ordinal));
         Assert.Contains("[notice] " + PlanText.Glyph + " Gap review, 3 passes", output);
         Assert.True(output.IndexOf("[notice] " + PlanText.Glyph + " Gap review, 3 passes", StringComparison.Ordinal) < output.IndexOf(PlanText.ConvergedNotice(HeadlessPlanPath, 3, 1, 2), StringComparison.Ordinal));
-        Assert.Contains("[notice] " + PlanText.ConvergedNotice(HeadlessPlanPath, 3, 1, 2) + " — /plan approve [--fresh] starts it", output);
+        Assert.Contains("[notice] " + PlanText.ConvergedNotice(HeadlessPlanPath, 3, 1, 2) + " — /plan approve [--fresh | --ralph] starts it", output);
         // The review line, and /plan open lists the plan confirmed.
         Assert.Contains(PlanText.ReviewMarkWord(PlanReviewMark.Confirmed), output[output.LastIndexOf("add-guide — Guide", StringComparison.Ordinal)..]);
         // A pass's revision is said by its own notice, not the saved line every pass.
@@ -104,7 +104,7 @@ public partial class SidekickAppTests
         string output = await Headless("/plan Add a guide\n/plan gaps\n");
 
         Assert.Equal(4, _chat.Requests.Count);
-        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1) + " — /plan approve [--fresh] starts it", output);
+        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1) + " — /plan approve [--fresh | --ralph] starts it", output);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_PlanGaps_ACount_CapsThisRun_AndZeroSaysItWasTyped()
     {
-        // 2026-10-17, the user's ask: the count replaces LLM plan gap passes for the run; 0 is still 20 headless.
+        // 2026-10-17, the user's ask: the count replaces LLM plan gap passes for the run; 0 is still the most headless (50 since 2026-10-18).
         ServerOn1234("llama");
         _chat.Enqueue(HeadlessPresentPlan());
         _chat.EnqueueText("Saved.");
@@ -143,14 +143,14 @@ public partial class SidekickAppTests
         _chat.EnqueueText("Pass 1 done.");
         _chat.EnqueueText("Which framework?");
 
-        string output = await Headless("/plan Add a guide\n/plan gaps model 1\n/plan gaps 0\n/plan gaps 21\n");
+        string output = await Headless("/plan Add a guide\n/plan gaps model 1\n/plan gaps 0\n/plan gaps 51\n");
 
         Assert.Equal(5, _chat.Requests.Count);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 1, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[2]));
-        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1) + " — /plan approve [--fresh] starts it", output);
+        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1) + " — /plan approve [--fresh | --ralph] starts it", output);
         Assert.Contains("[notice] " + PlanText.GapsHeadlessCapNotice(AppSettingsData.MaxPlanGapPasses, fromCommand: true), output);
         Assert.DoesNotContain(PlanText.GapsHeadlessCapNotice(AppSettingsData.MaxPlanGapPasses), output);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, AppSettingsData.MaxPlanGapPasses, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[4]));
-        Assert.Contains("[error] " + PlanText.GapPassesRangeError("21"), output);
+        Assert.Contains("[error] " + PlanText.GapPassesRangeError("51"), output);
     }
 }
