@@ -114,6 +114,10 @@ public sealed class MacUnifiedLogTests
 
         Assert.NotNull(found);
         Assert.Equal(last.Entry.Message, found!.Entry.Message);
-        Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(5), "the find read forward from its own microsecond");
+        var took = System.Diagnostics.Stopwatch.GetElapsedTime(started);
+        // 30 s, a runaway read's backstop, not 5 (2026-10-19, the Mac's CI-like run): under load the forward find took 2.5–8.5 s (0.8–1.2 s
+        // unloaded), and on this Mac a reverse one over the same window took 1.0 s too, so time cannot tell them apart here; the find's
+        // direction is pinned by MacLogToolsTests (its filter is Forward).
+        Assert.True(took < TimeSpan.FromSeconds(30), $"the find read forward from its own microsecond: took {took.TotalSeconds:F1} s, {page.Entries.Count} rows, the last at {last.Entry.Time:O}");
     }
 }

@@ -131,7 +131,11 @@ public class VoicePipelineTests
     [Fact]
     public async Task NoBuffers_FailsWithTheWatchdogDetail()
     {
-        var result = await Pipeline().ListenAsync(CancellationToken.None, null, CancellationToken.None);
+        // The watchdog the only timer that can end it (2026-10-19, the Mac's CI-like run): with Quick's 120 ms against the no-speech 200 ms, a
+        // starved pool ran both timers late and the no-speech one's continuation first ("no speech", Ok). The app's own are 2 s against 10 s.
+        var options = Quick with { NoSpeechTimeout = TimeSpan.FromSeconds(30), MaxUtterance = TimeSpan.FromSeconds(30) };
+
+        var result = await Pipeline(options).ListenAsync(CancellationToken.None, null, CancellationToken.None);
 
         Assert.False(result.Ok);
         Assert.Equal(ListenEnd.NoAudio, result.EndedBy);

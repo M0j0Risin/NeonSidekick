@@ -13427,8 +13427,11 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>
     /// The pane on the screen (mid-turn commands need it), speech off (the bare rows), a three-delta
     /// reply, the first line typed at the idle read and <c>/exit</c> at the next; the script's keys
-    /// pushed from <see cref="FakeChatClient.BeforeUpdate"/> reach the turn's watcher (1 ms poll)
-    /// within the 40 ms the hook is given.
+    /// pushed from <see cref="FakeChatClient.BeforeUpdate"/> are taken by the turn's watcher before the
+    /// update goes on, then the hook holds 40 ms for what the line posts. The wait (2026-10-19, the Mac's
+    /// CI-like run: under load the reply ended inside the 40 ms with the keys still queued, and a line
+    /// meant for the reply met the idle line) is asynchronous, so the turn task drains posted acts
+    /// meanwhile, and it ends at an empty queue, the turn's cancel or 5 s, for keys meant for after the reply.
     /// </summary>
     private void MidTurnFixture(Action<int> duringTheReply, params string[] deltas)
     {
@@ -13436,11 +13439,21 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText(deltas.Length == 0 ? ["One ", "two ", "three."] : deltas);
-        _chat.BeforeUpdate = async (i, _) =>
+        _chat.BeforeUpdate = async (i, ct) =>
         {
             if (_chat.Requests.Count == 1)
             {
+                int before = Scripted().Queued;
                 duringTheReply(i);
+                if (Scripted().Queued > before)
+                {
+                    var give = DateTime.UtcNow.AddSeconds(5);
+                    while (Scripted().Queued > 0 && !ct.IsCancellationRequested && DateTime.UtcNow < give)
+                    {
+                        await Task.Delay(5, CancellationToken.None);
+                    }
+                }
+
                 await Task.Delay(40, CancellationToken.None);
             }
         };
@@ -14399,12 +14412,12 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();
         _settings.Update(d => d.ShellCommandAllowed = []);
-        MidTurnFixture(i =>
+        // Held until the line is deferred (2026-10-19, the Mac's CI-like run: under load the reply ended inside the plain fixture's 40 ms,
+        // and the line met the idle line).
+        MidTurnHeldFixture(async ct =>
         {
-            if (i == 1)
-            {
-                PushLine("/profile push allowed work");
-            }
+            PushLine("/profile push allowed work");
+            await UntilAsync(() => Output.Contains(ChatScreen.MidTurnDeferredNotice("/profile"), StringComparison.Ordinal), ct);
         });
 
         string output = await RunAsync();

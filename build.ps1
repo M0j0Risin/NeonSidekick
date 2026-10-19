@@ -87,15 +87,21 @@ if ($Publish -and $CiLike) { Fail "-CiLike shapes the test step; -Publish has no
 # a fresh TEMP/TMP/TMPDIR (a new runner has no %TEMP%\NeonSidekick; the folder itself is left alone, the open app may be using
 # it), every other NEONSIDEKICK_* variable cleared, the workflows' dead LLM URL, and $Cores cores: DOTNET_PROCESSOR_COUNT
 # everywhere, plus this process's affinity on Windows (children inherit it; --disable-build-servers keeps a warm MSBuild node,
-# started at full affinity, from launching the test host) or `taskpolicy -c background` on a Mac (no affinity there). Everything
-# is put back afterwards: $env: and the affinity outlive the script in the caller's session.
+# started at full affinity, from launching the test host) or, on a Mac (no affinity there), busy loops: 2 per core for 2 cores, 4 for
+# 1, 1 for 4 or more, each a /bin/sh loop that ends itself once this script's process is gone (a Ctrl+C never leaves them burning).
+# Not `taskpolicy -c background` (the first Mac run, 2026-10-19): that clamp made the CPU ~5x slower but every timer ~10x coarser
+# (100 sleeps of 10 ms took 15 s, not 1.4 s), as no runner's are, and a test counting real-time sleeps failed every time; 20 loops
+# make the CPU ~4x slower with the sleeps on time. Everything is put back afterwards: $env: and the affinity outlive the script in
+# the caller's session, and the loops are stopped.
 # The fresh temp folder's path is as long as a runner's, never longer (the first -CiLike run, 2026-10-19: five tests that print
 # a temp path into a notice or the toolbar row wrapped or padded negative under a 66-character one): 39 characters on Windows,
-# C:\Users\runneradmin\AppData\Local\Temp (the runner's account, from its logs; RUNNER~1 is 36), and on a Mac this Mac's own
-# TMPDIR length, the runner's being the same /var/folders/…/T/ shape, made under /tmp. The home is a short folder of its own.
-function New-CiFolder([string]$parent, [int]$length) {
+# C:\Users\runneradmin\AppData\Local\Temp (the runner's account, from its logs; RUNNER~1 is 36), and on a Mac a one-letter sibling
+# of this Mac's own TMPDIR, /var/folders/…/<letter>: the runner's /var/folders/…/T/ shape and length, under /var's link to /private/var
+# as the runner's is (the first Mac run, 2026-10-19: under /tmp, itself a link to /private/tmp, a test that knows only /var's link
+# read `pwd -P` as another folder). The home is a short folder of its own.
+function New-CiFolder([string]$parent, [int]$length, [int]$least = 4) {
     $parent = $parent.TrimEnd('\', '/')
-    $size = [Math]::Max(4, $length - $parent.Length - 1)
+    $size = [Math]::Max($least, $length - $parent.Length - 1)
     do {
         $name = -join (1..$size | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
         $path = Join-Path $parent $name
@@ -106,7 +112,10 @@ function New-CiFolder([string]$parent, [int]$length) {
 
 function Enter-CiLike {
     $machineTemp = [System.IO.Path]::GetTempPath()
-    $ciTemp = if ($OnWindows) { New-CiFolder $machineTemp 39 } else { New-CiFolder "/tmp" $machineTemp.TrimEnd('/').Length }
+    $machineTrimmed = $machineTemp.TrimEnd('/')
+    $ciTemp = if ($OnWindows) { New-CiFolder $machineTemp 39 }
+        elseif ($IsMacOS) { New-CiFolder (Split-Path $machineTrimmed -Parent) $machineTrimmed.Length 1 }
+        else { New-CiFolder "/tmp" $machineTrimmed.Length }
     $ciHome = New-CiFolder $machineTemp 0
     $cleared = @(Get-ChildItem env: | Where-Object { $_.Name -like 'NEONSIDEKICK_*' } | ForEach-Object { $_.Name })
     $saved = @{}
@@ -127,10 +136,22 @@ function Enter-CiLike {
         $affinity = $self.ProcessorAffinity
         $self.ProcessorAffinity = [IntPtr]((1L -shl $cores) - 1)
     }
-    $how = if ($OnWindows) { "affinity" } elseif ($IsMacOS) { "taskpolicy -c background" } else { "DOTNET_PROCESSOR_COUNT only" }
+    $loops = @()
+    if ($IsMacOS) {
+        $count = [Environment]::ProcessorCount * [Math]::Max(1, [int][Math]::Floor(4 / $cores))
+        $busy = "while kill -0 $PID 2>/dev/null; do :; done"
+        $loops = @(1..$count | ForEach-Object {
+            $start = New-Object System.Diagnostics.ProcessStartInfo "/bin/sh"
+            $start.ArgumentList.Add("-c")
+            $start.ArgumentList.Add($busy)
+            $start.UseShellExecute = $false
+            [System.Diagnostics.Process]::Start($start)
+        })
+    }
+    $how = if ($OnWindows) { "affinity" } elseif ($IsMacOS) { "DOTNET_PROCESSOR_COUNT, $($loops.Count) busy loops" } else { "DOTNET_PROCESSOR_COUNT only" }
     Write-Host "  CI-like: $cores of $([Environment]::ProcessorCount) cores ($how); home $ciHome; temp $ciTemp ($($ciTemp.Length) characters);" -ForegroundColor Yellow
     Write-Host "  $($cleared.Count) NEONSIDEKICK_* variable(s) cleared, the LLM URL dead (http://127.0.0.1:9/v1)." -ForegroundColor Yellow
-    return @{ Folders = @($ciHome, $ciTemp); Saved = $saved; Affinity = $affinity }
+    return @{ Folders = @($ciHome, $ciTemp); Saved = $saved; Affinity = $affinity; Loops = $loops }
 }
 
 function Exit-CiLike($state) {
@@ -139,6 +160,10 @@ function Exit-CiLike($state) {
     }
     if ($null -ne $state.Affinity) {
         [System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = $state.Affinity
+    }
+    foreach ($loop in $state.Loops) {
+        if (-not $loop.HasExited) { $loop.Kill() }
+        $loop.Dispose()
     }
     # A headless browser a test started can outlive the test host by a moment, holding its profile in the temp folder: a few tries.
     foreach ($folder in $state.Folders) {
@@ -214,7 +239,7 @@ if (-not $Publish) {
                 "--blame-hang", "--blame-hang-timeout", $HangTimeout, "--blame-hang-dump-type", "mini", "--results-directory", $results)
             if (-not $partial) { $testArgs += @("--collect:XPlat Code Coverage", "--settings", $RunSettings) }
             if ($CiLike) { $testArgs += "--disable-build-servers" }
-            if ($CiLike -and $IsMacOS) { taskpolicy -c background dotnet @testArgs } else { dotnet @testArgs }
+            dotnet @testArgs
             if ($LASTEXITCODE -ne 0) { $failedRuns.Add($run) }
             if ($Repeat -gt 1) {
                 $verdict = if ($LASTEXITCODE -eq 0) { "passed" } else { "FAILED" }
