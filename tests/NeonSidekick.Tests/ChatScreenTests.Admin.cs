@@ -65,7 +65,7 @@ public partial class ChatScreenTests
         {
             if (_keys is { PendingLine.IsCompleted: false })
             {
-                int shown = CountOf(_console.Output, ConfirmRowsOnScreen);
+                int shown = CountOf(Output, ConfirmRowsOnScreen);   // the locked copy: the turn draws its confirm meanwhile
                 if (shown > asked && pending.Count > 0)
                 {
                     asked = shown;

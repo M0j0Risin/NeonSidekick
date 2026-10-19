@@ -14,7 +14,7 @@ public sealed partial class WebUiPageTests
         new(id, "botcheck", "Browser window", "Solve the check for example.com in the Browser window.", null, null, [new WebChoice("giveup", "Give up")], null, null, null, Live: true);
 
     private void PublishAsks(params WebAskView[] asks) =>
-        _backend.Events.Publish(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([.. asks]), WebUiJsonContext.Default.WebAsks)));
+        PublishWhenStreaming(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([.. asks]), WebUiJsonContext.Default.WebAsks)));
 
     private const string Picture = "document.querySelector('#asks .botcheck-picture')";
 

@@ -2029,6 +2029,21 @@ function openDrawer() {
   }
   showDrawer(true);
   scrollToOutlined();
+  // A tile is as wide as its picture, and the pictures start loading as the drawer opens, so the tiles before the outlined one widen after
+  // the scroll and push it out of view (2026-10-19, the CI-like runs: the oldest of 30 out of view every tenth run or so, 12 of the 30
+  // pictures still loading 10 s on). Each picture that arrives scrolls to it again, until the row is touched or the drawer goes.
+  const loading = [...stripRow.querySelectorAll('img')].filter(img => !img.complete);
+  if (loading.length) {
+    const touched = new AbortController();
+    const again = () => { if (drawerOpen) scrollToOutlined(); else touched.abort(); };
+    for (const kind of ['pointerdown', 'wheel', 'touchstart', 'keydown']) {
+      stripRow.addEventListener(kind, () => touched.abort(), { once: true, passive: true, signal: touched.signal });
+    }
+    for (const img of loading) {
+      img.addEventListener('load', again, { once: true, signal: touched.signal });
+      img.addEventListener('error', again, { once: true, signal: touched.signal });
+    }
+  }
   markSeen();
   const first = stripRow.querySelector('button');
   if (first) first.focus({ preventScroll: true });

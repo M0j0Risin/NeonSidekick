@@ -24,6 +24,15 @@ internal sealed unsafe partial class WebViewHost
     private static BrowserProbeRun? t_browserProbe;
 
     /// <summary>
+    /// The probe's window is shown, but where no monitor is (2026-10-19, the first CI-like run): a window never shown draws no frame once
+    /// Chromium has counted it hidden, so the live view's <c>Page.captureScreenshot</c>, which waits for one, never answered — 1 run in 5, and
+    /// every run on one or two cores, where the first frame came too late. It is a tool window that never activates (no taskbar button, no
+    /// focus taken), and the occlusion tracking that would count an off-screen window hidden is off for the probe alone.
+    /// </summary>
+    private const int OffScreen = -32000;
+
+    private const string ProbeArguments = "--disable-features=CalculateNativeWinOcclusion";
+    /// <summary>
     /// <c>browser:webview2</c>: the Browser window's chain in the published binary against a hidden window and a temp user data folder of
     /// its own, with <see cref="WebViewProfile.Browser"/> — the blank page's navigation completed (the new event, its status read through
     /// the second arguments interface), its address read, its DOM read as the window reads a page, a cookie set and read back over the
@@ -84,12 +93,13 @@ internal sealed unsafe partial class WebViewHost
                 return (false, failure!);
             }
 
-            hwnd = CreateWindowExW(0, s_probeClass, IntPtr.Zero, WsOverlappedWindow, 0, 0, 640, 480, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
+            hwnd = CreateWindowExW(WsExToolWindow | WsExNoActivate, s_probeClass, IntPtr.Zero, WsOverlappedWindow, OffScreen, OffScreen, 640, 480, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
             if (hwnd == IntPtr.Zero)
             {
                 return (false, $"CreateWindowExW failed ({Marshal.GetLastPInvokeError()})");
             }
 
+            ShowWindow(hwnd, SwShowNoActivate);
             if (ProbeBar(hwnd, instance) is { } barFailure)
             {
                 return (false, barFailure);
@@ -105,7 +115,7 @@ internal sealed unsafe partial class WebViewHost
                 Failed = (step, hr) => run.Finish(false, $"failed at {step} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})"),
             };
             SetTimer(hwnd, 1, 100, IntPtr.Zero);
-            if (run.Host.Start(Path.Combine(root, BrowserPage.FolderName), site, BrowserPage.Blank, WebViewProfile.Browser))
+            if (run.Host.Start(Path.Combine(root, BrowserPage.FolderName), site, BrowserPage.Blank, WebViewProfile.Browser with { BrowserArguments = ProbeArguments }))
             {
                 PumpBrowserProbe(() => run.Done);
             }
@@ -344,7 +354,7 @@ internal sealed unsafe partial class WebViewHost
         // The Web UI's live view of a bot check (2026-10-17): the visible part read, a JPEG of it, and a mouse move sent, all over DevTools.
         private void Remote()
         {
-            _step = "the live view";
+            _step = "the live view's layout";
             bool sent = Host!.CallDevTools("Page.getLayoutMetrics", "{}", (hr, json) =>
             {
                 if (hr < 0 || !BrowserAnswers.TryReadViewport(json, out var viewport))
@@ -353,6 +363,7 @@ internal sealed unsafe partial class WebViewHost
                     return;
                 }
 
+                _step = "the live view's picture";
                 Host.CallDevTools("Page.captureScreenshot", BrowserRemote.ScreenshotParameters(viewport, 640, 1), (shot, picture) =>
                 {
                     if (shot < 0 || !BrowserAnswers.TryReadScreenshot(picture, out byte[] jpeg) || BrowserRemote.JpegWidth(jpeg) is null)
@@ -363,6 +374,7 @@ internal sealed unsafe partial class WebViewHost
 
                     _frameBytes = jpeg.Length;
                     var (method, move) = BrowserRemote.Commands(new BrowserInput(BrowserInputKind.Scroll, 0.5, 0.5, 0), viewport)[0];
+                    _step = "the live view's mouse move";
                     Host.CallDevTools(method, move, (moved, _) =>
                     {
                         if (moved < 0)

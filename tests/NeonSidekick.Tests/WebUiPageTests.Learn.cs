@@ -44,7 +44,7 @@ public sealed partial class WebUiPageTests
     }
 
     private void Publish(WebStatus status) =>
-        _backend.Events.Publish(new WebEvent("status", () => JsonSerializer.Serialize(status, WebUiJsonContext.Default.WebStatus)));
+        PublishWhenStreaming(new WebEvent("status", () => JsonSerializer.Serialize(status, WebUiJsonContext.Default.WebStatus)));
 
     private static async Task UntilAsync(Func<bool> condition, string what)
     {

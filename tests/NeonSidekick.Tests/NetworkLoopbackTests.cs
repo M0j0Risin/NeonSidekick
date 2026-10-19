@@ -184,7 +184,16 @@ public sealed class NetworkLoopbackTests
 
         await using var ssl = new SslStream(stream, leaveInnerStreamOpen: true);
         await ssl.AuthenticateAsServerAsync(certificate);
-        await ssl.ShutdownAsync();
+        try
+        {
+            await ssl.ShutdownAsync();
+        }
+        catch (IOException)
+        {
+            // The probe hangs up once it has the certificate; on one core it always did so before this close_notify went out
+            // (2026-10-19, the first CI-like run: "an established connection was aborted", both cases, every time). The handshake
+            // above is the test; a refused courtesy is not.
+        }
     }
 
     [Theory]

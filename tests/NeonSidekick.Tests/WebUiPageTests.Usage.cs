@@ -110,7 +110,7 @@ public sealed partial class WebUiPageTests
 
         await OpenUsageAsync(page);
         _backend.Card = UsageCard(31, inUse: "1.3k");
-        _backend.Events.Publish(new WebEvent("status", () => JsonSerializer.Serialize(new WebStatus(null, null, null, new WebUsage("1.3k / 4.1k", "31%", "46 tok/s")), WebUiJsonContext.Default.WebStatus)));
+        PublishWhenStreaming(new WebEvent("status", () => JsonSerializer.Serialize(new WebStatus(null, null, null, new WebUsage("1.3k / 4.1k", "31%", "46 tok/s")), WebUiJsonContext.Default.WebStatus)));
         await page.WaitAsync("document.querySelector('.usage-figures').textContent === '1.3k / 4.1k'", "the card read again");
     }
 }

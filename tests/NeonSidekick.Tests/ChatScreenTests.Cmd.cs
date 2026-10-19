@@ -40,7 +40,7 @@ public partial class ChatScreenTests
             }
 
             bool Pane() => _keys is { PendingLine.IsCompleted: false };
-            SpinWait.SpinUntil(() => (Pane() && !answered && paneKeys is not null) || _console.Output.Contains(done, StringComparison.Ordinal), TimeSpan.FromSeconds(20));
+            SpinWait.SpinUntil(() => (Pane() && !answered && paneKeys is not null) || Output.Contains(done, StringComparison.Ordinal), TimeSpan.FromSeconds(20));
             if (Pane())
             {
                 if (!answered && paneKeys is not null)
@@ -52,7 +52,7 @@ public partial class ChatScreenTests
                 return;
             }
 
-            if (steps.Count > 0 && _console.Output.Contains(done, StringComparison.Ordinal))
+            if (steps.Count > 0 && Output.Contains(done, StringComparison.Ordinal))
             {
                 PushLine(input, steps.Dequeue());
             }
@@ -208,7 +208,9 @@ public partial class ChatScreenTests
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var pressing = Task.Run(async () =>
         {
-            while (!_console.Output.Contains("Pinging 127.0.0.1", StringComparison.Ordinal) && clock.Elapsed < TimeSpan.FromSeconds(20))
+            // Output, the locked copy, never _console.Output from this thread: the screen writes the console meanwhile, and a StringBuilder
+            // read under a write threw ArgumentOutOfRangeException (2026-10-13, a whole-suite run; the 2026-09-22 races' fix).
+            while (!Output.Contains("Pinging 127.0.0.1", StringComparison.Ordinal) && clock.Elapsed < TimeSpan.FromSeconds(20))
             {
                 await Task.Delay(20);
             }
@@ -264,8 +266,8 @@ public partial class ChatScreenTests
             bool ready = steps.Count switch
             {
                 3 => true,
-                2 => _console.Output.Contains(Header("echo hi"), StringComparison.Ordinal),
-                _ => _console.Output.Contains("It said hi.", StringComparison.Ordinal),
+                2 => Output.Contains(Header("echo hi"), StringComparison.Ordinal),
+                _ => Output.Contains("It said hi.", StringComparison.Ordinal),
             };
             if (ready && steps.Count > 0)
             {

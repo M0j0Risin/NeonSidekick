@@ -22,7 +22,10 @@ public sealed partial class WebUiPageTests
             return;
         }
 
-        const string Card = "document.querySelector('.ask')";
+        // The cards under #asks only (2026-10-19, the first CI-like run): the usage card is a section.ask too, always in the page, so a bare
+        // '.ask' counted one card more than there were. "Two cards" passed while the second ask was still on its way, and failed once it
+        // had drawn first, which is what one core always gave.
+        const string Card = "document.querySelector('#asks .ask')";
         await page.WaitAsync(Card + " !== null && " + Card + ".querySelector('details.detail') !== null", "the learn card with its fold");
         Assert.Equal("Greets the user by name.", await page.TextAsync(Card + ".querySelector('p.text').textContent"));
         Assert.Equal("View", await page.TextAsync(Card + ".querySelector('details.detail summary').textContent"));
@@ -36,8 +39,8 @@ public sealed partial class WebUiPageTests
 
         // Another ask arriving rebuilds the cards: the fold stays open.
         var other = new WebAskView("a2", "yesno", "Allow?", null, null, null, [new WebChoice("y", "Yes"), new WebChoice("n", "No")], null, null, null);
-        _backend.Events.Publish(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([LearnAsk(), other]), WebUiJsonContext.Default.WebAsks)));
-        await page.WaitAsync("document.querySelectorAll('.ask').length === 2", "two cards");
+        PublishWhenStreaming(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([LearnAsk(), other]), WebUiJsonContext.Default.WebAsks)));
+        await page.WaitAsync("document.querySelectorAll('#asks .ask').length === 2", "two cards");
         Assert.True((await page.EvalAsync(Card + ".querySelector('details.detail').open")).GetBoolean());
 
         await page.EvalAsync("[..." + Card + ".querySelectorAll('.choices button')].find(b => b.textContent === 'Keep').click()");

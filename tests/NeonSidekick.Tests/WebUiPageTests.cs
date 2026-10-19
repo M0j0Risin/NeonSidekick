@@ -55,6 +55,16 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
 
     private static WebState State(bool busy = false, string theme = "") => new("p", "", "", "m", busy, false, false, "", [], null, "1", "tag", theme);
 
+    /// <summary>
+    /// An event published once the page's stream has connected (2026-10-19, the CI-like runs): the hub keeps nothing for a stream that comes
+    /// later, and a page's stream connects after its document loads, so an event published straight after a load could be lost on a slow machine.
+    /// </summary>
+    private void PublishWhenStreaming(WebEvent item)
+    {
+        Assert.True(SpinWait.SpinUntil(() => _backend.Events.Count > 0, TimeSpan.FromSeconds(10)), "the page's event stream never connected");
+        _backend.Events.Publish(item);
+    }
+
     // ── Chat ────────────────────────────────────────────────────────────────
 
     [WindowsFact]
@@ -75,9 +85,9 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('#loading').length")).GetInt32());   // no Loading banner any more
 
         // A busy PC with no label still spins ("working", the fallback); the turn's end clears both. The usage card opens on a tap.
-        _backend.Events.Publish(new WebEvent("status", () => JsonSerializer.Serialize(new WebStatus(null, null, null, new WebUsage("4.6k", null, null)), WebUiJsonContext.Default.WebStatus)));
+        PublishWhenStreaming(new WebEvent("status", () => JsonSerializer.Serialize(new WebStatus(null, null, null, new WebUsage("4.6k", null, null)), WebUiJsonContext.Default.WebStatus)));
         await page.WaitAsync("document.querySelector('#status .label').textContent === " + JsonSerializer.Serialize(WebUiText.Working), "the fallback while the state says busy");
-        _backend.Events.Publish(new WebEvent("state", () => JsonSerializer.Serialize(State(busy: false), WebUiJsonContext.Default.WebState)));
+        PublishWhenStreaming(new WebEvent("state", () => JsonSerializer.Serialize(State(busy: false), WebUiJsonContext.Default.WebState)));
         await page.WaitAsync("document.querySelector('#status .spin').classList.contains('hidden')", "the spinner gone with its label");
         await page.EvalAsync("document.getElementById('usage').click()");
         await page.WaitAsync("!document.getElementById('usage-card').classList.contains('hidden')", "the usage card");

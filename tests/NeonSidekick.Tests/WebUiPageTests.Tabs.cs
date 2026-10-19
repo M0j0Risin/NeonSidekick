@@ -11,7 +11,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public sealed partial class WebUiPageTests
 {
-    private void Publish(string name, string json) => _backend.Events.Publish(new WebEvent(name, () => json));
+    private void Publish(string name, string json) => PublishWhenStreaming(new WebEvent(name, () => json));
 
     private static string Json(WebState state) => JsonSerializer.Serialize(state, WebUiJsonContext.Default.WebState);
 

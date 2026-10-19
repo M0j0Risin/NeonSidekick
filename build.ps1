@@ -140,8 +140,12 @@ function Exit-CiLike($state) {
     if ($null -ne $state.Affinity) {
         [System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = $state.Affinity
     }
+    # A headless browser a test started can outlive the test host by a moment, holding its profile in the temp folder: a few tries.
     foreach ($folder in $state.Folders) {
-        Remove-Item -Recurse -Force $folder -ErrorAction SilentlyContinue
+        for ($try = 0; $try -lt 10 -and (Test-Path $folder); $try++) {
+            Remove-Item -Recurse -Force $folder -ErrorAction SilentlyContinue
+            if (Test-Path $folder) { Start-Sleep -Milliseconds 500 }
+        }
         if (Test-Path $folder) { Write-Host "  CI-like: $folder left behind (a file still open); delete it by hand." -ForegroundColor Yellow }
     }
 }

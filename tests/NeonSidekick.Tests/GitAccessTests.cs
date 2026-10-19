@@ -73,7 +73,10 @@ public sealed class GitAccessTests : IDisposable
     /// </summary>
     internal static void PinUnbornHead(Repository repo) => repo.Refs.UpdateTarget("HEAD", "refs/heads/main");
 
-    private static int _commits;
+    // Each repository's own count (2026-10-19, the CI-like runs): one count for the whole run put the 60th commit made anywhere at 13:00, so
+    // GitToolsTests.Log_ListsRows' "12:\d\d" failed whenever the test order put enough commits ahead of it (and a long enough run would roll
+    // the date past 2026-09-01). Keyed by the repository's folder, every test's commits start at 12:01.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> s_commits = new(StringComparer.OrdinalIgnoreCase);
 
     private string Init() => Init(_root);
 
@@ -86,7 +89,8 @@ public sealed class GitAccessTests : IDisposable
         using var repo = new Repository(folder);
         Commands.Stage(repo, relative);
         // Each commit a minute later than the one before, so a time-sorted log is deterministic.
-        var sig = new Signature("Test User", "test@example.invalid", new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.FromHours(-7)).AddMinutes(Interlocked.Increment(ref _commits)));
+        int commit = s_commits.AddOrUpdate(Path.GetFullPath(folder), 1, (_, count) => count + 1);
+        var sig = new Signature("Test User", "test@example.invalid", new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.FromHours(-7)).AddMinutes(commit));
         return repo.Commit(message, sig, sig).Sha;
     }
 

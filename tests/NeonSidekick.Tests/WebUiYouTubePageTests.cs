@@ -65,6 +65,13 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         return _page;
     }
 
+    /// <summary>An event published once the page's stream has connected, as <c>WebUiPageTests.PublishWhenStreaming</c> (2026-10-19).</summary>
+    private void PublishWhenStreaming(WebEvent item)
+    {
+        Assert.True(SpinWait.SpinUntil(() => _backend.Events.Count > 0, TimeSpan.FromSeconds(10)), "the page's event stream never connected");
+        _backend.Events.Publish(item);
+    }
+
     private Task<bool> HiddenAsync(HeadlessPage page, string selector) =>
         page.EvalAsync("document.querySelector(" + JsonSerializer.Serialize(selector) + ").classList.contains('hidden')").ContinueWith(t => t.Result.GetBoolean(), TaskScheduler.Default);
 
@@ -113,9 +120,11 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
 
         await page.WaitAsync("document.body.dataset.tab === 'youtube'", "Chat gone to the YouTube tab");
 
+        // Shopping leaves for YouTube as it loads, so no wait at /shopping; the old page is marked, as it shows YouTube already.
         _backend.PulseNow = Pulse(watch: WebUiText.WatchBanner);
-        await page.GoAsync(Root + "shopping");
-        await page.WaitAsync("document.body.dataset.tab === 'youtube'", "Shopping gone to the YouTube tab", 15);
+        await page.EvalAsync("window.neonOldPage = true");
+        await page.NavigateAsync(Root + "shopping");
+        await page.WaitAsync("!window.neonOldPage && document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "Shopping gone to the YouTube tab", 15);
     }
 
     [WindowsFact]
@@ -129,7 +138,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
 
         await page.WaitAsync("document.body.dataset.tab === 'chat' && document.querySelector('header.top nav').classList.contains('ready')", "the chat");
         await page.EvalAsync("(() => { const d = document.getElementById('draft'); d.value = 'half a thought'; d.dispatchEvent(new Event('input')); })()");
-        _backend.Events.Publish(new WebEvent("watch", () => JsonSerializer.Serialize(new WebTextBack(WebUiText.WatchBanner), WebUiJsonContext.Default.WebTextBack)));
+        PublishWhenStreaming(new WebEvent("watch", () => JsonSerializer.Serialize(new WebTextBack(WebUiText.WatchBanner), WebUiJsonContext.Default.WebTextBack)));
         await page.WaitAsync("document.getElementById('watch-banner') !== null", "the banner");
         Assert.Equal(WebUiText.WatchBanner, await page.TextAsync("document.getElementById('watch-banner').textContent"));
         Assert.Equal("/youtube", await page.TextAsync("new URL(document.getElementById('watch-banner').href).pathname"));
@@ -147,9 +156,9 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         }
 
         await page.WaitAsync("document.querySelector('#asks section.ask') !== null && document.getElementById('watch-banner') !== null", "the card and the banner");
-        _backend.Events.Publish(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([]), WebUiJsonContext.Default.WebAsks)));
+        PublishWhenStreaming(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([]), WebUiJsonContext.Default.WebAsks)));
         await page.WaitAsync("document.querySelector('#asks section.ask') === null", "the ask gone");
-        _backend.Events.Publish(new WebEvent("state", () => JsonSerializer.Serialize(State(watch: WebUiText.WatchBanner), WebUiJsonContext.Default.WebState)));
+        PublishWhenStreaming(new WebEvent("state", () => JsonSerializer.Serialize(State(watch: WebUiText.WatchBanner), WebUiJsonContext.Default.WebState)));
         await Task.Delay(500);
         Assert.Equal("chat", await page.TextAsync("document.body.dataset.tab"));
         Assert.NotEqual(0, (await page.EvalAsync("document.querySelectorAll('#watch-banner').length")).GetInt32());

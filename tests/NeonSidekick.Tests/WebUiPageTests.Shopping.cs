@@ -196,12 +196,17 @@ public sealed partial class WebUiPageTests
         Assert.Equal(WebUiText.ShopWords.PastTitle, await page.TextAsync("document.getElementById('sheet-title').textContent"));
         Assert.True((await page.EvalAsync("document.getElementById('past-filter').classList.contains('hidden')")).GetBoolean());   // 8 rows or fewer
 
+        // The re-add reads the list again and redraws it, which replaces the rows and disarms (2026-10-19, the CI-like runs): a forget clicked
+        // before that redraw was armed on a row the redraw then swapped out. The page's list object before the re-add is kept, so the wait below
+        // knows the re-read landed (it assigns a new one and draws in the same step).
+        await page.EvalAsync("window.neonBought = bought");
         await page.EvalAsync("document.querySelector('.shop-past-add').click()");
         Assert.Equal(1, (await page.EvalAsync(PastRows)).GetInt32());   // the row leaves at once
         await WaitForAsync(() => !_backend.ShopCalls.IsEmpty);
         Assert.True(_backend.ShopCalls.TryDequeue(out string? readd));
         Assert.Equal("readd 4", readd);
         Assert.True((await page.EvalAsync(Sheet)).GetBoolean());   // the sheet stays for the next
+        await page.WaitAsync("bought !== window.neonBought && " + PastRows + " === 1", "the past items read again after the re-add");
 
         await page.EvalAsync("document.querySelector('.shop-forget').click()");
         Assert.True((await page.EvalAsync("document.querySelector('.shop-forget').classList.contains('armed')")).GetBoolean());

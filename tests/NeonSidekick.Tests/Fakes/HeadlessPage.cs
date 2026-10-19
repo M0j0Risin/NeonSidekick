@@ -100,10 +100,17 @@ public sealed class HeadlessPage : IAsyncDisposable
     public Task ViewportAsync(int width, int height = 800, bool mobile = true) =>
         SendAsync("Emulation.setDeviceMetricsOverride", w => { w.WriteNumber("width", width); w.WriteNumber("height", height); w.WriteNumber("deviceScaleFactor", 1); w.WriteBoolean("mobile", mobile); });
 
+    /// <summary>
+    /// Starts going to <paramref name="url"/> and waits for nothing: for a page that leaves on its own as it loads (2026-10-19, the first CI-like
+    /// run: <c>GoAsync</c> to a Shopping page the watch pulse sends straight on to YouTube waited for a URL it never stayed at, 2 runs in 5).
+    /// The caller waits on where it ends up.
+    /// </summary>
+    public Task NavigateAsync(string url) => SendAsync("Page.navigate", w => w.WriteString("url", url));
+
     /// <summary>Goes to <paramref name="url"/> and waits for its document to be complete.</summary>
     public async Task GoAsync(string url)
     {
-        await SendAsync("Page.navigate", w => w.WriteString("url", url));
+        await NavigateAsync(url);
         await WaitAsync("document.readyState === 'complete' && location.href.startsWith(" + JsonSerializer.Serialize(url.Split('?')[0]) + ")", "the page to load");
     }
 

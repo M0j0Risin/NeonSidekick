@@ -35,6 +35,9 @@ public partial class ChatScreenTests
         DiagnosticLog.Emitted += Record;
         try
         {
+            // Each change's flash is waited for before the next change (2026-10-19, the first CI-like run): FlashPc hands the PC only
+            // the newest of a burst, so five changes in a row on a slow machine flashed once ("cleared") and the others never came.
+            void Flashed(string text) => SpinWait.SpinUntil(() => flashed.Contains(text), TimeSpan.FromSeconds(10));
             var input = WhenIdle(
                 i =>
                 {
@@ -45,6 +48,7 @@ public partial class ChatScreenTests
                     notConnected = Web.PlaySaved(new WebSavedPlay { Page = PageOf('a'), Id = BunnyId }, IPAddress.Loopback);
                     using var page = web.Attach(PageOf('a'), PageOf('1'), false, null, () => { });
                     play = Web.PlaySaved(new WebSavedPlay { Page = PageOf('a'), Id = BunnyId }, IPAddress.Loopback);
+                    Flashed(WebUiText.SavedPlayFlash);
                     gone = Web.PlaySaved(new WebSavedPlay { Page = PageOf('a'), Id = "xxxxxxxxxxx" }, IPAddress.Loopback);
                     active = _running.RoutedVideoForTests!.Active;
                     while (page.Events.TryRead(out var e))
@@ -53,10 +57,13 @@ public partial class ChatScreenTests
                     }
 
                     moved = Web.MoveSaved(new WebSavedMove { Id = ZooId, To = "top" }, IPAddress.Loopback);
+                    Flashed(WebUiText.SavedMoveFlash);
                     removed = Web.RemoveSaved(new WebSavedId { Id = BunnyId }, IPAddress.Loopback);
+                    Flashed(WebUiText.SavedRemoveFlash);
                     savedNow = Web.SaveCurrent(IPAddress.Loopback);   // the tab's video, Bunny, saved again
+                    Flashed(WebUiText.SavedSaveFlash);
                     cleared = Web.ClearSaved(IPAddress.Loopback);
-                    SpinWait.SpinUntil(() => flashed.Count >= 5, TimeSpan.FromSeconds(10));
+                    Flashed(WebUiText.SavedClearFlash);
                     PushLine(i, "/exit");
                 });
 
@@ -187,13 +194,13 @@ public partial class ChatScreenTests
                 UntilServing();
                 PushLine(input, "/youtube list");
             }
-            else if (!removed && _console.Output.Contains(YouTubeText.SavedCaption(2), StringComparison.Ordinal))
+            else if (!removed && Output.Contains(YouTubeText.SavedCaption(2), StringComparison.Ordinal))   // the locked copy: the pane's watch redraws meanwhile
             {
                 removed = true;
                 Web.RemoveSaved(new WebSavedId { Id = ZooId }, null);   // the page's 🗑️, while the PC's pane is open
                 _time.Advance(App.YouTubeSavedMenu.WatchEvery);
             }
-            else if (removed && !redrawn && _console.Output.Contains(YouTubeText.SavedCaption(1), StringComparison.Ordinal))
+            else if (removed && !redrawn && Output.Contains(YouTubeText.SavedCaption(1), StringComparison.Ordinal))
             {
                 redrawn = true;
                 input.Push(Keys.Escape);

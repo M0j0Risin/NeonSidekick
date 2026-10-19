@@ -364,8 +364,15 @@ public partial class ChatScreenTests
         {
             input.Push(Keys.Char('/'), Keys.Char('h'), Keys.Char('e'), Keys.Escape, Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
             await UntilAsync(() => !input.IsAvailable, ct);
-            await Task.Delay(60, ct);   // the watcher takes the keys
-            underTheLoad = _console.Output;
+            // Until the list is drawn, read through the locked copy (2026-10-19, the CI-like runs: a fixed 60 ms for the watcher, then a raw
+            // read of the console it was writing). The assertion below says so if it never is.
+            var drawn = DateTime.UtcNow.AddSeconds(10);
+            while (!Output.Contains(MentionCompleter.Hint, StringComparison.Ordinal) && DateTime.UtcNow < drawn)
+            {
+                await Task.Delay(5, ct);
+            }
+
+            underTheLoad = Output;
         };
 
         string output = await RunAsync(input);

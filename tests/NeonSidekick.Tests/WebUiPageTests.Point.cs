@@ -140,7 +140,13 @@ public sealed partial class WebUiPageTests
         const string InView = "(() => { const t = document.querySelector('.strip-tile.selected'), r = document.getElementById('strip-row'); if (!t) return false; const a = t.getBoundingClientRect(), b = r.getBoundingClientRect(); return a.left >= b.left - 1 && a.right <= b.right + 1; })()";
         await page.WaitAsync("!document.getElementById('strip-button').classList.contains('hidden')", "🎞️");
         await page.EvalAsync("document.getElementById('strip-button').click()");
-        await page.WaitAsync(InView, "the oldest, outlined, in view as the drawer opens");
+        // A miss says where the outlined tile was against the row and how many pictures had loaded (2026-10-19: the tiles widen as their
+        // pictures arrive, which pushed the oldest out of view until chat.js scrolled to it again on each one).
+        await page.WaitAsync(InView, "the oldest, outlined, in view as the drawer opens", 10,
+            "(() => { const t = document.querySelector('.strip-tile.selected'), r = document.getElementById('strip-row'); const imgs = [...r.querySelectorAll('img')]; " +
+            "return JSON.stringify({ sel: t ? t.dataset.id : null, tile: t ? [Math.round(t.getBoundingClientRect().left), Math.round(t.getBoundingClientRect().right)] : null, " +
+            "row: [Math.round(r.getBoundingClientRect().left), Math.round(r.getBoundingClientRect().right)], scroll: [r.scrollLeft, r.scrollWidth, r.clientWidth], " +
+            "imgs: imgs.length, loaded: imgs.filter(i => i.complete).length, open: drawerOpen }); })()");
 
         Publish("strip", JsonSerializer.Serialize(KeyedStrip(30, ids), WebUiJsonContext.Default.WebStrip));
         await page.WaitAsync(InView + " && document.querySelector('.strip-tile.selected').dataset.id === '30'", "the newest, scrolled to");
