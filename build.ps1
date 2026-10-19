@@ -13,6 +13,8 @@
         .\build.ps1 -CoverageFloor 0           # report line coverage without gating (the default floor is 80%)
         .\build.ps1 -Package                   # ...and stage publish/package/NeonSidekick-v<ver>-win-x64.zip + .sha256
         .\build.ps1 -Package -Tag v0.2.0       # the same, refusing a tag that is not the csproj <Version> (release.yml)
+        .\build.ps1 -TestOnly -CiLike          # the test step as a CI runner meets it: an empty home, fresh temp, no live tests, 2 cores
+        .\build.ps1 -TestOnly -CiLike -Cores 1 -Filter "FullyQualifiedName~WebUiPageTests" -Repeat 20 -HangTimeout 60s
 
     On a Mac (2026-10-06, the macOS build; pwsh 7 and the Xcode command line tools), the same switches:
 
@@ -31,7 +33,12 @@ param(
     [double]$CoverageFloor = 80,
     [switch]$Package,
     [string]$Tag,
-    [string]$Runtime
+    [string]$Runtime,
+    [switch]$CiLike,
+    [int]$Cores = 2,
+    [string]$Filter,
+    [int]$Repeat = 1,
+    [string]$HangTimeout = "10m"
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,6 +73,61 @@ function Write-Section($text) {
 function Fail($text) {
     Write-Host "  $text" -ForegroundColor Red
     exit 1
+}
+
+# A filtered or repeated run is a check, not the pipeline (2026-10-19): it measures no coverage, so it never goes on to a publish.
+if (($Filter -or $Repeat -gt 1) -and -not $TestOnly) { Fail "-Filter and -Repeat need -TestOnly." }
+if ($Repeat -lt 1) { Fail "-Repeat is a count of runs, 1 or more." }
+if ($PSBoundParameters.ContainsKey('Cores') -and -not $CiLike) { Fail "-Cores needs -CiLike." }
+if ($Cores -lt 1) { Fail "-Cores is a count of cores, 1 or more." }
+if ($Publish -and $CiLike) { Fail "-CiLike shapes the test step; -Publish has none." }
+
+# -CiLike (2026-10-19, the pre-CI check in .notes/ci_test_debug_guidance.md): the test step as a GitHub runner meets it, since
+# nearly every CI-only failure so far was a race a fast, warm machine never showed. The test host gets an empty NEONSIDEKICK_HOME,
+# a fresh TEMP/TMP/TMPDIR (a new runner has no %TEMP%\NeonSidekick; the folder itself is left alone, the open app may be using
+# it), every other NEONSIDEKICK_* variable cleared, the workflows' dead LLM URL, and $Cores cores: DOTNET_PROCESSOR_COUNT
+# everywhere, plus this process's affinity on Windows (children inherit it; --disable-build-servers keeps a warm MSBuild node,
+# started at full affinity, from launching the test host) or `taskpolicy -c background` on a Mac (no affinity there). Everything
+# is put back afterwards: $env: and the affinity outlive the script in the caller's session.
+function Enter-CiLike {
+    $root = Join-Path ([System.IO.Path]::GetTempPath()) ("neonsidekick-cilike-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
+    $ciHome = Join-Path $root "home"
+    $ciTemp = Join-Path $root "temp"
+    New-Item -ItemType Directory -Path $ciHome, $ciTemp | Out-Null
+    $cleared = @(Get-ChildItem env: | Where-Object { $_.Name -like 'NEONSIDEKICK_*' } | ForEach-Object { $_.Name })
+    $saved = @{}
+    foreach ($name in $cleared + @('NEONSIDEKICK_HOME', 'NEONSIDEKICK_TEST_LLM_URL', 'TEMP', 'TMP', 'TMPDIR', 'DOTNET_PROCESSOR_COUNT')) {
+        $saved[$name] = [Environment]::GetEnvironmentVariable($name)
+    }
+    foreach ($name in $cleared) { Remove-Item "env:$name" }
+    $env:NEONSIDEKICK_HOME = $ciHome
+    $env:NEONSIDEKICK_TEST_LLM_URL = "http://127.0.0.1:9/v1"
+    $env:TEMP = $ciTemp
+    $env:TMP = $ciTemp
+    if (-not $OnWindows) { $env:TMPDIR = $ciTemp + "/" }
+    $cores = [Math]::Min($Cores, [Environment]::ProcessorCount)
+    $env:DOTNET_PROCESSOR_COUNT = $cores.ToString($Invariant)
+    $affinity = $null
+    if ($OnWindows) {
+        $self = [System.Diagnostics.Process]::GetCurrentProcess()
+        $affinity = $self.ProcessorAffinity
+        $self.ProcessorAffinity = [IntPtr]((1L -shl $cores) - 1)
+    }
+    $how = if ($OnWindows) { "affinity" } elseif ($IsMacOS) { "taskpolicy -c background" } else { "DOTNET_PROCESSOR_COUNT only" }
+    Write-Host "  CI-like: $cores of $([Environment]::ProcessorCount) cores ($how); home and temp under $root;" -ForegroundColor Yellow
+    Write-Host "  $($cleared.Count) NEONSIDEKICK_* variable(s) cleared, the LLM URL dead (http://127.0.0.1:9/v1)." -ForegroundColor Yellow
+    return @{ Root = $root; Saved = $saved; Affinity = $affinity }
+}
+
+function Exit-CiLike($state) {
+    foreach ($name in $state.Saved.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $state.Saved[$name])
+    }
+    if ($null -ne $state.Affinity) {
+        [System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = $state.Affinity
+    }
+    Remove-Item -Recurse -Force $state.Root -ErrorAction SilentlyContinue
+    if (Test-Path $state.Root) { Write-Host "  CI-like: $($state.Root) left behind (a file still open); delete it by hand." -ForegroundColor Yellow }
 }
 
 if ($Clean) {
@@ -116,13 +178,46 @@ if (-not $Publish) {
     # The facts that load an embedded model onto the GPU are left out (2026-10-01): the app is usually open during a build,
     # its own model holding VRAM, so the VRAM-only fact failed and both ate the card meanwhile. CI skips them anyway (no
     # model installed); a plain dotnet test still runs them where one is.
+    # -Filter narrows the run (still without those facts) and -Repeat runs it again and again, each run's hang diagnostics
+    # under publish/coverage/run-<n>; every run goes ahead whatever the one before did, so a flake's rate is counted
+    # (2026-10-19). Neither measures coverage: a slice of the suite can't meet the floor.
     if (Test-Path $CoverageDir) { Remove-Item -Recurse -Force $CoverageDir }
-    dotnet test $TestProject -c Release --no-build --verbosity minimal `
-        --filter "Category!=LoadsEmbeddedModel" `
-        --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini `
-        --collect:"XPlat Code Coverage" --settings $RunSettings --results-directory $CoverageDir
-    if ($LASTEXITCODE -ne 0) { Fail "Tests FAILED" }
+    $partial = $Filter -or $Repeat -gt 1
+    $testFilter = if ($Filter) { "Category!=LoadsEmbeddedModel&($Filter)" } else { "Category!=LoadsEmbeddedModel" }
+    $ciState = if ($CiLike) { Enter-CiLike } else { $null }
+    $failedRuns = New-Object System.Collections.Generic.List[int]
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        for ($run = 1; $run -le $Repeat; $run++) {
+            $results = if ($Repeat -gt 1) { Join-Path $CoverageDir "run-$run" } else { $CoverageDir }
+            $testArgs = @("test", $TestProject, "-c", "Release", "--no-build", "--verbosity", "minimal", "--filter", $testFilter,
+                "--blame-hang", "--blame-hang-timeout", $HangTimeout, "--blame-hang-dump-type", "mini", "--results-directory", $results)
+            if (-not $partial) { $testArgs += @("--collect:XPlat Code Coverage", "--settings", $RunSettings) }
+            if ($CiLike) { $testArgs += "--disable-build-servers" }
+            if ($CiLike -and $IsMacOS) { taskpolicy -c background dotnet @testArgs } else { dotnet @testArgs }
+            if ($LASTEXITCODE -ne 0) { $failedRuns.Add($run) }
+            if ($Repeat -gt 1) {
+                $verdict = if ($LASTEXITCODE -eq 0) { "passed" } else { "FAILED" }
+                Write-Host "  Run $run of ${Repeat}: $verdict" -ForegroundColor $(if ($LASTEXITCODE -eq 0) { "Green" } else { "Red" })
+            }
+        }
+    } finally {
+        $watch.Stop()
+        if ($null -ne $ciState) { Exit-CiLike $ciState }
+    }
+
+    Write-Host "  Tests took $($watch.Elapsed.ToString('hh\:mm\:ss', $Invariant))$(if ($Repeat -gt 1) { " for $Repeat runs" })."
+    if ($Repeat -gt 1) {
+        $passedRuns = $Repeat - $failedRuns.Count
+        Write-Host "  Repeat: $passedRuns of $Repeat runs passed$(if ($failedRuns.Count -gt 0) { "; failed: run " + ($failedRuns -join ', ') })." `
+            -ForegroundColor $(if ($failedRuns.Count -eq 0) { "Green" } else { "Red" })
+    }
+    if ($failedRuns.Count -gt 0) { Fail "Tests FAILED" }
     Write-Host "  Tests passed." -ForegroundColor Green
+    if ($partial) {
+        Write-Section "Done (a filtered or repeated run; coverage not measured)"
+        exit 0
+    }
 
     $report = Get-ChildItem -Path $CoverageDir -Recurse -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $report) { Fail "No coverage.cobertura.xml under $CoverageDir; the collector did not run." }

@@ -42,6 +42,8 @@ dotnet run --project src/NeonSidekick -c Release
 | `.\build.ps1 -Package` | The full run, then the release package in `publish\package\`: a `.zip` on Windows or a `.tar.gz` on a Mac, with the README, the docs, the license and a `.sha256`. It can't be combined with `-TestOnly`. |
 | `.\build.ps1 -Package -Tag v1.2.3` | The same, refusing a tag that isn't `v` plus the project's `<Version>`. |
 | `.\build.ps1 -CoverageFloor 0` | Reports coverage without failing under the floor (80% by default). |
+| `.\build.ps1 -TestOnly -CiLike` | Runs the tests the way a CI runner meets them: an empty home and temp folder, every `NEONSIDEKICK_*` variable cleared (so the live tests skip), and only 2 CPU cores (`-Cores <n>` for another count). It catches timing races a fast machine hides. |
+| `.\build.ps1 -TestOnly -Filter "<filter>" -Repeat 20` | Runs only the tests a `dotnet test` filter picks, as many times as asked, and counts the runs that pass. Coverage isn't measured. Add `-HangTimeout 60s` to stop a hung test sooner than 10 minutes. |
 | `.\build.ps1 -Clean` | Deletes every `bin\` and `obj\` folder and `publish\`. |
 | `.\build.ps1 -Runtime <rid>` | Picks the runtime: `win-x64` by default on Windows, `osx-arm64` on an Apple Silicon Mac. NativeAOT can't publish for another OS. |
 
@@ -70,6 +72,7 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 ```
 
 * The tests run one at a time, by design.
+* **Before a CI run**, run the suite with `-CiLike`, then repeat the classes you changed under it (`-CiLike -Filter … -Repeat 20`). Most tests that failed only on CI were timing races that a slower machine shows.
 * **Live tests** (a real LLM server, database, camera, microphone, speech model…) are skipped unless their resource is there. [ENVIRONMENT.md](ENVIRONMENT.md#test-suite) lists the variables that turn each one on, and [TESTCONTAINERS.md](TESTCONTAINERS.md) the Docker containers they run against.
 * **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in this machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass without proving anything; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
 * **GPU tests:** two tests load an embedded model onto the GPU, so `build.ps1` leaves them out. Run them with `dotnet test tests/NeonSidekick.Tests -c Release --filter Category=LoadsEmbeddedModel` while no other model holds the GPU.
@@ -116,6 +119,7 @@ Run `pwsh ./build.ps1 -Clean` once after switching SDKs, so nothing built by the
 
 ```sh
 pwsh ./build.ps1 -TestOnly     # build and test, the Windows-only tests skipped
+pwsh ./build.ps1 -TestOnly -CiLike   # as a CI runner: a Mac can't pin cores, so the tests run under taskpolicy -c background
 pwsh ./build.ps1 -Publish      # publish/output/NeonSidekick, smoke-tested
 pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm64.tar.gz
 ```
