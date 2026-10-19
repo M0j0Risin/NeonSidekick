@@ -720,8 +720,9 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The screen's hook for a command chord pressed in a pane that leaves the pane open (2026-10-01, the user's ask:
-    /// Ctrl+F <c>/perfbar</c> and Ctrl+T <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggle their bar in place, the tick repainting the pane's new
-    /// shape; Ctrl+E <c>/explore</c> opens the file browser, later that day): true when it did the chord's command, false for every chord that closes the pane first. Null: none does.
+    /// Ctrl+F <c>/perfbar</c> and Ctrl+T <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggled their bar in place until 2026-10-18,
+    /// when the bar chords went; Ctrl+E <c>/explore</c> opens the file browser, later that day, and the window chords their windows, Ctrl+B the
+    /// Browser window and Ctrl+W the Web UI since 2026-10-18): true when it did the chord's command, false for every chord that closes the pane first. Null: none does.
     /// </summary>
     public Func<string, bool>? ChordInPlace { get; set; }
 

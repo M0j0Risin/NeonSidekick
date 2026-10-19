@@ -34,7 +34,7 @@ public static class PerfBarItems
     public static readonly string[] Names = [Cpu, Ram, Gpu, Vram, Net, NetDown, NetUp, Proc];
 
     /// <summary>
-    /// The default meters: what a bare <c>/perfbar</c> (or Ctrl+F) shows when nothing was ever picked — the bar as it
+    /// The default meters: what a bare <c>/perfbar</c> (or Ctrl+F until 2026-10-18) shows when nothing was ever picked — the bar as it
     /// was before the checklist, CPU, RAM, GPU and VRAM — and, since 2026-10-02 (the user's ask, Show toolbar's shape), what
     /// the checklist's <c>⊡ default</c> button checks. <c>Restored</c> until then. What a profile that never chose shows since
     /// later that day (null). Pinned.

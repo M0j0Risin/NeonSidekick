@@ -21,6 +21,12 @@ public enum CameraVerb
     /// <summary><c>/camera thumbs</c> (2026-10-09, <c>/comfy thumbs</c>' twin): the thumbnail browser on the Camera output folder.</summary>
     Thumbs,
 
+    /// <summary>
+    /// <c>/camera purge</c> (2026-10-18, the user's ask: <c>/comfy purge</c>'s twin): everything in the Camera output folder, after a yes, to the
+    /// Recycle bin under <c>File deletes to Recycle bin</c>, else for good. Waits for the idle line under a reply.
+    /// </summary>
+    Purge,
+
     /// <summary>A word <c>/camera</c> does not know (the error says so).</summary>
     Unknown,
 }
@@ -45,6 +51,7 @@ public static class CameraCommand
         ("off", "let the camera go (live and watch)"),
         ("view", "open the picture viewer on the camera's folder"),
         ("thumbs", "open the camera's folder as thumbnails"),
+        ("purge", "delete every photo in the camera's folder"),   // 2026-10-18
     ];
 
     public static CameraCommandLine Parse(string? args)
@@ -68,13 +75,14 @@ public static class CameraCommand
             "off" => CameraVerb.Off,
             "view" => CameraVerb.View,
             "thumbs" => CameraVerb.Thumbs,
+            "purge" => CameraVerb.Purge,
             _ => CameraVerb.Unknown,
         };
         return verb switch
         {
             CameraVerb.Unknown => new CameraCommandLine(verb, rest, CameraText.Unknown(word)),
             CameraVerb.Use when rest.Length == 0 => new CameraCommandLine(CameraVerb.Unknown, "", CameraText.Usage),
-            CameraVerb.Snap or CameraVerb.List or CameraVerb.Live or CameraVerb.Off or CameraVerb.View or CameraVerb.Thumbs when rest.Length > 0 => new CameraCommandLine(CameraVerb.Unknown, rest, CameraText.Usage),
+            CameraVerb.Snap or CameraVerb.List or CameraVerb.Live or CameraVerb.Off or CameraVerb.View or CameraVerb.Thumbs or CameraVerb.Purge when rest.Length > 0 => new CameraCommandLine(CameraVerb.Unknown, rest, CameraText.Usage),
             _ => new CameraCommandLine(verb, rest),
         };
     }

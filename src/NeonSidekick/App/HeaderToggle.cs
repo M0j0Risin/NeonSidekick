@@ -1,7 +1,7 @@
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>/header [on|off]</c> and Ctrl+Alt+H (2026-10-01, the user's ask): <c>Show header</c>
+/// <c>/header [on|off]</c> (2026-10-01, the user's ask; Ctrl+Alt+H too until 2026-10-18): <c>Show header</c>
 /// (<see cref="Settings.AppSettingsData.ShowHeader"/>) flipped or set and saved, nothing redrawn — the banner is rows of the
 /// transcript drawn at each wipe (<see cref="SidekickApp.RenderScreen(Spectre.Console.IAnsiConsole)"/>), so the change shows
 /// at the next <c>/clear</c>, <c>/splash</c>, <c>/theme</c> or profile switch (the user's pick over a redraw that would wipe the

@@ -1068,6 +1068,19 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                // The picture folders' words (2026-10-18): their windows and the purge's question are the screen's.
+                if (SlashCommands.Parse(text) is (SlashCommand.Splash, { Length: > 0 }))
+                {
+                    await HeadlessLineAsync("[error] " + UI.SplashCommand.NeedsScreen).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (SlashCommands.Parse(text) is (SlashCommand.Pasted, _))
+                {
+                    await HeadlessLineAsync("[error] " + Images.PastedCommand.NeedsScreen).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /clear, /new and /splash are one act here — there is no screen to keep, wipe or draw a picture on — under their own lines.
                 bool isClear = text.Equals("/clear", StringComparison.OrdinalIgnoreCase) || text.Equals("/splash", StringComparison.OrdinalIgnoreCase);
                 if (isClear || text.Equals("/new", StringComparison.OrdinalIgnoreCase))
@@ -2748,7 +2761,7 @@ public sealed partial class SidekickApp
         {
             if (user)
             {
-                d.UserAvatar = chosen;   // empty for none (null is the 🙊 default since 2026-10-13)
+                d.UserAvatar = chosen;   // empty for none (null is the default since 2026-10-13, 🧿 since 2026-10-18)
             }
             else
             {

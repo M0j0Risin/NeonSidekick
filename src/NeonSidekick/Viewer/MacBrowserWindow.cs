@@ -263,6 +263,17 @@ internal static class MacBrowserWindows
 
         public bool Close() => MacBrowserWindows.Close();
 
+        // Ctrl+B (2026-10-18): asked on the AppKit thread, which owns the window's check; a check under way counts before it reaches the window.
+        public BrowserCloseOutcome CloseAsUser()
+        {
+            if (Volatile.Read(ref s_solving) > 0)
+            {
+                return BrowserCloseOutcome.BotCheck;
+            }
+
+            return OpenNow() is { } open && AppKitHost.Invoke(open.CloseAsUser, out var outcome) ? outcome : BrowserCloseOutcome.None;
+        }
+
         public Task<(string Url, string? Title)?> CurrentPageAsync() =>
             OpenNow() is { } window ? window.CurrentPageAsync() : Task.FromResult<(string Url, string? Title)?>(null);
 
@@ -577,6 +588,31 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
             work();
         }
     });
+
+    /// <summary>
+    /// See <see cref="IBrowserWindow.CloseAsUser"/> (2026-10-18, Ctrl+B): the window's own close (<see cref="MacBrowserAction.Close"/>'s, so the
+    /// visit's cookies are handed over), unless a check waits in it; a window hidden in a check's linger (<c>orderOut:</c>) is none. Main thread.
+    /// </summary>
+    internal BrowserCloseOutcome CloseAsUser()
+    {
+        if (!Live || !Alive)
+        {
+            return BrowserCloseOutcome.None;
+        }
+
+        if (_jobs.Check is not null)
+        {
+            return BrowserCloseOutcome.BotCheck;
+        }
+
+        if (SendBool(Window, Sel("isVisible")) == 0)
+        {
+            return BrowserCloseOutcome.None;
+        }
+
+        Close();
+        return BrowserCloseOutcome.Closing;
+    }
 
     /// <summary>Closed with nothing handed over (the app's exit, a profile switch, a stale profile's window). Main thread.</summary>
     public void CloseQuietly()

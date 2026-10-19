@@ -1720,7 +1720,7 @@ internal sealed partial class ChatScreen
     /// <c>/profile</c>'s notices already wore, between the gear and the tools, whose double-click is <c>/profile</c> (the
     /// picker; under a reply nothing, the command waiting for the reply and a click getting no notice), and the rising chart
     /// after the Usage chart, whose double-click was <c>/perfbar</c> — the performance bar shown or hidden (retired on 2026-10-14,
-    /// the user's ask: /perfbar and Ctrl+F stay); every column after the gear moved by three, after the Usage chart by six.
+    /// the user's ask: /perfbar and Ctrl+F stay; Ctrl+F went on 2026-10-18); every column after the gear moved by three, after the Usage chart by six.
     /// </summary>
     public const string SettingsToolGlyph = "⚙️";
     public const string ProfileToolGlyph = "🪪";
@@ -2111,7 +2111,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word until 2026-10-14, Ctrl+F's): one body for the idle line and the turn —
+    /// <c>/perfbar</c> (later on 2026-09-29, the user's ask; the toolbar's 📈 word until 2026-10-14, Ctrl+F's until 2026-10-18): one body for the idle line and the turn —
     /// display only, nothing reconnects, and the pane's tick adds or drops the row. Bare it hides the bar, keeping its meters,
     /// or brings them back (<see cref="PerfBarMode.Toggle"/>, the checklist's since 2026-09-30); <c>off</c> hides it; a look
     /// sets it and shows the bar. The saved profile's, as <c>/tts</c> reads it: the bar has no variable.
@@ -2135,7 +2135,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/toolbar</c> (later on 2026-09-30, the user's ask; Ctrl+T, Ctrl+Alt+B until later still on 2026-10-01): the toolbar hidden or shown again, saved as the
+    /// <c>/toolbar</c> (later on 2026-09-30, the user's ask; Ctrl+T until 2026-10-18, Ctrl+Alt+B until later still on 2026-10-01): the toolbar hidden or shown again, saved as the
     /// <c>Show toolbar</c> checklist is (<see cref="ToolbarItems.Toggle"/>), so the row goes or comes back at the next draw.
     /// </summary>
     private void HandleToolbar(string args)
@@ -2156,7 +2156,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/header</c> (2026-10-01, the user's ask, with Ctrl+Alt+H): <c>Show header</c> flipped or set and saved
+    /// <c>/header</c> (2026-10-01, the user's ask, with Ctrl+Alt+H until 2026-10-18): <c>Show header</c> flipped or set and saved
     /// (<see cref="HeaderToggle.Toggle"/>); the banner is rows of the transcript, so it comes or goes at the next wipe and the
     /// notice says so (the user's pick: no redraw that would wipe what is on the screen).
     /// </summary>
@@ -2177,8 +2177,11 @@ internal sealed partial class ChatScreen
     /// <c>/toolbar</c> (Ctrl+Alt+E and B until later still that day) toggle their bar as typed — here at the idle line, posted to the turn task under a reply — and the tick
     /// repaints the pane's new shape. Ctrl+Alt+H <c>/header</c> the same (later still that day): a setting saved, nothing on the pane. Ctrl+E <c>/explore</c> the same (later on 2026-10-01): it opens a window outside the
     /// terminal, so the pane has no reason to close. Ctrl+G <c>/log</c> (Ctrl+Alt+G until 2026-10-12), Ctrl+Alt+U <c>/comfy view</c> and Ctrl+Alt+V
-    /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. Ctrl+W <c>/homebar</c> toggles its
-    /// bar as Ctrl+F does (2026-10-12; Ctrl+Alt+W until later that day). False for every other chord:
+    /// <c>/camera live</c> the same (2026-10-02, the user's ask): each opens a window of its own. Ctrl+W <c>/homebar</c> toggled its
+    /// bar as Ctrl+F did (2026-10-12; Ctrl+Alt+W until later that day). On 2026-10-18 (the user's picks) the bar chords went (Ctrl+F,
+    /// Ctrl+T, Ctrl+W, Ctrl+Alt+H; the commands stay, typed), and Ctrl+B <c>/browser</c> (the Browser window on its home page, or closed
+    /// again, <see cref="CloseByChord(SlashCommand, string)"/>) and Ctrl+W <c>/webui browser</c> (the Web UI opened on this PC, as the
+    /// <c>/webui</c> pane's link double-click does, its errors through the flow sink) act here too. False for every other chord:
     /// the pane closes and the screen runs it (<see cref="ScreenPane.Chord"/>, <see cref="OffPaneLine"/>).
     /// </summary>
     private bool ChordInPlace(string line) => WithOrigin(CommandOrigin.Pc, () => ChordInPlaceOnce(line));
@@ -2203,17 +2206,21 @@ internal sealed partial class ChatScreen
             case SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Live:
                 RunOrPost(() => { if (!CloseByChord(command, args)) StartLive(); });
                 return true;
-            case SlashCommand.Perf:
-                RunOrPost(() => HandlePerf(""));
+            case SlashCommand.Browser when args.Trim().Length == 0:
+                RunOrPost(() => { if (!CloseByChord(command, args)) OpenInBrowser(BrowserAddress.Home(_effective().WebBrowserHomePage), _flow); });
                 return true;
-            case SlashCommand.HomeBar when HomeBarToggles(args):
-                RunOrPost(() => HandleHomeBarToggle(args));
-                return true;
-            case SlashCommand.Toolbar:
-                RunOrPost(() => HandleToolbar(""));
-                return true;
-            case SlashCommand.Header:
-                RunOrPost(() => HandleHeader(""));
+            case SlashCommand.WebUi when WebUiBrowserArgs(args) == false:
+                RunOrPost(() =>
+                {
+                    if (!_webUiController.Available)
+                    {
+                        _flow.Error(WebUi.WebUiText.NotAvailableError);
+                    }
+                    else
+                    {
+                        _ = OpenWebUiQuietlyAsync(WebUi.WebUiText.LoopbackHost, _flow);
+                    }
+                });
                 return true;
             default:
                 return false;
@@ -2280,6 +2287,19 @@ internal sealed partial class ChatScreen
                 StopLive();
                 _transcript.Notice(Camera.CameraText.LiveOff);
                 return true;
+            // Ctrl+B a second time (2026-10-18, the user's picks): the user's close, so the visit's own close notice follows and none here;
+            // a bot check in the window keeps it, said so; no window shown, the opener runs.
+            case SlashCommand.Browser when args.Trim().Length == 0 && _browserWindow is { } window:
+                switch (window.CloseAsUser())
+                {
+                    case BrowserCloseOutcome.Closing:
+                        return true;
+                    case BrowserCloseOutcome.BotCheck:
+                        _flow.Notice(BotCheckText.KeptForBotCheck);
+                        return true;
+                    default:
+                        return false;
+                }
             default:
                 return false;
         }
@@ -2371,7 +2391,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What closed the last pane, taken once (both are cleared): a command chord pressed in it (2026-10-01, the user's ask:
-    /// its bare command, ahead of any click — Ctrl+Alt+T in <c>/tools</c> closes it, Ctrl+Alt+S there opens <c>/skills</c>;
+    /// its bare command, ahead of any click — Ctrl+T in <c>/tools</c> closes it, Ctrl+Alt+S there opens <c>/skills</c>;
     /// <see cref="ScreenPane.TakeDismissChord"/>), else the line a double-click off it names (<see cref="OffPaneLine"/>).
     /// <c>Chord</c> says which, since a click that names no pane is the close alone where a chord still runs.
     /// </summary>
@@ -2393,12 +2413,19 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether the line off a pane names the pane's own command, so it ends there, the pane closed: the same command with the
     /// same words (2026-10-03: the command alone until then — <c>/tools web</c> off the Tools pane, the toolbar's 🌐, is another
-    /// page to open, as <c>/camera live</c> off the camera pane is the live window to open).
+    /// page to open, as <c>/camera live</c> off the camera pane is the live window to open). A bare <c>/find</c> off any find is the same
+    /// line (2026-10-18, the user's pick: Ctrl+F in a find closes it, whether Ctrl+F or a typed <c>/find words</c> opened it, rather than
+    /// opening an empty one).
     /// </summary>
     private static bool SameCommandLine(string next, string current)
     {
         var (nextCommand, nextArgs) = ParseLine(next);
         var (command, args) = ParseLine(current);
+        if (nextCommand == SlashCommand.Find && command == SlashCommand.Find && nextArgs.Trim().Length == 0)
+        {
+            return true;
+        }
+
         return nextCommand == command && string.Equals(nextArgs.Trim(), args.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -2772,6 +2799,11 @@ internal sealed partial class ChatScreen
     /// and Option+Delete for Ctrl+Backspace, whose BS is Ctrl+H there; Windows' rows are unchanged.
     /// Ctrl+J (the emoji picker, <see cref="Keys.IsEmojiPicker"/>) on 2026-10-12, the user's ask, in its letter's place, Windows' list
     /// alone (a Mac terminal sends it as the line break); a chord with no command, as Ctrl+L's.
+    /// On 2026-10-18 (the user's picks, the map rearranged) the rows follow the new map in letter order, on both lists: Ctrl+B
+    /// (<c>/browser</c>), Ctrl+F (<c>/find</c>, a Mac's too; the Ctrl+Shift+F row gone), Ctrl+N (<c>/rename</c>), Ctrl+T (<c>/tools</c>),
+    /// Ctrl+W (<c>/webui browser</c>), Ctrl+Alt+P (<c>/prompts</c>), Ctrl+Alt+T (<c>/tools shell allowed</c>), Ctrl+Alt+W (<c>/webui</c>),
+    /// Ctrl+Alt+Y (<c>/sessions</c>) and Ctrl+Alt+Z (<c>/splash</c>, after the kill switch's X); the bar rows (<c>/perfbar</c>,
+    /// <c>/toolbar</c>, <c>/homebar</c>, <c>/header</c>) and Ctrl+Alt+E, H, L and R went.
     /// </summary>
     public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase) =>
         KeyRows(voiceOn, pushToTalk, wakeReady, wakePhrase, OperatingSystem.IsMacOS());
@@ -2825,19 +2857,15 @@ internal sealed partial class ChatScreen
         }
 
         rows.Add(new("Ctrl+/", "open the settings", "/settings"));
+        rows.Add(new("Ctrl+B", "show or hide the Browser window", "/browser"));   // 2026-10-18, the user's pick
         if (mac)
         {
             rows.Add(new("Ctrl+D", "open the model picker", "/model"));
         }
 
         rows.Add(new("Ctrl+E", "open the working directory in the file browser", "/explore"));
-        rows.Add(new("Ctrl+F", "show or hide the performance bar", "/perfbar"));
-        if (!mac)
-        {
-            // 2026-10-13, the neon_help copy edit: the chord was missing from the list (a Mac terminal sends it as Ctrl+F, so type /find there).
-            rows.Add(new("Ctrl+Shift+F", "find words in the transcript", "/find"));
-        }
-
+        // 2026-10-18, the user's pick: /find on Ctrl+F (Ctrl+Shift+F until then, which a Mac terminal sent as Ctrl+F), a Mac's too.
+        rows.Add(new("Ctrl+F", "find words in the transcript", "/find"));
         rows.Add(new("Ctrl+G", "show or hide the log window", "/log"));   // 2026-10-12, the user's pick (Ctrl+Alt+G until then)
         rows.Add(new("Ctrl+H", "open the help", "/help"));
         if (!mac)
@@ -2848,14 +2876,15 @@ internal sealed partial class ChatScreen
 
         rows.Add(new("Ctrl+L", "cancel a background learning turn"));
         rows.Add(new("Ctrl+M", mac ? "open the model picker (in the app's windows; Ctrl+D in the terminal)" : "open the model picker", "/model"));
+        rows.Add(new("Ctrl+N", "rename this session", "/rename"));   // 2026-10-18, the user's pick (Ctrl+Alt+R until then)
         rows.Add(new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"));
         rows.Add(new("Ctrl+P", "open the profile pane", "/profile"));
         rows.Add(new("Ctrl+Q", "open the queue pane", "/queue"));
         rows.Add(new("Ctrl+R", "open the reasoning picker", "/reasoning"));
         rows.Add(new("Ctrl+S", "open the server picker", "/server"));
-        rows.Add(new("Ctrl+T", "show or hide the toolbar", "/toolbar"));
+        rows.Add(new("Ctrl+T", "open the tools pane", "/tools"));   // 2026-10-18, the user's pick (Ctrl+Alt+T until then)
         rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
-        rows.Add(new("Ctrl+W", "show or hide the home bar", HomeAssistant.HomeBarText.Command));
+        rows.Add(new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"));   // 2026-10-18, the user's pick
         rows.Add(new("Ctrl+Y", "open the system prompt pane", "/sys"));
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
         if (mac)
@@ -2867,22 +2896,20 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+B", "resume the last botchat · during one, end it at once", BotChat.ResumeLine));
         rows.Add(new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"));
         rows.Add(new("Ctrl+Alt+D", "open the MCP pane", "/mcp"));
-        rows.Add(new("Ctrl+Alt+E", "open the sessions pane", "/sessions"));
-        rows.Add(new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"));
         rows.Add(new("Ctrl+Alt+K", "stop the extra embedded servers a botchat left running", BotChat.KillLine));
-        rows.Add(new("Ctrl+Alt+L", "open the allowed commands list", ToolsText.ShellSubLine(ToolsText.ShellAllowedWord)));
         rows.Add(new("Ctrl+Alt+M", mac ? "open the memory pane (in the app's windows; Ctrl+Alt+A in the terminal)" : "open the memory pane", "/memory"));
         rows.Add(new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"));
         rows.Add(new("Ctrl+Alt+O", "open the shell police setting", ToolsText.ShellSubLine(ToolsText.ShellPoliceWord)));
-        rows.Add(new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"));
+        rows.Add(new("Ctrl+Alt+P", "open the saved prompts pane", PromptsCommand.Word));   // 2026-10-18, the user's pick (Ctrl+Alt+W until then)
         rows.Add(new("Ctrl+Alt+Q", "clear the message queue", "/queue clear"));
-        rows.Add(new("Ctrl+Alt+R", "rename this session", "/rename"));
         rows.Add(new("Ctrl+Alt+S", "open the skills pane", "/skills"));
-        rows.Add(new("Ctrl+Alt+T", "open the tools pane", "/tools"));
+        rows.Add(new("Ctrl+Alt+T", "open the allowed commands list", ToolsText.ShellSubLine(ToolsText.ShellAllowedWord)));   // 2026-10-18 (Ctrl+Alt+L until then)
         rows.Add(new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"));
         rows.Add(new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"));
-        rows.Add(new("Ctrl+Alt+W", "open the saved prompts pane", PromptsCommand.Word));   // 2026-10-13, the user's pick
+        rows.Add(new("Ctrl+Alt+W", "open the Web UI pane", SlashCommands.WebUiWord));   // 2026-10-18, the user's pick
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
+        rows.Add(new("Ctrl+Alt+Y", "open the sessions pane", "/sessions"));   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
+        rows.Add(new("Ctrl+Alt+Z", "start a new conversation with the splash", "/splash"));   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
         return rows.ToArray();
     }
 
@@ -5082,7 +5109,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyOfferedWord, ComfyOfferedNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ThumbsText.ThumbsWord, ThumbsText.ThumbsNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
+                return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyOfferedWord, ComfyOfferedNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ComfyStatusWord, ComfyStatusNote), new(ThumbsText.ThumbsWord, ThumbsText.ThumbsNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
             }
 
             case SlashCommand.Imagine:
@@ -5437,6 +5464,13 @@ internal sealed partial class ChatScreen
             case SlashCommand.Shopping:
                 // The verbs (2026-10-11), then the stores' names and the list's lines.
                 return sources.Shopping?.Invoke(argText) ?? Shopping.ShoppingCommand.Complete(argText, [], []);
+
+            case SlashCommand.Splash:
+                // view | thumbs | purge (2026-10-18).
+                return UI.SplashCommand.Complete(argText);
+
+            case SlashCommand.Pasted:
+                return Images.PastedCommand.Complete(argText);
 
             case SlashCommand.Screen:
                 // The words, then the monitors after monitor: and the windows after window: (2026-10-04, the user's report).
@@ -9929,6 +9963,16 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/comfy offered</c> (2026-10-04, the user's ask): the offered workflows as a bulleted list (<see cref="ComfyText.OfferedLines"/>). Pinned.</summary>
     public const string ComfyOfferedWord = "offered";
+
+    /// <summary>
+    /// <c>/comfy status</c> (2026-10-18): the server's status pane, the bare <c>/comfy</c>'s until then — the bare word opens <c>/tools comfy</c>
+    /// since (the user's ask), the ComfyUI group's on/off page with its offered button. Pinned.
+    /// </summary>
+    public const string ComfyStatusWord = "status";
+    public const string ComfyStatusNote = "the ComfyUI server's status and the workflows found";
+
+    /// <summary>The line a bare <c>/comfy</c> runs (2026-10-18, the user's ask): the ComfyUI tools' page. Pinned.</summary>
+    public const string ComfyToolsLine = "/tools " + ToolbarItems.Comfy;
     public const string ComfyOfferedNote = "list the currently offered ComfyUI workflows";
 
     /// <summary>The two kinds of file <c>/comfy edit</c> opens (the user's call, later still that day: the graph too, not only the settings). Pinned.</summary>
@@ -9941,7 +9985,7 @@ internal sealed partial class ChatScreen
     public const string ComfyMarkdownNote = "open a workflow's .md (its settings and tips) in your editor";
 
     /// <summary>A <c>/comfy</c> argument that is not <c>edit json|markdown &lt;workflow&gt;</c>. Pinned.</summary>
-    public const string ComfyUsageError = "Usage: /comfy, /comfy offered, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>";
+    public const string ComfyUsageError = "Usage: /comfy, /comfy status, /comfy offered, /comfy purge, /comfy view, /comfy thumbs, or /comfy edit json|markdown <workflow>";   // status and thumbs named since 2026-10-18
 
     /// <summary>The line after <c>/comfy edit</c> opened a workflow's file; <paramref name="created"/> when an <c>.md</c> had to be made first. Pinned.</summary>
     public static string ComfyEditNotice(string name, string path, bool json, bool created) =>
@@ -9998,34 +10042,79 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The confirmation line before a <c>/comfy purge</c>: the folder and what is in it; <c>y</c> or <c>yes</c> deletes, anything else keeps. Pinned.</summary>
-    public static string ComfyPurgePrompt(string path, int files, int folders, long bytes, bool truncated) =>
-        $"{TrashGlyph}Delete everything in {path} for good — {TrashContents(files, folders, bytes)}"
+    /// <summary>
+    /// The confirmation line before a purge (<c>/comfy purge</c>; <c>/camera</c>, <c>/screen</c>, <c>/splash</c> and <c>/pasted purge</c> since
+    /// 2026-10-18): the folder and what is in it, to the Recycle bin (the Trash on a Mac) under <paramref name="toBin"/>, else for good. Pinned.
+    /// </summary>
+    public static string PurgePrompt(string path, int files, int folders, long bytes, bool truncated, bool toBin = false) =>
+        (toBin ? $"{TrashGlyph}Send everything in {path} to the {FileText.RecycleBinName} — " : $"{TrashGlyph}Delete everything in {path} for good — ")
+        + TrashContents(files, folders, bytes)
         + (truncated ? $", counted the first {WorkingDirectory.MaxInfoEntries.ToString("N0", CultureInfo.InvariantCulture)} entries only" : "")
         + "?";
 
-    public static string ComfyPurgeEmptyNotice(string path) => $"({TrashGlyph}nothing in {path})";
+    public static string PurgeEmptyNotice(string path) => $"({TrashGlyph}nothing in {path})";
 
-    public static string ComfyPurgedNotice(string path, int files, int folders, long bytes) => $"({TrashGlyph}purged {path}: {TrashContents(files, folders, bytes)})";
+    public static string PurgedNotice(string path, int files, int folders, long bytes) => $"({TrashGlyph}purged {path}: {TrashContents(files, folders, bytes)})";
 
-    /// <summary>A <c>/comfy purge</c> with the output folder set to the profile's images folder itself (the working directory until 2026-10-09): refused, it would take the camera's, the screen's and the pasted pictures too. Pinned.</summary>
-    public const string ComfyPurgeHereError = "Not purging: the ComfyUI output folder is the profile's images folder itself; set a folder under it first.";
+    /// <summary>
+    /// A purge through the bin done (2026-10-18): its contents sent there, and how many of the folder's items a drive with no bin took for good
+    /// (<paramref name="noBin"/>; all of them when <paramref name="recycled"/> is 0). Pinned.
+    /// </summary>
+    public static string PurgedToBinNotice(string path, int files, int folders, long bytes, int recycled, int noBin)
+    {
+        string contents = TrashContents(files, folders, bytes);
+        string noBinWords = "deleted for good: no " + FileText.RecycleBinName + " on that drive";
+        if (recycled == 0)
+        {
+            return $"({TrashGlyph}purged {path}: {contents}; {noBinWords})";
+        }
 
-    public static string ComfyPurgeFailedError(string path, string detail) => $"Could not purge {path}: {detail}";
+        return $"({TrashGlyph}sent {path}'s contents to the {FileText.RecycleBinName}: {contents}"
+            + (noBin == 0 ? "" : $"; {Plural(noBin, "item")} {noBinWords}")
+            + ")";
+    }
+
+    /// <summary>A purge through the bin that the bin refused part-way (2026-10-18): how many of the folder's items went, why it stopped, the rest left. Pinned.</summary>
+    public static string PurgeStoppedError(string path, int gone, int entries, string why) =>
+        $"The purge of {path} stopped after {gone.ToString(CultureInfo.InvariantCulture)} of {Plural(entries, "item")}: {why}. The rest are still there.";
+
+    /// <summary>
+    /// A purge whose folder setting is the profile's images folder itself (the working directory until 2026-10-09): refused, it would take
+    /// every other folder's pictures too. <c>ComfyPurgeHereError</c> until 2026-10-18, the ComfyUI output folder's alone. Pinned.
+    /// </summary>
+    public static string PurgeHereError(string folderLabel) => $"Not purging: the {folderLabel} is the profile's images folder itself; set a folder under it first.";
+
+    public static string PurgeFailedError(string path, string detail) => $"Could not purge {path}: {detail}";
+
+    /// <summary>The spinner's label while a purge sends its items to the bin one by one (2026-10-18). Pinned.</summary>
+    public static string PurgeMovingLabel(int entries) => $"Moving {Plural(entries, "item")} to the {FileText.RecycleBinName}";
+
+    /// <summary>The folder labels the purges name (2026-10-18): the settings' own names, and the splash's fixed folder. Pinned.</summary>
+    public const string ComfyFolderLabel = "ComfyUI output folder";
+    public const string CameraFolderLabel = "Camera output folder";
+    public const string ScreenFolderLabel = "Screen output folder";
+    public const string PastedFolderLabel = "Pasted images folder";
+    public const string SplashFolderLabel = "splash pictures folder";
+
+    private static string Plural(int n, string noun) => n.ToString("N0", CultureInfo.InvariantCulture) + " " + noun + (n == 1 ? "" : "s");
 
     /// <summary>
     /// <c>/comfy purge</c> (later still on 2026-09-24, the user's ask): everything in the ComfyUI output folder — the pictures,
     /// the <c>.pasted</c> inputs, anything else put there — deleted for good, the folder kept; shaped like <c>/emptytrash</c> was
     /// (the count, one typed confirmation, then <see cref="WorkingDirectory.PurgeFolder"/>). An output folder that is the working
     /// directory itself is refused rather than asked about. A paste saved before is written again at its next use.
+    /// Made generic on 2026-10-18 (the user's ask: <c>/camera purge</c>, <c>/screen purge</c>, <c>/splash purge</c>, <c>/pasted purge</c>): any
+    /// folder under the profile's images folder by its setting, <paramref name="folderLabel"/> naming it in the refusal; and the purges follow
+    /// <c>File deletes to Recycle bin</c> (the user's pick, <c>/comfy purge</c> too), read as the purge runs: with the bin each item goes there
+    /// on a pool thread under the transcript's spinner, one shell call each, so a big folder takes a while.
     /// </summary>
-    private async Task PurgeComfyAsync(CancellationToken cancellationToken)
+    private async Task PurgePictureFolderAsync(string? folderSetting, string folderLabel, CancellationToken cancellationToken)
     {
-        string folder = ComfyStudio.OutputFolder(_effective().ComfyOutputFolder);
+        string folder = ComfyStudio.OutputFolder(folderSetting);
         var outcome = _images.Resolve(folder, forWrite: true, out string full);
         if (outcome == FileOutcome.Ok && string.Equals(full, _images.Root, StringComparison.OrdinalIgnoreCase))
         {
-            _flow.Error(ComfyPurgeHereError);
+            _flow.Error(PurgeHereError(folderLabel));
             return;
         }
 
@@ -10038,42 +10127,76 @@ internal sealed partial class ChatScreen
         var info = _images.Info(folder);
         if (info.Outcome == FileOutcome.Missing || (info.Outcome == FileOutcome.Ok && info.Files == 0 && info.Folders == 0))
         {
-            _flow.Notice(ComfyPurgeEmptyNotice(full));
+            _flow.Notice(PurgeEmptyNotice(full));
             return;
         }
 
         if (info.Outcome != FileOutcome.Ok)
         {
-            _flow.Error(ComfyPurgeFailedError(full, info.Detail));
+            _flow.Error(PurgeFailedError(full, info.Detail));
             return;
         }
 
         if (!info.IsDirectory)
         {
-            _flow.Error(ComfyPurgeFailedError(full, "it is a file, not a folder"));
+            _flow.Error(PurgeFailedError(full, "it is a file, not a folder"));
             return;
         }
 
-        if (!await ConfirmAsync(ComfyPurgePrompt(full, info.Files, info.Folders, info.Bytes, info.Truncated), cancellationToken).ConfigureAwait(false))
+        bool toBin = _effective().FileDeletesToRecycleBin && _recycleBin is not null;
+        if (!await ConfirmAsync(PurgePrompt(full, info.Files, info.Folders, info.Bytes, info.Truncated, toBin), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
         }
 
-        RunOrPost(() =>
+        // The setting read again as the purge runs: the question may have waited.
+        var bin = _effective().FileDeletesToRecycleBin ? _recycleBin : null;
+        if (bin is null)
         {
-            var result = _images.PurgeFolder(folder);
-            if (result.Outcome == FileOutcome.Ok)
+            RunOrPost(() =>
             {
-                _transcript.Notice(ComfyPurgedNotice(full, result.Files, result.Folders, result.Bytes));
-            }
-            else
-            {
-                _transcript.Error(ComfyPurgeFailedError(full, result.Detail.Length > 0 ? result.Detail : result.Outcome.ToString()));
-            }
+                ReportPurge(full, _images.PurgeFolder(folder));
+                DrainDiagnostics();
+            });
+            return;
+        }
 
-            DrainDiagnostics();
-        });
+        int entries = CountEntries(full);
+        var moved = await _transcript.WithSpinnerAsync(PurgeMovingLabel(entries), () => Task.Run(() => _images.PurgeFolder(folder, bin), CancellationToken.None)).ConfigureAwait(false);
+        ReportPurge(full, moved);
+        DrainDiagnostics();
+    }
+
+    // The folder's own entries, for the spinner's label; 0 when it cannot be read (the purge then says why).
+    private static int CountEntries(string full)
+    {
+        try
+        {
+            return Directory.EnumerateFileSystemEntries(full).Count();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    private void ReportPurge(string full, PurgeResult result)
+    {
+        if (result.Outcome == FileOutcome.Ok)
+        {
+            _transcript.Notice(result.ToBin
+                ? PurgedToBinNotice(full, result.Files, result.Folders, result.Bytes, result.Recycled, result.DeletedNoBin)
+                : PurgedNotice(full, result.Files, result.Folders, result.Bytes));
+        }
+        else if (result.ToBin && result.Entries > 0)
+        {
+            _transcript.Error(PurgeStoppedError(full, result.Recycled + result.DeletedNoBin, result.Entries, result.Detail));
+        }
+        else
+        {
+            _transcript.Error(PurgeFailedError(full, result.Detail.Length > 0 ? result.Detail : result.Outcome.ToString()));
+        }
     }
 
     /// <summary>
@@ -12487,7 +12610,7 @@ internal sealed partial class ChatScreen
     /// pointer, a line or a chord through <see cref="OnMidTurnLineAsync"/>, so the mid-turn policy holds as under a reply (the
     /// user's pick): a pane opens over the spinner, <c>/clear</c>, <c>/new</c> or <c>/exit</c> cancels the load and runs at the idle
     /// line after, <c>/server</c> or <c>/profile</c> waits for it — with the acts run as they come, as
-    /// <see cref="WaitForBotSpeechAsync"/> runs them, so Ctrl+T or <c>/tts off</c> lands while the model still loads. Ctrl+C alone
+    /// <see cref="WaitForBotSpeechAsync"/> runs them, so Ctrl+E or <c>/tts off</c> lands while the model still loads. Ctrl+C alone
     /// is the cancel key, as for every connect; a double-click on the spinner and its label (<see cref="LoadClickLine"/>) is the
     /// other way. True when either cancelled it (the caller prints the notice); the app token still propagates. Under another
     /// watch already (<c>_turnRunning</c>) it is <see cref="WaitUnderWatchAsync"/>'s plain Ctrl+C wait, so the outer watch's
@@ -13243,6 +13366,15 @@ internal sealed partial class ChatScreen
                 await RewindAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Splash when args.Trim().Length > 0:
+                // view | thumbs | purge on the profile's splash folder (2026-10-18); another word is the usage error, nothing wiped.
+                await HandleSplashWordsAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Pasted:
+                await HandlePastedAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Splash:
                 // The startup view over a fresh conversation (later on 2026-09-19, the user's ask):
                 // /clear's wipe and forgetting, then the picture whatever Welcome splash says.
@@ -13435,7 +13567,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Comfy:
                 if (string.Equals(args.Trim(), ComfyPurgeWord, StringComparison.OrdinalIgnoreCase))
                 {
-                    await PurgeComfyAsync(cancellationToken).ConfigureAwait(false);
+                    await PurgePictureFolderAsync(_effective().ComfyOutputFolder, ComfyFolderLabel, cancellationToken).ConfigureAwait(false);
                     return false;
                 }
 
@@ -13457,14 +13589,20 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
+                if (string.Equals(args.Trim(), ComfyStatusWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await HandleComfyAsync(cancellationToken).ConfigureAwait(false);
+                    return false;
+                }
+
                 if (args.Length > 0)
                 {
                     HandleComfyVerb(args);
                     return false;
                 }
 
-                await HandleComfyAsync(cancellationToken).ConfigureAwait(false);
-                return false;
+                // The bare word is /tools comfy (2026-10-18, the user's ask); the status it showed until then is /comfy status.
+                return await HandleOnceAsync(ComfyToolsLine, images, cancellationToken).ConfigureAwait(false);
 
             case SlashCommand.Echo:
                 HandleEcho(args, cancellationToken);

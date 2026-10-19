@@ -226,11 +226,20 @@ internal sealed partial class ChatScreen
     /// wait. <c>/view &lt;path&gt; --thumbs</c> (<c>/thumbs &lt;folder&gt;</c> until later on 2026-10-04) and <c>/comfy thumbs</c> (2026-10-04)
     /// are <see cref="MidTurnClass.Quick"/> as <c>/view</c> and <c>/comfy view</c> are: a window of its own; a bare <c>--thumbs</c>, or
     /// with <c>--chat</c> as well, is the usage error after the reply. Pure.
+    /// The picture folders' purges (2026-10-18, the user's ask: <c>/camera purge</c>, <c>/screen purge</c>, <c>/splash purge</c>, <c>/pasted
+    /// purge</c>) wait for the idle line, as <c>/comfy purge</c> does: a question, and a capture or a paste may be writing there.
+    /// <c>/splash view|thumbs</c> and <c>/pasted view|thumbs</c> are quick (a window of their own), as is a word either does not know (its
+    /// error at once, nothing cancelled); the bare <c>/splash</c> still stops the reply first.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
+        SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Purge => MidTurnClass.Deferred,
+        SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsPurgeWord(args) => MidTurnClass.Deferred,
+        SlashCommand.Splash when args.Trim().Length > 0 => UI.SplashCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
+        SlashCommand.Pasted => Images.PastedCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb is not (Camera.CameraVerb.Shutter or Camera.CameraVerb.Snap) => MidTurnClass.Quick,
+        SlashCommand.Comfy when args.Trim().Length == 0 => MidTurnClass.Pane,   // 2026-10-18: the bare word is /tools comfy, a page over the reply as that is
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
@@ -525,6 +534,10 @@ internal sealed partial class ChatScreen
                 // A bare /skills: the list shows; a scope pick is refused under the reply (a move could race load_skill).
                 await _skillsMenu.ShowAsync(cancellationToken, Reply).ConfigureAwait(false);
                 break;
+            case SlashCommand.Comfy when ToolsText.SwitchField(ToolbarItems.Comfy) is { } comfyField:
+                // The bare /comfy (2026-10-18, the user's ask): /tools comfy's page, as below.
+                await _toolsMenu.ShowSwitchAsync(comfyField, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Tools when args.Trim().Length > 0:
                 // /tools <group> (2026-10-03, the toolbar's tool switches): the switch alone, which /tools edits under a reply already;
                 // a flip is read at the next turn. /tools shell allowed|police (2026-10-09, /cmdlist and /police folded in): those rows
@@ -593,7 +606,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Rename:
             case SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane:
                 // The rename box (2026-09-28): the upper rule's session name double-clicked, or the bare /sessions title typed
-                // (the bare /rename and Ctrl+Alt+R since 2026-10-05; /rename with a name waits, as /sessions title's does).
+                // (the bare /rename and its chord since 2026-10-05, Ctrl+N since 2026-10-18; /rename with a name waits, as /sessions title's does).
                 await RenameSessionAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Session:
@@ -824,6 +837,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Screen:
                 // /screen view | thumbs alone reach here (2026-10-09): the viewer's or the browser's window, nothing of the turn's.
                 await HandleScreenAsync(args, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Splash:
+            case SlashCommand.Pasted:
+                // /splash and /pasted view | thumbs, and a word either does not know, alone reach here (2026-10-18): a window of its own or the error.
+                await (command == SlashCommand.Splash ? HandleSplashWordsAsync(args, cancellationToken) : HandlePastedAsync(args, cancellationToken)).ConfigureAwait(false);
                 break;
             case SlashCommand.Unknown:
                 _transcript.Error(UnknownCommandError(CommandWord(text)));

@@ -232,7 +232,7 @@ public class MenuPaneTests : IDisposable
 
         // A repeated hotkey, a stranger, a control chord and one whose row is off the page leave the cursor where it is.
         highlighted.Clear();
-        Push(Keys.Char('y'), Keys.Char('y'), Keys.Char('x'), Keys.Ctrl(ConsoleKey.B), Keys.Char('q'), Keys.Enter);
+        Push(Keys.Char('y'), Keys.Char('y'), Keys.Char('x'), Keys.Ctrl(ConsoleKey.K), Keys.Char('q'), Keys.Enter);   // Ctrl+B until 2026-10-18, /browser's chord since
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(page, 1, CancellationToken.None, highlighted.Add));
         Assert.Empty(highlighted);
 
@@ -1470,21 +1470,21 @@ public class MenuPaneTests : IDisposable
         pane.ChordInPlace = line =>
         {
             done.Add(line);
-            return line == "/perfbar";
+            return line == "/explore";   // /perfbar on Ctrl+F until 2026-10-18, when the bar chords went
         };
-        input.Push(Keys.CtrlF, Keys.Down, Keys.Enter);
+        input.Push(Keys.CtrlE, Keys.Down, Keys.Enter);
 
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
-        Assert.Equal(["/perfbar"], done);
+        Assert.Equal(["/explore"], done);
         Assert.False(pane.Dismissed);
 
         using (pane.SuppressChords())
         {
-            input.Push(Keys.CtrlAltC, Keys.CtrlF, Keys.Enter);
+            input.Push(Keys.CtrlAltC, Keys.CtrlE, Keys.Enter);
             Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Page("one", "two", "three"), 2, CancellationToken.None));
         }
 
-        Assert.Equal(["/perfbar"], done);                   // never asked while suppressed
+        Assert.Equal(["/explore"], done);                   // never asked while suppressed
         Assert.False(pane.Dismissed);
         Assert.Null(pane.TakeDismissChord());
         menu.Close();

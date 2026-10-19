@@ -164,7 +164,7 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 | Pane | Opens with | What's in it |
 |---|---|---|
 | `/settings` | Ctrl+/ or `//` | The app: chat, sessions and botchat (Client), the model servers (Servers), advisors, and voice. |
-| `/tools` | Ctrl+Alt+T | Which tools the model may use, and their options. |
+| `/tools` | Ctrl+T | Which tools the model may use, and their options. |
 | `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
 | `/mcp` | Ctrl+Alt+D | External MCP servers. |
 | `/sys` | Ctrl+Y | What the model is sent. |
@@ -188,6 +188,7 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 | Shortcut | Does |
 |---|---|
 | Ctrl+H | `/help`: every command and key |
+| Ctrl+F | `/find`: find words in the transcript |
 | Ctrl+S | `/server`: pick the LLM server |
 | Ctrl+M | `/model`: pick the model |
 | Ctrl+R | `/reasoning`: how hard the model thinks |
@@ -198,7 +199,7 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys and [Keyboard shortcuts](docs/INTERFACE.md#keyboard-shortcuts) list every key.
 
 ### Status bar, hints and toolbar
-The [hints bar](docs/INTERFACE.md#the-hints-bar) under the input line shows the keys that apply right now, while there are any. The [status bar](docs/INTERFACE.md#the-status-bar) under it shows the model, the context used and what runs in the background; double-click the model to switch. The [toolbar](docs/INTERFACE.md#the-toolbar) below has an icon per pane and tool group: click to see what it is, double-click to open it. Ctrl+T hides it.
+The [hints bar](docs/INTERFACE.md#the-hints-bar) under the input line shows the keys that apply right now, while there are any. The [status bar](docs/INTERFACE.md#the-status-bar) under it shows the model, the context used and what runs in the background; double-click the model to switch. The [toolbar](docs/INTERFACE.md#the-toolbar) below has an icon per pane and tool group: click to see what it is, double-click to open it. `/toolbar` hides it.
 
 ### Settings worth knowing first
 

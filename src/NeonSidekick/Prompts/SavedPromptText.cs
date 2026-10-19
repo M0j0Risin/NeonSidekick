@@ -151,7 +151,7 @@ public static class SavedPromptText
             : ErrorPrefix + $"\"{text}\" is no saved prompt: give its number in /prompts list.";
 
     /// <summary>Save draft on a blank draft (or one of pictures alone), or on the row a typed <c>/prompts</c> holds under a reply.</summary>
-    public const string DraftEmpty = "The draft is empty. To save what you are typing, open this pane with Ctrl+Alt+W or the toolbar's 📣, which keep the draft.";
+    public const string DraftEmpty = "The draft is empty. To save what you are typing, open this pane with Ctrl+Alt+P or the toolbar's 📣, which keep the draft.";
 
     /// <summary>A saved draft that held pictures or PDFs (named since 2026-10-14, the PDF plan's gap 53): the text alone is kept.</summary>
     public const string PicturesNotKept = "The draft's pictures and PDFs are not saved, only its text.";

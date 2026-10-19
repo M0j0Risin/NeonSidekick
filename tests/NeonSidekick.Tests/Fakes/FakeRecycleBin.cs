@@ -15,6 +15,9 @@ public sealed class FakeRecycleBin : IRecycleBin
 
     public string? Folder { get; set; }
 
+    /// <summary>An answer per call (2026-10-18, a purge refused part-way), read after the path is recorded; null: <see cref="Answer"/>.</summary>
+    public Func<string, RecycleResult>? AnswerFor { get; set; }
+
     public RecycleResult Move(string fullPath)
     {
         lock (Moved)
@@ -22,7 +25,8 @@ public sealed class FakeRecycleBin : IRecycleBin
             Moved.Add(fullPath);
         }
 
-        if (Answer.Outcome == RecycleOutcome.Recycled)
+        var answer = AnswerFor?.Invoke(fullPath) ?? Answer;
+        if (answer.Outcome == RecycleOutcome.Recycled)
         {
             if (Directory.Exists(fullPath))
             {
@@ -50,6 +54,6 @@ public sealed class FakeRecycleBin : IRecycleBin
             }
         }
 
-        return Answer;
+        return answer;
     }
 }

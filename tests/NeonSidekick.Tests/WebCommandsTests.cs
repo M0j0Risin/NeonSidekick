@@ -125,7 +125,7 @@ public sealed class WebCommandsTests
     [InlineData("/tree", WebCommandKind.List)]
     [InlineData("/vault", WebCommandKind.List)]
     [InlineData("/process", WebCommandKind.List)]
-    [InlineData("/comfy", WebCommandKind.List)]
+    [InlineData("/comfy status", WebCommandKind.List)]   // the bare word's until 2026-10-18
     [InlineData("/comfy offered", WebCommandKind.List)]
     // Refused
     [InlineData("/help", WebCommandKind.Refused)]
@@ -154,6 +154,14 @@ public sealed class WebCommandsTests
     [InlineData("/process abc", WebCommandKind.Refused)]
     [InlineData("/comfy view", WebCommandKind.Refused)]
     [InlineData("/comfy purge", WebCommandKind.Refused)]
+    [InlineData("/comfy", WebCommandKind.Refused)]   // 2026-10-18: /tools comfy, a page on the PC
+    [InlineData("/splash", WebCommandKind.Run)]
+    [InlineData("/splash view", WebCommandKind.Refused)]   // 2026-10-18: a window or a question on the PC
+    [InlineData("/splash purge", WebCommandKind.Refused)]
+    [InlineData("/pasted view", WebCommandKind.Refused)]
+    [InlineData("/pasted purge", WebCommandKind.Refused)]
+    [InlineData("/camera purge", WebCommandKind.Refused)]
+    [InlineData("/screen purge", WebCommandKind.Refused)]
     [InlineData("/settings", WebCommandKind.Refused)]
     [InlineData("/theme", WebCommandKind.Refused)]
     [InlineData("/view a.png", WebCommandKind.Refused)]

@@ -187,6 +187,14 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // /screen purge (2026-10-18): before the capture check (no screen capture still has a folder) and before ScreenTarget.Parse,
+        // which would read the word as a window's title.
+        if (ScreenText.IsPurgeWord(args))
+        {
+            await PurgePictureFolderAsync(_effective().ScreenOutputFolder, ScreenFolderLabel, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (_screenCapture is not { } capture || _screenSystem is not { } system)
         {
             _transcript.Error(ScreenText.Unsupported);

@@ -119,6 +119,12 @@ public static class BotCheckText
         return "The Browser window closed; " + count + (cookies == 1 ? " cookie" : " cookies") + " for " + string.Join(", ", hosts) + " handed to the web tools.";
     }
 
+    /// <summary>
+    /// Ctrl+B pressed while a bot check waits in the Browser window (2026-10-18): the window stays, since closing it would give the check up;
+    /// the window's own close still does. Pinned.
+    /// </summary>
+    public const string KeptForBotCheck = "The Browser window stays open: a bot check is waiting in it. Solve it there, or close the window to give it up.";
+
     /// <summary>Headless has no window. Pinned.</summary>
     public const string BrowserNeedsScreen = "/browser needs the screen: the Browser window is the interactive app's.";
 

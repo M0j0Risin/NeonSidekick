@@ -330,7 +330,20 @@ public sealed record DeleteResult(FileOutcome Outcome, string Relative, bool IsD
 }
 
 /// <summary>What <see cref="WorkingDirectory.PurgeFolder"/> removed: the files, the folders and their bytes (<c>PurgeResult</c> until 2026-10-01).</summary>
-public sealed record PurgeResult(FileOutcome Outcome, int Files, int Folders, long Bytes, string Detail = "");
+public sealed record PurgeResult(FileOutcome Outcome, int Files, int Folders, long Bytes, string Detail = "")
+{
+    /// <summary>A purge through the Recycle bin (2026-10-18, <c>File deletes to Recycle bin</c>): its entries went one by one, the folder kept.</summary>
+    public bool ToBin { get; init; }
+
+    /// <summary>The folder's own entries (files and subfolders at its top) when a purge through the bin began.</summary>
+    public int Entries { get; init; }
+
+    /// <summary>How many of <see cref="Entries"/> went to the bin.</summary>
+    public int Recycled { get; init; }
+
+    /// <summary>How many of <see cref="Entries"/> were deleted for good on a drive with no bin (<see cref="DeleteWay.DeletedNoBin"/>), or a link removed.</summary>
+    public int DeletedNoBin { get; init; }
+}
 
 public sealed record ZipResult(FileOutcome Outcome, string Relative, string Archive, int Entries, long Bytes, string Detail = "");
 
@@ -2659,9 +2672,13 @@ public sealed class WorkingDirectory
     /// ask: <c>/comfy purge</c> empties the ComfyUI output folder, its <c>.pasted</c> inputs included), reached only by
     /// a slash command after a typed confirmation, never by a tool. Refused outside the sandbox, on the root itself (an
     /// empty output folder setting means the working directory — purging that would take everything) and on a file.
-    /// A missing folder is nothing to do.
+    /// A missing folder is nothing to do. With <paramref name="bin"/> (2026-10-18, the user's pick: the purges follow
+    /// <c>File deletes to Recycle bin</c>) each of the folder's own entries goes to the bin through <see cref="FileDeletes.Remove"/>, so
+    /// each restores to its place, and the folder stays: the picture viewer and the thumbnail browser watch it, and a folder moved to
+    /// the bin and made again would leave them watching the copy there. A drive with no bin deletes them for good, counted; a refusal
+    /// stops there (<see cref="FileOutcome.Failed"/>, its reason), the rest left.
     /// </summary>
-    public PurgeResult PurgeFolder(string relative)
+    public PurgeResult PurgeFolder(string relative, IRecycleBin? bin = null)
     {
         var outcome = Resolve(relative, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
@@ -2679,7 +2696,7 @@ public sealed class WorkingDirectory
             return new PurgeResult(FileOutcome.IsAFile, 0, 0, 0);
         }
 
-        var result = EmptyContents(full);
+        var result = EmptyContents(full, bin);
         if (result.Outcome == FileOutcome.Ok && Directory.Exists(full))
         {
             DiagnosticLog.Info(Category, FolderPurgedLogLine(Relative(full, isDirectory: true), result.Files, result.Folders, result.Bytes));
@@ -2697,8 +2714,9 @@ public sealed class WorkingDirectory
     /// <summary>
     /// The walk-and-delete behind <see cref="PurgeFolder"/>: everything under
     /// <paramref name="target"/> counted, read-only cleared, then deleted; the folder itself stays. Absent = nothing to do.
+    /// With <paramref name="bin"/> nothing is cleared (a restore brings each file back as it was) and the top entries go to the bin one by one.
     /// </summary>
-    private static PurgeResult EmptyContents(string target)
+    private static PurgeResult EmptyContents(string target, IRecycleBin? bin = null)
     {
         if (!Directory.Exists(target))
         {
@@ -2731,11 +2749,21 @@ public sealed class WorkingDirectory
 
                 files++;
                 bytes += entry.Length;
+                if (bin is not null)
+                {
+                    continue;
+                }
+
                 var attributes = File.GetAttributes(entry.FullPath);
                 if ((attributes & FileAttributes.ReadOnly) != 0)
                 {
                     File.SetAttributes(entry.FullPath, attributes & ~FileAttributes.ReadOnly);
                 }
+            }
+
+            if (bin is not null)
+            {
+                return EmptyIntoBin(target, bin, files, folders, bytes);
             }
 
             foreach (var folder in Directory.EnumerateDirectories(target))
@@ -2754,6 +2782,40 @@ public sealed class WorkingDirectory
         {
             return new PurgeResult(FileOutcome.Failed, files, folders, bytes, ex.Message);
         }
+    }
+
+    // The folder's own entries to the bin, one call each (IRecycleBin.Move takes one path), in name order; a refusal stops there.
+    private static PurgeResult EmptyIntoBin(string target, IRecycleBin bin, int files, int folders, long bytes)
+    {
+        string[] entries = Directory.EnumerateFileSystemEntries(target).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        int recycled = 0, noBin = 0;
+        PurgeResult Counted(FileOutcome outcome, string detail = "") =>
+            new(outcome, files, folders, bytes, detail) { ToBin = true, Entries = entries.Length, Recycled = recycled, DeletedNoBin = noBin };
+
+        foreach (string entry in entries)
+        {
+            try
+            {
+                var attributes = File.GetAttributes(entry);
+                bool isDirectory = (attributes & FileAttributes.Directory) != 0;
+                bool isLink = (attributes & FileAttributes.ReparsePoint) != 0;
+                switch (FileDeletes.Remove(entry, isDirectory, isLink, bin))
+                {
+                    case DeleteWay.Recycled:
+                        recycled++;
+                        break;
+                    default:
+                        noBin++;
+                        break;
+                }
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                return Counted(FileOutcome.Failed, ex.Message);
+            }
+        }
+
+        return Counted(FileOutcome.Ok);
     }
 
     // ---- archives ----

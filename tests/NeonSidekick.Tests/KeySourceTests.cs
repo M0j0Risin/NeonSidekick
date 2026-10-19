@@ -327,7 +327,7 @@ public class KeySourceTests
         Assert.Equal('c', ((IAnsiConsoleInput)keys).ReadKey(intercept: true)!.Value.KeyChar);
         Assert.Equal((3, 1), (cancels, kills));
 
-        // Ctrl+Alt+L is the allowed-commands list's chord, never the cancel.
+        // Ctrl+Alt+L (the allowed-commands list's chord until 2026-10-18, free since) is never the cancel.
         input.PushKey(Keys.CtrlAlt(ConsoleKey.L));
         Assert.Equal(new InputEvent.Key(Keys.CtrlAlt(ConsoleKey.L)), await keys.ReadInputAsync(CancellationToken.None));
 
@@ -371,9 +371,9 @@ public class KeySourceTests
     [Fact]
     public async Task Watch_AnUnboundCtrlKey_IsJustAnotherKey()
     {
-        // Ctrl+B (Ctrl+Q until 2026-10-05, when it became the /queue chord).
+        // Ctrl+K (Ctrl+Q until 2026-10-05, when it became the /queue chord; Ctrl+B until 2026-10-18, when it became /browser's).
         var input = new TestConsoleInput();
-        input.PushKey(Keys.Ctrl(ConsoleKey.B));
+        input.PushKey(Keys.Ctrl(ConsoleKey.K));
         var keys = new KeySource(input, FastPoll);
         using var turn = new CancellationTokenSource();
         using var stop = new CancellationTokenSource(50);

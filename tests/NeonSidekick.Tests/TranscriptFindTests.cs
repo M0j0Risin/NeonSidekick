@@ -6,7 +6,7 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The transcript's find (2026-10-07, the user's ask, phase 5 of the UI round): <c>/find</c> and Ctrl+Shift+F over the scrollback.</summary>
+/// <summary>The transcript's find (2026-10-07, the user's ask, phase 5 of the UI round): <c>/find</c> and Ctrl+F (Ctrl+Shift+F until 2026-10-18) over the scrollback.</summary>
 public class TranscriptFindTests : IDisposable
 {
     private readonly TestConsole _console = new TestConsole().Interactive();
@@ -202,12 +202,12 @@ public class TranscriptFindTests : IDisposable
         Assert.Equal("the end of the transcript", ScreenPane.FindAtTheEnd);
     }
 
-    /// <summary>Ctrl+Shift+F is /find; Ctrl+F stays /perfbar.</summary>
+    /// <summary>Ctrl+F is /find since 2026-10-18 (the user's pick; /perfbar until then); Ctrl+Shift+F, /find until then, is the terminal's again.</summary>
     [Fact]
-    public void CtrlShiftF_IsFind_AndCtrlFStaysPerfbar()
+    public void CtrlF_IsFind_AndCtrlShiftF_IsNoChord()
     {
-        Assert.Equal("/find", Keys.ShortcutLine(new ConsoleKeyInfo('\x06', ConsoleKey.F, shift: true, alt: false, control: true)));
-        Assert.Equal("/perfbar", Keys.ShortcutLine(Keys.CtrlF));
+        Assert.Equal("/find", Keys.ShortcutLine(Keys.CtrlF));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x06', ConsoleKey.F, shift: true, alt: false, control: true)));
     }
 
     /// <summary>

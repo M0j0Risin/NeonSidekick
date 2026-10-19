@@ -148,7 +148,7 @@ public partial class ChatScreenTests
     /// else is the usage error. Never a turn.
     /// </summary>
     [Fact]
-    public async Task Tb_Toggles_KeepingTheItems_AndCtrlT_IsTheBareWord()
+    public async Task Tb_Toggles_KeepingTheItems()   // Ctrl+T was the bare word until 2026-10-18, when the bar chords went
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["tools", "usage"]; });
         var shown = new List<string>();
@@ -161,7 +161,7 @@ public partial class ChatScreenTests
             Line("/toolbar"),
             Then(input => PushLine(input, "/toolbar")),
             Then(input => PushLine(input, "/toolbar off")),
-            Then(input => input.Push(Keys.CtrlT)),
+            Then(input => PushLine(input, "/toolbar")),
             Then(input => PushLine(input, "/toolbar on")),
             Then(input => PushLine(input, "/toolbar sideways")),
             Line("/exit"));

@@ -46,13 +46,14 @@ public class KeysTests
     public void ShortcutLine_IsCtrlAltCNP_WithoutShift_AndAnAltGrCharacterStaysACharacter()
     {
         // 2026-09-30 (the user's ask): the test factory's '\0' and the console's control characters count. /splash was
-        // Ctrl+Alt+S until later still on 2026-10-01 (the user's ask), Ctrl+Alt+P since.
+        // Ctrl+Alt+S until later still on 2026-10-01 (the user's ask), Ctrl+Alt+P since, Ctrl+Alt+Z since 2026-10-18 (the user's pick).
         Assert.Equal("/clear", Keys.ShortcutLine(Keys.CtrlAltC));
         Assert.Equal("/new", Keys.ShortcutLine(Keys.CtrlAltN));
-        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.P)));
+        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Z)));
         Assert.Equal("/clear", Keys.ShortcutLine(new ConsoleKeyInfo('\x03', ConsoleKey.C, shift: false, alt: true, control: true)));
-        Assert.Equal("/new", Keys.ShortcutLine(new ConsoleKeyInfo('\x0e', ConsoleKey.N, shift: false, alt: true, control: true)));
-        Assert.Equal("/splash", Keys.ShortcutLine(new ConsoleKeyInfo('\x10', ConsoleKey.P, shift: false, alt: true, control: true)));
+        Assert.Equal("/new", Keys.ShortcutLine(new ConsoleKeyInfo('\x0e', ConsoleKey.N, shift: false, alt: true, control: true)));   // Alt held tells it from Ctrl+N's /rename
+        Assert.Equal("/splash", Keys.ShortcutLine(new ConsoleKeyInfo('\x1a', ConsoleKey.Z, shift: false, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('ż', ConsoleKey.Z, shift: false, alt: true, control: true)));      // AltGr+Z on a Polish layout
 
         Assert.Null(Keys.ShortcutLine(Keys.CtrlC));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x03', ConsoleKey.C, shift: true, alt: false, control: true)));   // Ctrl+Shift+C: Windows Terminal's copy
@@ -65,15 +66,14 @@ public class KeysTests
     }
 
     [Theory]
-    [InlineData(ConsoleKey.T, '\x14', "/tools")]
+    [InlineData(ConsoleKey.T, '\x14', "/tools shell allowed")]   // 2026-10-18, the user's pick (Ctrl+Alt+L until then; /tools before)
     [InlineData(ConsoleKey.S, '\x13', "/skills")]   // from Ctrl+Alt+K later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.M, '\r', "/memory")]
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]
-    [InlineData(ConsoleKey.L, '\x0c', "/tools shell allowed")]   // /cmdlist until 2026-10-09
     [InlineData(ConsoleKey.O, '\x0f', "/tools shell police")]    // /police until 2026-10-09
-    [InlineData(ConsoleKey.H, '\x08', "/header")]   // later still on 2026-10-01 (the user's ask), free since /help moved to Ctrl+H
-    [InlineData(ConsoleKey.E, '\x05', "/sessions")]   // later on 2026-10-03 (the user's ask), free since /perfbar moved to Ctrl+F
-    [InlineData(ConsoleKey.R, '\x12', "/rename")]   // 2026-10-05 (the user's ask): the rename box
+    [InlineData(ConsoleKey.P, '\x10', "/prompts")]   // 2026-10-18, the user's pick (Ctrl+Alt+W until then)
+    [InlineData(ConsoleKey.Y, '\x19', "/sessions")]   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
+    [InlineData(ConsoleKey.Z, '\x1a', "/splash")]   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
     public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
     {
         // Later on 2026-09-30 (the user's ask): the test factory's '\0' and the console's control character count; Shift,
@@ -90,12 +90,12 @@ public class KeysTests
     [Fact]
     public void ShortcutLine_CtrlE_IsExplore_WithoutAltOrShift_AndATypedEStaysAnE()
     {
-        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E was /perfbar (gone since Ctrl+F; /sessions since 2026-10-03),
+        // Later on 2026-10-01 (the user's ask): the console's ENQ and the test factory's '\0' count; Ctrl+Alt+E was /perfbar (gone since Ctrl+F; /sessions from 2026-10-03, free since 2026-10-18),
         // Shift, Alt alone and a typed "E" (Spectre's test input marks it with Control) are no chord.
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.CtrlE));
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.E)));
         Assert.Contains("/explore", NeonSidekick.App.SlashCommands.Words);
-        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions since later on 2026-10-03
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions from later on 2026-10-03 until 2026-10-18 (Ctrl+Alt+Y since)
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x05', ConsoleKey.E, shift: true, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('E', ConsoleKey.E, shift: false, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.E, shift: false, alt: true, control: false)));
@@ -106,16 +106,19 @@ public class KeysTests
     }
 
     [Theory]
-    [InlineData(ConsoleKey.F, '\x06', "/perfbar")]     // from Ctrl+Alt+E later still on 2026-10-01 (the user's ask)
+    [InlineData(ConsoleKey.B, '\x02', "/browser")]     // 2026-10-18, the user's pick (free until then)
+    [InlineData(ConsoleKey.F, '\x06', "/find")]        // 2026-10-18, the user's pick (Ctrl+Shift+F until then; /perfbar before)
     [InlineData(ConsoleKey.G, '\x07', "/log")]         // from Ctrl+Alt+G on 2026-10-12 (the user's ask)
     [InlineData(ConsoleKey.H, '\x08', "/help")]   // moved from Ctrl+Alt+H later still on 2026-10-01 (the user's ask)
     [InlineData(ConsoleKey.M, '\r', "/model")]
+    [InlineData(ConsoleKey.N, '\x0e', "/rename")]    // 2026-10-18, the user's pick (Ctrl+Alt+R until then)
     [InlineData(ConsoleKey.P, '\x10', "/profile")]   // from Ctrl+Alt+P
     [InlineData(ConsoleKey.Q, '\x11', "/queue")]     // 2026-10-05 (the user's ask); the key quit once
     [InlineData(ConsoleKey.R, '\x12', "/reasoning")]
     [InlineData(ConsoleKey.S, '\x13', "/server")]
-    [InlineData(ConsoleKey.T, '\x14', "/toolbar")]       // from Ctrl+Alt+B
+    [InlineData(ConsoleKey.T, '\x14', "/tools")]     // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
+    [InlineData(ConsoleKey.W, '\x17', "/webui browser")]   // 2026-10-18, the user's pick (/homebar until then)
     [InlineData(ConsoleKey.Y, '\x19', "/sys")]       // from Ctrl+Alt+Y on 2026-10-03 (the user's ask)
     [InlineData(ConsoleKey.Z, '\x1a', "/theme")]     // 2026-10-04 (the user's ask)
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
@@ -124,8 +127,8 @@ public class KeysTests
         // test factory's '\0' count; Shift, Alt alone and a typed upper-case letter (Spectre marks it with Control) are no chord.
         Assert.Equal(line, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
         Assert.Equal(line, Keys.ShortcutLine(Keys.Ctrl(key)));
-        Assert.Contains(line, NeonSidekick.App.SlashCommands.Words);
-        Assert.Equal(key == ConsoleKey.F ? "/find" : null, Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: true, alt: false, control: true)));   // Ctrl+Shift+F /find (2026-10-07)
+        Assert.Contains(line.Split(' ')[0], NeonSidekick.App.SlashCommands.Words);
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(control, key, shift: true, alt: false, control: true)));   // Ctrl+Shift+F was /find until 2026-10-18; the Ctrl+Shift arm went
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo(key.ToString()[0], key, shift: false, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(Keys.Char(char.ToLowerInvariant(key.ToString()[0]))));
@@ -186,14 +189,17 @@ public class KeysTests
         Assert.False(Keys.IsLineBreak(Keys.CtrlM));
         Assert.Equal("/memory", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.M)));
         Assert.Equal("/skills", Keys.ShortcutLine(Keys.CtrlAltS));
-        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.P)));
-        Assert.Equal("/rename", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.R)));   // 2026-10-05 (the user's ask)
+        Assert.Equal("/splash", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Z)));   // Ctrl+Alt+P until 2026-10-18
+        Assert.Equal("/rename", Keys.ShortcutLine(Keys.CtrlN));   // 2026-10-18 (Ctrl+Alt+R from 2026-10-05 until then)
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.R)));
 
         Assert.Equal("/help", Keys.ShortcutLine(Keys.CtrlH));
         Assert.Equal("/profile", Keys.ShortcutLine(Keys.CtrlP));
         Assert.Equal("/usage", Keys.ShortcutLine(Keys.CtrlU));
-        Assert.Equal("/perfbar", Keys.ShortcutLine(Keys.CtrlF));
-        Assert.Equal("/toolbar", Keys.ShortcutLine(Keys.CtrlT));
+        Assert.Equal("/find", Keys.ShortcutLine(Keys.CtrlF));   // /perfbar until 2026-10-18
+        Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlT));   // /toolbar until 2026-10-18
+        Assert.Equal("/browser", Keys.ShortcutLine(Keys.CtrlB));
+        Assert.Equal("/webui browser", Keys.ShortcutLine(Keys.CtrlW));
         Assert.Equal(ConsoleKey.H, Keys.CtrlH.Key);   // the BS rides on the H key: never Backspace
         Assert.Null(Keys.ShortcutLine(Keys.Backspace));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, false, true)));   // Ctrl+Backspace
@@ -201,19 +207,20 @@ public class KeysTests
         // on 2026-10-12 when /log moved to plain Ctrl+G), and Ctrl+Alt+K with /skills' move.
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.G)));
         Assert.Equal("/log", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.G)));
-        Assert.Equal("/header", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // back later still on 2026-10-01 as /header (the user's ask)
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.H)));   // /header from later still on 2026-10-01 until 2026-10-18 (the bar chords went)
         // Ctrl+Alt+K and Ctrl+Alt+B came back on 2026-10-11 as the botchat chords (ShortcutLine_TheBotChatChords_…).
         Assert.Equal(NeonSidekick.App.BotChat.KillLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
         Assert.Equal(NeonSidekick.App.BotChat.ResumeLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /toolbar on Ctrl+T, /perfbar on Ctrl+F since later still on 2026-10-01
-        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // back later on 2026-10-03 as /sessions (the user's ask)
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03
-        Assert.Equal("/tools", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions from later on 2026-10-03 until 2026-10-18
+        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03; /sessions here since 2026-10-18
+        Assert.Equal("/tools shell allowed", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));   // /tools until 2026-10-18
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));   // /tools shell allowed until 2026-10-18
     }
 
     [Theory]
     [InlineData(ConsoleKey.U, '\x15', "/comfy view")]
     [InlineData(ConsoleKey.V, '\x16', "/camera live")]
-    [InlineData(ConsoleKey.W, '\x17', "/prompts")]   // 2026-10-13
+    [InlineData(ConsoleKey.W, '\x17', "/webui")]   // 2026-10-18 (/prompts from 2026-10-13 until then)
     public void ShortcutLine_TheWindowChords_AreTheirLines_AndAnAltGrCharacterStaysACharacter(ConsoleKey key, char control, string line)
     {
         // 2026-10-02 (the user's ask): the picture viewer and the camera's live view (and the log window, on plain Ctrl+G since
@@ -241,7 +248,7 @@ public class KeysTests
         Assert.Equal(NeonSidekick.App.SlashCommand.BotChat, NeonSidekick.App.SlashCommands.Parse(line).Command);
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: true, alt: true, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', key, shift: false, alt: true, control: false)));
-        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(key)));
+        Assert.NotEqual(line, Keys.ShortcutLine(Keys.Ctrl(key)));   // plain Ctrl+B is /browser since 2026-10-18
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('{', key, shift: false, alt: true, control: true)));
         Assert.False(Keys.IsKillSwitch(Keys.CtrlAlt(key)));
     }
@@ -301,12 +308,12 @@ public class KeysTests
     [Fact]
     public void IsLearnCancel_IsPlainCtrlL_AndNeverAShortcutLine()
     {
-        // 2026-10-04 (the user's ask): the test factory's '\0' and the console's FF count; Ctrl+Alt+L (the allowed-commands list), Shift, and a
+        // 2026-10-04 (the user's ask): the test factory's '\0' and the console's FF count; Ctrl+Alt+L (the allowed-commands list until 2026-10-18, free since), Shift, and a
         // typed L (Spectre's test input marks a capital with Control) do not. A chord with no command: never a ShortcutLine.
         Assert.True(Keys.IsLearnCancel(Keys.CtrlL));
         Assert.True(Keys.IsLearnCancel(Keys.Ctrl(ConsoleKey.L)));
         Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
-        Assert.Equal("/tools shell allowed", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));
         Assert.False(Keys.IsLearnCancel(Keys.CtrlAlt(ConsoleKey.L)));
         Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('\x0c', ConsoleKey.L, shift: true, alt: false, control: true)));
         Assert.False(Keys.IsLearnCancel(new ConsoleKeyInfo('L', ConsoleKey.L, shift: true, alt: false, control: true)));

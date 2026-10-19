@@ -7,7 +7,7 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// The saved prompts on the screen (2026-10-13, the user's ask): <c>/prompts</c>' pane (Enter sends a prompt as if typed since 2026-10-16,
 /// the user's ask, and <c>d</c> puts it on the draft line in place of what is there, as Enter did until then; <c>r</c> removes),
-/// <c>/prompts &lt;n&gt;</c> (sends), <c>save</c>, <c>remove</c>, <c>list [--clear]</c>, the toolbar's 📣 and Ctrl+Alt+W (both keep the draft,
+/// <c>/prompts &lt;n&gt;</c> (sends), <c>save</c>, <c>remove</c>, <c>list [--clear]</c>, the toolbar's 📣 and Ctrl+Alt+P (Ctrl+Alt+W until 2026-10-18; both keep the draft,
 /// so the pane's save draft has it, and a send leaves it), the draft editor for a prompt of several lines, and the same under a reply, where
 /// a send is queued and a to-draft pick must not be emptied by the live row.
 /// </summary>
@@ -24,8 +24,8 @@ public sealed partial class ChatScreenTests
         }
     }
 
-    // Ctrl+Alt+W as the console delivers it: no character.
-    private static readonly ConsoleKeyInfo CtrlAltW = new('\0', ConsoleKey.W, false, true, true);
+    // Ctrl+Alt+P as the console delivers it: no character (Ctrl+Alt+W until 2026-10-18).
+    private static readonly ConsoleKeyInfo CtrlAltP = new('\0', ConsoleKey.P, false, true, true);
 
     /// <summary>
     /// The pane, Enter on a prompt of two lines (2026-10-16, the user's ask): it is sent as it is, with no second Enter, and nothing is left
@@ -266,7 +266,7 @@ public sealed partial class ChatScreenTests
         Assert.Equal("my draft", LastUserText(_chat.Requests[1]));
     }
 
-    /// <summary>Ctrl+Alt+W keeps the draft, so the pane's save draft saves it; the draft stays where it was.</summary>
+    /// <summary>Ctrl+Alt+P keeps the draft, so the pane's save draft saves it; the draft stays where it was.</summary>
     [Fact]
     public async Task Prompts_TheChord_SaveDraft_SavesWhatIsTyped()
     {
@@ -276,7 +276,7 @@ public sealed partial class ChatScreenTests
         StepsWhenIdle(
         [
             .. Typed("Line one"),
-            Key(CtrlAltW),
+            Key(CtrlAltP),
             Key(Keys.Char('s')),
             Key(Keys.Escape),   // the pane closed
             Key(Keys.Escape),   // the draft cleared

@@ -93,7 +93,7 @@ In every list ↑/↓ move, Enter or a double-click picks, Esc closes; key lette
 | `/plan open` | Enter opens (with `--chat`, to talk it through) · `o` open · `c` talk it through · `l` run as a [Ralph loop](COMMANDS.md#ralph-loop), outside plan mode · type to filter, Shift+letter to start one with a button's letter |
 | The plan approval pane | `a` approve & run · `f` clear context & run · `l` Ralph loop · `r` keep refining · `g` close gaps · `c` cancel plan · Esc keeps refining |
 | A Ralph loop's checkpoint | `k` keep · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc keeps |
-| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc or a double-click outside done |
+| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find (Shift+letter where the pane has lettered buttons) · Esc closes |
 | **Saved lists** | |
 | `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, Esc back to the list) · `r` refresh · `m` more · `c` computer · type to filter, Shift+letter to start one with a button's letter |
@@ -161,59 +161,61 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 |---|---|---|
 | Ctrl+. | `/terminal` | at once |
 | Ctrl+/ | `/settings` | over the reply |
+| Ctrl+B | `/browser` (the [Browser window](#the-browser-window)) | at once |
 | Ctrl+E | `/explore` | at once |
-| Ctrl+F | `/perfbar` | at once |
+| Ctrl+F | `/find` | waits |
 | Ctrl+G | `/log` (the [log window](#the-log-window)) | at once |
-| Ctrl+Shift+F | `/find` (Windows Terminal keeps it until you unbind it) | waits |
 | Ctrl+H | `/help` | over the reply |
 | Ctrl+J | the emoji picker (not on a Mac) | idle line only |
 | Ctrl+L | cancels the background learning (🧠) | at once |
 | Ctrl+M | `/model` | waits |
+| Ctrl+N | `/rename` | over the reply |
 | Ctrl+O | folds or unfolds tool calls, code, diffs and thinking | at once |
 | Ctrl+P | `/profile` | waits |
 | Ctrl+Q | `/queue` | over the reply |
 | Ctrl+R | `/reasoning` | over the reply |
 | Ctrl+S | `/server` | waits |
-| Ctrl+T | `/toolbar` | at once |
+| Ctrl+T | `/tools` | over the reply |
 | Ctrl+U | `/usage` | over the reply |
-| Ctrl+W | `/homebar` | at once |
+| Ctrl+W | `/webui browser` (the [Web UI](#web-ui) on this PC) | at once |
 | Ctrl+Y | `/sys` | over the reply |
 | Ctrl+Z | `/theme` | waits |
 | Ctrl+Alt+B | `/botchat --resume` | ends a running botchat at once; otherwise waits |
 | Ctrl+Alt+C | `/clear` | stops the reply first |
 | Ctrl+Alt+D | `/mcp` | over the reply |
-| Ctrl+Alt+E | `/sessions` | over the reply |
-| Ctrl+Alt+H | `/header` | at once |
 | Ctrl+Alt+K | `/botchat --kill` (the extra embedded servers a botchat left) | waits |
-| Ctrl+Alt+L | `/tools shell allowed` | over the reply |
 | Ctrl+Alt+M | `/memory` | over the reply |
 | Ctrl+Alt+N | `/new` | stops the reply first |
 | Ctrl+Alt+O | `/tools shell police` | over the reply |
-| Ctrl+Alt+P | `/splash` | stops the reply first |
+| Ctrl+Alt+P | `/prompts` | over the reply |
 | Ctrl+Alt+Q | `/queue clear` | at once |
-| Ctrl+Alt+R | `/rename` | over the reply |
 | Ctrl+Alt+S | `/skills` | over the reply |
-| Ctrl+Alt+T | `/tools` | over the reply |
+| Ctrl+Alt+T | `/tools shell allowed` | over the reply |
 | Ctrl+Alt+U | `/comfy view` (the [picture viewer](#the-picture-viewer)) | at once |
 | Ctrl+Alt+V | `/camera live` (the [camera window](#the-camera-window)) | at once |
-| Ctrl+Alt+W | `/prompts` | over the reply |
+| Ctrl+Alt+W | `/webui` (the Web UI pane) | over the reply |
 | Ctrl+Alt+X ×2 | unloads the embedded model | at once |
+| Ctrl+Alt+Y | `/sessions` | over the reply |
+| Ctrl+Alt+Z | `/splash` | stops the reply first |
 | F9 | `/camera snap`, attached to the line | waits |
 | F10 | `/screen`, attached to the line | waits |
 
-* **In a pane** a shortcut closes the pane and runs. Ctrl+., Ctrl+E, Ctrl+F, Ctrl+L, Ctrl+T, Ctrl+W, Ctrl+Alt+H, the window chords and Ctrl+Alt+X act and leave it open. A pane that asks you something ignores them all.
-* **Window chords** (Ctrl+G, Ctrl+Alt+U, Ctrl+Alt+V) close their window when pressed again; the typed command only opens it.
+* **In a pane** a shortcut closes the pane and runs. Ctrl+., Ctrl+E, Ctrl+W, Ctrl+L, the window chords and Ctrl+Alt+X act and leave it open. Ctrl+F in a find closes it. A pane that asks you something ignores them all.
+* **Window chords** (Ctrl+G, Ctrl+B, Ctrl+Alt+U, Ctrl+Alt+V) close their window when pressed again; the typed command only opens it. Ctrl+B leaves the Browser window open while a bot check waits in it.
+* **Ctrl+N** renames the session; Ctrl+Alt+N, beside it, starts a new conversation and stops a reply.
+* **Bars** have no shortcut: `/perfbar`, `/toolbar`, `/homebar` and `/header` show or hide them.
 * **Ctrl+Alt+X**, twice within two seconds, unloads the embedded model and frees its memory, canceling any reply, load or botchat using it. No server is connected until you pick one; *LLM URL* is kept. With any other server it does nothing.
 * **F9 and F10** work with no modifier held; the picture viewer and thumbnail browser keep their own meanings for them.
-* **On a Mac**, Ctrl+] stands in for Ctrl+., Ctrl+D for Ctrl+M and Ctrl+Option+A for Ctrl+Alt+M (the originals still work in the app's windows). Ctrl+Shift+F arrives as Ctrl+F, so type `/find`. Ctrl+Option chords need Option as Meta ([MAC.md](MAC.md#what-differs)).
+* **On a Mac**, Ctrl+] stands in for Ctrl+., Ctrl+D for Ctrl+M and Ctrl+Option+A for Ctrl+Alt+M (the originals still work in the app's windows). Ctrl+Option chords need Option as Meta ([MAC.md](MAC.md#what-differs)).
+* **Windows Terminal's** own Ctrl+Shift+F find is the terminal's again; if you unbound it for the app, bind it back.
 * **A chord that does nothing** may be another program's global hotkey. `/keycheck`, or `k` on `/help`'s Keys tab, lists what holds each one.
 
 ## Commands typed during a reply
 
 | Behavior | Commands |
 |---|---|
-| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/youtube`, `/shopping`, `/prompts`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui` |
-| Run at once | `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/view <path>`, `/view <path> --thumbs` |
+| Open their pane over the reply | `/help`, `/settings`, `/tools`, `/comfy`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/youtube`, `/shopping`, `/prompts`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui` |
+| Run at once | `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/view <path>`, `/view <path> --thumbs` |
 | Stop the reply first | `/clear`, `/new`, `/splash`, `/rewind`, `/exit` |
 | Everything else | Waits for the reply, queued behind earlier messages (*Queue cancel mode* applies) |
 
@@ -294,7 +296,7 @@ Icons under the status bar (*Tool bar*), each shown while it is checked there. A
 
 ## The performance bar
 
-Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC**. `/perfbar text`, `gauge` or `led` picks the look, as does the checklist's **look:** button (`l`, stepping text → gauge → led); `/perfbar` or Ctrl+F hides it.
+Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC**. `/perfbar text`, `gauge` or `led` picks the look, as does the checklist's **look:** button (`l`, stepping text → gauge → led); `/perfbar` hides it.
 
 * Values turn amber from 60 % and red from 85 %. A meter the machine can't read is left out.
 * NET is the share of the link speed; NET↓ and NET↑ are bits per second. They follow the busiest adapter with a gateway.
@@ -305,7 +307,7 @@ Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **V
 
 ## The home bar
 
-Chips for Home Assistant rooms and devices and the shopping list (*Home bar*); see [TOOLS.md](TOOLS.md#home-assistant). `/homebar` or Ctrl+W hides or shows it.
+Chips for Home Assistant rooms and devices and the shopping list (*Home bar*); see [TOOLS.md](TOOLS.md#home-assistant). `/homebar` hides or shows it.
 
 * **Chips:** a light wears its own color, a room counts its lights on (`2/5`), sensors show values, thermostats current → target, players ▸ or ‖. Off is dim; an open door, a leak, a jammed lock or a low battery turns amber or red. All go dim while Home Assistant is unreachable.
 * **🛒 n** counts the shopping lines still to get; it needs no Home Assistant and opens `/shopping`.
@@ -348,7 +350,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 * *Welcome splash* `fullsize`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
 * *Welcome splash* `tiled`: thumbnails at *Image thumbnail size*; ←/→ page, a double-click opens one.
-* Pictures in the profile's `images\splash_images\` replace the built-in ones. `/splash` shows the splash whatever *Welcome splash* says.
+* Pictures in the profile's `images\splash_images\` replace the built-in ones; `/splash view` or `/splash thumbs` opens the folder and `/splash purge` empties it. `/splash` shows the splash whatever *Welcome splash* says.
 * On the Web UI the splash stands first in the transcript, centered and filling the page, and goes at the first message sent, from either side, as at the PC.
 
 ## The app's windows
@@ -362,7 +364,7 @@ What every window shares:
 
 ### The picture viewer
 
-Opened by a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (which follows new pictures), and `/comfy view`, `/camera view` or `/screen view`. Without a window (over SSH on a Mac), `/view` draws in the transcript. A PDF goes to [the Browser window](#the-browser-window) instead.
+Opened by a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (which follows new pictures), and `/comfy view`, `/camera view`, `/screen view`, `/splash view` or `/pasted view`. Without a window (over SSH on a Mac), `/view` draws in the transcript. A PDF goes to [the Browser window](#the-browser-window) instead.
 
 | Key | Action |
 |---|---|
@@ -387,7 +389,7 @@ A right-click in the viewer or the thumbnail browser.
 
 ### The thumbnail browser
 
-`/view <folder> --thumbs`, `/comfy thumbs` (🪟), `/camera thumbs` and `/screen thumbs` show a folder's pictures, oldest first, new ones added at the end.
+`/view <folder> --thumbs`, `/comfy thumbs` (🪟), `/camera thumbs`, `/screen thumbs`, `/splash thumbs` and `/pasted thumbs` show a folder's pictures, oldest first, new ones added at the end.
 
 | Key | Action |
 |---|---|
@@ -439,7 +441,7 @@ Where YouTube videos play under *YouTube open links in* `youtube-window`, the de
 A browser window (Windows, and a Mac on macOS 14 or later, where it is WebKit: [The Browser window on a Mac](MAC.md#the-browser-window-on-a-mac)): the web tools open it for bot checks ([TOOLS.md](TOOLS.md#the-browser-window)), which a connected Web UI page can also see and drive ([A bot check from the page](#a-bot-check-from-the-page)), and `/browser [url]` opens it for you. When you close it, its cookies go to the web tools. A bare `/browser` opens *Web browser home page*.
 
 * **The bar:** back, forward, reload (✕ stops a load), home, a padlock (https) or a warning (http), the address box, Go, and open in your default browser. Words that aren't an address search with *Web search method*; `file:`, `javascript:` and local paths are refused.
-* **Keys:** Ctrl+W closes; F5 or Ctrl+R reloads; Alt+← / Alt+→ go back and forward; Ctrl+L, Alt+D or F6 go to the address box (Esc there restores it); Ctrl+H opens the history; Ctrl+D saves or unsaves the page; Ctrl+Shift+O opens the saved links; Esc stops a load. Esc never closes the window. On a Mac, Safari's: ⌘W, ⌘R, ⌘[ / ⌘] (or a mouse's side buttons), ⌘L, ⌘⇧H home, ⌘Y, ⌘D, ⌘⇧O or ⌘⌥B, ⌘. or Esc stops, and ⌘F finds (⌘G, ⌘⇧G), ⌘+ ⌘- ⌘0 zoom, ⌘P prints.
+* **Keys:** Ctrl+W closes; F5 or Ctrl+R reloads; Alt+← / Alt+→ go back and forward; Ctrl+L, Alt+D or F6 go to the address box (Esc there restores it); Ctrl+H opens the history; Ctrl+D saves or unsaves the page; Ctrl+Shift+O opens the saved links; Esc stops a load. Esc never closes the window. Ctrl+B in the terminal opens and closes it. On a Mac, Safari's: ⌘W, ⌘R, ⌘[ / ⌘] (or a mouse's side buttons), ⌘L, ⌘⇧H home, ⌘Y, ⌘D, ⌘⇧O or ⌘⌥B, ⌘. or Esc stops, and ⌘F finds (⌘G, ⌘⇧G), ⌘+ ⌘- ⌘0 zoom, ⌘P prints.
 * **Full screen:** F11 (⌃⌘F on a Mac), with the bar kept. A page's own full screen (a video's button) takes the window and hides the bar (on a Mac it fills a Space of its own, as in Safari). Esc leaves the page's first, then F11's.
 * **History** (🕘, Ctrl+H): newest first, older by day, with **Clear history**. *Web browser privacy* `clear-history` clears it at each close; `keep-history` keeps it in `<profile>\configs\browser-history.json`. Cookies and sign-ins stay either way.
 * **Saved links** (☆, ★ on a saved page): the first 15 on the menu, the rest in submenus, up to 190; `/browser list` (⭐) has them all. They're kept in `<profile>\configs\browser-links.json`. An address holding a user name or password is never saved. The model reaches them with `web_links` and `web_save_link` ([TOOLS.md](TOOLS.md#web)).
@@ -496,8 +498,9 @@ A browser front end the app hosts for the loaded profile: the chat as it happens
 * **The firewall:** Windows asks to let the app through the first time it serves the network; allow it on private networks. On a network Windows calls Public the phone can't connect. A Mac asks too.
 * **Who may connect:** under `lan`, a browser at a private address (the home network, and Tailscale's 100.64/10) with the cookie. Private here doesn't mean safe (a router's NAT loopback, Docker or Tailscale can present one): the token is the gate. The links are IPv4 addresses only. The page is plain HTTP, so a browser won't send notifications or reach the clipboard; a waiting question shows as a count in the tab's title.
 * **The pane's buttons:** `📱 Web UI │ enabled │ lan │ reset │ 192.168.1.217 · 100.78.20.125`. The first three are buttons, ahead of the address tabs: *enabled*/*disabled* (`e`) turns *Web UI* on or off, *lan*/*local* (`l`) switches *Web UI reach*, and *reset* (`r`) makes a new token after a yes, as `/webui reset` does. The server starts, stops or restarts at once and the pane opens again. The pane opens over a reply too, its buttons acting at once: a phone watching that reply drops for a moment and reconnects (or, after a reset, signs in again). With one address (`localhost` under `local`) the pane has one tab and shows no title for it.
+* **Opening the pane:** `/webui`, Ctrl+Alt+W or the toolbar's 📱.
 * **Copying and opening the link:** *copy* (`c`, after *reset*) puts the shown tab's sign-in link on the clipboard. A double-click on the link opens that address on this PC, as `/webui browser` does, and the pane stays open.
-* **Opening it on this PC:** `/webui browser` opens `http://127.0.0.1:<port>` signed in: in the Browser window under *Web open links in* `browser-window` (a one-time link while *Web browser privacy* is `keep-history`, else the usual link), else in your default browser (`--external` always), signed in as *Web browser sign in mode* says. A one-time link is good once, for a minute; a link checker's HEAD request doesn't spend it. The transcript and the log say where it opened, never the link; the Browser window keeps no sign-in link in its history or saved links, never shows one to the model, and never hands the Web UI's cookie to the web tools.
+* **Opening it on this PC:** `/webui browser` (or Ctrl+W, each press opening it again) opens `http://127.0.0.1:<port>` signed in: in the Browser window under *Web open links in* `browser-window` (a one-time link while *Web browser privacy* is `keep-history`, else the usual link), else in your default browser (`--external` always), signed in as *Web browser sign in mode* says. A one-time link is good once, for a minute; a link checker's HEAD request doesn't spend it. The transcript and the log say where it opened, never the link; the Browser window keeps no sign-in link in its history or saved links, never shows one to the model, and never hands the Web UI's cookie to the web tools.
 * **The toolbar's 📱** opens the pane (*Tool bar*, on by default, after 🌐). It sits on a dark background while *Web UI* is off.
 * **A port that won't open:** another program uses it, or Windows reserves it (`netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges). Pick another in *Web UI port*.
 * **Without the pane** (a redirected console), `/webui` prints the links as notices, so the token reaches the scrollback.
@@ -555,7 +558,7 @@ With *Web UI commands* on (off by default; `/settings` › Client › Web UI), t
 |---|---|---|
 | Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …`, `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
-| List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy`, `/comfy offered` | A card with the lines; Close |
+| List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube`, `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |

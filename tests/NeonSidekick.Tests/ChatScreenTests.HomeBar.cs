@@ -12,7 +12,6 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
-    private static readonly ConsoleKeyInfo CtrlW = new('\x17', ConsoleKey.W, shift: false, alt: false, control: true);
 
     private FakeHaServer HomeServer()
     {
@@ -44,7 +43,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task HomeBar_TogglesKeepingItsItems_AndCtrlW_IsTheBareWord()
+    public async Task HomeBar_TogglesKeepingItsItems()   // Ctrl+W was the bare word until 2026-10-18, when the bar chords went
     {
         HomeServer();
         _settings.Update(d => d.HomeBarItems = ["entity:light.desk"]);
@@ -56,7 +55,7 @@ public partial class ChatScreenTests
         };
         StepsWhenIdle(
             Line("/homebar"),
-            Then(input => input.Push(CtrlW)),
+            Then(input => PushLine(input, "/homebar")),
             Then(input => PushLine(input, "/homebar off")),
             Then(input => PushLine(input, "/homebar on")),
             Then(input => PushLine(input, "/homebar sideways")),

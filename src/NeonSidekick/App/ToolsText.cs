@@ -110,7 +110,7 @@ public static class ToolsText
 
     /// <summary>
     /// <c>/tools shell allowed</c>'s word (2026-10-09, the user's call: <c>/cmdlist</c> folded in): the <c>Shell allowed commands</c>
-    /// list straight, the toolbar lock's and Ctrl+Alt+L's. Pinned.
+    /// list straight, the toolbar lock's and Ctrl+Alt+T's (Ctrl+Alt+L's until 2026-10-18). Pinned.
     /// </summary>
     public const string ShellAllowedWord = "allowed";
 

@@ -255,6 +255,12 @@ public static class BrowserWindow
 
         public bool Close() => BrowserWindow.Close();
 
+        // Ctrl+B (2026-10-18): a check under way counts before its job reaches the window, as Unavailable's does.
+        public BrowserCloseOutcome CloseAsUser() =>
+            Volatile.Read(ref _solving) > 0 ? BrowserCloseOutcome.BotCheck
+            : OpenNow() is { } window ? window.CloseAsUser()
+            : BrowserCloseOutcome.None;
+
         public Task<(string Url, string? Title)?> CurrentPageAsync() =>
             OpenNow() is { } window ? window.CurrentPageAsync() : Task.FromResult<(string Url, string? Title)?>(null);
 
@@ -458,6 +464,36 @@ internal sealed unsafe partial class BrowserWindowThread
         {
             _thread?.Join(TimeSpan.FromSeconds(2));
         }
+    }
+
+    /// <summary>How long <see cref="CloseAsUser"/> waits for the window's thread to answer before it counts the window as none.</summary>
+    private static readonly TimeSpan CloseAsUserWait = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// See <see cref="IBrowserWindow.CloseAsUser"/> (2026-10-18, Ctrl+B): asked on the window's thread, which owns the job and the
+    /// window's state — a check in it leaves it be, a hidden window (one started for a clear, one in a check's linger) is none, else
+    /// <see cref="WmClose"/> posted without <see cref="_noHarvest"/>, as the window's own Ctrl+W and × do, so the visit's cookies are
+    /// handed over. A thread that does not answer within <see cref="CloseAsUserWait"/> counts as none.
+    /// </summary>
+    public BrowserCloseOutcome CloseAsUser()
+    {
+        var done = new TaskCompletionSource<BrowserCloseOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool posted = Post(() =>
+        {
+            if (_job is not null)
+            {
+                done.TrySetResult(BrowserCloseOutcome.BotCheck);
+            }
+            else if (!IsWindowVisible(_hwnd))
+            {
+                done.TrySetResult(BrowserCloseOutcome.None);
+            }
+            else
+            {
+                done.TrySetResult(PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero) ? BrowserCloseOutcome.Closing : BrowserCloseOutcome.None);
+            }
+        });
+        return posted && done.Task.Wait(CloseAsUserWait) ? done.Task.Result : BrowserCloseOutcome.None;
     }
 
     // Work for the window's thread. Before the window is up there is no handle to post to: the queue waits for the first flush.

@@ -65,7 +65,7 @@ public static class HelpCommands
         ]),
         new("/browser",
         [
-            new("/browser [<url>]", "Open the page, or *Web browser home page* (a blank page when that is empty), in the Browser window, the app's own browser, to sign in to a site or get past its bot check. When you close it, its cookies for the sites it visited go to the web tools for this run, so `web_fetch` and `download_file` reach those sites as you did; the window keeps its own cookies between runs in the profile's `webview2-browser` folder, each profile its own. Its bar has back, forward, reload, home, history (🕘), saved links (☆, ★ on a saved page), an address box (words search with *Web search method*) and a button that opens the page in your default browser. Ctrl+W closes it, F5 reloads, Alt+← and Alt+→ go back and forward, Ctrl+L goes to the address box, Ctrl+H opens the history, Ctrl+D saves or unsaves the page, Ctrl+Shift+O opens the saved links and F11 goes full screen (Esc leaves it). The web tools open the same window on a bot check they cannot get past, per *Web browser botcheck window*. Works while a reply runs. Not headless."),
+            new("/browser [<url>]", "Open the page, or *Web browser home page* (a blank page when that is empty), in the Browser window, the app's own browser, to sign in to a site or get past its bot check. When you close it, its cookies for the sites it visited go to the web tools for this run, so `web_fetch` and `download_file` reach those sites as you did; the window keeps its own cookies between runs in the profile's `webview2-browser` folder, each profile its own. Its bar has back, forward, reload, home, history (🕘), saved links (☆, ★ on a saved page), an address box (words search with *Web search method*) and a button that opens the page in your default browser. Ctrl+W closes it, F5 reloads, Alt+← and Alt+→ go back and forward, Ctrl+L goes to the address box, Ctrl+H opens the history, Ctrl+D saves or unsaves the page, Ctrl+Shift+O opens the saved links and F11 goes full screen (Esc leaves it). The web tools open the same window on a bot check they cannot get past, per *Web browser botcheck window*. Ctrl+B opens it on the home page and closes it again. Works while a reply runs. Not headless."),
             new("/browser clear history|all", "Clear the Browser window's history, its list of visits too (`history`), or everything it keeps for this profile: history, cookies, sign-ins, cache and site settings (`all`, after a yes). Your saved links stay. The web tools also forget the cookies the window gave them. The window opens hidden for it when it isn't open. *Web browser privacy* `clear-history` clears the history by itself at each close."),
             new("/browser <n>", "Open saved link n, its number in `/browser list`, in the Browser window."),
             new("/browser save [<url> [<name>]]", "Save a link to the profile's saved links: the address with the words after it as its name, or with no address the page the Browser window shows, its title as the name. A link saved by its address alone takes its page's title once the window visits it. Headless, give the address."),
@@ -84,6 +84,7 @@ public static class HelpCommands
             new("/camera off", "Stop `/camera live` and watch mode; the camera closes a few seconds later."),
             new("/camera view", "Open the picture viewer on the *Camera output folder*. Works while a reply runs."),
             new("/camera thumbs", "Open the thumbnail browser on the *Camera output folder*. Works while a reply runs."),
+            new("/camera purge", "Delete every photo in the *Camera output folder*, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Refused when the folder is the profile's `images` folder itself. Waits for a running reply."),
         ]),
         new("/claude",
         [
@@ -113,12 +114,13 @@ public static class HelpCommands
         ]),
         new("/comfy",
         [
-            new("/comfy", "Show the ComfyUI server's status in a pane: the workflows found (family, input, size, placeholders), the skipped files and where workflows go. A server that does not answer is an error line in the chat."),
+            new("/comfy", "Open the ComfyUI tools' page, as `/tools comfy` does: the switch and its offered button. Opens over a reply too."),
+            new("/comfy status", "Show the ComfyUI server's status in a pane: the workflows found (family, input, size, placeholders), the skipped files and where workflows go. A server that does not answer is an error line in the chat."),
             new("/comfy offered", "List the workflows offered to the model in a pane, one bullet each (name, family, input, size, description), without asking the server."),
             new("/comfy edit json|markdown|md <workflow>", "Open a workflow's graph, or its `.md`, in your editor; a missing `.md` is created with the family filled in."),
             new("/comfy view", "Open the picture viewer on the output folder. Ctrl+Alt+U opens it behind the terminal, which keeps the keyboard, or closes it. Works while a reply runs."),
             new("/comfy thumbs", "Open the thumbnail browser on the output folder. Works while a reply runs."),
-            new("/comfy purge", "Delete everything in the output folder (under the profile's `images` folder) for good, after a yes. Refused when the output folder is the `images` folder itself."),
+            new("/comfy purge", "Delete everything in the output folder (under the profile's `images` folder), to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Refused when the output folder is the `images` folder itself."),
         ]),
         new("/compact",
         [
@@ -168,7 +170,7 @@ public static class HelpCommands
         ]),
         new("/find",
         [
-            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. Esc, or a double-click outside it, ends it at the bottom of the transcript. Ctrl+Shift+F runs it too."),
+            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. Esc, Ctrl+F or a double-click outside it ends it at the bottom of the transcript. Ctrl+F runs it too."),
         ]),
         new("/gituser",
         [
@@ -187,7 +189,7 @@ public static class HelpCommands
         ]),
         new("/header",
         [
-            new("/header [on|off]", "Show or hide the banner (*Show header*): alone it flips the setting; `on` and `off` say which. The change shows at the next `/clear`, `/splash`, `/theme` or profile switch; nothing is redrawn now. Works while a reply runs; Ctrl+Alt+H runs it too."),
+            new("/header [on|off]", "Show or hide the banner (*Show header*): alone it flips the setting; `on` and `off` say which. The change shows at the next `/clear`, `/splash`, `/theme` or profile switch; nothing is redrawn now. Works while a reply runs."),
         ]),
         new("/help",
         [
@@ -196,7 +198,7 @@ public static class HelpCommands
         ]),
         new("/homebar",
         [
-            new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips and the shopping list's 🛒 (*Home bar*; under the performance bar unless *Toolbar order* moves it). Alone, it hides the bar or shows it again with its last items; the first time, with nothing picked, it opens the picker. Works while a reply runs; Ctrl+W runs it too."),
+            new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips and the shopping list's 🛒 (*Home bar*; under the performance bar unless *Toolbar order* moves it). Alone, it hides the bar or shows it again with its last items; the first time, with nothing picked, it opens the picker. Works while a reply runs."),
             new("/homebar edit", "Choose the bar's items, their order and their sides on the picker. Its first tab lists the items under Pinned left, center and right: Shift+←/→ pins one a group over, Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete takes it off, and Enter offers the same as a list plus Rename on the bar…, Change emoji… and their defaults. The other tabs (Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones, Other and Shopping) add or remove an item with Space or Enter; typing filters. Without Home Assistant it opens with the bar and Shopping alone."),
             new("/homebar tap <item>", "Do what a double-click on a chip does, by its item (`entity:light.desk`, `area:kitchen`) or its name. A light, switch or fan toggles, a room's lights go off or on, a scene or script runs, a player plays or pauses. Unlocking, opening a garage, gate or door, and disarming an alarm ask first."),
             new("/homebar show <item>", "Open a chip's pane, as a right-click does: its actions (on, off, brightness, volume, open, close, lock…), or a room's devices to switch one by one."),
@@ -270,6 +272,12 @@ public static class HelpCommands
         [
             new("/open <file>", "Open a file from the working directory in its default app, as double-clicking it would (Tab completes the path). A folder is refused: `/explore` or `/browse` opens one. Works while a reply runs."),
         ]),
+        new("/pasted",
+        [
+            new("/pasted view", "Open the picture viewer on the *Pasted images folder*, where pasted pictures are saved as their messages are sent. Works while a reply runs."),
+            new("/pasted thumbs", "Open the thumbnail browser on the *Pasted images folder*. Works while a reply runs."),
+            new("/pasted purge", "Delete every picture in the *Pasted images folder*, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Refused when the folder is the profile's `images` folder itself. Waits for a running reply."),
+        ]),
         new("/pdf",
         [
             new("/pdf <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]", "Make a PDF of a file in the working directory, beside it unless `to=` names a file or folder; an existing PDF is replaced only with `overwrite`. Markdown keeps its headings, tables, lists, links, colored code and the pictures beside it; text and code become a colored listing; HTML prints as the page, without its scripts or anything outside the working directory; a picture is fitted to one page. Options go anywhere. *PDF engine* chooses what makes it: Edge, Chrome or Brave, or without one Microsoft Print to PDF (Markdown, text and pictures, in black and white). Alone, `/pdf` shows how to use it."),
@@ -281,7 +289,7 @@ public static class HelpCommands
         ]),
         new("/perfbar",
         [
-            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Performance bar*). Alone, it hides the bar or shows it again with its last meters (CPU, RAM, GPU and VRAM the first time); `off` hides it, and a look (`text`, `gauge`, `led`) sets that look and shows the bar. Works while a reply runs; Ctrl+F runs it too."),
+            new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Performance bar*). Alone, it hides the bar or shows it again with its last meters (CPU, RAM, GPU and VRAM the first time); `off` hides it, and a look (`text`, `gauge`, `led`) sets that look and shows the bar. Works while a reply runs."),
             new("/perfbar edit", "Choose the bar's meters, their order and their sides on the *Performance bar* checklist. Enter or Space checks a meter, Shift+←/→ pins it a group over (left, center, right), Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks; `a`, `n` and `d` pick all, none or the default."),
         ]),
         new("/plan",
@@ -333,7 +341,7 @@ public static class HelpCommands
         ]),
         new("/prompts",
         [
-            new("/prompts", "Open your saved prompts, the messages you send often; Enter or a double-click sends one, or queues it while a reply runs. `d` puts one on the draft line instead, in place of what is there; the old draft goes to the history, so Up brings it back. `a` adds one, `s` saves the draft as one, `e` edits (a prompt of several lines in your draft editor), `r` or Delete removes and `c` clears the list (each removal after a yes); Shift+↑↓ and Shift+Home/End move a prompt. Type to filter. The toolbar's 📣 and Ctrl+Alt+W open it, keeping the draft for `s`. Works while a reply runs."),
+            new("/prompts", "Open your saved prompts, the messages you send often; Enter or a double-click sends one, or queues it while a reply runs. `d` puts one on the draft line instead, in place of what is there; the old draft goes to the history, so Up brings it back. `a` adds one, `s` saves the draft as one, `e` edits (a prompt of several lines in your draft editor), `r` or Delete removes and `c` clears the list (each removal after a yes); Shift+↑↓ and Shift+Home/End move a prompt. Type to filter. The toolbar's 📣 and Ctrl+Alt+P open it, keeping the draft for `s`. Works while a reply runs."),
             new("/prompts <n>", "Send saved prompt n, its number in `/prompts`, as if typed; while a reply runs it is queued. Headless, it is printed."),
             new("/prompts save <text>", "Save the rest of the line as a prompt, a pasted block of several lines too."),
             new("/prompts list [--clear]", "Print the saved prompts, numbered; `--clear` takes them all off the list, after a yes (headless: without asking)."),
@@ -359,7 +367,7 @@ public static class HelpCommands
         ]),
         new("/rename",
         [
-            new("/rename [<name>]", "Rename the current session, as `/sessions title` does: a name is set at once (after the reply, under one); alone, it opens the rename box with the current name, and works while a reply runs. There is nothing to rename before the first reply. Ctrl+Alt+R runs it too."),
+            new("/rename [<name>]", "Rename the current session, as `/sessions title` does: a name is set at once (after the reply, under one); alone, it opens the rename box with the current name, and works while a reply runs. There is nothing to rename before the first reply. Ctrl+N runs it too."),
         ]),
         new("/rewind",
         [
@@ -382,6 +390,7 @@ public static class HelpCommands
             new("/screen list", "List the monitors and the windows (front to back) in a pane, with the target that names each; the argument list after `/screen ` offers them too."),
             new("/screen view", "Open the picture viewer on the *Screen output folder*. Works while a reply runs."),
             new("/screen thumbs", "Open the thumbnail browser on the *Screen output folder*. Works while a reply runs."),
+            new("/screen purge", "Delete every screenshot in the *Screen output folder*, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Refused when the folder is the profile's `images` folder itself. Waits for a running reply."),
         ]),
         new("/server",
         [
@@ -393,7 +402,7 @@ public static class HelpCommands
         ]),
         new("/sessions",
         [
-            new("/sessions [<id>]", "List the stored sessions on a pane, or restore one by its id (`#12` works too). Ctrl+Alt+E runs it too."),
+            new("/sessions [<id>]", "List the stored sessions on a pane, or restore one by its id (`#12` works too). Ctrl+Alt+Y runs it too."),
             new("/sessions purge <id>|all", "Delete one stored session, or every one."),
             new("/sessions purge older <age>", "Delete the sessions older than an age: a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`)."),
             new("/sessions title [<text>]", "Rename the current session; alone, it opens a box with the current name (as a double-click on the name above the input row does). Works while a reply runs."),
@@ -432,6 +441,9 @@ public static class HelpCommands
         new("/splash",
         [
             new("/splash", "Start a new conversation and show the splash screen."),
+            new("/splash view", "Open the picture viewer on the profile's splash pictures (`images\\splash_images`), made when missing; an empty folder means the built-in pictures show. Works while a reply runs."),
+            new("/splash thumbs", "Open the thumbnail browser on the profile's splash pictures. Works while a reply runs."),
+            new("/splash purge", "Delete every splash picture of the profile, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes; the built-in pictures show again. Waits for a running reply."),
         ]),
         new("/stt",
         [
@@ -471,14 +483,14 @@ public static class HelpCommands
         ]),
         new("/toolbar",
         [
-            new("/toolbar [on|off]", "Show or hide the toolbar (*Tool bar*): alone it hides the toolbar, or shows it again with the items it last had (the default items the first time); `on` and `off` say which. Works while a reply runs; Ctrl+T runs it too."),
+            new("/toolbar [on|off]", "Show or hide the toolbar (*Tool bar*): alone it hides the toolbar, or shows it again with the items it last had (the default items the first time); `on` and `off` say which. Works while a reply runs."),
             new("/toolbar edit", "Choose the toolbar's items, their sides and their order on the *Tool bar* checklist. Enter or Space checks an item, Shift+←/→ pins it left or right, Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks, and `+` adds a divider after it; `a`, `n` and `d` pick all, none or the default."),
         ]),
         new("/tools",
         [
-            new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes."),
+            new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes. Ctrl+T runs it too."),
             new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and Esc comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
-            new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); Esc closes it. The toolbar's lock and Ctrl+Alt+L run it."),
+            new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); Esc closes it. The toolbar's lock and Ctrl+Alt+T run it."),
             new("/tools shell police", "Open the *Shell police* on/off page; turning it off asks first, and **strings** (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),
         new("/tree",
@@ -505,10 +517,10 @@ public static class HelpCommands
         ]),
         new("/webui",
         [
-            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser; its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes, c copies the shown link. A double-click on the link opens it on this PC, as `/webui browser` does. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Opens over a reply too."),
+            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser; its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes, c copies the shown link. A double-click on the link opens it on this PC, as `/webui browser` does. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Opens over a reply too. Ctrl+Alt+W runs it too."),
             new("/webui on|off", "Turn the Web UI on or off for this profile: the server starts or stops at once."),
             new("/webui copy", "Copy the first sign-in link (Tailscale's when there is one) to the clipboard."),
-            new("/webui browser [--external]", "Open the Web UI on this PC, signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says (a link good once for a minute, or the usual link). `--external` always uses the default browser. The Web UI must be on."),
+            new("/webui browser [--external]", "Open the Web UI on this PC, signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says (a link good once for a minute, or the usual link). `--external` always uses the default browser. The Web UI must be on. Ctrl+W runs it too."),
             new("/webui reset", "Make a new sign-in token, after a yes: every browser signed in will be signed out, and `/webui` shows the new link."),
         ]),
         new("/window",

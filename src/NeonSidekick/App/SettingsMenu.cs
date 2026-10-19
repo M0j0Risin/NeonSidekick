@@ -204,7 +204,7 @@ public enum SettingsField
     /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The Chat tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
-    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The Chat tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw). <c>/header</c> and Ctrl+Alt+H flip it too (later that day).</summary>
+    /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The Chat tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw). <c>/header</c> flips it too (later that day; Ctrl+Alt+H as well until 2026-10-18).</summary>
     ShowHeader,
 
     /// <summary>A toggle: whether the working directory sits at the right edge of the banner's title line (<see cref="Settings.AppSettingsData.ShowWorkingDirectory"/>). The Chat tab's row under Show header (2026-10-01; before Draft editor from 2026-09-19, its last row until then); no reconnect (read at each banner draw).</summary>

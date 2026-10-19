@@ -895,14 +895,14 @@ public class AppSettingsTests : IDisposable
     }
 
     /// <summary>
-    /// The user avatar's default (2026-10-13, the user's call: 🙊; none until then): a profile saved before then holds an explicit null and
-    /// reads as 🙊, one that cleared it holds an empty string and keeps none, and one with no key at all reads as 🙊.
+    /// The user avatar's default (2026-10-13, the user's call: 🙊; none until then; 🧿 since 2026-10-18): a profile saved before then holds an explicit null and
+    /// reads as 🧿, one that cleared it holds an empty string and keeps none, and one with no key at all reads as 🧿.
     /// </summary>
     [Theory]
-    [InlineData("\"UserAvatar\": null, ", "🙊")]
+    [InlineData("\"UserAvatar\": null, ", "🧿")]
     [InlineData("\"UserAvatar\": \"\", ", "")]
     [InlineData("\"UserAvatar\": \"🦉\", ", "🦉")]
-    [InlineData("", "🙊")]
+    [InlineData("", "🧿")]
     public void ProfileFile_UserAvatar_NullIsTheDefault_EmptyIsNone(string entry, string expected)
     {
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));

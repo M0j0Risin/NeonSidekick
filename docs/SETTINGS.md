@@ -36,7 +36,7 @@ The app itself, this side of the connection.
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets a typed path. | empty (the profile's `files\` folder) |
 | Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: it recalls only (your `/remember` still saves). `off`: no memory, and `/remember` is refused. | `read-write` |
 | Model avatar | The profile's emoji, at the start of its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
-| User avatar | Your emoji, at the start of each of your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
+| User avatar | Your emoji, at the start of each of your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🧿 |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when the reply ends. `manual`: every message waits until you press `➤ send` (`s`) on `/queue`. `off`: no list. | `automatic` |
 | Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next one at once, `empty` drops them all. Under `hold` a message from the Web UI counts as your next message too, and the page's **Resume** sends what was held. | `empty` |
 | Keep message history | Saves the ↑/↓ history (the newest 100 lines, the Web UI's sent lines among them) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
@@ -52,8 +52,8 @@ The app itself, this side of the connection.
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder (see [Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
-| Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `off`. See [The welcome splash](INTERFACE.md#the-welcome-splash). | `fullsize` |
-| Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` and Ctrl+Alt+H flip it. | on |
+| Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `off`. `/splash view` opens the profile's own pictures' folder. See [The welcome splash](INTERFACE.md#the-welcome-splash). | `fullsize` |
+| Show header | Shows the banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
 | Hints bar | Whether the keys' hints get a bar of their own over the status bar: `auto` (a row while there is a hint, held until the next send), `always`, or `off` (the hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
@@ -576,7 +576,7 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
-| File deletes to Recycle bin | Files deleted by `delete`, the picture viewer, the thumbnail browser, the picture menu or the Web UI go to the Recycle bin (*File deletes to Trash* on a Mac), where you can restore it. Off, they delete directly. A network share or removable drive has no bin, so a delete there is direct either way; something too big for the bin is deleted for good, as Windows does. A command's or script's own deletes aren't covered. | on |
+| File deletes to Recycle bin | Files deleted by `delete`, the picture viewer, the thumbnail browser, the picture menu or the Web UI go to the Recycle bin (*File deletes to Trash* on a Mac), where you can restore it. Off, they delete directly. A network share or removable drive has no bin, so a delete there is direct either way; something too big for the bin is deleted for good, as Windows does. The purges (`/comfy`, `/camera`, `/screen`, `/splash` and `/pasted purge`) follow it too. A command's or script's own deletes aren't covered. | on |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `remain` opens it in the list; `apply` writes `@folder/` and closes the list. | `remain` |
@@ -593,7 +593,7 @@ The file tools and the places beyond the working directory they reach.
 | Image edit metadata | What metadata `image_edit` keeps: `none`, `basic` (author, date taken, camera…) or `all` (basic plus the GPS position). | `none` |
 | Image edit mode | Where an edited picture goes: `beside-original` writes a new file beside the source; `overwrite-original` replaces the source, without asking. It rules `image_edit` and the picture windows' right-click menu. | `beside-original` |
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the profile's `images` folder. Empty writes beside the source. | empty (beside the source) |
-| Pasted images folder | Where a picture pasted from the clipboard is saved, under the profile's `images` folder, so the model's picture tools can use it. | `pasted_images` |
+| Pasted images folder | Where a picture pasted from the clipboard is saved, under the profile's `images` folder, so the model's picture tools can use it. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted_images` |
 
 #### UNC
 

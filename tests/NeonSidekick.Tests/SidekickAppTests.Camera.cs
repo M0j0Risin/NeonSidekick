@@ -20,6 +20,17 @@ public partial class SidekickAppTests
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
     }
 
+    /// <summary>The picture folders' words (2026-10-18) need the screen; the bare /splash is still the clear.</summary>
+    [Fact]
+    public async Task Headless_SplashWordsAndPasted_NeedTheScreen()
+    {
+        string output = await Headless("/splash view\n/splash purge\n/pasted thumbs\n/pasted\n/splash\n");
+
+        Assert.Equal(2, output.Split("[error] " + NeonSidekick.UI.SplashCommand.NeedsScreen).Length - 1);
+        Assert.Equal(2, output.Split("[error] " + NeonSidekick.Images.PastedCommand.NeedsScreen).Length - 1);
+        Assert.Contains("(conversation cleared)", output);
+    }
+
     [Fact]
     public async Task Headless_Camera_WithoutALayer_SaysSo()
     {

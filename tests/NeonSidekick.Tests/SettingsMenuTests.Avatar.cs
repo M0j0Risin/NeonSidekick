@@ -32,9 +32,9 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsField.UserAvatar, SettingsMenu.TabFields[(int)SettingsTab.Chat][4]);   // right under Model avatar (2026-10-12, the user's ask)
         Assert.Equal("User avatar", SettingsMenu.FieldName(SettingsField.UserAvatar));
         Assert.False(SettingsMenu.IsToggle(SettingsField.UserAvatar));
-        Assert.Equal("🙊", new AppSettingsData().UserAvatar);   // 🙊 since 2026-10-13 (the user's call; none until then)
-        Assert.Equal("🙊", new AppSettingsData { UserAvatar = null }.UserAvatar);   // a null is the default: the profiles saved before then
-        Assert.Equal("🙊 speak-no-evil monkey", SettingsMenu.FieldValue(SettingsField.UserAvatar, new AppSettingsData(), "C:\\p"));
+        Assert.Equal("🧿", new AppSettingsData().UserAvatar);   // 🧿 since 2026-10-18, 🙊 from 2026-10-13 (the user's calls; none until then)
+        Assert.Equal("🧿", new AppSettingsData { UserAvatar = null }.UserAvatar);   // a null is the default: the profiles saved before then
+        Assert.Equal("🧿 nazar amulet", SettingsMenu.FieldValue(SettingsField.UserAvatar, new AppSettingsData(), "C:\\p"));
         Assert.Equal(SettingsMenu.NoAvatarLabel, SettingsMenu.FieldValue(SettingsField.UserAvatar, new AppSettingsData { UserAvatar = "" }, "C:\\p"));
         Assert.Equal("🦊 fox", SettingsMenu.FieldValue(SettingsField.UserAvatar, new AppSettingsData { UserAvatar = "🦊" }, "C:\\p"));
     }
@@ -52,7 +52,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal("", _settings.Current.UserAvatar);   // none: empty (null is the 🙊 default since 2026-10-13)
+        Assert.Equal("", _settings.Current.UserAvatar);   // none: empty (null is the default since 2026-10-13, 🧿 since 2026-10-18)
         Assert.Equal(Emojis.AvatarRules.DefaultAvatar, _settings.Current.ModelAvatar);   // the model's untouched
         Assert.Contains("  · User avatar: 🦊 fox", Output);
         Assert.Contains("  · User avatar: " + SettingsMenu.NoAvatarLabel, Output);

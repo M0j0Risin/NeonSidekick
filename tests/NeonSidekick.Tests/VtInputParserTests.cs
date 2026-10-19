@@ -77,7 +77,9 @@ public class VtInputParserTests
         Assert.Equal(new ConsoleKeyInfo('\b', ConsoleKey.Backspace, false, true, false), keys[4]);
         Assert.Equal("/help", Keys.ShortcutLine(keys[0]));
         Assert.Equal("/settings", Keys.ShortcutLine(keys[1]));
-        Assert.Equal("/header", Keys.ShortcutLine(keys[3]));
+        Assert.Null(Keys.ShortcutLine(keys[3]));   // Ctrl+Alt+H, /header until 2026-10-18 (the bar chords went)
+        // A Mac terminal sends Ctrl+Shift+F as Ctrl+F's ACK: /find since 2026-10-18, either way (/perfbar until then).
+        Assert.Equal("/find", Keys.ShortcutLine(Parse("\x06").Select(Key).Single()));
         Assert.Equal(OperatingSystem.IsMacOS() ? "/terminal" : null, Keys.ShortcutLine(keys[2]));
     }
 

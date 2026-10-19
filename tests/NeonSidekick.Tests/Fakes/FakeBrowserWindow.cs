@@ -198,6 +198,27 @@ public sealed class FakeBrowserWindow : IBrowserWindow
         return false;
     }
 
+    /// <summary>
+    /// What <see cref="CloseAsUser"/> answers (2026-10-18, Ctrl+B); null: <see cref="BrowserCloseOutcome.Closing"/> while a held visit is
+    /// open (it then ends, as the user's close ends it), else <see cref="BrowserCloseOutcome.None"/>.
+    /// </summary>
+    public BrowserCloseOutcome? CloseAsUserAnswer { get; set; }
+
+    /// <summary>How many times <see cref="CloseAsUser"/> was called.</summary>
+    public int UserCloses { get; private set; }
+
+    public BrowserCloseOutcome CloseAsUser()
+    {
+        UserCloses++;
+        var outcome = CloseAsUserAnswer ?? (_held is not null ? BrowserCloseOutcome.Closing : BrowserCloseOutcome.None);
+        if (outcome == BrowserCloseOutcome.Closing)
+        {
+            EndVisit();
+        }
+
+        return outcome;
+    }
+
     public Task<string?> ClearAsync(BrowserClear kind)
     {
         Clears.Add(kind);

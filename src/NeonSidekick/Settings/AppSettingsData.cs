@@ -50,7 +50,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The user's avatar (2026-10-12, the user's ask): one emoji, picked on <c>/settings</c> › Client › Chat's grid picker right under
     /// <see cref="ModelAvatar"/>. It opens each of the user's lines in the transcript, the main chat's and <c>/botchat</c>'s alike, in
-    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. 🙊 by default
+    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. 🧿 by default (🙊 until 2026-10-18)
     /// (<see cref="Emojis.AvatarRules.DefaultUserAvatar"/>, 2026-10-13, the user's call; null, the <c>›</c>, until then); empty for none
     /// (the <c>›</c>); anything that is not one two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. A null read or set is the
     /// default: every profile saved before then holds <c>"UserAvatar": null</c>, and one that never chose wears the default as the model's
@@ -432,7 +432,7 @@ public sealed class AppSettingsData
     public List<string>? StatusBarRight { get; set; }
 
     /// <summary>
-    /// The items a bare <c>/toolbar</c> (or Ctrl+T, or <c>/toolbar on</c>) brings back after it hid the toolbar (later on 2026-09-30,
+    /// The items a bare <c>/toolbar</c> (or Ctrl+T until 2026-10-18, or <c>/toolbar on</c>) brings back after it hid the toolbar (later on 2026-09-30,
     /// the user's ask: "same as how /perf works for the perfbar"): what showed when it hid it, as <see cref="ToolbarItems"/>
     /// saves it; null until then, or when that was <see cref="App.ToolbarItems.Defaults"/>, which come back. No settings row,
     /// no variable.
@@ -473,7 +473,7 @@ public sealed class AppSettingsData
     public List<string>? PerformanceBarItems { get; set; }
 
     /// <summary>
-    /// The meters a bare <c>/perfbar</c> (or Ctrl+F) brings back after it hid the bar (2026-09-30): what was checked when
+    /// The meters a bare <c>/perfbar</c> (or Ctrl+F until 2026-10-18) brings back after it hid the bar (2026-09-30): what was checked when
     /// it hid it; null until then, when <see cref="App.PerfBarItems.Defaults"/> (CPU, RAM, GPU and VRAM) come back. No settings
     /// row, no variable.
     /// </summary>
@@ -522,7 +522,7 @@ public sealed class AppSettingsData
     public List<string>? HomeBarItems { get; set; }
 
     /// <summary>
-    /// The items a bare <c>/homebar</c> (or Ctrl+W) brings back after it hid the bar (2026-10-12): what showed when it hid
+    /// The items a bare <c>/homebar</c> (or Ctrl+W until 2026-10-18) brings back after it hid the bar (2026-10-12): what showed when it hid
     /// it; null until then. No settings row, no variable.
     /// </summary>
     public List<string>? HomeBarLastItems { get; set; }

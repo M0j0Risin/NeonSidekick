@@ -13,7 +13,7 @@ public enum SlashCommand
     /// <summary><c>/new</c>: forget the conversation and keep the screen — a rule and a notice mark the boundary in the transcript (2026-09-16).</summary>
     New,
 
-    /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask): its tiled pages when it says <c>tiled</c>, else one picture, <c>disabled</c> included (2026-09-24). No argument.</summary>
+    /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask): its tiled pages when it says <c>tiled</c>, else one picture, <c>disabled</c> included (2026-09-24). No argument until 2026-10-18 (the user's ask): <c>view</c>, <c>thumbs</c> and <c>purge</c> open or empty the profile's <c>splash_images</c> folder (<c>UI.SplashCommand</c>); another word is the usage error, nothing wiped.</summary>
     Splash,
 
     /// <summary>
@@ -87,7 +87,7 @@ public enum SlashCommand
     /// <c>/perfbar [off|text|gauge|led]</c> (2026-09-29, the user's ask): bare, the performance bar hidden, or shown again
     /// with the meters it last had (<see cref="Settings.AppSettingsData.PerformanceBarLastItems"/>; CPU, RAM, GPU and VRAM the
     /// first time, 2026-09-30); <c>off</c> hides it; a look sets it and shows the bar. Display only, so it runs at once under a
-    /// reply; Ctrl+F's word (the toolbar's 📈 too until 2026-10-14).
+    /// reply; Ctrl+F's word until 2026-10-18 (the toolbar's 📈 too until 2026-10-14), typed alone since.
     /// </summary>
     Perf,
 
@@ -95,7 +95,7 @@ public enum SlashCommand
     /// <c>/homebar [on|off|edit]</c> (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the performance
     /// bar): bare, the home bar hidden, or shown again with the items it last had (the picker opens when it never had any);
     /// <c>on</c>/<c>off</c> say which; <c>edit</c> opens the picker. <c>tap &lt;item&gt;</c> and <c>show &lt;item&gt;</c> are the bar's
-    /// own clicks (a confirm, a chip's pane), the lines a click makes. <c>name &lt;item&gt; = &lt;alias&gt;</c> labels an item's chip. Ctrl+W (Ctrl+Alt+W until later that day).
+    /// own clicks (a confirm, a chip's pane), the lines a click makes. <c>name &lt;item&gt; = &lt;alias&gt;</c> labels an item's chip. Ctrl+W (Ctrl+Alt+W until later that day) until 2026-10-18, no chord since.
     /// </summary>
     HomeBar,
 
@@ -103,12 +103,12 @@ public enum SlashCommand
     /// <c>/toolbar [on|off]</c> (later on 2026-09-30, the user's ask: "same as how /perf works for the perfbar"): bare, the toolbar
     /// hidden while it shows — its items kept in <see cref="Settings.AppSettingsData.ToolbarLastItems"/> — else shown again with
     /// them (<see cref="ToolbarItems.Defaults"/> the first time); <c>on</c> and <c>off</c> say which. Display only, so it runs at
-    /// once under a reply; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01).
+    /// once under a reply; Ctrl+T (Ctrl+Alt+B until later still on 2026-10-01) until 2026-10-18, no chord since.
     /// </summary>
     Toolbar,
 
     /// <summary>
-    /// <c>/header [on|off]</c> (2026-10-01, the user's ask, with Ctrl+Alt+H): <c>Show header</c> flipped, or set by the word, and
+    /// <c>/header [on|off]</c> (2026-10-01, the user's ask, with Ctrl+Alt+H until 2026-10-18): <c>Show header</c> flipped, or set by the word, and
     /// saved; the banner comes or goes at the next wipe, nothing redrawn now (<see cref="HeaderToggle"/>). A setting alone, so it
     /// runs at once under a reply, and a pane stays open over it.
     /// </summary>
@@ -204,7 +204,7 @@ public enum SlashCommand
     Collapse,
 
     /// <summary>
-    /// <c>/find [words]</c> (2026-10-07, the user's ask, phase 5 of the UI round; Ctrl+Shift+F the same, bare): the transcript's find —
+    /// <c>/find [words]</c> (2026-10-07, the user's ask, phase 5 of the UI round; Ctrl+F the same, bare, since 2026-10-18, Ctrl+Shift+F until then): the transcript's find —
     /// a find row over the input row, the transcript scrolled to the newest match, Enter older, Shift+Enter newer, ESC back at the
     /// bottom (<c>UI/TranscriptFind</c>). The words start it with that text, and open the folds that hold it at once. Needs the
     /// screen; under a reply it waits for the idle line.
@@ -346,7 +346,7 @@ public enum SlashCommand
     /// <summary>
     /// <c>/rename [name]</c> (2026-10-05, the user's ask): the session on screen renamed from the draft line — a front door onto
     /// <c>/sessions title</c>, the name the title (waits for a reply as that does) and the bare word the rename box (a pane under
-    /// a reply as that is). Ctrl+Alt+R sends the bare word.
+    /// a reply as that is). Ctrl+N sends the bare word (Ctrl+Alt+R until 2026-10-18).
     /// </summary>
     Rename,
 
@@ -385,6 +385,13 @@ public enum SlashCommand
     /// links); <c>on</c> and <c>off</c> the switch; <c>reset</c> a new sign-in token after a yes. Waits for the idle line under a reply.
     /// </summary>
     WebUi,
+
+    /// <summary>
+    /// <c>/pasted view|thumbs|purge</c> (2026-10-18, the user's ask: every picture folder under the profile's <c>images</c> folder with
+    /// <c>/comfy</c>'s three words): the <c>Pasted images folder</c> in the picture viewer or the thumbnail browser, or emptied after a yes
+    /// (<c>Images.PastedCommand</c>). Bare or another word is the usage error. Not headless.
+    /// </summary>
+    Pasted,
 
     /// <summary><c>/exit</c>: leave the app (<c>/quit</c> until 2026-09-17, the user's call; the old word is unknown now, as the aliases are).</summary>
     Exit,
@@ -467,6 +474,7 @@ public static class SlashCommands
             new("/msgclear", "clear the profile's message history"),
             new("/new", "start over, keeping the screen"),
             new("/open", "open a file in its default app"),
+            new(Images.PastedCommand.Word, "view, browse or purge pasted pictures"),   // 2026-10-18
             new("/perfbar", "show or hide the performance bar"),
             new(HomeAssistant.HomeBarText.Command, "show, hide or edit the home bar"),
             new("/plan", "plan before doing"),
@@ -596,7 +604,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -611,7 +619,7 @@ public static class SlashCommands
     public const string McpWord = "/mcp";
     public const string SysWord = "/sys";
     public const string SessionsWord = "/sessions";   // later on 2026-09-21, the sixth glyph
-    public const string RenameWord = "/rename";       // 2026-10-05, what Ctrl+Alt+R sends: the rename box
+    public const string RenameWord = "/rename";       // 2026-10-05, what Ctrl+N sends (Ctrl+Alt+R until 2026-10-18): the rename box
     public const string MemoryWord = "/memory";       // 2026-09-22, the disk between the balloon and the lock, while Memory is on
     public const string ProfileWord = "/profile";     // later on 2026-09-29, the ID card after the gear: the profile picker
     public const string ThemeWord = "/theme";         // 2026-10-04, the abacus after the ID card: the theme picker
@@ -645,6 +653,7 @@ public static class SlashCommands
             "/clear" => SlashCommand.Clear,
             "/new" => SlashCommand.New,
             "/splash" => SlashCommand.Splash,
+            Images.PastedCommand.Word => SlashCommand.Pasted,
             "/rewind" => SlashCommand.Rewind,
             "/theme" => SlashCommand.Theme,
             "/mark" => SlashCommand.Mark,
@@ -750,5 +759,6 @@ public static class SlashCommands
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
-        or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi;
+        or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
+        or SlashCommand.Splash or SlashCommand.Pasted;   // 2026-10-18: view|thumbs|purge
 }

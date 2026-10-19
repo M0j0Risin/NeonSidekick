@@ -132,7 +132,7 @@ public partial class ChatScreenTests : IDisposable
         // Reflection (auto-learn) is on by default (2026-09-17); a script of five tool calls would then dequeue a reflection it never
         // enqueued, so the fixture opts out and the learning tests opt in.
         _settings.Update(d => d.ReflectionAutoLearn = false);
-        // The user avatar is 🙊 by default (2026-10-13): these scripts pin the sent line's ›, so the fixture opts out; the avatar's own tests set one.
+        // The user avatar has a default (🙊 from 2026-10-13, 🧿 since 2026-10-18): these scripts pin the sent line's ›, so the fixture opts out; the avatar's own tests set one.
         _settings.Update(d => d.UserAvatar = "");
         // Tool collapse count is 2 by default (2026-09-22): with a geometry the opening calls alone fold, and a fold rewrites the
         // flow from the store — every refresh-counting script would count it. The fixture opts out; the fold's own tests opt in.
@@ -10683,7 +10683,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 161;   // /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 170;   // the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -11968,25 +11968,27 @@ public partial class ChatScreenTests : IDisposable
         var windows = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: false);
         var mac = ChatScreen.KeyRows(false, ConsoleKey.F8, false, "", mac: true);
 
-        Assert.Equal(windows.Length + 3 - 2, mac.Length);   // less Ctrl+J (2026-10-12): a Mac terminal sends it as the line break; less Ctrl+Shift+F (2026-10-13), which arrives as Ctrl+F
+        // Less Ctrl+J (2026-10-12): a Mac terminal sends it as the line break. Ctrl+Shift+F, which arrived there as Ctrl+F, was left out
+        // from 2026-10-13 until 2026-10-18, when /find moved to Ctrl+F on both lists.
+        Assert.Equal(windows.Length + 3 - 1, mac.Length);
         Assert.DoesNotContain(mac, r => r.Key is "Ctrl+J" or "Ctrl+Shift+F");
         Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
         string[] keys = mac.Select(r => r.Key).ToArray();
-        Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
+        Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+B", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
         Assert.Equal("Ctrl+Alt+A", keys[Array.IndexOf(keys, "Ctrl+Alt+B") - 1]);
         Assert.Equal(new KeyRow("Ctrl+]", "open a terminal in the working directory", "/terminal"), mac.Single(r => r.Key == "Ctrl+]"));
         Assert.Equal(new KeyRow("Ctrl+D", "open the model picker", "/model"), mac.Single(r => r.Key == "Ctrl+D"));
         Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
         Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
         Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text, pictures or PDFs (Cmd+V is the terminal's: text only)"), mac[12]);   // pictures off the pasteboard, 2026-10-07
-        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V" or "Ctrl+J" or "Ctrl+Shift+F")),
+        Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V" or "Ctrl+J")),
             mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A" or "Ctrl+V / Alt+V")));
     }
 
     [Theory]
-    [InlineData(false, false, 57)]   // Ctrl+Alt+W (/prompts) on 2026-10-13; Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
-    [InlineData(true, false, 58)]
-    [InlineData(true, true, 59)]   // the word moves and deletes joined (2026-10-04)
+    [InlineData(false, false, 56)]   // 2026-10-18 (the user's picks, the map rearranged): Ctrl+B and Ctrl+N joined, Ctrl+Shift+F and Ctrl+Alt+E, H, L and R went, Ctrl+Alt+Y and Z joined. Before: Ctrl+Alt+W (/prompts) on 2026-10-13; Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(true, false, 57)]
+    [InlineData(true, true, 58)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
     {
         var rows = ChatScreen.KeyRows(voiceOn, ConsoleKey.F8, wakeReady, "hey neon", mac: false);   // Windows' list on any machine (2026-10-07)
@@ -12035,25 +12037,26 @@ public partial class ChatScreenTests : IDisposable
             new("F10", "capture the screen and attach it", "/screen"),
             new("Ctrl+.", "open a terminal in the working directory", "/terminal"),   // 2026-10-03, the user's ask
             new("Ctrl+/", "open the settings", "/settings"),   // later still on 2026-10-01
+            new("Ctrl+B", "show or hide the Browser window", "/browser"),   // 2026-10-18, the user's pick
             new("Ctrl+E", "open the working directory in the file browser", "/explore"),   // later on 2026-10-01
-            new("Ctrl+F", "show or hide the performance bar", "/perfbar"),   // from Ctrl+Alt+E, later still on 2026-10-01
-            new("Ctrl+Shift+F", "find words in the transcript", "/find"),   // 2026-10-13: the chord was missing from the list
+            new("Ctrl+F", "find words in the transcript", "/find"),   // 2026-10-18, the user's pick (Ctrl+Shift+F until then; /perfbar before)
             new("Ctrl+G", "show or hide the log window", "/log"),   // from Ctrl+Alt+G on 2026-10-12, the user's ask
             new("Ctrl+H", "open the help", "/help"),   // from Ctrl+Alt+H, later still on 2026-10-01
             new("Ctrl+J", "open the emoji picker at the cursor"),   // 2026-10-12, the user's ask (Windows' list alone)
             new("Ctrl+L", "cancel a background learning turn"),   // 2026-10-04, the user's ask
             new("Ctrl+M", "open the model picker", "/model"),   // later still on 2026-10-01
+            new("Ctrl+N", "rename this session", "/rename"),   // 2026-10-18, the user's pick (Ctrl+Alt+R until then)
             new("Ctrl+O", "expand or collapse tool calls, code, diffs and thinking"),   // 2026-09-22; diffs 2026-10-04
             new("Ctrl+P", "open the profile pane", "/profile"),   // from Ctrl+Alt+P
             new("Ctrl+Q", "open the queue pane", "/queue"),   // 2026-10-05, the user's ask
             new("Ctrl+R", "open the reasoning picker", "/reasoning"),
             new("Ctrl+S", "open the server picker", "/server"),
-            new("Ctrl+T", "show or hide the toolbar", "/toolbar"),   // from Ctrl+Alt+B
+            new("Ctrl+T", "open the tools pane", "/tools"),   // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
             new("Ctrl+U", "open the usage pane", "/usage"),   // from Ctrl+Alt+G
-            new("Ctrl+W", "show or hide the home bar", "/homebar"),   // 2026-10-12, the user's pick (Ctrl+Alt+W for a few hours)
+            new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"),   // 2026-10-18, the user's pick (/homebar until then)
             new("Ctrl+Y", "open the system prompt pane", "/sys"),   // from Ctrl+Alt+Y on 2026-10-03, the user's ask
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^41..^19]);
+        ], rows[^40..^17]);
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -12061,23 +12064,21 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+B", "resume the last botchat · during one, end it at once", "/botchat --resume"),   // 2026-10-11, the user's ask
             new("Ctrl+Alt+C", "start a new conversation and clear the screen", "/clear"),
             new("Ctrl+Alt+D", "open the MCP pane", "/mcp"),
-            new("Ctrl+Alt+E", "open the sessions pane", "/sessions"),   // later on 2026-10-03, the user's ask
-            new("Ctrl+Alt+H", "show or hide the header from the next clear", "/header"),   // later still on 2026-10-01, the user's ask
             new("Ctrl+Alt+K", "stop the extra embedded servers a botchat left running", "/botchat --kill"),   // 2026-10-11, the user's ask
-            new("Ctrl+Alt+L", "open the allowed commands list", "/tools shell allowed"),   // /cmdlist until 2026-10-09
             new("Ctrl+Alt+M", "open the memory pane", "/memory"),
             new("Ctrl+Alt+N", "start a new conversation, keeping the screen", "/new"),
             new("Ctrl+Alt+O", "open the shell police setting", "/tools shell police"),   // /police until 2026-10-09
-            new("Ctrl+Alt+P", "start a new conversation with the splash", "/splash"),   // from Ctrl+Alt+S, later still on 2026-10-01
+            new("Ctrl+Alt+P", "open the saved prompts pane", "/prompts"),   // 2026-10-18, the user's pick (Ctrl+Alt+W until then)
             new("Ctrl+Alt+Q", "clear the message queue", "/queue clear"),   // 2026-10-05, the user's ask
-            new("Ctrl+Alt+R", "rename this session", "/rename"),   // 2026-10-05, the user's ask
             new("Ctrl+Alt+S", "open the skills pane", "/skills"),   // from Ctrl+Alt+K
-            new("Ctrl+Alt+T", "open the tools pane", "/tools"),
+            new("Ctrl+Alt+T", "open the allowed commands list", "/tools shell allowed"),   // 2026-10-18 (Ctrl+Alt+L until then; /cmdlist until 2026-10-09)
             new("Ctrl+Alt+U", "show or hide the ComfyUI picture viewer", "/comfy view"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
-            new("Ctrl+Alt+W", "open the saved prompts pane", "/prompts"),   // 2026-10-13, the user's pick
+            new("Ctrl+Alt+W", "open the Web UI pane", "/webui"),   // 2026-10-18, the user's pick
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-        ], rows[^19..]);
+            new("Ctrl+Alt+Y", "open the sessions pane", "/sessions"),   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
+            new("Ctrl+Alt+Z", "start a new conversation with the splash", "/splash"),   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
+        ], rows[^17..]);
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
@@ -12087,13 +12088,14 @@ public partial class ChatScreenTests : IDisposable
             ["F10"] = new('\0', ConsoleKey.F10, false, false, false),
             ["Ctrl+."] = Keys.CtrlPeriod,
             ["Ctrl+/"] = Keys.CtrlSlash,
+            ["Ctrl+B"] = Keys.Ctrl(ConsoleKey.B),   // 2026-10-18
             ["Ctrl+E"] = Keys.CtrlE,
             ["Ctrl+F"] = Keys.CtrlF,
-            ["Ctrl+Shift+F"] = new('\x06', ConsoleKey.F, true, false, true),   // 2026-10-13
             ["Ctrl+G"] = Keys.Ctrl(ConsoleKey.G),
             ["Ctrl+H"] = Keys.CtrlH,
             ["Ctrl+L"] = Keys.CtrlL,
             ["Ctrl+M"] = Keys.CtrlM,
+            ["Ctrl+N"] = Keys.Ctrl(ConsoleKey.N),   // 2026-10-18
             ["Ctrl+P"] = Keys.CtrlP,
             ["Ctrl+Q"] = Keys.Ctrl(ConsoleKey.Q),
             ["Ctrl+R"] = Keys.CtrlR,
@@ -13534,7 +13536,8 @@ public partial class ChatScreenTests : IDisposable
     [Theory]
     [InlineData(SlashCommand.Comfy, "view", MidTurnClass.Quick)]
     [InlineData(SlashCommand.Comfy, " VIEW ", MidTurnClass.Quick)]
-    [InlineData(SlashCommand.Comfy, "", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.Comfy, "", MidTurnClass.Pane)]   // 2026-10-18: /tools comfy's page (the status, Deferred, until then)
+    [InlineData(SlashCommand.Comfy, "status", MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Comfy, "purge", MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Comfy, "edit json x", MidTurnClass.Deferred)]
     [InlineData(SlashCommand.Tools, "", MidTurnClass.Pane)]
@@ -17795,7 +17798,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.KeptNotice, output);
-        Assert.Contains("  · " + ChatScreen.ComfyPurgedNotice(ComfyImagesDir, 2, 1, 8), output);
+        Assert.Contains("  · " + ChatScreen.PurgedNotice(ComfyImagesDir, 2, 1, 8), output);
         Assert.True(Directory.Exists(ComfyImagesDir));
         Assert.Empty(Directory.EnumerateFileSystemEntries(ComfyImagesDir));
         Assert.Empty(_chat.Requests);
@@ -17810,7 +17813,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.ComfyPurgeEmptyNotice(ComfyImagesDir), output);
+        Assert.Contains("  · " + ChatScreen.PurgeEmptyNotice(ComfyImagesDir), output);
         Assert.DoesNotContain(ChatScreen.KeptNotice, output);
     }
 
@@ -17826,17 +17829,26 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  ✗ " + ChatScreen.ComfyPurgeHereError, output);
+        Assert.Contains("  ✗ " + ChatScreen.PurgeHereError(ChatScreen.ComfyFolderLabel), output);
         Assert.Equal("stays", File.ReadAllText(Path.Combine(root, "keep.txt")));
     }
 
     [Fact]
     public void ComfyPurge_Wording_IsPinned()
     {
-        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.ComfyPurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
-        Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.ComfyPurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
-        Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.ComfyPurgeEmptyNotice(@"D:\x\comfy_images"));
-        Assert.Equal("Usage: /comfy, /comfy offered, /comfy purge, /comfy view, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
+        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
+        Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.PurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
+        Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.PurgeEmptyNotice(@"D:\x\comfy_images"));
+        Assert.Equal("Usage: /comfy, /comfy status, /comfy offered, /comfy purge, /comfy view, /comfy thumbs, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
+        // Through the bin (2026-10-18): the bin's name is this system's (the Trash on a Mac).
+        string bin = FileText.RecycleBinName;
+        Assert.Equal(@"🗑️ Send everything in D:\x\camera_images to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera_images", 3, 1, 1_234, false, toBin: true));
+        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 3, noBin: 0));
+        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B; 1 item deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 2, noBin: 1));
+        Assert.Equal(@"(🗑️ purged D:\x\camera_images: 2 files, 1 folder, 8 B; deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 0, noBin: 3));
+        Assert.Equal(@"The purge of D:\x\camera_images stopped after 1 of 3 items: too long. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera_images", 1, 3, "too long"));
+        Assert.Equal("Not purging: the Pasted images folder is the profile's images folder itself; set a folder under it first.", ChatScreen.PurgeHereError(ChatScreen.PastedFolderLabel));
+        Assert.Equal("Moving 1 item to the " + bin, ChatScreen.PurgeMovingLabel(1));
     }
 
     [Fact]
@@ -17846,7 +17858,7 @@ public partial class ChatScreenTests : IDisposable
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], None, None,
             Workflows: () => [new("juggernaut-xl", "juggernaut · text → image · 1024×1024"), new("pony-txt2img", "pony · text → image · 1024×1024")]);
 
-        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyOfferedWord, ChatScreen.ComfyPurgeWord, NeonSidekick.Viewer.ThumbsText.ThumbsWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
+        Assert.Equal([ChatScreen.ComfyEditWord, ChatScreen.ComfyOfferedWord, ChatScreen.ComfyPurgeWord, ChatScreen.ComfyStatusWord, NeonSidekick.Viewer.ThumbsText.ThumbsWord, NeonSidekick.Viewer.ViewerText.ViewWord], ChatScreen.ArgumentItems("/comfy", "", sources).Select(i => i.Text));
         Assert.Equal(["view"], ChatScreen.ArgumentItems("/comfy", "v", sources).Select(i => i.Text));
         Assert.Equal(["purge"], ChatScreen.ArgumentItems("/comfy", "pu", sources).Select(i => i.Text));
         Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));
@@ -17861,7 +17873,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Comfy_ShowsTheServer_AndTheWorkflows()
     {
         ComfyServer();
-        PushLine("/comfy");
+        PushLine("/comfy status");   // the bare word's until 2026-10-18
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -18798,13 +18810,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task CtrlAltP_ShowsTheSplash_AsSlashSplash()
+    public async Task CtrlAltZ_ShowsTheSplash_AsSlashSplash()   // Ctrl+Alt+P until 2026-10-18 (the user's pick)
     {
         _settings.Update(d => d.TtsOutput = false);
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf(2380, 100);
-        StepsWhenIdle(Line("hi"), Key(Keys.CtrlAlt(ConsoleKey.P)), Line("again"), Line("/exit"));
+        StepsWhenIdle(Line("hi"), Key(Keys.CtrlAlt(ConsoleKey.Z)), Line("again"), Line("/exit"));
 
         string output = await RunAsync();
 
@@ -18815,7 +18827,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task MidTurn_CtrlAltP_CancelsTheReply_AndRunsAtTheIdleLine()
+    public async Task MidTurn_CtrlAltZ_CancelsTheReply_AndRunsAtTheIdleLine()
     {
         _settings.Update(d => d.WelcomeSplashMode = "off");
         SplashOf(2380, 100);
@@ -18823,7 +18835,7 @@ public partial class ChatScreenTests : IDisposable
         {
             if (i == 1)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.P));
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.Z));
             }
         });
 
@@ -18836,16 +18848,16 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltT_OpensTheToolsPane_AsSlashTools_TheDraftKept()
+    public async Task CtrlT_OpensTheToolsPane_AsSlashTools_TheDraftKept()
     {
         // The pane chords (later on 2026-09-30, the user's ask): the bare command through the dispatch, no transcript row,
-        // the draft back on the row after ESC.
+        // the draft back on the row after ESC. Ctrl+Alt+T until 2026-10-18 (the user's pick), plain Ctrl+T since.
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         _chat.EnqueueText("one");
         StepsWhenIdle(
-            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.T)); },
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlT); },
             Key(Keys.Escape),
             Key(Keys.Enter),
             Line("/exit"));
@@ -18874,16 +18886,17 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltE_OpensTheSessionsPane_AsSlashSessions_TheDraftKept()
+    public async Task CtrlAltY_OpensTheSessionsPane_AsSlashSessions_TheDraftKept()
     {
         // Later on 2026-10-03 (the user's ask): the bare /sessions through the dispatch, no transcript row, the draft back after ESC.
+        // Ctrl+Alt+E until 2026-10-18 (the user's pick), Ctrl+Alt+Y since.
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         long id = SeedSession();
         _chat.EnqueueText("one");
         StepsWhenIdle(
-            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.E)); },
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.Y)); },
             Key(Keys.Escape),
             Key(Keys.Enter),
             Line("/exit"));
@@ -18896,14 +18909,14 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlAltE_OpensTheSessionsPane_OverTheReply_WhichRunsOn()
+    public async Task MidTurn_CtrlAltY_OpensTheSessionsPane_OverTheReply_WhichRunsOn()
     {
         SeedSession();
         MidTurnFixture(i =>
         {
             if (i == 1)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.E));
+                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.Y));
             }
             else if (i == 2)
             {
@@ -18992,23 +19005,27 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
     }
 
-    [Fact]
-    public async Task CtrlAltH_FlipsShowHeader_NoHelpPane_TheDraftSentIntact()
+    [Theory]
+    [InlineData(ConsoleKey.H)]
+    [InlineData(ConsoleKey.E)]
+    [InlineData(ConsoleKey.L)]
+    [InlineData(ConsoleKey.R)]
+    public async Task AFreedCtrlAltChord_DoesNothing_TheDraftSentIntact(ConsoleKey key)
     {
-        // Ctrl+Alt+H was /help until plain Ctrl+H took it, and /header since later still on 2026-10-01 (the user's ask): Show header
-        // flipped and saved, the notice saying when, the draft on the row kept and nothing redrawn.
+        // Ctrl+Alt+H was /help, then /header from later still on 2026-10-01; E /sessions, L the allowed commands, R /rename. All four went
+        // on 2026-10-18 (the user's picks): a freed chord does nothing and says nothing, types nothing, and the draft is sent as it was.
         _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("one");
         StepsWhenIdle(
-            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.H)); input.Push(Keys.Enter); },
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(key)); input.Push(Keys.Enter); },
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain(InfoPane.Title + " │ Basic", output);
         Assert.Equal("keep", UserText(Assert.Single(_chat.Requests)));
-        Assert.False(_settings.Current.ShowHeader);
-        Assert.Contains(HeaderToggle.Notice(false), output);
+        Assert.True(_settings.Current.ShowHeader);
+        Assert.DoesNotContain(HeaderToggle.Notice(false), output);
+        Assert.DoesNotContain(Titled(SessionsMenu.Title), output);
     }
 
     [Fact]
@@ -19128,21 +19145,59 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlF_InThePane_TogglesThePerformanceBar_WithThePaneLeftOpen()
+    public async Task CtrlF_InThePane_ClosesIt_AndOpensTheFind()
     {
-        // In place (2026-10-01, the user's call): the pane stays, so the "x" after the chord is the pane's (nothing),
-        // never a draft on the idle line that the Enter after the ESC would send.
-        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
+        // Ctrl+F toggled the performance bar in place until 2026-10-18 (the user's picks); /find since, which closes the pane and runs,
+        // as every chord that is no window's: the words typed after it are the find's, and Esc ends it.
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
-            input => { PushLine(input, "/help"); input.Push(Keys.CtrlF, Keys.Char('x'), Keys.Escape, Keys.Escape, Keys.Enter); },   // the x a find since 2026-10-07: the first ESC clears it
+            Line("/echo the apple tree"),
+            input => { PushLine(input, "/help"); input.Push(Keys.CtrlF); PushText(input, "apple"); input.Push(Keys.Escape); },
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.NotNull(_settings.Current.PerformanceBarItems);
-        Assert.Contains(NeonSidekick.Perf.PerfText.BarNotice(_settings.Current.PerformanceBarLook), output);
+        Assert.Contains(InfoPane.Title + " │ Basic", output);
+        Assert.Contains(TranscriptFind.Hint(1, 2), output);   // the typed /echo line and its echo; the chord writes no line
+        Assert.DoesNotContain(NeonSidekick.Perf.PerfText.BarNotice(_settings.Current.PerformanceBarLook), output);   // the bar left alone
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// Ctrl+F in a find closes it (2026-10-18, the user's pick), whether Ctrl+F or a typed <c>/find words</c> opened it: nothing reruns,
+    /// so no empty find opens over the line (a find left open would take the <c>/exit</c> after it as its words, and the script would run dry).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CtrlF_InAFind_ClosesIt(bool byChord)
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        StepsWhenIdle(
+            Line("/echo the apple tree"),
+            input =>
+            {
+                if (byChord)
+                {
+                    input.Push(Keys.CtrlF);
+                    PushText(input, "apple");
+                }
+                else
+                {
+                    PushLine(input, "/find apple");
+                }
+
+                input.Push(Keys.CtrlF);
+            },
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(TranscriptFind.Hint(1, 2), output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -19562,10 +19617,11 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlF_InAPaneTheReplyEndedUnder_TogglesTheBar_WithThePaneStillOpen()
+    public async Task MidTurn_CtrlE_InAPaneTheReplyEndedUnder_ActsInPlace_WithThePaneStillOpen()
     {
         // The review's finding (2026-10-01): with the reply over and the pane left open, the turn's end waited on the pane and
-        // ran nothing posted meanwhile, so the bar changed only at the close — and twice was no change at all.
+        // ran nothing posted meanwhile, so the bar changed only at the close — and twice was no change at all. Ctrl+F (the bar) until
+        // 2026-10-18, when the bar chords went; Ctrl+E (/explore, in place too) since.
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
@@ -19606,13 +19662,13 @@ public partial class ChatScreenTests : IDisposable
                 {
                     replied.Wait(TimeSpan.FromSeconds(5));
                     await Task.Delay(200);
-                    input.Push(Keys.CtrlF);
+                    input.Push(Keys.CtrlE);
                 });
             }
             else if (step == 2)
             {
-                // The pane reads on (the chord was done in place): the bar must be on before it closes.
-                barWhileOpen = SpinWait.SpinUntil(() => _settings.Current.PerformanceBarItems is { Count: > 0 }, TimeSpan.FromSeconds(5));
+                // The pane reads on (the chord was done in place): the folder must be open before it closes.
+                barWhileOpen = SpinWait.SpinUntil(() => _openedFiles.Count > 0, TimeSpan.FromSeconds(5));
                 input.Push(Keys.Escape);
                 step++;
             }
@@ -19627,7 +19683,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(InfoPane.Title + " │ Basic", output);
         Assert.True(barWhileOpen, output);
-        Assert.NotNull(_settings.Current.PerformanceBarItems);
+        Assert.Single(_openedFiles);
         Assert.Single(_chat.Requests);
     }
 
@@ -22332,9 +22388,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    /// <summary>Ctrl+Alt+R (2026-10-05, the user's ask): the bare <c>/rename</c>, the rename box with the title in it; no transcript row, the draft back after.</summary>
+    /// <summary>Ctrl+N (Ctrl+Alt+R from 2026-10-05, the user's ask, until 2026-10-18, the user's pick): the bare <c>/rename</c>, the rename box with the title in it; no transcript row, the draft back after.</summary>
     [Fact]
-    public async Task CtrlAltR_OpensTheRenameBox_AndTheTypedTitleReplacesIt_TheDraftKept()
+    public async Task CtrlN_OpensTheRenameBox_AndTheTypedTitleReplacesIt_TheDraftKept()
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
@@ -22351,7 +22407,7 @@ public partial class ChatScreenTests : IDisposable
             input =>
             {
                 PushText(input, "ok");
-                input.Push(Keys.CtrlAlt(ConsoleKey.R));
+                input.Push(Keys.CtrlN);
                 PushBackspaces(input, "vosk-model-wiring".Length);
                 PushText(input, "Wiring notes");
                 input.Push(Keys.Enter);   // the box's

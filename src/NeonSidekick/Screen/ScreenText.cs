@@ -38,7 +38,17 @@ public static class ScreenText
         (WindowPrefix, "a window by id or title"),
         (ViewWord, "open the picture viewer on the screenshots' folder"),
         (ThumbsWord, "open the screenshots' folder as thumbnails"),
+        (PurgeWord, "delete every screenshot in the folder"),   // 2026-10-18
     ];
+
+    /// <summary>
+    /// <c>/screen purge</c> (2026-10-18, the user's ask: <c>/comfy purge</c>'s twin): everything in the Screen output folder after a yes. Not
+    /// one of <see cref="IsFolderWord"/>'s words, which are also the quick ones under a reply; a purge waits. Pinned.
+    /// </summary>
+    public const string PurgeWord = "purge";
+
+    /// <summary>Whether <c>/screen</c>'s <paramref name="args"/> are <see cref="PurgeWord"/> alone, any case (a window titled so is <c>window:purge</c>). Pure.</summary>
+    public static bool IsPurgeWord(string? args) => string.Equals(args?.Trim(), PurgeWord, StringComparison.OrdinalIgnoreCase);
 
     /// <summary><c>/screen view</c> (2026-10-09, the user's ask: <c>/comfy view</c>'s twin): the picture viewer on the Screen capture output folder. Pinned.</summary>
     public const string ViewWord = "view";
@@ -234,7 +244,7 @@ public static class ScreenText
 
     public const string HelpSummary = "capture a monitor or a window";
 
-    public const string Usage = "Usage: /screen [screen | all | monitor:N | window:<id or title words> | behind | list | view | thumbs]";
+    public const string Usage = "Usage: /screen [screen | all | monitor:N | window:<id or title words> | behind | list | view | thumbs | purge]";
 
     public const string Capturing = "Capturing the screen…";
 

@@ -356,6 +356,10 @@ internal sealed partial class ChatScreen
             case CameraVerb.Thumbs:
                 OpenThumbsOn(_effective().CameraOutputFolder);
                 return;
+            case CameraVerb.Purge:
+                // /comfy purge's twin (2026-10-18, the user's ask); no camera needed, only its folder.
+                await PurgePictureFolderAsync(_effective().CameraOutputFolder, CameraFolderLabel, cancellationToken).ConfigureAwait(false);
+                return;
             default:
                 _transcript.Error(parsed.Error ?? CameraText.Usage);
                 return;

@@ -3,7 +3,7 @@ using Spectre.Console;
 namespace NeonSidekick.UI;
 
 /// <summary>
-/// The transcript's find (2026-10-07, the user's ask, phase 5 of the UI round): <c>/find [words]</c> or Ctrl+Shift+F at the idle
+/// The transcript's find (2026-10-07, the user's ask, phase 5 of the UI round): <c>/find [words]</c> or Ctrl+F (Ctrl+Shift+F until 2026-10-18) at the idle
 /// line opens a find row over the input row, and the transcript scrolls to what it finds — every place marked, the one it is on
 /// in the selection's colours (<see cref="ScreenPane.ShowFind"/>). Typing narrows it, newest first: the view goes to the match
 /// nearest the bottom, Enter or F3 to the next one up (older), Shift with either back down (newer), both wrapping; PgUp/PgDn and
@@ -234,7 +234,7 @@ public sealed class TranscriptFind
 
     /// <summary>
     /// Where the typed <c>/find</c> line that opened the find starts — the last row with text, when it is one — else the row
-    /// count: the rows from there on are not searched. Ctrl+Shift+F writes no line, so nothing is left out then. <paramref name="glyph"/>
+    /// count: the rows from there on are not searched. Ctrl+F writes no line, so nothing is left out then. <paramref name="glyph"/>
     /// is what a sent line opens with (<see cref="ScreenPane.UserGlyph"/>, the user avatar since 2026-10-12).
     /// </summary>
     internal static int OwnLine(IReadOnlyList<IReadOnlyList<Spectre.Console.Rendering.Segment>> rows, string glyph = InputLine.PromptGlyph)

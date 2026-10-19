@@ -53,7 +53,7 @@ public static class Keys
     /// <summary>Ctrl+E as the console delivers it: the ENQ character with the key and Control (<c>/explore</c>, <see cref="ShortcutLine"/>).</summary>
     public static ConsoleKeyInfo CtrlE => new('\x05', ConsoleKey.E, false, false, true);
 
-    /// <summary>Ctrl+F as the console delivers it: the ACK character with the key and Control (<c>/perfbar</c>).</summary>
+    /// <summary>Ctrl+F as the console delivers it: the ACK character with the key and Control (<c>/find</c> since 2026-10-18).</summary>
     public static ConsoleKeyInfo CtrlF => new('\x06', ConsoleKey.F, false, false, true);
 
     /// <summary>Ctrl+H as the console delivers it: the BS character with the H key (never Backspace) and Control (<c>/help</c>).</summary>
@@ -74,7 +74,16 @@ public static class Keys
     /// <summary>Ctrl+S as the console delivers it: the DC3 character with the key and Control (<c>/server</c>).</summary>
     public static ConsoleKeyInfo CtrlS => new('\x13', ConsoleKey.S, false, false, true);
 
-    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/toolbar</c>).</summary>
+    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/tools</c> since 2026-10-18).</summary>
+
+    /// <summary>Ctrl+B as the console delivers it: the STX character with the key and Control (<c>/browser</c>, 2026-10-18).</summary>
+    public static ConsoleKeyInfo CtrlB => new('\x02', ConsoleKey.B, false, false, true);
+
+    /// <summary>Ctrl+N as the console delivers it: the SO character with the key and Control (<c>/rename</c>, 2026-10-18).</summary>
+    public static ConsoleKeyInfo CtrlN => new('\x0e', ConsoleKey.N, false, false, true);
+
+    /// <summary>Ctrl+W as the console delivers it: the ETB character with the key and Control (<c>/webui browser</c>, 2026-10-18).</summary>
+    public static ConsoleKeyInfo CtrlW => new('\x17', ConsoleKey.W, false, false, true);
     public static ConsoleKeyInfo CtrlT => new('\x14', ConsoleKey.T, false, false, true);
 
     /// <summary>Ctrl+/ as the console delivers it on a US layout: no character, the Oem2 key with Control (<c>/settings</c>).</summary>
@@ -158,6 +167,16 @@ public static class Keys
     /// did there. Nothing in the app used Ctrl+G; Windows Terminal leaves it alone, and macOS's Terminal sends BEL, which this reads.
     /// On 2026-10-13 (the user's pick) Ctrl+Alt+W is <c>/prompts</c>, the saved prompts' pane, free since <c>/homebar</c> moved to Ctrl+W:
     /// its ETB counts as no character. A chord keeps the draft, so the pane's save draft has it.
+    /// On 2026-10-18 (the user's picks, the map rearranged so the most-used commands sit on the shortest chords) every chord that
+    /// only showed or hid a bar went, the commands staying: Ctrl+F (<c>/perfbar</c>), Ctrl+T (<c>/toolbar</c>), Ctrl+W (<c>/homebar</c>)
+    /// and Ctrl+Alt+H (<c>/header</c>). Plain Ctrl+B is <c>/browser</c> (the Browser window on its home page, closed again by a second
+    /// press: <c>ChatScreen.CloseByChord</c>), Ctrl+F <c>/find</c> (Ctrl+Shift+F until then; the Ctrl+Shift arm went with it, so Windows
+    /// Terminal's own find has its chord back), Ctrl+N <c>/rename</c> (Ctrl+Alt+R until then), Ctrl+T <c>/tools</c> (Ctrl+Alt+T until
+    /// then) and Ctrl+W <c>/webui browser</c> (the Web UI on this PC, signed in). Ctrl+Alt+P is <c>/prompts</c> (Ctrl+Alt+W until then),
+    /// Ctrl+Alt+T <c>/tools shell allowed</c> (Ctrl+Alt+L until then), Ctrl+Alt+W <c>/webui</c> (its pane), Ctrl+Alt+Y <c>/sessions</c>
+    /// (Ctrl+Alt+E until then) and Ctrl+Alt+Z <c>/splash</c> (Ctrl+Alt+P until then); Ctrl+Alt+E, H, L and R are free. Their STX, ACK,
+    /// SO, DC4, ETB, DLE, EM and SUB count as no character, and an AltGr key that types one (ż on AltGr+Z, € on AltGr+E) is still that
+    /// character. A freed chord does nothing and says nothing (the user's pick): the editor types no control character.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -176,35 +195,26 @@ public static class Keys
         {
             return (key.Key, key.KeyChar) switch
             {
+                (ConsoleKey.B, '\0' or '\x02') => "/browser",   // 2026-10-18, the user's pick (free until then)
                 (ConsoleKey.E, '\0' or '\x05') => "/explore",
-                (ConsoleKey.F, '\0' or '\x06') => "/perfbar",
+                (ConsoleKey.F, '\0' or '\x06') => "/find",   // 2026-10-18, the user's pick (Ctrl+Shift+F until then; /perfbar before)
                 (ConsoleKey.G, '\0' or '\x07') => "/log",   // 2026-10-12, the user's pick (Ctrl+Alt+G until then)
                 (ConsoleKey.H, '\0' or '\x08') => "/help",
                 (ConsoleKey.M, '\0' or '\r') => "/model",
+                (ConsoleKey.N, '\0' or '\x0e') => "/rename",   // 2026-10-18, the user's pick (Ctrl+Alt+R until then)
                 (ConsoleKey.P, '\0' or '\x10') => "/profile",
                 (ConsoleKey.Q, '\0' or '\x11') => "/queue",
                 (ConsoleKey.R, '\0' or '\x12') => "/reasoning",
                 (ConsoleKey.S, '\0' or '\x13') => "/server",
-                (ConsoleKey.T, '\0' or '\x14') => "/toolbar",
+                (ConsoleKey.T, '\0' or '\x14') => "/tools",   // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
-                (ConsoleKey.W, '\0' or '\x17') => "/homebar",   // 2026-10-12, the user's pick (Ctrl+Alt+W until later that day)
+                (ConsoleKey.W, '\0' or '\x17') => "/webui browser",   // 2026-10-18, the user's pick (/homebar until then)
                 (ConsoleKey.Y, '\0' or '\x19') => "/sys",
                 (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 (ConsoleKey.OemPeriod, '\0') => "/terminal",
                 (ConsoleKey.Oem6, '\0' or '\x1d') when OperatingSystem.IsMacOS() => "/terminal",
                 (ConsoleKey.D, '\0' or '\x04') when OperatingSystem.IsMacOS() => "/model",
-                _ => null,
-            };
-        }
-
-        if (held == (ConsoleModifiers.Control | ConsoleModifiers.Shift))
-        {
-            // Ctrl+Shift+F /find (2026-10-07, the user's pick): Shift tells it from Ctrl+F's /perfbar. Windows Terminal binds it to
-            // its own find by default, so there it reaches the app only once that binding is taken off.
-            return (key.Key, key.KeyChar) switch
-            {
-                (ConsoleKey.F, '\0' or '\x06') => "/find",
                 _ => null,
             };
         }
@@ -218,22 +228,20 @@ public static class Keys
         {
             (ConsoleKey.B, '\0' or '\x02') => App.BotChat.ResumeLine,
             (ConsoleKey.C, '\0' or '\x03') => "/clear",
-            (ConsoleKey.H, '\0' or '\x08') => "/header",
             (ConsoleKey.K, '\0' or '\x0b') => App.BotChat.KillLine,
             (ConsoleKey.N, '\0' or '\x0e') => "/new",
-            (ConsoleKey.P, '\0' or '\x10') => "/splash",
+            (ConsoleKey.P, '\0' or '\x10') => "/prompts",   // 2026-10-18, the user's pick (Ctrl+Alt+W until then; /splash before)
             (ConsoleKey.Q, '\0' or '\x11') => "/queue clear",
-            (ConsoleKey.R, '\0' or '\x12') => "/rename",
-            (ConsoleKey.T, '\0' or '\x14') => "/tools",
+            (ConsoleKey.T, '\0' or '\x14') => "/tools shell allowed",   // 2026-10-18, the user's pick (Ctrl+Alt+L until then; /tools before)
             (ConsoleKey.S, '\0' or '\x13') => "/skills",
             (ConsoleKey.M, '\0' or '\r') => "/memory",
             (ConsoleKey.D, '\0' or '\x04') => "/mcp",
-            (ConsoleKey.E, '\0' or '\x05') => "/sessions",
-            (ConsoleKey.L, '\0' or '\x0c') => "/tools shell allowed",
             (ConsoleKey.O, '\0' or '\x0f') => "/tools shell police",
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
-            (ConsoleKey.W, '\0' or '\x17') => "/prompts",   // 2026-10-13, the user's pick (free since /homebar went to Ctrl+W)
+            (ConsoleKey.W, '\0' or '\x17') => "/webui",   // 2026-10-18, the user's pick (/prompts until then)
+            (ConsoleKey.Y, '\0' or '\x19') => "/sessions",   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
+            (ConsoleKey.Z, '\0' or '\x1a') => "/splash",   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
             (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
             _ => null,
         };
@@ -257,7 +265,7 @@ public static class Keys
     /// Ctrl+L, the background learning's cancel (2026-10-04, the user's ask: "cancels a running background learning turn") — what a
     /// double-click on the strip's 🧠 does, from the keyboard. A chord with no command, so never a <see cref="ShortcutLine"/>:
     /// <see cref="KeySource.LearnCancel"/> spends it wherever the key is read, <see cref="IsKillSwitch"/>'s way, so it never waits
-    /// for a reply or a pane and a pane stays open. Control held, Alt and Shift not (Ctrl+Alt+L is still the allowed-commands list), and no
+    /// for a reply or a pane and a pane stays open. Control held, Alt and Shift not (Ctrl+Alt+L was the allowed-commands list until 2026-10-18, free since), and no
     /// character but the console's own FF (<c>'\x0c'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>), so a typed "L" stays an "L".
     /// One press: a cancelled reflection costs nothing to start again (<c>/learn</c>).
     /// </summary>

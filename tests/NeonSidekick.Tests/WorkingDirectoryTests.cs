@@ -1474,6 +1474,40 @@ public sealed class WorkingDirectoryTests : IDisposable
         Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
     }
 
+    /// <summary>
+    /// With a bin (2026-10-18, the purges following <c>File deletes to Recycle bin</c>): each of the folder's own entries goes there in name order,
+    /// counted, the folder kept; a drive with no bin deletes them, counted apart; a refusal stops there, the rest left.
+    /// </summary>
+    [Fact]
+    public void PurgeFolder_WithABin_SendsEachEntry_KeepsTheFolder_AndStopsAtARefusal()
+    {
+        Put(Path.Combine("out", "b.png"), "12");
+        Put(Path.Combine("out", "a", "c.png"), "345");
+        var bin = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
+
+        var result = _files.PurgeFolder("out", bin);
+
+        Assert.Equal(FileOutcome.Ok, result.Outcome);
+        Assert.Equal((2, 1, 5L, true, 2, 2, 0), (result.Files, result.Folders, result.Bytes, result.ToBin, result.Entries, result.Recycled, result.DeletedNoBin));
+        Assert.Equal([Full("out" + Path.DirectorySeparatorChar + "a"), Full("out" + Path.DirectorySeparatorChar + "b.png")], bin.Moved);
+        Assert.True(Directory.Exists(Full("out")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
+
+        Put(Path.Combine("out", "x.png"), "1");
+        Put(Path.Combine("out", "y.png"), "2");
+        var noBin = _files.PurgeFolder("out", new NeonSidekick.Tests.Fakes.FakeRecycleBin { Answer = new RecycleResult(RecycleOutcome.NoBin) });
+        Assert.Equal((FileOutcome.Ok, 0, 2), (noBin.Outcome, noBin.Recycled, noBin.DeletedNoBin));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
+
+        Put(Path.Combine("out", "x.png"), "1");
+        Put(Path.Combine("out", "y.png"), "2");
+        var refusing = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
+        refusing.AnswerFor = _ => refusing.Moved.Count == 1 ? new RecycleResult(RecycleOutcome.Recycled) : new RecycleResult(RecycleOutcome.Failed, "no");
+        var stopped = _files.PurgeFolder("out", refusing);
+        Assert.Equal((FileOutcome.Failed, "no", 2, 1), (stopped.Outcome, stopped.Detail, stopped.Entries, stopped.Recycled));
+        Assert.True(File.Exists(Full(Path.Combine("out", "y.png"))));
+    }
+
     [Fact]
     public void PurgeFolder_NoFolder_IsOkWithZeros_AndCreatesNothing()
     {

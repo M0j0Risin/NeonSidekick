@@ -137,6 +137,7 @@ public static class WebCommands
         {
             SlashCommand.Overloaded => Refused(ChatScreen.NoArgumentError(word)),
             SlashCommand.Help => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/help <words>"),
+            SlashCommand.Splash when text.Length > 0 => Pane(word, "/splash"),   // 2026-10-18: view|thumbs|purge are a window or a question on the PC
             SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Remember or SlashCommand.Timer or SlashCommand.Mark
                 or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
@@ -171,7 +172,8 @@ public static class WebCommands
             SlashCommand.Tree => settings.FileTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "File tools")),
             SlashCommand.Vault => settings.ObsidianTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "Obsidian tools")),
             SlashCommand.Process => text.Length == 0 ? WebCommandVerdict.List : Pane(word, "/process"),
-            SlashCommand.Comfy => text.Length == 0 || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy or /comfy offered"),
+            // 2026-10-18: the bare word is /tools comfy (a page on the PC); the status it showed is /comfy status, a list as before.
+            SlashCommand.Comfy => Is(text, ChatScreen.ComfyStatusWord) || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy status or /comfy offered"),
             SlashCommand.Loop => LoopVerdict(args, settings),
             _ => Pane(word, null),
         };

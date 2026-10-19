@@ -60,6 +60,8 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/new` | Starts a new conversation, keeping the screen. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
+| `/splash view`, `/splash thumbs` | Opens the picture viewer or the thumbnail browser on the profile's `images\splash_images` folder; an empty one means the built-in pictures show. |
+| `/splash purge` | Deletes every splash picture of the profile, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes; the built-in pictures show again. |
 | `/compact [<focus>]` | Shrinks the context (*LLM compact mode*); a focus tells the summary what to keep. |
 | `/rewind [<n>]` | Goes back to an earlier message after a yes: it and everything after it leave the conversation and the stored session, and its text goes back on the input row. What tools changed stays. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
@@ -158,12 +160,16 @@ Each pane's keys are under [Pane keys](INTERFACE.md#pane-keys), and the commands
 | `/camera watch [<seconds>\|off]` | Checks the camera every *Camera watch interval (s)* (or the 2–3600 seconds given); a changed picture goes with your next message. |
 | `/camera off` | Ends live view and watch mode. |
 | `/camera view`, `/camera thumbs` | Opens the picture viewer or the thumbnail browser on *Camera output folder*. |
+| `/camera purge` | Deletes everything in *Camera output folder*, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
 | `/screen` | Captures the app's monitor onto the input line; *Screen tools* and *Screen policy* don't apply. See [Screen capture](#screen-capture). |
 | `/screen all\|desktop`, `/screen monitor:<n>` | Captures every monitor as one picture, or monitor *n*. |
 | `/screen window:<id>\|<title-words>` | Captures one window, even when covered, by id or words of its title or program. |
 | `/screen behind` | Captures the window right behind the app's own. |
 | `/screen list` | Lists the monitors and windows, front to back, with their targets. |
 | `/screen view`, `/screen thumbs` | Opens the picture viewer or the thumbnail browser on *Screen output folder*. |
+| `/screen purge` | Deletes everything in *Screen output folder*, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
+| `/pasted view`, `/pasted thumbs` | Opens the picture viewer or the thumbnail browser on *Pasted images folder*, where pasted pictures are saved as their messages are sent. |
+| `/pasted purge` | Deletes everything in *Pasted images folder*, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
 
 ### Voice
 
@@ -224,10 +230,11 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/ha say <sentence>` | Hands a sentence to *Home Assistant Assist agent*. |
 | `/imagine [<workflow>] <prompt> [-- <negative>\|--no-negative]` | Makes a picture on ComfyUI from your prompt as typed. See [Imagine options](#imagine-options). |
 | `/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]`, `/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]` | Sets the seed, size, steps, count, guidance, denoise strength and up to three input pictures. |
-| `/comfy`, `/comfy offered` | The ComfyUI server's status and workflows, or the workflows offered to the model. See [ComfyUI](TOOLS.md#comfyui). |
+| `/comfy` | Opens the ComfyUI tools' page, as `/tools comfy` does. |
+| `/comfy status`, `/comfy offered` | The ComfyUI server's status and workflows, or the workflows offered to the model. See [ComfyUI](TOOLS.md#comfyui). |
 | `/comfy edit json\|markdown\|md <workflow>` | Opens a workflow's graph, or its `.md` (made if missing), in your editor. |
 | `/comfy view`, `/comfy thumbs` | Opens the picture viewer or the thumbnail browser on the output folder. |
-| `/comfy purge` | Deletes everything in the output folder for good, after a yes. |
+| `/comfy purge` | Deletes everything in the output folder, to the Recycle bin (the Trash on a Mac) while *File deletes to Recycle bin* is on, else for good, after a yes. |
 | `/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]` | Prints a file (*Print action policy* never applies). On a Mac a PDF prints as it is and Office files are refused. See [Printing](TOOLS.md#printing). |
 | `/print reply [<options>]`, `/print printers` | Prints the last reply, or lists the printers. |
 | `/pdf <file> [to=<path>] [paper=letter\|a4\|legal] [landscape] [overwrite]` | Makes a PDF of a file, beside it unless `to=` says (*PDF engine*; on a Mac, a browser). See [Making PDFs](TOOLS.md#making-pdfs). |

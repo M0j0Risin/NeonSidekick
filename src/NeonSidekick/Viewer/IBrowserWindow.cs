@@ -11,6 +11,19 @@ public sealed record BrowserVisit(IReadOnlyList<BrowserCookie> Cookies, IReadOnl
     public string? Failure { get; init; }
 }
 
+/// <summary>What <see cref="IBrowserWindow.CloseAsUser"/> did (2026-10-18, Ctrl+B).</summary>
+public enum BrowserCloseOutcome
+{
+    /// <summary>No window shown: nothing done, the caller opens it.</summary>
+    None,
+
+    /// <summary>The user's close is under way; the visit's close notice follows.</summary>
+    Closing,
+
+    /// <summary>A bot check waits in the window: nothing done.</summary>
+    BotCheck,
+}
+
 /// <summary>
 /// The Browser window as the app sees it (2026-10-13, the bot checks): <see cref="BrowserWindow.Window"/> on Windows,
 /// <c>MacBrowserWindows.Window</c> on macOS 14 or later with a window server (2026-10-18, the Mac Browser plan: WebKit), null elsewhere,
@@ -34,6 +47,14 @@ public interface IBrowserWindow
 
     /// <summary>The open window closed without handing anything over (the app's exit, a profile switch); true when one was open.</summary>
     bool Close();
+
+    /// <summary>
+    /// The open window closed as the user closes it (2026-10-18, Ctrl+B a second time): the visit's cookies handed over and its close notice
+    /// following, as the window's own close does. <see cref="BrowserCloseOutcome.BotCheck"/> leaves a window a bot check waits in open;
+    /// <see cref="BrowserCloseOutcome.None"/> with no window shown — none open, one started hidden for a clear, one hidden in a check's
+    /// linger — so the caller opens it. No default body: a window that forgot it would reopen on every press.
+    /// </summary>
+    BrowserCloseOutcome CloseAsUser();
 
     /// <summary>
     /// The loaded profile's browser data cleared (<c>/browser clear history|all</c>, later on 2026-10-13): the history (and the window's
