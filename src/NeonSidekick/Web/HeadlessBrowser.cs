@@ -740,7 +740,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     // The steps in the page, each failure noted in the state and the rest skipped.
     private static async Task EditInPageAsync(DevToolsClient client, string session, string library, PdfEditJob job, PdfEditState state, CancellationToken cancellationToken)
     {
-        var (loaded, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfEditor.LoadExpression(library), cancellationToken).ConfigureAwait(false);
+        var (loaded, loadError) = await LoadIntoPageAsync(client, session, BrowserPdfEditor.LoadExpression(library), cancellationToken).ConfigureAwait(false);
         if (loaded is not { } answer || !BrowserPdfEditor.Loaded(answer))
         {
             state.Failure = "pdf-lib did not load: " + (loadError ?? "PDFLib missing");
@@ -869,11 +869,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
                 await Task.Delay(DomSettle.PollInterval, cancellationToken).ConfigureAwait(false);
             }
 
-            var (_, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.LoadExpression(library, worker), cancellationToken).ConfigureAwait(false);
+            var (_, loadError) = await LoadIntoPageAsync(client, session, BrowserPdfReader.LoadExpression(library, worker), cancellationToken).ConfigureAwait(false);
             if (loadError is null && BrowserPdfReader.CMapCount > 0)
             {
                 // The packed CMaps (2026-10-14, the PDF plan's gap 3), before the file opens: pdf.js asks for one while it builds a font.
-                (_, loadError) = await EvaluateAwaitAsync(client, session, BrowserPdfReader.CMapsExpression(), cancellationToken).ConfigureAwait(false);
+                (_, loadError) = await LoadIntoPageAsync(client, session, BrowserPdfReader.CMapsExpression(), cancellationToken).ConfigureAwait(false);
             }
 
             if (loadError is not null)
@@ -951,6 +951,34 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
+    /// <summary>
+    /// A library loaded into the page (pdf.js, its CMaps, pdf-lib): <see cref="EvaluateAwaitAsync"/>, and a failure says where the page stood
+    /// (2026-10-19, the CI-like runs: that is how "pdf.js did not load" was found to be a load into <c>edge://sync-confirmation-dialog/</c>,
+    /// a page the browser had opened for itself, now never attached to: <see cref="IsOwnPage"/>).
+    /// </summary>
+    private static async Task<(JsonElement? Value, string? Error)> LoadIntoPageAsync(DevToolsClient client, string session, string expression, CancellationToken cancellationToken)
+    {
+        var result = await EvaluateAwaitAsync(client, session, expression, cancellationToken).ConfigureAwait(false);
+        return result.Error is null ? result : (null, $"{result.Error} ({await PageStateAsync(client, session, cancellationToken).ConfigureAwait(false)})");
+    }
+
+    // Where the page stood when a load failed: its address, its state and how many navigations it had made, for the failure's line.
+    private static async Task<string> PageStateAsync(DevToolsClient client, string session, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (state, _) = await EvaluateAwaitAsync(client, session, "({ at: location.href, ready: document.readyState })", cancellationToken).ConfigureAwait(false);
+            var history = await client.SendAsync("Page.getNavigationHistory", null, session, cancellationToken).ConfigureAwait(false);
+            int navigations = history.ValueKind == JsonValueKind.Object && history.TryGetProperty("entries", out var entries) ? entries.GetArrayLength() : -1;
+            string at = state is { } s && s.TryGetProperty("at", out var a) ? a.GetString() ?? "?" : "?";
+            string ready = state is { } r && r.TryGetProperty("ready", out var d) ? d.GetString() ?? "?" : "?";
+            return $"the page at {at}, {ready}, {navigations.ToString(CultureInfo.InvariantCulture)} history entries";
+        }
+        catch (DevToolsException ex)
+        {
+            return "the page unreadable: " + ex.Message;
+        }
+    }
     /// <summary>
     /// <paramref name="expression"/> run in the page and its promise awaited (2026-10-11, the PDF read): its value as an object, or the
     /// exception's first line; a DevTools refusal throws to the caller.
@@ -1118,6 +1146,17 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     }
 
     /// <summary>A session on the run's page, attached flat so commands carry its id; null while the browser has no page yet.</summary>
+    /// <summary>
+    /// Whether a page target is the read's own (2026-10-19, the CI-like runs): never one the browser opened for itself. A fresh Edge profile
+    /// now and then opened <c>edge://sync-confirmation-dialog/</c> as a page listed before ours, the read attached to it, and pdf.js's
+    /// <c>data:</c> import was refused there every time ("Failed to fetch dynamically imported module", 3 runs in 10 on one core); a page
+    /// read would have read the dialog. A target with no address yet is not taken either: the next look finds ours.
+    /// </summary>
+    internal static bool IsOwnPage(string? url) =>
+        !string.IsNullOrEmpty(url) && !Array.Exists(InternalSchemes, scheme => url.StartsWith(scheme, StringComparison.OrdinalIgnoreCase));
+
+    private static readonly string[] InternalSchemes = ["edge:", "chrome:", "brave:", "devtools:", "chrome-extension:", "extension:", "chrome-untrusted:"];
+
     private static async Task<string?> AttachAsync(DevToolsClient client, CancellationToken cancellationToken)
     {
         var targets = await client.SendAsync("Target.getTargets", null, null, cancellationToken).ConfigureAwait(false);
@@ -1126,7 +1165,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             foreach (var info in infos.EnumerateArray())
             {
-                if (info.TryGetProperty("type", out var type) && type.ValueEquals("page") && info.TryGetProperty("targetId", out var id) && id.ValueKind == JsonValueKind.String)
+                if (info.TryGetProperty("type", out var type) && type.ValueEquals("page") && info.TryGetProperty("targetId", out var id) && id.ValueKind == JsonValueKind.String
+                    && IsOwnPage(info.TryGetProperty("url", out var url) && url.ValueKind == JsonValueKind.String ? url.GetString() : null))
                 {
                     targetId = id.GetString();
                     break;

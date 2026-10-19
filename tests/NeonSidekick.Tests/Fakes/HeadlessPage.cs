@@ -75,7 +75,8 @@ public sealed class HeadlessPage : IAsyncDisposable
         var targets = await client.SendAsync("Target.getTargets", null, null, cancellationToken);
         foreach (var info in targets.GetProperty("targetInfos").EnumerateArray())
         {
-            if (info.GetProperty("type").ValueEquals("page"))
+            // Never a page the browser opened for itself (2026-10-19: a fresh Edge profile's edge://sync-confirmation-dialog/, as the app's reads met).
+            if (info.GetProperty("type").ValueEquals("page") && HeadlessBrowser.IsOwnPage(info.TryGetProperty("url", out var url) ? url.GetString() : null))
             {
                 string id = info.GetProperty("targetId").GetString()!;
                 var attached = await client.SendAsync("Target.attachToTarget", w => { w.WriteString("targetId", id); w.WriteBoolean("flatten", true); }, null, cancellationToken);

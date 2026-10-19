@@ -34,6 +34,27 @@ public class HeadlessBrowserTests
         Assert.All(list, p => Assert.StartsWith(@"C:\Program Files\", p));
     }
 
+    /// <summary>
+    /// The page a read attaches to is its own, never one the browser opened for itself (2026-10-19, the CI-like runs: a fresh Edge profile's
+    /// <c>edge://sync-confirmation-dialog/</c>, listed first, took pdf.js's import and refused it).
+    /// </summary>
+    [Theory]
+    [InlineData("about:blank", true)]
+    [InlineData("https://example.com/page", true)]
+    [InlineData("data:text/html,<p>hi</p>", true)]
+    [InlineData("edge://sync-confirmation-dialog/", false)]
+    [InlineData("EDGE://welcome", false)]
+    [InlineData("chrome://newtab/", false)]
+    [InlineData("brave://welcome/", false)]
+    [InlineData("devtools://devtools/bundled/inspector.html", false)]
+    [InlineData("chrome-extension://abc/page.html", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsOwnPage_TakesNoPageTheBrowserOpenedForItself(string? url, bool own)
+    {
+        Assert.Equal(own, HeadlessBrowser.IsOwnPage(url));
+    }
+
     [Fact]
     public void Locate_TakesTheConfiguredPath_WhenItExists()
     {
