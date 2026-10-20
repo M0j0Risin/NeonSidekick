@@ -324,15 +324,17 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The note for an admin tool's result (its first line, the family's glyph), or null for another tool's. A network budget refusal is noted
-    /// once a turn (<see cref="NetworkBudget.NoteOnce"/>), nothing after.
+    /// once a turn (<see cref="NetworkBudget.NoteOnce"/>), nothing after: the bots' budget's note during a bot's turn, the main chat's otherwise
+    /// (2026-10-19, the network review: a bot's refusal spent the main chat's note, which no bot turn resets).
     /// </summary>
     private string? AdminNote(string tool, string text)
     {
         if (NetworkToolNames.Contains(tool))
         {
-            if (text.StartsWith("Error: this turn has checked", StringComparison.Ordinal))
+            if (NetworkText.IsBudgetSpent(text))
             {
-                return _networkBudget.NoteOnce() ? NetworkText.BudgetNote : "";
+                var budget = Volatile.Read(ref _botTurn) is null ? _networkBudget : _networkBotBudget;
+                return budget.NoteOnce() ? NetworkText.BudgetNote : "";
             }
 
             return NetworkText.Note(text);

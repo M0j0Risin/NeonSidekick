@@ -13,7 +13,7 @@ public sealed record DnsOutcome(DnsMessage? Reply, IPEndPoint? Server, string? E
 /// <c>net_dns</c>'s own client (2026-10-15, the admin-tools plan) for every type but a plain A/AAAA asked of the system: UDP first from a fresh
 /// ephemeral socket, the query's id a random 16 bits from <see cref="RandomNumberGenerator"/>; a reply is taken only when it comes from the
 /// server's address and port, carries the id, echoes the question (name case ignored, type, class) and has the QR bit set — anything else is
-/// dropped and the wait goes on. 3 s per server, 2 tries, then the next server; a truncated reply is asked again once over TCP (5 s).
+/// dropped and the wait goes on. 3 s per server, 2 tries, then the next server (after a SERVFAIL or REFUSED too); a truncated reply is asked again once over TCP (5 s).
 /// </summary>
 public static class DnsClient
 {
@@ -59,7 +59,10 @@ public static class DnsClient
         return found.OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1).Select(a => new IPEndPoint(a, Port)).ToList();
     }
 
-    /// <summary>Asks each of <paramref name="servers"/> in turn until one answers; the last failure's sentence when none does.</summary>
+    /// <summary>
+    /// Asks each of <paramref name="servers"/> in turn until one answers (a server's failure or refusal moving on to the next); the first such
+    /// refusal, else the last failure's sentence, when none does.
+    /// </summary>
     public static async Task<DnsOutcome> QueryAsync(IReadOnlyList<IPEndPoint> servers, string name, ushort type, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(servers);
@@ -79,18 +82,30 @@ public static class DnsClient
             return new DnsOutcome(null, null, NetworkText.BadName(name));
         }
 
+        // A server that failed or refused (SERVFAIL, REFUSED, FORMERR, NOTIMP) is a reason to ask the next, as a resolver does (2026-10-19,
+        // the network review: a VPN's resolver first that refuses public names ended the lookup); its reply is kept and given when no
+        // server answers better. NXDOMAIN and no error are answers.
         DnsOutcome last = new(null, null, NetworkText.DnsNoAnswer(servers[0].Address.ToString()));
+        DnsOutcome? failed = null;
         foreach (var server in servers)
         {
             last = await AskAsync(server, name, type, cancellationToken).ConfigureAwait(false);
-            if (last.Reply is not null)
+            if (last.Reply is { } reply)
             {
-                return last;
+                if (!ServerFailed(reply.Rcode))
+                {
+                    return last;
+                }
+
+                failed ??= last;
             }
         }
 
-        return last;
+        return failed ?? last;
     }
+
+    /// <summary>Whether <paramref name="rcode"/> says the server could not or would not answer (FORMERR, SERVFAIL, NOTIMP, REFUSED), not that the name has none.</summary>
+    public static bool ServerFailed(int rcode) => rcode is 1 or 2 or 4 or 5;
 
     /// <summary>One server: UDP with <see cref="Tries"/> tries, TCP once when the reply is truncated.</summary>
     public static async Task<DnsOutcome> AskAsync(IPEndPoint server, string name, ushort type, CancellationToken cancellationToken)

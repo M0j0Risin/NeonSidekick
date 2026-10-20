@@ -75,7 +75,8 @@ public sealed class LanPolicy
     /// Whether <paramref name="address"/> is this machine or a local network: loopback, the private
     /// ranges (10/8, 172.16/12, 192.168/16), link-local (169.254/16), carrier-grade NAT (100.64/10),
     /// the unspecified and broadcast addresses, multicast; for IPv6 <c>::1</c>, <c>::</c>, <c>fc00::/7</c>,
-    /// <c>fe80::/10</c>, <c>ff00::/8</c>, and a v4-mapped address by its v4 rules.
+    /// <c>fe80::/10</c>, <c>fec0::/10</c>, <c>64:ff9b:1::/48</c>, <c>ff00::/8</c>, and a v4-mapped address, or one carrying an IPv4 address
+    /// (<see cref="EmbeddedIPv4"/>: NAT64, 6to4, v4-compatible, v4-translated), by its v4 rules.
     /// </summary>
     public static bool IsPrivate(IPAddress address)
     {
@@ -106,12 +107,49 @@ public sealed class LanPolicy
             }
 
             var b = address.GetAddressBytes();
+            if (EmbeddedIPv4(b) is { } embedded)
+            {
+                return IsPrivate(embedded);
+            }
+
             return (b[0] & 0xFE) == 0xFC   // fc00::/7 unique local
                 || (b[0] == 0xFE && (b[1] & 0xC0) == 0x80)   // fe80::/10 link-local
+                || (b[0] == 0xFE && (b[1] & 0xC0) == 0xC0)   // fec0::/10 site-local (deprecated, still routed by some)
+                || (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B && b[4] == 0x00 && b[5] == 0x01)   // 64:ff9b:1::/48 local-use NAT64
                 || b[0] == 0xFF;   // multicast
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The IPv4 address an IPv6 one carries and reaches (2026-10-19, the network review: <c>64:ff9b::c0a8:101</c> reached 192.168.1.1 through
+    /// a NAT64 gateway under <c>internet</c>): the well-known NAT64 prefix 64:ff9b::/96 (RFC 6052), 6to4's 2002::/16 (RFC 3056), an
+    /// IPv4-compatible ::/96 (<c>::</c> and <c>::1</c> judged before), and an IPv4-translated ::ffff:0:0/96 (RFC 2765). Null for any other.
+    /// </summary>
+    public static IPAddress? EmbeddedIPv4(IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        return address.AddressFamily == AddressFamily.InterNetworkV6 && !address.IsIPv4MappedToIPv6
+            && !IPAddress.IPv6Loopback.Equals(address) && !IPAddress.IPv6Any.Equals(address) ? EmbeddedIPv4(address.GetAddressBytes()) : null;
+    }
+
+    private static IPAddress? EmbeddedIPv4(byte[] b)
+    {
+        bool nat64 = b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B && b.AsSpan(4, 8).IndexOfAnyExcept((byte)0) < 0;
+        if (nat64)
+        {
+            return new IPAddress(b.AsSpan(12, 4));
+        }
+
+        if (b[0] == 0x20 && b[1] == 0x02)
+        {
+            return new IPAddress(b.AsSpan(2, 4));
+        }
+
+        bool compatible = b.AsSpan(0, 12).IndexOfAnyExcept((byte)0) < 0;   // :: and ::1 judged before this is asked
+        bool translated = b.AsSpan(0, 8).IndexOfAnyExcept((byte)0) < 0 && b[8] == 0xFF && b[9] == 0xFF && b[10] == 0 && b[11] == 0;
+        return compatible || translated ? new IPAddress(b.AsSpan(12, 4)) : null;
     }
 
     /// <summary>Whether <paramref name="host"/> is the name <c>localhost</c> (any case, a trailing dot allowed) or a private literal address.</summary>

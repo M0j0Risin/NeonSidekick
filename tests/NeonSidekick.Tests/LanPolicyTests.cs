@@ -27,6 +27,14 @@ public class LanPolicyTests
     [InlineData("ff02::1")]
     [InlineData("::ffff:192.168.0.1")]
     [InlineData("::ffff:10.0.0.7")]
+    [InlineData("64:ff9b::c0a8:101")]
+    [InlineData("64:ff9b::10.0.0.1")]
+    [InlineData("64:ff9b:1::5")]
+    [InlineData("2002:c0a8:101::1")]
+    [InlineData("::192.168.1.1")]
+    [InlineData("::0.0.0.2")]
+    [InlineData("::ffff:0:192.168.1.1")]
+    [InlineData("fec0::1")]
     public void Private_IsRefused(string address)
     {
         Assert.True(LanPolicy.IsPrivate(IPAddress.Parse(address)));
@@ -44,6 +52,8 @@ public class LanPolicyTests
     [InlineData("2606:2800:220:1:248:1893:25c8:1946")]
     [InlineData("2001:db8::1")]
     [InlineData("::ffff:8.8.8.8")]
+    [InlineData("64:ff9b::8.8.8.8")]
+    [InlineData("2002:808:808::1")]
     public void Public_IsAllowed(string address)
     {
         Assert.False(LanPolicy.IsPrivate(IPAddress.Parse(address)));

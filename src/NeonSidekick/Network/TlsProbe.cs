@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using NeonSidekick.Web;
 
 namespace NeonSidekick.Network;
 
@@ -66,7 +67,7 @@ public sealed record TlsReport(
     SslPolicyErrors PolicyErrors);
 
 /// <summary>
-/// <c>net_tls</c>'s handshake (2026-10-15, the admin-tools plan): a TCP connection to the first admitted address that takes one, the port's
+/// <c>net_tls</c>'s handshake (2026-10-15, the admin-tools plan): a TCP connection to the first admitted address to answer (raced, <see cref="Web.HappyEyeballs"/>), the port's
 /// preamble (<see cref="TlsPreamble"/>), then <see cref="SslStream"/> as a client for <c>server_name</c> — every certificate accepted so the
 /// report can say what is wrong with it, the chain built with <see cref="X509ChainPolicy.DisableCertificateDownloads"/> and revocation
 /// <see cref="X509RevocationMode.NoCheck"/> (no fetch of anyone's AIA or CRL from here). The protocol, the cipher, the leaf, the chain and
@@ -83,31 +84,12 @@ public static class TlsProbe
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(Timeout);
         var token = budget.Token;
-        Socket? socket = null;
-        IPAddress? reached = null;
-        Exception? last = null;
-        foreach (var address in addresses)
-        {
-            var attempt = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-            try
-            {
-                await attempt.ConnectAsync(address, port, token).ConfigureAwait(false);
-                socket = attempt;
-                reached = address;
-                break;
-            }
-            catch (SocketException ex)
-            {
-                attempt.Dispose();
-                last = ex;
-            }
-        }
 
-        if (socket is null || reached is null)
-        {
-            throw last ?? new SocketException((int)SocketError.HostUnreachable);
-        }
-
+        // Raced, not one after another (2026-10-19, the network review: a dead IPv6 route held the whole 10 s on the first address while
+        // IPv4 would have answered, and an attempt cancelled by the budget or Esc was never disposed). Each attempt disposes its own socket
+        // on a failure or a cancel; a loser that connects anyway is closed (HappyEyeballs).
+        var socket = await HappyEyeballs.ConnectAsync(addresses, port, HappyEyeballs.AttemptDelay, HappyEyeballs.ConnectOneAsync, token).ConfigureAwait(false);
+        var reached = socket.RemoteEndPoint is IPEndPoint remote ? remote.Address : addresses[0];
         await using var network = new NetworkStream(socket, ownsSocket: true);
         await TlsPreamble.RunAsync(network, preamble, port, token).ConfigureAwait(false);
         var chain = new List<string>();

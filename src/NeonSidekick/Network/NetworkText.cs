@@ -1,4 +1,5 @@
 using System.Globalization;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Web;
 
 namespace NeonSidekick.Network;
@@ -82,13 +83,23 @@ public static class NetworkText
 
     public static string NotAllowed(string host) => $"Error: {Short(host)} is not in {AllowedSetting}.";
 
+    /// <summary>How both budget refusals open: what <see cref="IsBudgetSpent"/> knows them by.</summary>
+    private const string BudgetSpentLead = "Error: this turn has checked ";
+
     /// <summary>The host budget spent. Pinned.</summary>
     public static string HostBudgetSpent(int hosts) =>
-        $"Error: this turn has checked {hosts.ToString(CultureInfo.InvariantCulture)} hosts, the most Network tools max hosts per turn allows.";
+        $"{BudgetSpentLead}{hosts.ToString(CultureInfo.InvariantCulture)} hosts, the most Network tools max hosts per turn allows.";
 
     /// <summary>The port budget spent. Pinned.</summary>
     public static string PortBudgetSpent(int used, int wanted) =>
-        $"Error: this turn has checked {used.ToString(CultureInfo.InvariantCulture)} host:port pairs and this call would add {wanted.ToString(CultureInfo.InvariantCulture)}, past what Network tools max ports per turn allows.";
+        $"{BudgetSpentLead}{used.ToString(CultureInfo.InvariantCulture)} host:port pairs and this call would add {wanted.ToString(CultureInfo.InvariantCulture)}, past what Network tools max ports per turn allows.";
+
+    /// <summary>Whether a tool's result is one of the budget's refusals (<see cref="HostBudgetSpent"/>, <see cref="PortBudgetSpent"/>).</summary>
+    public static bool IsBudgetSpent(string result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.StartsWith(BudgetSpentLead, StringComparison.Ordinal);
+    }
 
     /// <summary>The transcript's once-a-turn note when the budget refused a call. Pinned.</summary>
     public const string BudgetNote = "(" + Glyph + " the network tools' budget for this turn is spent)";
@@ -138,7 +149,12 @@ public static class NetworkText
 
     // ── TLS preambles ───────────────────────────────────────────────────────
 
-    public static string PreambleRefused(string protocol, int port, string said) => $"Error: the {protocol} server on port {TlsProbe.Port(port)} refused: {Short(said)}";
+    /// <summary>
+    /// A server's refusal before TLS, its own words quoted: scrubbed and fenced with <see cref="UntrustedText.QuoteNote"/> under them (2026-10-19,
+    /// the network review: a hostile banner reached the model and the transcript note bare, control characters and all).
+    /// </summary>
+    public static string PreambleRefused(string protocol, int port, string said) =>
+        $"Error: the {protocol} server on port {TlsProbe.Port(port)} refused: {UntrustedText.Fenced(Short(said))}\n{UntrustedText.QuoteNote}";
 
     /// <summary>A server that never offers STARTTLS. Pinned.</summary>
     public static string NoStartTls(int port) => $"Error: this server does not offer STARTTLS on port {TlsProbe.Port(port)}.";

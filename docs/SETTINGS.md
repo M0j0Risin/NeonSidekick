@@ -700,7 +700,7 @@ See [Network](TOOLS.md#network).
 | Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). | 8 |
 | Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
 | Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
-| Network tools denied hosts | Hosts never reached, in the same forms; wins over the allowed list. | empty |
+| Network tools denied hosts | Hosts never reached, in the same forms, a name by its addresses too; wins over the allowed list. | empty |
 | Network certificate stores | Also offers `net_certs`, which lists one of this machine's certificate stores (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |
 
 #### EventLog

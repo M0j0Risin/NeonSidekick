@@ -435,6 +435,8 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 
 * **One host per call:** a name or an address. A range, block, list, URL, `host:port` or short-form address (`10.1`) is refused.
 * **Where they may go:** *Network tools reach*, *Network tools allowed hosts* and *Network tools denied hosts* ([Network settings](SETTINGS.md#network)). Every address a name resolves to is judged; under `lan` only private ones are used.
+* **Lookups too:** a `net_dns` question is judged like a host (a PTR by its address) and counts toward the budget.
+* **A denied name** also denies the addresses it resolves to, so another name or the bare address won't reach it.
 * **A budget per turn:** *Network tools max hosts per turn* and *Network tools max ports per turn*, spent by scripts and advisors too; bots have their own.
 * **Nothing fetched, nothing sent:** a TLS check downloads no certificate and asks for no revocation list, and no credential is ever sent.
 * **Server text** (TXT records, certificate names, banners) is fenced as untrusted data (`⟪ ⟫`), an answer held to 16,000 characters.

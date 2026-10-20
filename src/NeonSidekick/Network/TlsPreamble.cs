@@ -212,6 +212,11 @@ public static class TlsPreamble
         int length = await ReadBerLengthAsync(reader, cancellationToken).ConfigureAwait(false);
         var body = await reader.ReadBytesAsync(length, cancellationToken).ConfigureAwait(false);
         int code = LdapResultCode(body);
+        if (code < 0)
+        {
+            throw new TlsPreambleException(NetworkText.PreambleGarbled);
+        }
+
         if (code != 0)
         {
             throw new TlsPreambleException(code == 2 ? NetworkText.NoStartTls(port) : NetworkText.LdapStartTlsRefused(port, code));
@@ -286,8 +291,15 @@ public static class TlsPreamble
             return false;
         }
 
+        // Against what is left, never `at + length`: a hostile four-byte length (0x7FFFFFFF) wrapped `at` negative and the next read
+        // indexed the body with it (2026-10-19, the network review).
+        if (length > body.Length - at)
+        {
+            return false;
+        }
+
         at += length;
-        return at <= body.Length;
+        return true;
     }
 
     private static bool SkipLength(ReadOnlySpan<byte> body, ref int at) => SkipLength(body, ref at, out _);

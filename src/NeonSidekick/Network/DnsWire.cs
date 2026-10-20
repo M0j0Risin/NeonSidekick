@@ -85,6 +85,52 @@ public static class DnsWire
         return nibbles + "ip6.arpa";
     }
 
+    /// <summary>
+    /// The address a reverse name stands for, <see cref="ReverseName"/> read back (2026-10-19, the network review: a PTR typed as
+    /// <c>1.1.168.192.in-addr.arpa</c> was judged as a name, not as the LAN address it asks about): any name under <c>in-addr.arpa</c> or
+    /// <c>ip6.arpa</c>, of any type, its parts read from the zone down until one is not an octet or a nibble, the rest taken as zeros — so a
+    /// zone (<c>168.192.in-addr.arpa</c>) stands for its first address. Null for any other name.
+    /// </summary>
+    public static IPAddress? ReverseAddress(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string[] labels = name.Trim().TrimEnd('.').Split('.');
+        bool v4 = labels.Length >= 2 && labels[^2].Equals("in-addr", StringComparison.OrdinalIgnoreCase) && labels[^1].Equals("arpa", StringComparison.OrdinalIgnoreCase);
+        bool v6 = labels.Length >= 2 && labels[^2].Equals("ip6", StringComparison.OrdinalIgnoreCase) && labels[^1].Equals("arpa", StringComparison.OrdinalIgnoreCase);
+        if (!v4 && !v6)
+        {
+            return null;
+        }
+
+        var bytes = new byte[v4 ? 4 : 16];
+        int parts = v4 ? 4 : 32;
+        for (int i = 0; i < parts && labels.Length - 3 - i >= 0; i++)
+        {
+            string label = labels[labels.Length - 3 - i];
+            if (v4)
+            {
+                if (label.Length is 0 or > 3 || !label.All(char.IsAsciiDigit) || !byte.TryParse(label, NumberStyles.None, CultureInfo.InvariantCulture, out byte octet))
+                {
+                    break;
+                }
+
+                bytes[i] = octet;
+            }
+            else
+            {
+                if (label.Length != 1 || !char.IsAsciiHexDigit(label[0]))
+                {
+                    break;
+                }
+
+                int nibble = Convert.ToInt32(label, 16);
+                bytes[i / 2] |= (byte)(i % 2 == 0 ? nibble << 4 : nibble);
+            }
+        }
+
+        return new IPAddress(bytes);
+    }
+
     /// <summary>A query for <paramref name="name"/>/<paramref name="type"/> with <paramref name="id"/>, recursion desired, an EDNS0 OPT record.</summary>
     public static byte[] Query(ushort id, string name, ushort type)
     {
