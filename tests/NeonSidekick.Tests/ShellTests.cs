@@ -101,8 +101,12 @@ public sealed class ShellTests
     [InlineData("zsh", "FOO=1 git status", "git status")]
     [InlineData("bash", "PATH=/tmp/x make test", CommandPrefix.Unreadable)]   // a leading PATH assignment can redirect which make runs
     [InlineData("powershell", "FOO=1 git status", "foo=1")]
-    [InlineData("cmd", "FOO=1 git status", "foo")]
-    [InlineData("cmd", "git,x status", "git status")]   // cmd runs git; git still reads status as its verb
+    [InlineData("cmd", "FOO=1 git status", CommandPrefix.Unreadable)]   // cmd runs foo; whether foo sees 1 is foo's (2026-10-20)
+    [InlineData("cmd", "git,x status", CommandPrefix.Unreadable)]       // git's verb is status or x, by how git splits its line
+    [InlineData("cmd", "git,status", CommandPrefix.Unreadable)]         // read as git until 2026-10-20: an allowed git covered it
+    [InlineData("cmd", "git=push", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "set,PATH=C:\\x;%PATH%", CommandPrefix.Unreadable)]   // read as set: the PATH never reached SetsDangerous
+    [InlineData("cmd", "git, status", "git status")]                    // a delimiter with nothing glued is a blank
     [InlineData("cmd", "set PATH=C:\\x;%PATH%", CommandPrefix.Unreadable)]
     [InlineData("cmd", "set NoDefaultCurrentDirectoryInExePath=", CommandPrefix.Unreadable)]
     [InlineData("cmd", "set \"path=C:\\x\"", CommandPrefix.Unreadable)]

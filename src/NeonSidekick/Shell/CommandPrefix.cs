@@ -29,8 +29,9 @@ namespace NeonSidekick.Shell;
 /// <c>git status</c>, so a <c>git.cmd</c> the model wrote into the working folder ran under the user's allowed <c>git status</c>. It is
 /// now <c>./git status</c> (<see cref="Program"/>), a prefix of its own; a bare name is the one found on PATH, cmd's working-folder
 /// search being turned off for every shell child (<see cref="ChildEnvironment"/>'s <c>NoDefaultCurrentDirectoryInExePath</c>). A leading
-/// <c>NAME=value</c> is skipped only in bash and zsh, where it is an assignment: in PowerShell it is the command's name, in cmd the
-/// name ends at the <c>=</c>.</para>
+/// <c>NAME=value</c> is skipped only in bash and zsh, where it is an assignment: in PowerShell it is the command's name. In cmd the
+/// name ends at a <c>=</c> or <c>,</c>, and since 2026-10-20 (the code review) a first word with text glued after one
+/// (<c>FOO=1</c>, <c>git,push</c>) is <see cref="Unreadable"/>: the program, not cmd, decides whether that text is an argument.</para>
 /// </summary>
 public static partial class CommandPrefix
 {
@@ -619,7 +620,16 @@ public static partial class CommandPrefix
         string token = tokens[first];
         if (shell == ShellKind.Cmd && token.IndexOfAny(CmdNameEnds) is > 0 and var end && QuoteKind(token[0], shell) == '\0')
         {
-            // cmd ends a command's name at = and , as at a blank: FOO=1 runs foo.
+            // cmd ends a command's name at = and , as at a blank: FOO=1 runs foo. Text glued after the cut asks (2026-10-20, the code
+            // review): whether a program reads it as an argument (cmd's split) or as part of its own name (the C runtime's, blanks only)
+            // is the program's, so either reading has a hole under the other — git,push read as git, which an allowed git or git
+            // --version then covered, and set,PATH=… as set, the PATH never seen by SetsDangerous. A trailing delimiter alone (git, status)
+            // is still read.
+            if (token[end..].TrimStart(CmdNameEnds).Length > 0)
+            {
+                return Unreadable;
+            }
+
             token = token[..end];
         }
 

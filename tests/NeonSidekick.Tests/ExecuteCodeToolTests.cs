@@ -109,23 +109,43 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(["execute_code", "ask_user", "finish_step"], ExecuteCodeTool.Excluded);   // a Ralph pass's report is the model's own call (2026-10-18)
     }
 
-    /// <summary>The leftovers (2026-10-12, the shell review): run folders older than a day go; a fresh one and anything not a run's stay.</summary>
+    /// <summary>
+    /// The leftovers (2026-10-12, the shell review): run folders older than a day go; a fresh one and anything not a run's stay. And an old
+    /// one whose owner still runs stays (2026-10-20, the code review), while a reused pid (another start) or a broken record owns nothing.
+    /// </summary>
     [Fact]
     public void SweepLeftovers_TakesOnlyOldRunFolders()
     {
         string runs = Path.Combine(_dir, "sweep");
         var now = new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
-        foreach (var (name, age) in new[] { ("code_000001", 2.0), ("code_000002", 0.1), ("keep_000003", 3.0) })
+        long? Starts(int pid) => pid == 4242 ? 1_000_000_000 : null;
+        foreach (var (name, age, owner) in new (string, double, string?)[]
+                 {
+                     ("code_000001", 2.0, null),
+                     ("code_000002", 0.1, null),
+                     ("keep_000003", 3.0, null),
+                     ("code_000004", 2.0, ExecuteCodeTool.OwnerLine(4242, Starts)),   // its app still runs: a long script's folder
+                     ("code_000005", 2.0, "owner 4242 5000000000\n"),                 // the pid reused by another process
+                     ("code_000006", 2.0, "owner 77 1000000000\n"),                   // the app gone
+                     ("code_000007", 2.0, "owner x\n"),                               // a record that says nothing
+                 })
         {
             string folder = Path.Combine(runs, name);
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "script.py"), "print(1)");
+            if (owner is not null)
+            {
+                File.WriteAllText(Path.Combine(folder, ExecuteCodeTool.OwnerFileName), owner);
+            }
+
             Directory.SetLastWriteTimeUtc(folder, now.AddDays(-age));
         }
 
-        ExecuteCodeTool.SweepLeftovers(runs, now);
+        ExecuteCodeTool.SweepLeftovers(runs, now, Starts);
 
-        Assert.Equal(["code_000002", "keep_000003"], Directory.GetDirectories(runs).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal("owner 4242 1000000000\n", ExecuteCodeTool.OwnerLine(4242, Starts));
+        Assert.Null(ExecuteCodeTool.OwnerLine(77, Starts));   // a start that cannot be read: no record, the folder goes by age
+        Assert.Equal(["code_000002", "code_000004", "keep_000003"], Directory.GetDirectories(runs).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         ExecuteCodeTool.SweepLeftovers(Path.Combine(_dir, "none"), now);   // no folder: nothing to do
     }
 
