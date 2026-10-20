@@ -5,9 +5,14 @@
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)
 
-Neon Sidekick is an agentic terminal client built first and foremost for local LLMs. Point it at LM Studio, Ollama, vLLM, SGLang or llama.cpp, or let it download a model and run it itself. When you want a frontier model too, it connects to the OpenAI and Anthropic APIs with your own key, or to your Claude Code install.
+Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer hardware, best on a graphics card with 16–32 GB of VRAM or an Apple Silicon Mac. Point it at LM Studio, Ollama or any OpenAI-compatible server, or let it download a model and run it itself. Without a suitable graphics card, or when you want a frontier model, it connects to the OpenAI and Anthropic APIs with your own key, or to Claude Code on your Claude subscription.
 
-Inspired by Claude Code, Hermes Agent and Cline, it brings together features I liked from each and adds many of my own. It runs on Windows and Apple Silicon Macs, for IT and admin work, your smart home, or creative projects like images and storytelling. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
+It's one app for research, IT and admin work, your smart home and creative projects. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
+
+**What makes it different**
+* **It can run entirely on your machine,** the model and the voice included.
+* **More than a terminal:** pictures in the transcript, its own windows for photos, video and the web, and your phone can join the same live session.
+* **Advisors:** pair a local model with a frontier one. Your model does the work; the advisor can review its plans and check its steps, or give a second opinion when asked.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
@@ -46,7 +51,7 @@ Inspired by Claude Code, Hermes Agent and Cline, it brings together features I l
 * **Saved prompts:** messages you send often, picked from a list (`/prompts`) or from your phone.
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with voices you can mix, both in-process or through a Kokoro server.
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
-* **Web UI:** the chat, the model's questions and the shopping list on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
+* **Web UI:** the chat, the model's questions, the shopping list, a Home tab (rooms, lights, scenes and the PC's meters) and a YouTube player on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network, or takes a URL.
@@ -54,12 +59,13 @@ Inspired by Claude Code, Hermes Agent and Cline, it brings together features I l
 * **Model sizes:** Q4 and larger builds for 8–32 GB of VRAM, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
 * **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or Claude Code as the chat's server (`/claude` sends it one message); all off until you turn them on.
-* **Advisors:** other profiles the model (or you, with `/advisor`) asks for a second opinion; they answer with the chat's read-only tools.
+* **Advisors:** other profiles, local or frontier, that review plans and Ralph steps, or give a second opinion when the model (or you, with `/advisor`) asks; they answer with the chat's read-only tools.
 
 ### Conversations, memory & skills
-* **Profiles:** each has its own settings, persona, memory, sessions and working directory (the folder the model works in).
+* **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory (the folder the model works in).
 * **Sessions:** resume, search and learn from past conversations.
 * **Memory:** facts you can edit, added to every conversation.
+* **Project notes:** reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md`, so a project's own rules come along.
 * **Context control:** compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand, and `/sys` shows what the model is sent.
 * **Skills:** the profile's own, global ones, and the read-only `~/.agents/skills` other agents use; `/skills add` installs more from [skills.sh](https://skills.sh) or GitHub.
 * **Managing skills:** edit, move, lock, disable or revert a skill (its last 10 versions) on `/skills`. The model's `skill_editor` never deletes one.
@@ -71,7 +77,9 @@ Inspired by Claude Code, Hermes Agent and Cline, it brings together features I l
 * **Integrations:** the IT, smart home and creative tools below, once you switch them on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
 * **Sandboxed:** file tools reach only the working directory; shell commands go through an approval pane (once, this session, or always).
 * **Shell police (👮):** refuses a command naming a path outside the working directory, a forbidden string (disk wipes, shutdowns…) or the database tools' databases, even under `--yolo` ([Shell guards](docs/SETTINGS.md#shell-guards)).
-* **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve.
+* **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve. `/plan chat` talks a plan through with you first.
+* **Closing gaps:** `/plan gaps` has the model or an advisor review a plan pass after pass, fixing what would stall the work, until it comes up clean ([Closing gaps](docs/COMMANDS.md#closing-gaps)).
+* **Ralph loop:** carries out an approved plan one step at a time, each step a fresh pass checked before moving on ([Ralph loop](docs/COMMANDS.md#ralph-loop)).
 * **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
 
 ### IT & admin
@@ -223,5 +231,7 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 ## About
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
+
+**Inspiration:** I started out using Claude Code, Hermes Agent and Cline, and kept wishing one app had the parts I liked from each, running on my own hardware. Neon Sidekick is that app.
 
 **License:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).
