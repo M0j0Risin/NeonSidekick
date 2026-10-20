@@ -160,12 +160,12 @@ If no model server answers when the app starts, it opens **Connect a model**:
 
 Pick one and the app walks you through it, switching that server on for you; Esc skips. Then type a message and press Enter.
 
-Good to know:
-* `/server` switches servers later. It lists embedded models and the servers it finds; the APIs, Claude Code and Docker appear once switched on in `/settings` › Servers.
-* Settings, memories and conversations are saved in `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac).
-* The model can't touch your files, the web or the shell until you allow it; see [What the model may do](#what-the-model-may-do).
-* Voice is off at first. `/tts` turns on spoken replies and `/stt` voice input; each first downloads what it needs (about 330 MB and 150 MB).
-* Each profile offers, once, to put a shortcut on the desktop (one that also writes a log, if you like); `/shortcut` makes one later.
+**Good to know:**
+* **Permissions:** the model can't touch your files, the web or the shell until you allow it; see [What the model may do](#what-the-model-may-do).
+* **Your data:** settings, memories and conversations are saved in `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac).
+* **Switching servers:** `/server` lists embedded models and the servers it finds; the APIs, Claude Code and Docker appear once switched on in `/settings` › Servers.
+* **Voice:** off at first. `/tts` turns on spoken replies and `/stt` voice input; each first downloads what it needs (about 330 MB and 150 MB).
+* **Desktop shortcut:** each profile offers one once (it can also write a log); `/shortcut` makes one later.
 
 ### Useful first commands
 | Command | What it does |
