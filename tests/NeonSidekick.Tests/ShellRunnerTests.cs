@@ -505,6 +505,43 @@ public sealed class ShellRunnerTests : IDisposable
         Assert.All(reader.UnfinishedAfterEachRead.Take(64), u => Assert.True(Assert.Single(u).Text.Length <= OutputBuffer.MaxLineChars));
     }
 
+    /// <summary>
+    /// A line past its cap is told once, not rebuilt after every read (the fourth shell review, 2026-10-19): 4,096 reads of 4 KB with no
+    /// newline made about 16 KB of strings each, some 64 MB; now a few lines' worth. The reader returns at once, so the pump stays on this thread.
+    /// </summary>
+    [Fact]
+    public async Task Pump_ALineAlreadyAtItsCap_IsNotRebuiltAtEveryRead()
+    {
+        var output = new OutputBuffer();
+        string block = new('x', ShellRunner.PumpChunk);
+        var reader = new QuietChunkedReader(block, 4096);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        await ShellRunner.PumpAsync(reader, output, isError: false);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(OutputBuffer.MaxLineChars, Assert.Single(output.Lines()).Text.Length);
+        Assert.True(allocated < 4 * 1024 * 1024, $"{allocated} bytes allocated");
+    }
+
+    /// <summary>The same block <paramref name="count"/> times, read back with nothing recorded between reads.</summary>
+    private sealed class QuietChunkedReader(string block, int count) : TextReader
+    {
+        private int _left = count;
+
+        public override ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_left == 0)
+            {
+                return ValueTask.FromResult(0);
+            }
+
+            _left--;
+            block.AsSpan().CopyTo(buffer.Span);
+            return ValueTask.FromResult(block.Length);
+        }
+    }
+
     [Fact]
     public void Unfinished_IsStdoutsThenStderrs_AndCountsNowhere()
     {

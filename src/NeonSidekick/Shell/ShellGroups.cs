@@ -167,14 +167,7 @@ public sealed class ShellGroups
             RedirectStandardOutput = true,   // the guard says nothing; the TUI's terminal must not get what it might
             RedirectStandardError = true,
         };
-        foreach (string argument in ShellGuard.Arguments(_folder))
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        // The guard lives as long as the app and needs none of its keys (the fourth shell review, 2026-10-19: e6f76814 cut them from
-        // every other child that is not the shell's, this one was missed and held every NEONSIDEKICK_* secret for the session).
-        ChildEnvironment.Withhold(start.Environment);
+        ShellGuard.Prepare(start, _folder);   // its arguments, and the app's secrets withheld
 
         try
         {

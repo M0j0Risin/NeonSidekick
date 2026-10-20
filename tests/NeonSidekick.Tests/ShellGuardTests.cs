@@ -108,6 +108,22 @@ public sealed class ShellGuardTests : IDisposable
         Assert.Equal("A background command's process group 345, left by NeonSidekick 12, may still run; its leader is gone, so it was not killed (pgrep -l -g 345 lists it)", ShellText.GroupUnproven(345, 12));
     }
 
+    /// <summary>The guard starts without the app's secrets (the fourth shell review, 2026-10-19: it alone of the non-shell children kept them).</summary>
+    [Fact]
+    public void TheGuard_StartsWithItsArguments_AndWithoutTheAppsSecrets()
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("guard");
+        start.Environment["NEONSIDEKICK_LLM_API_KEY"] = "secret";
+        start.Environment["NEONSIDEKICK_TEST_SQL_CONNECTION"] = "Password=secret";
+        start.Environment["KEEP"] = "yes";
+
+        ShellGuard.Prepare(start, "/r");
+
+        Assert.Equal(ShellGuard.Arguments("/r"), start.ArgumentList);
+        Assert.Equal("yes", start.Environment["KEEP"]);
+        Assert.DoesNotContain(start.Environment.Keys, ChildEnvironment.IsWithheld);
+    }
+
     [MacFact]
     public void TheSmokesProbe_WritesAndReadsARecord_AndKeepsALiveOwners()
     {

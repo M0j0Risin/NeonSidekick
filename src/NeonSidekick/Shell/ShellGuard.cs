@@ -32,6 +32,22 @@ public static class ShellGuard
     public static IReadOnlyList<string> Arguments(string recordsFolder) =>
         [Flag, recordsFolder, Environment.ProcessId.ToString(CultureInfo.InvariantCulture)];
 
+    /// <summary>
+    /// The guard's arguments and environment on <paramref name="start"/> (<see cref="ShellGroups"/> starts it). The guard lives as long
+    /// as the app and needs none of its keys (the fourth shell review, 2026-10-19: e6f76814 cut them from every other child that is not
+    /// the shell's, this one was missed and held every NEONSIDEKICK_* secret for the session), so they are withheld.
+    /// </summary>
+    public static void Prepare(System.Diagnostics.ProcessStartInfo start, string recordsFolder)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        foreach (string argument in Arguments(recordsFolder))
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        ChildEnvironment.Withhold(start.Environment);
+    }
+
     /// <summary>The guard's run (<paramref name="args"/> as <see cref="Asked"/> takes them): 0 once its owner's groups are killed, 2 for a bad owner pid.</summary>
     [SupportedOSPlatform("macos")]
     public static async Task<int> RunAsync(string[] args)
