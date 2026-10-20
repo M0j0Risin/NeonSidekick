@@ -126,6 +126,7 @@ Only for some features:
 ### Install
 1. Download `NeonSidekick-v<version>-win-x64.zip` from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases).
 2. Unzip it into any folder and run `NeonSidekick.exe`. Keep everything in the folder together.
+3. The app isn't signed, so Windows may say it protected your PC: choose **More info**, then **Run anyway**.
 
 On a Mac:
 1. Download `NeonSidekick-v<version>-osx-arm64.tar.gz` from the same page and unpack it (double-click, or `tar -xzf`).
@@ -133,7 +134,9 @@ On a Mac:
 3. In Terminal or iTerm2, run `./NeonSidekick` in that folder. Keep everything in the folder together.
 4. When macOS asks whether the app may use its Keychain key, choose **Always Allow**. For the Ctrl+Option shortcuts, let Option act as Meta ([how](docs/MAC.md#install-and-first-run)).
 
-Each download's `.sha256` file lets you check it arrived intact.
+**Updating:** unpack the new version into a fresh folder (on a Mac, clear its quarantine again). Your settings, memories and conversations live in `.neonsidekick`, not the app's folder, so they carry over.
+
+Each download's `.sha256` file lets you check it arrived intact (`Get-FileHash` on Windows, `shasum -a 256` on a Mac).
 
 ### First launch
 If no model server answers when the app starts, it opens **Connect a model**:
