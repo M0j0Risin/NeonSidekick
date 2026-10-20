@@ -121,8 +121,8 @@ It's one app for research, IT and admin work, your smart home and creative proje
 ### What you need
 * **A 64-bit Windows PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac (M1 and later). Nothing else to install.
 * **Windows Terminal:** it comes with Windows 11, and the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
-* **A language model:** the app can download one and run it, use one you already run, or connect to the OpenAI or Anthropic API.
-* **For local models, a graphics card with 16–32 GB of VRAM** (NVIDIA with driver 580 or newer, or any Vulkan card) **or an Apple Silicon Mac.** Without one they run, but slowly.
+* **A language model:** the app can download one and run it, use one you already run, or connect to the OpenAI or Anthropic API, or to Claude Code on your Claude subscription.
+* **For local models, a graphics card with 16 GB of VRAM or more** (NVIDIA with driver 580 or newer, or any Vulkan card) **or an Apple Silicon Mac.** Without one they run, but slowly.
 
 Only for some features:
 * **Web pages that need a real browser, and PDFs:** Edge, Chrome or Brave (or Chromium on a Mac).
