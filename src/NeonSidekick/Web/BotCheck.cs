@@ -87,28 +87,47 @@ public static class BotCheck
     /// Whether a fetch's answer is worth showing to a person: <see cref="FetchOutcome.Blocked"/> with no wait named (a
     /// <c>Retry-After</c> is a rate limit: the window would only add to it), and not a bare 429 — a 429 with a check's page on it
     /// is a check. So a 403, a 503 without a wait, a 200 challenge page and the headless browser's own challenge page all are;
-    /// a timeout, a network-mode refusal or a 404 never. Pinned.
+    /// a timeout, a network-mode refusal or a 404 never. Code review, 2026-10-20: nor a refusal with no page on it (an API's JSON, S3's
+    /// <c>AccessDenied</c> XML, plain text) — a check is a page a person sees — nor a 403 that names a spent rate limit
+    /// (<see cref="WebFetcher.RateLimitWait"/>, GitHub's). Pinned.
     /// </summary>
     public static bool Offers(FetchResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (result.Outcome != FetchOutcome.Blocked || result.RetryAfter is not null)
+        if (result.Outcome != FetchOutcome.Blocked || result.RetryAfter is not null || result.Page is null)
         {
             return false;
         }
 
-        return result.Status != 429 || (result.Page is not null && WebFetcher.LooksLikeChallenge(result.Text, result.Page.Markdown));
+        return result.Status != 429 || WebFetcher.LooksLikeChallenge(result.Text, result.Page.Markdown);
     }
 
     /// <summary>
     /// Whether a download's refusal is worth showing to a person: <see cref="FetchOutcome.Blocked"/> as a 403, or a 503 with no wait
-    /// named; the body is not read, so a 429 is taken as the rate limit it most often is. Pinned.
+    /// named, served as a page (<see cref="WebFetcher.IsHtml"/>, no type counting as one, since 2026-10-20 as the fetch's); the body is
+    /// not read, so a 429 is taken as the rate limit it most often is. Pinned.
     /// </summary>
     public static bool Offers(OpenedDownload opened)
     {
         ArgumentNullException.ThrowIfNull(opened);
-        return opened.Outcome == FetchOutcome.Blocked && opened.RetryAfter is null && opened.Status is 403 or 503;
+        return opened.Outcome == FetchOutcome.Blocked && opened.RetryAfter is null && opened.Status is 403 or 503 && WebFetcher.IsHtml(opened.MediaType);
     }
+
+    /// <summary>
+    /// Whether the address a solved check ended on is another site than the one asked for (<see cref="BrowserHeaders.RegistrableDomain"/>;
+    /// <c>example.com</c> to <c>www.example.com</c>, or http to https, is the same). Code review, 2026-10-20: the window's profile is kept
+    /// between runs, so a page that sent the window on to a site the user is signed in to handed that session's cookies and its page to
+    /// the web tools; such an ending is refused (<see cref="BotCheckText.LeftTheSite"/>) and its cookies never read. Pure; pinned.
+    /// </summary>
+    public static bool LeftTheSite(Uri url, string finalUrl)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        return Uri.TryCreate(finalUrl, UriKind.Absolute, out var final) && WebFetcher.IsHttp(final) && !SameSite(url.IdnHost, final.IdnHost);
+    }
+
+    /// <summary>Whether two hosts are one site (<see cref="BrowserHeaders.RegistrableDomain"/>), whatever their scheme.</summary>
+    public static bool SameSite(string host, string other) =>
+        string.Equals(BrowserHeaders.RegistrableDomain(host), BrowserHeaders.RegistrableDomain(other), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The pane's short reason from a refusal's detail: its first clause (<c>HTTP 403 Forbidden</c> out of <c>HTTP 403 Forbidden; the

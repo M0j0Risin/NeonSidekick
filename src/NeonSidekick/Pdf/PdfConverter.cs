@@ -118,6 +118,7 @@ public sealed class PdfConverter
         string id = Guid.NewGuid().ToString("N");
         string htmlPath = System.IO.Path.Combine(_tempFolder, id + ".html");
         string pdfPath = System.IO.Path.Combine(_tempFolder, id + ".pdf");
+        string windowPdfPath = System.IO.Path.Combine(_tempFolder, id + ".window.pdf");
         using (pending)
         {
             try
@@ -125,9 +126,11 @@ public sealed class PdfConverter
                 Directory.CreateDirectory(_tempFolder);
                 string? fallbackReason = null;
                 string madeWith;
-                if (source.Gate is { } gate && await WindowAsync(gate with { PdfPath = pdfPath }, request.Url!, effective, cancellationToken).ConfigureAwait(false))
+                string madePath = pdfPath;
+                if (source.Gate is { } gate && await WindowAsync(gate with { PdfPath = windowPdfPath }, request.Url!, effective, cancellationToken).ConfigureAwait(false))
                 {
                     madeWith = BotCheckText.WindowName;
+                    madePath = windowPdfPath;
                 }
                 else
                 {
@@ -168,7 +171,7 @@ public sealed class PdfConverter
                     }
                 }
 
-                await using (var made = new FileStream(pdfPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
+                await using (var made = new FileStream(madePath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
                 {
                     await made.CopyToAsync(pending.Stream, cancellationToken).ConfigureAwait(false);
                 }
@@ -185,6 +188,7 @@ public sealed class PdfConverter
             {
                 WorkingDirectory.DeleteQuietly(htmlPath);
                 WorkingDirectory.DeleteQuietly(pdfPath);
+                WorkingDirectory.DeleteQuietly(windowPdfPath);
             }
         }
     }
@@ -223,17 +227,28 @@ public sealed class PdfConverter
         }
 
         // With someone to ask (2026-10-13), the page as web_fetch gets it first: a bot check a person may solve is the window's to print.
-        // Asked without reading a PDF (2026-10-14): the probe only wants to know what the address is, not a 40-page read.
+        // Asked without reading a PDF (2026-10-14): the probe only wants to know what the address is, not a 40-page read. Under the
+        // default mode over HTTP alone (2026-10-20, the code review: a page of scripts sent the probe's fallback to the headless browser
+        // for a DOM that was thrown away, then the print started it again); the headless browser only for a refusal, which it may pass
+        // with no person, as web_fetch's fallback would.
         BotCheckRequest? gate = null;
         if (_botCheck is not null && BotcheckWindow.Resolve(effective) != BotcheckKind.Disabled)
         {
-            var probe = await _fetcher.FetchAsync(url, options with { ReadPdf = false }, cancellationToken).ConfigureAwait(false);
+            bool fallback = options.Engine == FetchEngine.Default;
+            var probe = await _fetcher.FetchAsync(url, options with { ReadPdf = false, Engine = fallback ? FetchEngine.HttpClient : options.Engine }, cancellationToken).ConfigureAwait(false);
             if (WebFetcher.IsPdfType(probe.MediaType))
             {
                 return (null, PdfText.UrlIsPdf(url.AbsoluteUri));
             }
 
-            if (BotCheck.Offers(probe))
+            bool offered = BotCheck.Offers(probe);
+            if (offered && fallback)
+            {
+                // The headless browser got the page: no person is needed, and its print will get it too.
+                offered = !(await _fetcher.FetchAsync(url, options with { ReadPdf = false, Engine = FetchEngine.Chromium }, cancellationToken).ConfigureAwait(false)).Ok;
+            }
+
+            if (offered)
             {
                 gate = new BotCheckRequest(url, BotCheckUse.Pdf, BotCheck.WhyOf(probe.Detail));
             }
@@ -245,7 +260,8 @@ public sealed class PdfConverter
     /// <summary>
     /// The Browser window's print of a page behind a bot check (2026-10-13): true with the PDF at the request's path once the user has the
     /// page through and the window printed it, its cookies kept for the web tools; false for any other ending, which the caller follows
-    /// with the headless browser's print.
+    /// with the headless browser's print. The request's path is the window's alone, never the headless print's (2026-10-20, the code
+    /// review: a refused page's PDF was left where the headless browser was to write, and taken as its own), and a refused one is deleted.
     /// </summary>
     private async Task<bool> WindowAsync(BotCheckRequest gate, Uri url, AppSettingsData effective, CancellationToken cancellationToken)
     {
@@ -253,12 +269,14 @@ public sealed class PdfConverter
         if (solved is not { Cleared: true, PdfWritten: true })
         {
             DiagnosticLog.Info(PdfText.Category, $"The Browser window made no PDF of {url}{(solved is null ? "" : BotCheckText.For(solved))}; the headless browser prints it instead.");
+            WorkingDirectory.DeleteQuietly(gate.PdfPath!);
             return false;
         }
 
-        if (await _fetcher.LeftTheReachAsync(url, solved.FinalUrl, WebAccess.Options(effective), cancellationToken).ConfigureAwait(false))
+        if (await _fetcher.SolvedElsewhereAsync(url, solved, WebAccess.Options(effective), cancellationToken).ConfigureAwait(false) is { } elsewhere)
         {
-            DiagnosticLog.Info(PdfText.Category, $"The Browser window's page for {url} ended on {solved.FinalUrl}, off the network mode's reach; its PDF is not used.");
+            DiagnosticLog.Info(PdfText.Category, $"The Browser window's page for {url} is not used{elsewhere}.");
+            WorkingDirectory.DeleteQuietly(gate.PdfPath!);
             return false;
         }
 

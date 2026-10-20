@@ -114,6 +114,13 @@ public sealed class WebSearchTool : AIFunction
             return SearchOutcome.Failed(WebText.SearchRefused(engine.Name, gate.Why + BotCheckText.For(solved)));
         }
 
+        // Where it ended judged as the other tools' hand-offs are (2026-10-20, the code review: a redirect, or an address typed in the bar,
+        // put another site's cookies in the jar and its page in the results).
+        if (await _web.Fetcher.SolvedElsewhereAsync(gate.Url, solved, options, cancellationToken).ConfigureAwait(false) is { } elsewhere)
+        {
+            return SearchOutcome.Failed(WebText.SearchRefused(engine.Name, gate.Why + elsewhere));
+        }
+
         _web.Fetcher.Adopt(solved.Cookies, solved.Identity, gate.Url);
         var read = engine.Outcome(query, count, solved.Html ?? "", WebText.WindowEngine, solved.Status);
         if (read.Ok && read.Results.Count > 0)

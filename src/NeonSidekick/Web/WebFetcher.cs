@@ -21,7 +21,8 @@ public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, Networ
 /// <see cref="Text"/> the body of a plain-text, JSON, XML or CSV answer; <see cref="Engine"/> which
 /// leg produced it (<see cref="WebText.HttpEngine"/> / <see cref="WebText.BrowserEngine"/>).
 /// </summary>
-/// <remarks><see cref="RetryAfter"/> (2026-10-11): how long a 429 or 503 answer asked the client to wait (its <c>Retry-After</c>), null without one.</remarks>
+/// <remarks><see cref="RetryAfter"/> (2026-10-11): how long a 429 or 503 answer asked the client to wait (its <c>Retry-After</c>), null without one;
+/// a 403's too since 2026-10-20, and a spent rate limit's reset (<see cref="WebFetcher.RateLimitWait"/>).</remarks>
 public sealed record FetchResult(FetchOutcome Outcome, string Url, string FinalUrl, int Status, string MediaType, PageText? Page, string Text, string Engine, string Detail, bool Truncated, TimeSpan? RetryAfter = null)
 {
     public bool Ok => Outcome == FetchOutcome.Ok;
@@ -86,7 +87,7 @@ public sealed class OpenedDownload : IDisposable
     public long Declared { get; }
     public string Detail { get; }
 
-    /// <summary>How long a 429 or 503 refusal asked the client to wait (its <c>Retry-After</c>), null without one (2026-10-13: a rate limit is no bot check, <see cref="BotCheck.Offers(OpenedDownload)"/>).</summary>
+    /// <summary>How long a 403, 429 or 503 refusal asked the client to wait (<see cref="WebFetcher.RateLimitWait"/>), null without one (2026-10-13: a rate limit is no bot check, <see cref="BotCheck.Offers(OpenedDownload)"/>).</summary>
     public TimeSpan? RetryAfter { get; init; }
 
     public bool Ok => Outcome == FetchOutcome.Ok;
@@ -219,6 +220,51 @@ public sealed class WebFetcher
         { Date: { } date } => date > now ? date - now : TimeSpan.Zero,
         _ => null,
     };
+
+    /// <summary>The remaining/reset header pairs a spent rate limit is read from (<see cref="RateLimitWait"/>): GitHub's, the IETF draft's, X's.</summary>
+    private static readonly (string Remaining, string Reset)[] RateLimitHeaders =
+    [
+        ("x-ratelimit-remaining", "x-ratelimit-reset"),
+        ("ratelimit-remaining", "ratelimit-reset"),
+        ("x-rate-limit-remaining", "x-rate-limit-reset"),
+    ];
+
+    /// <summary>A reset at or past this is a Unix time (GitHub's, X's), below it a number of seconds (the IETF draft's).</summary>
+    private const long EpochResetFloor = 1_000_000_000;
+
+    /// <summary>
+    /// How long a refusal (<paramref name="status"/> 403, 429 or 503) asks the client to wait at <paramref name="now"/>: its
+    /// <c>Retry-After</c> (<see cref="RetryAfterOf"/>), else a spent rate limit's reset — a <c>…-remaining: 0</c> with a readable
+    /// <c>…-reset</c> (<see cref="RateLimitHeaders"/>); null for any other answer. Code review, 2026-10-20: a rate limit sent as a 403
+    /// (GitHub's <c>x-ratelimit-remaining: 0</c>, or its secondary limit's <c>Retry-After</c> on a 403) was taken for a bot check, the
+    /// Browser window offered and the headless browser sent in. Pure; pinned.
+    /// </summary>
+    public static TimeSpan? RateLimitWait(System.Net.Http.Headers.HttpResponseHeaders headers, int status, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+        if (status is not (403 or 429 or 503))
+        {
+            return null;
+        }
+
+        if (RetryAfterOf(headers.RetryAfter, now) is { } after)
+        {
+            return after;
+        }
+
+        foreach (var (remaining, reset) in RateLimitHeaders)
+        {
+            if (headers.TryGetValues(remaining, out var left) && left.FirstOrDefault()?.Trim() == "0"
+                && headers.TryGetValues(reset, out var resets)
+                && long.TryParse(resets.FirstOrDefault()?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out long value))
+            {
+                var wait = value >= EpochResetFloor ? DateTimeOffset.FromUnixTimeSeconds(value) - now : TimeSpan.FromSeconds(value);
+                return wait < TimeSpan.Zero ? TimeSpan.Zero : wait;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>The <c>http</c> / <c>https</c> rule, applied to every URL and every redirect.</summary>
     public static bool IsHttp(Uri url)
@@ -563,7 +609,7 @@ public sealed class WebFetcher
     /// <summary>
     /// The HTTP leg with a rate limit heeded (2026-10-11): an answer that names a <c>Retry-After</c> of at most <see cref="MaxRetryWait"/>
     /// is waited out on the clock and the page asked for once more; a longer one, or a second that names one again, is the answer,
-    /// its detail saying how long the site asks to wait (<see cref="WebText.AskedToWait"/>). A second refused (429 / 503) with no wait
+    /// its detail saying how long the site asks to wait (<see cref="WebText.AskedToWait"/>). A second refused (403 / 429 / 503) with no wait
     /// named carries the first's, so the rate limit still keeps the headless browser out.
     /// </summary>
     private async Task<FetchResult> PoliteHttpAsync(Uri url, FetchOptions options, CancellationToken cancellationToken)
@@ -596,7 +642,7 @@ public sealed class WebFetcher
         // Refused again with no wait named (code review, 2026-10-11): the limit still stands, so the first wait goes with it and the
         // headless browser stays out. A challenge page is a bot check, the browser's to try.
         bool challenge = second.Page is not null && LooksLikeChallenge(second.Text, second.Page.Markdown);
-        return second.Outcome == FetchOutcome.Blocked && second.Status is 429 or 503 && !challenge
+        return second.Outcome == FetchOutcome.Blocked && second.Status is 403 or 429 or 503 && !challenge
             ? second with { RetryAfter = wait, Detail = second.Detail + WebText.AskedToWait(wait) }
             : second;
     }
@@ -704,7 +750,7 @@ public sealed class WebFetcher
 
                 // A rate limit names its wait; a bot check that does (a 503 challenge page) is still a bot check, the browser's to try.
                 bool challenge = page is not null && LooksLikeChallenge(text, page.Markdown);
-                var retryAfter = status is 429 or 503 && !challenge ? RetryAfterOf(response.Headers.RetryAfter, _time.GetUtcNow()) : null;
+                var retryAfter = !challenge ? RateLimitWait(response.Headers, status, _time.GetUtcNow()) : null;
                 return new FetchResult(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, page, text, WebText.HttpEngine, detail, truncated, retryAfter);
             }
 
@@ -791,7 +837,7 @@ public sealed class WebFetcher
         {
             string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
             DiagnosticLog.Info(Category, $"GET {current} → {detail} ({mediaType}).");
-            var retryAfter = status is 429 or 503 ? RetryAfterOf(response.Headers.RetryAfter, _time.GetUtcNow()) : null;
+            var retryAfter = RateLimitWait(response.Headers, status, _time.GetUtcNow());
             return new FetchResult(IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, null, "", WebText.HttpEngine, detail, false, retryAfter);
         }
 
@@ -960,7 +1006,7 @@ public sealed class WebFetcher
                     string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
                     DiagnosticLog.Info(Category, $"GET {current} → {detail}.");
                     var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
-                    var retryAfter = status is 429 or 503 ? RetryAfterOf(response.Headers.RetryAfter, _time.GetUtcNow()) : null;
+                    var retryAfter = RateLimitWait(response.Headers, status, _time.GetUtcNow());
                     return new OpenedDownload(outcome, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, 0, detail) { RetryAfter = retryAfter };
                 }
 
@@ -1228,7 +1274,7 @@ public sealed class WebFetcher
     /// <paramref name="url"/> through its bot check in the Browser window. Cleared, and the address it ended on still within the network
     /// mode (<see cref="PreflightAsync"/>), the window's page is the answer (<see cref="FromWindow"/>); any other ending is
     /// <paramref name="refused"/> with what happened added to its detail (<see cref="BotCheckText.For"/>); no one to ask (null) leaves
-    /// it as it was.
+    /// it as it was. An ending on another site is refused as well (<see cref="SolvedElsewhereAsync"/>, 2026-10-20).
     /// </summary>
     public async Task<FetchResult> PastBotCheckAsync(Uri url, FetchResult refused, FetchOptions options, BotCheckSolver solver, BotCheckUse use, CancellationToken cancellationToken)
     {
@@ -1247,9 +1293,9 @@ public sealed class WebFetcher
             return refused with { Detail = refused.Detail + BotCheckText.For(solved) };
         }
 
-        if (await LeftTheReachAsync(url, solved.FinalUrl, options, cancellationToken).ConfigureAwait(false))
+        if (await SolvedElsewhereAsync(url, solved, options, cancellationToken).ConfigureAwait(false) is { } elsewhere)
         {
-            return refused with { Detail = refused.Detail + BotCheckText.LeftTheReach(solved.FinalUrl) };
+            return refused with { Detail = refused.Detail + elsewhere };
         }
 
         // A file past the check (2026-10-14, the PDF plan's gap 22): the window cancels a download during a check (WasFile) and shows a
@@ -1272,6 +1318,30 @@ public sealed class WebFetcher
         }
 
         return FromWindow(url, solved);
+    }
+
+    /// <summary>
+    /// Why a cleared check's page is not the answer to <paramref name="url"/>, as the detail it adds to the refusal: it ended on another
+    /// site (<see cref="BotCheck.LeftTheSite"/>, <see cref="BotCheckText.LeftTheSite"/>), or off the network mode's reach
+    /// (<see cref="LeftTheReachAsync"/>, <see cref="BotCheckText.LeftTheReach"/>); null when it is the answer. The one check every tool's
+    /// hand-off runs (2026-10-20, the code review: <c>web_search</c>'s ran none).
+    /// </summary>
+    public async Task<string?> SolvedElsewhereAsync(Uri url, BotCheckResult solved, FetchOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        ArgumentNullException.ThrowIfNull(solved);
+        if (await LeftTheReachAsync(url, solved.FinalUrl, options, cancellationToken).ConfigureAwait(false))
+        {
+            return BotCheckText.LeftTheReach(solved.FinalUrl);
+        }
+
+        if (BotCheck.LeftTheSite(url, solved.FinalUrl))
+        {
+            DiagnosticLog.Info(Category, $"{url}: the Browser window ended on {solved.FinalUrl}, another site; its page and cookies are not taken.");
+            return BotCheckText.LeftTheSite(solved.FinalUrl);
+        }
+
+        return null;
     }
 
     /// <summary>Whether the address a bot check ended on is off a host the network mode lets the fetch reach (a redirect onto the LAN under <c>internet</c>, say).</summary>

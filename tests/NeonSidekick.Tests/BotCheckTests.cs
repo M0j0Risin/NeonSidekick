@@ -101,13 +101,63 @@ public sealed class BotCheckTests : IDisposable
         Assert.False(BotCheck.Offers(FetchResult.Fail(FetchOutcome.LanRefused, "http://nas.home/", "nas.home")));
         Assert.False(BotCheck.Offers(Refused(200, Article, outcome: FetchOutcome.Ok)));
 
-        static OpenedDownload Opened(int status, FetchOutcome outcome = FetchOutcome.Blocked, TimeSpan? wait = null) =>
-            new(outcome, "https://example.com/f.zip", "https://example.com/f.zip", status, "", "", 0, "HTTP " + status) { RetryAfter = wait };
+        // A refusal with no page on it (2026-10-20, the code review): an API's JSON, S3's AccessDenied XML. A check is a page.
+        Assert.False(BotCheck.Offers(new FetchResult(FetchOutcome.Blocked, "https://api.github.com/", "https://api.github.com/", 403, "application/json", null, "{\"message\":\"forbidden\"}", WebText.HttpEngine, "HTTP 403", false)));
+        Assert.False(BotCheck.Offers(new FetchResult(FetchOutcome.Blocked, "https://b.s3.amazonaws.com/k", "https://b.s3.amazonaws.com/k", 403, "application/xml", null, "<Error><Code>AccessDenied</Code></Error>", WebText.HttpEngine, "HTTP 403", false)));
+
+        static OpenedDownload Opened(int status, FetchOutcome outcome = FetchOutcome.Blocked, TimeSpan? wait = null, string mediaType = "") =>
+            new(outcome, "https://example.com/f.zip", "https://example.com/f.zip", status, mediaType, "", 0, "HTTP " + status) { RetryAfter = wait };
         Assert.True(BotCheck.Offers(Opened(403)));
+        Assert.True(BotCheck.Offers(Opened(403, mediaType: "text/html")));
         Assert.True(BotCheck.Offers(Opened(503)));
         Assert.False(BotCheck.Offers(Opened(503, wait: TimeSpan.FromSeconds(5))));
         Assert.False(BotCheck.Offers(Opened(429)));
         Assert.False(BotCheck.Offers(Opened(404, FetchOutcome.Failed)));
+        Assert.False(BotCheck.Offers(Opened(403, mediaType: "application/xml")));
+        Assert.False(BotCheck.Offers(Opened(403, mediaType: "text/plain")));
+    }
+
+    /// <summary>
+    /// A rate limit sent as a 403 (2026-10-20, the code review: GitHub's spent limit was offered as a bot check): its <c>Retry-After</c>, or a
+    /// <c>…-remaining: 0</c> with its reset — a Unix time, or seconds — is the wait; a limit not spent, or another status, is none.
+    /// </summary>
+    [Theory]
+    [InlineData(403, "x-ratelimit-remaining", "0", "x-ratelimit-reset", "1800000060", 60)]   // GitHub's: a Unix time
+    [InlineData(429, "ratelimit-remaining", "0", "ratelimit-reset", "30", 30)]               // the IETF draft's: seconds
+    [InlineData(403, "x-rate-limit-remaining", "0", "x-rate-limit-reset", "1799999000", 0)] // a reset gone by: no wait left
+    [InlineData(403, "x-ratelimit-remaining", "12", "x-ratelimit-reset", "1800000060", -1)] // a limit not spent
+    [InlineData(403, "x-ratelimit-remaining", "0", "x-ratelimit-reset", "soon", -1)]        // no reset to read
+    [InlineData(404, "x-ratelimit-remaining", "0", "x-ratelimit-reset", "30", -1)]          // no refusal of that kind
+    public void RateLimitWait_ReadsASpentLimitsReset(int status, string remaining, string left, string reset, string at, int seconds)
+    {
+        using var response = new HttpResponseMessage((HttpStatusCode)status);
+        response.Headers.TryAddWithoutValidation(remaining, left);
+        response.Headers.TryAddWithoutValidation(reset, at);
+        var now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+        Assert.Equal(seconds < 0 ? null : TimeSpan.FromSeconds(seconds), WebFetcher.RateLimitWait(response.Headers, status, now));
+
+        using var secondary = new HttpResponseMessage(HttpStatusCode.Forbidden);
+        secondary.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(90));
+        Assert.Equal(TimeSpan.FromSeconds(90), WebFetcher.RateLimitWait(secondary.Headers, 403, now));   // GitHub's secondary limit
+    }
+
+    [Fact]
+    public async Task WebFetch_ARateLimitSentAsA403_IsNoBotCheck_AndSendsNoBrowser()
+    {
+        _http.Map("https://example.com/api", (_, _) =>
+        {
+            var response = Html(HttpStatusCode.Forbidden, "<p>API rate limit exceeded</p>");
+            response.Headers.TryAddWithoutValidation("x-ratelimit-remaining", "0");
+            response.Headers.TryAddWithoutValidation("x-ratelimit-reset", _time.GetUtcNow().AddMinutes(30).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return Task.FromResult(response);
+        });
+        _browser.Html = Article;
+
+        string result = await new WebFetchTool(_web, () => _settings, Solve).FetchAsync("https://example.com/api", null, CancellationToken.None);
+
+        Assert.Contains("the site asks to wait", result, StringComparison.Ordinal);
+        Assert.Empty(_asked);
+        Assert.Empty(_browser.Runs);
     }
 
     [Fact]
@@ -341,6 +391,34 @@ public sealed class BotCheckTests : IDisposable
     }
 
     /// <summary>
+    /// A check that ended on another site (2026-10-20, the code review: the window's kept profile handed a signed-in site's cookies and page
+    /// to the web tools): refused, nothing put in the jar; the same site on another host (www, https) is taken.
+    /// </summary>
+    [Fact]
+    public async Task Fetcher_PastBotCheck_AnEndingOnAnotherSite_IsRefused_AndItsCookiesNotTaken()
+    {
+        var url = new Uri("https://example.com/");
+        var options = WebAccess.Options(_settings);
+        var mail = new BrowserCookie("SID", "signed-in", ".google.com", "/", -1, true, true);
+        _answer = r => FakeBrowserWindow.Cleared(r, Article) with { FinalUrl = "https://mail.google.com/mail/u/0/", Cookies = [mail] };
+
+        var elsewhere = await _web.Fetcher.PastBotCheckAsync(url, Refused(403), options, Solve, BotCheckUse.Fetch, CancellationToken.None);
+
+        Assert.False(elsewhere.Ok);
+        Assert.EndsWith(BotCheckText.LeftTheSite("https://mail.google.com/mail/u/0/") + ")", elsewhere.Error, StringComparison.Ordinal);
+        Assert.Equal("", _jar.GetCookieHeader(new Uri("https://mail.google.com/")));
+
+        _answer = r => FakeBrowserWindow.Cleared(r, Article) with { FinalUrl = "https://www.example.com/welcome" };
+        Assert.True((await _web.Fetcher.PastBotCheckAsync(url, Refused(403), options, Solve, BotCheckUse.Fetch, CancellationToken.None)).Ok);
+
+        Assert.True(BotCheck.LeftTheSite(url, "https://accounts.example.org/"));
+        Assert.False(BotCheck.LeftTheSite(url, "http://shop.example.com/"));
+        Assert.False(BotCheck.LeftTheSite(url, "about:blank"));
+        Assert.Equal(["example.com", "example.com"], BrowserJobs.CheckHosts(url, "https://mail.google.com/"));   // the window reads none of its cookies
+        Assert.Equal(["example.com", "shop.example.com"], BrowserJobs.CheckHosts(url, "https://shop.example.com/"));
+    }
+
+    /// <summary>
     /// A PDF past a bot check (2026-10-14, the PDF plan's gap 22): the window cancels a download during a check and hands back its cookies,
     /// so the address is asked once more over HTTP with them — a PDF read there; a file still refused names download_file.
     /// </summary>
@@ -470,6 +548,20 @@ public sealed class BotCheckTests : IDisposable
         Assert.Equal("Error: DuckDuckGo refused the search (a bot check; the user gave up on it in the Browser window); try again in a minute", await search.SearchAsync("other", null, CancellationToken.None));
     }
 
+    /// <summary>The search's hand-off judges where the window ended as the other tools' do (2026-10-20, the code review: it judged nothing).</summary>
+    [Fact]
+    public async Task WebSearch_AnEndingOnAnotherSite_IsRefused_AndItsCookiesNotTaken()
+    {
+        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, DuckAnomaly, "text/html");
+        _answer = r => FakeBrowserWindow.Cleared(r, DuckResults) with { FinalUrl = "https://example.com/" };
+        var search = new WebSearchTool(_web, () => _settings, Solve);
+
+        string result = await search.SearchAsync("example", null, CancellationToken.None);
+
+        Assert.Contains(BotCheckText.LeftTheSite("https://example.com/"), result, StringComparison.Ordinal);
+        Assert.Equal("", _jar.GetCookieHeader(new Uri("https://html.duckduckgo.com/html/")));
+    }
+
     [Fact]
     public async Task Download_ShowsTheCheck_ThenAsksAgainWithItsCookies()
     {
@@ -490,10 +582,17 @@ public sealed class BotCheckTests : IDisposable
     [Fact]
     public async Task Download_RefusedAgain_OrDeclined_SaysSo_AndARateLimitIsNotShown()
     {
-        _http.Map("https://example.com/f.bin", HttpStatusCode.Forbidden, "denied", "text/plain");
+        _http.Map("https://example.com/f.bin", HttpStatusCode.Forbidden, "<p>denied</p>", "text/html");
         var download = new DownloadFileTool(_web, _files, () => _settings, Solve);
         string again = await download.DownloadAsync("https://example.com/f.bin", null, overwrite: false, CancellationToken.None);
         Assert.Equal("Error: 'https://example.com/f.bin' refused the request (HTTP 403 Forbidden" + BotCheckText.ClearedButClientRefused + ")", again);
+
+        // A refusal served as XML (S3's AccessDenied, 2026-10-20) is no page to solve: not shown.
+        _asked.Clear();
+        _http.Map("https://example.com/h.bin", HttpStatusCode.Forbidden, "<Error><Code>AccessDenied</Code></Error>", "application/xml");
+        Assert.Equal("Error: 'https://example.com/h.bin' refused the request (HTTP 403 Forbidden)", await download.DownloadAsync("https://example.com/h.bin", null, overwrite: false, CancellationToken.None));
+        Assert.Empty(_asked);
+        _asked.Clear();
 
         _answer = r => BotCheckResult.Ended(BotCheckEnd.Declined, r.Url.AbsoluteUri);
         string declined = await download.DownloadAsync("https://example.com/f.bin", null, overwrite: false, CancellationToken.None);
@@ -525,6 +624,45 @@ public sealed class BotCheckTests : IDisposable
         Assert.Equal(BotCheckUse.Pdf, Assert.Single(_asked).Use);
         Assert.Empty(_browser.PdfRuns);
         Assert.Equal("cf_clearance=solved", _jar.GetCookieHeader(new Uri("https://example.com/")));
+    }
+
+    /// <summary>
+    /// The window's PDF of a page that ended on another site (2026-10-20, the code review): not used, and never where the headless browser
+    /// prints, so its own print is the one made — the window's file was left at that path and taken for the headless browser's.
+    /// </summary>
+    [Fact]
+    public async Task Pdf_AWindowPdfOfAnotherSite_IsDropped_AndTheHeadlessPrintIsTheOneMade()
+    {
+        GatedSite();
+        string? windowPath = null;
+        _answer = r =>
+        {
+            windowPath = r.PdfPath;
+            File.WriteAllBytes(r.PdfPath!, Encoding.ASCII.GetBytes("%PDF-1.7 the other site's page"));
+            return FakeBrowserWindow.Cleared(r, Article) with { PdfWritten = true, FinalUrl = "https://accounts.example.org/" };
+        };
+
+        string result = await Pdf(Solve).ConvertAsync(new PdfRequest(Url: new Uri("https://example.com/")), CancellationToken.None);
+
+        Assert.Equal("Made example.com.pdf (21 B) from https://example.com/ with msedge", result);
+        var print = Assert.Single(_browser.PdfRuns);
+        Assert.NotEqual(windowPath, print.Output);
+        Assert.False(File.Exists(windowPath));
+        Assert.Equal("%PDF-1.7 fake browser", File.ReadAllText(Path.Combine(_root, "example.com.pdf")));
+        Assert.Equal("", _jar.GetCookieHeader(new Uri("https://example.com/")));
+    }
+
+    /// <summary>The bot-check probe under the default mode asks over HTTP alone (2026-10-20, the code review): a page of scripts starts no headless read.</summary>
+    [Fact]
+    public async Task Pdf_TheProbe_SendsNoHeadlessRead_ForAPageThatIsNoRefusal()
+    {
+        _http.Map("https://example.com/", HttpStatusCode.OK, "<html><body><div id=\"app\"></div><script src=\"/app.js\"></script></body></html>", "text/html");
+
+        await Pdf(Solve).ConvertAsync(new PdfRequest(Url: new Uri("https://example.com/")), CancellationToken.None);
+
+        Assert.Empty(_browser.Runs);
+        Assert.Single(_browser.PdfRuns);
+        Assert.Empty(_asked);
     }
 
     [Fact]

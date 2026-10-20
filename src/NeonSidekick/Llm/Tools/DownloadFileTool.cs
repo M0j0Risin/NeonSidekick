@@ -162,9 +162,9 @@ public sealed class DownloadFileTool : AIFunction
                 var solved = await _botCheck(new BotCheckRequest(parsed, BotCheckUse.Download, BotCheck.WhyOf(opened.Detail)), cancellationToken).ConfigureAwait(false);
                 if (solved is { Cleared: true })
                 {
-                    if (await _web.Fetcher.LeftTheReachAsync(parsed, solved.FinalUrl, options, cancellationToken).ConfigureAwait(false))
+                    if (await _web.Fetcher.SolvedElsewhereAsync(parsed, solved, options, cancellationToken).ConfigureAwait(false) is { } elsewhere)
                     {
-                        return WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.LeftTheReach(solved.FinalUrl));
+                        return WebText.Error(opened.Outcome, opened.Url, opened.Detail + elsewhere);
                     }
 
                     _web.Fetcher.Adopt(solved.Cookies, solved.Identity, parsed);

@@ -74,6 +74,12 @@ public static class BotCheckText
     /// <summary>The page left the network mode's reach after the check (a redirect to the LAN under <c>internet</c>, say). Pinned.</summary>
     public static string LeftTheReach(string finalUrl) => "; the Browser window ended on " + finalUrl + ", which Web browser network mode keeps off limits";
 
+    /// <summary>
+    /// The page went on to another site after the check (<see cref="BotCheck.LeftTheSite"/>, 2026-10-20): neither its page nor its
+    /// cookies are taken, and the model may fetch that address itself. Pinned.
+    /// </summary>
+    public static string LeftTheSite(string finalUrl) => "; the Browser window ended on " + finalUrl + ", another site, so its page and cookies were not taken";
+
     /// <summary>What a PDF the window printed says it was made with (<c>convert_to_pdf</c>'s result). Pinned.</summary>
     public const string WindowName = "the Browser window";
 

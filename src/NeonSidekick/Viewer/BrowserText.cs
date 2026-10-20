@@ -34,6 +34,9 @@ public static class BrowserText
     /// <summary>The window closed while a page it was asked for still waited (the app's exit, a failure). Pinned.</summary>
     public const string Closed = "the Browser window closed";
 
+    /// <summary>The window's thread made no window in time, with no reason of its own (2026-10-20, inline until the code review). Pinned.</summary>
+    public const string DidNotStart = "the Browser window did not start";
+
     /// <summary>Why a link the model opens is not put in the window now (later still on 2026-10-13, <see cref="IBrowserWindow.Unavailable"/>): it would end the check.</summary>
     public const string BotCheckWaiting = "a bot check is waiting in the Browser window";
 

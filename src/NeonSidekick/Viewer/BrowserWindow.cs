@@ -96,6 +96,9 @@ public static class BrowserWindow
     /// <summary>The open window, else a new one started; throws <see cref="InvalidOperationException"/> with the reason when none can be had.</summary>
     internal static BrowserWindowThread Open() => Open(forClear: false).Window;
 
+    /// <summary>How long <see cref="Open(bool)"/> waits for a closing window to finish its close (the visit's cookies, the history's clear) before it closes it outright.</summary>
+    private static readonly TimeSpan ClosingWait = TimeSpan.FromSeconds(6);
+
     /// <summary>
     /// The loaded profile's open window, else a new one started (<paramref name="forClear"/>: for a clear alone, hidden, no clear of its
     /// own as it opens), and whether it was started now. A window open on another profile's folder (a race with the profile switch,
@@ -108,9 +111,15 @@ public static class BrowserWindow
             string profile = ProfileNow();
             string folder = BrowserPage.UserDataFolder(profile);
             BrowserWindowThread? stale = null;
+            BrowserWindowThread? closing = null;
             lock (s_gate)
             {
-                if (s_open is { Alive: true } open)
+                if (s_open is { Alive: true, Closing: true } going)
+                {
+                    closing = going;
+                    s_open = null;
+                }
+                else if (s_open is { Alive: true } open)
                 {
                     if (string.Equals(open.UserDataFolder, folder, StringComparison.OrdinalIgnoreCase))
                     {
@@ -120,6 +129,13 @@ public static class BrowserWindow
                     stale = open;
                     s_open = null;
                 }
+            }
+
+            // A window on its way out (its linger's close, the user's, its history clearing) is never handed out (2026-10-20, the code
+            // review: a check sent to it ended GaveUp unseen): its close is waited out, since it holds the profile's folder, then a new one.
+            if (closing is not null && !closing.WaitEnded(ClosingWait))
+            {
+                closing.Close();
             }
 
             stale?.Close();
@@ -199,18 +215,36 @@ public static class BrowserWindow
             Interlocked.Increment(ref _solving);
             try
             {
-                BrowserWindowThread window;
-                try
+                // Twice at most: a window found closing as the check reached it hands it back (BrowserWindowThread.IsRetry) for a new one.
+                for (int attempt = 0; ; attempt++)
                 {
-                    // Off the caller's thread: a new window's start waits up to 10 s for its thread.
-                    window = await Task.Run(Open, cancellationToken).ConfigureAwait(false);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, ex.Message);
-                }
+                    BrowserWindowThread window;
+                    try
+                    {
+                        // Off the caller's thread: a new window's start waits up to 10 s for its thread.
+                        window = await Task.Run(Open, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, ex.Message);
+                    }
 
-                return await window.SolveAsync(request, cancellationToken).ConfigureAwait(false);
+                    var result = await window.SolveAsync(request, cancellationToken).ConfigureAwait(false);
+                    if (!BrowserWindowThread.IsRetry(result))
+                    {
+                        return result;
+                    }
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.GaveUp, request.Url.AbsoluteUri);
+                    }
+
+                    if (attempt > 0)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, BrowserText.Closed);
+                    }
+                }
             }
             finally
             {
@@ -249,8 +283,20 @@ public static class BrowserWindow
 
         public async Task<BrowserVisit> BrowseAsync(Uri? url)
         {
-            var window = await Task.Run(Open).ConfigureAwait(false);
-            return await window.BrowseAsync(url).ConfigureAwait(false);
+            for (int attempt = 0; ; attempt++)
+            {
+                var window = await Task.Run(Open).ConfigureAwait(false);
+                var visit = await window.BrowseAsync(url).ConfigureAwait(false);
+                if (!BrowserWindowThread.IsRetry(visit))
+                {
+                    return visit;
+                }
+
+                if (attempt > 0)
+                {
+                    return BrowserVisit.Empty with { Failure = BrowserText.Closed };
+                }
+            }
         }
 
         public bool Close() => BrowserWindow.Close();
@@ -363,7 +409,8 @@ internal sealed unsafe partial class BrowserWindowThread
     private readonly Lock _gate = new();
     private readonly Queue<Action> _inbox = new();
     private readonly List<TaskCompletionSource<BotCheckResult>> _pendingSolves = [];
-    private readonly List<TaskCompletionSource<BrowserVisit>> _pendingVisits = [];
+    private readonly List<TaskCompletionSource<BrowserVisit>> _pendingVisits = [];   // asked for, not yet begun on the window's thread
+    private readonly List<TaskCompletionSource<BrowserVisit>> _visitsWaiting = [];   // begun: they wait for the visit's close
     private readonly string _userDataFolder;
     private readonly BrowserIdentity _identity;
     private WebViewHost? _host;
@@ -381,6 +428,21 @@ internal sealed unsafe partial class BrowserWindowThread
     private bool _ole;
     private volatile bool _noHarvest;
     private volatile bool _alive = true;
+    private volatile bool _closing;
+
+    /// <summary>
+    /// The answers a closing window gives work that reached it too late (2026-10-20, the code review): a check or a visit that would have
+    /// begun in a window already on its way out — its linger's close, the user's, its history clearing — and been ended by that close
+    /// unseen. <see cref="BrowserWindow"/> asks a new window instead (<see cref="IsRetry(BotCheckResult)"/>).
+    /// </summary>
+    private static readonly BotCheckResult RetrySolve = BotCheckResult.Ended(BotCheckEnd.Unavailable, "", BrowserText.Closed);
+    private static readonly BrowserVisit RetryVisit = BrowserVisit.Empty with { Failure = BrowserText.Closed };
+
+    /// <summary>Whether a check's answer is a closing window's hand-back (<see cref="RetrySolve"/>).</summary>
+    public static bool IsRetry(BotCheckResult result) => ReferenceEquals(result, RetrySolve);
+
+    /// <summary>Whether a visit's answer is a closing window's hand-back (<see cref="RetryVisit"/>).</summary>
+    public static bool IsRetry(BrowserVisit visit) => ReferenceEquals(visit, RetryVisit);
 
     /// <param name="linksDirectory">The profile folder whose saved links the ☆ menu shows (later on 2026-10-13), and whose privacy the window keeps
     /// (2026-10-14); null: none (the smoke).</param>
@@ -397,6 +459,12 @@ internal sealed unsafe partial class BrowserWindowThread
 
     public bool Alive => _alive;
 
+    /// <summary>The window is on its way out: its close began (or its linger's is posted) and nothing new begins in it.</summary>
+    public bool Closing => _closing;
+
+    /// <summary>Waits for the window's thread to end; true when it has (or never started).</summary>
+    public bool WaitEnded(TimeSpan timeout) => _thread is not { } thread || thread.Join(timeout);
+
     /// <summary>The WebView2 user data folder the window runs on: its profile's.</summary>
     public string UserDataFolder => _userDataFolder;
 
@@ -408,7 +476,7 @@ internal sealed unsafe partial class BrowserWindowThread
         _thread.Start();
         if (!_ready.Wait(TimeSpan.FromSeconds(10)) || !_started)
         {
-            throw new InvalidOperationException(_failure ?? "the Browser window did not start");
+            throw new InvalidOperationException(_failure ?? BrowserText.DidNotStart);
         }
     }
 
@@ -447,12 +515,23 @@ internal sealed unsafe partial class BrowserWindowThread
             _pendingVisits.Add(done);
         }
 
-        if (!Post(() => BeginBrowse(url)))
+        if (!Post(() => BeginBrowse(url, done)))
         {
-            SettleVisits(BrowserVisit.Empty with { Failure = _failure ?? BrowserText.Closed });
+            SettleUnbegun(done, BrowserVisit.Empty with { Failure = _failure ?? BrowserText.Closed });
         }
 
         return done.Task;
+    }
+
+    // A visit asked for that never began answered on its own (the begun ones wait for the visit's close, SettleVisits).
+    private void SettleUnbegun(TaskCompletionSource<BrowserVisit> done, BrowserVisit visit)
+    {
+        lock (_gate)
+        {
+            _pendingVisits.Remove(done);
+        }
+
+        done.TrySetResult(visit);
     }
 
     /// <summary>The window asked to close with nothing handed over (once it has started, if it is starting), and its thread waited for a moment.</summary>
@@ -522,13 +601,18 @@ internal sealed unsafe partial class BrowserWindowThread
         done.TrySetResult(result);
     }
 
-    private void SettleVisits(BrowserVisit visit)
+    // The begun visits answered (the close's cookies, or why there are none); with everyone, the visits not yet begun as well (a failure).
+    private void SettleVisits(BrowserVisit visit, bool everyone = false)
     {
         TaskCompletionSource<BrowserVisit>[] waiting;
         lock (_gate)
         {
-            waiting = [.. _pendingVisits];
-            _pendingVisits.Clear();
+            waiting = everyone ? [.. _visitsWaiting, .. _pendingVisits] : [.. _visitsWaiting];
+            _visitsWaiting.Clear();
+            if (everyone)
+            {
+                _pendingVisits.Clear();
+            }
         }
 
         foreach (var done in waiting)
@@ -670,7 +754,7 @@ internal sealed unsafe partial class BrowserWindowThread
             Msg msg;
             while (GetMessageW(&msg, IntPtr.Zero, 0, 0) > 0)
             {
-                if (PreKey(&msg))
+                if (PreKeySafely(&msg))
                 {
                     continue;
                 }
@@ -710,21 +794,42 @@ internal sealed unsafe partial class BrowserWindowThread
         }
     }
 
+    // The pump's key hook, as the window procedure's handlers are: a failure logged, never out into Run's catch, which would end the
+    // window mid-visit or mid-check (2026-10-20, the code review). A key whose handler failed counts as taken, so it is not also the page's.
+    private bool PreKeySafely(Msg* msg)
+    {
+        try
+        {
+            return PreKey(msg);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error("Browser", $"The Browser window failed on key message 0x{msg->message:X}.", ex);
+            return true;
+        }
+    }
+
     // Whatever still waits on the window ends with it: a check given up (or why the window could not be had), a visit with nothing.
+    // A check or a visit that never began (its work still in the inbox when the close came, 2026-10-20) is handed back for a new window,
+    // unless the window failed or was closed from outside (the app's exit, a profile switch), which give up as before.
     private void EndAll()
     {
         TaskCompletionSource<BotCheckResult>[] solves;
+        TaskCompletionSource<BrowserVisit>[] unbegun;
         lock (_gate)
         {
             solves = [.. _pendingSolves];
             _pendingSolves.Clear();
+            unbegun = [.. _pendingVisits];
+            _pendingVisits.Clear();
             _inbox.Clear();
         }
 
+        bool retry = _failure is null && !_noHarvest;
         foreach (var done in solves)
         {
-            done.TrySetResult(_failure is { } failure
-                ? BotCheckResult.Ended(BotCheckEnd.Unavailable, "", failure)
+            done.TrySetResult(_failure is { } failure ? BotCheckResult.Ended(BotCheckEnd.Unavailable, "", failure)
+                : retry ? RetrySolve
                 : BotCheckResult.Ended(BotCheckEnd.GaveUp, ""));
         }
 
@@ -732,7 +837,12 @@ internal sealed unsafe partial class BrowserWindowThread
         EndPages();
         EndRemote();
 
-        SettleVisits(_failure is { } why ? BrowserVisit.Empty with { Failure = why } : BrowserVisit.Empty);
+        var ended = _failure is { } why ? BrowserVisit.Empty with { Failure = why } : BrowserVisit.Empty;
+        SettleVisits(ended);
+        foreach (var done in unbegun)
+        {
+            done.TrySetResult(retry ? RetryVisit : ended);
+        }
     }
 
     private IntPtr Handle(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
@@ -774,6 +884,7 @@ internal sealed unsafe partial class BrowserWindowThread
                 KillTimer(hwnd, LingerTimer);
                 if (_job is null && _visited is null)
                 {
+                    _closing = true;   // from now: a check that reaches it before the close is handled goes to a new window
                     PostMessageW(hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
                 }
 
@@ -796,6 +907,7 @@ internal sealed unsafe partial class BrowserWindowThread
                 ApplyStyle();   // a /theme change reaches the window the next time it is focused
                 break;
             case WmClose:
+                _closing = true;
                 _menu?.Close();
                 if (StartHarvest())
                 {
@@ -905,6 +1017,9 @@ internal sealed unsafe partial class BrowserWindowThread
         public Stopwatch Clock { get; } = Stopwatch.StartNew();
         public bool Busy;
         public bool Finishing;
+
+        /// <summary>Its answer given (<see cref="Finish"/>): a callback still to come for it (the print, the cookies) does nothing (2026-10-20, the code review).</summary>
+        public bool Ended;
         public bool PdfWritten;
 
         /// <summary>The visible part as the last look read it (the Web UI's live view, 2026-10-17); null before any.</summary>
@@ -921,6 +1036,12 @@ internal sealed unsafe partial class BrowserWindowThread
 
     private void BeginSolve(BotCheckRequest request, TaskCompletionSource<BotCheckResult> done)
     {
+        if (_closing)
+        {
+            Settle(done, RetrySolve);   // the close would end it unseen: a new window takes it
+            return;
+        }
+
         if (_job is { } older)
         {
             Finish(older, BotCheckResult.Ended(BotCheckEnd.GaveUp, older.Request.Url.AbsoluteUri), close: false);
@@ -947,8 +1068,16 @@ internal sealed unsafe partial class BrowserWindowThread
         }
     }
 
+    // Once per job (2026-10-20, the code review): a print or cookie answer arriving after the job was given up hid the window and started
+    // the linger under the next check or a /browser visit, and logged the old job Cleared.
     private void Finish(SolveJob job, BotCheckResult result, bool close)
     {
+        if (job.Ended)
+        {
+            return;
+        }
+
+        job.Ended = true;
         if (_job == job)
         {
             _job = null;
@@ -1079,6 +1208,11 @@ internal sealed unsafe partial class BrowserWindowThread
         {
             bool started = _host.PrintToPdf(path, (hr, ok) =>
             {
+                if (job.Ended)
+                {
+                    return;
+                }
+
                 job.PdfWritten = hr >= 0 && ok && File.Exists(path);
                 Harvest(job, final);
             });
@@ -1091,9 +1225,15 @@ internal sealed unsafe partial class BrowserWindowThread
         Harvest(job, final);
     }
 
+    // The cookies for the host asked for and, on the same site, the one it ended on (BrowserJobs.CheckHosts): never another site's.
     private void Harvest(SolveJob job, string final)
     {
-        var hosts = new[] { job.Request.Url.Host, BrowserPage.HostOf(final) ?? job.Request.Url.Host };
+        if (job.Ended)
+        {
+            return;
+        }
+
+        var hosts = BrowserJobs.CheckHosts(job.Request.Url, final);
         void Done(IReadOnlyList<BrowserCookie> cookies) =>
             Finish(job, new BotCheckResult(BotCheckEnd.Cleared, job.WasFile ? null : job.Watch.Html, final, job.Watch.Status, cookies, _identity, "")
             {
@@ -1110,8 +1250,24 @@ internal sealed unsafe partial class BrowserWindowThread
 
     // ── /browser ─────────────────────────────────────────────────────────────
 
-    private void BeginBrowse(Uri? url)
+    private void BeginBrowse(Uri? url, TaskCompletionSource<BrowserVisit> done)
     {
+        if (_closing)
+        {
+            SettleUnbegun(done, RetryVisit);   // the close would end it at once: a new window takes it
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (!_pendingVisits.Remove(done))
+            {
+                return;   // already answered
+            }
+
+            _visitsWaiting.Add(done);
+        }
+
         _visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (_job is { } job)
         {
@@ -1231,7 +1387,7 @@ internal sealed unsafe partial class BrowserWindowThread
             Finish(job, BotCheckResult.Ended(BotCheckEnd.Unavailable, job.Request.Url.AbsoluteUri, _failure), close: false);
         }
 
-        SettleVisits(BrowserVisit.Empty with { Failure = _failure });
+        SettleVisits(BrowserVisit.Empty with { Failure = _failure }, everyone: true);
         PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);
     }
 

@@ -186,11 +186,15 @@ public sealed class BrowserJobs
         return Uri.TryCreate(source, UriKind.Absolute, out var at) && WebFetcher.IsHttp(at) ? at.AbsoluteUri : asked.AbsoluteUri;
     }
 
-    /// <summary>The two hosts a check's cookies are read for: the one asked and the one it ended on.</summary>
+    /// <summary>
+    /// The two hosts a check's cookies are read for, both windows': the one asked and the one it ended on — the latter only on the same site
+    /// (<see cref="BotCheck.SameSite"/>; 2026-10-20, the code review: a page that sent the window on to a site the user is signed in to had
+    /// that session's cookies read, the tools refusing such an ending since, <see cref="BotCheck.LeftTheSite"/>). Pure.
+    /// </summary>
     public static IReadOnlyList<string> CheckHosts(Uri asked, string final)
     {
         ArgumentNullException.ThrowIfNull(asked);
-        return [asked.Host, BrowserPage.HostOf(final) ?? asked.Host];
+        return BrowserPage.HostOf(final) is { } ended && BotCheck.SameSite(asked.IdnHost, ended) ? [asked.Host, ended] : [asked.Host, asked.Host];
     }
 
     /// <summary>
