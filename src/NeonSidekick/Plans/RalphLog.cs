@@ -759,8 +759,8 @@ public static class RalphLog
     /// <summary>
     /// The lock of <paramref name="planPath"/> taken for <paramref name="me"/>: true when it was free, stale (<paramref name="alive"/> says its owner is
     /// gone) or already this process's; false while another live process holds it. Taken by creating the file whole, never over one that is there
-    /// (2026-10-19, the review: read-then-write let two instances starting together both take it): its text is written beside it and moved into
-    /// place without overwriting, so of two racing for it one fails, and a reader never sees it half written. A stale lock is removed only while it
+    /// (2026-10-19, the review: read-then-write let two instances starting together both take it): created only where none is
+    /// (<see cref="TryCreate"/>), so of two racing for it one fails, and one being written reads as held. A stale lock is removed only while it
     /// still says what was read, then the take tried again.
     /// </summary>
     public static bool TryLock(WorkingDirectory files, string planPath, LockOwner me, Func<LockOwner, bool> alive)
@@ -812,33 +812,45 @@ public static class RalphLog
     /// </summary>
     public static bool StillHeld(WorkingDirectory files, string planPath, Func<LockOwner, bool> alive) => TryLock(files, planPath, Me, alive);
 
-    /// <summary><paramref name="text"/> as a new file at <paramref name="full"/>: false when one is there (or it could not be written).</summary>
+    /// <summary>
+    /// <paramref name="text"/> as a new file at <paramref name="full"/>: false when one is there (or it could not be written). Created with
+    /// <see cref="FileMode.CreateNew"/>, the one create that fails on a file already there on every system (2026-10-20, the Mac's gate: a temp file
+    /// moved in with <c>File.Move(overwrite: false)</c> is a look then a rename on macOS, and of eight racers all eight took the lock). Held unshared
+    /// while written, so a reader meanwhile finds it unreadable; one that slips in first reads it short, which <see cref="ReadLockAt"/> takes for a
+    /// lock being written while it is younger than <see cref="WritingGrace"/>.
+    /// </summary>
     private static bool TryCreate(string full, string text)
     {
-        string temp = full + "." + N(Environment.ProcessId) + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        FileStream stream;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            File.WriteAllText(temp, text);
-            File.Move(temp, full, overwrite: false);
-            return true;
+            stream = new FileStream(full, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
         }
-        finally
+
+        try
         {
-            try
+            using (stream)
             {
-                File.Delete(temp);
+                stream.Write(Encoding.UTF8.GetBytes(text));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // A stray temp file: harmless, never read as the lock.
-            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Ours, half written: gone again rather than left to read as held until it is old.
+            DeleteQuietly(full);
+            return false;
         }
     }
+
+    /// <summary>How long a lock that is not whole (no owner, no start, no last line end) counts as one being written, so held, before it is garbage.</summary>
+    private static readonly TimeSpan WritingGrace = TimeSpan.FromSeconds(5);
 
     /// <summary>How old a take-over guard is before it counts as left by a process that died holding it.</summary>
     private static readonly TimeSpan GuardStale = TimeSpan.FromSeconds(30);
@@ -917,14 +929,20 @@ public static class RalphLog
         Read,
     }
 
-    /// <summary>The lock file at a full path read, sharing every access so a taker's read never stops another's delete.</summary>
+    /// <summary>
+    /// The lock file at a full path read, sharing every access so a taker's read never stops another's delete. One that is not whole and younger
+    /// than <see cref="WritingGrace"/> is being written (<see cref="TryCreate"/>): unreadable, so held, never taken for garbage and removed.
+    /// </summary>
     private static (LockRead State, LockOwner? Owner) ReadLockAt(string full)
     {
         try
         {
             using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
-            return (LockRead.Read, ParseLock(reader.ReadToEnd()));
+            string text = reader.ReadToEnd();
+            var owner = ParseLock(text);
+            bool whole = owner is not null && owner.Started != DateTimeOffset.MinValue && text.EndsWith('\n');
+            return !whole && DateTime.UtcNow - File.GetLastWriteTimeUtc(stream.SafeFileHandle) < WritingGrace ? (LockRead.Unreadable, null) : (LockRead.Read, owner);
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {

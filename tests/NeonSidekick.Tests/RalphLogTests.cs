@@ -176,8 +176,27 @@ public sealed class RalphLogTests : IDisposable
         string folder = Path.Combine(_dir, ".neon", "plans", "guide");
         Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
 
-        File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "not a lock");   // garbage: no owner, taken over
+        string garbage = Path.Combine(folder, RalphLog.LockName);
+        File.WriteAllText(garbage, "not a lock");                                   // young garbage: maybe a lock being written, so held
+        Assert.False(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
+        File.SetLastWriteTimeUtc(garbage, DateTime.UtcNow.AddMinutes(-1));         // old garbage: no owner, taken over
         Assert.True(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
+    }
+
+    [Fact]
+    public void ALockHalfWritten_IsHeldWhileYoung_AndTakenOverOnceOld()
+    {
+        // 2026-10-20, the Mac's gate: created in place, a lock can be read before its text is all there; "pid: 12" alone named a gone process.
+        string folder = Path.Combine(_dir, ".neon", "plans", "guide");
+        string lockFile = Path.Combine(folder, RalphLog.LockName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(lockFile, "pid: 12");
+        Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => false));
+        Assert.Equal(RalphText.LockedError(Plan), RalphLog.HeldElsewhere(_files, Plan));
+
+        File.SetLastWriteTimeUtc(lockFile, DateTime.UtcNow.AddMinutes(-1));
+        Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => false));
+        Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
     }
 
     [Fact]
