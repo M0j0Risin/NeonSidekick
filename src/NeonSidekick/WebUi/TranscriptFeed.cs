@@ -75,6 +75,12 @@ public sealed class TranscriptFeed
     /// <summary>The most characters one thinking block keeps (2026-10-15); past it the block ends with "…" and grows no more.</summary>
     public const int MaxThinkingChars = 64_000;
 
+    /// <summary>
+    /// The most characters one <c>/cmd</c> output entry keeps (2026-10-19, the review: a command printing a long log grew one entry without bound,
+    /// and the trim could not drop the entry growing); past it the entry ends with "…" and grows no more, as a thinking block does.
+    /// </summary>
+    public const int MaxOutputChars = 64_000;
+
     private readonly object _gate = new();
     private readonly LinkedList<Entry> _entries = new();
     private long _next = 1;
@@ -348,7 +354,7 @@ public sealed class TranscriptFeed
 
     /// <summary>
     /// A line a <c>/cmd</c> run printed (2026-10-15): joins the open output of the same stream, or starts one (stderr's marked failed); any other
-    /// write ends it. Never part of a tool run.
+    /// write ends it. Never part of a tool run. Past <see cref="MaxOutputChars"/> the entry ends with "…" and keeps nothing more.
     /// </summary>
     public void AppendOutput(string text, bool isError)
     {
@@ -370,6 +376,19 @@ public sealed class TranscriptFeed
             }
 
             var open = _open;
+            if (open.Capped)
+            {
+                RaiseAll(changes);
+                return;
+            }
+
+            int room = MaxOutputChars - open.Text.Length;
+            if (text.Length >= room)
+            {
+                text = text[..Math.Max(0, room)] + "…";
+                open.Capped = true;
+            }
+
             int at;
             lock (open)
             {
@@ -490,6 +509,30 @@ public sealed class TranscriptFeed
         return found?.ToWeb(html);
     }
 
+    /// <summary>
+    /// Finished reply <paramref name="seq"/>'s Markdown as HTML through the entry's own cache (2026-10-19, the review: the <c>end</c> event rendered
+    /// it a second time beside the snapshot's): rendered once whoever asks first. Null when the feed no longer holds it or it is no finished reply.
+    /// Looked for from the newest, where a reply that just ended is.
+    /// </summary>
+    public string? HtmlOf(long seq, Func<string, string> html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        Entry? found = null;
+        lock (_gate)
+        {
+            for (var node = _entries.Last; node is not null; node = node.Previous)
+            {
+                if (node.Value.Seq == seq)
+                {
+                    found = node.Value;
+                    break;
+                }
+            }
+        }
+
+        return found?.Html(html);
+    }
+
     private Entry Push(FeedKind kind, string text, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures = null)
     {
         var entry = new Entry(_next++, kind, glyph, failed, pictures);
@@ -589,13 +632,25 @@ public sealed class TranscriptFeed
         return new FeedChange.Ended(run.Seq, "", FeedKind.Run);
     }
 
+    /// <summary>
+    /// The oldest entries dropped while the feed holds too many or too much. The entry growing and the open run's head are passed over, never a
+    /// stop (2026-10-19, the review: once either was the oldest nothing more was dropped, and a long run or output grew the feed without bound),
+    /// and so is the newest, which <see cref="Push"/> has just added for its caller.
+    /// </summary>
     private void Trim()
     {
-        while (_entries.Count > 1 && (_entries.Count > MaxEntries || _chars > MaxChars) && _entries.First is { } first && first.Value != _open && first.Value != _run)
+        var node = _entries.First;
+        while (node is not null && node != _entries.Last && (_entries.Count > MaxEntries || _chars > MaxChars))
         {
-            _chars -= first.Value.Text.Length;
-            _entries.RemoveFirst();
-            Release(first.Value);
+            var next = node.Next;
+            if (node.Value != _open && node.Value != _run)
+            {
+                _chars -= node.Value.Text.Length;
+                _entries.Remove(node);
+                Release(node.Value);
+            }
+
+            node = next;
         }
     }
 
@@ -678,7 +733,7 @@ public sealed class TranscriptFeed
         /// <summary>How long a thinking block has streamed.</summary>
         public TimeSpan Elapsed { get; set; }
 
-        /// <summary>A thinking block cut at <see cref="MaxThinkingChars"/>.</summary>
+        /// <summary>A thinking block cut at <see cref="MaxThinkingChars"/>, or an output entry at <see cref="MaxOutputChars"/>.</summary>
         public bool Capped { get; set; }
 
         /// <summary>A tool line's run (its head's seq).</summary>
@@ -696,6 +751,32 @@ public sealed class TranscriptFeed
         /// <summary>The welcome splash's pictures (2026-10-18).</summary>
         public bool Splash { get; set; }
 
+        /// <summary>A finished reply's Markdown as HTML, rendered once and cached (re-rendered only if its text changed); null for anything else.</summary>
+        public string? Html(Func<string, string> html)
+        {
+            if (Kind != FeedKind.Assistant || NoReply)
+            {
+                return null;
+            }
+
+            lock (this)
+            {
+                if (!Ended)
+                {
+                    return null;
+                }
+
+                string text = Text.ToString();
+                if (_htmlLength != text.Length)
+                {
+                    _html = html(text);
+                    _htmlLength = text.Length;
+                }
+
+                return _html;
+            }
+        }
+
         public WebEntry ToWeb(Func<string, string>? html, bool defer = false)
         {
             string text;
@@ -710,21 +791,7 @@ public sealed class TranscriptFeed
             bool deferText = defer && Kind == FeedKind.Thinking && ended && text.Length > 0;
             bool deferDiff = defer && Diff is { Fold: > 0 } folded && folded.Rows.Count > DeferRows;
 
-            string? rendered = null;
-            if (html is not null && Kind == FeedKind.Assistant && ended && !NoReply)
-            {
-                lock (this)
-                {
-                    if (_htmlLength != text.Length)
-                    {
-                        _html = html(text);
-                        _htmlLength = text.Length;
-                    }
-
-                    rendered = _html;
-                }
-            }
-
+            string? rendered = html is null ? null : Html(html);
             return new WebEntry(Seq, KindName(Kind), deferText ? "" : text, Glyph, rendered, Failed, Pictures)
             {
                 Continues = Continues ? true : null,

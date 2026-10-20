@@ -65,13 +65,14 @@ internal sealed partial class ChatScreen
             var first = await Task.WhenAny(request, handle.Answered).WaitAsync(turnToken).ConfigureAwait(false);
             if (first == request)
             {
+                bool neverAsked = false;
                 try
                 {
                     await request.ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!turnToken.IsCancellationRequested)
                 {
-                    return new AskOutcome<T>(default, null, NeverAsked: true);
+                    neverAsked = true;
                 }
 
                 if (paneAnswered)
@@ -79,11 +80,12 @@ internal sealed partial class ChatScreen
                     return new AskOutcome<T>(paneResult, AskSource.Pc, NeverAsked: false);
                 }
 
-                if (handle.Winner != AskSource.Web)
+                // The pane closed with no answer, or was never run: the PC claims so the page may not answer it now. A claim that fails means
+                // the page's answer landed in between (2026-10-19, the review: the claim's result was ignored and that answer, told OK, was
+                // dropped), and it counts as below.
+                if (handle.TryClaim(AskSource.Pc))
                 {
-                    // The pane closed with no answer: the page may not answer it now.
-                    handle.TryClaim(AskSource.Pc);
-                    return new AskOutcome<T>(paneResult, null, NeverAsked: false);
+                    return new AskOutcome<T>(default, null, neverAsked);
                 }
             }
 

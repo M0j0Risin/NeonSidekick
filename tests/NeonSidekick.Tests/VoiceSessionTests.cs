@@ -56,6 +56,22 @@ public class VoiceSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task WouldDownload_WhileAModelIsMissing_TheWakeModelOnlyUnderTheWakeOrTheInterrupt()
+    {
+        Assert.True(_voice.WouldDownload(Enabled()));   // the Web UI's /stt on refuses it (2026-10-19)
+
+        ServeBoth();
+        await ConnectAsync(Enabled());
+
+        Assert.False(_voice.WouldDownload(Enabled()));
+        var wake = Enabled();
+        wake.SttWake = true;
+        Assert.True(_voice.WouldDownload(wake));   // Vosk is not here
+        Assert.False(_voice.WouldDownload(Enabled(model: "no-such-model.bin")));   // a name the store doesn't know downloads nothing
+        Assert.False(_voice.WouldDownload(Enabled(model: Path.Combine(_dir, "mine.bin"))));   // nor a path of the user's own
+    }
+
+    [Fact]
     public async Task ConnectAsync_ADownloadCancelled_Rethrows_AndIsUnavailableWithTheReason_NeverOff()
     {
         // Ctrl+C under the connect's spinner (2026-09-17): the status is a warning naming the

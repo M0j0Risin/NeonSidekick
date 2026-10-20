@@ -32,12 +32,6 @@ internal sealed partial class ChatScreen
     /// <summary>The state last handed to the controller: the idle line's backstop asks again only when the settings say otherwise.</summary>
     private WebUiWanted? _webUiAsked;
 
-    /// <summary>
-    /// The page's Stop asked for the turn's end (2026-10-14): before the model's first event the turn ends withdrawn, as ESC's would
-    /// (<see cref="TurnEndNotice"/> reads it as <see cref="Interrupt.Cancel"/> at its call); cleared at each turn's start and end.
-    /// </summary>
-    private volatile bool _webStopRequested;
-
     /// <summary>The line sent last came from the page (2026-10-14): withdrawn, it goes back to the page's draft, never the PC's row.</summary>
     private bool _sentFromWeb;
 
@@ -379,7 +373,11 @@ internal sealed partial class ChatScreen
         return new WebReply(WebOutcome.Ok, WebUiText.PictureDeleted(name, way));
     }
 
-    /// <summary>Every id registered for <paramref name="path"/> no longer served, and the strip without them.</summary>
+    /// <summary>
+    /// Every id registered for <paramref name="path"/> no longer served, and the strip without them. Called on a request's thread: the strip is
+    /// redrawn on the pool (2026-10-19, the review: the redraw takes the pane's lock and writes to the console, and a stalled console — a mouse
+    /// selection in the terminal — must not hold a phone's request, as <see cref="WebUiSession.FlashPc"/> has it).
+    /// </summary>
     private void ForgetDeletedFile(string path)
     {
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -403,7 +401,7 @@ internal sealed partial class ChatScreen
 
         if (_pictureStrip.Remove(ids.Contains))
         {
-            _pane.RedrawStrip();
+            _ = Task.Run(_pane.RedrawStrip);
         }
     }
 
@@ -704,21 +702,30 @@ internal sealed partial class ChatScreen
     /// The page's Stop (a Kestrel thread): speech stopped and the model's work cancelled — a reply, a compact, a botchat, an advisor,
     /// <c>/imagine</c>, <c>/test</c>, <c>/loop</c>'s wait — never the user's own editor and never a model's load (Ctrl+C's at the PC).
     /// Before the reply's first event it withdraws the message, as ESC does.
+    /// The scopes to cancel are taken here, on the request's thread, and only those are cancelled on the pool (2026-10-19, the review: the
+    /// pool's cancel read the scopes again after <c>_speech.Stop()</c>, by when the stopped turn could have ended and a queued message's
+    /// turn begun, and that turn was cancelled and withdrawn instead). Each one is marked (<see cref="KillScope.WebStopped"/>) for the turn
+    /// that owns it to read, never a flag on the screen a later turn could find set.
     /// </summary>
     private WebReply WebStop(IPAddress? remote)
     {
         var (working, loading) = ScopesNow();
-        if (!working)
+        var targets = StopTargetsNow();
+        if (!working || (targets.Ladder is null && targets.Scopes.Count == 0))
         {
             return new WebReply(WebOutcome.Conflict, loading ? WebUiText.LoadingNoStop : WebUiText.NothingToStop);
         }
 
-        _webStopRequested = true;
         DiagnosticLog.Info(WebUiCategory, "Web UI: Stop from " + (remote?.ToString() ?? "an unknown address") + ".");
+        foreach (var scope in targets.Scopes)
+        {
+            scope.WebStopped = true;
+        }
+
         _ = Task.Run(() =>
         {
+            CancelTargets(targets);
             _speech.Stop();
-            CancelScopes(all: false);
         });
         return WebReply.Ok;
     }

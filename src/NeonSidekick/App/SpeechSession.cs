@@ -127,6 +127,16 @@ internal sealed class SpeechSession : IDisposable
         : NoServerLine(Source, Detail);
 
     /// <summary>
+    /// Whether turning speech on under <paramref name="effective"/> would download Kokoro first (2026-10-19, the Web UI review: the page's
+    /// <c>/tts on</c> may not start a first-use download): the in-process engine with its model missing. An HTTP server downloads nothing.
+    /// </summary>
+    public bool WouldDownload(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return TtsSource.Resolve(effective) == TtsEngine.InProcess && !ModelStore.IsPresent(_models.Kokoro());
+    }
+
+    /// <summary>
     /// The request the factory would get for <paramref name="saved"/>: the normalised URL over
     /// HTTP (null when it is not usable), the model's path in-process — the same value the
     /// session keeps from its connect, so the picker and the preview can compare.

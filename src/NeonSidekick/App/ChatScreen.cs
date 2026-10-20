@@ -16649,7 +16649,6 @@ internal sealed partial class ChatScreen
         // The mid-turn line hook (the pane only: without it nothing can be shown or typed under
         // a reply): a pane it opens reads the keys under the app token and the close signal the
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.
-        _webStopRequested = false;
         _turnRunning = true;
         BeginReplyRun();
         // The hint row is the turn's again (the usage part); the reading stays remembered for /read.
@@ -16942,13 +16941,13 @@ internal sealed partial class ChatScreen
 
             stop.Cancel();
             interrupt = await watcher.ConfigureAwait(false);
-            if (_webStopRequested && interrupt == Interrupt.None)
+            if (killScope.WebStopped && interrupt == Interrupt.None)
             {
-                // The Web UI's Stop (2026-10-14) ends a turn as ESC does: before the first event, withdrawn.
+                // The Web UI's Stop (2026-10-14) ends a turn as ESC does: before the first event, withdrawn. Its mark is on this turn's
+                // own scope (2026-10-19), so a Stop meant for the turn before never reaches this one.
                 interrupt = Interrupt.Cancel;
             }
 
-            _webStopRequested = false;
             // A cancelled turn (ESC, the phrase, the app token) has silenced the device through
             // the registration, a speech ESC through the hook; wait for the consumer so the reason
             // below is final. Otherwise the tail plays on under the input line and the session

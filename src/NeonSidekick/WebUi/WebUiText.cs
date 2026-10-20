@@ -259,6 +259,9 @@ public static class WebUiText
     /// <summary><c>/model &lt;id&gt;</c> from the page naming an embedded model not installed.</summary>
     public const string WouldInstall = "that embedded model is not installed: install it at the PC.";
 
+    /// <summary><c>/tts on</c> or <c>/stt on</c> from the page while its models would be downloaded first (2026-10-19).</summary>
+    public static string WouldDownload(string word) => word + " on would download its models first: turn it on at the PC.";
+
     /// <summary>A post past its rate limit (2026-10-15, <see cref="WebRateLimit"/>); the page does not try again by itself.</summary>
     public const string SlowDown = "Slow down: too many in a row. Try again in a moment.";
 

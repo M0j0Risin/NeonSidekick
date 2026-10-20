@@ -51,7 +51,10 @@ public interface IWebUiHost : IAsyncDisposable
 /// and refuses a browser whose address is not private (<see cref="Web.LanPolicy.IsPrivate"/>; defense in depth — NAT loopback, Docker or
 /// Tailscale can present a private address, so the token is the real gate). Every page and API but <c>/health</c>, <c>/signin</c> and
 /// the static files needs the cookie (<see cref="WebUiAuth"/>); every POST needs JSON and <c>X-Neon: 1</c>, which no cross-site form
-/// can send, and every GET is side-effect free. The handler catches everything: a failure is a 500 and a log line, never the app's end.
+/// can send. A GET of an API changes nothing but what its own stream does (the Chat stream's snapshot hands over the held drafts, the YouTube
+/// tab's attaches and may claim the player): an EventSource can send no header, so a GET of <c>/api/</c> that the browser marks cross-site or
+/// same-site (<c>Sec-Fetch-Site</c>, a top-level link from another page carrying the Lax cookie) is refused (<see cref="CrossSiteGet"/>, 2026-10-19,
+/// the review). The handler catches everything: a failure is a 500 and a log line, never the app's end.
 /// No process-start site, no native DLL.
 /// </summary>
 public sealed class WebUiHost : IWebUiHost
@@ -237,7 +240,11 @@ public sealed class WebUiHost : IWebUiHost
             var remote = context.Connection.RemoteIpAddress;
             if (_binding is { Audience: WebUiAudience.LocalAreaNetwork } && remote is not null && !_allowRemote(remote))
             {
-                DiagnosticLog.Info(Category, WebUiText.RefusedRemoteLogLine(remote));
+                if (_limits.LogDue(remote, nameof(WebUiText.RefusedRemoteLogLine)))
+                {
+                    DiagnosticLog.Info(Category, WebUiText.RefusedRemoteLogLine(remote));
+                }
+
                 response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
@@ -251,8 +258,9 @@ public sealed class WebUiHost : IWebUiHost
                 return;
             }
 
-            // The limits (2026-10-15): a tap, a question to Home Assistant, a pasted sign-in, each counted per address before anything else.
-            if (WebRateLimit.BucketOf(path, post) is { } bucket && !_limits.TryTake(remote, bucket, out var retry))
+            // The limits (2026-10-15): a tap, a question to Home Assistant, a sign-in (pasted, or the link's GET since 2026-10-19), each counted per
+            // address before anything else.
+            if (WebRateLimit.BucketOf(path, post, HttpMethods.IsGet(context.Request.Method)) is { } bucket && !_limits.TryTake(remote, bucket, out var retry))
             {
                 response.Headers.CacheControl = "no-store";
                 response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -310,6 +318,12 @@ public sealed class WebUiHost : IWebUiHost
             if (!signedIn)
             {
                 await ResultAsync(context, StatusCodes.Status401Unauthorized, new WebResult(false, WebUiText.SignInNeeded)).ConfigureAwait(false);
+                return;
+            }
+
+            if (get && CrossSiteGet(context.Request))
+            {
+                await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
                 return;
             }
 
@@ -837,6 +851,14 @@ public sealed class WebUiHost : IWebUiHost
         response.Headers.XFrameOptions = "DENY";
     }
 
+    /// <summary>
+    /// A GET another site started (2026-10-19, the review): the browser's <c>Sec-Fetch-Site</c> says <c>cross-site</c> or <c>same-site</c> (a link or
+    /// a redirect from another page, which carries the Lax cookie). The page's own reads say <c>same-origin</c>, and a typed address or a bookmark
+    /// <c>none</c>; a browser that sends no such header (older than 2023) is let through, the token still the gate.
+    /// </summary>
+    private static bool CrossSiteGet(HttpRequest request) =>
+        request.Headers["Sec-Fetch-Site"].ToString() is "cross-site" or "same-site";
+
     /// <summary>A POST a cross-site page could not have made: JSON, and the header no form can set.</summary>
     private static bool CrossSiteSafe(HttpRequest request) =>
         request.Headers[CsrfHeader] == "1"
@@ -1029,6 +1051,11 @@ public sealed class WebUiHost : IWebUiHost
             await WriteEventAsync(response, "snapshot", JsonSerializer.Serialize(_backend.Snapshot(), WebUiJsonContext.Default.WebSnapshot), token).ConfigureAwait(false);
             await response.Body.FlushAsync(token).ConfigureAwait(false);
             var reader = subscription.Reader;
+            // One heartbeat at a time (2026-10-19, the review: a new 15 s delay for each wake, left running when an event won, piled up timers
+            // and registrations on this stream's token while a reply streamed): kept across wakes and made again only once it has fired. Its
+            // wait for the reader likewise, across heartbeats.
+            Task? beat = null;
+            Task<bool>? waiting = null;
             while (!token.IsCancellationRequested)
             {
                 // Chat turned off at the PC (later on 2026-10-15): the stream ends, a backgrounded page stops getting the transcript, and its
@@ -1044,8 +1071,8 @@ public sealed class WebUiHost : IWebUiHost
                 }
 
                 await response.Body.FlushAsync(token).ConfigureAwait(false);
-                var waiting = reader.WaitToReadAsync(token).AsTask();
-                var beat = Task.Delay(Heartbeat, _time, token);
+                waiting ??= reader.WaitToReadAsync(token).AsTask();
+                beat ??= Task.Delay(Heartbeat, _time, token);
                 var first = await Task.WhenAny(waiting, beat).ConfigureAwait(false);
                 if (token.IsCancellationRequested)
                 {
@@ -1054,11 +1081,14 @@ public sealed class WebUiHost : IWebUiHost
 
                 if (first == beat)
                 {
+                    beat = null;
                     await response.WriteAsync(": alive\n\n", token).ConfigureAwait(false);
                     continue;
                 }
 
-                if (!await waiting.ConfigureAwait(false))
+                bool more = await waiting.ConfigureAwait(false);
+                waiting = null;
+                if (!more)
                 {
                     break;   // dropped for falling behind: the page reconnects and starts from a snapshot
                 }
@@ -1117,6 +1147,8 @@ public sealed class WebUiHost : IWebUiHost
             await WriteEventAsync(response, "hello", JsonSerializer.Serialize(attachment.Hello, WebUiJsonContext.Default.WebVideoHello), token).ConfigureAwait(false);
             await response.Body.FlushAsync(token).ConfigureAwait(false);
             var reader = attachment.Events;
+            Task? beat = null;   // one at a time, as the Chat stream's (2026-10-19)
+            Task<bool>? waiting = null;
             while (!token.IsCancellationRequested)
             {
                 if (!_backend.Tabs().YouTube)
@@ -1130,8 +1162,8 @@ public sealed class WebUiHost : IWebUiHost
                 }
 
                 await response.Body.FlushAsync(token).ConfigureAwait(false);
-                var waiting = reader.WaitToReadAsync(token).AsTask();
-                var beat = Task.Delay(Heartbeat, _time, token);
+                waiting ??= reader.WaitToReadAsync(token).AsTask();
+                beat ??= Task.Delay(Heartbeat, _time, token);
                 var first = await Task.WhenAny(waiting, beat).ConfigureAwait(false);
                 if (token.IsCancellationRequested)
                 {
@@ -1140,11 +1172,14 @@ public sealed class WebUiHost : IWebUiHost
 
                 if (first == beat)
                 {
+                    beat = null;
                     await response.WriteAsync(": alive\n\n", token).ConfigureAwait(false);
                     continue;
                 }
 
-                if (!await waiting.ConfigureAwait(false))
+                bool more = await waiting.ConfigureAwait(false);
+                waiting = null;
+                if (!more)
                 {
                     break;   // dropped for falling behind, or replaced: the page reconnects as the same page
                 }

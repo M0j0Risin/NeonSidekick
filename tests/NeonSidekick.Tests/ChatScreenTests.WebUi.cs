@@ -657,6 +657,24 @@ public partial class ChatScreenTests
         Assert.Empty(_pcOnlyPanes);
     }
 
+    /// <summary>
+    /// <c>/tts on</c> from the page (2026-10-19, the review) is refused while its first use would download Kokoro, as <c>/model</c>'s install is:
+    /// the setting stays off and nothing is fetched.
+    /// </summary>
+    [Fact]
+    public async Task SpeechTurnedOnFromThePage_IsRefused_WhenItWouldDownloadItsModel()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.TtsSource = "in-process"; d.WebUiCommands = true; });
+        var input = WebSteps(
+            _ => SendFromPage("/tts on"),
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(WebUiText.RefusedAtDispatch(WebUiText.WouldDownload("/tts")), output);
+        Assert.False(_settings.Current.TtsOutput);
+    }
+
     [Fact]
     public async Task ASavedPrompt_FromThePage_IsSent()
     {

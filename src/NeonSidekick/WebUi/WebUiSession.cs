@@ -1099,9 +1099,12 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
                 Events.Publish(new WebEvent("delta", () => JsonSerializer.Serialize(new WebDelta(grew.Seq, grew.At, grew.Text), WebUiJsonContext.Default.WebDelta)));
                 break;
             case FeedChange.Ended ended:
-                // A reply's Markdown as HTML; a thinking block its summary, a run or an output their end alone (2026-10-15).
+                // A reply's Markdown as HTML; a thinking block its summary, a run or an output their end alone (2026-10-15). The HTML through the
+                // entry's own cache (2026-10-19, the review: rendered here a second time beside the snapshot's), rendered here only once the feed has
+                // let it go.
                 Events.Publish(new WebEvent("end", () => JsonSerializer.Serialize(
-                    new WebEnd(ended.Seq, ended.Kind == FeedKind.Assistant ? WebUiMarkdown.ToHtml(ended.Markdown) : null, ended.Summary), WebUiJsonContext.Default.WebEnd)));
+                    new WebEnd(ended.Seq, ended.Kind == FeedKind.Assistant ? Feed.HtmlOf(ended.Seq, WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown) : null, ended.Summary),
+                    WebUiJsonContext.Default.WebEnd)));
                 break;
             case FeedChange.Replaced replaced:
                 Events.Publish(new WebEvent("replace", () => JsonSerializer.Serialize(new WebReplaced(replaced.Seq, replaced.Text, replaced.Failed), WebUiJsonContext.Default.WebReplaced)));

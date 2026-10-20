@@ -12,7 +12,7 @@ public enum WebRateBucket
     /// <summary><i>Ask the house</i>: one every 2 seconds.</summary>
     Say,
 
-    /// <summary>A pasted sign-in: 5 a minute.</summary>
+    /// <summary>A sign-in, pasted or by the link's GET (2026-10-19, the review: the GET went unlimited): 5 a minute.</summary>
     SignIn,
 
     /// <summary>The YouTube tab's player reports (2026-10-16): a tick a second and a command's answers, 10 a second, bursts of 30.</summary>
@@ -26,7 +26,8 @@ public enum WebRateBucket
 /// The Web UI's rate limits (2026-10-15): a token bucket per address and <see cref="WebRateBucket"/>, so a stuck or misbehaving page can't flood
 /// Home Assistant or guess at the token. Thread-safe (one lock, held for arithmetic only). The table is bounded: an address idle for
 /// <see cref="IdleAfter"/> is dropped at the next check, and past <see cref="MaxEntries"/> the least recently seen goes first. A refusal is logged
-/// once per address a minute, never once per request. <c>/api/send</c> and <c>/api/answer</c> are not limited here: the chat's own flow gates them.
+/// once per address a minute, never once per request (and a refused remote's line the same, <see cref="LogDue"/>). <c>/api/send</c> and
+/// <c>/api/answer</c> are not limited here: the chat's own flow gates them.
 /// </summary>
 public sealed class WebRateLimit
 {
@@ -42,6 +43,7 @@ public sealed class WebRateLimit
     private readonly TimeProvider _time;
     private readonly object _gate = new();
     private readonly Dictionary<(string Address, WebRateBucket Bucket), Entry> _entries = [];
+    private readonly Dictionary<(string Address, string What), long> _logged = [];
     private long _lastSweep;
 
     public WebRateLimit(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
@@ -57,12 +59,15 @@ public sealed class WebRateLimit
         _ => throw new ArgumentOutOfRangeException(nameof(bucket), bucket, null),
     };
 
-    /// <summary>The bucket a request counts against: a post to one of the limited paths, or null for everything else.</summary>
-    public static WebRateBucket? BucketOf(string path, bool post)
+    /// <summary>
+    /// The bucket a request counts against: a post to one of the limited paths, a <paramref name="get"/> (not a HEAD, which spends nothing) of the
+    /// sign-in link (2026-10-19, the review: anyone on the LAN could loop it unlimited, a log line each), or null for everything else.
+    /// </summary>
+    public static WebRateBucket? BucketOf(string path, bool post, bool get = false)
     {
         if (!post)
         {
-            return null;
+            return get && path == WebUiAuth.SignInPath ? WebRateBucket.SignIn : null;
         }
 
         return path switch
@@ -124,6 +129,41 @@ public sealed class WebRateLimit
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether a log line about <paramref name="what"/> from <paramref name="remote"/> is due (2026-10-19, the review: a refused remote's line was
+    /// written once per request, so any address could flood the log): once per address a minute, as a refusal's. The table holds at
+    /// <see cref="MaxEntries"/>: the lines older than a minute go first, then all of them.
+    /// </summary>
+    public bool LogDue(IPAddress? remote, string what)
+    {
+        ArgumentNullException.ThrowIfNull(what);
+        long now = _time.GetTimestamp();
+        string address = remote is null ? "" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
+        lock (_gate)
+        {
+            if (_logged.TryGetValue((address, what), out long last) && _time.GetElapsedTime(last, now) < LogEvery)
+            {
+                return false;
+            }
+
+            if (_logged.Count >= MaxEntries)
+            {
+                foreach (var key in _logged.Where(e => _time.GetElapsedTime(e.Value, now) >= LogEvery).Select(e => e.Key).ToList())
+                {
+                    _logged.Remove(key);
+                }
+
+                if (_logged.Count >= MaxEntries)
+                {
+                    _logged.Clear();
+                }
+            }
+
+            _logged[(address, what)] = now;
+            return true;
+        }
     }
 
     /// <summary>The buckets kept now (tests).</summary>

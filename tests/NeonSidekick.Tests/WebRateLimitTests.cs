@@ -148,4 +148,39 @@ public sealed class WebRateLimitTests
             DiagnosticLog.Emitted -= Record;
         }
     }
+
+    [Fact]
+    public void TheSignInLinksGet_CountsAgainstTheSignIn_AndNoOtherGetDoes()
+    {
+        Assert.Equal(WebRateBucket.SignIn, WebRateLimit.BucketOf("/signin", post: false, get: true));   // 2026-10-19, the review
+        Assert.Null(WebRateLimit.BucketOf("/signin", post: false));   // a HEAD spends nothing
+        Assert.Null(WebRateLimit.BucketOf("/api/shopping", post: false, get: true));
+        Assert.Null(WebRateLimit.BucketOf("/", post: false, get: true));
+    }
+
+    [Fact]
+    public void LogDue_OncePerAddressAMinute()
+    {
+        var limit = new WebRateLimit(_time);
+        Assert.True(limit.LogDue(Phone, "refused"));
+        Assert.False(limit.LogDue(Phone, "refused"));
+        Assert.True(limit.LogDue(Other, "refused"));
+        Assert.True(limit.LogDue(Phone, "another line"));
+
+        _time.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(limit.LogDue(Phone, "refused"));
+    }
+
+    [Fact]
+    public void LogDue_HoldsItsTableAtTheCap()
+    {
+        var limit = new WebRateLimit(_time);
+        for (int i = 0; i < WebRateLimit.MaxEntries + 10; i++)
+        {
+            Assert.True(limit.LogDue(new IPAddress(0x0A000000 + i), "refused"));
+        }
+
+        Assert.True(limit.LogDue(Phone, "refused"));
+        Assert.False(limit.LogDue(Phone, "refused"));
+    }
 }

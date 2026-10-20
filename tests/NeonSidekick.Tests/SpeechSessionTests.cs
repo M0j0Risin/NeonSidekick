@@ -325,6 +325,20 @@ public class SpeechSessionTests : IDisposable
     // ── The in-process source ───────────────────────────────────────────────
 
     [Fact]
+    public async Task WouldDownload_OnlyTheInProcessModel_WhileItIsMissing()
+    {
+        var inProcess = new AppSettingsData { TtsSource = "in-process" };
+        Assert.True(_speech.WouldDownload(inProcess));   // the Web UI's /tts on refuses it (2026-10-19)
+        Assert.False(_speech.WouldDownload(new AppSettingsData { TtsSource = "http", TtsHttpUrl = "http://127.0.0.1:8880" }));
+
+        var body = FakeModelFiles.OnnxBytes(2048);
+        _http.Map(ModelStore.KokoroModelUrl, (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, body, "application/octet-stream")));
+        await _speech.ConnectAsync(new AppSettingsData { TtsOutput = true, TtsSource = "in-process" }, null, CancellationToken.None);
+
+        Assert.False(_speech.WouldDownload(inProcess));
+    }
+
+    [Fact]
     public async Task Connect_InProcess_EnsuresTheModel_ThenPrepares_AndTheLineNamesTheEngine()
     {
         var body = FakeModelFiles.OnnxBytes(2048);

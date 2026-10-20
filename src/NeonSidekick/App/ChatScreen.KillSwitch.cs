@@ -110,9 +110,9 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Ends a running botchat and cancels the running work (2026-10-14, out of <see cref="KillSwitch"/> for the Web UI's Stop as well):
-    /// every scope under <paramref name="all"/> (the kill switch, which unloads the model), else the <see cref="KillScopeKind.Work"/>
-    /// ones alone (the Web UI's Stop: never the user's own editor, never a model's load). True when anything was cancelled.
+    /// Ends a running botchat and cancels the running work (2026-10-14, out of <see cref="KillSwitch"/>): every scope but an
+    /// <see cref="KillScopeKind.Aside"/> one (the kill switch unloads the model; a <c>/claude</c> run doesn't use it). True when anything was
+    /// cancelled. The Web UI's Stop takes its own targets first (<see cref="StopTargetsNow"/>) and cancels those alone (2026-10-19).
     /// </summary>
     private bool CancelScopes(bool all)
     {
@@ -133,6 +133,35 @@ internal sealed partial class ChatScreen
         }
 
         return any;
+    }
+
+    /// <summary>
+    /// What the Web UI's Stop cancels, read now (2026-10-19, the review): the running botchat's ladder and the <see cref="KillScopeKind.Work"/>
+    /// and <see cref="KillScopeKind.Aside"/> scopes (never the user's own editor, never a model's load). Taken on the request's thread so a
+    /// cancel that runs later on the pool never reaches work that began after the tap.
+    /// </summary>
+    private (BotEscLadder? Ladder, List<KillScope> Scopes) StopTargetsNow()
+    {
+        var scopes = new List<KillScope>();
+        for (var outer = Volatile.Read(ref _killScopes); outer is not null; outer = outer.Outer)
+        {
+            if (outer.Kind is KillScopeKind.Work or KillScopeKind.Aside)
+            {
+                scopes.Add(outer);
+            }
+        }
+
+        return (Volatile.Read(ref _botLadder), scopes);
+    }
+
+    /// <summary>Cancels what <see cref="StopTargetsNow"/> took: a scope already disposed (its token source too) is passed over.</summary>
+    private static void CancelTargets((BotEscLadder? Ladder, List<KillScope> Scopes) targets)
+    {
+        targets.Ladder?.End();
+        foreach (var scope in targets.Scopes)
+        {
+            VoiceSession.SafeCancel(scope.Cts);
+        }
     }
 
     /// <summary>What runs now, as the Web UI's header says it: model work (Stop shows) and a model's load alone.</summary>
@@ -166,12 +195,24 @@ internal sealed partial class ChatScreen
     {
         private string? _notice;
 
+        private bool _webStopped;
+
         public CancellationTokenSource Cts { get; } = cts;
 
         /// <summary>What the scope holds (2026-10-14): whether the Web UI's Stop may cancel it.</summary>
         public KillScopeKind Kind { get; } = kind;
 
         public KillScope? Outer { get; } = outer;
+
+        /// <summary>
+        /// The Web UI's Stop cancelled this scope (2026-10-19, was the screen's <c>_webStopRequested</c>): the turn that owns it reads a
+        /// clean end as <see cref="Interrupt.Cancel"/>, as ESC's. Set on a request's thread, read on the owning task.
+        /// </summary>
+        public bool WebStopped
+        {
+            get => Volatile.Read(ref _webStopped);
+            set => Volatile.Write(ref _webStopped, value);
+        }
 
         /// <summary>The kill's notice, set on the key's task when the kill landed under this scope.</summary>
         public string? Notice

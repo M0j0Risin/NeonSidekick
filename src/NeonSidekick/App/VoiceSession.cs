@@ -227,6 +227,29 @@ internal sealed class VoiceSession : IDisposable
         InterruptStatusIsWarning ? InterruptUnavailableLine(InterruptDetail.Length > 0 ? InterruptDetail : WakeDetail) : null;
 
     /// <summary>
+    /// Whether turning voice input on under <paramref name="effective"/> would download a model first (2026-10-19, the Web UI review: the
+    /// page's <c>/stt on</c> may not start a first-use download of hundreds of MB): Whisper and Silero, and Vosk under the wake word or the
+    /// interrupt. A model name the store does not know, or a path to a file of the user's own, downloads nothing (the connect says so instead).
+    /// </summary>
+    public bool WouldDownload(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        string model = string.IsNullOrWhiteSpace(effective.SttWhisperModel) ? new AppSettingsData().SttWhisperModel : effective.SttWhisperModel.Trim();
+        if (_models.Whisper(model) is { DownloadUrl: not null } whisper && !ModelStore.IsPresent(whisper))
+        {
+            return true;
+        }
+
+        if (!ModelStore.IsPresent(_models.Silero()))
+        {
+            return true;
+        }
+
+        string wake = string.IsNullOrWhiteSpace(effective.SttVoskModel) ? new AppSettingsData().SttVoskModel : effective.SttVoskModel.Trim();
+        return (effective.SttWake || effective.SttInterrupt) && _models.Vosk(wake) is { } vosk && !ModelStore.IsPresent(vosk);
+    }
+
+    /// <summary>
     /// Drops the loaded models, takes the switch, key and model from <paramref name="effective"/>
     /// and, only when enabled, counts microphones, ensures both model files (reporting progress
     /// through <paramref name="phase"/>) and loads them; then, only when the wake word is also

@@ -66,8 +66,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The dispatch's guard for a line from the page (later on 2026-10-14): everything <see cref="WebUiSession.Send"/> checked, read again (the
     /// settings may have changed while it waited), and what only the screen knows — a model set by id or a reasoning level whose connect would
-    /// look for a server (no URL, the scan on: its pickers are the PC's), or an embedded model that would be installed first. The refusal's
-    /// sentence, or null to run it.
+    /// look for a server (no URL, the scan on: its pickers are the PC's), an embedded model that would be installed first, or a voice model
+    /// <c>/tts on</c> or <c>/stt on</c> would download first (2026-10-19). The refusal's sentence, or null to run it.
     /// </summary>
     private string? WebDispatchRefusal(SlashCommand command, string args, string text)
     {
@@ -95,6 +95,17 @@ internal sealed partial class ChatScreen
                 && !embedded.State(named).IsInstalled)
             {
                 return WebUiText.WouldInstall;
+            }
+        }
+
+        // /tts on and /stt on (2026-10-19, the review): a first use downloads its models (Whisper, Silero, Vosk, Kokoro: hundreds of MB), as
+        // an embedded model's install does, so the page may turn on only what is already here.
+        if (command is SlashCommand.Tts or SlashCommand.Voice && string.Equals(args.Trim(), "on", StringComparison.OrdinalIgnoreCase))
+        {
+            var effective = _effective();
+            if (command == SlashCommand.Tts ? _speech.WouldDownload(effective) : _voice.WouldDownload(effective))
+            {
+                return WebUiText.WouldDownload(WebCommands.Word(text));
             }
         }
 
@@ -161,9 +172,10 @@ internal sealed partial class ChatScreen
             if (first == running)
             {
                 await running.ConfigureAwait(false);
-                if (paneAnswered || handle.Winner != AskSource.Web)
+                // The pane's own answer, or a close with none that the PC claims; a failed claim is the page's answer landing in between
+                // (2026-10-19, the review: it was told OK and dropped), counted below.
+                if (paneAnswered || handle.TryClaim(AskSource.Pc))
                 {
-                    handle.TryClaim(AskSource.Pc);
                     return new AskOutcome<T>(paneResult, paneAnswered ? AskSource.Pc : null, NeverAsked: false);
                 }
             }

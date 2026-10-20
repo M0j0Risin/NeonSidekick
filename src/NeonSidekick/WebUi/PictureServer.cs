@@ -194,8 +194,10 @@ internal sealed class PictureServer
             return;
         }
 
-        // Read by the decode itself, not through this request's handle: the decode is shared and may outlive this request.
-        var encoded = await EncodeOnceAsync(tag, () => File.ReadAllBytesAsync(file), size, context.RequestAborted).ConfigureAwait(false);
+        // Read by the decode itself, not through this request's handle: the decode is shared and may outlive this request. The cache's key names
+        // the file as well as its stamp (2026-10-19, the review: two pictures of one length and write time, a coarse clock's or an archive's,
+        // shared one cached thumbnail); the ETag needs no path, the browser keeping it per address.
+        var encoded = await EncodeOnceAsync(tag + "|" + file, () => File.ReadAllBytesAsync(file), size, context.RequestAborted).ConfigureAwait(false);
         await SendAsync(context, source, encoded).ConfigureAwait(false);
     }
 

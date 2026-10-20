@@ -160,6 +160,23 @@ public sealed class ModelStore
         EnsureAsync(spec, progress, verifying: null, cancellationToken);
 
     /// <summary>
+    /// Whether <paramref name="spec"/> is on disk as <see cref="EnsureAsync(ModelSpec, IProgress{ValueTuple{long, Nullable{long}}}?, Action?, CancellationToken)"/>
+    /// would take it, without a download, a delete or a hash (2026-10-19, the Web UI review: the page may not start a first-use download).
+    /// </summary>
+    public static bool IsPresent(ModelSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        return File.Exists(spec.Path) && LooksLike(spec.Path, spec.Format) && (spec.Sha256 is null || new FileInfo(spec.Path).Length == spec.ApproxBytes);
+    }
+
+    /// <summary>Whether the model directory <paramref name="spec"/> is complete on disk (<see cref="EnsureDirectoryAsync"/> would download nothing).</summary>
+    public static bool IsPresent(ModelDirectorySpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        return IsCompleteModelDirectory(spec.Path, spec.RequiredFiles);
+    }
+
+    /// <summary>
     /// <see cref="EnsureAsync(ModelSpec, IProgress{ValueTuple{long, Nullable{long}}}?, CancellationToken)"/> with a
     /// word for the pause after a pinned download (<see cref="ModelSpec.Sha256"/>): <paramref name="verifying"/> is
     /// told before the file is hashed, which takes seconds for a few gigabytes.
