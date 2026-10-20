@@ -41,25 +41,25 @@ It's one app for research, IT and admin work, your smart home and creative proje
 ## Features
 
 ### The app
-* **No installer:** unzip and run. It's compiled to native code, so it starts fast and needs no .NET runtime.
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, the mouse, and sixty color themes or your own.
-* **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`).
 * **Its own windows:** pictures and thumbnails (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`) and a YouTube player (`/youtube play`).
-* **A web browser** (`/browser`): sign in to a site or pass its bot check there, and the web tools borrow its cookies.
-* **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
-* **Message queue:** keep typing while the model works; messages go out in order.
-* **Saved prompts:** messages you send often, picked from a list (`/prompts`) or from your phone.
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with voices you can mix, both in-process or through a Kokoro server.
-* **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 * **Web UI:** the chat, the model's questions, the shopping list, a Home tab (rooms, lights, scenes and the PC's meters) and a YouTube player on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
+* **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`).
+* **No installer:** unzip and run. It's compiled to native code, so it starts fast and needs no .NET runtime.
+* **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
+* **Message queue:** keep typing while the model works; messages go out in order, and `/loop` repeats one.
+* **Saved prompts:** messages you send often, picked from a list (`/prompts`) or from your phone.
+* **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on this machine or your network, or takes a URL.
 * **Embedded model:** the app downloads a Gemma, Qwen or Muse model (all read pictures and call tools) and runs it on a built-in llama.cpp.
-* **Model sizes:** Q4 and larger builds for 8–32 GB of VRAM, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
+* **Model sizes:** builds for 8 GB cards and up, best at 16–32 GB, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
 * **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or Claude Code as the chat's server (`/claude` sends it one message); all off until you turn them on.
 * **Advisors:** other profiles, local or frontier, that review plans and Ralph steps, or give a second opinion when the model (or you, with `/advisor`) asks; they answer with the chat's read-only tools.
+* **Benchmarks & meters:** `/test` benchmarks the model, and the performance bar shows CPU, RAM, GPU and network while it works.
 
 ### Conversations, memory & skills
 * **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory (the folder the model works in).
@@ -72,15 +72,23 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Self-learning:** a background reflection writes new skills and improves existing ones from your work.
 
 ### Tools & guardrails
-* **Built-in tools:** files, Git, shell (PowerShell, cmd, bash, zsh), scripts (PowerShell, Python, Node), web search and pages, questions to you, clock, timers and `neon_help`, the app's own manual.
+* **Built-in tools:** files, Git, shell (PowerShell, cmd, bash, zsh), scripts (PowerShell, Python, Node), questions to you, clock, timers and `neon_help`, the app's own manual.
 * **MCP servers:** add Model Context Protocol servers, outside programs with more tools and data.
-* **Integrations:** the IT, smart home and creative tools below, once you switch them on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
+* **Integrations:** the research, IT, smart home and creative tools below, once you switch them on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
 * **Sandboxed:** file tools reach only the working directory; shell commands go through an approval pane (once, this session, or always).
 * **Shell police (👮):** refuses a command naming a path outside the working directory, a forbidden string (disk wipes, shutdowns…) or the database tools' databases, even under `--yolo` ([Shell guards](docs/SETTINGS.md#shell-guards)).
+
+### Plans & reviews
 * **Plan mode:** `/plan <requirement>` researches with read-only tools and saves a plan; nothing changes until you approve. `/plan chat` talks a plan through with you first.
 * **Closing gaps:** `/plan gaps` has the model or an advisor review a plan pass after pass, fixing what would stall the work, until it comes up clean ([Closing gaps](docs/COMMANDS.md#closing-gaps)).
 * **Ralph loop:** carries out an approved plan one step at a time, each step a fresh pass checked before moving on ([Ralph loop](docs/COMMANDS.md#ralph-loop)).
 * **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
+
+### Research & notes
+* **Web search & pages:** searches with DuckDuckGo or your own SearXNG server, reads pages (in a real browser when a page needs one), and downloads files.
+* **A web browser** (`/browser`): sign in to a site or pass its bot check there, and the web tools borrow its cookies.
+* **PDFs:** the model reads them, on disk or on the web; attach one to a message, `/view` it, or merge, split, rotate and fill them in.
+* **Obsidian:** search, read, write and link notes in your vault.
 
 ### IT & admin
 * **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
@@ -90,7 +98,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Event logs:** crashes, failed service starts and sign-ins, on this PC, in `.evtx` files or on computers you name. Read-only; `/eventlog` does it by hand.
 * **Services & scheduled tasks (Windows only):** read them here or on computers you name; changes are opt-in and ask first (`/services`, `/tasks`).
 * **Active Directory:** users, groups, computers and OUs, and the locked, expiring, stale and privileged accounts. It never writes to the directory; `/ad` does it by hand.
-* **Printing & PDFs:** `/print` to any printer, and `/pdf` from Markdown, text, pictures or a web page. The model reads PDFs; attach, `/view`, merge, split, rotate and fill them in.
+* **Printing:** `/print` to any printer, and `/pdf` makes a PDF from Markdown, text, pictures or a web page.
 
 ### Smart home
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"); `/ha` drives the house directly.
@@ -101,10 +109,6 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Picture editing:** resize, crop, rotate, recolor, convert or strip metadata, by the model or with a right-click in the viewer.
 * **Bot chat:** `/botchat` lets your profiles talk to each other in their own voices, optionally illustrated by ComfyUI.
 * **YouTube:** search (with your API key) and play videos in the app, a browser or the Web UI; saved videos resume where you left off.
-* **Obsidian:** search, read, write and link notes in your vault.
-
-### Extras
-* `/loop` repeats a message, `/test` benchmarks the model, and the performance bar shows CPU, RAM, GPU and network.
 
 ## Getting started
 
