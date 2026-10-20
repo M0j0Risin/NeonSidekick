@@ -109,18 +109,19 @@ It's one app for research, IT and admin work, your smart home and creative proje
 ## Getting started
 
 ### What you need
-* **A 64-bit Windows PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac. Nothing else to install.
+* **A 64-bit Windows PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac (M1 and later). Nothing else to install.
 * **Windows Terminal:** it comes with Windows 11, and the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
-* **A language model:** the app can download one for you, or use one you already run.
-
-**On a Mac?** It runs on Apple Silicon (M1 and later); a few features need Windows or macOS 14, and [On a Mac](docs/MAC.md) covers setup and every difference.
+* **A language model:** the app can download one and run it, use one you already run, or connect to the OpenAI or Anthropic API.
+* **For local models, a graphics card with 16–32 GB of VRAM** (NVIDIA with driver 580 or newer, or any Vulkan card) **or an Apple Silicon Mac.** Without one they run, but slowly.
 
 Only for some features:
-* **Running a model inside the app:** an NVIDIA card (driver 580 or newer), any Vulkan card, or Apple Silicon (Metal); without one it works, but slowly. 16 GB of VRAM runs the smaller models, 32 GB the biggest.
 * **Web pages that need a real browser, and PDFs:** Edge, Chrome or Brave (or Chromium on a Mac).
 * **`/claude` and the Claude Code server:** Claude Code installed.
 * **Scripts in Python or Node:** Python or Node installed.
 * **Better web search:** a SearXNG server ([setup with Docker](docs/DOCKER_WINDOWS_SEARXNG.md)), or an MCP web-search server.
+* **The integrations:** the thing itself, such as Home Assistant, ComfyUI, Docker Desktop, an Obsidian vault or a YouTube API key.
+
+**On a Mac?** A few features need Windows or macOS 14, and [On a Mac](docs/MAC.md) covers setup and every difference.
 
 ### Install
 1. Download `NeonSidekick-v<version>-win-x64.zip` from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases).
