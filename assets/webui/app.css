@@ -779,6 +779,42 @@ main.youtube { display: flex; flex-direction: column; gap: 12px; }
 .yt-hint { margin: 0; flex: 1; min-width: 12em; color: var(--dim); font-size: 14px; }
 .yt-frame { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
 .yt-frame iframe, .yt-frame #player { width: 100%; height: 100%; border: 0; display: block; }
+/* Fill the window (2026-10-20, the user's ask): body.yt-windowed restyles in place (the iframe never moves, which would reload it). The strip is
+   a black bar fixed at the top, the message line fixed under it, the video fixed from the bar (--yt-strip, --yt-bar, measured by youtube.js) to
+   the bottom, black around it; fixed, so main's cap and padding stay behind. The header and the saved list go, so nothing is left to scroll
+   (iOS ignores overflow: hidden on the body). Every rule scoped to the mode: no second bare .yt-strip, .yt-frame or .message (WebUiStylesTests). */
+body.yt-windowed { background: #000; }
+body.yt-windowed header.top, body.yt-windowed #saved { display: none; }
+body.yt-windowed .yt-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: calc(4px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 4px calc(12px + env(safe-area-inset-left));
+  background: #000;
+}
+body.yt-windowed #message {
+  position: fixed;
+  top: var(--yt-strip, 48px);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0 calc(12px + env(safe-area-inset-right)) 6px calc(12px + env(safe-area-inset-left));
+  background: #000;
+}
+body.yt-windowed .yt-frame {
+  position: fixed;
+  top: var(--yt-bar, 48px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  aspect-ratio: auto;
+  border-radius: 0;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 /* The saved videos under the player (later on 2026-10-16): a head row (the count, ☆ save the playing one, a two-tap clear all), a filter, a
    row per video (its thumbnail at 16:9, title, channel and place; the row's body plays it) with a ⋯ that opens its details and its moves. Every
    class carries yt-, so none restyles another page's (WebUiStylesTests). */

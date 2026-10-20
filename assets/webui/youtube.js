@@ -145,7 +145,93 @@ function draw() {
     : tapHint ? tapHint
     : !loaded && !canResume ? (hello ? words.idle : words.loading)
     : '';
+  const fill = canFill();
+  fillBtn.textContent = windowed ? words.exitWindowed : words.windowed;
+  fillBtn.classList.toggle('hidden', !fill);
+  if (!fill) leaveWindowed();   // the video closed, another page took it, a Resume offer, the player failed
 }
+
+// ── Fill the window (2026-10-20, the user's ask: a "windowed fullscreen") ──
+// The video fills the browser's window, the hint strip a slim black bar above it with ✕ Exit, without the screen's full screen (YouTube's own
+// button). A body class restyles in place: the iframe is never moved in the DOM (that reloads the player), so the video keeps its place and
+// sound. Nothing covers the video (a phone starts one only on a tap on the video itself). Ways out: the button, Esc, Back (one history entry,
+// the sheets' pattern), and on its own whenever draw() hides the button; every way but Back goes through history.back() while the top entry
+// is ours, so entries never pile up. Not remembered: every load starts in the normal layout.
+const fillBtn = document.getElementById('fill');
+const stripEl = document.querySelector('.yt-strip');
+const messageEl = document.getElementById('message');
+let windowed = false;
+let windowedScroll = 0;
+let backPending = false;
+
+function canFill() { return owner && loaded && !apiFailed; }
+
+function filledEntry() { return !!(history.state && history.state.filled); }
+
+// The bar's height: the strip's, and the message's while it shows (a sentence said while filled is seen). The CSSOM, not a style attribute:
+// the page's CSP refuses inline styles but not this.
+function measureBar() {
+  if (!windowed) return;
+  const strip = stripEl.offsetHeight;
+  const message = messageEl.classList.contains('hidden') ? 0 : messageEl.offsetHeight;
+  document.body.style.setProperty('--yt-strip', strip + 'px');
+  document.body.style.setProperty('--yt-bar', (strip + message) + 'px');
+}
+
+if (typeof ResizeObserver === 'function') {
+  const bar = new ResizeObserver(measureBar);
+  bar.observe(stripEl);
+  bar.observe(messageEl);
+}
+
+// pushed: false when Forward came back to our entry (it is there already).
+function enterWindowed(pushed) {
+  if (windowed || backPending || !canFill()) return;
+  windowed = true;
+  windowedScroll = window.scrollY;
+  if (pushed !== false) history.pushState({ filled: true }, '');
+  document.body.classList.add('yt-windowed');
+  measureBar();
+  fillBtn.textContent = words.exitWindowed;
+  fillBtn.focus();   // Enter or Esc acts at once, and a screen reader hears the change
+}
+
+// popped: Back itself, the entry gone already.
+function leaveWindowed(popped) {
+  if (!windowed) return;
+  windowed = false;
+  document.body.classList.remove('yt-windowed');
+  document.body.style.removeProperty('--yt-strip');
+  document.body.style.removeProperty('--yt-bar');
+  window.scrollTo(0, windowedScroll);   // the hidden content had dropped it to 0
+  if (words) fillBtn.textContent = words.windowed;
+  if (!popped && filledEntry()) {
+    backPending = true;
+    history.back();
+  }
+}
+
+fillBtn.addEventListener('click', () => { if (windowed) leaveWindowed(); else enterWindowed(); });
+
+document.addEventListener('keydown', e => {
+  // YouTube's own full screen takes Esc first (the browser's); inside the video's frame the keys are YouTube's.
+  if (e.key === 'Escape' && windowed && !document.fullscreenElement) {
+    e.preventDefault();
+    leaveWindowed();
+  }
+});
+
+window.addEventListener('popstate', () => {
+  backPending = false;
+  const filled = filledEntry();
+  if (windowed && !filled) leaveWindowed(true);
+  else if (!windowed && filled) {
+    if (canFill()) enterWindowed(false); else history.replaceState(null, '');
+  }
+});
+
+// A reload starts in the normal layout, so an entry of ours left on top goes (the chat page's rule).
+if (filledEntry()) history.replaceState(null, '');
 
 // The offer resumed on this page: the app told first (its player switches here), then the page's own load.
 async function resume(o) {

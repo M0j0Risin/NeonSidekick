@@ -630,6 +630,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 * **Sound:** a phone starts a video only after a tap on the video itself. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
 * **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever *YouTube open links in* says; ⋯ moves or removes it; ☆ saves the playing video.
+* **⛶ Fill window** fills the browser's window with the video under a slim bar; YouTube's own button is still full screen. ✕ Exit, Esc or Back leave (after a tap on the video, Esc is YouTube's).
 * **Limits:** on an iPhone *YouTube while speaking* `duck` does nothing (`pause` works).
 * A `/youtube` command typed in Chat is refused from the page, except bare `/youtube` and `/youtube list`, which point to this tab's saved videos; ask the model to play instead.
 * **Trust:** the tab runs YouTube's player script in the Web UI's own page, so while it's open that script can do what the page can, though it can never read the sign-in cookie.

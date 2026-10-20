@@ -623,11 +623,17 @@ public sealed class WebStoreRequest
 
 /// <summary>
 /// The YouTube tab's words, made on the server (<see cref="WebUiText.VideoWords"/>), with (later on 2026-10-16) the saved list's
-/// (<see cref="Saved"/>).
+/// (<see cref="Saved"/>), and (2026-10-20, the user's ask) the fill-the-window button's two labels: <see cref="Windowed"/> in the normal
+/// layout, <see cref="ExitWindowed"/> while the video fills the browser's window. The label says the state, so the page sets no
+/// <c>aria-pressed</c> on top (a toggle whose name also flips reads twice).
 /// </summary>
 public sealed record WebVideoWords(string Waiting, string PlayHere, string TapForSound, string TapToStart, string Idle, string Loading, string Failed, string Closed)
 {
     public WebSavedWords? Saved { get; init; }
+
+    public string Windowed { get; init; } = "";
+
+    public string ExitWindowed { get; init; } = "";
 }
 
 /// <summary>
