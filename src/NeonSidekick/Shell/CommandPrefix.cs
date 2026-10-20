@@ -114,15 +114,101 @@ public static partial class CommandPrefix
         "GIT_CONFIG", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_COUNT", "GIT_DIR",
         "BASH_ENV", "ENV", "ZDOTDIR", "PYTHONPATH", "PYTHONSTARTUP", "NODE_OPTIONS", "PERL5LIB", "PERL5OPT", "IFS",
         "NoDefaultCurrentDirectoryInExePath", "PATHEXT", "COMSPEC",
+        // The environment twins of DangerousOptions and the other variables that make an allowed verb run another program or reach
+        // another server (the fourth shell review, 2026-10-19): git's -c and --exec-path, kubectl's --kubeconfig, docker's -H and
+        // --config, the editors and pagers a tool starts, a config folder holding those (HOME: ~/.gitconfig's core.pager), the
+        // compilers and loaders a build runs. Families too wide to list are DangerousEnvPrefixes.
+        "GIT_CONFIG_PARAMETERS", "GIT_EXEC_PATH", "KUBECONFIG", "DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT", "CONTAINER_HOST",
+        "EDITOR", "VISUAL", "PAGER", "MANPAGER", "BROWSER", "LESSOPEN", "LESSCLOSE", "SHELL", "SSH_ASKPASS", "SUDO_ASKPASS", "PS4",
+        "HOME", "XDG_CONFIG_HOME", "XDG_CONFIG_DIRS", "MAKEFILES", "MAKEFLAGS", "MFLAGS", "GNUMAKEFLAGS", "CC", "CXX", "CPP", "LD",
+        "DOTNET_STARTUP_HOOKS", "DOTNET_ADDITIONAL_DEPS", "DOTNET_ROOT", "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTDOC",
+        "RUSTFLAGS", "RUSTDOCFLAGS", "GOFLAGS", "GOROOT", "GOPATH", "GOTOOLCHAIN", "GOENV", "GOPROXY", "NODE_PATH", "RUBYOPT", "RUBYLIB",
+        "PERLLIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE",
+        "AZURE_CONFIG_DIR", "TF_PLUGIN_CACHE_DIR", "TF_DATA_DIR",
     };
 
     /// <summary>
-    /// The commands that set a variable for the rest of the line (later on 2026-10-19, the third shell review): cmd's <c>set</c> and
-    /// bash's and zsh's <c>export</c>, <c>declare</c>, <c>typeset</c>. One that sets a <see cref="DangerousEnvVars"/> name (<c>set
-    /// PATH=…&amp; git status</c>) reads as <see cref="Unreadable"/>, so an allowed <c>set</c> never lets the next segment run another
-    /// program. Pinned.
+    /// The variable families <see cref="DangerousEnvVars"/> takes by the start of the name (the fourth shell review, 2026-10-19), any
+    /// case: git's, npm's <c>npm_config_*</c> (its <c>script_shell</c>), yarn's (<c>YARN_YARN_PATH</c> runs a file), docker's and
+    /// podman's, kubectl's, cargo's linkers and wrappers, .NET's hosts and profilers, MSBuild's and NuGet's paths, Python's and pip's,
+    /// the dynamic loaders', gcloud's (<c>CLOUDSDK_PYTHON</c>), gh's (its aliases may be shell commands), terraform's CLI config. Pinned.
     /// </summary>
-    public static readonly IReadOnlySet<string> SettingPrograms = new HashSet<string>(StringComparer.Ordinal) { "set", "export", "declare", "typeset" };
+    public static readonly IReadOnlyList<string> DangerousEnvPrefixes =
+    [
+        "GIT_", "NPM_CONFIG_", "YARN_", "PNPM_", "COREPACK_", "DOCKER_", "CONTAINER_", "CONTAINERS_", "KUBE", "CARGO_", "CGO_",
+        "DOTNET_", "COREHOST_", "CORECLR_", "COMPLUS_", "MSBUILD", "NUGET_", "PYTHON", "PIP_", "UV_", "POETRY_", "LD_", "DYLD_",
+        "PERL5", "CLOUDSDK_", "GH_", "TF_CLI_",
+    ];
+
+    /// <summary>
+    /// Whether a variable named <paramref name="name"/> can redirect what an allowed program runs: one of <see cref="DangerousEnvVars"/>
+    /// or of a <see cref="DangerousEnvPrefixes"/> family, any case (cmd's and PowerShell's names are case-blind; in bash a lower-case
+    /// twin only asks more).
+    /// </summary>
+    public static bool IsDangerousName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (DangerousEnvVars.Contains(name, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (string family in DangerousEnvPrefixes)
+        {
+            if (name.StartsWith(family, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The commands that set a variable for the rest of the line (later on 2026-10-19, the third shell review): cmd's <c>set</c> and
+    /// bash's and zsh's <c>export</c>, <c>declare</c>, <c>typeset</c>, <c>readonly</c>, <c>local</c> (the last two the fourth review's).
+    /// One that sets a <see cref="DangerousEnvVars"/> name (<c>set PATH=…&amp; git status</c>) reads as <see cref="Unreadable"/>, so an
+    /// allowed <c>set</c> never lets the next segment run another program. Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> SettingPrograms = new HashSet<string>(StringComparer.Ordinal) { "set", "export", "declare", "typeset", "readonly", "local" };
+
+    /// <summary>
+    /// PowerShell's item cmdlets and their aliases, which set or remove a variable through the <c>env:</c> drive (the fourth shell review,
+    /// 2026-10-19): <c>Set-Item env:PATH …</c> or <c>Remove-Item env:NoDefaultCurrentDirectoryInExePath</c> under an allowed
+    /// <c>set-item</c> changed what the next segment ran. One naming a dangerous variable reads as <see cref="Unreadable"/>.
+    /// </summary>
+    private static readonly IReadOnlySet<string> EnvDrivePrograms = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "set-item", "si", "new-item", "ni", "remove-item", "ri", "rm", "del", "erase", "clear-item", "cli", "rename-item", "rni", "copy-item", "cpi",
+    };
+
+    /// <summary>
+    /// The words bash and zsh run the command after (the fourth shell review, 2026-10-19): read past on the way to it, so an allowed
+    /// <c>then</c> or <c>!</c> (from one approved <c>if …; then …</c>) never covers the command it leads. <c>time</c> takes <c>-p</c>,
+    /// <c>exec</c> its options, <c>command</c> <c>-p</c> (<c>command -v</c> runs nothing and is <c>command</c>). zsh's precommand
+    /// modifiers too. A word alone is its own prefix.
+    /// </summary>
+    private static readonly IReadOnlySet<string> LeadingWords = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "!", "{", "then", "do", "else", "elif", "if", "while", "until", "time", "builtin", "exec", "command",
+    };
+
+    private static readonly IReadOnlySet<string> ZshLeadingWords = new HashSet<string>(StringComparer.Ordinal) { "nocorrect", "noglob", "-" };
+
+    /// <summary>
+    /// The bash and zsh words whose command cannot be told from the words (the fourth shell review): <c>case</c> (its patterns lead
+    /// commands), <c>coproc</c>, <c>function</c> (a function named <c>git</c> runs under <c>git status</c>). The line asks.
+    /// </summary>
+    private static readonly IReadOnlySet<string> UnreadableWords = new HashSet<string>(StringComparer.Ordinal) { "case", "coproc", "function" };
+
+    /// <summary>zsh's short loops (on by default): <c>for x (a b) rm $x</c>, <c>repeat 3 rm x</c> run a command in the header's segment. The line asks.</summary>
+    private static readonly IReadOnlySet<string> ZshUnreadableWords = new HashSet<string>(StringComparer.Ordinal) { "for", "foreach", "repeat", "select" };
+
+    /// <summary>The zsh words whose short form runs a command after a <c>[[ … ]]</c>, <c>(( … ))</c>, <c>( … )</c> or before a <c>{ … }</c> (<c>if [[ -f x ]] rm x</c>).</summary>
+    private static readonly IReadOnlySet<string> ZshShortForms = new HashSet<string>(StringComparer.Ordinal) { "if", "elif", "while", "until" };
+
+    /// <summary>PowerShell's statements that take a pipeline (measured: <c>return whoami</c>, <c>throw whoami</c>, <c>exit /b</c> each run it), any case.</summary>
+    private static readonly IReadOnlySet<string> PowerShellLeadingWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "exit", "return", "throw" };
 
     /// <summary>
     /// The options a verb program takes ahead of its verb with no value (2026-10-19, the second shell review): skipped alone on the way to
@@ -288,19 +374,18 @@ public static partial class CommandPrefix
     private static bool IsDangerousAssignment(string token)
     {
         int eq = token.IndexOf('=', StringComparison.Ordinal);
-        return eq > 0 && DangerousEnvVars.Contains(token[..eq]);
+        return eq > 0 && IsDangerousName(token[..eq].TrimEnd('+'));
     }
 
-    /// <summary>Whether a <see cref="SettingPrograms"/> word's arguments set a <see cref="DangerousEnvVars"/> name; cmd's names are case-blind, a quote around the pair is read through.</summary>
-    private static bool SetsDangerous(List<string> tokens, int from, ShellKind shell)
+    /// <summary>Whether a <see cref="SettingPrograms"/> word's arguments set a dangerous name (<see cref="IsDangerousName"/>); a quote around the pair is read through.</summary>
+    private static bool SetsDangerous(List<string> tokens, int from)
     {
-        var comparer = shell is ShellKind.Cmd or ShellKind.PowerShell ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         for (int i = from; i < tokens.Count; i++)
         {
             string word = tokens[i].Trim('"', '\'');
             int eq = word.IndexOf('=', StringComparison.Ordinal);
-            string name = eq < 0 ? word : word[..eq];
-            if (DangerousEnvVars.Contains(name, comparer))
+            string name = eq < 0 ? word : word[..eq].TrimEnd('+');
+            if (name.Length > 0 && IsDangerousName(name))
             {
                 return true;
             }
@@ -308,6 +393,27 @@ public static partial class CommandPrefix
 
         return false;
     }
+
+    /// <summary>Whether an <see cref="EnvDrivePrograms"/> cmdlet's arguments name a dangerous variable on the <c>env:</c> drive (<c>env:PATH</c>, <c>Env:\PATH</c>, <c>-Path env:PATH</c>).</summary>
+    private static bool TouchesDangerousEnv(List<string> tokens, int from)
+    {
+        for (int i = from; i < tokens.Count; i++)
+        {
+            string word = tokens[i].Trim('"', '\'');
+            int colon = word.IndexOf(':', StringComparison.Ordinal);
+            if (colon > 0 && word.AsSpan(0, colon).EndsWith("env", StringComparison.OrdinalIgnoreCase)
+                && word[(colon + 1)..].TrimStart('\\', '/') is { Length: > 0 } name && IsDangerousName(name.TrimEnd(',')))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // A bash or zsh word that assigns a subscript (a[1]=x): bash refuses it as a prefix and zsh reads it its own way; neither is the program.
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*\[[^\]]*\]\+?=", RegexOptions.CultureInvariant)]
+    private static partial Regex SubscriptAssignmentPattern();
 
     /// <summary>
     /// The segments of <paramref name="command"/>: the pieces between <c>&amp;&amp;</c>, <c>||</c>,
@@ -328,10 +434,29 @@ public static partial class CommandPrefix
         var segments = new List<(string, string)>();
         var current = new StringBuilder();
         char quote = '\0';
+        bool ansi = false;
         int escapedAt = -1;
         for (int i = 0; i < command.Length; i++)
         {
             char c = command[i];
+            if (ansi)
+            {
+                // Inside bash's and zsh's $'…' a backslash escapes, so \' never closes it (the fourth shell review, 2026-10-19: the
+                // plain single-quote rule saw the string close there and open again at the real close, hiding the separators after it).
+                current.Append(c);
+                if (c == '\\' && i + 1 < command.Length)
+                {
+                    current.Append(command[++i]);
+                }
+                else if (c == '\'')
+                {
+                    ansi = false;
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
             // An escaped character is literal: never a quote that opens a string, never a separator (bash/zsh \, PowerShell `, cmd ^,
             // which is literal inside double quotes). Mirrors Substitutions, so a desync can no longer hide a separator inside what the
             // segmenter thinks is a string (the code review, 2026-10-19).
@@ -359,6 +484,14 @@ public static partial class CommandPrefix
             {
                 current.Append(' ');
                 i = commentEnd - 1;
+                continue;
+            }
+
+            if (OpensAnsiC(command, i, shell))
+            {
+                current.Append(c).Append(command[++i]);
+                quote = '\'';
+                ansi = true;
                 continue;
             }
 
@@ -394,6 +527,10 @@ public static partial class CommandPrefix
         return segments;
     }
 
+    /// <summary>Whether bash's or zsh's ANSI-C string <c>$'…'</c> opens at <paramref name="at"/> (outside quotes; the caller checks), where a backslash escapes up to its close.</summary>
+    private static bool OpensAnsiC(string text, int at, ShellKind shell) =>
+        shell is ShellKind.Bash or ShellKind.Zsh && text[at] == '$' && at + 1 < text.Length && text[at + 1] == '\'';
+
     private static void Flush(List<(string, string)> segments, StringBuilder current, string join)
     {
         string segment = current.ToString().Trim();
@@ -421,14 +558,57 @@ public static partial class CommandPrefix
         // segment of only assignments — either can redirect what the command after it runs. Only in bash and zsh (later that day, the
         // third review): PowerShell runs a command of that name and cmd one named up to the =, so the program after it was judged instead.
         bool assigns = shell is ShellKind.Bash or ShellKind.Zsh;
-        while (first < tokens.Count && assigns && IsAssignment(tokens[first]))
+        while (first < tokens.Count)
         {
-            if (IsDangerousAssignment(tokens[first]))
+            string word = tokens[first];
+            if (assigns && IsAssignment(word))
+            {
+                if (IsDangerousAssignment(word))
+                {
+                    return Unreadable;
+                }
+
+                first++;
+                continue;
+            }
+
+            if (assigns && SubscriptAssignmentPattern().IsMatch(word))
             {
                 return Unreadable;
             }
 
-            first++;
+            // A subshell's or a group's opening paren glued to the name ((rm x) in bash and zsh, (del x) and @del x in cmd) is not the
+            // name's (the fourth shell review); bash's (( … )) is arithmetic and stays its own prefix.
+            if ((assigns || shell == ShellKind.Cmd) && word.Length > 1 && ((word[0] == '@' && shell == ShellKind.Cmd) || (word[0] == '(' && word[1] != '(')))
+            {
+                tokens[first] = word[1..];
+                continue;
+            }
+
+            int skip = LeadingSkip(tokens, first, shell);
+            if (skip == 0)
+            {
+                break;
+            }
+
+            if (skip < 0)
+            {
+                return skip == AloneSkip ? word.ToLowerInvariant() : Unreadable;
+            }
+
+            if (shell == ShellKind.PowerShell)
+            {
+                // exit/return/throw run the pipeline after them: read as a statement, so a value (exit $LASTEXITCODE, throw "x") is the
+                // word's own prefix and a command or a method call (return $x.Delete()) is read.
+                return StatementPrefix(string.Join(' ', tokens.Skip(first + 1))) ?? word.ToLowerInvariant();
+            }
+
+            if (first + skip >= tokens.Count)
+            {
+                return word.ToLowerInvariant();   // a word alone (then, fi's then, a bare !) runs nothing
+            }
+
+            first += skip;
         }
 
         if (first >= tokens.Count)
@@ -457,7 +637,8 @@ public static partial class CommandPrefix
             return Unreadable;
         }
 
-        if (SettingPrograms.Contains(baseName) && SetsDangerous(tokens, first + 1, shell))
+        if ((SettingPrograms.Contains(baseName) && SetsDangerous(tokens, first + 1))
+            || (shell == ShellKind.PowerShell && EnvDrivePrograms.Contains(baseName) && TouchesDangerousEnv(tokens, first + 1)))
         {
             return Unreadable;
         }
@@ -516,6 +697,80 @@ public static partial class CommandPrefix
         return program;
     }
 
+    // LeadingSkip's answers besides a count: the line asks; the word is the prefix (command -v, a word with nothing after it).
+    private const int AskSkip = -1;
+    private const int AloneSkip = -2;
+
+    /// <summary>
+    /// How many words at <paramref name="at"/> lead the command after them rather than being it (the fourth shell review, 2026-10-19):
+    /// 0 for none (the word is the program), <see cref="AskSkip"/> for a word whose command cannot be told, <see cref="AloneSkip"/> for one
+    /// that is its own prefix. bash and zsh: <see cref="LeadingWords"/> (with <c>time -p</c>, <c>exec</c>'s options, <c>command -p</c>), zsh's
+    /// precommand modifiers, a bare <c>(</c>; <see cref="UnreadableWords"/>, a function's definition, zsh's short forms ask. cmd's
+    /// <c>if</c> and <c>for</c> ask, a bare <c>(</c> is skipped. PowerShell's <see cref="PowerShellLeadingWords"/> are one word.
+    /// </summary>
+    private static int LeadingSkip(List<string> tokens, int at, ShellKind shell)
+    {
+        string word = tokens[at];
+        string? next = at + 1 < tokens.Count ? tokens[at + 1] : null;
+        switch (shell)
+        {
+            case ShellKind.PowerShell:
+                return PowerShellLeadingWords.Contains(word) ? 1 : 0;
+            case ShellKind.Cmd:
+                string lower = word.ToLowerInvariant();
+                return lower is "if" or "for" || lower.StartsWith("if/", StringComparison.Ordinal) || lower.StartsWith("for/", StringComparison.Ordinal) ? AskSkip
+                    : word == "(" ? 1
+                    : 0;
+        }
+
+        bool zsh = shell == ShellKind.Zsh;
+        if (word.Contains("()", StringComparison.Ordinal) || (next is not null && next.StartsWith("()", StringComparison.Ordinal))
+            || UnreadableWords.Contains(word) || (zsh && ZshUnreadableWords.Contains(word)))
+        {
+            return AskSkip;
+        }
+
+        if (zsh && ZshShortForms.Contains(word)
+            && ((next is not null && (next[0] is '(' or '{' || next.StartsWith("[[", StringComparison.Ordinal)))
+                || tokens.Skip(at + 1).Any(t => t is "{" or "}")))
+        {
+            return AskSkip;
+        }
+
+        if (word == "(" || (zsh && ZshLeadingWords.Contains(word)))
+        {
+            return 1;
+        }
+
+        if (!LeadingWords.Contains(word))
+        {
+            return 0;
+        }
+
+        int skip = 1;
+        switch (word)
+        {
+            case "time":
+                skip += next == "-p" ? 1 : 0;
+                break;
+            case "command" when next is "-v" or "-V":
+                return AloneSkip;   // a lookup: runs nothing
+            case "command":
+                skip += next == "-p" ? 1 : 0;
+                break;
+            case "exec":
+                // exec [-cl] [-a name] command
+                while (at + skip < tokens.Count && tokens[at + skip] is { Length: > 1 } option && option[0] == '-')
+                {
+                    skip += option == "-a" ? 2 : 1;
+                }
+
+                break;
+        }
+
+        return skip;
+    }
+
     /// <summary>
     /// Every distinct prefix of <paramref name="command"/> as <paramref name="shell"/> runs it: its segments' in the order they come,
     /// then those of the commands its substitutions run (<see cref="Unreadable"/> for one that cannot be read); empty for a blank line.
@@ -544,7 +799,12 @@ public static partial class CommandPrefix
         unreadable |= shell == ShellKind.PowerShell ? HereStringPattern().IsMatch(text) : shell != ShellKind.Cmd && HereDocumentPattern().IsMatch(text);
         foreach (string segment in Segments(outer, shell))
         {
-            if ((depth > 0 && shell == ShellKind.PowerShell ? StatementPrefix(segment) : Of(segment, shell: shell)) is not { Length: > 0 } prefix)
+            // A PowerShell statement is read as one at every depth (the fourth shell review, 2026-10-19: at the top, $null = Remove-Item x was
+            // the prefix $null, so an allowed $null let any right side run); at the top a value keeps Of's prefix ($x), never none.
+            string? read = shell != ShellKind.PowerShell ? Of(segment, shell: shell)
+                : depth > 0 ? StatementPrefix(segment)
+                : StatementPrefix(segment) ?? Of(segment, shell: shell);
+            if (read is not { Length: > 0 } prefix)
             {
                 continue;
             }
@@ -596,8 +856,9 @@ public static partial class CommandPrefix
     }
 
     /// <summary>
-    /// A PowerShell statement inside a substitution or a script block: <c>$x = …</c> is its right side's command; any other one
-    /// opening with a value (<c>$_.Name -like '*.cs'</c>, <c>"x"</c>, <c>42</c>, <c>-not …</c>) runs none (null); the rest are <see cref="Of"/>'s.
+    /// A PowerShell statement: <c>$x = …</c> is its right side's statement (typed, <c>[string]$s = …</c>, and several targets, <c>$a, $b =
+    /// …</c>, too: measured to run it; one that sets a dangerous <c>$env:</c> variable asks); any other one opening with a value
+    /// (<c>$_.Name -like '*.cs'</c>, <c>"x"</c>, <c>42</c>, <c>-not …</c>) runs none (null); the rest are <see cref="Of"/>'s.
     /// </summary>
     private static string? StatementPrefix(string segment)
     {
@@ -607,14 +868,22 @@ public static partial class CommandPrefix
             return null;
         }
 
-        if (statement[0] == '$')
+        var assignment = AssignmentPattern().Match(statement);
+        if (assignment.Success)
         {
-            var assignment = AssignmentPattern().Match(statement);
-            if (assignment.Success)
+            foreach (Match target in EnvTargetPattern().Matches(assignment.Groups["targets"].Value))
             {
-                return Of(statement[assignment.Length..]);
+                if (IsDangerousName(target.Groups["name"].Value))
+                {
+                    return Unreadable;   // $env:PATH = …; git status: the next segment's program is no longer the one allowed
+                }
             }
 
+            return StatementPrefix(statement[assignment.Length..]);
+        }
+
+        if (statement[0] == '$')
+        {
             // A method call on a $ value runs code ($x.Delete(), $items.ForEach({…})): not a plain value, so it reads as Unreadable
             // rather than nothing (2026-10-19, the code review). A property read ($_.Length -gt 1) has no call and stays a value.
             return InvokesMethodPattern().IsMatch(statement) ? Unreadable : null;
@@ -629,9 +898,14 @@ public static partial class CommandPrefix
     [GeneratedRegex("(?:\\.|::)[^\\s.(\u0002]+[(\u0002]", RegexOptions.CultureInvariant)]
     private static partial Regex InvokesMethodPattern();
 
-    // $name = , $a.b += , $x ??= … : an assignment and the space after it; never == or -eq.
-    [GeneratedRegex(@"^\$[\w:.\[\]{}]+\s*(?:[-+*/%]|\?\?)?=(?!=)\s*", RegexOptions.CultureInvariant)]
+    // $name = , $a.b += , $x ??= … , [string]$s = , $a, [int]$b = : an assignment and the space after it; never == or -eq. A target is
+    // casts (one level of nested brackets: [List[string]]) then $ and anything up to a blank, = or , (a subscript's $i, a Hole).
+    [GeneratedRegex(@"^(?<targets>(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*\$[^\s=,]+(?:\s*,\s*(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*\$[^\s=,]+)*)\s*(?:[-+*/%]|\?\?)?=(?!=)\s*", RegexOptions.CultureInvariant)]
     private static partial Regex AssignmentPattern();
+
+    // An assignment target on the env: drive: $env:NAME, ${env:NAME}, any case.
+    [GeneratedRegex(@"\$\{?env:(?<name>[^\s}=,\[\]]+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex EnvTargetPattern();
 
     /// <summary>
     /// <paramref name="text"/> with every substitution <paramref name="shell"/> would run replaced by <see cref="Hole"/>, its body added
@@ -724,7 +998,7 @@ public static partial class CommandPrefix
                 unreadable |= HasQuote(text, i, commentEnd, shell);
             }
 
-            if (powerShell && quote == '\0' && c == '&' && CallsAValue(text, i))
+            if (powerShell && quote == '\0' && (c == '&' || c == '.') && CallsAValue(text, i))
             {
                 unreadable = true;
             }
@@ -825,10 +1099,27 @@ public static partial class CommandPrefix
         char opener = closer == ')' ? '(' : '{';
         int depth = 0;
         char quote = '\0';
+        bool ansi = false;
         int escapedAt = -1;
         for (int i = from; i < text.Length; i++)
         {
             char c = text[i];
+            if (ansi)
+            {
+                // $'…': a backslash escapes, so a \' (or a \)) inside never ends it or the body (the fourth shell review).
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == '\'')
+                {
+                    ansi = false;
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
             if (quote != '\'' && c == escape)
             {
                 escapedAt = ++i;
@@ -841,7 +1132,13 @@ public static partial class CommandPrefix
                 continue;
             }
 
-            if (CommentAt(text, i, shell, escapedAt, out int commentEnd) == Comment.Opens)
+            if (OpensAnsiC(text, i, shell))
+            {
+                ansi = true;
+                quote = '\'';
+                i++;
+            }
+            else if (CommentAt(text, i, shell, escapedAt, out int commentEnd) == Comment.Opens)
             {
                 // A comment's parens and quotes are text (2026-10-19, the second shell review): the scans agree on where a body ends.
                 i = commentEnd - 1;
@@ -908,6 +1205,17 @@ public static partial class CommandPrefix
                 continue;
             }
 
+            if (quote == '\0' && OpensAnsiC(text, i, shell))
+            {
+                // $'…' is text whose \' does not close it (the fourth shell review): passed over whole.
+                for (i += 2; i < text.Length && text[i] != '\''; i++)
+                {
+                    i += text[i] == '\\' ? 1 : 0;
+                }
+
+                continue;
+            }
+
             if (c == '"')
             {
                 quote = quote == '"' ? '\0' : '"';
@@ -930,10 +1238,20 @@ public static partial class CommandPrefix
         return false;
     }
 
-    /// <summary>PowerShell's call operator on a value (<c>&amp; $x</c>, <c>&amp; (…)</c>): the command it runs is whatever the value holds. Not <c>&amp;&amp;</c>.</summary>
+    /// <summary>
+    /// PowerShell's call operator or dot-source operator on a value (<c>&amp; $x</c>, <c>&amp; (…)</c>, <c>. $x</c>, <c>.$x</c>, <c>&amp;
+    /// "$dir\tool"</c>): the command it runs is whatever the value holds. Not <c>&amp;&amp;</c>; a <c>.</c> only where a statement starts
+    /// (the fourth shell review, 2026-10-19: <c>. $x</c> read as the prefix <c>.</c>, so an allowed <c>. .\script.ps1</c> let any value
+    /// run), never a member's or a range's dot.
+    /// </summary>
     private static bool CallsAValue(string text, int at)
     {
-        if ((at > 0 && text[at - 1] == '&') || (at + 1 < text.Length && text[at + 1] == '&'))
+        if (text[at] == '&' && ((at > 0 && text[at - 1] == '&') || (at + 1 < text.Length && text[at + 1] == '&')))
+        {
+            return false;
+        }
+
+        if (text[at] == '.' && (!AtStatementStart(text, at) || (at + 1 < text.Length && text[at + 1] == '.')))
         {
             return false;
         }
@@ -944,7 +1262,52 @@ public static partial class CommandPrefix
             next++;
         }
 
-        return next < text.Length && (text[next] == '$' || text[next] == '(');
+        if (next >= text.Length)
+        {
+            return false;
+        }
+
+        char value = text[next];
+        if (value is '$' or '(' || (value == '@' && next + 1 < text.Length && text[next + 1] == '('))
+        {
+            return true;
+        }
+
+        if (QuoteKind(value, ShellKind.PowerShell) != '"')
+        {
+            return false;
+        }
+
+        // A double-quoted name with a variable in it is a value too; an escaped $ is text. A string left open asks.
+        for (int i = next + 1; i < text.Length; i++)
+        {
+            if (text[i] == '`')
+            {
+                i++;
+            }
+            else if (text[i] == '$')
+            {
+                return true;
+            }
+            else if (QuoteKind(text[i], ShellKind.PowerShell) == '"')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Whether only blanks stand between a statement's start (the text's, a line's, a separator, a <c>(</c>, <c>{</c>, <c>=</c> or <c>,</c>) and <paramref name="at"/>.</summary>
+    private static bool AtStatementStart(string text, int at)
+    {
+        int i = at - 1;
+        while (i >= 0 && (text[i] == ' ' || text[i] == '\t'))
+        {
+            i--;
+        }
+
+        return i < 0 || text[i] is ';' or '|' or '&' or '(' or '{' or '=' or ',' or '\n' or '\r';
     }
 
     // The characters that end a command's name in cmd besides a blank.
@@ -975,6 +1338,10 @@ public static partial class CommandPrefix
         return (folder + file).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// Whether a bash or zsh word is <c>NAME=value</c> or <c>NAME+=value</c> (the append, the fourth shell review: read as the program
+    /// <c>x+=1</c> until then, so one approved <c>X+=1 ls</c> let <c>X+=1 &lt;anything&gt;</c> run).
+    /// </summary>
     private static bool IsAssignment(string token)
     {
         int eq = token.IndexOf('=');
@@ -983,6 +1350,7 @@ public static partial class CommandPrefix
             return false;
         }
 
+        eq -= token[eq - 1] == '+' && eq > 1 ? 1 : 0;
         for (int i = 0; i < eq; i++)
         {
             char c = token[i];
@@ -1002,12 +1370,38 @@ public static partial class CommandPrefix
         var tokens = new List<string>();
         var current = new StringBuilder();
         char quote = '\0';
+        bool ansi = false;
         for (int i = 0; i < segment.Length; i++)
         {
             char c = segment[i];
+            if (ansi)
+            {
+                // $'…' as JoinedSegments reads it: a backslash escapes, so \' never closes it.
+                current.Append(c);
+                if (c == '\\' && i + 1 < segment.Length)
+                {
+                    current.Append(segment[++i]);
+                }
+                else if (c == '\'')
+                {
+                    ansi = false;
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
             if (c == escape && i + 1 < segment.Length && quote != '\'' && (shell != ShellKind.Cmd || quote == '\0'))
             {
                 current.Append(c).Append(segment[++i]);
+                continue;
+            }
+
+            if (quote == '\0' && OpensAnsiC(segment, i, shell))
+            {
+                current.Append(c).Append(segment[++i]);
+                quote = '\'';
+                ansi = true;
                 continue;
             }
 

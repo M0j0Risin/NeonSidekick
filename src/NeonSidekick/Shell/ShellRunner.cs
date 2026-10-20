@@ -180,6 +180,9 @@ public sealed class ShellRunner
             int read;
             while ((read = await reader.ReadAsync(chunk.AsMemory(), CancellationToken.None).ConfigureAwait(false)) > 0)
             {
+                // Whether this read changed the unfinished line: a line past its cap, all of it dropped, is told once, not rebuilt and
+                // compared after every read (the fourth shell review, 2026-10-19: a huge line with no newline made ~16 KB of strings per 4 KB).
+                bool changed = false;
                 for (int i = 0; i < read; i++)
                 {
                     char c = chunk[i];
@@ -192,6 +195,7 @@ public sealed class ShellRunner
                             // to a text-mode stdout as \r\r\n (the csv module does by default), and clearing here on the
                             // second \r lost every such line's text (the code review, 2026-10-19). A real redraw (\r then
                             // text) still clears, as a terminal overwrites the line.
+                            changed |= line.Length > 0;
                             line.Clear();
                         }
                     }
@@ -199,6 +203,7 @@ public sealed class ShellRunner
                     if (c == '\n')
                     {
                         output.Append(line.ToString(), isError);
+                        changed = true;
                         line.Clear();
                     }
                     else if (c == '\r')
@@ -209,10 +214,14 @@ public sealed class ShellRunner
                     {
                         // One past the cap, so Append cuts it with the mark; the rest of the line is dropped as it comes.
                         line.Append(c);
+                        changed = true;
                     }
                 }
 
-                output.SetUnfinished(line.Length > 0 ? line.ToString() : null, isError);
+                if (changed)
+                {
+                    output.SetUnfinished(line.Length > 0 ? line.ToString() : null, isError);
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)

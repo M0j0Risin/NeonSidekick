@@ -161,7 +161,7 @@ public sealed class ShellTests
         Assert.Equal(["echo"], CommandPrefix.All("echo \"a; b && c\""));
         Assert.Equal(["echo"], CommandPrefix.All("echo 'x | y'"));
         Assert.Equal(["ping"], CommandPrefix.All("ping -n 3 127.0.0.1 >nul & exit /b 0").Take(1));
-        Assert.Equal(["ping", "exit"], CommandPrefix.All("ping -n 3 127.0.0.1 >nul & exit /b 0"));
+        Assert.Equal(["ping", "/b"], CommandPrefix.All("ping -n 3 127.0.0.1 >nul & exit /b 0"));   // PowerShell runs exit's argument (measured)
         Assert.Empty(CommandPrefix.All(""));
         Assert.Equal(["a", "b"], CommandPrefix.Segments("a || b"));
         Assert.Equal(["\"C:\\x.exe\"", "y"], CommandPrefix.Segments("& \"C:\\x.exe\" & y"));
@@ -212,7 +212,7 @@ public sealed class ShellTests
     [InlineData("zsh", "git log =(rm -rf src)", new[] { "git log", "rm" })]
     [InlineData("zsh", "cat < =(rm x) && cat <=(rm y)", new[] { "cat", "rm" })]   // after a redirection
     [InlineData("zsh", "x==(rm y) make test", new[] { "make test", "rm" })]   // an assignment's value
-    [InlineData("zsh", "x+==(rm y) make test", new[] { CommandPrefix.Unreadable, "rm" })]   // an append, a subscript: read too (not an assignment
+    [InlineData("zsh", "x+==(rm y) make test", new[] { "make test", "rm" })]   // an append is an assignment too (the fourth review); a subscript (not one
     [InlineData("zsh", "a[1]==(rm y) make test", new[] { CommandPrefix.Unreadable, "rm" })]   // IsAssignment knows, so the pane always asks)
     [InlineData("zsh", "export y==(rm z)", new[] { "export", "rm" })]
     [InlineData("zsh", "echo '=(rm x)' \"=(rm y)\" \\=(rm z)", new[] { "echo" })]   // quoted or escaped: text

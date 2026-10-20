@@ -172,6 +172,10 @@ public sealed class ShellGroups
             start.ArgumentList.Add(argument);
         }
 
+        // The guard lives as long as the app and needs none of its keys (the fourth shell review, 2026-10-19: e6f76814 cut them from
+        // every other child that is not the shell's, this one was missed and held every NEONSIDEKICK_* secret for the session).
+        ChildEnvironment.Withhold(start.Environment);
+
         try
         {
             var guard = Process.Start(start) ?? throw new InvalidOperationException("no process");
