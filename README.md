@@ -212,19 +212,15 @@ On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help`
 * **The [status bar](docs/INTERFACE.md#the-status-bar)** shows the model, the context used and what runs in the background; double-click the model to switch.
 * **The [toolbar](docs/INTERFACE.md#the-toolbar)** has an icon per pane and tool group: click to see what it is, double-click to open it. `/toolbar` hides it.
 
-### Settings worth knowing first
+### What the model may do
 
 | Setting | Where | What it does | Default |
 |---|---|---|---|
-| Working directory (cwd) | `/settings` › Client › Chat | The folder the file and Git tools work in. | the profile's `files` folder |
-| LLM URL, LLM model | `/settings` › Servers › Common | The server and model; `/server` and `/model` set them. | (none) |
-| Theme | `/settings` › Client › Chat | One of sixty color themes, or your own. | `collider` |
-| Memory mode | `/settings` › Client › Chat | Whether the model remembers facts about you. | `read-write` |
-| TTS output, STT input | `/settings` › Voice › TTS, STT | Spoken replies; voice input on a push-to-talk key (F4). | off |
 | File tools | `/tools` › Files › File | The model reads and writes files in the working directory. | off |
 | Image tools | `/tools` › Files › Image | The model looks at and edits pictures. | off |
 | Web tools | `/tools` › Core › Web | The model searches the web and reads pages. | off |
-| Shell command policy | `/tools` › Core › Shell | Whether the model may run commands: `off`, `ask` (you approve any not on the allowed list) or `yolo` (no asking). | `off` |
+| Shell command policy | `/tools` › Core › Shell | `off`, `ask` (you approve any command not on the allowed list) or `yolo` (no asking). | `off` |
+| Memory mode | `/settings` › Client › Chat | Whether the model saves facts about you between conversations. | `read-write` |
 
 A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/ENVIRONMENT.md) can override a few settings for one launch.
 
