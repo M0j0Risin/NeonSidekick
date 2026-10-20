@@ -17,6 +17,9 @@ internal sealed partial class ChatScreen
     /// <summary>The review's busy label.</summary>
     public const string RalphReviewLabel = "reviewing the step";
 
+    /// <summary>The loop whose run has said <see cref="RalphText.ReviewConfirmFallbackNotice"/> already (once a run).</summary>
+    private RalphLoop? _ralphConfirmFallbackSaid;
+
     /// <summary>
     /// An independent look at a step whose checks stood (<c>LLM Ralph loop reviewer</c>, <see cref="RalphReviewers"/>): the model or the first
     /// advisor, under the watch with a spinner; Esc stops the loop (null).
@@ -26,7 +29,19 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var snapshot = loop.Snapshot;
         bool byAdvisor = RalphReviewers.ByAdvisor(snapshot.Reviewer, AdvisorPassOffered());
-        if (byAdvisor && effective.AdvisorConfirm && _neonAdvisor.Advisors.FirstOrDefault() is { } advisor
+        if (byAdvisor && effective.AdvisorConfirm && snapshot.Checkpoint == 0)
+        {
+            // An unattended loop (no checkpoint: it never waits on the user) asks no yes either (2026-10-20, a review: each step's review waited on
+            // one until someone answered): the model reviews, as headless does under the setting, said once a run.
+            if (!ReferenceEquals(_ralphConfirmFallbackSaid, loop))
+            {
+                _ralphConfirmFallbackSaid = loop;
+                _transcript.Notice(RalphText.ReviewConfirmFallbackNotice);
+            }
+
+            byAdvisor = false;
+        }
+        else if (byAdvisor && effective.AdvisorConfirm && _neonAdvisor.Advisors.FirstOrDefault() is { } advisor
             && !await RalphConfirmAsync(AdvisorText.ConfirmQuestion(advisor, RalphText.ReviewConfirmQuestion(step.Text)), cancellationToken).ConfigureAwait(false))
         {
             // Advisor confirm holds for the loop's review too (2026-10-20, a review: it called the advisor directly, past the yes the setting asks
@@ -136,7 +151,19 @@ internal static class RalphReviewers
         }
 
         long before = usage.Advisors.Total;
-        string answer = await advisors.AskAsync(advisor, RalphText.ReviewerSystem + "\n\n" + request, "", null, effective, cancellationToken, thread: false).ConfigureAwait(false);
+        string answer;
+        try
+        {
+            answer = await advisors.AskAsync(advisor, RalphText.ReviewerSystem + "\n\n" + request, "", null, effective, cancellationToken, thread: false).ConfigureAwait(false);
+        }
+        // A cancellation that is not the caller's (the request's own timeout) is a failed review, as the model's is (2026-10-20, a review: it ran out
+        // through the judge, after the step's box was ticked, and the loop failed with the box standing unreviewed).
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: the advisor's review failed: " + Assistant.Explain(ex));
+            return (RalphVerdict.Unclear(Assistant.Explain(ex)), Math.Max(0, usage.Advisors.Total - before));
+        }
+
         long tokens = Math.Max(0, usage.Advisors.Total - before);
         return (answer.StartsWith("Error:", StringComparison.Ordinal) ? RalphVerdict.Unclear(answer) : RalphReview.FromText(answer), tokens);
     }

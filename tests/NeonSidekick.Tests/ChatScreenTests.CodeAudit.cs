@@ -7,6 +7,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using NeonSidekick.WebUi;
 
 namespace NeonSidekick.Tests;
 
@@ -138,6 +139,35 @@ public partial class ChatScreenTests
         Assert.Empty(report.Open);               // present_audit recorded nothing
         Assert.Contains(_chat.Requests[2], m => m.Contents.OfType<FunctionResultContent>().Any(r => r.Result?.ToString() == AuditText.WorkdirMovedResult));
         Assert.False(Directory.Exists(Path.Combine(elsewhere, ".neon")));   // nothing written in the new folder
+        // The pass is in the summary (2026-10-20, a review: it was left out while the report counted it).
+        Assert.Contains(AuditText.Glyph + " Code audit, 1 pass", output);
+    }
+
+    [Fact]
+    public async Task CodeAudit_AMessageFromThePageDuringAPass_StopsItAfterThePass_ThenRuns()
+    {
+        // 2026-10-20, a review: only the PC's queue (and only when it drained) stopped an audit, so a page's message waited out every pass.
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                Assert.Equal(WebOutcome.Ok, Web.Send(new WebSendRequest { Text = "how is it going?" }, null).Outcome);
+            }
+
+            return Task.CompletedTask;
+        };
+        _chat.Enqueue(ReadCall("r1"));
+        _chat.Enqueue(FindingCall("a1"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.EnqueueText("Going well.");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Contains(AuditText.StopNotice(PlanGapStop.UserSpoke, Path.GetFileNameWithoutExtension(AuditPath), 1), output);
+        Assert.Equal("how is it going?", LastUserText(_chat.Requests[3]));
+        Assert.DoesNotContain(PresentAuditTool.ToolName, OfferedNames(_chat.Options[3]));
     }
 
     [Fact]

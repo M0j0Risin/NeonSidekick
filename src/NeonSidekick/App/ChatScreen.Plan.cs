@@ -169,7 +169,9 @@ internal sealed partial class ChatScreen
         string first = (space < 0 ? trimmed : trimmed[..space]).ToLowerInvariant();
         string after = space < 0 ? "" : trimmed[(space + 1)..].Trim();
         // /plan ralph [name] [passes] (later on 2026-10-18): at most a name and a count, in either order; more words are a requirement or detail.
-        if (first == RalphText.RalphWord && RalphArgs(after, out _, out _, out string badCount) is { } ralphForm)
+        // While planning only the bare word is the command (2026-10-20, a review: "/plan ralph tests" typed as detail was refused and lost): its
+        // error says how a plan being planned is run; with words it is detail.
+        if (first == RalphText.RalphWord && (!planning || after.Length == 0) && RalphArgs(after, out _, out _, out string badCount) is { } ralphForm)
         {
             rest = ralphForm ? after : badCount;
             return ralphForm ? PlanCommand.Ralph : PlanCommand.BadRalphPasses;
@@ -248,6 +250,16 @@ internal sealed partial class ChatScreen
     /// <paramref name="passes"/> null for none); a count out of <see cref="AppSettingsData.MinRalphLoopPasses"/>–<see cref="AppSettingsData.MaxRalphLoopPasses"/>
     /// is false with the word in <paramref name="badCount"/>; anything else (more words, two names) is null — not this form. Pure.
     /// </summary>
+    /// <summary>
+    /// The plan <paramref name="rest"/> names when it is one word of digits and a plan has that name (2026-10-20, a review: such a name parsed as a
+    /// pass count and could not be named); else null.
+    /// </summary>
+    internal static string? RalphDigitsPlan(WorkingDirectory files, string rest)
+    {
+        string word = rest.Trim();
+        return word.Length > 0 && word.All(char.IsAsciiDigit) && PlanFiles.Resolve(files, word) is not null ? word : null;
+    }
+
     internal static bool? RalphArgs(string after, out string name, out int? passes, out string badCount)
     {
         name = "";
@@ -467,6 +479,10 @@ internal sealed partial class ChatScreen
             case PlanCommand.Chat:
                 return EnterPlanChat();
 
+            case PlanCommand.BadRalphPasses when !_plan.Active && RalphDigitsPlan(_files, rest) is { } digits:
+                // A plan whose name is all digits (2026-10-20, a review: it read as a pass count, out of range here, and could not be named).
+                return await HandleRalphAsync(digits, null, cancellationToken).ConfigureAwait(false);
+
             case PlanCommand.BadRalphPasses:
                 _transcript.Error(RalphText.BadPassesError(rest));
                 return false;
@@ -474,6 +490,12 @@ internal sealed partial class ChatScreen
             case PlanCommand.Ralph:
             {
                 RalphArgs(rest, out string ralphName, out int? ralphPasses, out _);
+                if (ralphName.Length == 0 && ralphPasses is not null && _executingPlan is not { Ralph: true } && RalphDigitsPlan(_files, rest) is { } named)
+                {
+                    // The same with nothing paused: a lone number that names a plan runs that plan.
+                    (ralphName, ralphPasses) = (named, null);
+                }
+
                 return await HandleRalphAsync(ralphName, ralphPasses, cancellationToken).ConfigureAwait(false);
             }
 

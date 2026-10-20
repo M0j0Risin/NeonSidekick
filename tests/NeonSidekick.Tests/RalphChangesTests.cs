@@ -203,6 +203,119 @@ public sealed class RalphChangesTests : IDisposable
     public void IsTestPath_ReadsGenericNames(string path, bool expected) => Assert.Equal(expected, RalphChanges.IsTestPath(path));
 
     [Fact]
+    public void ATrackedFileThePassDeleted_ShowsAsDeleted_NeverAsNoChange()
+    {
+        // 2026-10-20, a review: the deletion took HEAD's text as the file's "after", so the diff was empty (or a revert of its earlier edits).
+        var (files, git, root) = Repo();
+        Write(root, "dirty.cs", "a\nedited before\n");
+        var before = RalphChanges.Snapshot(files, git);
+
+        File.Delete(Path.Combine(root, "app.cs"));
+        File.Delete(Path.Combine(root, "dirty.cs"));
+        var delta = RalphChanges.Delta(before, RalphChanges.Snapshot(files, git, since: before), files, git, []);
+
+        Assert.Equal(["app.cs", "dirty.cs"], delta.Changed);
+        Assert.Contains("--- a/app.cs\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", delta.Diff);
+        Assert.Contains("--- a/dirty.cs\n+++ /dev/null", delta.Diff);
+        Assert.Contains("-edited before", delta.Diff);
+    }
+
+    [Fact]
+    public void ARenameStagedInTheIndex_NamesItsOldPathToo()
+    {
+        // 2026-10-20, a review: only a rename in the working tree named its source, so git mv's old file was lost from the evidence.
+        var (files, git, root) = Repo();
+        var before = RalphChanges.Snapshot(files, git);
+        using (var repo = new Repository(Path.Combine(_dir, "repo")))
+        {
+            Commands.Move(repo, "app.cs", "moved.cs");
+        }
+
+        var delta = RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, []);
+
+        Assert.Contains("app.cs", delta.Changed);
+        Assert.Contains("moved.cs", delta.Changed);
+    }
+
+    [Fact]
+    public void AnUntrackedFolder_IsWalkedPastItsIgnoredFolders_UnderTheToken()
+    {
+        // 2026-10-20, a review: libgit2's recursive status ran past Esc, and a walk spent its budget in an ignored node_modules before its sources.
+        var (files, git, root) = Repo();
+        GitAccessTests.CommitFile(Path.Combine(_dir, "repo"), ".gitignore", "node_modules/\n", "ignore");
+        Write(root, "web/src/a.cs", "a\n");
+        Write(root, "web/node_modules/dep/x.js", "x\n");
+
+        var changed = git.ChangedPaths("");
+
+        Assert.Equal(GitOutcome.Ok, changed.Outcome);
+        Assert.Contains("web/src/a.cs", changed.Paths.Select(p => p.Replace('\\', '/')));
+        Assert.DoesNotContain(changed.Paths, p => p.Contains("node_modules", StringComparison.Ordinal));
+        Assert.Throws<OperationCanceledException>(() => git.ChangedPaths("", new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public void DiffPaths_ListsTheFilesAlone_UnderTheToken()
+    {
+        // 2026-10-20, a review: an audit's git scope and a pass's commits asked Diff for one line, which still built every file's patch.
+        var (_, git, root) = Repo();
+        string repoDir = Path.Combine(_dir, "repo");
+        string first;
+        using (var repo = new Repository(repoDir))
+        {
+            first = repo.Commits.Last().Sha;
+        }
+
+        Write(root, "app.cs", "changed\n");
+        var range = git.DiffPaths(new GitDiffRequest(GitDiffKind.Range, "", From: first, To: GitAccess.Head));
+        var unstaged = git.DiffPaths(new GitDiffRequest(GitDiffKind.Unstaged, ""));
+
+        Assert.Equal(["dirty.cs", "outside.cs"], range.Files.Select(f => f.Path.Replace('\\', '/')).Order(StringComparer.Ordinal));
+        Assert.False(range.FilesTruncated);
+        Assert.Equal("", range.Patch);
+        Assert.Equal(["app.cs"], unstaged.Files.Select(f => f.Path.Replace('\\', '/')));
+        Assert.Throws<OperationCanceledException>(() => git.DiffPaths(new GitDiffRequest(GitDiffKind.Unstaged, ""), new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public void APlainFolder_NeverStampsItsBuildFolders()
+    {
+        // 2026-10-20, a review: outside a repository node_modules and build output filled the cap, and a source file past it changed unseen.
+        string root = Path.Combine(_dir, "plain");
+        Directory.CreateDirectory(root);
+        Write(root, "src/a.txt", "one");
+        Write(root, "node_modules/dep/x.js", "x");
+        var files = new WorkingDirectory(() => root, _time);
+        var before = RalphChanges.Snapshot(files, null);
+        Assert.Equal(["src/a.txt"], before.Files.Keys);
+
+        Write(root, "node_modules/dep/x.js", "x changed");
+        Write(root, "src/a.txt", "one more");
+        Assert.Equal(["src/a.txt"], RalphChanges.Delta(before, RalphChanges.Snapshot(files, null), files, null, []).Changed);
+    }
+
+    [Fact]
+    public void ACutSnapshot_NeverCountsAFileItCouldNotSee_AndClaimsNoNothingChanged()
+    {
+        // 2026-10-20, a review: a file past one snapshot's cut and in the other's read as changed, and a partial pass counted as progress.
+        string root = Path.Combine(_dir, "plain");
+        Directory.CreateDirectory(root);
+        Write(root, "old.txt", "old");
+        Write(root, "kept.txt", "kept");
+        var files = new WorkingDirectory(() => root, _time);
+        var full = RalphChanges.Snapshot(files, null);
+        var cutBefore = full with { Cut = true, Files = full.Files.Where(f => f.Key != "old.txt").ToDictionary(f => f.Key, f => f.Value) };
+        var cutAfter = full with { Cut = true, Files = full.Files.Where(f => f.Key != "kept.txt").ToDictionary(f => f.Key, f => f.Value) };
+
+        var delta = RalphChanges.Delta(cutBefore, cutAfter, files, null, []);
+
+        Assert.Empty(delta.Changed);
+        Assert.True(delta.Cut);
+        Assert.False(delta.NothingChanged);
+        Assert.Contains(RalphText.FlagEvidenceCut, delta.Flags);
+    }
+
+    [Fact]
     public void APlainFolder_ListsChangesByStamp_WithNoDiff()
     {
         string root = Path.Combine(_dir, "plain");

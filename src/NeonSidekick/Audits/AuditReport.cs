@@ -201,9 +201,10 @@ public sealed partial class AuditReport
 
         if (Areas.Count > 0)
         {
+            // Escaped as every other list is (2026-10-20, a review: read back through UnescapeLine, a leading backslash went at each save).
             foreach (string area in Areas)
             {
-                sb.Append("- ").Append(Flatten(area)).Append('\n');
+                sb.Append("- ").Append(EscapeLine(Flatten(area))).Append('\n');
             }
 
             sb.Append('\n');
@@ -522,7 +523,9 @@ public sealed partial class AuditReport
                 case FindingsHeading:
                     if (line.StartsWith("### ", StringComparison.Ordinal))
                     {
-                        severity = Enum.TryParse<AuditSeverity>(line[4..].Trim(), ignoreCase: true, out var s) ? s : severity ?? AuditSeverity.Medium;
+                        // A name only (2026-10-20, a review: Enum.TryParse took "### 7" as a severity no section writes, and its findings went at the next save).
+                        string word = line[4..].Trim();
+                        severity = !word.Any(char.IsAsciiDigit) && Enum.TryParse<AuditSeverity>(word, ignoreCase: true, out var s) && Enum.IsDefined(s) ? s : severity ?? AuditSeverity.Medium;
                         at++;
                     }
                     else if (line.Trim().Length == 0)

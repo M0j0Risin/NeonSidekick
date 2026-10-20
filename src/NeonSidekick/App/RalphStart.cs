@@ -151,6 +151,47 @@ internal static class RalphStart
         return new RalphBaseline(RalphBaselineOutcome.Go, finalOnly, false);
     }
 
+    /// <summary>
+    /// Every step ticked: the final check (when there is one) run through <paramref name="host"/>, its fix owed or the loop done (2026-10-20, a review:
+    /// the screen and headless each had a copy, already apart — a check that could not run was the user's stop on one and a throw on the other).
+    /// Esc stops; a refusal, a check that could not start or could not run (null) stops as no stop the user caused; a failure the first time is said
+    /// with its tail, its fix pass owed.
+    /// </summary>
+    public static async Task<RalphStop?> FinalCheckAsync(IRalphHost host, RalphLoop loop, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(loop);
+        if (loop.Snapshot.FinalCheck is not { } final)
+        {
+            return RalphStop.Done;
+        }
+
+        var result = await host.CheckAsync(final, RalphJudge.ShellOf(loop.Snapshot), RalphText.CheckLabel(final), cancellationToken).ConfigureAwait(false);
+        if (result is { Kind: RalphCheckKind.Cancelled } || cancellationToken.IsCancellationRequested)
+        {
+            return RalphStop.Stopped;
+        }
+
+        if (result is null or { Kind: RalphCheckKind.Refused or RalphCheckKind.NotRun })
+        {
+            if (result is { Kind: RalphCheckKind.NotRun } notRun)
+            {
+                host.Notice(RalphText.CheckNotRunError(final, notRun.Tail));
+            }
+
+            return RalphStop.CheckRefused;
+        }
+
+        var stop = loop.FinalResult(result.Passed, result.Tail);
+        if (stop is null)
+        {
+            host.Notice(RalphText.FinalFailedOnceNotice(final));
+            host.Tail(result.Tail);
+        }
+
+        return stop;
+    }
+
     /// <summary>What a run is fixed to at its start, from the settings now (<paramref name="checkpoint"/> 0 headless: nobody to answer it).</summary>
     public static RalphSnapshot Snapshot(string path, string root, string body, string? verify, string? final, RalphBaseline baseline, ShellKind shell, AppSettingsData effective, int checkpoint, int? passes, RalphLogDocument? log)
     {

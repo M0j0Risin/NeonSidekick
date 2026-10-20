@@ -344,6 +344,33 @@ public static class PlanDocument
     }
 
     /// <summary>
+    /// <paramref name="text"/> with its <c>verify:</c> and <c>final:</c> lines set to <paramref name="verify"/> and <paramref name="final"/> (null or empty:
+    /// none), the rest of the header and the body untouched, <c>updated</c> too (2026-10-20, a review of the Ralph loop: a pass that rewrote them kept
+    /// them, and the next run took the weakened check as the plan's). A file with no header the app wrote is returned as it is.
+    /// </summary>
+    public static string WithChecks(string text, string? verify, string? final)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (TryParse(normalized) is { } header && Split(normalized, out _) is { } body)
+        {
+            return HeaderText(header with { Verify = string.IsNullOrWhiteSpace(verify) ? null : verify, Final = string.IsNullOrWhiteSpace(final) ? null : final }) + body;
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// The plan's revision and its <c>updated</c> time, one string, from its header (2026-10-20, a review of the Ralph loop): what an in-pass mark is
+    /// tied to, so a start after a crash never puts back lines over a plan revised, approved or run since. Null with no header. Pure.
+    /// </summary>
+    public static string? Stamp(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return TryParse(text) is { } header ? header.Revision.ToString(CultureInfo.InvariantCulture) + " " + header.Updated.ToString(TimeFormat, CultureInfo.InvariantCulture) : null;
+    }
+
+    /// <summary>
     /// The body's fingerprint for the <c>review:</c> line (2026-10-17): the first 8 hex of SHA-256 over <paramref name="body"/>,
     /// LF-normalized and trimmed, with every task line's <c>[x]</c> / <c>[X]</c> read as <c>[ ]</c> (task lines as <see cref="Progress"/>
     /// knows them, outside code fences), so ticking steps while the plan is carried out never reads as an edit. Pure, invariant.

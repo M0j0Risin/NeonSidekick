@@ -552,7 +552,8 @@ public class PlanCleanPassesTests : IDisposable
 
         Assert.Equal(
             [
-                PlanText.Glyph + " Gap review, 5 passes, 9m 20s, 206.0k tokens:",
+                // The advisors' tokens in the total too, as each pass's line counts them (2026-10-20, a review).
+                PlanText.Glyph + " Gap review, 5 passes, 9m 20s, 206.0k tokens (12.0k advisor):",
                 "  pass 1: 4 gaps, 1 minor fix · 1m 52s · 41.2k tokens",
                 "  pass 2: 1 gap · 1m 52s · 41.2k tokens",
                 "  pass 3: clean · 1m 52s · 41.2k tokens",

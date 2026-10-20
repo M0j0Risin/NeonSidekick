@@ -138,7 +138,7 @@ public sealed partial class PresentAuditTool : AIFunction
 
     private string Invoke(AIFunctionArguments arguments)
     {
-        var read = new Dictionary<string, List<string>?>(AuditPath.Comparer);
+        var read = new Dictionary<string, EvidenceFile?>(AuditPath.Comparer);
         if (_session.Running is not { Pending: false } loop || _session.Path is not { } path || _session.Scope is not { } scope)
         {
             return AuditText.NotAuditingResult;
@@ -325,18 +325,18 @@ public sealed partial class PresentAuditTool : AIFunction
                 // No line on either side: the quote may stand anywhere in the file (2026-10-19, the second review: a 0 here held a
                 // line-less finding's new quote to lines 1 to 6).
                 int? at = line ?? finding.Line;
-                if (FileLines(read, finding.File) is not { } lines)
+                if (FileLines(read, finding.File) is not { } source)
                 {
                     return AuditText.NoFileResult(finding.File);
                 }
 
-                if (line is { } moved && moved > lines.Count)
+                if (line is { } moved && moved > source.Lines.Count)
                 {
-                    return AuditText.LineOutOfRangeResult(field + ".line", finding.File, moved, lines.Count);
+                    return AuditText.LineOutOfRangeResult(field + ".line", finding.File, moved, source.Lines.Count);
                 }
 
                 string? quote = evidence ?? finding.Evidence;
-                if (quote is { Length: > 0 } && EvidenceProblem(finding.File, lines, quote, at, wildcard: evidence is null) is { } problem)
+                if (quote is { Length: > 0 } && EvidenceProblem(finding.File, source, quote, at, wildcard: evidence is null) is { } problem)
                 {
                     return problem;
                 }
@@ -421,17 +421,17 @@ public sealed partial class PresentAuditTool : AIFunction
                     return AuditText.ReadFirstResult(file);
                 }
 
-                if (FileLines(read, file) is not { } lines)
+                if (FileLines(read, file) is not { } source)
                 {
                     return AuditText.NoFileResult(file);
                 }
 
-                if (line is { } at && at > Math.Max(1, lines.Count))
+                if (line is { } at && at > Math.Max(1, source.Lines.Count))
                 {
-                    return AuditText.LineOutOfRangeResult(field + ".line", file, at, lines.Count);
+                    return AuditText.LineOutOfRangeResult(field + ".line", file, at, source.Lines.Count);
                 }
 
-                if (evidence.Length > 0 && EvidenceProblem(file, lines, evidence, line, wildcard: false) is { } problem)
+                if (evidence.Length > 0 && EvidenceProblem(file, source, evidence, line, wildcard: false) is { } problem)
                 {
                     return problem;
                 }
@@ -546,7 +546,9 @@ public sealed partial class PresentAuditTool : AIFunction
             after = after with { Notes = [.. before.Notes, $"revised in pass {N(pass)}: " + (said.Count > 0 ? string.Join("; ", said) : "confirmed as it stands")] };
             report.Findings[at] = after;
             revised.Add(after);
-            keys.Add("revise " + revision.Id);
+            // The key names what the finding became (2026-10-20, a review: "revise A3" twice in a row, though the second moved its line, read to
+            // the stall check as the same gaps, and the audit stopped as stalled): two passes match only when they left it the same.
+            keys.Add("revise " + revision.Id + " " + ContentKey(after));
         }
 
         var reopened = new List<AuditFinding>();
@@ -581,7 +583,7 @@ public sealed partial class PresentAuditTool : AIFunction
             };
             report.Findings[at] = again;
             reopened.Add(again);
-            keys.Add("reopen " + settled.Id);
+            keys.Add("reopen " + settled.Id + " " + ContentKey(again));
         }
 
         var made = new List<AuditFinding>();
@@ -684,29 +686,44 @@ public sealed partial class PresentAuditTool : AIFunction
             : flat;
     }
 
+    /// <summary>A cited file as the evidence check reads it: its lines, and their text joined once (2026-10-20, a review: joined again for each quote).</summary>
+    private sealed record EvidenceFile(List<string> Lines, string Text);
+
     /// <summary>
     /// The file's lines (BOM dropped), or null when it cannot be read as text: read once per call into <paramref name="read"/> (2026-10-19, the
     /// second review: twenty findings in one large file read it twenty times).
     /// </summary>
-    private List<string>? FileLines(Dictionary<string, List<string>?> read, string file)
+    private EvidenceFile? FileLines(Dictionary<string, EvidenceFile?> read, string file)
     {
-        if (!read.TryGetValue(file, out var lines))
+        if (!read.TryGetValue(file, out var source))
         {
             var text = _files.ReadText(file, null, null, int.MaxValue);
-            read[file] = lines = text.Outcome == FileOutcome.Ok ? WorkingDirectory.SplitLines(text.Text) : null;
+            if (text.Outcome == FileOutcome.Ok)
+            {
+                var lines = WorkingDirectory.SplitLines(text.Text);
+                source = new EvidenceFile(lines, Joined(lines));
+            }
+
+            read[file] = source;
         }
 
-        return lines;
+        return source;
     }
 
     /// <summary>
     /// Why the quote is refused, or null when it stands within <see cref="EvidenceSlack"/> lines of <paramref name="line"/> (the whole file with
     /// no line): whitespace runs collapsed, line endings and a byte-order mark ignored; under <paramref name="wildcard"/> each
-    /// <see cref="ToolRedaction.Placeholder"/> matches any run of characters on its line. A hit elsewhere is refused naming its line.
+    /// <see cref="ToolRedaction.Placeholder"/> matches any run of characters on its line. A hit elsewhere is refused naming its line; a search that
+    /// ran out of time says so (2026-10-20, a review: it was read as no match, and a quote that stood was refused as not found).
     /// </summary>
-    private static string? EvidenceProblem(string file, List<string> lines, string evidence, int? line, bool wildcard)
+    private static string? EvidenceProblem(string file, EvidenceFile source, string evidence, int? line, bool wildcard)
     {
-        var found = EvidenceLines(lines, evidence, wildcard);
+        var found = EvidenceLinesIn(source.Text, evidence, wildcard, out bool timedOut);
+        if (timedOut)
+        {
+            return AuditText.EvidenceTimedOutResult(file);
+        }
+
         if (found.Count == 0)
         {
             return AuditText.EvidenceNotFoundResult(line is { } at ? file + ":" + N(at) : file);
@@ -720,11 +737,25 @@ public sealed partial class PresentAuditTool : AIFunction
         return AuditText.EvidenceElsewhereResult(file, target, found.OrderBy(f => Math.Abs(f - target)).First());
     }
 
-    /// <summary>The 1-based lines the quote starts on in <paramref name="lines"/> (at most a few), whitespace forgiven. Pure.</summary>
+    /// <summary>The 1-based lines the quote starts on in <paramref name="lines"/> (at most a few), whitespace forgiven; none when the search ran out of time. Pure.</summary>
     public static IReadOnlyList<int> EvidenceLines(IReadOnlyList<string> lines, string evidence, bool wildcard = false)
     {
         ArgumentNullException.ThrowIfNull(lines);
+        return EvidenceLinesIn(Joined(lines), evidence, wildcard, out _);
+    }
+
+    /// <summary>The lines joined as the quote is searched in, a byte-order mark dropped.</summary>
+    private static string Joined(IReadOnlyList<string> lines) => string.Join('\n', lines).TrimStart('﻿');
+
+    /// <summary>
+    /// <see cref="EvidenceLines"/> over the file's joined text, <paramref name="timedOut"/> when the search ran past <see cref="WorkingDirectory.RegexTimeout"/>.
+    /// Each hit's line is counted on from the one before (2026-10-20, a review: counted from the file's start each time, 20 hits on a large file
+    /// scanned it 20 times).
+    /// </summary>
+    private static IReadOnlyList<int> EvidenceLinesIn(string text, string evidence, bool wildcard, out bool timedOut)
+    {
         ArgumentNullException.ThrowIfNull(evidence);
+        timedOut = false;
         string[] tokens = evidence.TrimStart('﻿').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0)
         {
@@ -743,19 +774,16 @@ public sealed partial class PresentAuditTool : AIFunction
             pattern.Append(wildcard ? escaped.Replace(Regex.Escape(ToolRedaction.Placeholder), @"[^\n]*?", StringComparison.Ordinal) : escaped);
         }
 
-        string text = string.Join('\n', lines).TrimStart('﻿');
         var starts = new List<int>();
+        int counted = 0;
+        int newlines = 0;
         try
         {
             var expression = new Regex(pattern.ToString(), RegexOptions.CultureInvariant, WorkingDirectory.RegexTimeout);
             foreach (Match match in expression.Matches(text))
             {
-                int newlines = 0;
-                for (int i = 0; i < match.Index; i++)
-                {
-                    newlines += text[i] == '\n' ? 1 : 0;
-                }
-
+                newlines += text.AsSpan(counted, match.Index - counted).Count('\n');
+                counted = match.Index;
                 starts.Add(newlines + 1);
                 if (starts.Count >= 20)
                 {
@@ -765,10 +793,18 @@ public sealed partial class PresentAuditTool : AIFunction
         }
         catch (RegexMatchTimeoutException)
         {
+            timedOut = true;
             return [];
         }
 
         return starts;
+    }
+
+    /// <summary>A short key of what a finding says (its severity, line, detail, fix and quote): two revisions of it match only when they leave it the same.</summary>
+    private static string ContentKey(AuditFinding finding)
+    {
+        string said = string.Join('\u001f', AuditFinding.Word(finding.Severity), finding.Line?.ToString(CultureInfo.InvariantCulture) ?? "", finding.Detail, finding.Fix ?? "", finding.Evidence ?? "");
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(said)).AsSpan(0, 4));
     }
 
     private static bool EvidenceTooLong(string evidence) =>

@@ -294,11 +294,13 @@ public static class AuditScopes
         foreach (string path in request.Paths.Count > 0 ? request.Paths : [""])
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Paths alone, under the token (2026-10-20, a review: a one-line diff still read and diffed every file, uncancellable, and stopped at
+            // 200 files with nothing said, so a 600-file branch was audited as if its 200 were all): a cut is said.
             var reports = request.Kind switch
             {
-                AuditScopeKind.Diff => new[] { git.Diff(new GitDiffRequest(GitDiffKind.Unstaged, path), 1), git.Diff(new GitDiffRequest(GitDiffKind.Staged, path), 1) },
-                AuditScopeKind.Staged => new[] { git.Diff(new GitDiffRequest(GitDiffKind.Staged, path), 1) },
-                _ => new[] { git.Diff(new GitDiffRequest(GitDiffKind.Range, path, From: from, To: GitAccess.Head), 1) },
+                AuditScopeKind.Diff => new[] { git.DiffPaths(new GitDiffRequest(GitDiffKind.Unstaged, path), cancellationToken), git.DiffPaths(new GitDiffRequest(GitDiffKind.Staged, path), cancellationToken) },
+                AuditScopeKind.Staged => new[] { git.DiffPaths(new GitDiffRequest(GitDiffKind.Staged, path), cancellationToken) },
+                _ => new[] { git.DiffPaths(new GitDiffRequest(GitDiffKind.Range, path, From: from, To: GitAccess.Head), cancellationToken) },
             };
             foreach (var report in reports)
             {
@@ -306,6 +308,8 @@ public static class AuditScopes
                 {
                     return new AuditScopeResult(null, Bare(GitText.Error(report.Outcome, report.Detail)));
                 }
+
+                cut |= report.FilesTruncated;
 
                 foreach (var change in report.Files)
                 {

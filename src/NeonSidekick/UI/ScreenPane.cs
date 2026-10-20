@@ -957,16 +957,11 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The title at the right edge of the upper rule — the one above the input row — in every
-    /// state (2026-09-18, the user's ask), read like <see cref="Strip"/> on every draw and on the
-    /// tick, which repaints the pane when it changes; empty = the bare rule. The screen puts the
-    /// session's name there: <see cref="RuleWithTitle"/> is the row.
-    /// </summary>
-    /// <summary>
     /// The color the rules around the draft line are drawn in (2026-10-18, the user's ask: <c>/mark &lt;color&gt;</c>, a window told apart at a
     /// glance; <see cref="RuleMarks"/>): the rule glyphs of the upper and lower rule take it, the session's name, ⤡, 🎞️ and the lower rule's
     /// title keep their own styles; null is <see cref="Theme.PaneRule"/>, the theme's (so a <c>/theme</c> change keeps a mark). Set from any
-    /// thread; a change redraws at the next tick, as a new rule title does.
+    /// thread; a change redraws at the next tick, as a new rule title does. A frame reads it once, as its upper rule is drawn (2026-10-20, a review:
+    /// each rule read it, so a mark set between them left the upper one in the old color with nothing to redraw it).
     /// </summary>
     public Style? RuleMark
     {
@@ -974,6 +969,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         set => _ruleMark = value;
     }
 
+    /// <summary>
+    /// The title at the right edge of the upper rule — the one above the input row — in every
+    /// state (2026-09-18, the user's ask), read like <see cref="Strip"/> on every draw and on the
+    /// tick, which repaints the pane when it changes; empty = the bare rule. The screen puts the
+    /// session's name there: <see cref="RuleWithTitle"/> is the row.
+    /// </summary>
     public Func<string> RuleTitle
     {
         get => _ruleTitle;
@@ -6172,7 +6173,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     private void WriteLowerRule(int width)
     {
         _drawnLowerRuleTitle = _lowerRuleTitle();
-        _drawnRuleMark = _ruleMark;
+        // The mark the upper rule took this frame (WriteUpperRule): a change since redraws both at the tick.
         var rule = _drawnRuleMark is Style marked ? marked : Theme.PaneRule;
         (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
         if (FitRuleTitle(_drawnLowerRuleTitle, width) is var (fitted, left))

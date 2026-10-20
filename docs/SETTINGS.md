@@ -156,7 +156,7 @@ Settings every server reads, whatever its kind.
 | LLM plan gap clean passes | Passes in a row with no gaps that end the review (1–5). A lower pass limit lowers it for that review; `/plan gaps confirm` needs at least 2. | 2 |
 | LLM plan gap ask user | Whether a gap pass may use `ask_user`, `camera_capture` and `screen_capture`. Off, it gets none whatever their own settings say, and a decision only you can make goes into `## Risks` as an open question. | on |
 | LLM Ralph loop reviewer | Who reviews a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request), `advisor` (the first advisor, its thread untouched) or `any` (an advisor if offered, else the model). A fail unticks the step. | `any` |
-| LLM Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you. | 0 (off) |
+| LLM Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you; with no pane or Web UI, a run has none. | 0 (off) |
 | LLM Ralph loop passes | The most passes a loop runs (0–200; 0 is three a step, plus one for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
 | LLM Ralph loop passes per step | The most passes one step may take before the loop stops (1–20). | 4 |
 | LLM Ralph loop check timeout | How long a check command may run before it's stopped and the step unticked (30–3600 seconds). | 600 |

@@ -58,9 +58,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>A restored row's mark (2026-10-18): a name it no longer knows is dropped with a Debug line; none takes the mark off.</summary>
-    private void RestoreMark(string historyJson)
+    private void RestoreMark(string? stored)
     {
-        string? stored = SessionHistory.MarkOf(historyJson);
         string? name = RuleMarks.TryParse(stored, out string known) ? known : null;
         if (stored is not null && name is null)
         {

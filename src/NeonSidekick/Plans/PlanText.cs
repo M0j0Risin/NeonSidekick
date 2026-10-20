@@ -450,6 +450,23 @@ public static class PlanText
     public static IReadOnlyList<string> ReviewSummaryLines(IReadOnlyList<PlanPassRecord> history, PlanGapStop reason, int cleanPasses = 1)
     {
         ArgumentNullException.ThrowIfNull(history);
+        return SummaryLines(history, $"{Glyph} Gap review", p =>
+        {
+            string outcome = p.Gaps > 0 ? Gaps(p.Gaps) : p.Clean ? "clean" : "nothing presented";
+            string marks = string.Join(", ", new[] { p.Focus >= 0 ? ConfirmFocusLabels[p.Focus % ConfirmFocusLabels.Count] : null, p.Advisor ? "advisor" : null }.OfType<string>());
+            return outcome + MinorPart(p.Minor) + (marks.Length > 0 ? $" ({marks})" : "");
+        }, EndingWord(reason, cleanPasses));
+    }
+
+    /// <summary>
+    /// A review's summary, the gap review's and the code audit's one shape (2026-10-20, a review: the audit's was a copy with the nouns changed):
+    /// <paramref name="heading"/> with the passes and their totals (the advisors' tokens too, as each pass's line counts them), one line a pass
+    /// (<paramref name="pass"/> says what it found), the last ending with <paramref name="ending"/>, how it stopped. Pure.
+    /// </summary>
+    internal static IReadOnlyList<string> SummaryLines(IReadOnlyList<PlanPassRecord> history, string heading, Func<PlanPassRecord, string> pass, string ending)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(pass);
         if (history.Count == 0)
         {
             return [];
@@ -458,15 +475,12 @@ public static class PlanText
         var timed = history.Where(p => p.Elapsed is not null).ToList();
         string totals = timed.Count == 0 ? ""
             : ", " + NeonSidekick.UI.ThinkingFoldText.Duration(timed.Aggregate(TimeSpan.Zero, (sum, p) => sum + p.Elapsed!.Value))
-              + TokensPart(timed.Sum(p => p.Tokens ?? 0), 0);
-        var lines = new List<string>(history.Count + 1) { $"{Glyph} Gap review, {Passes(history.Count)}{totals}:" };
+              + TokensPart(timed.Sum(p => p.Tokens ?? 0), timed.Sum(p => p.AdvisorTokens ?? 0));
+        var lines = new List<string>(history.Count + 1) { $"{heading}, {Passes(history.Count)}{totals}:" };
         for (int i = 0; i < history.Count; i++)
         {
             var p = history[i];
-            string outcome = p.Gaps > 0 ? Gaps(p.Gaps) : p.Clean ? "clean" : "nothing presented";
-            string marks = string.Join(", ", new[] { p.Focus >= 0 ? ConfirmFocusLabels[p.Focus % ConfirmFocusLabels.Count] : null, p.Advisor ? "advisor" : null }.OfType<string>());
-            string line = $"  pass {N(p.Pass)}: {outcome}{MinorPart(p.Minor)}" + (marks.Length > 0 ? $" ({marks})" : "")
-                + (i == history.Count - 1 ? ", " + EndingWord(reason, cleanPasses) : "");
+            string line = $"  pass {N(p.Pass)}: {pass(p)}" + (i == history.Count - 1 ? ", " + ending : "");
             if (p.Elapsed is { } elapsed)
             {
                 line += " · " + NeonSidekick.UI.ThinkingFoldText.Duration(elapsed) + TokensPart(p.Tokens ?? 0, p.AdvisorTokens ?? 0, " · ");
@@ -739,6 +753,12 @@ public static class PlanText
 
     /// <summary>A reference picture as a stored session keeps it (2026-10-18): the file beside the plan, not its bytes. Pinned.</summary>
     public static string ReferenceNotKept(string path) => $"(reference picture {path}, kept beside the plan)";
+
+    /// <summary>
+    /// A saved reference picture's line the app adds to the plan's references section (2026-10-20, a review: written inline in
+    /// <see cref="PlanReferences"/>). Pinned.
+    /// </summary>
+    public static string ReferenceLine(string name, string path) => $"- {name} (`{path}`): a picture from the conversation";
 
     /// <summary>The dim line under a run's message for the reference pictures it carries (2026-10-18): they are not drawn again. Pinned.</summary>
     public static string ReferencesAttachedNotice(int count) =>

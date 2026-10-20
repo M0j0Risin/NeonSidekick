@@ -926,6 +926,7 @@ public sealed partial class SidekickApp
         planState.RalphContext = new HeadlessRalphContext(session, git, neonAdvisor, interpreters, _ralphVerifier ?? new Plans.RalphVerifier(runner, interpreters.Locate), allowList);
         // The code audit (2026-10-18): no seam, so each present_audit call prints as any tool's; its passes ride the gap review's slot.
         var audit = new Audits.AuditSession(files);
+        planState.Audit = audit;
         var presentAudit = new Llm.Tools.PresentAuditTool(audit, files, _time);
         // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
         string? gapTurn = null;
@@ -1477,7 +1478,7 @@ public sealed partial class SidekickApp
                 if (command == SlashCommand.CodeAudit)
                 {
                     // /code-audit headless (2026-10-18): the screen's words; a pass (or fix's plan mode) comes back as the turn's text.
-                    if (await HeadlessAuditAsync(audit, plan, files, git, args, () => HeadlessPlanMeter(session), cancellationToken).ConfigureAwait(false) is not { } audited)
+                    if (await HeadlessAuditAsync(audit, plan, planState, files, git, args, () => HeadlessPlanMeter(session), cancellationToken).ConfigureAwait(false) is not { } audited)
                     {
                         continue;
                     }
@@ -1550,7 +1551,7 @@ public sealed partial class SidekickApp
 
                 // The code audit after the pass (2026-10-18): its notices, then the next pass as the next line, or the audit over.
                 var auditLines = new List<string>();
-                gapTurn ??= HeadlessAuditAfterTurn(audit, files, turn.Trace.ToolNames, turn.Cancelled, auditLines, HeadlessPlanMeter(session));
+                gapTurn ??= HeadlessAuditAfterTurn(audit, files, turn.Trace.ToolNames, turn.Cancelled, turn.Failed, auditLines, HeadlessPlanMeter(session));
                 foreach (string auditLine in auditLines)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + auditLine.Trim()).ConfigureAwait(false);
@@ -2030,6 +2031,9 @@ public sealed partial class SidekickApp
 
         /// <summary>The Ralph loop running (2026-10-18), and what its passes are judged with.</summary>
         public HeadlessRalph? Ralph { get; set; }
+
+        /// <summary>The run's code audit (2026-10-20, a review: a Ralph loop's start reads it, refused while one runs, as on the screen).</summary>
+        public Audits.AuditSession? Audit { get; set; }
 
         public HeadlessRalphContext? RalphContext { get; set; }
 

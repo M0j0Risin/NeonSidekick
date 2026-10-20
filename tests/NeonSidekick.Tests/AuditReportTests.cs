@@ -36,6 +36,21 @@ public sealed class AuditReportTests
     }
 
     [Fact]
+    public void ACoverageArea_KeepsALeadingBackslash_AndANumericSeverityHeadingLosesNoFinding()
+    {
+        // 2026-10-20, a review: an area was written unescaped and read back escaped, losing a backslash each save; "### 7" parsed as a severity no
+        // section writes, and its findings went at the next save.
+        var report = Sample();
+        report.Areas.Add(@"\\fileserver\share tools");
+        var back = AuditReport.Parse(AuditReport.Parse(report.Render()).Render());
+        Assert.Contains(@"\\fileserver\share tools", back.Areas);
+
+        string numbered = Sample().Render().Replace("### High", "### 7", StringComparison.Ordinal);
+        var parsed = AuditReport.Parse(numbered);
+        Assert.Equal(Sample().Findings.Count, AuditReport.Parse(parsed.Render()).Findings.Count);
+    }
+
+    [Fact]
     public void Render_ThenParse_RoundTrips()
     {
         var report = Sample();

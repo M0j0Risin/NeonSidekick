@@ -357,7 +357,20 @@ public sealed class GitAccess
     });
 
     /// <summary>The changes <paramref name="request"/> names, narrowed to its path, the patch cut at <paramref name="maxLines"/>.</summary>
-    public GitDiffReport Diff(GitDiffRequest request, int maxLines)
+    public GitDiffReport Diff(GitDiffRequest request, int maxLines) => DiffCore(request, maxLines, pathsOnly: false, MaxChangedFiles, CancellationToken.None);
+
+    /// <summary>The most files <see cref="DiffPaths"/> lists before it says it was cut.</summary>
+    public const int MaxDiffPaths = 5000;
+
+    /// <summary>
+    /// The files <paramref name="request"/>'s changes touch, with no patch and no counts (2026-10-20, a review: a code audit's git scope and a
+    /// Ralph pass's committed files asked <see cref="Diff"/> for one line, which still read and diffed every file, uncancellable, and stopped at
+    /// <see cref="MaxChangedFiles"/>): at most <see cref="MaxDiffPaths"/>, <see cref="GitDiffReport.FilesTruncated"/> past it;
+    /// <paramref name="cancellationToken"/> throws between entries.
+    /// </summary>
+    public GitDiffReport DiffPaths(GitDiffRequest request, CancellationToken cancellationToken = default) => DiffCore(request, 1, pathsOnly: true, MaxDiffPaths, cancellationToken);
+
+    private GitDiffReport DiffCore(GitDiffRequest request, int maxLines, bool pathsOnly, int cap, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         return Run(request.Path, (o, d) => GitDiffReport.Refused(request.Kind, o, d), (repo, location, full) =>
@@ -373,11 +386,11 @@ public sealed class GitAccess
             switch (request.Kind)
             {
                 case GitDiffKind.Unstaged:
-                    (files, filesTruncated) = WorkdirDiff(repo, location, prefix, staged: false);
+                    (files, filesTruncated) = WorkdirDiff(repo, location, prefix, staged: false, pathsOnly, cap, cancellationToken);
                     label = "";
                     break;
                 case GitDiffKind.Staged:
-                    (files, filesTruncated) = WorkdirDiff(repo, location, prefix, staged: true);
+                    (files, filesTruncated) = WorkdirDiff(repo, location, prefix, staged: true, pathsOnly, cap, cancellationToken);
                     label = "";
                     break;
                 case GitDiffKind.Commit:
@@ -388,7 +401,7 @@ public sealed class GitAccess
                         return GitDiffReport.Refused(request.Kind, found, detail);
                     }
 
-                    (files, filesTruncated) = Compare(repo, location, commit!.Parents.FirstOrDefault()?.Tree, commit.Tree, prefix);
+                    (files, filesTruncated) = Compare(repo, location, commit!.Parents.FirstOrDefault()?.Tree, commit.Tree, prefix, pathsOnly, cap, cancellationToken);
                     label = Short(commit) + " (" + commit.MessageShort + ")";
                     break;
                 }
@@ -407,7 +420,7 @@ public sealed class GitAccess
                         return GitDiffReport.Refused(request.Kind, foundTo, detail);
                     }
 
-                    (files, filesTruncated) = Compare(repo, location, from!.Tree, to!.Tree, prefix);
+                    (files, filesTruncated) = Compare(repo, location, from!.Tree, to!.Tree, prefix, pathsOnly, cap, cancellationToken);
                     label = Short(from) + " to " + Short(to);
                     break;
                 }
@@ -582,28 +595,48 @@ public sealed class GitAccess
                     continue;
                 }
 
-                // An untracked folder: walked here, budgeted and cancellable; a nested repository's (its own .git) is not this one's.
-                string folder = Path.Combine(location.WorkTree, entry.FilePath.TrimEnd('/').Replace('/', Path.DirectorySeparatorChar));
-                if (Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git")))
-                {
-                    continue;
-                }
-
-                var walked = _files.ListFiles(_files.Relative(folder), room, name => string.Equals(name, ".git", StringComparison.OrdinalIgnoreCase), cancellationToken);
-                truncated |= walked.Cut;
-                foreach (string file in walked.Files)
-                {
-                    string repoPath = Path.GetRelativePath(location.WorkTree, Path.Combine(_files.Root, file)).Replace('\\', '/');
-                    if (!repo.Ignore.IsPathIgnored(repoPath))
-                    {
-                        untracked.Add(file);
-                    }
-                }
+                // An untracked folder: walked here, budgeted and cancellable.
+                untracked.AddRange(WalkUntracked(repo, location, entry.FilePath, room, cancellationToken, out bool cut));
+                truncated |= cut;
             }
         }
 
         return new GitTrackedReport(GitOutcome.Ok, "", tracked, untracked, location.RootRelative, truncated);
     });
+
+    /// <summary>
+    /// The files of the untracked folder <paramref name="folderRepoPath"/> (status's entry, a trailing <c>/</c>), sandbox-relative, at most
+    /// <paramref name="room"/>: walked by <see cref="WorkingDirectory.ListFiles"/> (its budget, the token, never into a reparse point), a nested
+    /// repository's folder left out as status leaves it, and an ignored folder never entered (2026-10-20, a review: its files spent the walk's
+    /// budget before each was dropped as ignored, so a new folder's ignored <c>node_modules</c> left its sources unlisted); an ignored file dropped.
+    /// </summary>
+    private List<string> WalkUntracked(Repository repo, RepoLocation location, string folderRepoPath, int room, CancellationToken cancellationToken, out bool cut)
+    {
+        cut = false;
+        string folder = Path.Combine(location.WorkTree, folderRepoPath.TrimEnd('/').Replace('/', Path.DirectorySeparatorChar));
+        if (IsNestedRepository(folder))
+        {
+            return [];
+        }
+
+        string RepoPathOf(string fullPath) => Path.GetRelativePath(location.WorkTree, fullPath).Replace('\\', '/');
+        var walked = _files.ListFiles(_files.Relative(folder), room, name => string.Equals(name, ".git", StringComparison.OrdinalIgnoreCase), cancellationToken,
+            skipFolder: full => IsNestedRepository(full) || repo.Ignore.IsPathIgnored(RepoPathOf(full) + "/"));
+        cut = walked.Cut;
+        var files = new List<string>();
+        foreach (string file in walked.Files)
+        {
+            if (!repo.Ignore.IsPathIgnored(RepoPathOf(Path.Combine(_files.Root, file))))
+            {
+                files.Add(file);
+            }
+        }
+
+        return files;
+    }
+
+    /// <summary>Whether a folder is a repository of its own (its own <c>.git</c>, a folder or a file): status leaves it out.</summary>
+    private static bool IsNestedRepository(string folder) => Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git"));
 
     /// <summary>The most files <see cref="TrackedFiles"/> lists, tracked and untracked together, before it says it was cut.</summary>
     public const int MaxTrackedFiles = WorkingDirectory.MaxListEntries;
@@ -615,8 +648,12 @@ public sealed class GitAccess
     /// Every path changed in the working tree under <paramref name="relative"/> (2026-10-18, a Ralph pass's evidence): modified, added, deleted, renamed
     /// and untracked files, each in the sandbox's spelling, an untracked folder walked to its files (<see cref="Status"/> lists it as one entry);
     /// ignored files and submodules out, at most <see cref="MaxChangedPaths"/>.
+    /// <para>2026-10-20, a review: libgit2's recursive status was one native call no token reached, run before and after every pass, so a large
+    /// untracked, unignored folder held the loop for minutes past Esc; untracked folders are walked as <see cref="TrackedFiles"/> walks them now
+    /// (<see cref="WalkUntracked"/>), under <paramref name="cancellationToken"/>. A rename staged in the index names its old path too (only a
+    /// rename in the working tree did, so <c>git mv</c>'s source was lost).</para>
     /// </summary>
-    public GitChangedReport ChangedPaths(string relative) => Run(relative, GitChangedReport.Refused, (repo, location, full) =>
+    public GitChangedReport ChangedPaths(string relative, CancellationToken cancellationToken = default) => Run(relative, GitChangedReport.Refused, (repo, location, full) =>
     {
         if (RepoPath(location, full) is not { } prefix)
         {
@@ -625,23 +662,36 @@ public sealed class GitAccess
 
         var paths = new List<string>();
         bool truncated = false;
-        foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: true))
+        foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: false))
         {
-            if (entry.FilePath.EndsWith('/'))
-            {
-                continue;
-            }
-
-            if (paths.Count >= MaxChangedPaths)
+            cancellationToken.ThrowIfCancellationRequested();
+            int room = MaxChangedPaths - paths.Count;
+            if (room <= 0)
             {
                 truncated = true;
                 break;
             }
 
-            paths.Add(SandboxPath(location, entry.FilePath));
-            if (entry.IndexToWorkDirRenameDetails is { } moved)
+            if (entry.FilePath.EndsWith('/'))
             {
-                paths.Add(SandboxPath(location, moved.OldFilePath));
+                if (entry.State.HasFlag(FileStatus.NewInWorkdir))
+                {
+                    paths.AddRange(WalkUntracked(repo, location, entry.FilePath, room, cancellationToken, out bool cut));
+                    truncated |= cut;
+                }
+
+                continue;
+            }
+
+            paths.Add(SandboxPath(location, entry.FilePath));
+            if (entry.HeadToIndexRenameDetails is { OldFilePath: { } staged })
+            {
+                paths.Add(SandboxPath(location, staged));
+            }
+
+            if (entry.IndexToWorkDirRenameDetails is { OldFilePath: { } moved })
+            {
+                paths.Add(SandboxPath(location, moved));
             }
         }
 
@@ -1515,14 +1565,15 @@ public sealed class GitAccess
     }
 
     /// <summary>The index against the working tree (<paramref name="staged"/> false: what <c>git diff</c> shows, untracked files out) or HEAD against the index.</summary>
-    private (List<FileDiff> Files, bool Truncated) WorkdirDiff(Repository repo, RepoLocation location, string prefix, bool staged)
+    private (List<FileDiff> Files, bool Truncated) WorkdirDiff(Repository repo, RepoLocation location, string prefix, bool staged, bool pathsOnly, int cap, CancellationToken cancellationToken)
     {
         var files = new List<FileDiff>();
         bool truncated = false;
         var head = repo.Head.Tip?.Tree;
         foreach (var entry in StatusEntries(repo, location, prefix, recurseUntracked: false))
         {
-            if (files.Count >= MaxChangedFiles)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (files.Count >= cap)
             {
                 truncated = true;
                 break;
@@ -1536,6 +1587,12 @@ public sealed class GitAccess
                 }
 
                 string? oldPath = code == 'R' ? entry.HeadToIndexRenameDetails?.OldFilePath : null;
+                if (pathsOnly)
+                {
+                    files.Add(PathChange(location, code, entry.FilePath, oldPath));
+                    continue;
+                }
+
                 var before = code == 'A' ? UnifiedDiff.Text.Empty : BlobLines(head?[oldPath ?? entry.FilePath]?.Target as Blob);
                 var after = code == 'D' ? UnifiedDiff.Text.Empty : BlobLines(IndexBlob(repo, entry.FilePath));
                 files.Add(FileChange(location, code, entry.FilePath, oldPath, before, after));
@@ -1548,6 +1605,12 @@ public sealed class GitAccess
                 }
 
                 string? oldPath = code == 'R' ? entry.IndexToWorkDirRenameDetails?.OldFilePath : null;
+                if (pathsOnly)
+                {
+                    files.Add(PathChange(location, code, entry.FilePath, oldPath));
+                    continue;
+                }
+
                 var before = BlobLines(IndexBlob(repo, oldPath ?? entry.FilePath));
                 var after = code == 'D' ? UnifiedDiff.Text.Empty : FileLines(Path.Combine(location.WorkTree, entry.FilePath.Replace('/', Path.DirectorySeparatorChar)));
                 files.Add(FileChange(location, code, entry.FilePath, oldPath, before, after));
@@ -1556,6 +1619,10 @@ public sealed class GitAccess
 
         return (files, truncated);
     }
+
+    /// <summary>One file's change with no patch and no counts (<see cref="DiffPaths"/>).</summary>
+    private FileDiff PathChange(RepoLocation location, char code, string repoPath, string? oldRepoPath) =>
+        new(new GitChange(code, SandboxPath(location, repoPath), oldRepoPath is null ? null : SandboxPath(location, oldRepoPath), 0, 0, false), []);
 
     private static Blob? IndexBlob(Repository repo, string repoPath)
     {
@@ -1568,10 +1635,10 @@ public sealed class GitAccess
     /// new), under <paramref name="prefix"/> alone when given, capped at <see cref="MaxChangedFiles"/> — a walk of the
     /// two trees by entry id, never libgit2's diff. Renames show as a delete and an add.
     /// </summary>
-    private (List<FileDiff> Files, bool Truncated) Compare(Repository repo, RepoLocation location, Tree? from, Tree to, string prefix)
+    private (List<FileDiff> Files, bool Truncated) Compare(Repository repo, RepoLocation location, Tree? from, Tree to, string prefix, bool pathsOnly = false, int cap = MaxChangedFiles, CancellationToken cancellationToken = default)
     {
         var files = new List<FileDiff>();
-        var state = new WalkState(files);
+        var state = new WalkState(files, pathsOnly, cap, cancellationToken);
         if (prefix.Length == 0)
         {
             Walk(location, from, to, "", state);
@@ -1597,9 +1664,12 @@ public sealed class GitAccess
         return (files, state.Truncated);
     }
 
-    private sealed class WalkState(List<FileDiff> files)
+    private sealed class WalkState(List<FileDiff> files, bool pathsOnly, int cap, CancellationToken cancellationToken)
     {
         public List<FileDiff> Files { get; } = files;
+        public bool PathsOnly { get; } = pathsOnly;
+        public int Cap { get; } = cap;
+        public CancellationToken Token { get; } = cancellationToken;
         public int Visited { get; set; }
         public bool Truncated { get; set; }
     }
@@ -1634,7 +1704,8 @@ public sealed class GitAccess
                 return;
             }
 
-            if (++state.Visited > MaxTreeEntries || state.Files.Count >= MaxChangedFiles)
+            state.Token.ThrowIfCancellationRequested();
+            if (++state.Visited > MaxTreeEntries || state.Files.Count >= state.Cap)
             {
                 state.Truncated = true;
                 return;
@@ -1680,6 +1751,12 @@ public sealed class GitAccess
         }
 
         char code = b is null ? 'A' : a is null ? 'D' : 'M';
+        if (state.PathsOnly)
+        {
+            state.Files.Add(PathChange(location, code, repoPath, null));
+            return;
+        }
+
         state.Files.Add(FileChange(location, code, repoPath, null, b is null ? UnifiedDiff.Text.Empty : BlobLines(b), a is null ? UnifiedDiff.Text.Empty : BlobLines(a)));
     }
 

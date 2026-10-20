@@ -31,16 +31,8 @@ public sealed record RalphCheckResult(RalphCheckKind Kind, int? ExitCode, string
 {
     public bool Passed => Kind == RalphCheckKind.Passed;
 
-    /// <summary>What the log says of it: <c>passed</c>, <c>failed (exit 1)</c>, <c>timed out</c>, <c>stopped</c>, <c>not run</c>.</summary>
-    public string Word => Kind switch
-    {
-        RalphCheckKind.Passed => "passed",
-        RalphCheckKind.Failed => "failed (exit " + (ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + ")",
-        RalphCheckKind.TimedOut => "timed out",
-        RalphCheckKind.Cancelled => "stopped",
-        RalphCheckKind.Refused => "refused",
-        _ => "not run",
-    };
+    /// <summary>What the log says of it (<see cref="RalphText.CheckWord"/>).</summary>
+    public string Word => RalphText.CheckWord(Kind, ExitCode);
 }
 
 /// <summary>Runs a Ralph loop's check command (2026-10-18): the screen's and headless's seam, <see cref="RalphVerifier"/> for real, a fake in the tests.</summary>

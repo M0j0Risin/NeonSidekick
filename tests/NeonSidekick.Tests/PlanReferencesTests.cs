@@ -110,6 +110,17 @@ public sealed class PlanReferencesTests : IDisposable
     }
 
     [Fact]
+    public void TwoSavedPicturesOfTheSameBytes_KeepTheFirstsName_NeverThrow()
+    {
+        // 2026-10-20, a review: a picture written again while the first copy was locked (or copied by hand) made Names throw on every planning turn.
+        PlanReferences.Sync(_files, PlanPath, [new PlanPicture(Red, "image/png", null)]);
+        File.Copy(Path.Combine(_dir, ".neon", "plans", "guide", "ref-1.png"), Path.Combine(_dir, ".neon", "plans", "guide", "ref-2.png"));
+
+        Assert.Equal(["ref-1", "ref-3"], PlanReferences.Names(_files, PlanPath, [new PlanPicture(Red, "image/png", null), new PlanPicture(Other, "image/png", null)]));
+        Assert.Equal("- ref-1 (`p/ref-1.png`): a picture from the conversation", PlanText.ReferenceLine("ref-1", "p/ref-1.png"));
+    }
+
+    [Fact]
     public void ReconcileSection_KeepsTheModelsLines_AndAppendsWhatItLeftOut()
     {
         var saved = new[] { new PlanReference("ref-1", ".neon/plans/guide/ref-1.png"), new PlanReference("ref-2", ".neon/plans/guide/ref-2.png") };

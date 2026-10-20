@@ -347,9 +347,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
 * **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*LLM Ralph loop reviewer*).
   * The diff the reviewer reads is redacted, and a secrets file (`.env`, a key) is named, never shown.
-  * Only the app ticks boxes. A box, a step's words or its `Done when:` line a pass changed are put back, as is the `## Steps` heading, and a step it added is taken out; a stopped pass decides nothing.
+  * Only the app ticks boxes. A box, a step's words or its `Done when:` line a pass changed are put back, as are the `## Steps` heading and the header's `verify:` and `final:` lines, and a step it added is taken out; a stopped pass decides nothing.
   * The plan as the pass left it is kept in `as-left.md` beside the log, so an edit of your own made during a pass isn't lost. Type a message to pause the loop before you edit the plan.
   * A run that ends mid-pass (a crash, a profile switch) has the plan put back the same way before the next pass. If that pass deleted unfinished steps, the loop won't start until you put them back.
+  * If the plan was revised, approved or run since, nothing is put back, and the start says so: check that step's box.
   * The command is approved once with the loop, on one line as the pane shows it; nothing runs under *Shell command policy* `off`, and a resume with it on runs the checks again.
   * A resume runs only the commands its run was approved with, never a `verify:` line written into the plan since.
   * The shell police judge it again before every run, so a script a pass rewrote can't slip past them; a refusal, or the policy turned `off`, stops the loop.
@@ -359,8 +360,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **The baseline:** the checks run once on the project as it is. If `verify:` fails you may start anyway; the steps then go unchecked and verify runs once at the end.
   * If only `final:` fails (say, a test of the work still to do), starting anyway keeps the steps checked.
 * **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan: while the loop runs, the other can't run, open, revise or approve it. Mind that folder before you commit `.neon/`.
+  * A lock another PC wrote (a shared or synced folder) is never taken over: the error names that PC and the file to delete if its run is gone.
 * **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
-  * Only then may a pass ask you anything (`ask_user`, the camera, the screen).
+  * Only then may a pass ask you anything (`ask_user`, the camera, the screen). With neither the pane nor the Web UI to ask on, a run has no checkpoint.
   * Each answer goes in the log, so a Redo's note reaches the next pass after a pause or a restart too.
 * **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
 
@@ -378,7 +380,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 `/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply.
 
-* **Scope:** the working directory, or a path (quote one with a blank); `diff` the working changes (unstaged, staged, untracked), `staged` the staged ones, `branch [<base>]` the commits since its base (`main`, else `master`). Past 5,000 files the list is cut.
+* **Scope:** the working directory, or a path (quote one with a blank); `diff` the working changes (unstaged, staged, untracked), `staged` the staged ones, `branch [<base>]` the commits since its base (`main`, else `master`). Past 5,000 files the list is cut, and the start says so.
 * **Left out:** git's ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` folders unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.
 * **Focus:** security, correctness, performance, maintainability and tests, any mix (`all`; none means *LLM code audit focus*). A pass after a clean one takes one in turn (with one chosen, an angle: edge cases, error paths, concurrency, outside input).
 * **The brief:** the first other word, or all after `--`, starts the brief (`/code-audit src -- tests are flaky`); a path-like word that names nothing is refused.
@@ -394,7 +396,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Its rules:** a finding needs its file read this session (a window is enough, a diff is not). You may edit the report during an audit: a ticked box settles a finding; reporting it again reopens it. `<name>.coverage.txt` keeps the files read, so `resume` carries on.
 * **Clean passes:** an audit ends after *LLM code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first.
   * *LLM code audit pass tool calls* is guidance, never a cut-off. The pane says how much of the scope was read.
-* **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a typed message or Esc, `/new`, `/clear`, a profile switch or a working directory change (its report stays in its own folder). Each stop says why; `/code-audit resume <name>` runs more passes.
+* **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a message typed at the PC or sent from the Web UI, on Esc, `/new`, `/clear`, a profile switch or a working directory change (its report stays in its own folder). Each stop says why; `/code-audit resume <name>` runs more passes.
 * **The pane:** the open findings, then its choices ([keys](INTERFACE.md#pane-keys)); the Web UI page gets the same ones.
   * **Fix via plan:** plan mode on the open findings, the report marked `fixing`.
   * **More passes…:** the reviewer page when advisors are offered.

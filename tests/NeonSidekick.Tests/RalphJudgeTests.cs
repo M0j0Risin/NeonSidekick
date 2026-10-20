@@ -20,6 +20,54 @@ public sealed class RalphJudgeTests
     private static PlanStep Step(string text, string words) => Lines(text).Single(s => s.Text == words);
 
     [Fact]
+    public void AWeakenedVerifyOrFinalLine_IsPutBack_TheBodyLeftAsItIs()
+    {
+        // 2026-10-20, a review: a pass could rewrite the header's checks, and a later run by name took them as the plan's.
+        var header = new PlanHeader(PlanStatus.Approved, 2, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "Guide", Verify: "dotnet build", Final: "dotnet test");
+        string before = PlanDocument.Render(header, "Guide", Before);
+        string after = PlanDocument.Render(header with { Verify = "exit 0", Final = null }, "Guide", Before);
+
+        var restore = RalphJudge.Restore(after, Lines(before), Step(before, "One"), ownBoxBack: false, checks: new PlanChecks("dotnet build", "dotnet test"));
+
+        Assert.True(restore.ChecksPutBack);
+        Assert.Equal(before, restore.Text);
+        Assert.Contains(RalphText.ChecksPutBackNotice, RalphJudge.RestoreNotices(restore, null));
+        Assert.False(RalphJudge.Restore(before, Lines(before), Step(before, "One"), ownBoxBack: false, checks: new PlanChecks("dotnet build", "dotnet test")).ChecksPutBack);
+    }
+
+    [Fact]
+    public void AnInPassMark_OverAPlanChangedSince_PutsNothingBack()
+    {
+        // 2026-10-20, a review: a mark left by a crash put days-old lines back over a plan revised, approved or run since.
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
+            const string plan = ".neon/plans/guide.md";
+            var header = new PlanHeader(PlanStatus.Approved, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "Guide");
+            string text = PlanDocument.Render(header, "Guide", Before);
+            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, text, overwrite: true).Outcome);
+            Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
+            Assert.Null(RalphLog.MarkInPass(files, plan, Step(text, "One"), Lines(text), headed: true, planStamp: PlanDocument.Stamp(text)));
+            // Revised since (a new revision and time), its steps the user's now.
+            string revised = PlanDocument.Render(header with { Revision = 2, Updated = DateTimeOffset.UnixEpoch.AddDays(2) }, "Guide",
+                Before.Replace("- [ ] Two\n", "- [x] Two, done by a plain run\n- [ ] Two and a half\n", StringComparison.Ordinal));
+            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, revised, overwrite: true).Outcome);
+
+            var recovered = RalphJudge.RecoverInPass(files, plan)!;
+
+            Assert.False(recovered.Changed);
+            Assert.Equal([RalphText.InPassStaleNotice("One")], recovered.Notices);
+            Assert.Equal(revised, File.ReadAllText(Path.Combine(dir, ".neon", "plans", "guide.md")));
+            Assert.False(RalphLog.InPass(RalphLog.Read(files, plan)!.Head));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public void RewordedLines_GetTheirWordsBack_AnotherBoxIsPutBack_AndTheOwnTickStays()
     {
         string after = Before.Replace("- [ ] One", "- [x] One (done in one.md)", StringComparison.Ordinal)

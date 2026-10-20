@@ -146,7 +146,14 @@ public static class PlanReferences
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(pictures);
         var saved = planPath is null ? [] : Saved(files, planPath);
-        var hashes = saved.ToDictionary(r => HashOf(files, r.Path) ?? r.Path, r => r.Name, StringComparer.Ordinal);
+        // Two saved files of the same bytes (one written again while the first was locked, or copied by hand) keep the first's name (2026-10-20,
+        // a review: ToDictionary threw on the second, and every planning turn after it).
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var reference in saved)
+        {
+            hashes.TryAdd(HashOf(files, reference.Path) ?? reference.Path, reference.Name);
+        }
+
         int next = saved.Count == 0 ? 1 : saved.Max(r => Number(r.Name)) + 1;
         var names = new List<string>();
         foreach (var picture in pictures)
@@ -225,7 +232,7 @@ public static class PlanReferences
         int end = start < 0 ? lines.Count : NextSection(lines, start);
         string section = start < 0 ? "" : string.Join('\n', lines.Skip(start + 1).Take(end - start - 1));
         var named = new HashSet<string>(s_refName.Matches(section).Select(m => Prefix + m.Groups[1].Value), StringComparer.OrdinalIgnoreCase);
-        var missing = saved.Where(r => !named.Contains(r.Name) && !section.Contains(r.Path, StringComparison.Ordinal)).Select(r => $"- {r.Name} (`{r.Path}`): a picture from the conversation").ToList();
+        var missing = saved.Where(r => !named.Contains(r.Name) && !section.Contains(r.Path, StringComparison.Ordinal)).Select(r => PlanText.ReferenceLine(r.Name, r.Path)).ToList();
         if (missing.Count == 0)
         {
             return body;

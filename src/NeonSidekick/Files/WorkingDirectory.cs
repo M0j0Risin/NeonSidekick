@@ -124,8 +124,12 @@ public sealed record FileTreeResult(FileOutcome Outcome, string Relative, string
 
 public sealed record FindResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Paths, bool Truncated, string Detail = "");
 
-/// <summary><see cref="WorkingDirectory.ListFiles"/>'s answer (2026-10-18): the files, sandbox-relative, and whether the walk was cut by its budget.</summary>
-public sealed record FileListResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Files, bool Cut, string Detail = "");
+/// <summary>
+/// <see cref="WorkingDirectory.ListFiles"/>'s answer (2026-10-18): the files, sandbox-relative, and whether the walk was cut by its budget.
+/// <paramref name="Stamps"/> (2026-10-20, a review: the Ralph loop's snapshot stat'ed every listed file again) holds each file's size and time, in
+/// the order of <paramref name="Files"/>, when the walk was asked for them; else null.
+/// </summary>
+public sealed record FileListResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Files, bool Cut, string Detail = "", IReadOnlyList<(long Length, DateTime Written)>? Stamps = null);
 
 /// <summary>
 /// The @-mention completions for a typed query (<see cref="WorkingDirectory.Complete"/>): relative
@@ -1602,9 +1606,11 @@ public sealed class WorkingDirectory
     /// by — never into a reparse point (so a link out of the sandbox is never followed), the hidden rule off Windows — with a folder
     /// <paramref name="skip"/> says to (its name) left unentered; at most <paramref name="limit"/> files. The walk stops at
     /// <see cref="MaxListEntries"/> entries or <see cref="ListFilesBudget"/> and says it was cut; <paramref name="cancellationToken"/> throws.
-    /// A file named as the path is listed alone.
+    /// A file named as the path is listed alone. <paramref name="skipFolder"/> (2026-10-20, a review: a repository's untracked folder was walked
+    /// into its ignored <c>node_modules</c>, whose files spent the budget before they were dropped) leaves a folder unentered by its full path too;
+    /// <paramref name="withStamps"/> keeps each file's size and time (<see cref="FileListResult.Stamps"/>).
     /// </summary>
-    public FileListResult ListFiles(string relative, int limit, Func<string, bool>? skip, CancellationToken cancellationToken)
+    public FileListResult ListFiles(string relative, int limit, Func<string, bool>? skip, CancellationToken cancellationToken, Func<string, bool>? skipFolder = null, bool withStamps = false)
     {
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
@@ -1617,7 +1623,8 @@ public sealed class WorkingDirectory
             EnsureExists();
             if (File.Exists(full))
             {
-                return new FileListResult(FileOutcome.Ok, Relative(full), [Relative(full)], false);
+                var info = new FileInfo(full);
+                return new FileListResult(FileOutcome.Ok, Relative(full), [Relative(full)], false, Stamps: withStamps ? [(info.Length, info.LastWriteTimeUtc)] : null);
             }
 
             if (!Directory.Exists(full))
@@ -1627,6 +1634,7 @@ public sealed class WorkingDirectory
 
             long started = _time.GetTimestamp();
             var files = new List<string>();
+            var stamps = withStamps ? new List<(long Length, DateTime Written)>() : null;
             int entries = 0;
             bool cut = false;
             var walk = new FileSystemEnumerable<WalkEntry>(
@@ -1636,7 +1644,8 @@ public sealed class WorkingDirectory
             {
                 ShouldIncludePredicate = (ref FileSystemEntry entry) => !IsHiddenOffWindows(entry.Attributes, entry.FileName),
                 ShouldRecursePredicate = (ref FileSystemEntry entry) =>
-                    !IsHiddenOffWindows(entry.Attributes, entry.FileName) && !(skip?.Invoke(entry.FileName.ToString()) ?? false),
+                    !IsHiddenOffWindows(entry.Attributes, entry.FileName) && !(skip?.Invoke(entry.FileName.ToString()) ?? false)
+                    && !(skipFolder?.Invoke(entry.ToFullPath()) ?? false),
             };
             foreach (var entry in walk)
             {
@@ -1659,9 +1668,10 @@ public sealed class WorkingDirectory
                 }
 
                 files.Add(Relative(entry.FullPath));
+                stamps?.Add((entry.Length, entry.LastWriteTimeUtc));
             }
 
-            return new FileListResult(FileOutcome.Ok, Relative(full, isDirectory: true), files, cut);
+            return new FileListResult(FileOutcome.Ok, Relative(full, isDirectory: true), files, cut, Stamps: stamps);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {

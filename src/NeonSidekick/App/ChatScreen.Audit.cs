@@ -138,7 +138,9 @@ internal sealed partial class ChatScreen
 
         int limit = parsed.Passes ?? effective.CodeAuditPasses;
         var loop = _audit.Start(path, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses);
-        _transcript.Notice(AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, focus, loop.Limit, path));
+        MarkAuditBaseline();
+        images = AuditPictures(images);
+        _transcript.Notice(AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, focus, loop.Limit, path, scope.Cut));
         DiagnosticLog.Info(AppCategory, $"code audit: started {path}, {scope.Files.Count} files, focus {AuditFocus.Label(focus)}, reviewer {PlanText.ReviewerWord(reviewer)}");
         return await SendPassAsync(BeginAuditPass(loop), images, cancellationToken).ConfigureAwait(false);
     }
@@ -230,6 +232,15 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // The report as it stands after the listing (2026-10-20, a review: the copy read before it was saved back, so a finding ticked or edited in
+        // an editor while the spinner ran was lost).
+        if (AuditFiles.Read(_files, path) is not { } fresh)
+        {
+            _transcript.Error(AuditText.ReportUnreadable(path));
+            return false;
+        }
+
+        report = fresh;
         var who = reviewer ?? PlanText.ParseReviewer(report.Header.Reviewer) ?? PlanReviewer.Model;
         report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(who) };
         if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
@@ -239,9 +250,16 @@ internal sealed partial class ChatScreen
         }
 
         var loop = _audit.Start(path, scope, report.Header.Focus, report.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses);
+        MarkAuditBaseline();
+        images = AuditPictures(images);
         if (said)
         {
             _transcript.Notice(AuditText.ResumedNotice(System.IO.Path.GetFileNameWithoutExtension(path), newest));
+        }
+
+        if (scope.Cut)
+        {
+            _transcript.Notice(AuditText.ScopeCutNotice);
         }
 
         DiagnosticLog.Info(AppCategory, $"code audit: resumed {path}, {scope.Files.Count} files, reviewer {PlanText.ReviewerWord(who)}");
@@ -333,11 +351,14 @@ internal sealed partial class ChatScreen
     /// The next pass begun: the loop's pass over the report's findings and retractions (the stall body), its meter, a short limit's notice once,
     /// and the pass's message with its own reviewer (the model when no advisor is offered) and focus.
     /// </summary>
-    private string BeginAuditPass(PlanGapLoop loop)
+    private string BeginAuditPass(PlanGapLoop loop) => BeginAuditPass(loop, AuditFiles.Read(_audit.Files, _audit.Path!)?.StallBody());
+
+    /// <summary><see cref="BeginAuditPass(PlanGapLoop)"/> over the stall body the caller read just now (2026-10-20, a review: read again for each pass).</summary>
+    private string BeginAuditPass(PlanGapLoop loop, string? body)
     {
         bool offered = AdvisorPassOffered();
         string path = _audit.Path!;
-        loop.BeginPass(AuditFiles.Read(_audit.Files, path)?.StallBody(), PlanMeter(), offered);
+        loop.BeginPass(body, PlanMeter(), offered);
         if (loop.Pass == 1 && loop.CleanLowered)
         {
             _transcript.Notice(AuditText.CleanLoweredNotice(loop.Limit, loop.CleanAsked));
@@ -348,12 +369,54 @@ internal sealed partial class ChatScreen
         return AuditText.PassMessage(_audit.Scope!.Label, path, loop.Pass, loop.Limit, reviewer, focus, loop.CleanStreak);
     }
 
-    /// <summary>A pass's message sent as a turn (a gap pass's too), echoed since no line was typed.</summary>
+    /// <summary>
+    /// A pass's message sent as a turn (a gap pass's too), echoed since no line was typed. An audit's pass that never reached a turn (2026-10-20, a
+    /// review: <see cref="RunMessageAsync"/> returns before one when there is no assistant or the model cannot see a picture, and the audit stayed
+    /// mid-pass, every later turn narrowed to its tools and judged as its pass) is recorded and the audit stopped.
+    /// </summary>
     private async Task<bool> SendPassAsync(string message, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
         _transcript.User(message);
         _passMessage = message;
-        return await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
+        var loop = _audit.Running;
+        int pass = loop?.Pass ?? 0;
+        long judged = _auditJudged;
+        bool exit = await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
+        if (loop is not null && ReferenceEquals(_audit.Running, loop) && loop.Pass == pass && _auditJudged == judged)
+        {
+            _transcript.Notice(AuditText.PassNotSentNotice(_audit.Name));
+            loop.Next(false, false, null, PlanMeter());
+            EndAudit(loop, PlanGapStop.Stopped);
+        }
+
+        return exit;
+    }
+
+    /// <summary>How many passes <see cref="TakeAuditPass"/> has judged: a pass's send tells by it whether its turn ran.</summary>
+    private long _auditJudged;
+
+    /// <summary>The lines queued, held and sent from the page as the audit began (<see cref="MarkAuditBaseline"/>).</summary>
+    private (long Typed, long Pended, long Sent) _auditBaseline;
+
+    /// <summary>
+    /// The lines so far as an audit begins or resumes (2026-10-20, a review, the Ralph loop's rule: the queue's count stopped it after pass 1 on a
+    /// line waiting before it began, while under Queue mode manual a typed line, and a page's message, never stopped it).
+    /// </summary>
+    private void MarkAuditBaseline() => _auditBaseline = (_queue.Added, PendedCount, _webUi.LinesAdded);
+
+    /// <summary>A message typed on the PC, held, or sent from the page since the audit began: it stops the audit after its pass.</summary>
+    private bool AuditUserSpoke() => _queue.Added != _auditBaseline.Typed || PendedCount != _auditBaseline.Pended || _webUi.LinesAdded != _auditBaseline.Sent;
+
+    /// <summary>The line's pictures, less those the model cannot see (said): a picture it cannot see would stop the pass before it began.</summary>
+    private IReadOnlyList<ImageAttachment> AuditPictures(IReadOnlyList<ImageAttachment> images)
+    {
+        if (ModelSeesPictures() || images.All(i => i.IsDocument))
+        {
+            return images;
+        }
+
+        _transcript.Notice(AuditText.PicturesUnseenNotice);
+        return images.Where(i => i.IsDocument).ToList();
     }
 
     /// <summary>
@@ -374,35 +437,40 @@ internal sealed partial class ChatScreen
             return null;
         }
 
+        _auditJudged++;
         if (_audit.Moved)
         {
-            // The working directory changed under it (2026-10-19): the next pass would read another folder's code. Ended in its own folder's report.
+            // The working directory changed under it (2026-10-19): the next pass would read another folder's code. Ended in its own folder's report,
+            // the pass recorded first (2026-10-20, a review: the summary left it out while the report counted it).
             _transcript.Notice(AuditText.WorkdirMovedNotice(_audit.Name, _audit.Root!));
             DiagnosticLog.Info(AppCategory, $"code audit: stopped {path}: the working directory moved from {_audit.Root}");
+            loop.Next(false, false, null, PlanMeter());
             return EndAudit(loop, PlanGapStop.Stopped, moved: true);
         }
 
         bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
-        if (AuditFiles.MergeCoverage(_audit.Files, path, _audit.ViewedNow()) is { } problem)
+        // The coverage worked out once for the merge, the notice and the end (2026-10-20, a review: three times, each a read of the sidecar and a
+        // look at every scope file).
+        var coverage = _audit.Coverage();
+        if (AuditFiles.MergeCoverage(_audit.Files, path, coverage.Viewed) is { } problem)
         {
             DiagnosticLog.Info(AppCategory, "code audit: " + problem);
         }
 
         string? body = AuditFiles.Read(_audit.Files, path)?.StallBody();
-        var stop = loop.Next(onItsOwn, QueueDrains && _queue.Count > 0, body, PlanMeter());
+        var stop = loop.Next(onItsOwn, AuditUserSpoke(), body, PlanMeter());
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(NeonAdvisorTool.ToolName, StringComparer.Ordinal);
         DiagnosticLog.Info(AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, cost));
         if (stop is not { } reason)
         {
-            var coverage = _audit.Coverage();
             _transcript.Notice(loop.PassGaps.Count > 0
                 ? AuditText.PassDoneNotice(loop.Pass, loop.Limit, loop.PassGaps.Count, loop.PassMinor.Count, coverage.Read, coverage.Scope)
                 : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses));
-            return new AuditAfterTurn(BeginAuditPass(loop), null);
+            return new AuditAfterTurn(BeginAuditPass(loop, body), null);
         }
 
-        return EndAudit(loop, reason);
+        return EndAudit(loop, reason, coverage: coverage);
     }
 
     /// <summary>
@@ -410,7 +478,7 @@ internal sealed partial class ChatScreen
     /// (converged, limit, stalled, unconfirmed) the report back on the done pane at the idle line. The loop is forgotten. <paramref name="moved"/>
     /// (the working directory changed, its own notice said): no stop line and no pane, the report written in the audit's own folder.
     /// </summary>
-    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false)
+    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false, AuditCoverage? coverage = null)
     {
         string path = _audit.Path!;
         string name = _audit.Name;
@@ -420,7 +488,7 @@ internal sealed partial class ChatScreen
             _transcript.Notice(line);
         }
 
-        var coverage = _audit.Coverage();
+        coverage ??= _audit.Coverage();
         int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
         if (AuditFiles.Read(files, path) is { } report)
         {

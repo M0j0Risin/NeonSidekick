@@ -15,9 +15,10 @@ namespace NeonSidekick.Plans;
 /// Set for the final fix too, which has no step of its own; null with no pass under way (or a log the previous build wrote).
 /// <paramref name="InPassHeaded"/> (2026-10-19, the fifth review) is whether the plan read its steps under <c>## Steps</c> then, and each in-pass line
 /// keeps its <c>Done when:</c> (a <c>done when:</c> item under it), so the start puts back a renamed heading and a weakened check as the judge does;
-/// null in a log the previous build wrote (which kept neither).
+/// null in a log the previous build wrote (which kept neither). <paramref name="InPassPlan"/> (2026-10-20, a review) is the plan's
+/// <see cref="PlanDocument.Stamp"/> as the pass began: a start whose plan was revised, approved or run since puts nothing back.
 /// </summary>
-public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null, IReadOnlyList<PlanStep>? InPassLines = null, bool? InPassHeaded = null);
+public sealed record RalphLogHead(string Plan, string? Verify, string? Final, bool FinalOnly, string Shell, DateTimeOffset Started, string? Stopped = null, int InPassLine = -1, string? InPassStep = null, IReadOnlyList<PlanStep>? InPassLines = null, bool? InPassHeaded = null, string? InPassPlan = null);
 
 /// <summary>
 /// One pass as the log keeps it (2026-10-18): its number, its step, the outcome and the model's summary, what it said it checked, the app's check
@@ -98,9 +99,10 @@ public static class RalphLog
 
     /// <summary>
     /// The log read whole (its size bounded by <see cref="WorkingDirectory.MaxReadFileBytes"/>, never a window); null with
-    /// <paramref name="problem"/> the error sentence when a file is there that cannot be read, so a write never replaces it.
+    /// <paramref name="problem"/> the error sentence when a file is there that cannot be read, so a write never replaces it. Null with no problem
+    /// when there is no log yet.
     /// </summary>
-    private static RalphLogDocument? ReadFor(WorkingDirectory files, string planPath, out string? problem)
+    internal static RalphLogDocument? ReadFor(WorkingDirectory files, string planPath, out string? problem)
     {
         ArgumentNullException.ThrowIfNull(files);
         string path = PathFor(planPath);
@@ -147,14 +149,20 @@ public static class RalphLog
     /// </summary>
     public static string? Append(WorkingDirectory files, string planPath, RalphLogHead head, RalphLogEntry entry, IReadOnlyList<string> learned)
     {
+        var document = ReadFor(files, planPath, out string? problem);
+        return problem ?? Append(files, planPath, document, head, entry, learned);
+    }
+
+    /// <summary>
+    /// <see cref="Append"/> onto <paramref name="document"/>, the log as the caller just read it with no problem (<see cref="ReadFor"/>; null for none
+    /// yet), so a pass's entry costs one read of the log (2026-10-20, a review: the judge read it for the head's start time, then Append read and
+    /// parsed it again).
+    /// </summary>
+    internal static string? Append(WorkingDirectory files, string planPath, RalphLogDocument? document, RalphLogHead head, RalphLogEntry entry, IReadOnlyList<string> learned)
+    {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(learned);
-        var document = ReadFor(files, planPath, out string? problem) ?? RalphLogDocument.Empty;
-        if (problem is not null)
-        {
-            return problem;
-        }
-
+        document ??= RalphLogDocument.Empty;
         var entries = document.Entries.ToList();
         entries.Add(Capped(entry));
         return Write(files, planPath, new RalphLogDocument(head, MergeLearned(document.Learned, learned), entries));
@@ -205,12 +213,13 @@ public static class RalphLog
     /// <summary>
     /// The head's mark of a pass under way set: its step (null for the final fix) and the plan's task lines as it began (<see cref="PlanSteps.Flat"/>
     /// of the file whole) with their <c>Done when:</c>, and whether they were read under <c>## Steps</c> (<paramref name="headed"/>), the rest as it was;
-    /// null when written (or no head to mark).
+    /// null when written (or no head to mark). <paramref name="read"/> is the log as the caller just read it (<see cref="Read"/>), else it is read here.
     /// </summary>
-    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step, IReadOnlyList<PlanStep> lines, bool headed)
+    public static string? MarkInPass(WorkingDirectory files, string planPath, PlanStep? step, IReadOnlyList<PlanStep> lines, bool headed, RalphLogDocument? read = null, string? planStamp = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        var document = ReadFor(files, planPath, out string? problem);
+        string? problem = null;
+        var document = read ?? ReadFor(files, planPath, out problem);
         if (problem is not null || document?.Head is not { } head)
         {
             return problem;
@@ -222,6 +231,7 @@ public static class RalphLog
             InPassStep = step is null ? null : Flat(step.Text),
             InPassLines = lines.Select(l => new PlanStep(0, l.Line, 0, Flat(l.Text), l.Ticked, l.DoneWhen is { } d ? Flat(d) : null, [], [], [])).ToList(),
             InPassHeaded = headed,
+            InPassPlan = planStamp,
         };
         return Write(files, planPath, document with { Head = marked });
     }
@@ -235,7 +245,7 @@ public static class RalphLog
             return problem;
         }
 
-        var cleared = head with { InPassLine = -1, InPassStep = null, InPassLines = null, InPassHeaded = null };
+        var cleared = head with { InPassLine = -1, InPassStep = null, InPassLines = null, InPassHeaded = null, InPassPlan = null };
         return cleared == head ? null : Write(files, planPath, document with { Head = cleared });
     }
 
@@ -266,9 +276,16 @@ public static class RalphLog
     /// The checkpoint's answer written into pass <paramref name="pass"/>'s entry (2026-10-19, the fourth review: <see cref="RalphLogEntry.Checkpoint"/>
     /// was never set, so a Redo's note lived only in memory); null when written (or no such entry), else the error sentence.
     /// </summary>
-    public static string? SetCheckpoint(WorkingDirectory files, string planPath, int pass, string checkpoint)
+    public static string? SetCheckpoint(WorkingDirectory files, string planPath, int pass, string checkpoint) => SetCheckpoint(files, planPath, pass, checkpoint, out _);
+
+    /// <summary>
+    /// <see cref="SetCheckpoint(WorkingDirectory, string, int, string)"/>, <paramref name="written"/> saying the entry now holds the answer (2026-10-20,
+    /// a review: a Redo's note went to the next pass both from the loop and from this entry, through <see cref="RecentNotes"/>, in two wordings).
+    /// </summary>
+    public static string? SetCheckpoint(WorkingDirectory files, string planPath, int pass, string checkpoint, out bool written)
     {
         ArgumentNullException.ThrowIfNull(checkpoint);
+        written = false;
         var document = ReadFor(files, planPath, out string? problem);
         if (problem is not null || document is null)
         {
@@ -283,7 +300,9 @@ public static class RalphLog
         }
 
         entries[at] = entries[at] with { Checkpoint = Flat(Clean(checkpoint)) };
-        return Write(files, planPath, document with { Entries = entries });
+        string? failed = Write(files, planPath, document with { Entries = entries });
+        written = failed is null;
+        return failed;
     }
 
     /// <summary>The copy of the plan as a pass left it, kept whenever the judge put lines back (2026-10-19, the fourth review).</summary>
@@ -328,27 +347,35 @@ public static class RalphLog
 
     /// <summary>
     /// The notes a pass on <paramref name="stepText"/> gets from the log: this step's earlier entries first (newest first), then the latest of the
-    /// rest, at most <see cref="NotesEntries"/> and <see cref="NotesChars"/>; null with none.
+    /// rest, at most <see cref="NotesEntries"/> and <see cref="NotesChars"/>; null with none. Each entry's summary is cut to <see cref="NoteChars"/>, and
+    /// a first entry still past the room is cut to it (2026-10-20, a review: a summary over the room ended the list before its first line, so a long
+    /// one dropped every note, the checkpoint's Redo with them). <paramref name="stepIndex"/> (2026-10-20, a review: two steps of the same words read
+    /// each other's notes) narrows "this step's" entries to the step of that number when the plan has twins of its words.
     /// </summary>
-    public static string? RecentNotes(RalphLogDocument? document, string stepText)
+    public static string? RecentNotes(RalphLogDocument? document, string stepText, int? stepIndex = null)
     {
         if (document is not { Entries.Count: > 0 } d)
         {
             return null;
         }
 
-        var mine = d.Entries.Where(e => string.Equals(e.StepText, stepText, StringComparison.Ordinal)).Reverse();
+        var mine = d.Entries.Where(e => IsStep(e, stepText, stepIndex)).Reverse();
         var chosen = mine.Concat(d.Entries.Reverse().Take(1)).Distinct().Take(NotesEntries).ToList();
         var text = new StringBuilder();
         foreach (var entry in chosen)
         {
-            string line = $"- pass {N(entry.Pass)} (step {N(entry.Step)}): {entry.Outcome}; {Flat(entry.Summary)}" + (entry.Check is { Length: > 0 } c && c != "none" ? $"; check {c}" : "") +
+            string line = $"- pass {N(entry.Pass)} (step {N(entry.Step)}): {entry.Outcome}; {Shorten(Flat(entry.Summary), NoteChars)}" + (entry.Check is { Length: > 0 } c && c != "none" ? $"; check {c}" : "") +
                 (entry.Review is { Length: > 0 } r && r != "off" ? $"; review {Flat(r)}" : "") +
                 (entry.Notes is { Length: > 0 } notes ? $"; notes for the next pass: {Shorten(Flat(notes), NoteChars)}" : "") +
                 // The checkpoint's answer (2026-10-19, the fourth review: a Redo's note never reached a pass after a pause, a crash or a resume).
                 (entry.Checkpoint is { Length: > 0 } checkpoint ? $"; at the checkpoint the user chose {Shorten(Flat(checkpoint), NoteChars)}" : "");
             if (text.Length + line.Length + 1 > NotesChars)
             {
+                if (text.Length == 0)
+                {
+                    text.Append(Shorten(line, NotesChars - 1)).Append('\n');
+                }
+
                 break;
             }
 
@@ -358,12 +385,16 @@ public static class RalphLog
         return text.Length == 0 ? null : text.ToString().TrimEnd();
     }
 
+    /// <summary>Whether <paramref name="entry"/> is a pass on the step of <paramref name="stepText"/> (and of <paramref name="stepIndex"/>, when given).</summary>
+    private static bool IsStep(RalphLogEntry entry, string stepText, int? stepIndex) =>
+        string.Equals(entry.StepText, stepText, StringComparison.Ordinal) && (stepIndex is not { } index || entry.Step == index);
+
     /// <summary>The highest pass number the log holds; 0 with none.</summary>
     public static int PassCount(RalphLogDocument? document) => document is { Entries.Count: > 0 } d ? d.Entries.Max(e => e.Pass) : 0;
 
-    /// <summary>The files the passes on <paramref name="stepText"/> changed, once each, in order.</summary>
-    public static IReadOnlyList<string> ChangedBy(RalphLogDocument? document, string stepText) =>
-        document is null ? [] : document.Entries.Where(e => e.StepText == stepText).SelectMany(e => e.Changed).Distinct(StringComparer.Ordinal).ToList();
+    /// <summary>The files the passes on <paramref name="stepText"/> (of <paramref name="stepIndex"/> among twins, as <see cref="RecentNotes"/>) changed, once each, in order.</summary>
+    public static IReadOnlyList<string> ChangedBy(RalphLogDocument? document, string stepText, int? stepIndex = null) =>
+        document is null ? [] : document.Entries.Where(e => IsStep(e, stepText, stepIndex)).SelectMany(e => e.Changed).Distinct(StringComparer.Ordinal).ToList();
 
     // ── The file ───────────────────────────────────────────────────────────
 
@@ -395,6 +426,11 @@ public static class RalphLog
             if (head.InPassHeaded is { } headed)
             {
                 text.Append("- in pass steps heading: ").Append(headed ? "yes" : "no").Append('\n');
+            }
+
+            if (head.InPassPlan is { Length: > 0 } stamp)
+            {
+                text.Append("- in pass plan: ").Append(Flat(stamp)).Append('\n');
             }
 
             text.Append('\n');
@@ -638,6 +674,11 @@ public static class RalphLog
             head = head with { InPassLine = inPassLine, InPassStep = inPassStep };
         }
 
+        if (head is not null && headFields.GetValueOrDefault("in pass plan") is { Length: > 0 } planStamp)
+        {
+            head = head with { InPassPlan = planStamp };
+        }
+
         if (head is not null && inPassLines is not null)
         {
             head = head with { InPassLines = inPassLines };
@@ -652,13 +693,21 @@ public static class RalphLog
 
     // ── The lock ───────────────────────────────────────────────────────────
 
-    /// <summary>What a lock says: the process and when it started.</summary>
-    public sealed record LockOwner(int ProcessId, DateTimeOffset Started);
+    /// <summary>
+    /// What a lock says: the process, when it started, and the machine it runs on (<paramref name="Host"/>, 2026-10-20, a review: a plan in a shared or
+    /// synced folder was locked by a pid on another PC, which this one read as a process of its own that was gone, took over, and ran the plan beside
+    /// it). A lock with no host (one the previous build wrote) is this machine's.
+    /// </summary>
+    public sealed record LockOwner(int ProcessId, DateTimeOffset Started, string? Host = null)
+    {
+        /// <summary>Whether the lock was written on another machine (whose processes this one cannot see).</summary>
+        public bool Foreign => Host is { Length: > 0 } host && !string.Equals(host, Environment.MachineName, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static readonly Lazy<LockOwner> s_me = new(() =>
     {
         using var me = System.Diagnostics.Process.GetCurrentProcess();
-        return new LockOwner(Environment.ProcessId, new DateTimeOffset(me.StartTime.ToUniversalTime(), TimeSpan.Zero));
+        return new LockOwner(Environment.ProcessId, new DateTimeOffset(me.StartTime.ToUniversalTime(), TimeSpan.Zero), Environment.MachineName);
     });
 
     /// <summary>This process as a lock names it (the screen's and headless's one owner, 2026-10-19, the second review: each kept a copy).</summary>
@@ -672,6 +721,12 @@ public static class RalphLog
     public static bool OwnerAlive(LockOwner owner)
     {
         ArgumentNullException.ThrowIfNull(owner);
+        if (owner.Foreign)
+        {
+            // Another machine's process: never seen from here, so never taken for gone (the user deletes a lock its crash left: LockError says where).
+            return true;
+        }
+
         System.Diagnostics.Process process;
         try
         {
@@ -719,7 +774,7 @@ public static class RalphLog
             return false;
         }
 
-        string text = "pid: " + N(me.ProcessId) + "\nstarted: " + me.Started.ToString("O", CultureInfo.InvariantCulture) + "\n";
+        string text = "pid: " + N(me.ProcessId) + "\nstarted: " + me.Started.ToString("O", CultureInfo.InvariantCulture) + "\n" + (me.Host is { Length: > 0 } host ? "host: " + host + "\n" : "");
         for (int attempt = 0; attempt < 3; attempt++)
         {
             if (TryCreate(full, text))
@@ -918,7 +973,20 @@ public static class RalphLog
         }
 
         var (state, owner) = ReadLockAt(full);
-        return state == LockRead.Missing || (state == LockRead.Read && (owner is null || owner == Me || !LiveOwner(owner))) ? null : RalphText.LockedError(planPath);
+        return state == LockRead.Missing || (state == LockRead.Read && (owner is null || owner == Me || !LiveOwner(owner))) ? null : LockError(files, planPath);
+    }
+
+    /// <summary>
+    /// The error sentence for a lock this process could not take: another machine's names that machine and where the lock is, so the user can delete
+    /// one its crash left (2026-10-20, a review); else <see cref="RalphText.LockedError"/>.
+    /// </summary>
+    public static string LockError(WorkingDirectory files, string planPath)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        string path = LockPathFor(planPath);
+        return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && ReadLockAt(full) is (LockRead.Read, { Foreign: true, Host: { } host })
+            ? RalphText.LockedOnHostError(planPath, host, path)
+            : RalphText.LockedError(planPath);
     }
 
     private static LockOwner? ReadLock(WorkingDirectory files, string path)
@@ -931,6 +999,7 @@ public static class RalphLog
     {
         int pid = 0;
         DateTimeOffset started = DateTimeOffset.MinValue;
+        string? host = null;
         foreach (string line in text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
         {
             if (line.StartsWith("pid: ", StringComparison.Ordinal))
@@ -941,9 +1010,13 @@ public static class RalphLog
             {
                 DateTimeOffset.TryParse(line[9..].Trim(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out started);
             }
+            else if (line.StartsWith("host: ", StringComparison.Ordinal) && line[6..].Trim() is { Length: > 0 } named)
+            {
+                host = named;
+            }
         }
 
-        return pid > 0 ? new LockOwner(pid, started) : null;
+        return pid > 0 ? new LockOwner(pid, started, host) : null;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

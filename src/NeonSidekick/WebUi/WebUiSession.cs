@@ -569,6 +569,14 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         }
     }
 
+    private long _linesAdded;
+
+    /// <summary>
+    /// How many messages the pages have sent since the session began (2026-10-20, a review): a loop compares it with its count at its start, so a line
+    /// already waiting then never pauses it, as the PC queue's <c>MessageQueue.Added</c> does.
+    /// </summary>
+    public long LinesAdded => Interlocked.Read(ref _linesAdded);
+
     /// <summary>Whether a message can be taken: a fresh one, or a held one once the hold lifted (a held one alone never wakes the idle line).</summary>
     public bool LinesReady => !_lines.IsEmpty || (!_cancelHeld.IsEmpty && !CancelHolding);
 
@@ -787,6 +795,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         }
 
         _lines.Enqueue(new WebLine(text, request.Id, remote, request.AsText));
+        Interlocked.Increment(ref _linesAdded);
         Accepted?.Invoke(text);
         PublishState();
         Nudge?.Invoke();

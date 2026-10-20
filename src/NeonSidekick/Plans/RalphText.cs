@@ -86,13 +86,41 @@ public static class RalphText
         string notesHead = "Notes for this pass (" + DataNote + "):\n";
         string learnedText = learned is { Length: > 0 } l ? UntrustedText.Scrub(l.Trim()) : "";
         string notesText = notes is { Length: > 0 } n ? UntrustedText.Scrub(n.Trim()) : "";
+        // The notes shrink first, from their end: the pending note leads them, a failed check's tail already cut to its last NoteTailChars so it fits
+        // beside the learned facts, and a fence the cut leaves open is closed (2026-10-20, a review: the error at a long tail's end was cut off).
         int room = DirectiveBudget - head.Length - rules.Length - Fenced(learnedHead, learnedText).Length - notesHead.Length - 3;
-        notesText = Cut(notesText, Math.Max(0, room));
+        notesText = CutNotes(notesText, Math.Max(0, room));
         room = DirectiveBudget - head.Length - rules.Length - Fenced(notesHead, notesText).Length - learnedHead.Length - 3;
         learnedText = Cut(learnedText, Math.Max(0, room));
         return (head + rules + Fenced(notesHead, notesText) + Fenced(learnedHead, learnedText)).TrimEnd();
 
         static string Fenced(string heading, string text) => text.Length == 0 ? "" : heading + UntrustedText.Quote(text) + "\n";
+    }
+
+    /// <summary>
+    /// <paramref name="notes"/> cut to <paramref name="max"/> characters from their end (the pending note leads; the log's older ones go first), a code
+    /// fence the cut leaves open closed again (2026-10-20, a review).
+    /// </summary>
+    private static string CutNotes(string notes, int max)
+    {
+        if (notes.Length <= max)
+        {
+            return notes;
+        }
+
+        string cut = Cut(notes, Math.Max(0, max - 12));
+        string? open = null;
+        foreach (string line in cut.Split('\n'))
+        {
+            string trimmed = line.Trim();
+            if (trimmed.StartsWith("```", StringComparison.Ordinal))
+            {
+                string fence = new('`', trimmed.TakeWhile(c => c == '`').Count());
+                open = open is null ? fence : trimmed == open ? null : open;
+            }
+        }
+
+        return open is null ? cut : cut + "\n" + open;
     }
 
     /// <summary>
@@ -126,12 +154,25 @@ public static class RalphText
     /// </summary>
     public static int InlineLimit(int windowChars) => windowChars > 0 ? Math.Min(InlinePlanChars, windowChars / 4) : InlinePlanChars;
 
-    /// <summary>The final fix pass's message, the failing check's tail inline. Pinned.</summary>
+    /// <summary>
+    /// The final fix pass's message, the failing check's tail inline: scrubbed, redacted (<see cref="RalphLog.CleanTail"/>) and fenced as data
+    /// (2026-10-20, a review: it went to the model raw, a secret the check printed with it, and text the project printed read as the user's own). Pinned.
+    /// </summary>
     public static string FinalFixMessage(string path, string command, string tail) =>
-        $"Every step of the plan in {path} is done, but the final check {Cmd(command)} fails. Make it pass, then call finish_step. Its output ends:\n\n" + Fence(tail);
+        $"Every step of the plan in {path} is done, but the final check {Cmd(command)} fails. Make it pass, then call finish_step. Its output ends ({UntrustedText.QuoteNote}):\n\n" +
+        UntrustedText.Quote(Fence(KeepEnd(RalphLog.CleanTail(tail), NoteTailChars)));
 
-    /// <summary>A failed check's tail as the next pass's note. Pinned.</summary>
-    public static string CheckFailedNote(string command, string tail) => $"The last pass's check {Cmd(command)} failed; its output ends:\n" + Fence(tail);
+    /// <summary>
+    /// The most characters of a failed check's output a pass's note carries: its end, where the error is, small enough that the note fits the directive
+    /// beside the learned facts at their cap.
+    /// </summary>
+    public const int NoteTailChars = 1200;
+
+    /// <summary>
+    /// A failed check's tail as the next pass's note: its last <see cref="NoteTailChars"/> (2026-10-20, a review: a long tail was cut from its end by
+    /// the directive's budget, losing the error and leaving its fence open). Pinned.
+    /// </summary>
+    public static string CheckFailedNote(string command, string tail) => $"The last pass's check {Cmd(command)} failed; its output ends:\n" + Fence(KeepEnd(tail, NoteTailChars));
 
     /// <summary>A checkpoint's Redo as the next pass's note. Pinned.</summary>
     public static string RedoNote(string note) => "The user looked at the last pass's work and wants it redone: \"" + Flatten(note) + "\"";
@@ -323,6 +364,13 @@ public static class RalphText
     public const string WhilePlanningError = "While planning, the plan being planned goes through its pane's Ralph row or /plan approve --ralph";
     public const string NothingPausedNotice = Glyph + " No Ralph loop is paused: /plan ralph <name> runs one.";
     public static string LockedError(string path) => $"Another NeonSidekick is running {path} as a Ralph loop; wait for it to end";
+
+    /// <summary>
+    /// The lock was written on another machine (2026-10-20, a review: a plan in a shared or synced folder), whose process this one cannot see: it is
+    /// never taken over, so the user deletes the file if that machine's run is gone. Pinned.
+    /// </summary>
+    public static string LockedOnHostError(string path, string host, string lockPath) =>
+        $"NeonSidekick on {host} is running {path} as a Ralph loop; wait for it to end, or delete {lockPath} if that run is gone";
     public static string NotRunnableError(string path, PlanStatus status) => $"{path} is {PlanDocument.Word(status)}: a Ralph loop runs a plan that is not done or canceled";
     public static string BadPassesError(string word) =>
         $"'{word}' passes: a Ralph loop takes {N(Settings.AppSettingsData.MinRalphLoopPasses)} to {N(Settings.AppSettingsData.MaxRalphLoopPasses)}, 0 for three a step";
@@ -337,6 +385,12 @@ public static class RalphText
     public static string ConfirmQuestion(string path, string checks, IReadOnlyList<string>? problems = null) => $"Run {path} as a Ralph loop? {checks}" + FitPart(problems);
 
     private static string FitPart(IReadOnlyList<string>? problems) => problems is { Count: > 0 } p ? ". " + FitSentence(p) : "";
+
+    /// <summary>
+    /// <c>LLM Ralph loop checkpoint</c> above 0 with no pane and no Web UI to ask it on (2026-10-20, a review): the run has no checkpoint, and its passes
+    /// ask nothing. Pinned.
+    /// </summary>
+    public const string CheckpointNowhereNotice = Glyph + " No pane or Web UI to ask at a checkpoint: this run has none, and its passes ask nothing.";
 
     /// <summary><c>/plan open</c> on a paused Ralph plan: the loop is left, its log kept. Pinned.</summary>
     public static string LeftOnOpenNotice(string path) =>
@@ -355,6 +409,29 @@ public static class RalphText
     public static string ReviewFailedNotice(string reason) => $"{Glyph} The review found the step not done: {Flatten(reason)}";
     public const string ReviewUnclearNotice = Glyph + " The review gave no clear verdict: the step stands, unchecked.";
     public static string SplitNotice(int count, string text) => $"{Glyph} Split into {N(count)} sub-steps: {Flatten(text)}";
+
+    /// <summary>
+    /// A split the app could not write into the plan (2026-10-20, a review: the step's box the model ticked stood unchecked, and the log said "split"):
+    /// the step unticked, worked again by the next pass. Pinned.
+    /// </summary>
+    public static string SplitNotWrittenNotice(string text) => $"{Glyph} The split of \"{Flatten(text)}\" could not be written into the plan: the step is unticked, and the next pass works it.";
+
+    /// <summary>
+    /// A check that could not start (its shell's start failed, the folder could not be made; 2026-10-20, a review: it was read as a failed check, the
+    /// next pass told to fix code that was not broken): the step unticked, and the loop stops. Pinned.
+    /// </summary>
+    public static string CheckNotRunError(string command, string reason) =>
+        $"The check {Cmd(command)} could not start: {(reason.Length == 0 ? "no reason given" : Flatten(reason).TrimEnd('.'))}. The Ralph loop stops.";
+
+    /// <summary>A pass changed the plan header's verify or final command (2026-10-20, a review): the approved ones put back. Pinned.</summary>
+    public const string ChecksPutBackNotice = Glyph + " The pass changed the plan's verify or final command: put back.";
+
+    /// <summary>
+    /// The last run ended mid-pass, but the plan changed since (a revision, another run: 2026-10-20, a review, the mark put back days-old lines over
+    /// it): nothing is put back. Pinned.
+    /// </summary>
+    public static string InPassStaleNotice(string text) =>
+        $"{Glyph} The last run ended in the middle of a pass on \"{Flatten(text)}\", but the plan has changed since: nothing is put back, so check that step's box.";
     public static string PartialNotice(int changed) => $"{Glyph} Part of the step done ({Files(changed)} changed); the next pass goes on.";
     public const string NothingChangedNotice = Glyph + " The pass reported done but changed no file.";
     public static string WordsPutBackNotice(int count) => $"{Glyph} The pass reworded {(count == 1 ? "a step" : N(count) + " steps")} of the plan: put back.";
@@ -480,6 +557,12 @@ public static class RalphText
         "  Log: " + log + (paused ? " — /plan ralph resumes" : ""),
     ];
 
+    /// <summary>
+    /// <c>/plan show</c> on a loop paused in another folder (2026-10-20, a review: it read this folder's plan and log, a plan of the same name or
+    /// none, beside "paused"). Pinned.
+    /// </summary>
+    public static string PausedElsewhereNotice(string path, string root) => $"{Glyph} A Ralph loop is paused on {path} in {root}: go back there to see it or resume it.";
+
     /// <summary>The picker's footer line for a plan with a Ralph log: its last pass, where it stood and how it stopped. Pinned.</summary>
     public static string PickerLine(int pass, int done, int total, string? stopped) =>
         $"{Glyph} Ralph: pass {N(pass)}, step {N(done)}/{N(total)}" + (stopped is { Length: > 0 } s ? ", " + s : "");
@@ -550,6 +633,13 @@ public static class RalphText
 
     public const string VerdictToolDescription = "Gives your verdict on the step: pass (it is done as described) or fail (it is not), and one sentence why.";
 
+    /// <summary>
+    /// Advisor confirm on in a loop with no checkpoint (2026-10-20, a review: each review waited on a yes nobody was there to give): the model reviews
+    /// instead, said once a run. Pinned.
+    /// </summary>
+    public const string ReviewConfirmFallbackNotice =
+        Glyph + " Advisor confirm is on and the loop has no checkpoint, so nobody is there to say yes: the model reviews each step instead.";
+
     /// <summary>What Advisor confirm's question says the advisor is asked for: the step's review. Pinned.</summary>
     public static string ReviewConfirmQuestion(string stepText) => "review the Ralph loop's step \"" + Flatten(stepText) + "\"";
 
@@ -574,6 +664,9 @@ public static class RalphText
     public const string FlagNothingChanged = "no file changed";
     public static string FlagNamedMissing(IReadOnlyList<string> paths) => "files the step names are missing: " + string.Join(", ", paths);
     public const string FlagTestsTouched = "test files were changed";
+
+    /// <summary>A delta whose snapshot or commit list was cut (2026-10-20, a review): the changed list may miss files. Pinned.</summary>
+    public const string FlagEvidenceCut = "too many files to compare them all: the list of changes may be incomplete";
 
     /// <summary>A secret-looking file's line in a pass's diff, in place of its text.</summary>
     public static string SecretNotDiffed(string path) => $"({path} looks like a secrets file: changed, not shown)";
@@ -607,7 +700,34 @@ public static class RalphText
     /// <summary>The review request's summary when the pass called no <c>finish_step</c>.</summary>
     public const string NoReportSummary = "(the pass made no report)";
 
+    /// <summary>
+    /// What the log and the notices say of a check's end: <c>passed</c>, <c>failed (exit 1)</c>, <c>timed out</c>, <c>stopped</c>, <c>refused</c>,
+    /// <c>not run</c> (2026-10-20, a review: inline on <see cref="RalphCheckResult"/>). Pinned.
+    /// </summary>
+    public static string CheckWord(RalphCheckKind kind, int? exitCode) => kind switch
+    {
+        RalphCheckKind.Passed => "passed",
+        RalphCheckKind.Failed => "failed (exit " + (exitCode ?? -1).ToString(CultureInfo.InvariantCulture) + ")",
+        RalphCheckKind.TimedOut => "timed out",
+        RalphCheckKind.Cancelled => "stopped",
+        RalphCheckKind.Refused => "refused",
+        _ => "not run",
+    };
+
+    /// <summary>The most lines of a check's output the transcript and headless show.</summary>
+    public const int ShownTailLines = 12;
+
+    /// <summary>
+    /// A check's output as the transcript and headless show it: its last <see cref="ShownTailLines"/> lines, scrubbed and redacted, blanks dropped
+    /// (2026-10-20, a review: the screen and headless's two hosts each had a copy).
+    /// </summary>
+    public static IReadOnlyList<string> TailLines(string tail) =>
+        RalphLog.CleanTail(tail ?? "").Split('\n').TakeLast(ShownTailLines).Where(l => l.Length > 0).ToList();
+
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /// <summary><paramref name="text"/>'s last <paramref name="max"/> characters, led by "…" when it was longer.</summary>
+    private static string KeepEnd(string text, int max) => text.Length <= max ? text : "…" + text[^(max - 1)..];
 
     /// <summary><paramref name="text"/> in a code fence long enough to hold it.</summary>
     public static string Fence(string text)

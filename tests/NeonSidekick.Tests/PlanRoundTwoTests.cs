@@ -256,6 +256,9 @@ public class PlanRoundTwoTests : IDisposable
     [InlineData("RALPH 5 add-guide", false, "Ralph", "5 add-guide")]
     [InlineData("ralph add-guide 201", false, "BadRalphPasses", "201")]
     [InlineData("ralph the whole requirement here", false, "Enter", "")]
+    // While planning, only the bare word is the command (2026-10-20, a review: "/plan ralph tests" typed as detail was refused and lost).
+    [InlineData("ralph", true, "Ralph", "")]
+    [InlineData("ralph tests", true, "Detail", "")]
     [InlineData("approve --ralph", true, "ApproveRalph", "")]
     [InlineData("--ralph approve 5", true, "ApproveRalph", "5")]
     [InlineData("approve --ralph 201", true, "BadRalphPasses", "201")]

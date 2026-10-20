@@ -18,7 +18,7 @@ public sealed partial class SidekickApp
     /// A <c>/code-audit</c> line: the text to send as the next turn (a pass's message, or plan mode's requirement for <c>fix</c>), or null when
     /// the line is done (a list, a report, a refusal).
     /// </summary>
-    private async Task<string?> HeadlessAuditAsync(AuditSession audit, PlanSession plan, WorkingDirectory files, Git.GitAccess git, string args, Func<PlanPassMeter> meter, CancellationToken cancellationToken)
+    private async Task<string?> HeadlessAuditAsync(AuditSession audit, PlanSession plan, HeadlessPlanState state, WorkingDirectory files, Git.GitAccess git, string args, Func<PlanPassMeter> meter, CancellationToken cancellationToken)
     {
         string? Existing(string word)
         {
@@ -83,6 +83,10 @@ public sealed partial class SidekickApp
             }
 
             await HeadlessNoticeLineAsync("[notice] " + AuditText.FixingNotice(name, parsed.Name is null)).ConfigureAwait(false);
+            // As headless /plan and the screen's EnterPlanAsync (2026-10-20, a review: the plan carried out, or a paused Ralph loop, and a draft
+            // stayed, so the fix's planning turns said done notices about the old plan and a bare /plan ralph resumed it).
+            state.Executing = null;
+            state.Draft = null;
             plan.Enter(AuditText.FixRequirement(fixPath, open));
             await HeadlessNoticeLineAsync("[notice] " + PlanText.EnteredNotice).ConfigureAwait(false);
             return plan.Requirement;
@@ -171,7 +175,13 @@ public sealed partial class SidekickApp
         var now = _time.GetLocalNow();
         if (parsed.Verb == AuditVerb.Resume)
         {
-            var report = AuditFiles.Read(files, path)!;
+            // Read again after the listing (2026-10-20, a review: a report gone or cut meanwhile threw past the null-forgiving read).
+            if (AuditFiles.Read(files, path) is not { } report)
+            {
+                await HeadlessErrorAsync(AuditText.ReportUnreadable(path)).ConfigureAwait(false);
+                return null;
+            }
+
             report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(reviewer) };
             if (AuditFiles.Save(files, path, report, now) is { } failed)
             {
@@ -180,6 +190,10 @@ public sealed partial class SidekickApp
             }
 
             await HeadlessNoticeLineAsync("[notice] " + AuditText.ResumedNotice(Path.GetFileNameWithoutExtension(path), parsed.Name is null)).ConfigureAwait(false);
+            if (scope.Cut)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + AuditText.ScopeCutNotice).ConfigureAwait(false);
+            }
         }
         else
         {
@@ -202,7 +216,7 @@ public sealed partial class SidekickApp
         var loop = audit.Start(path, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean);
         if (parsed.Verb == AuditVerb.Start)
         {
-            await HeadlessNoticeLineAsync("[notice] " + AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, audit.Focus, loop.Limit, path)).ConfigureAwait(false);
+            await HeadlessNoticeLineAsync("[notice] " + AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, audit.Focus, loop.Limit, path, scope.Cut)).ConfigureAwait(false);
         }
 
         if (loop.CleanLowered)
@@ -214,10 +228,14 @@ public sealed partial class SidekickApp
     }
 
     /// <summary>The next pass begun, its message (the reviewer the model when no advisor is offered).</summary>
-    private string HeadlessBeginAuditPass(AuditSession audit, WorkingDirectory files, PlanGapLoop loop, PlanPassMeter? meter)
+    private string HeadlessBeginAuditPass(AuditSession audit, WorkingDirectory files, PlanGapLoop loop, PlanPassMeter? meter) =>
+        HeadlessBeginAuditPass(audit, loop, meter, AuditFiles.Read(audit.Files, audit.Path!)?.StallBody());
+
+    /// <summary><see cref="HeadlessBeginAuditPass(AuditSession, WorkingDirectory, PlanGapLoop, PlanPassMeter?)"/> over a stall body just read.</summary>
+    private string HeadlessBeginAuditPass(AuditSession audit, PlanGapLoop loop, PlanPassMeter? meter, string? body)
     {
         bool offered = HeadlessAdvisorsOffered();
-        loop.BeginPass(AuditFiles.Read(audit.Files, audit.Path!)?.StallBody(), meter, offered);
+        loop.BeginPass(body, meter, offered);
         string focus = AuditFocus.PassFocus(audit.Focus, loop.Confirmation).Short;
         return AuditText.PassMessage(audit.Scope!.Label, audit.Path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : PlanReviewer.Model, focus, loop.CleanStreak);
     }
@@ -227,7 +245,7 @@ public sealed partial class SidekickApp
     /// judged and said into <paramref name="lines"/>, then the next pass's message, or null once the audit is over (its summary, the report's
     /// status, the stop's line and the no-pane lines).
     /// </summary>
-    private string? HeadlessAuditAfterTurn(AuditSession audit, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines, PlanPassMeter? meter)
+    private string? HeadlessAuditAfterTurn(AuditSession audit, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, bool turnFailed, List<string> lines, PlanPassMeter? meter)
     {
         if (audit.Running is not { Pending: false } loop || audit.Path is not { } path)
         {
@@ -238,18 +256,21 @@ public sealed partial class SidekickApp
         bool moved = audit.Moved;
         string root = audit.Root!;
         files = audit.Files;
-        AuditFiles.MergeCoverage(files, path, audit.ViewedNow());
+        // The coverage once (2026-10-20, a review), and the pass recorded on a move too, as on the screen; a failed turn is no pass that ended on its
+        // own (2026-10-20, a review: headless counted it as one, and kept sending passes to a server that was down).
+        var coverage = audit.Coverage();
+        AuditFiles.MergeCoverage(files, path, coverage.Viewed);
         string? body = AuditFiles.Read(files, path)?.StallBody();
-        var stop = moved ? PlanGapStop.Stopped : loop.Next(!cancelled, userSpoke: false, body, meter);
+        var next = loop.Next(!cancelled && !turnFailed && !moved, userSpoke: false, body, meter);
+        var stop = moved ? PlanGapStop.Stopped : next;
         bool advisorAsked = tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
         DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
-        var coverage = audit.Coverage();
         if (stop is not { } reason)
         {
             lines.Add(loop.PassGaps.Count > 0
                 ? AuditText.PassDoneNotice(loop.Pass, loop.Limit, loop.PassGaps.Count, loop.PassMinor.Count, coverage.Read, coverage.Scope)
                 : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses));
-            return HeadlessBeginAuditPass(audit, files, loop, meter);
+            return HeadlessBeginAuditPass(audit, loop, meter, body);
         }
 
         string name = audit.Name;

@@ -344,4 +344,48 @@ public sealed class RalphLogTests : IDisposable
         Assert.Equal("🔁 Ralph loop stopped: another NeonSidekick took over .neon/plans/guide.md (1 of 3 steps done); it runs the plan now.",
             RalphText.StopNotice(RalphStop.Locked, Plan, 1, 3));
     }
+
+    [Fact]
+    public void ALockAnotherMachineWrote_IsNeverTakenForStale_AndItsErrorNamesTheMachine()
+    {
+        // 2026-10-20, a review: a plan in a shared folder, locked by a pid on another PC, read here as a gone process and taken over.
+        var foreign = new RalphLog.LockOwner(int.MaxValue - 7, T0, "OTHER-PC");
+        Assert.True(foreign.Foreign);
+        Assert.True(RalphLog.OwnerAlive(foreign));
+        Assert.True(RalphLog.TryLock(_files, Plan, foreign, _ => true));
+
+        Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), RalphLog.OwnerAlive));
+        Assert.Equal(RalphText.LockedOnHostError(Plan, "OTHER-PC", RalphLog.LockPathFor(Plan)), RalphLog.LockError(_files, Plan));
+        Assert.False(new RalphLog.LockOwner(1, T0).Foreign);   // a lock the previous build wrote: this machine's
+        Assert.False(RalphLog.Me.Foreign);
+    }
+
+    [Fact]
+    public void ALongSummary_NeverDropsTheNotes_AndTwinStepsReadOnlyTheirOwn()
+    {
+        // 2026-10-20, a review: a summary past the notes' room ended the list before its first line; and two steps of the same words read each
+        // other's notes.
+        var longOne = Entry(1, 2, "Run the migrations") with { Summary = new string('s', 1800), Checkpoint = "redo: use the old schema" };
+        string notes = RalphLog.RecentNotes(new RalphLogDocument(Head, [], [longOne]), "Run the migrations")!;
+        Assert.StartsWith("- pass 1 (step 2): done; sss", notes);
+        Assert.True(notes.Length <= RalphLog.NotesChars);
+        Assert.Contains("redo: use the old schema", notes);
+
+        var log = new RalphLogDocument(Head, [], [Entry(1, 2, "Run the migrations"), Entry(2, 5, "Run the migrations"), Entry(3, 7, "Other")]);
+        string twin = RalphLog.RecentNotes(log, "Run the migrations", 5)!;
+        Assert.Contains("pass 2 (step 5)", twin);
+        Assert.DoesNotContain("pass 1 ", twin);
+        Assert.Contains("pass 1 (step 2)", RalphLog.RecentNotes(log, "Run the migrations")!);
+    }
+
+    [Fact]
+    public void SetCheckpoint_SaysWhetherTheEntryHoldsTheAnswer()
+    {
+        // 2026-10-20, a review: a Redo's note went to the next pass from the loop and from this entry both; it now goes from the entry when written.
+        Assert.Null(RalphLog.Append(_files, Plan, Head, Entry(1, 1, "One"), []));
+        Assert.Null(RalphLog.SetCheckpoint(_files, Plan, 1, "redo: shorter", out bool written));
+        Assert.True(written);
+        Assert.Null(RalphLog.SetCheckpoint(_files, Plan, 9, "keep", out written));
+        Assert.False(written);
+    }
 }

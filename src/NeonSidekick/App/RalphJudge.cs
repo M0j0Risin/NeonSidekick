@@ -63,13 +63,28 @@ internal static class RalphJudge
             return new RalphJudged(RalphPassFacts.None with { Cancelled = cancelled, TurnFailed = failed }, "none", null, "off", [], "", PlanUnread: true);
         }
 
+        // The evidence first, under the token (2026-10-20, a review: taken after the put-back with no token, a large tree held the judge past Esc): an
+        // Esc during it stops the pass, judged as stopped, its own box put back below. The plan is under .neon/, which a snapshot never holds.
+        RalphSnapshotOfFiles after;
+        try
+        {
+            after = await Task.Run(() => RalphChanges.Snapshot(host.Files, host.Git, cancellationToken, before), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            after = before;
+            cancelled = true;
+        }
+
         // The task lines put back as they were (Restore: every other box, every step's words, the pass's own box too when it was stopped, the lines it
-        // added taken out); the steps it deleted said, and the loop stops on them (2026-10-19, the third review: deleting the steps left let a plan read
-        // as done) with no check run and its own tick put back too (2026-10-19, the fourth review: the verify and the review ran first, for nothing).
-        var restore = Restore(text, lines, step, ownBoxBack: cancelled, headed);
+        // added taken out, the header's checks); the steps it deleted said, and the loop stops on them (2026-10-19, the third review: deleting the steps
+        // left let a plan read as done) with no check run and its own tick put back too (2026-10-19, the fourth review: the verify and the review ran
+        // first, for nothing).
+        var checks = new PlanChecks(snapshot.Verify, snapshot.Final);
+        var restore = Restore(text, lines, step, ownBoxBack: cancelled, headed, checks: checks);
         if (restore.Removed.Count > 0 && !cancelled)
         {
-            restore = Restore(text, lines, step, ownBoxBack: true, headed);
+            restore = Restore(text, lines, step, ownBoxBack: true, headed, checks: checks);
         }
 
         var removed = restore.Removed;
@@ -97,7 +112,6 @@ internal static class RalphJudge
         }
 
         PlanStep? own = restore.Own;
-        var after = await Task.Run(() => RalphChanges.Snapshot(host.Files, host.Git, CancellationToken.None, before)).ConfigureAwait(false);
         var delta = RalphChanges.Delta(before, after, host.Files, host.Git, step?.NamedPaths ?? []);
         if (cancelled)
         {
@@ -150,6 +164,13 @@ internal static class RalphJudge
                     SetBox(host, path, target, false);
                     host.Notice(RalphText.SplitNotice(report.Substeps.Count, step.Text));
                 }
+                else
+                {
+                    // Not written (2026-10-20, a review: a tick the model wrote stood unchecked, and the loop moved past the step): unticked, worked again.
+                    SetBox(host, path, target, false);
+                    host.Notice(RalphText.SplitNotWrittenNotice(step.Text));
+                    host.Log($"ralph: pass {loop.Pass}'s split of a step could not be written");
+                }
 
                 break;
             default:
@@ -173,10 +194,16 @@ internal static class RalphJudge
                 if (snapshot.StepCheck is { } verify)
                 {
                     var result = await host.CheckAsync(verify, ShellOf(snapshot), RalphText.CheckLabel(verify), cancellationToken).ConfigureAwait(false);
-                    check = result?.Word ?? "not run";
-                    if (result is { Kind: RalphCheckKind.Refused })
+                    check = result?.Word ?? RalphText.CheckWord(RalphCheckKind.NotRun, null);
+                    if (result is null or { Kind: RalphCheckKind.Refused or RalphCheckKind.NotRun } && !cancellationToken.IsCancellationRequested)
                     {
-                        // Refused as it was due (the host said why): unticked, and the loop stops as no stop the user caused (2026-10-19, the fourth review).
+                        // Refused as it was due (the host said why), or it could not start (2026-10-20, a review: read as a failed check, the next pass was
+                        // told to fix code that was not broken): unticked, and the loop stops as no stop the user caused (2026-10-19, the fourth review).
+                        if (result is { Kind: RalphCheckKind.NotRun } notRun)
+                        {
+                            host.Notice(RalphText.CheckNotRunError(verify, notRun.Tail));
+                        }
+
                         SetBox(host, path, target, false);
                         return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, false, delta.Changed, removed, CheckRefused: true), check, null, review, delta.Flags, delta.Diff);
                     }
@@ -270,10 +297,10 @@ internal static class RalphJudge
     /// says the <c>## Steps</c> heading was put back (or one the pass added taken out), <paramref name="DoneWhenPutBack"/> counts the steps whose
     /// <c>Done when:</c> went back (2026-10-19, the fifth review).
     /// </summary>
-    internal sealed record RalphRestore(string Text, PlanStep? Own, int BoxesPutBack, int WordsPutBack, bool OwnBoxPutBack, IReadOnlyList<string> Removed, int Added = 0, bool HeadingPutBack = false, int DoneWhenPutBack = 0)
+    internal sealed record RalphRestore(string Text, PlanStep? Own, int BoxesPutBack, int WordsPutBack, bool OwnBoxPutBack, IReadOnlyList<string> Removed, int Added = 0, bool HeadingPutBack = false, int DoneWhenPutBack = 0, bool ChecksPutBack = false)
     {
         /// <summary>Whether it put back anything but the pass's own box: what keeps the plan as the pass left it (<see cref="Apply"/>).</summary>
-        public bool PutBackOthers => BoxesPutBack + WordsPutBack + Added + DoneWhenPutBack > 0 || HeadingPutBack;
+        public bool PutBackOthers => BoxesPutBack + WordsPutBack + Added + DoneWhenPutBack > 0 || HeadingPutBack || ChecksPutBack;
     }
 
     /// <summary>
@@ -288,9 +315,11 @@ internal static class RalphJudge
     /// every task line of the file a step, and the other sections' checklists were taken out as lines it added): <paramref name="headed"/> true puts
     /// the heading back first (<see cref="PlanSteps.WithStepsHeading"/>), false takes out one the pass added, null reads the text as it is (a log the
     /// previous build wrote). Every step's <c>Done when:</c> goes back too (<see cref="PlanSteps.WithDoneWhen"/>: a pass weakened its own check, or a
-    /// later step's, and the edit drove the passes and reviews after it) unless <paramref name="doneWhenKnown"/> is false (that old log keeps none).</para>
+    /// later step's, and the edit drove the passes and reviews after it) unless <paramref name="doneWhenKnown"/> is false (that old log keeps none).
+    /// The header's <c>verify:</c> and <c>final:</c> go back to <paramref name="checks"/>, the run's approved commands, when given (2026-10-20, a review:
+    /// a pass could write <c>verify: "exit 0"</c>, and a later run by name took it as the plan's own check).</para>
     /// </summary>
-    internal static RalphRestore Restore(string text, IReadOnlyList<PlanStep> lines, PlanStep? step, bool ownBoxBack, bool? headed = null, bool doneWhenKnown = true)
+    internal static RalphRestore Restore(string text, IReadOnlyList<PlanStep> lines, PlanStep? step, bool ownBoxBack, bool? headed = null, bool doneWhenKnown = true, PlanChecks? checks = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(lines);
@@ -403,8 +432,19 @@ internal static class RalphJudge
             }
         }
 
+        bool checksBack = false;
+        if (checks is not null && PlanDocument.TryParse(taken) is { } header
+            && (!string.Equals(header.Verify, Blank(checks.Verify), StringComparison.Ordinal) || !string.Equals(header.Final, Blank(checks.Final), StringComparison.Ordinal)))
+        {
+            // The header alone: the task lines keep their places.
+            taken = PlanDocument.WithChecks(taken, checks.Verify, checks.Final);
+            checksBack = true;
+        }
+
         var ownNow = ownAt >= 0 && ownAt < settled.Count ? settled[ownAt] : null;
-        return new RalphRestore(taken, ownNow, boxes, words, ownBack, removed, gone.Count == 0 ? 0 : added.Count, headingBack, doneWhens);
+        return new RalphRestore(taken, ownNow, boxes, words, ownBack, removed, gone.Count == 0 ? 0 : added.Count, headingBack, doneWhens, checksBack);
+
+        static string? Blank(string? command) => string.IsNullOrWhiteSpace(command) ? null : command;
     }
 
     /// <summary>
@@ -456,6 +496,11 @@ internal static class RalphJudge
             notices.Add(RalphText.StepsHeadingPutBackNotice);
         }
 
+        if (restore.ChecksPutBack)
+        {
+            notices.Add(RalphText.ChecksPutBackNotice);
+        }
+
         if (asLeft is not null)
         {
             notices.Add(RalphText.AsLeftNotice(asLeft));
@@ -469,13 +514,13 @@ internal static class RalphJudge
     /// review): the plan's lines put back as a stopped pass's are (<see cref="Restore"/>, its own box too), and the log's in-pass mark cleared; true
     /// when a box or words were put back.
     /// </summary>
-    public static bool PutBackUnjudged(WorkingDirectory files, string path, IReadOnlyList<PlanStep> lines, PlanStep? step, bool? headed)
+    public static bool PutBackUnjudged(WorkingDirectory files, string path, IReadOnlyList<PlanStep> lines, PlanStep? step, bool? headed, PlanChecks? checks = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         bool changed = false;
         if (PlanFiles.ReadWhole(files, path) is { } text)
         {
-            changed = Apply(files, path, text, Restore(text, lines, step, ownBoxBack: true, headed)).Written;
+            changed = Apply(files, path, text, Restore(text, lines, step, ownBoxBack: true, headed, checks: checks)).Written;
         }
 
         RalphLog.ClearInPass(files, path);
@@ -490,13 +535,22 @@ internal static class RalphJudge
     /// 2026-10-19, the third review): the plan put back as the judge puts back a stopped pass (<see cref="Restore"/> over the task lines the mark keeps,
     /// 2026-10-19, the fourth review: only the pass's own box went back, so other boxes it ticked, steps it reworded or added stood, and a resume passed
     /// them by), and the mark cleared. A log the previous build wrote keeps no lines: its step's box alone goes back. The steps the pass deleted
-    /// (<see cref="RalphRecovered.Removed"/>) refuse that start; the next one runs. Null with no mark.
+    /// (<see cref="RalphRecovered.Removed"/>) refuse that start; the next one runs. Null with no mark. A mark whose plan was revised, approved or run
+    /// since (its <see cref="RalphLogHead.InPassPlan"/> no longer the plan's <see cref="PlanDocument.Stamp"/>; 2026-10-20, a review: the lines it keeps
+    /// put back old words, took out the user's new steps and unticked steps a plain run had finished) puts nothing back: it is cleared and said.
+    /// The header's checks go back to the run's (<see cref="RalphLogHead.Verify"/>, <see cref="RalphLogHead.Final"/>) too.
     /// </summary>
     public static RalphRecovered? RecoverInPass(WorkingDirectory files, string path)
     {
         ArgumentNullException.ThrowIfNull(files);
         var head = RalphLog.Read(files, path)?.Head;
         var stale = RalphLog.InPassOf(head);
+        if (head is { InPassPlan: { } marked } && RalphLog.InPass(head) && PlanFiles.ReadWhole(files, path) is { } now && PlanDocument.Stamp(now) != marked)
+        {
+            RalphLog.ClearInPass(files, path);
+            return new RalphRecovered([RalphText.InPassStaleNotice(stale?.Text ?? RalphText.FinalFixStep)], false, []);
+        }
+
         if (head?.InPassLines is not { } lines)
         {
             if (stale is null)
@@ -516,7 +570,8 @@ internal static class RalphJudge
         if (PlanFiles.ReadWhole(files, path) is { } text)
         {
             // A log the previous build wrote says neither the scope nor the Done when: lines: its text read as it is, the checks left.
-            var restore = Restore(text, lines, stale, ownBoxBack: true, head.InPassHeaded, doneWhenKnown: head.InPassHeaded is not null);
+            var restore = Restore(text, lines, stale, ownBoxBack: true, head.InPassHeaded, doneWhenKnown: head.InPassHeaded is not null,
+                checks: head.InPassHeaded is null ? null : new PlanChecks(head.Verify, head.Final));
             removed = restore.Removed;
             (changed, string? asLeft) = Apply(files, path, text, restore);
             if (changed)
@@ -571,16 +626,18 @@ internal static class RalphJudge
             // finish_step's notes for the next pass on the step (2026-10-19, the third review: read and dropped), carried by RecentNotes from here.
             report?.Notes);
         var head = new RalphLogHead(snapshot.Path, snapshot.Verify, snapshot.Final, snapshot.FinalOnly, snapshot.Shell, time.GetLocalNow());
-        if (RalphLog.Read(files, snapshot.Path)?.Head is { } kept)
+        // One read: its head's start time, and the document the entry is added to (2026-10-20, a review: Append read and parsed it again).
+        var document = RalphLog.ReadFor(files, snapshot.Path, out string? unread);
+        if (document?.Head is { } kept)
         {
             head = head with { Started = kept.Started };
             if (judged.PlanUnread)
             {
-                head = head with { InPassLine = kept.InPassLine, InPassStep = kept.InPassStep, InPassLines = kept.InPassLines, InPassHeaded = kept.InPassHeaded };
+                head = head with { InPassLine = kept.InPassLine, InPassStep = kept.InPassStep, InPassLines = kept.InPassLines, InPassHeaded = kept.InPassHeaded, InPassPlan = kept.InPassPlan };
             }
         }
 
-        string? problem = RalphLog.Append(files, snapshot.Path, head, entry, report?.Learned ?? []);
+        string? problem = unread ?? RalphLog.Append(files, snapshot.Path, document, head, entry, report?.Learned ?? []);
         if (problem is not null && !judged.PlanUnread)
         {
             RalphLog.ClearInPass(files, snapshot.Path);

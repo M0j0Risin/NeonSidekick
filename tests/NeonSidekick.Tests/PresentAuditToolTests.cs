@@ -285,6 +285,14 @@ public sealed class PresentAuditToolTests : IDisposable
     }
 
     [Fact]
+    public void EvidenceLines_CountsEachHitsLine_OnFromTheLast()
+    {
+        // 2026-10-20, a review: each hit counted its line from the file's start.
+        Assert.Equal([2, 4, 5], PresentAuditTool.EvidenceLines(["a {", "}", "b {", "}", "}"], "}"));
+        Assert.Equal([1, 3], PresentAuditTool.EvidenceLines(["a {", "}", "a {", "}"], "a {\n }"));
+    }
+
+    [Fact]
     public void Revise_ReRatesInPlace_MovedLineReChecked_UnknownIdRefused()
     {
         Read();
@@ -294,7 +302,8 @@ public sealed class PresentAuditToolTests : IDisposable
         var finding = Report().Findings[0];
         Assert.Equal((AuditSeverity.Medium, 8), (finding.Severity, finding.Line!.Value));
         Assert.Contains("revised in pass 1: severity high → medium; line 7 → 8", finding.Notes);
-        Assert.Contains("revise A1", _loop.PassGaps);
+        // The key names what the revision left (2026-10-20, a review): two passes that revise A1 differently are not the same gaps.
+        Assert.Contains(_loop.PassGaps, g => g.StartsWith("revise A1 ", StringComparison.Ordinal));
         Assert.Equal(AuditText.EvidenceElsewhereResult("src/x.cs", 1, 8), Call("{\"revise\":[{\"id\":\"A1\",\"line\":1}]}"));
     }
 
@@ -322,7 +331,7 @@ public sealed class PresentAuditToolTests : IDisposable
         var finding = Report().Findings[0];
         Assert.Equal(AuditFindingState.Open, finding.State);
         Assert.Contains("reopened in pass 1: Still joined after the fix.", finding.Notes);
-        Assert.Contains("reopen A1", _loop.PassGaps);
+        Assert.Contains(_loop.PassGaps, g => g.StartsWith("reopen A1 ", StringComparison.Ordinal));
     }
 
     [Fact]

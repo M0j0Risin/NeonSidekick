@@ -7851,13 +7851,11 @@ internal sealed partial class ChatScreen
         }
 
         List<ChatMessage> messages;
-        StoredPlan? plan;
-        StoredPlan? executing;
-        string? claudeSessionId;
-        string? claudeServerSessionId;
+        StoredHistory stored;
         try
         {
-            messages = SessionHistory.FromJson(record.HistoryJson, out plan, out executing, out claudeSessionId, out claudeServerSessionId);
+            // One parse for the messages and everything beside them (2026-10-20, a review).
+            messages = SessionHistory.FromJsonWhole(record.HistoryJson, out stored);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
         {
@@ -7885,13 +7883,13 @@ internal sealed partial class ChatScreen
             // The files the last conversation saw are not this one's (2026-10-11, the review): its write_file asks for a mode again.
             _files.ForgetSeen();
             _conversation++;
-            _claudeSessionId = claudeSessionId;
-            _advisorThreads.Restore(SessionHistory.AdvisorThreadsOf(record.HistoryJson));
-            _advisorThreads.RestoreSessions(SessionHistory.AdvisorSessionsOf(record.HistoryJson));
-            _claudeServerSessionId = claudeServerSessionId;
-            RestoreMark(record.HistoryJson);   // /mark (2026-10-18): the row's mark back on the rules
+            _claudeSessionId = stored.ClaudeSessionId;
+            _advisorThreads.Restore(stored.AdvisorThreads);
+            _advisorThreads.RestoreSessions(stored.AdvisorSessions);
+            _claudeServerSessionId = stored.ClaudeServerSessionId;
+            RestoreMark(stored.Mark);   // /mark (2026-10-18): the row's mark back on the rules
             _transcript.Notice(SessionRestoredNotice(record.Summary, _time.LocalTimeZone));
-            RestorePlan(plan, executing);
+            RestorePlan(stored.Plan, stored.Executing);
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
             var pictures = RestoredPictures.Turns(messages);
             var box = ReplayPictures(pictures);

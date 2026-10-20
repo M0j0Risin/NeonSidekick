@@ -264,9 +264,9 @@ public static partial class AuditCommand
         string first = typed.Count > 0 ? typed[0] : "";
         if (typed.Count == 0)
         {
-            items.Add(new(AuditText.OpenWord, "list the reports, or show one"));
-            items.Add(new(AuditText.FixWord, "plan the fixes for a report's open findings"));
-            items.Add(new(AuditText.ResumeWord, "more passes on a kept report"));
+            items.Add(new(AuditText.OpenWord, AuditText.OpenNote));
+            items.Add(new(AuditText.FixWord, AuditText.FixNote));
+            items.Add(new(AuditText.ResumeWord, AuditText.ResumeNote));
         }
 
         if (typed.Count == 1 && first is AuditText.OpenWord or AuditText.FixWord or AuditText.ResumeWord)
@@ -282,11 +282,11 @@ public static partial class AuditCommand
         items.AddRange(Reviewers);
         if (first != AuditText.ResumeWord)
         {
-            items.Add(new(AuditText.DiffWord, "the working changes: unstaged, staged and untracked"));
-            items.Add(new(AuditText.StagedWord, "the staged changes"));
-            items.Add(new(AuditText.BranchWord, "the branch's commits since its base (main, else master)"));
-            items.AddRange(AuditFocus.Dimensions.Select(d => new CompletionItem(d, "focus")));
-            items.Add(new(AuditFocus.AllWord, "every focus"));
+            items.Add(new(AuditText.DiffWord, AuditText.DiffNote));
+            items.Add(new(AuditText.StagedWord, AuditText.StagedNote));
+            items.Add(new(AuditText.BranchWord, AuditText.BranchNote));
+            items.AddRange(AuditFocus.Dimensions.Select(d => new CompletionItem(d, AuditText.FocusNote)));
+            items.Add(new(AuditFocus.AllWord, AuditText.AllFocusNote));
             items.AddRange(folders(last.TrimStart('"')).Select(f => new CompletionItem(f.Any(char.IsWhiteSpace) ? "\"" + f + "\"" : f, "")));
         }
 
@@ -296,10 +296,10 @@ public static partial class AuditCommand
     /// <summary>The reviewer words with their notes, for the completion list.</summary>
     public static readonly IReadOnlyList<CompletionItem> Reviewers =
     [
-        new(PlanText.ReviewerWord(PlanReviewer.Model), "the model audits alone"),
-        new(PlanText.ReviewerWord(PlanReviewer.Advisor), "an advisor finds, the model verifies"),
-        new(PlanText.ReviewerWord(PlanReviewer.Any), "the model, asking advisors where a role fits"),
-        new(PlanText.ReviewerWord(PlanReviewer.Confirm), "the model audits; an advisor checks once it finds nothing new"),
+        new(PlanText.ReviewerWord(PlanReviewer.Model), AuditText.ModelReviewerNote),
+        new(PlanText.ReviewerWord(PlanReviewer.Advisor), AuditText.AdvisorReviewerNote),
+        new(PlanText.ReviewerWord(PlanReviewer.Any), AuditText.AnyReviewerNote),
+        new(PlanText.ReviewerWord(PlanReviewer.Confirm), AuditText.ConfirmReviewerNote),
     ];
 
     private static AuditArguments ParseResume(List<string> words)

@@ -254,12 +254,23 @@ public static class SessionHistory
     /// </summary>
     public static List<ChatMessage> FromJson(string json, out StoredPlan? plan, out StoredPlan? executing, out string? claudeSessionId, out string? claudeServerSessionId)
     {
-        ArgumentNullException.ThrowIfNull(json);
-        var document = JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory) ?? throw new JsonException("The stored history is empty.");
+        var messages = FromJsonWhole(json, out StoredHistory document);
         plan = document.Plan;
         executing = document.Executing;
         claudeSessionId = document.ClaudeSessionId;
         claudeServerSessionId = document.ClaudeServerSessionId;
+        return messages;
+    }
+
+    /// <summary>
+    /// The messages of <paramref name="json"/> and the rest the document holds (<paramref name="rest"/>, its messages left out): the plans, the Claude
+    /// ids, the advisors' threads and sessions, the mark — one parse (2026-10-20, a review: a session's restore parsed the whole history four times,
+    /// once each for the threads, the sessions and the mark). Throws <see cref="JsonException"/> on a document that is not one.
+    /// </summary>
+    public static List<ChatMessage> FromJsonWhole(string json, out StoredHistory rest)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        var document = JsonSerializer.Deserialize(json, SessionJsonContext.Default.StoredHistory) ?? throw new JsonException("The stored history is empty.");
         var messages = new List<ChatMessage>(document.Messages.Count);
         foreach (var stored in document.Messages)
         {
@@ -269,6 +280,8 @@ public static class SessionHistory
             }
         }
 
+        document.Messages.Clear();
+        rest = document;
         return messages;
     }
 

@@ -32,7 +32,8 @@ public sealed record AuditDirectiveState(
     int ToolBudget,
     int MaxToolIterations,
     bool DeletedFiles = false,
-    bool GitScope = false);
+    bool GitScope = false,
+    bool Cut = false);
 
 /// <summary>
 /// A code audit's words (2026-10-18, <c>/code-audit</c>, the user's idea: <c>/plan gaps</c>' engine for code): the command's words and
@@ -155,10 +156,29 @@ public static class AuditText
     public static string NoFilesLeft(string label, string skipped) =>
         skipped.Length == 0 ? $"no text file in {label}" : $"no text file left in {label} ({skipped} skipped)";
 
-    /// <summary>The audit's start: the label, the files, the focus, the limit, the report. Pinned.</summary>
-    public static string StartedNotice(string label, int files, int more, string skipped, IReadOnlyList<string> focus, int limit, string path) =>
+    /// <summary>
+    /// The audit's start: the label, the files, the focus, the limit, the report; <paramref name="cut"/> (2026-10-20, a review: never said) when the
+    /// listing stopped short, so the scope is not the whole of what was asked for. Pinned.
+    /// </summary>
+    public static string StartedNotice(string label, int files, int more, string skipped, IReadOnlyList<string> focus, int limit, string path, bool cut = false) =>
         $"{Glyph} Code audit of {label}: {Files(files + more)}" + (skipped.Length > 0 ? $" ({skipped} skipped)" : "")
-        + $", focus {AuditFocus.Label(focus)}, " + (limit > 0 ? $"up to {Passes(limit)}" : "no pass limit") + $". The report is {path}; Esc stops it.";
+        + $", focus {AuditFocus.Label(focus)}, " + (limit > 0 ? $"up to {Passes(limit)}" : "no pass limit") + $". The report is {path}; Esc stops it."
+        + (cut ? " " + ScopeCutSentence : "");
+
+    /// <summary>A scope whose listing stopped short (its cap, its time, a git list's cap): what the notice and the directive say. Pinned.</summary>
+    public const string ScopeCutSentence = "The listing was cut short: files past it are not in the scope; name a narrower path to audit them.";
+
+    /// <summary>A resume whose scope's listing stopped short (2026-10-20, a review). Pinned.</summary>
+    public const string ScopeCutNotice = Glyph + " " + ScopeCutSentence;
+
+    /// <summary>
+    /// A pass's message that never reached a turn (2026-10-20, a review: a picture the model cannot see, no assistant — the audit stayed mid-pass,
+    /// every later turn narrowed to its tools): the audit stops. Pinned.
+    /// </summary>
+    public static string PassNotSentNotice(string name) => $"{Glyph} The code audit's pass could not be sent, so it stops; /code-audit resume {name} runs more passes.";
+
+    /// <summary>The line's pictures left out of an audit whose model cannot see them (2026-10-20, a review). Pinned.</summary>
+    public const string PicturesUnseenNotice = Glyph + " The model cannot see pictures: the line's pictures are left out of the audit.";
 
     /// <summary>The spinner's label while the scope is listed.</summary>
     public const string ListingSpinner = "Listing the files to audit";
@@ -266,7 +286,8 @@ public static class AuditText
 
         // The names fenced as data (2026-10-19, the second review: the audited repository names its files, and a name may read as an order; the
         // open findings' titles were fenced for the same reason).
-        sb.Append("- Scope (").Append(Files(s.ScopeFiles.Count + s.MoreFiles)).Append(s.MoreFiles > 0 ? $", {N(s.MoreFiles)} past the list's cap" : "").Append(") ")
+        sb.Append("- Scope (").Append(Files(s.ScopeFiles.Count + s.MoreFiles)).Append(s.MoreFiles > 0 ? $", {N(s.MoreFiles)} past the list's cap" : "")
+          .Append(s.Cut ? ", the listing cut short: more files exist than it holds" : "").Append(") ")
           .Append(FileNamesNote).Append(": ");
         sb.Append(NamesFenced(scopeFolders || s.ScopeFiles.Count > DirectiveFiles ? Folders(s.ScopeFiles) : string.Join(", ", s.ScopeFiles))).Append('\n');
         if (s.Skipped.Length > 0)
@@ -494,6 +515,10 @@ public static class AuditText
     public static string CoverageNotSavedLogLine(string detail) => "Code audit: the coverage sidecar was not saved: " + detail;
     public static string EvidenceTooLongResult(string field) => $"Error: {field} is over 400 characters or 8 lines; quote the few lines that show it";
     public static string EvidenceNotFoundResult(string location) => $"Error: the quoted code isn't at {location}; read it again and quote it as it stands";
+    /// <summary>The quote's search ran out of time (2026-10-20, a review: read as "not found"). Pinned.</summary>
+    public static string EvidenceTimedOutResult(string file) =>
+        $"Error: the quote took too long to find in {file}; quote a shorter, distinctive part of the line as it stands";
+
     public static string EvidenceElsewhereResult(string file, int line, int found) => $"Error: the quoted code is at {file}:{N(found)}, not line {N(line)}; send the finding again with line {N(found)}";
     public static string DuplicateResult(string field, string id) => $"Error: {field} repeats {id}, which is open in the report; leave it out";
     public static string UnknownIdResult(string field, string id) => $"Error: {field} names {Clip(id, 20)}, which is not an open finding";
@@ -605,33 +630,14 @@ public static class AuditText
     {
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(dimensions);
-        if (history.Count == 0)
+        // The gap review's shape, shared (PlanText.SummaryLines, 2026-10-20, a review), with the audit's nouns.
+        return PlanText.SummaryLines(history, $"{Glyph} Code audit", p =>
         {
-            return [];
-        }
-
-        var timed = history.Where(p => p.Elapsed is not null).ToList();
-        string totals = timed.Count == 0 ? ""
-            : ", " + NeonSidekick.UI.ThinkingFoldText.Duration(timed.Aggregate(TimeSpan.Zero, (sum, p) => sum + p.Elapsed!.Value))
-              + TokensPart(timed.Sum(p => p.Tokens ?? 0), 0);
-        var lines = new List<string>(history.Count + 1) { $"{Glyph} Code audit, {Passes(history.Count)}{totals}:" };
-        for (int i = 0; i < history.Count; i++)
-        {
-            var p = history[i];
             string outcome = p.Gaps > 0 ? Changes(p.Gaps) : p.Clean ? "nothing new" : "no report";
             string focus = p.Focus >= 0 ? AuditFocus.PassFocus(dimensions, p.Focus + 1).Label : "";
             string marks = string.Join(", ", new[] { focus.Length > 0 ? focus : null, p.Advisor ? "advisor" : null }.OfType<string>());
-            string line = $"  pass {N(p.Pass)}: {outcome}" + (p.Minor > 0 ? ", " + Nits(p.Minor) : "") + (marks.Length > 0 ? $" ({marks})" : "")
-                + (i == history.Count - 1 ? ", " + EndingWord(reason, cleanPasses) : "");
-            if (p.Elapsed is { } elapsed)
-            {
-                line += " · " + NeonSidekick.UI.ThinkingFoldText.Duration(elapsed) + TokensPart(p.Tokens ?? 0, p.AdvisorTokens ?? 0, " · ");
-            }
-
-            lines.Add(line);
-        }
-
-        return lines;
+            return outcome + (p.Minor > 0 ? ", " + Nits(p.Minor) : "") + (marks.Length > 0 ? $" ({marks})" : "");
+        }, EndingWord(reason, cleanPasses));
     }
 
     private static string EndingWord(PlanGapStop reason, int cleanPasses) => reason switch
@@ -644,6 +650,20 @@ public static class AuditText
         PlanGapStop.NoRevision => "no report",
         _ => "your message",
     };
+
+    // The completion list's notes (2026-10-20, a review: inline in AuditCommand.Complete and its reviewer list). Pinned.
+    public const string OpenNote = "list the reports, or show one";
+    public const string FixNote = "plan the fixes for a report's open findings";
+    public const string ResumeNote = "more passes on a kept report";
+    public const string DiffNote = "the working changes: unstaged, staged and untracked";
+    public const string StagedNote = "the staged changes";
+    public const string BranchNote = "the branch's commits since its base (main, else master)";
+    public const string FocusNote = "focus";
+    public const string AllFocusNote = "every focus";
+    public const string ModelReviewerNote = "the model audits alone";
+    public const string AdvisorReviewerNote = "an advisor finds, the model verifies";
+    public const string AnyReviewerNote = "the model, asking advisors where a role fits";
+    public const string ConfirmReviewerNote = "the model audits; an advisor checks once it finds nothing new";
 
     /// <summary>The --log line of a call: the titles only, never a detail (2026-10-18). Pinned.</summary>
     public static string CallLogLine(int pass, IReadOnlyList<string> added, IReadOnlyList<string> reopened, IReadOnlyList<string> retracted, IReadOnlyList<string> revised, int minor, bool clean) =>

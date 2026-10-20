@@ -60,7 +60,7 @@ public sealed partial class SidekickApp
 
         public void Notice(string text) => notices.Add(text);
 
-        public void Tail(string tail) => notices.AddRange(RalphLog.CleanTail(tail).Split('\n').TakeLast(12).Where(l => l.Length > 0).Select(l => "  " + l));
+        public void Tail(string tail) => notices.AddRange(RalphText.TailLines(tail).Select(l => "  " + l));
 
         public void Log(string line) => Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, line);
 
@@ -74,7 +74,19 @@ public sealed partial class SidekickApp
                 return new RalphCheckResult(RalphCheckKind.Refused, null, "", TimeSpan.Zero);
             }
 
-            return await context.Verifier.RunAsync(command, shell, Files.EnsureExists(), TimeSpan.FromSeconds(ralph.Loop.Snapshot.CheckTimeoutSeconds), cancellationToken).ConfigureAwait(false);
+            // A folder that cannot be made is said, the check not run (null), as the screen's is (2026-10-20, a review: it threw, and the loop failed).
+            string workdir;
+            try
+            {
+                workdir = Files.EnsureExists();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+            {
+                notices.Add(FileText.CouldNot("create", Files.Root, ex.Message));
+                return null;
+            }
+
+            return await context.Verifier.RunAsync(command, shell, workdir, TimeSpan.FromSeconds(ralph.Loop.Snapshot.CheckTimeoutSeconds), cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)
@@ -104,7 +116,7 @@ public sealed partial class SidekickApp
 
         public async Task TailAsync(string tail)
         {
-            foreach (string line in RalphLog.CleanTail(tail).Split('\n').TakeLast(12).Where(l => l.Length > 0))
+            foreach (string line in RalphText.TailLines(tail))
             {
                 await app.HeadlessNoticeLineAsync("[notice]   " + line).ConfigureAwait(false);
             }
@@ -145,6 +157,9 @@ public sealed partial class SidekickApp
     {
         switch (command)
         {
+            case ChatScreen.PlanCommand.BadRalphPasses when !plan.Active && state.Executing is not { Ralph: true } && ChatScreen.RalphDigitsPlan(files, rest) is not null:
+                // A plan whose name is all digits (2026-10-20, a review), as on the screen.
+                goto case ChatScreen.PlanCommand.Ralph;
             case ChatScreen.PlanCommand.BadRalphPasses:
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.BadPassesError(rest)).ConfigureAwait(false);
                 return true;
@@ -177,12 +192,26 @@ public sealed partial class SidekickApp
                 }
 
                 ChatScreen.RalphArgs(rest, out string name, out int? passes, out _);
+                if (name.Length == 0 && state.Executing is not { Ralph: true } && ChatScreen.RalphDigitsPlan(files, rest) is { } named)
+                {
+                    (name, passes) = (named, null);
+                }
+
                 if (name.Length == 0)
                 {
                     if (state.Executing is { Ralph: true, Path: { } elsewhere } away && !RalphSnapshot.SameRoot(away.Root, files.Root))
                     {
                         // Its approved commands are the folder's it ran in (2026-10-19, the review): never run here.
                         await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.ResumeElsewhereError(elsewhere, away.Root ?? "?")).ConfigureAwait(false);
+                        return true;
+                    }
+
+                    if (state.Executing is { Ralph: true, Path: { } gone } && PlanFiles.ReadWhole(files, gone) is null)
+                    {
+                        // Gone, or past the read limit, while it was paused (2026-10-20, a review: headless said nothing was paused and kept the
+                        // state), as the screen's resume says it and drops it.
+                        state.Executing = null;
+                        await HeadlessNoticeLineAsync("[notice] " + RalphText.StopNotice(RalphStop.PlanGone, gone, 0, 0)).ConfigureAwait(false);
                         return true;
                     }
 
@@ -260,6 +289,14 @@ public sealed partial class SidekickApp
             return;
         }
 
+        if (state.Audit is { Active: true })
+        {
+            // As the screen refuses it (2026-10-20, a review: the audit's directive and read-only tools won every pass's turn, so no pass saw
+            // finish_step and the loop stalled).
+            await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.UnderAuditError).ConfigureAwait(false);
+            return;
+        }
+
         var steps = PlanSteps.Parse(body);
         if (!PlanSteps.Leaves(steps).Any())
         {
@@ -272,7 +309,7 @@ public sealed partial class SidekickApp
         var owner = RalphLog.Me;
         if (!RalphLog.TryLock(files, path, owner, RalphLog.OwnerAlive))
         {
-            await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.LockedError(path)).ConfigureAwait(false);
+            await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphLog.LockError(files, path)).ConfigureAwait(false);
             return;
         }
 
@@ -425,35 +462,20 @@ public sealed partial class SidekickApp
 
             if (next.Kind == RalphNextKind.FinalCheck)
             {
-                if (loop.Snapshot.FinalCheck is not { } final)
+                // The screen's final check (RalphStart.FinalCheckAsync), its lines said after.
+                var said = new List<string>();
+                var stop = await RalphStart.FinalCheckAsync(new HeadlessRalphHost(this, ralph, context, said), loop, cancellationToken).ConfigureAwait(false);
+                foreach (string line in said)
                 {
-                    await HeadlessRalphEndAsync(state, files, RalphStop.Done).ConfigureAwait(false);
+                    await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+                }
+
+                if (stop is { } stopped)
+                {
+                    await HeadlessRalphEndAsync(state, files, stopped).ConfigureAwait(false);
                     return;
                 }
 
-                string? refused = HeadlessCheckRefusal(final, RalphJudge.ShellOf(loop.Snapshot), files, EffectiveSettings, context, out bool policyOff);
-                if (refused is not null || policyOff)
-                {
-                    await HeadlessNoticeLineAsync("[notice] " + RalphText.CheckRefusedError(final, refused ?? RalphText.PolicyOffNowReason)).ConfigureAwait(false);
-                    await HeadlessRalphEndAsync(state, files, RalphStop.CheckRefused).ConfigureAwait(false);
-                    return;
-                }
-
-                int seconds = loop.Snapshot.CheckTimeoutSeconds;
-                var result = await context.Verifier.RunAsync(final, RalphJudge.ShellOf(loop.Snapshot), files.EnsureExists(), TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
-                if (result.Kind == RalphCheckKind.Cancelled)
-                {
-                    await HeadlessRalphEndAsync(state, files, RalphStop.Stopped).ConfigureAwait(false);
-                    return;
-                }
-
-                if (loop.FinalResult(result.Passed, result.Tail) is { } stop)
-                {
-                    await HeadlessRalphEndAsync(state, files, stop).ConfigureAwait(false);
-                    return;
-                }
-
-                await HeadlessNoticeLineAsync("[notice] " + RalphText.FinalFailedOnceNotice(final)).ConfigureAwait(false);
                 continue;
             }
 
@@ -464,16 +486,19 @@ public sealed partial class SidekickApp
             int index = step?.Index ?? total;
             string? finalTail = step is null ? loop.TakeFinalTail() : null;
             var log = RalphLog.Read(files, path);
+            // The tree before the pass, ahead of its mark (the screen's order).
+            ralph.Before = RalphChanges.Snapshot(files, ralph.Git, cancellationToken);
             loop.BeginPass(step, HeadlessPlanMeter(context.Session));
             // The task lines as the pass begins, the file's (steps was parsed from it whole): what the judge pairs the lines after with, and what a
             // start after a crash puts back (the in-pass mark keeps them, the final fix's too: 2026-10-19, the fourth review).
             ralph.Lines = PlanSteps.Flat(steps);
             ralph.Headed = PlanSteps.HasStepsHeading(body);
-            if (RalphLog.MarkInPass(files, path, step, ralph.Lines, ralph.Headed) is { } unmarked)
+            if (RalphLog.MarkInPass(files, path, step, ralph.Lines, ralph.Headed, log, PlanDocument.Stamp(text)) is { } unmarked)
             {
                 Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: " + unmarked);
             }
-            string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text));
+
+            string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text, step.Twins > 1 ? step.Index : null));
             string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step),
                 snapshot.Reviewer != RalphReviewer.Off && step is not null, canAsk: false, notes, RalphLog.LearnedText(log), finalFix: step is null);
             ralph.Turn = new PlanTurn(directive, ralph.Tool);
@@ -491,7 +516,6 @@ public sealed partial class SidekickApp
 
             loop.DropPicturesNext = false;
             ralph.HadPictures = images.Count > 0;
-            ralph.Before = RalphChanges.Snapshot(files, ralph.Git, cancellationToken);
             ralph.Line = step is null ? RalphText.FinalFixLine(loop.Pass) : RalphText.TranscriptLine(loop.Pass, index, total, step.Text);
             ralph.Title = RalphText.SessionTitle(snapshot.Title, index, total, loop.Pass);
             Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, $"ralph: pass {loop.Pass}, step {index} of {total}: {step?.Text ?? RalphText.FinalFixStep}");
@@ -584,7 +608,7 @@ public sealed partial class SidekickApp
         {
             if (ralph.Loop.InPass)
             {
-                RalphJudge.PutBackUnjudged(ralph.Files, ralph.Loop.Snapshot.Path, ralph.Lines, ralph.Step, ralph.Headed);
+                RalphJudge.PutBackUnjudged(ralph.Files, ralph.Loop.Snapshot.Path, ralph.Lines, ralph.Step, ralph.Headed, new PlanChecks(ralph.Loop.Snapshot.Verify, ralph.Loop.Snapshot.Final));
             }
 
             RalphLog.Unlock(ralph.Files, ralph.Loop.Snapshot.Path, RalphLog.Me);

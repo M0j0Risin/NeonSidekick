@@ -173,11 +173,20 @@ public static class AuditFiles
         return bare + CoverageExtension;
     }
 
-    /// <summary>The files the passes read, as the sidecar keeps them; empty when there is none yet.</summary>
-    public static HashSet<string> ReadCoverage(WorkingDirectory files, string reportPath)
+    /// <summary>The files the passes read, as the sidecar keeps them; empty when there is none yet (or it cannot be read now).</summary>
+    public static HashSet<string> ReadCoverage(WorkingDirectory files, string reportPath) => ReadCoverage(files, reportPath, out _);
+
+    /// <summary>
+    /// <see cref="ReadCoverage(WorkingDirectory, string)"/>, <paramref name="problem"/> the error sentence when a sidecar is there that cannot be read
+    /// (locked by a scan or a sync client): a merge then leaves it as it is (2026-10-20, a review: read as empty, it was written over with this
+    /// call's files alone, and every earlier run's were lost).
+    /// </summary>
+    public static HashSet<string> ReadCoverage(WorkingDirectory files, string reportPath, out string? problem)
     {
         ArgumentNullException.ThrowIfNull(files);
-        var read = files.ReadText(CoveragePath(reportPath), null, null, WorkingDirectory.MaxWriteChars);
+        string path = CoveragePath(reportPath);
+        var read = files.ReadText(path, null, null, WorkingDirectory.MaxWriteChars);
+        problem = read.Outcome is FileOutcome.Ok or FileOutcome.Missing ? null : FileText.Error(read.Outcome, path, "read", read.Detail);
         return read.Outcome == FileOutcome.Ok ? ParseCoverage(read.Text) : new HashSet<string>(AuditPath.Comparer);
     }
 
@@ -189,7 +198,12 @@ public static class AuditFiles
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(read);
-        var known = ReadCoverage(files, reportPath);
+        var known = ReadCoverage(files, reportPath, out string? unread);
+        if (unread is not null)
+        {
+            return unread;
+        }
+
         int before = known.Count;
         known.UnionWith(read.Where(p => p.Length > 0));
         if (known.Count == before && before > 0)
@@ -262,13 +276,16 @@ public static class AuditFiles
         return paths;
     }
 
-    /// <summary>The report and its sidecar deleted (through <see cref="WorkingDirectory.Delete"/>, the Recycle bin when the setting says): the report's result.</summary>
+    /// <summary>
+    /// The report and its sidecar deleted (through <see cref="WorkingDirectory.Delete"/>, the Recycle bin when the setting says): the report's result.
+    /// The sidecar goes only with the report (2026-10-20, a review: a report that would not go kept its place with its coverage gone).
+    /// </summary>
     public static DeleteResult Discard(WorkingDirectory files, string path)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
         var result = files.Delete(path);
-        if (Exists(files, CoveragePath(path)))
+        if (result.Outcome == FileOutcome.Ok && Exists(files, CoveragePath(path)))
         {
             files.Delete(CoveragePath(path));
         }
@@ -288,6 +305,10 @@ public static class AuditFiles
         }
     }
 
+    /// <summary>
+    /// Whether a report's name is taken: its file, or a sidecar left behind (2026-10-20, a review: a report deleted by hand left its
+    /// <c>.coverage.txt</c>, and a new audit of the same name took its coverage as its own).
+    /// </summary>
     private static bool Taken(WorkingDirectory files, string path) =>
-        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full);
+        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full) || Exists(files, CoveragePath(path));
 }

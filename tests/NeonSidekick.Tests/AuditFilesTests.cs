@@ -90,6 +90,33 @@ public sealed class AuditFilesTests : IDisposable
     }
 
     [Fact]
+    public void Choose_PassesAName_WhoseSidecarWasLeftBehind()
+    {
+        // 2026-10-20, a review: a report deleted by hand left its coverage, and a new audit of the same name took it as its own.
+        var day = new DateTimeOffset(2026, 10, 18, 9, 0, 0, TimeSpan.Zero);
+        string first = Save("tree", day);
+        AuditFiles.MergeCoverage(_box.Files, first, ["a.cs"]);
+        File.Delete(_box.Full(first));
+
+        Assert.Equal(".neon/audits/tree-2026-10-18-2.md", AuditFiles.Choose(_box.Files, "tree", day));
+    }
+
+    [WindowsFact]
+    public void Coverage_ASidecarThatCannotBeRead_IsNeverWrittenOver()
+    {
+        // 2026-10-20, a review: a locked sidecar read as empty, and the merge wrote this call's files over every earlier run's.
+        string path = Save("x", DateTimeOffset.UtcNow);
+        AuditFiles.MergeCoverage(_box.Files, path, ["a.cs", "b.cs"]);
+        string sidecar = _box.Full(AuditFiles.CoveragePath(path));
+        using (new FileStream(sidecar, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.NotNull(AuditFiles.MergeCoverage(_box.Files, path, ["c.cs"]));
+        }
+
+        Assert.Equal(["a.cs", "b.cs"], AuditFiles.ReadCoverage(_box.Files, path).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void Discard_RemovesTheReportAndItsSidecar()
     {
         string path = Save("x", DateTimeOffset.UtcNow);

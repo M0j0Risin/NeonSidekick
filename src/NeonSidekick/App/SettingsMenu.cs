@@ -2785,11 +2785,11 @@ internal sealed partial class SettingsMenu
             SettingsField.PlanGapCleanPasses => GapPasses(data.PlanGapCleanPasses),
             SettingsField.PlanGapAskUser => OnOff(data.PlanGapAskUser),
             SettingsField.RalphLoopReviewer => Plans.RalphReviewerMode.TryParse(data.RalphLoopReviewer, out var ralphReviewer) ? Plans.RalphReviewerMode.Name(ralphReviewer) : data.RalphLoopReviewer,
-            SettingsField.RalphLoopCheckpoint => data.RalphLoopCheckpoint <= 0 ? OnOff(false) : data.RalphLoopCheckpoint == 1 ? "every step" : "every " + data.RalphLoopCheckpoint.ToString(CultureInfo.InvariantCulture) + " steps",
+            SettingsField.RalphLoopCheckpoint => RalphCheckpointValue(data.RalphLoopCheckpoint),
             SettingsField.RalphLoopPasses => data.RalphLoopPasses <= 0 ? RalphAutoPassesLabel : GapPasses(data.RalphLoopPasses),
             SettingsField.RalphLoopPassesPerStep => GapPasses(data.RalphLoopPassesPerStep),
-            SettingsField.RalphLoopCheckTimeoutSeconds => data.RalphLoopCheckTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " s",
-            SettingsField.RalphLoopTokenBudget => data.RalphLoopTokenBudget <= 0 ? NoBudgetLabel : UsageText.CompactNumber(data.RalphLoopTokenBudget) + " tokens",
+            SettingsField.RalphLoopCheckTimeoutSeconds => SecondsValue(data.RalphLoopCheckTimeoutSeconds),
+            SettingsField.RalphLoopTokenBudget => data.RalphLoopTokenBudget <= 0 ? NoBudgetLabel : TokensValue(data.RalphLoopTokenBudget),
             SettingsField.RalphLoopStopTone => Timers.TimerTones.Normalize(data.RalphLoopStopTone),
             SettingsField.CodeAuditPasses => GapPasses(data.CodeAuditPasses),
             SettingsField.CodeAuditCleanPasses => GapPasses(data.CodeAuditCleanPasses),
@@ -10327,6 +10327,19 @@ internal sealed partial class SettingsMenu
 
     /// <summary>A token budget of none (2026-10-18).</summary>
     public const string NoBudgetLabel = "no budget";
+
+    /// <summary>
+    /// <c>LLM Ralph loop checkpoint</c>'s value: off, <c>every step</c>, <c>every 3 steps</c> (2026-10-20, a review: written inline beside the named
+    /// labels). Pinned.
+    /// </summary>
+    public static string RalphCheckpointValue(int steps) =>
+        steps <= 0 ? OnOff(false) : steps == 1 ? "every step" : "every " + steps.ToString(CultureInfo.InvariantCulture) + " steps";
+
+    /// <summary>A seconds row's value: <c>300 s</c> (2026-10-20, a review). Pinned.</summary>
+    public static string SecondsValue(int seconds) => seconds.ToString(CultureInfo.InvariantCulture) + " s";
+
+    /// <summary>A token budget's value: <c>2M tokens</c> (2026-10-20, a review). Pinned.</summary>
+    public static string TokensValue(long tokens) => UsageText.CompactNumber(tokens) + " tokens";
 
     /// <summary><c>40 tool calls</c>, <c>1 tool call</c>, <c>no budget</c> for 0: <see cref="AppSettingsData.CodeAuditPassToolCalls"/> as the row shows it (2026-10-18). Pinned.</summary>
     public static string ToolCallBudget(int value) => value <= 0 ? "no budget" : value.ToString(CultureInfo.InvariantCulture) + (value == 1 ? " tool call" : " tool calls");
