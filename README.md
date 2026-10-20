@@ -10,7 +10,7 @@ Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer
 It's one app for research, IT and admin work, your smart home and creative projects. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
 
 **What makes it different**
-* **It can run entirely on your machine,** the model and the voice included.
+* **Fully local:** it can run entirely on your machine, the model and the voice included, and it sends no telemetry.
 * **More than a terminal:** pictures in the transcript, its own windows for photos, video and the web, and your phone can join the same live session.
 * **Advisors:** pair a local model with a frontier one. Your model does the work; the advisor can review its plans and check its steps, or give a second opinion when asked.
 
