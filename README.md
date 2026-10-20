@@ -5,7 +5,7 @@
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)
 
-Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer hardware. It runs best on a graphics card with 16 GB of VRAM or more (it's tuned for 16–32 GB), or on an Apple Silicon Mac.
+Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer hardware. It runs best on a graphics card with 16 GB of VRAM or more (it's tuned for 16–32 GB), or on an Apple Silicon Mac. On a 32 GB card such as an RTX 5090, it runs larger models with room for long context.
 
 Point it at LM Studio, Ollama or any OpenAI-compatible server on your PC or your network, or let it download a model and run it itself. When you want a frontier model, or don't have the hardware for a local one, it connects to the OpenAI and Anthropic APIs with your own key, or to Claude Code through your subscription.
 
