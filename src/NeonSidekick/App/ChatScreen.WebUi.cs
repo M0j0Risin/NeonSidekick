@@ -288,7 +288,7 @@ internal sealed partial class ChatScreen
                 }
                 catch (Exception e) when (e is not OutOfMemoryException)
                 {
-                    DiagnosticLog.Warn(WebUiCategory, "Web UI: the strip's pick did not reach the PC: " + e.Message);
+                    DiagnosticLog.Warn(WebUiCategory, WebUiText.StripPickFailedLogLine(e.Message));
                 }
             }
 
@@ -354,23 +354,49 @@ internal sealed partial class ChatScreen
 
         var bin = _effective().FileDeletesToRecycleBin ? _recycleBin : null;
         var work = Task.Run(() => Files.FileDeletes.Remove(path, isDirectory: false, isLink: false, bin));
-        try
-        {
-            if (!work.Wait(WebDeleteWait))
+
+        // The aftermath rides the delete, not the request (2026-10-19, the review): a delete slower than the wait (the bin's cap is 30 s) still
+        // leaves its audit line, its flash and the strip, and one that fails after the page stopped waiting says so in the log.
+        int abandoned = 0;
+        var settled = work.ContinueWith(
+            t =>
             {
-                return new WebReply(WebOutcome.Refused, WebUiText.StillDeleting(name));
-            }
-        }
-        catch (AggregateException e) when (e.InnerException is IOException or UnauthorizedAccessException)
+                if (t.IsCompletedSuccessfully)
+                {
+                    DeletedFromWeb(path, name, t.Result, remote);
+                }
+                else if (Volatile.Read(ref abandoned) == 1)
+                {
+                    DiagnosticLog.Warn(WebUiCategory, WebUiText.PictureDeleteFailedLogLine(name, Inner(t.Exception).Message, remote));
+                }
+            },
+            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        if (!settled.Wait(WebDeleteWait))
         {
-            return new WebReply(WebOutcome.Refused, WebUiText.PictureDeleteFailed(name, e.InnerException.Message));
+            Volatile.Write(ref abandoned, 1);
+            if (work.IsFaulted && !settled.IsCompleted)
+            {
+                // Faulted in the gap: the continuation may have read the flag before it was set; say it here (at worst twice).
+                DiagnosticLog.Warn(WebUiCategory, WebUiText.PictureDeleteFailedLogLine(name, Inner(work.Exception).Message, remote));
+            }
+
+            return new WebReply(WebOutcome.Refused, WebUiText.StillDeleting(name));
         }
 
-        var way = work.Result;
+        // Any failure is a refusal with its sentence (the review: an ArgumentException or NotSupportedException was a 500).
+        return work.IsCompletedSuccessfully
+            ? new WebReply(WebOutcome.Ok, WebUiText.PictureDeleted(name, work.Result))
+            : new WebReply(WebOutcome.Refused, WebUiText.PictureDeleteFailed(name, Inner(work.Exception).Message));
+
+        static Exception Inner(AggregateException? e) => e?.InnerException ?? (Exception?)e ?? new OperationCanceledException();
+    }
+
+    /// <summary>A page's delete done (any thread, whether or not the request still waits): the strip, the PC's flash and the audit line.</summary>
+    private void DeletedFromWeb(string path, string name, Files.DeleteWay way, IPAddress? remote)
+    {
         ForgetDeletedFile(path);
         _webUi.FlashPc(WebUiText.PictureDeletedFlash(name, way));
         DiagnosticLog.Info(WebUiCategory, WebUiText.PictureDeletedLogLine(name, way, remote));
-        return new WebReply(WebOutcome.Ok, WebUiText.PictureDeleted(name, way));
     }
 
     /// <summary>
@@ -890,8 +916,9 @@ internal sealed partial class ChatScreen
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            DiagnosticLog.Warn(WebUiCategory, "Web UI: could not open it on this PC: " + e.Message);
-            sink.Error(e.Message);
+            // Said once (2026-10-19, the review: a Warn reaches the transcript too, and the failure was printed twice); the log keeps it at Debug.
+            DiagnosticLog.Debug(WebUiCategory, WebUiText.BrowserOpenFailed(e.Message));
+            sink.Error(WebUiText.BrowserOpenFailed(e.Message));
         }
     }
 
@@ -970,7 +997,16 @@ internal sealed partial class ChatScreen
         }
         else
         {
-            _web.OpenUrl(link);
+            try
+            {
+                _web.OpenUrl(link);
+            }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
+            {
+                // A sentence, as OpenInDefaultBrowser gives one (2026-10-19, the review: it reached the command's dispatcher), never naming the link.
+                sink.Error(WebUiText.BrowserOpenFailed(e.Message));
+                return;
+            }
         }
 
         sink.Notice(WebUiText.BrowserOpened(window));

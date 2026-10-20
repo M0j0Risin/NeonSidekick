@@ -236,21 +236,30 @@ internal sealed partial class ChatScreen
     private bool HomeExpiryDue(DateTimeOffset now) =>
         _homePending.Values.Any(p => now - p.Since >= (p.Failed ? HomeFailedShows : HomePendingWait));
 
-    // Under _homeGate: the pending chips against the feed — a change ends the wait; a wait run out shows the failed mark, then goes.
+    // Under _homeGate: the pending chips against the feed — a change ends the wait; a wait run out shows the failed mark, then goes. Any change
+    // moves _homeModel (2026-10-19, the review: the Web UI's Home tab runs this too, and a mark it changed left the bar's cached row as it was).
     private void UpdateHomePending(HaLiveSnapshot live, DateTimeOffset now)
     {
+        bool marked = false;
         foreach (var (reference, pending) in _homePending.ToList())
         {
             bool moved = pending.Ids.Select((id, i) => !ReferenceEquals(live.Entities.GetValueOrDefault(id), pending.Before[i])).Any(changed => changed);
             if (moved || (pending.Failed && now - pending.Since >= HomeFailedShows))
             {
                 _homePending.Remove(reference);
+                marked = true;
             }
             else if (!pending.Failed && now - pending.Since >= HomePendingWait)
             {
                 _homePending[reference] = pending with { Since = now, Failed = true };
                 DiagnosticLog.Info(HaText.Category, HomeBarText.NoChange(HomeBarItems.NameOf(reference, live.Catalog)));
+                marked = true;
             }
+        }
+
+        if (marked)
+        {
+            _homeModel++;
         }
     }
 

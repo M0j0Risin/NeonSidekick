@@ -160,6 +160,9 @@ internal sealed class ShoppingMenu
         {
             while (true)
             {
+                // The key before the view (2026-10-19, the review: taken after, a change made in between counted as drawn and never redrew): a
+                // change in between now costs one redraw at most.
+                string drawn = ListKey();
                 var shop = _list.StoreFor(null, out _);
                 var view = _list.View(shop);
                 var (rows, headings, items) = Rows(view);
@@ -184,7 +187,7 @@ internal sealed class ShoppingMenu
                 MenuPick? picked;
                 using (var stale = new CancellationTokenSource())
                 {
-                    var watching = Watch(ListKey(), stale, cancellationToken);
+                    var watching = Watch(drawn, stale, cancellationToken);
                     try
                     {
                         picked = await _pane.PickAsync(page, cursor, cancellationToken, stale: stale.Token).ConfigureAwait(false);

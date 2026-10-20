@@ -161,6 +161,73 @@ public partial class ChatScreenTests
         Assert.False(File.Exists(ComfyPicture("pony-5.png")));
     }
 
+    /// <summary>
+    /// A delete slower than the request's wait (2026-10-19, the review): the page hears it is still under way, and when it ends the strip still drops
+    /// the picture and it is no longer served, as a quick one's would.
+    /// </summary>
+    [Fact]
+    public async Task ThePagesDelete_SlowerThanTheWait_StillDropsThePicture_WhenItEnds()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        using var release = new ManualResetEventSlim();
+        _recycleBin = new FakeRecycleBin
+        {
+            Folder = Path.Combine(_dir, "bin"),
+            AnswerFor = _ =>
+            {
+                release.Wait(TimeSpan.FromSeconds(10));
+                return new RecycleResult(RecycleOutcome.Recycled);
+            },
+        };
+        var wait = ChatScreen.WebDeleteWait;
+        ChatScreen.WebDeleteWait = TimeSpan.FromMilliseconds(50);
+        try
+        {
+            WebReply reply = default;
+            bool dropped = false;
+            int id = -1;
+            StepsWhenIdle(Line("/imagine a cat --seed 5"), input =>
+            {
+                id = Web.Snapshot().Strip!.Pictures.Single().Id;
+                reply = Web.DeletePicture(new WebPictureDelete { Id = id }, IPAddress.Loopback);
+                release.Set();
+                dropped = SpinWait.SpinUntil(() => Web.Picture(id) is null && Web.Snapshot().Strip is null, TimeSpan.FromSeconds(10));
+                PushLine(input, "/exit");
+            });
+
+            await RunAsync();
+
+            Assert.Equal((WebOutcome.Refused, WebUiText.StillDeleting("pony-5.png")), (reply.Outcome, reply.Message));
+            Assert.True(dropped);
+            Assert.False(File.Exists(ComfyPicture("pony-5.png")));
+        }
+        finally
+        {
+            ChatScreen.WebDeleteWait = wait;
+        }
+    }
+
+    /// <summary>A delete that throws something other than an I/O or access error (2026-10-19, the review): a refusal with its words, never a 500.</summary>
+    [Fact]
+    public async Task ThePagesDelete_ThatThrows_IsARefusal()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        _recycleBin = new FakeRecycleBin { AnswerFor = _ => throw new NotSupportedException("no such thing") };
+        WebReply reply = default;
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), input =>
+        {
+            reply = Web.DeletePicture(new WebPictureDelete { Id = Web.Snapshot().Strip!.Pictures.Single().Id }, null);
+            PushLine(input, "/exit");
+        });
+
+        await RunAsync();
+
+        Assert.Equal((WebOutcome.Refused, WebUiText.PictureDeleteFailed("pony-5.png", "no such thing")), (reply.Outcome, reply.Message));
+        Assert.True(File.Exists(ComfyPicture("pony-5.png")));
+    }
+
     /// <summary>The page's saved prompts sheet (later on 2026-10-15): the profile's prompts, numbered as the PC's pane numbers them.</summary>
     [Fact]
     public async Task ThePagesPromptsSheet_ListsTheProfilesPrompts_NumberedAsAtThePc()

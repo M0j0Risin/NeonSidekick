@@ -32,7 +32,7 @@ public static class WebTheme
             return "";
         }
 
-        var css = new StringBuilder("/* The profile's theme, ").Append(palette.Name.Replace("*/", "", StringComparison.Ordinal)).Append(" (2026-10-15, Web UI profile theme). */\n:root {\n");
+        var css = new StringBuilder("/* The profile's theme, ").Append(CommentSafe(palette.Name)).Append(" (2026-10-15, Web UI profile theme). */\n:root {\n");
         void Token(string name, Color color) => css.Append("  ").Append(name).Append(": ").Append(Hex(color)).Append(";\n");
         Token("--accent", palette.Primary);
         Token("--accent-2", palette.Secondary);
@@ -51,6 +51,20 @@ public static class WebTheme
         }
 
         return css.Append("}\n").ToString();
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> safe inside a CSS comment: every <c>*/</c> gone, however nested (2026-10-19, the review: one pass turned <c>**//</c>
+    /// back into <c>*/</c>, and a user theme's name closed the comment in a sheet served before sign-in).
+    /// </summary>
+    internal static string CommentSafe(string text)
+    {
+        while (text.Contains("*/", StringComparison.Ordinal))
+        {
+            text = text.Replace("*/", "", StringComparison.Ordinal);
+        }
+
+        return text;
     }
 
     /// <summary>Whether the theme's ink reads on its ground (<see cref="MinContrast"/>), so the page may take its grounds and inks.</summary>

@@ -177,6 +177,41 @@ public partial class ChatScreenTests
         Assert.Contains("light.kitchen", server.Calls[2].Target, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A room off the bar holding a Hue room's group light (2026-10-19, the review): its sheet lists only what the page may act on — the group light
+    /// is the room's own switch's — and every row it lists acts.
+    /// </summary>
+    [Fact]
+    public async Task HomeTab_ARoomsSheet_ListsOnlyWhatItsReachActsOn()
+    {
+        var server = HomeTab();
+        server.Area("kitchen", "Kitchen")
+            .Entity("light.kitchen", "off", """{"friendly_name":"Kitchen"}""", area: "kitchen")
+            .Entity("light.kitchen_room", "off", """{"friendly_name":"Kitchen room","is_hue_group":true,"entity_id":["light.kitchen"]}""", area: "kitchen");
+        server.HoldStates = true;
+        WebHomeSheet? sheet = null;
+        var replies = new List<WebReply>();
+        var input = WhenIdle(
+            i =>
+            {
+                HomeSide.Read();
+                TickUntil(() => HomeSide.Read().Rooms.Any(r => r.Ref == "area:kitchen") && HomeSide.Sheet("area:kitchen") is { Rows: [_, { Actions.Count: > 0 }, ..] });
+                sheet = HomeSide.Sheet("area:kitchen");
+                foreach (var row in sheet!.Rows.Where(r => r.Entity is not null))
+                {
+                    replies.Add(HomeSide.Act(new WebHomeActRequest { Ref = "area:kitchen", Entity = row.Entity, Index = 0, Label = row.Actions[0].Label }, null));
+                }
+
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.Equal(["light.kitchen"], sheet!.Rows.Select(r => r.Entity).OfType<string>());
+        Assert.All(replies, r => Assert.Equal(WebOutcome.Ok, r.Outcome));
+        Assert.Single(replies);
+    }
+
     /// <summary>The rooms' controls with <i>Web UI home controls</i> off (2026-10-16): a room's switch and a row's act refused like every action.</summary>
     [Fact]
     public async Task HomeTab_TheRooms_WithControlsOff_AreRefused()

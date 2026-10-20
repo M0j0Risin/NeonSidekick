@@ -35,6 +35,12 @@ internal sealed partial class ChatScreen
 
     private readonly SemaphoreSlim _homeSaying = new(1, 1);
 
+    // What a page may reach, as last worked out, and what from (2026-10-19, the review: the rooms were rebuilt at every sheet read, tap and act, about
+    // twice a second with a sheet open). Swapped whole; the snapshot is the feed's, replaced on every change, so a reference compare is its version.
+    private sealed record HomeReachCache(string ItemsKey, HaLiveSnapshot Live, IReadOnlySet<string> Reach);
+
+    private HomeReachCache? _homeReach;
+
     /// <summary>The Home tab's side, as the session hands it to the host.</summary>
     private sealed class HomeSide(ChatScreen screen) : IWebHome
     {
@@ -151,21 +157,28 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
-        IReadOnlyList<WebHomeTile> tiles;
-        IReadOnlyList<WebHomeRoom> rooms;
+        Dictionary<string, HomeChipMark> marks;
         lock (_homeGate)
         {
             _homeWebUntil = (_time.GetUtcNow() + HomeWebLease).UtcTicks;
             UpdateHomePending(live, _time.GetUtcNow());
-            tiles = WebHomeView.Tiles(items, live, HomeMarkOf, effective.HomeBarAliases, effective.HomeBarGlyphs, effective.WebUiHomeControls);
-            // The rooms under the same lock (2026-10-16): their marks read _homePending, as the tiles' do; nothing here touches the pane.
-            rooms = WebHomeView.Rooms(live, items, HomeMarkOf, HomeRoomDomains);
-            var ids = new HashSet<string>(HomeBarItems.EntityIds(items, live.Catalog), StringComparer.Ordinal);
-            // The scenes too, so their names come with their states (the registry often has none).
-            ids.UnionWith(live.Catalog?.EntitiesOf("scene") ?? []);
-            // And every room's devices, an area's lights and a zone's group light (2026-10-16): a zone's members come with its group's
-            // attributes, so they are wanted from the next read on.
-            ids.UnionWith(HomeRoomIds(rooms, live.Catalog));
+            marks = _homePending.Keys.ToDictionary(r => r, HomeMarkOf, StringComparer.Ordinal);
+        }
+
+        // The tiles and the rooms outside the lock, over a copy of the marks (2026-10-19, the review: the PC bar's draw takes _homeGate under the
+        // pane's lock, and a big catalog's rooms held it there).
+        HomeChipMark MarkOf(string reference) => marks.GetValueOrDefault(reference);
+        var tiles = WebHomeView.Tiles(items, live, MarkOf, effective.HomeBarAliases, effective.HomeBarGlyphs, effective.WebUiHomeControls);
+        var rooms = WebHomeView.Rooms(live, items, MarkOf, HomeRoomDomains);
+        Volatile.Write(ref _homeReach, new HomeReachCache(HomeItemsKey(items), live, WebHomeView.Reach(items, live.Catalog, HomeRoomDomains, rooms)));
+        var ids = new HashSet<string>(HomeBarItems.EntityIds(items, live.Catalog), StringComparer.Ordinal);
+        // The scenes too, so their names come with their states (the registry often has none).
+        ids.UnionWith(live.Catalog?.EntitiesOf("scene") ?? []);
+        // And every room's devices, an area's lights and a zone's group light (2026-10-16): a zone's members come with its group's
+        // attributes, so they are wanted from the next read on.
+        ids.UnionWith(HomeRoomIds(rooms, live.Catalog));
+        lock (_homeGate)
+        {
             _homeWebIds = ids;
         }
 
@@ -215,10 +228,23 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What a page may read or act on now (2026-10-16): the tiles' reach and the rooms' (<see cref="WebHomeView.Reach"/>), the rooms built
-    /// without marks. Checked again at every request against the states as they are.
+    /// without marks. Checked again at every request against the states as they are: worked out again only when the items or the feed's
+    /// snapshot moved (2026-10-19, the review), the marks never changing which devices a room holds.
     /// </summary>
-    private static IReadOnlySet<string> HomeReach(IReadOnlyList<string> items, HaLiveSnapshot live) =>
-        WebHomeView.Reach(items, live.Catalog, HomeRoomDomains, WebHomeView.Rooms(live, items, static _ => HomeChipMark.None, HomeRoomDomains));
+    private IReadOnlySet<string> HomeReach(IReadOnlyList<string> items, HaLiveSnapshot live)
+    {
+        string key = HomeItemsKey(items);
+        if (Volatile.Read(ref _homeReach) is { } cache && ReferenceEquals(cache.Live, live) && string.Equals(cache.ItemsKey, key, StringComparison.Ordinal))
+        {
+            return cache.Reach;
+        }
+
+        var reach = WebHomeView.Reach(items, live.Catalog, HomeRoomDomains, WebHomeView.Rooms(live, items, static _ => HomeChipMark.None, HomeRoomDomains));
+        Volatile.Write(ref _homeReach, new HomeReachCache(key, live, reach));
+        return reach;
+    }
+
+    private static string HomeItemsKey(IReadOnlyList<string> items) => string.Join('\n', items);
 
     /// <summary>
     /// A tile's sheet (a Kestrel thread): a room's devices with their states and actions (its own row first: all on, all off), or one device's;
@@ -230,7 +256,8 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
-        if (!WebHomeView.Reaches(reference, items, HomeReach(items, live)) || !HomeBarItems.TryParse(reference, out var kind, out string id))
+        var reach = HomeReach(items, live);
+        if (!WebHomeView.Reaches(reference, items, reach) || !HomeBarItems.TryParse(reference, out var kind, out string id))
         {
             return null;
         }
@@ -242,7 +269,10 @@ internal sealed partial class ChatScreen
         IReadOnlyList<string> watched;
         if (kind == HomeItemKind.Area)
         {
+            // Only the members a page may act on (2026-10-19, the review: a room off the home bar listed its Hue group light, which its reach
+            // leaves to the room's own switch, and every tap on it was refused).
             var members = live.Catalog?.MembersOf(id, HomeRoomDomains)
+                .Where(reach.Contains)
                 .OrderBy(m => Array.IndexOf(HomeRoomDomains, HaCatalog.DomainOf(m)))
                 .ToList() ?? [];
             var rows = new List<WebHomeSheetRow>

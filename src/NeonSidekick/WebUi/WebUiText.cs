@@ -66,6 +66,12 @@ public static class WebUiText
     /// <summary><c>/webui browser</c> while the server isn't serving (a port refused, still starting).</summary>
     public static string BrowserNotServing(int port) => "The Web UI isn't serving on port " + port.ToString(System.Globalization.CultureInfo.InvariantCulture) + " yet.";
 
+    /// <summary>The Web UI not opened on this PC (the shell refused the open): the system's words, never the link or the token.</summary>
+    public static string BrowserOpenFailed(string detail) => "Could not open the Web UI on this PC: " + detail;
+
+    /// <summary>The log line for a strip pick from the page that failed on the PC.</summary>
+    public static string StripPickFailedLogLine(string detail) => "Web UI: the strip's pick did not reach the PC: " + detail;
+
     /// <summary>Where it went; never the link or the token.</summary>
     public static string BrowserOpened(bool window) => "📱 opened the Web UI in " + (window ? "the Browser window" : "the default browser");
 
@@ -552,6 +558,10 @@ public static class WebUiText
 
     /// <summary>A delete the system refused; the picture stays.</summary>
     public static string PictureDeleteFailed(string name, string detail) => "Could not delete " + name + ": " + detail;
+
+    /// <summary>The log line for a delete that failed after the page stopped waiting: the name alone, never the path.</summary>
+    public static string PictureDeleteFailedLogLine(string name, string detail, IPAddress? remote) =>
+        "Web UI could not delete \"" + name + "\" for " + Where(remote) + ": " + detail;
 
     /// <summary>A delete the PC did not finish within the request's wait.</summary>
     public static string StillDeleting(string name) => name + " is still being deleted at the PC.";

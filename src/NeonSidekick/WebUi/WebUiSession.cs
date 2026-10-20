@@ -57,18 +57,20 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly LinkedList<string> _ids = new();
     private readonly object _idGate = new();
     private readonly ITimer _sampler;
-    private readonly ITimer _statusTrail;
     private readonly TimeProvider _time;
-    private readonly object _statusGate = new();
+    private readonly WebThrottle _status;
     private readonly WebThrottle _strip;
     private readonly WebThrottle _point;
+
+    // The state's, the status row's and the strip's reads and sends one at a time each (2026-10-19, the review): the sampler, a nudge and a trailing send ran
+    // together, and an older read published after a newer one's key was taken stayed on the pages until the next change.
+    private readonly object _statePublish = new();
+    private readonly object _statusPublish = new();
+    private readonly object _stripPublish = new();
     private string _lastStrip = "";
     private long _lastPoint;
     private string _lastState = "";
     private string _lastStatus = "";
-    private long _statusAt;
-    private bool _statusSent;
-    private bool _statusTrailing;
 
     /// <summary>The fastest the status row is sent while its label changes (2026-10-15): a download's percent can change many times a second.</summary>
     public static readonly TimeSpan StatusThrottle = TimeSpan.FromMilliseconds(200);
@@ -88,7 +90,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         Asks.Changed += PublishAsks;
         _time = time ?? TimeProvider.System;
         _sampler = _time.CreateTimer(_ => SampleState(), null, StateInterval, StateInterval);
-        _statusTrail = _time.CreateTimer(_ => TrailingStatus(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _status = new WebThrottle(_time, StatusThrottle, PublishStatus, e => DiagnosticLog.Debug(Category, "Web UI: the status could not be read: " + e.Message));
         _strip = new WebThrottle(_time, StatusThrottle, PublishStrip, e => DiagnosticLog.Debug(Category, "Web UI: the picture strip could not be read: " + e.Message));
         _point = new WebThrottle(_time, StatusThrottle, PublishPoint, e => DiagnosticLog.Debug(Category, "Web UI: the PC's picture could not be sent: " + e.Message));
     }
@@ -251,14 +253,18 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return;
         }
 
-        string key = StripKey();
-        if (key == Interlocked.Exchange(ref _lastStrip, key))
+        lock (_stripPublish)
         {
-            return;
-        }
+            string key = StripKey();
+            if (key == _lastStrip)
+            {
+                return;
+            }
 
-        var strip = StripView?.Invoke();
-        Events.Publish(new WebEvent("strip", new Lazy<string>(JsonSerializer.Serialize(strip, WebUiJsonContext.Default.WebStrip))));
+            var strip = StripView?.Invoke();
+            Events.Publish(new WebEvent("strip", new Lazy<string>(JsonSerializer.Serialize(strip, WebUiJsonContext.Default.WebStrip))));
+            _lastStrip = key;   // after the send: a view that threw is read again at the next tick
+        }
     }
 
     /// <summary>A picture as an entry carries it: its three addresses under this run's tag. Pure but for the tag.</summary>
@@ -992,13 +998,17 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return;
         }
 
-        string json = Json(_state());
-        if (json == Interlocked.Exchange(ref _lastState, json))
+        lock (_statePublish)
         {
-            return;
-        }
+            string json = Json(_state());
+            if (json == _lastState)
+            {
+                return;
+            }
 
-        Events.Publish(new WebEvent("state", new Lazy<string>(json)));
+            _lastState = json;
+            Events.Publish(new WebEvent("state", new Lazy<string>(json)));
+        }
     }
 
     /// <summary>
@@ -1012,45 +1022,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return;
         }
 
-        long now = _time.GetTimestamp();
-        lock (_statusGate)
-        {
-            if (_statusTrailing)
-            {
-                return;   // the trailing send reads the newest
-            }
-
-            var since = _time.GetElapsedTime(_statusAt, now);
-            if (_statusSent && since < StatusThrottle)
-            {
-                _statusTrailing = true;
-                _statusTrail.Change(StatusThrottle - since, Timeout.InfiniteTimeSpan);
-                return;
-            }
-
-            _statusAt = now;
-            _statusSent = true;
-        }
-
-        PublishStatus();
-    }
-
-    private void TrailingStatus()
-    {
-        lock (_statusGate)
-        {
-            _statusTrailing = false;
-            _statusAt = _time.GetTimestamp();
-        }
-
-        try
-        {
-            PublishStatus();
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            DiagnosticLog.Debug(Category, "Web UI: the status could not be read: " + e.Message);
-        }
+        _status.Nudge();
     }
 
     /// <summary>The status row now, to every page, when its key differs from what they have (the sampler's tick, a nudge).</summary>
@@ -1061,13 +1033,17 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return;
         }
 
-        var (status, key) = StatusNow();
-        if (key == Interlocked.Exchange(ref _lastStatus, key))
+        lock (_statusPublish)
         {
-            return;
-        }
+            var (status, key) = StatusNow();
+            if (key == _lastStatus)
+            {
+                return;
+            }
 
-        Events.Publish(new WebEvent("status", new Lazy<string>(JsonSerializer.Serialize(status, WebUiJsonContext.Default.WebStatus))));
+            _lastStatus = key;
+            Events.Publish(new WebEvent("status", new Lazy<string>(JsonSerializer.Serialize(status, WebUiJsonContext.Default.WebStatus))));
+        }
     }
 
     private void SampleState()
@@ -1179,7 +1155,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public void Dispose()
     {
         _sampler.Dispose();
-        _statusTrail.Dispose();
+        _status.Dispose();
         _strip.Dispose();
         _point.Dispose();
         _completing.Dispose();

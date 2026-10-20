@@ -796,6 +796,18 @@ public sealed partial class WebUiTests : IDisposable
     }
 
     [Theory]
+    [InlineData("x **// } body{display:none} /*")]
+    [InlineData("x ***///*/ } body{display:none}")]
+    [InlineData("plain */ name")]
+    public void AThemesName_NeverClosesTheSheetsComment(string name)
+    {
+        string safe = WebTheme.CommentSafe(name);
+        Assert.DoesNotContain("*/", safe, StringComparison.Ordinal);
+        string css = WebTheme.Css(UI.Theme.Current with { Name = name }, on: true);
+        Assert.Equal(css.IndexOf("*/", StringComparison.Ordinal), css.IndexOf(" (2026-10-15, Web UI profile theme). */", StringComparison.Ordinal) + " (2026-10-15, Web UI profile theme). ".Length);
+    }
+
+    [Theory]
     [InlineData("http://192.168.1.217:8765/signin?t=abc_DEF-123", "abc_DEF-123")]
     [InlineData("  abc_DEF-123  ", "abc_DEF-123")]
     [InlineData("http://h:1/signin?x=1&t=tok&y=2", "tok")]
