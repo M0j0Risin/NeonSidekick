@@ -238,7 +238,8 @@ internal sealed class ShoppingMenu
                         await PickStoreAsync(shop, cancellationToken).ConfigureAwait(false);
                         break;
                     case More or Less when item is not null:
-                        int quantity = Math.Max(1, item.Quantity + (pick.Button == More ? 1 : -1));
+                        // In long (2026-10-19, the code review): a stored int.MaxValue wrapped round to 1 on +.
+                        int quantity = (int)Math.Clamp((long)item.Quantity + (pick.Button == More ? 1 : -1), 1, int.MaxValue);
                         Say(_list.SetQuantity(item, quantity) ? ShoppingText.Line(item with { Quantity = quantity }) : "Error: " + ShoppingText.WriteFailed);
                         break;
                     case Rename when item is not null:

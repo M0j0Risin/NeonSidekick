@@ -118,9 +118,15 @@ public sealed class BrowserRemoteTests
         Assert.Equal(1, clip.GetProperty("scale").GetDouble());   // 1000 px fits in 2000
 
         // Narrower than the view: scaled down, and a display at 150 % (1.5 pixels a dip, read off the last picture) scales further.
-        Assert.Equal(0.5, BrowserRemote.ScaleOf(BrowserRemote.ScreenshotParameters(viewport, 500, 1)));
-        Assert.Equal(0.3333, BrowserRemote.ScaleOf(BrowserRemote.ScreenshotParameters(viewport, 500, 1.5)));
-        Assert.Equal(1, BrowserRemote.ScaleOf(BrowserRemote.ScreenshotParameters(viewport with { Zoom = 0 }, 800, 1)));   // no zoom read: 1
+        Assert.Equal(0.5, ScaleOf(BrowserRemote.ScreenshotParameters(viewport, 500, 1)));
+        Assert.Equal(0.3333, ScaleOf(BrowserRemote.ScreenshotParameters(viewport, 500, 1.5)));
+        Assert.Equal(1, ScaleOf(BrowserRemote.ScreenshotParameters(viewport with { Zoom = 0 }, 800, 1)));   // no zoom read: 1
+
+        // ScaleFor is what the parameters carry, so the window never parses them back.
+        Assert.Equal(0.3333, BrowserRemote.ScaleFor(viewport, 500, 1.5));
+        Assert.Equal(1, BrowserRemote.ScaleFor(viewport with { Zoom = 0 }, 800, 1));
+
+        static double ScaleOf(string parameters) => Read(parameters).GetProperty("clip").GetProperty("scale").GetDouble();
     }
 
     [Fact]

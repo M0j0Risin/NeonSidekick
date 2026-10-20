@@ -378,14 +378,19 @@ public class MemoryMenuTests : IDisposable
     // ── Edit, disable, add (2026-10-13, the user's ask) ─────────────────────
 
     /// <summary>The menu over a pane with an input row (the screen's), Memory mode's switch wired at read-write.</summary>
-    private (MemoryMenu Menu, ScreenPane Pane) InputMenu()
+    /// <summary>The pane with its input row; <paramref name="meanwhile"/> runs once, after the list's snapshot and before its first pick (a page's change).</summary>
+    private (MemoryMenu Menu, ScreenPane Pane) InputMenu(Action? meanwhile = null)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var line = new InputLine(pane, keys);
         var mode = MemoryAccess.ReadWrite;
-        var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys), () => mode, value => { mode = value; return true; }, () => line);
+        var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys), () => mode, value => { mode = value; return true; }, () =>
+        {
+            Interlocked.Exchange(ref meanwhile, null)?.Invoke();
+            return line;
+        });
         pane.Show();
         return (menu, pane);
     }
@@ -450,6 +455,42 @@ public class MemoryMenuTests : IDisposable
         Assert.Contains(MemoryMenu.EnableWord, _console.Output);
         Assert.Contains("(💾 enabled: two)", _console.Output);
         Assert.Equal(["one", "two"], _store.Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A memory the page turned off after the list was drawn (2026-10-19, the code review): the choice reads it as it is now, so the toggle turns
+    /// it back on — it flipped the drawn state, failed, and said the memory was gone.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_AToggle_ReadsTheMemoryAsItIsNow_NotAsDrawn()
+    {
+        Seed("one", "two");
+        var (menu, pane) = InputMenu(() => _store.SetDisabled("two", true));
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the row, the toggle
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.EnableWord, _console.Output);
+        Assert.Contains("(💾 enabled: two)", _console.Output);
+        Assert.DoesNotContain(MemoryMenu.MissingError, _console.Output);
+        Assert.Equal(["one", "two"], _store.Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>A memory the page forgot after the list was drawn: said so at once, no choice offered (2026-10-19).</summary>
+    [Fact]
+    public async Task OnThePane_AMemoryForgottenMeanwhile_IsSaidGone()
+    {
+        Seed("one", "two");
+        var (menu, pane) = InputMenu(() => _store.Remove("two"));
+        Push(Keys.Down, Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.MissingError, _console.Output);
+        Assert.DoesNotContain(MemoryMenu.ActionTitle("two"), _console.Output);
+        Assert.Equal(["one"], _store.Snapshot());
         pane.Dispose();
     }
 

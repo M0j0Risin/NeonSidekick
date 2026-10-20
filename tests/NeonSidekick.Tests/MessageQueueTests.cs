@@ -62,6 +62,12 @@ public class MessageQueueTests
         Assert.Equal(2, queue.Clear());
         Assert.Equal(0, queue.Count);
         Assert.False(queue.Held);
+
+        // /queue clear's (2026-10-19, the code review): the hold stays, so the page's lines held after a cancel stay held.
+        queue.Enqueue(Line("three"));
+        queue.Held = true;
+        Assert.Equal(1, queue.Clear(keepHold: true));
+        Assert.True(queue.Held);
     }
 
     [Fact]

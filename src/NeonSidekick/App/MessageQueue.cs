@@ -43,7 +43,7 @@ public sealed class MessageQueue
     /// <summary>
     /// A cancelled reply under <c>Queue cancel mode</c> <c>hold</c> sets this: nothing is sent by
     /// itself until the next reply ends normally, which clears it. Inert with nothing queued;
-    /// <see cref="Clear"/> resets it too.
+    /// <see cref="Clear"/> resets it too, unless told to keep it.
     /// </summary>
     public bool Held
     {
@@ -146,15 +146,19 @@ public sealed class MessageQueue
         }
     }
 
-    /// <summary>Drops every entry and the hold; returns how many were dropped.</summary>
-    public int Clear()
+    /// <summary>
+    /// Drops every entry and, unless <paramref name="keepHold"/>, the hold; returns how many were dropped. <c>/queue clear</c> and its
+    /// pane's button keep it (2026-10-19, the code review): the Web UI's lines held after a cancel are not theirs to drop, and lifting
+    /// the hold sent them at the next idle read. Inert with nothing queued, so keeping it costs the PC nothing.
+    /// </summary>
+    public int Clear(bool keepHold = false)
     {
         int dropped;
         lock (_gate)
         {
             dropped = _entries.Count;
             _entries.Clear();
-            _held = false;
+            _held &= keepHold;
         }
 
         if (dropped > 0)

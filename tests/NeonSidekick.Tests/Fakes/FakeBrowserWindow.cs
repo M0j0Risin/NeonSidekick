@@ -111,9 +111,12 @@ public sealed class FakeBrowserWindow : IBrowserWindow
         return Task.FromResult(Frame);
     }
 
+    /// <summary>Every input refused while a check runs, as a window whose page reloads under it does.</summary>
+    public bool InputMisses { get; set; }
+
     public Task<bool> InputAsync(BrowserInput input, CancellationToken cancellationToken)
     {
-        if (!Running)
+        if (!Running || InputMisses)
         {
             return Task.FromResult(false);
         }

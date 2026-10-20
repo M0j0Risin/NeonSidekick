@@ -619,6 +619,12 @@ public static class WebUiText
     /// <summary>A picture or input for a check that is over, or never was.</summary>
     public const string BotCheckGone = "That bot check is over.";
 
+    /// <summary>
+    /// An input the window didn't take while its check still runs (2026-10-19, the code review: the page under it reloading, a slow window); the
+    /// card stays live, where <see cref="BotCheckGone"/> ends it.
+    /// </summary>
+    public const string BotCheckMissed = "That didn't reach the Browser window; try again.";
+
     /// <summary>The PC's hint row when a page first drives a check.</summary>
     public static string BotCheckDrivenFlash(string host) => "📱 the Web UI is driving the bot check on " + host;
 

@@ -106,7 +106,7 @@ internal sealed unsafe partial class BrowserWindowThread
             }
 
             string parameters = BrowserRemote.ScreenshotParameters(viewport, maxWidth, job.PixelsPerDip);
-            double scale = BrowserRemote.ScaleOf(parameters);
+            double scale = BrowserRemote.ScaleFor(viewport, maxWidth, job.PixelsPerDip);
             bool sent = host.CallDevTools("Page.captureScreenshot", parameters, (hr, json) =>
             {
                 if (hr < 0 || !BrowserAnswers.TryReadScreenshot(json, out byte[] jpeg))
@@ -150,7 +150,18 @@ internal sealed unsafe partial class BrowserWindowThread
             var commands = BrowserRemote.Commands(input, viewport);
             Send(host, commands, 0, ok =>
             {
-                if (ok)
+                if (ok && (_job != job || job.Finishing))
+                {
+                    // The check ended while the commands were on their way (2026-10-19, the code review): Finish has let go of what it
+                    // knew was held, so a press answered after it is let go here, or nobody would (the release timer reads the live job).
+                    if (input.Kind == BrowserInputKind.Down)
+                    {
+                        SendRelease(host, Math.Round(input.X * viewport.Width, 2), Math.Round(input.Y * viewport.Height, 2));
+                    }
+
+                    ok = false;
+                }
+                else if (ok)
                 {
                     Hold(job, input, viewport);
                 }
@@ -240,8 +251,16 @@ internal sealed unsafe partial class BrowserWindowThread
         }
 
         job.Held = null;
-        var (method, json) = BrowserRemote.Release(held.X, held.Y);
-        if (_host is { IsCreated: true } host && !host.CallDevTools(method, json, (_, _) => { }))
+        if (_host is { IsCreated: true } host)
+        {
+            SendRelease(host, held.X, held.Y);
+        }
+    }
+
+    private static void SendRelease(WebViewHost host, double x, double y)
+    {
+        var (method, json) = BrowserRemote.Release(x, y);
+        if (!host.CallDevTools(method, json, (_, _) => { }))
         {
             DiagnosticLog.Debug("Browser", "The held button could not be released.");
         }

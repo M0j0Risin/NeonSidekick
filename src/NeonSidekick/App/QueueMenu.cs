@@ -246,7 +246,7 @@ internal sealed class QueueMenu
                 {
                     // The button: every message goes, the loop's own drop notice says how many
                     // (nothing queued by now — the loop took the last — is the empty notice).
-                    int dropped = _queue.Clear();
+                    int dropped = _queue.Clear(keepHold: true);   // /queue clear's: the page's held lines stay held
                     closingNotice = dropped > 0 ? ChatScreen.QueueDroppedNotice(dropped) : EmptyNotice;
                     return null;
                 }

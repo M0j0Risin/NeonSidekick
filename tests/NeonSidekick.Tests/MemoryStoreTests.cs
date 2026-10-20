@@ -38,6 +38,33 @@ public class MemoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void EveryChange_IsLogged_WithoutTheMemorysText()
+    {
+        // 2026-10-19 (the code review): the log is shareable, so a change's line says what happened and never the text.
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == "Memory") lines.Enqueue(e.Message); };
+        DiagnosticLog.Emitted += capture;
+        try
+        {
+            var store = new MemoryStore(_dir);
+            store.Add("my bank PIN is 1234");
+            store.SetDisabled("my bank PIN is 1234", true);
+            store.Add("my bank PIN is 1234", enableDisabled: true);
+            store.Edit("my bank PIN is 1234", "my locker code is 5678");
+            store.Remove("my locker code is 5678");
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(
+            ["Remembered a memory (19 characters).", "Disabled a memory (19 characters).", "Enabled a memory (19 characters).", "Edited a memory (22 characters).", "Removed a memory (22 characters)."],
+            lines.Where(l => l.Contains(" a memory (", StringComparison.Ordinal)));
+        Assert.DoesNotContain(lines, l => l.Contains("1234", StringComparison.Ordinal) || l.Contains("5678", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Add_KeepsTheOrder_OldestFirst()
     {
         var store = new MemoryStore(_dir);

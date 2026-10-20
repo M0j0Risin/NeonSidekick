@@ -817,7 +817,7 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
 
     /// <summary>
     /// One typed line of the list split into its name and quantity: <c>2 milk</c>, <c>milk x2</c>, <c>milk ×2</c>, <c>2x milk</c> and
-    /// <c>milk</c> (1). A quantity of 0 or over 999 is read as part of the name.
+    /// <c>milk</c> (1). A quantity of 0 or over <see cref="MaxQuantity"/> is read as part of the name.
     /// </summary>
     public static (string Name, int Quantity) ParseLine(string line)
     {
@@ -829,13 +829,19 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
             match = TrailingQuantity().Match(text);
         }
 
-        if (match.Success && int.TryParse(match.Groups["q"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int q) && q is >= 1 and <= 999 && match.Groups["name"].Value.Trim().Length > 0)
+        if (match.Success && int.TryParse(match.Groups["q"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int q) && q is >= 1 and <= MaxQuantity && match.Groups["name"].Value.Trim().Length > 0)
         {
             return (match.Groups["name"].Value.Trim(), q);
         }
 
         return (text, 1);
     }
+
+    /// <summary>
+    /// The most a typed line reads as a quantity, and the most the Web UI's absolute quantity sets (2026-10-19, the code review: the page could
+    /// store <see cref="int.MaxValue"/>, and the PC's + then wrapped it round to 1).
+    /// </summary>
+    public const int MaxQuantity = 999;
 
     private static void Audit(string line) => DiagnosticLog.Info(ShoppingStore.Category, line);
 

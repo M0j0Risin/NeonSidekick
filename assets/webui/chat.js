@@ -1507,7 +1507,7 @@ async function readSheet(tab) {
   const path = tab === 'memory' ? '/api/memory' : tab === 'history' ? '/api/history' : '/api/prompts';
   const r = await Neon.get(path, tab === 'history');
   if (tab === 'history') {
-    if (r.ok && r.json) msgHistory.lines = r.json.lines || [];   // a 304 keeps the lines the page holds
+    if (r.ok && r.json) takeLines(r.json.lines || []);   // a 304 keeps the lines the page holds
     return r.ok ? { lines: msgHistory.lines } : null;
   }
   return r.ok && r.json ? r.json : null;
@@ -2305,7 +2305,23 @@ function historyReset() {
 
 async function readHistory() {
   const r = await Neon.get('/api/history', true);
-  if (r.ok && r.json) msgHistory.lines = r.json.lines || [];
+  if (r.ok && r.json) takeLines(r.json.lines || []);
+}
+
+// The app's lines taken in. A walk under way keeps the line it shows (2026-10-19, the code review: the PC's lines added, the oldest dropped
+// at the cap, and the walk's place then named another line): found again by its text, the nearest to where it was; gone, the walk goes on
+// from the bottom, the draft it set aside kept.
+function takeLines(lines) {
+  const list = walkList();
+  const at = msgHistory.index;
+  msgHistory.lines = lines;
+  if (at < 0) return;
+  if (at >= list.length) { msgHistory.index = walkList().length; return; }   // walked back to the draft: still at the bottom
+  const shown = list[at];
+  const now = walkList();
+  let best = -1;
+  now.forEach((t, i) => { if (t === shown && (best < 0 || Math.abs(i - at) < Math.abs(best - at))) best = i; });
+  msgHistory.index = best >= 0 ? best : now.length;
 }
 
 function remembered(text) {
@@ -2334,7 +2350,7 @@ function walkStep(delta) {
   let at = msgHistory.index < 0 || msgHistory.index > list.length ? list.length : msgHistory.index;   // a list that shrank: clamped
   if (delta < 0) {
     if (at === 0) return;
-    if (at === list.length) msgHistory.saved = draft.value;
+    if (at === list.length && !msgHistory.walking) msgHistory.saved = draft.value;   // walking, the draft is the one set aside already
     at--;
     recall(list[at]);
   } else {

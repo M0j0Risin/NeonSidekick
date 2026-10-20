@@ -106,7 +106,10 @@ public sealed partial class InputLine
         private int _cursor;
         // The selection's other end; −1 = none. There is a selection only while it differs from the cursor.
         private int _anchor = -1;
-        private int _historyIndex;
+        // The walk, as lines back from the newest (0 = the draft's own row). Counted from the end since 2026-10-19 (the code review):
+        // an index into the history taken at the read's start went stale when a Web UI line was remembered meanwhile, so the next Up
+        // never set the typed draft aside and Down brought back an empty one.
+        private int _historyBack;
         private string _draft = "";
         // The Up/Down row moves (2026-09-21): the cell column of the run's first press, kept while the
         // arrows repeat so a short row in between does not lose it; and whether the last arrow recalled
@@ -140,7 +143,6 @@ public sealed partial class InputLine
             _line = line;
             _text = new StringBuilder(initialText);
             _cursor = _text.Length;
-            _historyIndex = line.HistoryCount;
         }
 
         /// <summary>The draft in its token form.</summary>
@@ -168,7 +170,7 @@ public sealed partial class InputLine
             _percenting = onPane && _line._connections is not null;
             _careting = onPane && _line._workflows is not null;
             _starring = onPane && _line._shares is not null;
-            _historyIndex = _line.HistoryCount;
+            _historyBack = 0;
             _draft = "";
             _goalCol = -1;
             _walking = false;
@@ -250,7 +252,7 @@ public sealed partial class InputLine
                 _line.Remember(line.Draft);
             }
 
-            _historyIndex = _line.HistoryCount;
+            _historyBack = 0;
             _draft = "";
             _text.Clear();
             _cursor = 0;
@@ -686,7 +688,7 @@ public sealed partial class InputLine
                     if (_o.Remember && !_o.Mask)
                     {
                         _line.RememberDraft(_text.ToString());
-                        _historyIndex = _line.HistoryCount;   // the walk starts past it, so the next Up is the line just cleared
+                        _historyBack = 0;   // the walk starts past it, so the next Up is the line just cleared
                         _walking = false;
                     }
 
@@ -955,26 +957,26 @@ public sealed partial class InputLine
 
                     // A copy (2026-10-16): the Web UI's request threads may add a line meanwhile.
                     var history = _line.HistorySnapshot();
-                    // ReplaceHistory under a live walk (a /msgclear under a reply, 2026-09-25) can leave the index past the end.
-                    _historyIndex = Math.Min(_historyIndex, history.Count);
+                    // ReplaceHistory under a live walk (a /msgclear under a reply, 2026-09-25) can leave the walk past the oldest line.
+                    _historyBack = Math.Min(_historyBack, history.Count);
                     if (delta < 0)
                     {
-                        if (_historyIndex > 0)
+                        if (_historyBack < history.Count)
                         {
-                            if (_historyIndex == history.Count)
+                            if (_historyBack == 0)
                             {
                                 _draft = _text.ToString();
                             }
 
-                            _historyIndex--;
-                            Replace(history[_historyIndex]);
+                            _historyBack++;
+                            Replace(history[^_historyBack]);
                             _walking = true;
                         }
                     }
-                    else if (_historyIndex < history.Count)
+                    else if (_historyBack > 0)
                     {
-                        _historyIndex++;
-                        Replace(_historyIndex == history.Count ? _draft : history[_historyIndex]);
+                        _historyBack--;
+                        Replace(_historyBack == 0 ? _draft : history[^_historyBack]);
                         _walking = true;
                     }
 

@@ -797,6 +797,27 @@ public class InputLineTests : IDisposable
     }
 
     [Fact]
+    public async Task ALineRememberedMidRead_TheWalkStillSetsTheDraftAside()
+    {
+        // 2026-10-19 (the code review): a Web UI line remembered while the user typed left the walk's index short of the end, so Up never set
+        // the draft aside and Down brought back an empty one.
+        var (line, keys) = PaneLine();
+        keys.Push(Chars("first")).Push(Keys.Enter);
+        await line.ReadAsync();
+
+        // "mine" typed, then (the keys run dry) the page's line remembered, then Up (the page's line) and Down (the draft back).
+        keys.Push(Chars("mine"));
+        keys.OnWait = () =>
+        {
+            keys.OnWait = null;
+            line.Remember("from the page");
+            keys.Push(Keys.Up, Keys.Down).Push(Keys.Enter);
+        };
+        Assert.Equal("mine", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+        Assert.Equal(["first", "from the page", "mine"], line.History);
+    }
+
+    [Fact]
     public async Task ConsecutiveDuplicate_IsNotRepeatedInHistory()
     {
         Type("same");

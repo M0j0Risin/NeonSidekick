@@ -167,6 +167,26 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task BotCheck_AnInputTheWindowMissed_WhileTheCheckRuns_IsAConflict_NotTheEnd()
+    {
+        // 2026-10-19 (the code review): a false from the window ended the page's live view as if the check were over.
+        _browserWindow = new FakeBrowserWindow { Hold = true, InputMisses = true };
+        WebReply missed = default;
+        var failures = OnThePage("botcheck", async (web, ask) =>
+        {
+            missed = await web.BotCheckInputAsync(new WebBotCheckInput { AskId = ask.Id, Kind = "tap", X = 0.5, Y = 0.5 }, IPAddress.Loopback, CancellationToken.None);
+            _browserWindow.EndHeld();
+        });
+        BotCheckFixture([], "Read.", mode: "automatic");
+
+        await RunAsync();
+
+        Assert.Empty(failures);
+        Assert.Equal(WebOutcome.Conflict, missed.Outcome);
+        Assert.Equal(WebUiText.BotCheckMissed, missed.Message);
+    }
+
+    [Fact]
     public async Task BotCheck_WithTheControlOff_TheCardHasNoLiveView_AndThePageCanNotReachTheWindow()
     {
         _browserWindow = new FakeBrowserWindow { Hold = true };

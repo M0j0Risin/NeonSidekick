@@ -310,21 +310,29 @@ internal sealed class MemoryMenu
 
                 int row = pick.Value.Row;
                 cursor = row;
-                var entry = entries[row];
-                string text = entry.Text;
+                // The memory as the store holds it now, not as the list was drawn (2026-10-19, the code review): the Web UI may have edited,
+                // turned off or forgotten it meanwhile, and a toggle read off the drawn row flipped it the wrong way and said it was gone.
+                var entry = Find(_store.EntriesSnapshot(), entries[row].Text);
+                string text = entry?.Text ?? "";
                 try
                 {
-                    // Delete is forget, asked as ever; Enter offers the choice first.
-                    switch (pick.Value.Remove ? RowAction.Forget : await ChooseAsync(entry, cancellationToken).ConfigureAwait(false))
+                    // Delete is forget, asked as ever; Enter offers the choice first. A memory gone meanwhile is said so, the list read again.
+                    switch (entry is null ? null : pick.Value.Remove ? RowAction.Forget : await ChooseAsync(entry, cancellationToken).ConfigureAwait(false))
                     {
+                        case null when entry is null:
+                            Sink.Error(MissingError);
+                            break;
+
                         case RowAction.Edit:
                             await EditAsync(list, row, text, cancellationToken).ConfigureAwait(false);
                             break;
 
                         case RowAction.Toggle:
-                            if (_store.SetDisabled(text, !entry.Disabled))
+                            // The way the choice offered, which a change from the page while it was up may have made already: said as done.
+                            bool off = !entry!.Disabled;
+                            if (_store.SetDisabled(text, off) || Find(_store.EntriesSnapshot(), text)?.Disabled == off)
                             {
-                                Sink.Notice(entry.Disabled ? EnabledNotice(text) : DisabledNotice(text));
+                                Sink.Notice(off ? DisabledNotice(text) : EnabledNotice(text));
                             }
                             else
                             {
@@ -384,6 +392,10 @@ internal sealed class MemoryMenu
             }
         }
     }
+
+    /// <summary>The entry holding <paramref name="text"/>, matched as the store matches (ignoring case); null when none does.</summary>
+    private static MemoryEntry? Find(IReadOnlyList<MemoryEntry> entries, string text) =>
+        entries.FirstOrDefault(e => string.Equals(e.Text, text, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The input row, when there is one to type on (2026-10-13): edit and add need it.</summary>
     private InputLine? Line => _input?.Invoke();

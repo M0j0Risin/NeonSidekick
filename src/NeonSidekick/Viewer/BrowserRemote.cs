@@ -126,8 +126,7 @@ public static class BrowserRemote
         ArgumentNullException.ThrowIfNull(viewport);
         double zoom = viewport.Zoom > 0 && double.IsFinite(viewport.Zoom) ? viewport.Zoom : 1;
         double width = viewport.Width * zoom;
-        double perDip = pixelsPerDip > 0 && double.IsFinite(pixelsPerDip) ? pixelsPerDip : 1;
-        double scale = width <= 0 ? 1 : Math.Min(1, maxWidth / (width * perDip));
+        double scale = ScaleFor(viewport, maxWidth, pixelsPerDip);
         return Write(w =>
         {
             w.WriteString("format", "jpeg");
@@ -137,7 +136,7 @@ public static class BrowserRemote
             w.WriteNumber("y", Math.Round(viewport.PageY * zoom, 2));
             w.WriteNumber("width", Math.Round(width, 2));
             w.WriteNumber("height", Math.Round(viewport.Height * zoom, 2));
-            w.WriteNumber("scale", Math.Round(scale, 4));
+            w.WriteNumber("scale", scale);
             w.WriteEndObject();
         });
     }
@@ -154,11 +153,17 @@ public static class BrowserRemote
         return jpegWidth > 0 && dips > 0 ? jpegWidth / dips : null;
     }
 
-    /// <summary>The scale <see cref="ScreenshotParameters"/> asked for, read back from its JSON.</summary>
-    public static double ScaleOf(string parameters)
+    /// <summary>
+    /// The scale <see cref="ScreenshotParameters"/> asks for, as it writes it (rounded to 4 places). Worked out here since 2026-10-19 (the code
+    /// review): each picture parsed its own parameters back to learn it.
+    /// </summary>
+    public static double ScaleFor(BrowserViewport viewport, int maxWidth, double pixelsPerDip)
     {
-        using var document = JsonDocument.Parse(parameters);
-        return document.RootElement.GetProperty("clip").GetProperty("scale").GetDouble();
+        ArgumentNullException.ThrowIfNull(viewport);
+        double zoom = viewport.Zoom > 0 && double.IsFinite(viewport.Zoom) ? viewport.Zoom : 1;
+        double width = viewport.Width * zoom;
+        double perDip = pixelsPerDip > 0 && double.IsFinite(pixelsPerDip) ? pixelsPerDip : 1;
+        return width <= 0 ? 1 : Math.Round(Math.Min(1, maxWidth / (width * perDip)), 4);
     }
 
     /// <summary>A JPEG's width from its frame header (any SOF marker), or null for bytes that are no JPEG.</summary>

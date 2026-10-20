@@ -38,7 +38,11 @@ internal sealed partial class ChatScreen
         /// <summary>True for the first page input of the check alone.</summary>
         public bool FirstDrive() => Interlocked.Exchange(ref _driven, 1) == 0;
 
-        /// <summary>The picture at <paramref name="width"/>: the one on its way, or one taken less than <see cref="BotCheckFrameReuse"/> ago, else a new one.</summary>
+        /// <summary>
+        /// The picture at <paramref name="width"/>: the one on its way, or one taken less than <see cref="BotCheckFrameReuse"/> ago, else a new one.
+        /// A finished picture past its reuse is dropped at each ask (2026-10-19, the code review: the page picks the width, so one entry a width
+        /// kept every picture of the check).
+        /// </summary>
         public Task<BrowserFrame?> Capture(int width, TimeProvider time)
         {
             lock (_captures)
@@ -46,6 +50,11 @@ internal sealed partial class ChatScreen
                 if (_captures.TryGetValue(width, out var last) && (!last.Task.IsCompleted || time.GetElapsedTime(last.At) < BotCheckFrameReuse))
                 {
                     return last.Task;
+                }
+
+                foreach (var (stale, _) in _captures.Where(c => c.Value.Task.IsCompleted && time.GetElapsedTime(c.Value.At) >= BotCheckFrameReuse).ToList())
+                {
+                    _captures.Remove(stale);
                 }
 
                 var task = Window.FrameAsync(width, _ending.Token);
@@ -107,7 +116,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A bot check card's input (a Kestrel thread): Forbidden with the control off, NotFound for an ask that is not the live check's, Refused for an
-    /// input that can't be sent, else sent into the window. The first of a check is logged with the page's address and flashed on the PC; the
+    /// input that can't be sent, else sent into the window; Conflict when the window didn't take it while the check still runs (2026-10-19, the
+    /// code review: NotFound ended the card's live view for good over a slow window or a page reloading under a tap). The first of a check is logged with the page's address and flashed on the PC; the
     /// rest at Debug, by kind alone, never the typed text.
     /// </summary>
     private async Task<WebReply> WebBotCheckInputAsync(WebBotCheckInput request, IPAddress? remote, CancellationToken cancellationToken)
@@ -141,14 +151,19 @@ internal sealed partial class ChatScreen
         DiagnosticLog.Debug(WebUiCategory, "Web UI: a bot check " + input.Kind.ToString().ToLowerInvariant() + " from the page.");
         try
         {
-            return await live.Window.InputAsync(input, cancellationToken).ConfigureAwait(false)
-                ? WebReply.Ok
-                : new WebReply(WebOutcome.NotFound, WebUiText.BotCheckGone);
+            if (await live.Window.InputAsync(input, cancellationToken).ConfigureAwait(false))
+            {
+                return WebReply.Ok;
+            }
         }
         catch (OperationCanceledException)
         {
-            return new WebReply(WebOutcome.NotFound, WebUiText.BotCheckGone);
+            // The request dropped, or the window gave up waiting: told apart below by whether the check runs still.
         }
+
+        return BotCheckLiveFor(request.AskId) == live
+            ? new WebReply(WebOutcome.Conflict, WebUiText.BotCheckMissed)
+            : new WebReply(WebOutcome.NotFound, WebUiText.BotCheckGone);
     }
 
     /// <summary>The page's input as the window takes it; null for a kind it doesn't know. Pure.</summary>

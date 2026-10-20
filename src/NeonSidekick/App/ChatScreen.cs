@@ -3482,7 +3482,7 @@ internal sealed partial class ChatScreen
     {
         // The Web UI's waiting messages go with the PC's (2026-10-14), back to the page's draft — but not for /queue clear, which empties
         // the queue its pane shows (web: false).
-        if (_queue.Clear() + (web ? _webUi.DropLines() + DropPendingWebLines() : 0) is > 0 and var dropped)
+        if (_queue.Clear(keepHold: !web) + (web ? _webUi.DropLines() + DropPendingWebLines() : 0) is > 0 and var dropped)
         {
             _transcript.Notice(QueueDroppedNotice(dropped));
         }

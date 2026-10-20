@@ -243,7 +243,7 @@ public static class WebShoppingView
     }
 
     /// <summary>
-    /// Line <paramref name="id"/>'s quantity set to <paramref name="quantity"/>, floored at 1 (an absolute quantity: the page's −/+ taps post once
+    /// Line <paramref name="id"/>'s quantity set to <paramref name="quantity"/>, held between 1 and <see cref="ShoppingList.MaxQuantity"/> (an absolute quantity: the page's −/+ taps post once
     /// they stop, and a repeat changes nothing). <paramref name="changed"/> is the line as it now reads.
     /// </summary>
     public static WebReply Quantity(ShoppingList list, long id, int quantity, out string? changed)
@@ -260,7 +260,7 @@ public static class WebShoppingView
             return new WebReply(WebOutcome.NotFound, WebUiText.NoSuchItem);
         }
 
-        quantity = Math.Max(1, quantity);
+        quantity = Math.Clamp(quantity, 1, ShoppingList.MaxQuantity);
         if (item.Quantity == quantity)
         {
             return WebReply.Ok;

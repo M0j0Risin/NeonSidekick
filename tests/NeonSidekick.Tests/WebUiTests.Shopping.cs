@@ -110,6 +110,9 @@ public sealed partial class WebUiTests
         Assert.Equal(WebOutcome.Ok, _session.ShopQuantity(new WebShopQuantity { Id = milk, Qty = -4 }, null).Outcome);
         Assert.Equal(1, OnList("Milk").Quantity);   // floored at 1
 
+        Assert.Equal(WebOutcome.Ok, _session.ShopQuantity(new WebShopQuantity { Id = milk, Qty = int.MaxValue }, null).Outcome);
+        Assert.Equal(ShoppingList.MaxQuantity, OnList("Milk").Quantity);   // capped (2026-10-19): the PC's + wrapped int.MaxValue round to 1
+
         var gone = _session.ShopQuantity(new WebShopQuantity { Id = 9999, Qty = 2 }, null);
         Assert.Equal((WebOutcome.NotFound, WebUiText.NoSuchItem), (gone.Outcome, gone.Message));
     }

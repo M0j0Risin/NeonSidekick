@@ -268,6 +268,39 @@ public sealed partial class WebUiPageTests
     }
 
     [WindowsFact]
+    public async Task AWalk_KeepsItsLine_WhenTheAppsLinesChangeUnderIt()
+    {
+        // 2026-10-19 (the code review): a re-read at focus kept the walk's place, which then named another line.
+        _backend.HistoryLines.AddRange(["a", "b", "c"]);
+        if (await PromptsPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await SetDraftAsync(page, "mine");
+        await KeyAsync(page, "ArrowUp");
+        await KeyAsync(page, "ArrowUp");
+        await page.WaitAsync(Draft + ".value === 'b'", "walked to b");
+
+        // The PC added two lines and the oldest went at the cap; the box takes focus again.
+        lock (_backend.ListsGate)
+        {
+            _backend.HistoryLines.Clear();
+            _backend.HistoryLines.AddRange(["b", "c", "d", "e"]);
+        }
+        await page.EvalAsync(Draft + ".dispatchEvent(new Event('focus'))");
+        await page.WaitAsync("msgHistory.lines.length === 4", "the lines read again");
+
+        await KeyAsync(page, "ArrowDown");
+        await page.WaitAsync(Draft + ".value === 'c'", "the line after b, not two past it");
+        await KeyAsync(page, "ArrowDown");
+        await KeyAsync(page, "ArrowDown");
+        await page.WaitAsync(Draft + ".value === 'e'", "the newest");
+        await KeyAsync(page, "ArrowDown");
+        await page.WaitAsync(Draft + ".value === 'mine'", "the draft set aside, kept");
+    }
+
+    [WindowsFact]
     public async Task OnAWrappedDraft_UpMovesTheCaretFirst_AndRecallsFromTheStart()
     {
         _backend.HistoryLines.Add("older");

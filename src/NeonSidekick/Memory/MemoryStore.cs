@@ -118,6 +118,13 @@ public sealed class MemoryStore
 
     private const string Category = "Memory";
 
+    /// <summary>
+    /// A change's log line: what happened and the memory's length, never its text (2026-10-19, the code review: the Web UI's audit lines left
+    /// the text out because the log is shareable, and the store's own lines, written just before them, put it back).
+    /// </summary>
+    internal static string ChangeLogLine(string verb, string text) =>
+        verb + " a memory (" + text.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + " characters).";
+
     private readonly object _gate = new();
     private readonly string _filePath;
     private readonly TimeProvider _time;
@@ -220,7 +227,7 @@ public sealed class MemoryStore
                 throw;
             }
 
-            DiagnosticLog.Info(Category, $"Edited: {before} → {normalized}");
+            DiagnosticLog.Info(Category, ChangeLogLine("Edited", normalized));
             return new(MemoryEditOutcome.Edited, normalized);
         }
     }
@@ -252,7 +259,7 @@ public sealed class MemoryStore
                 throw;
             }
 
-            DiagnosticLog.Info(Category, $"{(disabled ? "Disabled" : "Enabled")}: {entry.Text}");
+            DiagnosticLog.Info(Category, ChangeLogLine(disabled ? "Disabled" : "Enabled", entry.Text));
             return true;
         }
     }
@@ -293,7 +300,7 @@ public sealed class MemoryStore
                 throw;
             }
 
-            DiagnosticLog.Info(Category, $"Removed: {entry.Text}");
+            DiagnosticLog.Info(Category, ChangeLogLine("Removed", entry.Text));
             return true;
         }
     }
@@ -374,7 +381,7 @@ public sealed class MemoryStore
                     return new(MemoryAddOutcome.Failed, existing.Text);
                 }
 
-                DiagnosticLog.Info(Category, $"Enabled: {existing.Text}");
+                DiagnosticLog.Info(Category, ChangeLogLine("Enabled", existing.Text));
                 return new(MemoryAddOutcome.Enabled, existing.Text);
             }
 
@@ -396,7 +403,7 @@ public sealed class MemoryStore
                 return new(MemoryAddOutcome.Failed, normalized);
             }
 
-            DiagnosticLog.Info(Category, $"Remembered: {normalized}");
+            DiagnosticLog.Info(Category, ChangeLogLine("Remembered", normalized));
             return new(MemoryAddOutcome.Added, normalized);
         }
     }
