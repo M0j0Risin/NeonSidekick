@@ -27,7 +27,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 - [Using the app](#using-the-app)
 - [About](#about)
 - More documentation:
-  - [Using the app](docs/INTERFACE.md): the screen, keys, bars and windows
+  - [The interface, in full](docs/INTERFACE.md): every key, bar and window
   - [Slash commands](docs/COMMANDS.md)
   - [Tools](docs/TOOLS.md)
   - [Settings reference](docs/SETTINGS.md)
@@ -35,8 +35,11 @@ It's one app for research, IT and admin work, your smart home and creative proje
   - [Headless and scripted runs](docs/HEADLESS.md)
   - [Command-line options](docs/COMMANDLINE.md)
   - [Environment variables](docs/ENVIRONMENT.md)
-  - [Components & Libraries](docs/COMPONENTS.md)
+  - Setup guides: [SearXNG](docs/DOCKER_WINDOWS_SEARXNG.md), [vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) in Docker on Windows
+- For developers:
   - [Building from source](docs/BUILD.md)
+  - [Components & libraries](docs/COMPONENTS.md)
+  - [Test containers](docs/TESTCONTAINERS.md)
 
 ## Features
 
