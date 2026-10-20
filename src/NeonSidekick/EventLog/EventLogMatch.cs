@@ -58,7 +58,8 @@ public static class EventLogMatch
             return false;
         }
 
-        return query.BeforeRecord is not { } before || system.Record < before;
+        // A tagged cursor is the search's skip, not a comparison: a forwarded log's records are not in read order.
+        return query.BeforeRecord is not { Tagged: false } before || system.Record < before.Record;
     }
 
     /// <summary>Whether <paramref name="fields"/> hold every field term of the query (name and value, case ignored).</summary>

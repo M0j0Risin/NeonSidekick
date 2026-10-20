@@ -90,29 +90,7 @@ public static class DirectoryRender
     private static readonly string CutMarker = "\n(cut at " + DirectoryQueries.MaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)";
 
     /// <summary>The body's first <paramref name="room"/> characters, a surrogate pair kept whole and a fence left open closed (inside the room).</summary>
-    internal static string CutBody(string body, int room)
-    {
-        room = Math.Clamp(room - UntrustedText.QuoteClose.Length, 0, body.Length);
-        if (room > 0 && room < body.Length && char.IsHighSurrogate(body[room - 1]))
-        {
-            room--;
-        }
-
-        string cut = body[..room];
-        int opens = 0;
-        int closes = 0;
-        for (int at = cut.IndexOf(UntrustedText.QuoteOpen, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(UntrustedText.QuoteOpen, at + 1, StringComparison.Ordinal))
-        {
-            opens++;
-        }
-
-        for (int at = cut.IndexOf(UntrustedText.QuoteClose, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(UntrustedText.QuoteClose, at + 1, StringComparison.Ordinal))
-        {
-            closes++;
-        }
-
-        return opens > closes ? cut + UntrustedText.QuoteClose : cut;
-    }
+    internal static string CutBody(string body, int room) => UntrustedText.CutFenced(body, room);
 
     /// <summary>
     /// The card at <paramref name="width"/> cells (<see cref="int.MaxValue"/>: nothing wrapped or cut, what <c>copy</c>, the Web UI's card and

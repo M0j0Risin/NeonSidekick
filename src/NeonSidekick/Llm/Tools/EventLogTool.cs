@@ -69,29 +69,46 @@ public abstract class EventLogTool : AIFunction, IRedactedTwin
         return (value ?? fallback, null);
     }
 
-    /// <summary>A time argument (an age or a moment, in the user's zone); null when missing, the refusal when it is neither.</summary>
-    protected (DateTimeOffset? Value, string? Error) Moment(AIFunctionArguments arguments, string name)
+    /// <summary>
+    /// A time argument (an age or a moment, in the user's zone); null when missing, the refusal when it is neither. Held to the whole second,
+    /// the start down and an end (<paramref name="end"/>) up (2026-10-20, a review: the next call restates it to the second, so a page's
+    /// window and the next one's differed by the fraction).
+    /// </summary>
+    protected (DateTimeOffset? Value, string? Error) Moment(AIFunctionArguments arguments, string name, bool end = false)
     {
         if (Optional(arguments, name) is not { } text)
         {
             return (null, null);
         }
 
-        return TimeArgument.Parse(text, Access.Time.GetUtcNow(), Zone) is { } moment ? (moment, null) : (null, EventLogText.BadTime(name, text));
+        return TimeArgument.Parse(text, Access.Time.GetUtcNow(), Zone) is { } moment ? (WholeSecond(moment, end), null) : (null, EventLogText.BadTime(name, text));
     }
 
-    /// <summary>
-    /// The channel an <c>.evtx</c> holds, from its newest event (<see cref="EventLogQuery.DefaultFor"/> reads a Security export as Security);
-    /// the log itself for a channel.
-    /// </summary>
-    protected static string ChannelOf(IEventLogSystem system, EventLogSource source, CancellationToken cancellationToken)
+    /// <summary><paramref name="moment"/> at a whole second: down, or (<paramref name="up"/>) up when it has a fraction.</summary>
+    internal static DateTimeOffset WholeSecond(DateTimeOffset moment, bool up)
     {
-        if (!source.IsFile)
+        long fraction = moment.Ticks % TimeSpan.TicksPerSecond;
+        if (fraction == 0)
         {
-            return source.Log;
+            return moment;
         }
 
-        using var reader = system.Query(source.Target, source.Log, "*", cancellationToken);
-        return reader.Next() is { Count: > 0 } batch ? batch[0].System.Channel : "";
+        var down = moment.AddTicks(-fraction);
+        return up && down < DateTimeOffset.MaxValue.AddSeconds(-1) ? down.AddSeconds(1) : down;
     }
+
+    /// <summary>A cursor argument (a record, or one with its tag): null when missing, the refusal when it is neither.</summary>
+    protected static (EventCursor? Value, string? Error) Cursor(AIFunctionArguments arguments, string name)
+    {
+        if (Optional(arguments, name) is not { } text)
+        {
+            return (null, null);
+        }
+
+        return EventCursor.Parse(text) is { } cursor ? (cursor, null) : (null, EventLogText.BadCursor(name, text));
+    }
+
+    /// <summary>The channel the log's default view is read for (<see cref="EventLogAccess.ChannelOf"/>).</summary>
+    protected static string ChannelOf(IEventLogSystem system, EventLogSource source, CancellationToken cancellationToken) =>
+        EventLogAccess.ChannelOf(system, source, cancellationToken);
 }

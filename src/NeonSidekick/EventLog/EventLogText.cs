@@ -145,6 +145,10 @@ public static class EventLogText
 
     public static string BadRecord(string text) => $"Error: '{text}' is not a record number.";
 
+    /// <summary>The refusal of a cursor that is neither a record number nor a tagged one (2026-10-20, a review). Pinned.</summary>
+    public static string BadCursor(string argument, string text) =>
+        $"Error: {argument} '{(text.Length > 40 ? text[..40] + "…" : text)}' is not a record number, nor one with its tag as an answer gives it (1200@3f9a2c1b).";
+
     public static string OutOfRange(string argument, string given, int min, int max) =>
         $"Error: {argument} '{given}' is out of range; it must be {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}.";
 
@@ -161,6 +165,22 @@ public static class EventLogText
     public static string NotSearchable(string log) => $"Error: '{log}' is an Analytic or Debug log: it reads oldest-first only and is not searchable here.";
 
     public const string EventTooLarge = "Error: an event was too large to read even alone.";
+
+    /// <summary>The note when events too large to read even alone were stepped over (2026-10-20, a review). Pinned.</summary>
+    public static string SkippedNote(int skipped) =>
+        "(" + Count(skipped, "event") + " too large to read even alone " + (skipped == 1 ? "was" : "were") + " stepped over)";
+
+    /// <summary>The note when a tagged cursor's event is no longer in the log (2026-10-20, a review). Pinned.</summary>
+    public static string CursorMissing(string cursor) =>
+        $"(the event the page was to start below, #{cursor}, is no longer in the log; search again without before_record)";
+
+    /// <summary>
+    /// The refusal when a record alone names several events (2026-10-20, a review: a forwarded log keeps each computer's own records): each
+    /// one's tagged record and its computer, fenced. Pinned.
+    /// </summary>
+    public static string SeveralEvents(long record, string log, IEnumerable<(string Cursor, string Computer)> events) =>
+        $"Error: {Count(events.Count(), "event")} in {log} hold record {record.ToString(CultureInfo.InvariantCulture)} (forwarded from other computers); give record as one of: "
+        + string.Join(", ", events.Select(e => e.Cursor + " on " + Quote(Scrub(e.Computer).Replace('\n', ' ')))) + ".";
 
     public const string Canceled = "Error: the read was canceled.";
 

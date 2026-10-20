@@ -7,7 +7,7 @@ namespace NeonSidekick.EventLog;
 /// A search's XPath, as the event log takes it (2026-10-15, the event-log plan): the providers, the levels (information is
 /// <c>Level=0 or Level=4</c>), the ids and ranges, <b>absolute</b> times from the injected clock (<c>TimeCreated[@SystemTime&gt;=…Z]</c>,
 /// never <c>timediff</c>, so a page's next call means the same moment), the Security log's audit keywords (<c>band(Keywords,…)</c>), the
-/// cursor (<c>EventRecordID&lt;N</c>) and, when the server may see them, EventData's named values (<c>UserData</c>'s are reached by
+/// cursor (<c>EventRecordID&lt;N</c>; a tagged one is none) and, when the server may see them, EventData's named values (<c>UserData</c>'s are reached by
 /// <c>text</c>). A literal is quoted with <c>'</c> or <c>"</c>, whichever it does not hold; one holding both, a control character, or
 /// more than <see cref="MaxLiteral"/> characters is refused.
 ///
@@ -29,7 +29,7 @@ public static partial class EventLogXPath
     {
         ArgumentNullException.ThrowIfNull(query);
         int terms = LevelValues(query.Levels).Count + query.Ids.Sum(r => r.Single ? 1 : 2) + query.Providers.Count;
-        terms += (query.Since is null ? 0 : 1) + (query.Until is null ? 0 : 1) + (query.Audit == EventAudit.Any ? 0 : 1) + (query.BeforeRecord is null ? 0 : 1);
+        terms += (query.Since is null ? 0 : 1) + (query.Until is null ? 0 : 1) + (query.Audit == EventAudit.Any ? 0 : 1) + (query.BeforeRecord is { Tagged: false } ? 1 : 0);
         return terms + (serverFields ? query.Fields.Count : 0);
     }
 
@@ -92,9 +92,10 @@ public static partial class EventLogXPath
             system.Add("band(Keywords," + keyword.ToString(CultureInfo.InvariantCulture) + ")");
         }
 
-        if (query.BeforeRecord is { } before)
+        if (query.BeforeRecord is { Tagged: false } before)
         {
-            system.Add("EventRecordID<" + before.ToString(CultureInfo.InvariantCulture));
+            // A tagged cursor (a forwarded log's) is no term: the records are the source computers', so the search skips to it instead.
+            system.Add("EventRecordID<" + before.Record.ToString(CultureInfo.InvariantCulture));
         }
 
         var parts = new List<string>(2);

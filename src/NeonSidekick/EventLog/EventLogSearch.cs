@@ -13,14 +13,24 @@ public sealed record EventScan(bool Redacted, int ScanLimit, TimeSpan Budget, Ti
 /// <summary>
 /// A search's page (2026-10-15): the events kept, newest first; how many were looked at; whether more may follow; the cursor the next
 /// page starts below (the last event shown, or on a budget stop the last one looked at); and on a budget stop how far back it got.
+/// <see cref="Tagged"/> (2026-10-20, a review): the page's cursors name each event's source (<see cref="EventCursor"/>), a forwarded log's;
+/// <see cref="CursorMissing"/>: a tagged cursor's event was not found again (the log rolled over it); <see cref="Skipped"/>: events too
+/// large to read even alone, stepped over.
 /// </summary>
-public sealed record EventSearchPage(IReadOnlyList<EventView> Events, int Scanned, bool More, long? Cursor, bool BudgetStop, DateTimeOffset? ReachedTime);
+public sealed record EventSearchPage(IReadOnlyList<EventView> Events, int Scanned, bool More, EventCursor? Cursor, bool BudgetStop, DateTimeOffset? ReachedTime,
+    bool Tagged = false, bool CursorMissing = false, int Skipped = 0);
 
 /// <summary>One provider and id's share of a summary: how many, the newest one's time and record, and a sample message.</summary>
 public sealed record EventSummaryGroup(string Provider, int Id, int Level, ulong Keywords, int Count, DateTimeOffset? Newest, long NewestRecord, string? Sample, bool Unregistered);
 
-/// <summary>A summary: the groups by count (the top <see cref="EventLogSearch.SummaryGroups"/>), the events counted, the scan, and whether the budget stopped it.</summary>
-public sealed record EventSummary(IReadOnlyList<EventSummaryGroup> Groups, int Total, int GroupCount, int Scanned, bool BudgetStop, DateTimeOffset? ReachedTime);
+/// <summary>A summary: the groups by count (the top <see cref="EventLogSearch.SummaryGroups"/>), the events counted, the scan, whether the budget stopped it, and the events too large to read.</summary>
+public sealed record EventSummary(IReadOnlyList<EventSummaryGroup> Groups, int Total, int GroupCount, int Scanned, bool BudgetStop, DateTimeOffset? ReachedTime, int Skipped = 0);
+
+/// <summary>
+/// What <see cref="EventLogSearch.Find"/> found: the event, or none; and when the cursor was a record alone and more than one event holds it
+/// (a forwarded log's), each one's tagged cursor and computer, so the answer can ask which (2026-10-20, a review).
+/// </summary>
+public sealed record EventFound(EventView? View, IReadOnlyList<(EventCursor Cursor, string Computer)> Several);
 
 /// <summary>
 /// The policy over any reader (2026-10-15, the event-log plan): the match (<see cref="EventLogMatch"/>), the redaction
@@ -51,7 +61,10 @@ public static class EventLogSearch
     private static EventView View(RawEvent raw, bool redacted, EventXmlData data, IReadOnlyList<EventField> fields, bool withXml)
     {
         var message = redacted ? raw.Format((i, value) => EventLogRedaction.Insert(data.Fields, i, value)) : raw.Format();
-        string? text = message.Text ?? data.Message;
+
+        // The event's own rendered text (a forwarded event's, its provider not here) was formatted from the raw values, so under redacted
+        // each secret field's value is taken out of it first (2026-10-20, a review: the fields hid a password the message still held).
+        string? text = message.Text ?? (redacted && data.Message is { } own ? EventLogRedaction.Rendered(own, data.Fields) : data.Message);
         if (redacted && text is not null)
         {
             text = EventLogRedaction.Text(text);
@@ -70,21 +83,46 @@ public static class EventLogSearch
         long started = scan.Time.GetTimestamp();
         var kept = new List<EventView>(Math.Min(query.Limit, EventLogQuery.MaxLimit));
         int scanned = 0;
-        long? lastScanned = null;
+        EventSystemValues? lastScanned = null;
         DateTimeOffset? reached = null;
+
+        // A forwarded log's records are the source computers' own (2026-10-20, a review): such a page's cursors are tagged, and a tagged
+        // cursor is reached by reading from the top and skipping to it. A log is taken for one when it is ForwardedEvents, when an event's
+        // channel is not the log's, or when its events come from more than one computer or channel.
+        var skipTo = query.BeforeRecord is { Tagged: true } given ? given : (EventCursor?)null;
+        string? channel = EventLogQuery.IsFile(query.Log) ? null : query.Log;
+        bool tagged = skipTo is not null || EventLogQuery.IsForwarded(query.Log);
+        (string Computer, string Channel)? first = null;
         while (reader.Next() is { } batch)
         {
             foreach (var raw in batch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (skipTo is { } target)
+                {
+                    // Down to the cursor's event every one was on an earlier page (or came in since); only the clock holds the skip.
+                    if (scan.Time.GetElapsedTime(started) >= scan.Budget)
+                    {
+                        return new EventSearchPage(kept, scanned, true, target, true, reached, tagged, Skipped: reader.Skipped);
+                    }
+
+                    if (target.Is(raw.System))
+                    {
+                        skipTo = null;
+                    }
+
+                    continue;
+                }
+
                 if (scanned >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
                 {
-                    return new EventSearchPage(kept, scanned, true, lastScanned, true, reached);
+                    return new EventSearchPage(kept, scanned, true, lastScanned is { } last ? EventCursor.Of(last, tagged) : null, true, reached, tagged, Skipped: reader.Skipped);
                 }
 
                 scanned++;
-                lastScanned = raw.System.Record;
+                lastScanned = raw.System;
                 reached = raw.System.Time ?? reached;
+                tagged = tagged || Mixed(raw.System, channel, ref first);
                 if (Keep(raw, query, scan.Redacted) is not { } view)
                 {
                     continue;
@@ -93,12 +131,29 @@ public static class EventLogSearch
                 kept.Add(view);
                 if (kept.Count >= query.Limit)
                 {
-                    return new EventSearchPage(kept, scanned, true, view.System.Record, false, reached);
+                    return new EventSearchPage(kept, scanned, true, EventCursor.Of(view.System, tagged), false, reached, tagged, Skipped: reader.Skipped);
                 }
             }
         }
 
-        return new EventSearchPage(kept, scanned, false, null, false, reached);
+        return new EventSearchPage(kept, scanned, false, null, false, reached, tagged, CursorMissing: skipTo is not null, Skipped: reader.Skipped);
+    }
+
+    /// <summary>Whether <paramref name="system"/> shows the log holds other computers' events: a channel not the log's, or a computer or channel unlike the first event's.</summary>
+    private static bool Mixed(EventSystemValues system, string? channel, ref (string Computer, string Channel)? first)
+    {
+        if (channel is not null && !string.Equals(system.Channel, channel, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (first is not { } seen)
+        {
+            first = (system.Computer, system.Channel);
+            return false;
+        }
+
+        return !string.Equals(seen.Computer, system.Computer, StringComparison.OrdinalIgnoreCase) || !string.Equals(seen.Channel, system.Channel, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -179,25 +234,43 @@ public static class EventLogSearch
         }
 
         var top = order.Select(k => groups[k]).OrderByDescending(g => g.Count).ThenByDescending(g => g.Newest).Take(SummaryGroups).ToList();
-        return new EventSummary(top, total, groups.Count, scanned, stopped, reached);
+        return new EventSummary(top, total, groups.Count, scanned, stopped, reached, reader.Skipped);
     }
 
-    /// <summary>The event with record <paramref name="record"/>, or null; its XML kept under the full detail.</summary>
-    public static EventView? Find(IEventLogReader reader, long record, bool redacted, CancellationToken cancellationToken)
+    /// <summary>
+    /// The event <paramref name="cursor"/> names, its XML kept under the full detail; a tagged cursor's first match. A record alone reads on:
+    /// when other events hold it too (a forwarded log's, from other computers or channels), <see cref="EventFound.Several"/> lists each.
+    /// </summary>
+    public static EventFound Find(IEventLogReader reader, EventCursor cursor, bool redacted, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reader);
+        EventView? found = null;
+        var several = new List<(EventCursor Cursor, string Computer)>();
         while (reader.Next() is { } batch)
         {
             foreach (var raw in batch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (raw.System.Record == record)
+                if (!cursor.Is(raw.System))
                 {
-                    return View(raw, redacted, withXml: true);
+                    continue;
                 }
+
+                if (cursor.Tagged)
+                {
+                    return new EventFound(View(raw, redacted, withXml: true), []);
+                }
+
+                var tagged = EventCursor.Of(raw.System, tagged: true);
+                if (several.All(s => s.Cursor != tagged))
+                {
+                    several.Add((tagged, raw.System.Computer));
+                }
+
+                found ??= View(raw, redacted, withXml: true);
             }
         }
 
-        return null;
+        return new EventFound(found, several.Count > 1 ? several : []);
     }
 }

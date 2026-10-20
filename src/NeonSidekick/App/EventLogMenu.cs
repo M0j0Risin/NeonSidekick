@@ -191,7 +191,7 @@ internal sealed class EventLogMenu
 
         public List<EventView> Events { get; } = [];
 
-        public long? Cursor { get; set; }
+        public EventCursor? Cursor { get; set; }
 
         public bool More { get; set; }
 
@@ -425,7 +425,7 @@ internal sealed class EventLogMenu
         var scan = _access.Scan(source, ScanLimit);
         var result = await _access.RunAsync(source, (system, token) =>
         {
-            var query = tab.Query ?? line.For(source.Log, source.IsFile ? EventLogCommand.FileChannel(system, source, token) : source.Log) with { Limit = Limit };
+            var query = tab.Query ?? line.For(source.Log, EventLogAccess.ChannelOf(system, source, token)) with { Limit = Limit };
             if (append)
             {
                 query = query with { BeforeRecord = tab.Cursor };
@@ -495,8 +495,9 @@ internal sealed class EventLogMenu
         var zone = _access.Time.LocalTimeZone;
         var whole = await _access.RunAsync(source, (system, token) =>
         {
+            // By its tag too: in a forwarded log another computer's event may hold the same record (2026-10-20, a review).
             using var reader = system.Query(source.Target, source.Log, "*[System[EventRecordID=" + listed.System.Record.ToString(CultureInfo.InvariantCulture) + "]]", token);
-            return EventLogSearch.Find(reader, listed.System.Record, redacted: false, token);
+            return EventLogSearch.Find(reader, EventCursor.Of(listed.System, tagged: true), redacted: false, token).View;
         }, cancellationToken).ConfigureAwait(false);
         var view = whole.Value ?? listed;
         string text = PageText(source, view, zone);

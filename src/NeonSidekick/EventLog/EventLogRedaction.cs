@@ -55,6 +55,38 @@ public static class EventLogRedaction
         return index >= 0 && index < fields.Count ? Field(fields[index].Name, value) : Text(value);
     }
 
+    /// <summary>The shortest secret value <see cref="Rendered"/> takes out of a text; a shorter one drops the text instead.</summary>
+    public const int MinRenderedSecret = 4;
+
+    /// <summary>
+    /// An event's own rendered text (<c>RenderingInfo/Message</c>, a forwarded event's) as the redacted detail may show it, or null
+    /// (2026-10-20, a review): it was formatted from the raw values, so each secret-named field's value (<paramref name="rawFields"/>) is
+    /// replaced wherever it stands; a value too short to replace safely (under <see cref="MinRenderedSecret"/>) drops the text whole.
+    /// The free-text rules run after, as on any message.
+    /// </summary>
+    public static string? Rendered(string text, IReadOnlyList<EventField> rawFields)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(rawFields);
+        foreach (var field in rawFields)
+        {
+            string value = field.Value.Trim();
+            if (value.Length == 0 || !IsSecretField(field.Name))
+            {
+                continue;
+            }
+
+            if (value.Length < MinRenderedSecret)
+            {
+                return null;
+            }
+
+            text = text.Replace(value, Placeholder, StringComparison.Ordinal);
+        }
+
+        return text;
+    }
+
     /// <summary><paramref name="text"/> with every secret the free-text rules know hidden (<see cref="ToolRedaction.Text"/>'s since later on 2026-10-15).</summary>
     public static string Text(string text) => ToolRedaction.Text(text);
 }

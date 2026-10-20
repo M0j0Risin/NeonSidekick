@@ -456,6 +456,7 @@ Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash
 * **Default view:** with no `level` or `audit`, Security shows its audit failures, other logs their critical events, errors and warnings.
 * **Filters:** `level` (`critical,error,warning,information,verbose` or `all`), `id` (`41,1074`, `4700-4799`), `provider`, `since`/`until` (`2h`, or a time), `audit`, `field` (`Name=value` in EventData) and `text` (provider, fields, message). At most 20 terms.
 * **Limits:** *Event log max events* per page and *Event log scan limit* per call; the answer says how far back it got.
+* **Forwarded logs:** in ForwardedEvents each computer keeps its own record numbers, so a record carries a tag (`1200@3f9a2c1b`). Copy it whole into `before_record` or `record`.
 * **Security** needs the Event Log Readers group, or the app run as administrator. Analytic and Debug logs read oldest-first only and can't be searched.
 
 #### Event log computers
@@ -991,6 +992,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 
 ## Known issues
 
+* **An event too large to read:** a remote event too large for one reply even alone is stepped over and noted. That step hasn't been tried against a real host.
 * **Remote `runas`:** a remote computer reached with `runas` (event logs, services, scheduled tasks) hasn't been tried against a real second machine; this PC and `localhost` have.
 * **YouTube:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 * **Bot-checked downloads:** a site that ties its clearance to the browser's connection may still refuse a download after the Browser window passed its check.

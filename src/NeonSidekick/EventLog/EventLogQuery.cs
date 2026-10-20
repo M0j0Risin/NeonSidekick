@@ -32,6 +32,66 @@ public readonly record struct EventIdRange(int From, int To)
     public override string ToString() => Single ? From.ToString(CultureInfo.InvariantCulture) : From.ToString(CultureInfo.InvariantCulture) + "-" + To.ToString(CultureInfo.InvariantCulture);
 }
 
+/// <summary>
+/// Where a page goes on from, and what <c>eventlog_event</c> reads (2026-10-20, a review: a forwarded log keeps each source computer's own
+/// EventRecordID, so in ForwardedEvents a record number is neither unique nor in read order): a record alone (<c>81100</c>), or a record
+/// with its <see cref="Source"/> tag (<c>1200@3f9a2c1b</c>), eight hex of a hash over the event's computer and channel — never their text,
+/// which is the event's own and would sit outside a fence where the model copies it. A tagged cursor is never an XPath term: the search
+/// reads from the top and skips to it (<see cref="EventLogSearch.Search"/>).
+/// </summary>
+public readonly record struct EventCursor(long Record, string? Source = null)
+{
+    /// <summary>Whether the cursor names the event's source too (a forwarded log's).</summary>
+    public bool Tagged => Source is not null;
+
+    /// <summary>The cursor of <paramref name="system"/>'s event: tagged, or its record alone.</summary>
+    public static EventCursor Of(EventSystemValues system, bool tagged)
+    {
+        ArgumentNullException.ThrowIfNull(system);
+        return new EventCursor(system.Record, tagged ? Tag(system) : null);
+    }
+
+    /// <summary>The tag of an event's computer and channel (case ignored): the first four bytes of SHA-256 over both, in lowercase hex.</summary>
+    public static string Tag(EventSystemValues system)
+    {
+        ArgumentNullException.ThrowIfNull(system);
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(system.Computer.ToUpperInvariant() + "\n" + system.Channel.ToUpperInvariant()));
+        return Convert.ToHexStringLower(hash.AsSpan(0, 4));
+    }
+
+    /// <summary>Whether <paramref name="system"/> is this cursor's event: its record, and its tag when the cursor has one.</summary>
+    public bool Is(EventSystemValues system)
+    {
+        ArgumentNullException.ThrowIfNull(system);
+        return system.Record == Record && (Source is null || string.Equals(Tag(system), Source, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> as a cursor: a record number from 1, alone or with <c>@</c> and an eight-hex tag; null for anything else.
+    /// </summary>
+    public static EventCursor? Parse(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string trimmed = text.Trim().TrimStart('#');
+        int at = trimmed.IndexOf('@', StringComparison.Ordinal);
+        string number = at < 0 ? trimmed : trimmed[..at];
+        if (!long.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out long record) || record < 1)
+        {
+            return null;
+        }
+
+        if (at < 0)
+        {
+            return new EventCursor(record);
+        }
+
+        string tag = trimmed[(at + 1)..];
+        return tag.Length == 8 && tag.All(char.IsAsciiHexDigit) ? new EventCursor(record, tag.ToLowerInvariant()) : null;
+    }
+
+    public override string ToString() => Record.ToString(CultureInfo.InvariantCulture) + (Source is null ? "" : "@" + Source);
+}
+
 /// <summary>A named field's value to match (<c>TargetUserName=alice</c>); EventData's names only.</summary>
 public readonly record struct EventFieldTerm(string Name, string Value)
 {
@@ -64,7 +124,14 @@ public sealed record EventLogQuery
 
     public EventAudit Audit { get; init; }
 
-    public long? BeforeRecord { get; init; }
+    /// <summary>The page's start: only events below it (a tagged cursor: only those after it in read order).</summary>
+    public EventCursor? BeforeRecord { get; init; }
+
+    /// <summary>
+    /// Whether <paramref name="log"/> is one whose events come from other computers and keep their own records (2026-10-20, a review):
+    /// <c>ForwardedEvents</c>, the collector's default; its pages always carry tagged cursors.
+    /// </summary>
+    public static bool IsForwarded(string? log) => string.Equals(log?.Trim(), "ForwardedEvents", StringComparison.OrdinalIgnoreCase);
 
     public string? Text { get; init; }
 

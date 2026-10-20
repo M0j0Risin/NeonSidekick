@@ -197,6 +197,24 @@ public sealed class EventLogAccess
     }
 
     /// <summary>
+    /// The channel a log's default view is read for (<see cref="EventLogQuery.DefaultFor"/>): the log itself, or the channel an <c>.evtx</c>
+    /// holds, from its newest event (a Security export reads as Security). One helper for the tools, <c>/eventlog</c> and its pane
+    /// (2026-10-20, a review: two copies); the reader renders only that event's system values.
+    /// </summary>
+    public static string ChannelOf(IEventLogSystem system, EventLogSource source, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(system);
+        ArgumentNullException.ThrowIfNull(source);
+        if (!source.IsFile)
+        {
+            return source.Log;
+        }
+
+        using var reader = system.Query(source.Target, source.Log, "*", cancellationToken);
+        return reader.Next() is { Count: > 0 } batch ? batch[0].System.Channel : "";
+    }
+
+    /// <summary>
     /// A computer tried as it stands (2026-10-15, the wizard's Test and <c>--eventlog-check</c>): its newest System event read under its
     /// account — the session, the sign-in and the read all proven — nothing written. Its sentence either way.
     /// </summary>

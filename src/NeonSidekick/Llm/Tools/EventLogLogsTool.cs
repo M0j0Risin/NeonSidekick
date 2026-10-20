@@ -96,24 +96,21 @@ public sealed class EventLogLogsTool : EventLogTool
             .ToList();
         int cap = source.Remote ? RemoteProbes : LocalProbes;
         var listed = new List<EventLogListing>();
-        foreach (string name in names.Take(cap))
+
+        // One session for every log looked into (2026-10-20, a review: on a remote computer each Info signed in again).
+        foreach (var (name, read, failure) in system.Infos(source.Target, names.Take(cap).ToList(), cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            EventLogInfo info;
-            try
-            {
-                info = system.Info(source.Target, name, cancellationToken);
-            }
-            catch (EventLogException ex) when (ex.Code == 5)
+            if (failure is { Code: 5 })
             {
                 listed.Add(new EventLogListing(name, null, NoAccess: true));
                 continue;
             }
-            catch (EventLogException ex)
+
+            if (failure is not null || read is not { } info)
             {
-                if (all)
+                if (all && failure is not null)
                 {
-                    listed.Add(new EventLogListing(name, null, Error: EventLogErrors.Sentence(ex.Code, source.Context with { Log = name }, ex.Message)));
+                    listed.Add(new EventLogListing(name, null, Error: EventLogErrors.Sentence(failure.Code, source.Context with { Log = name }, failure.Message)));
                 }
 
                 continue;

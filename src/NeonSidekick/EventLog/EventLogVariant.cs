@@ -97,6 +97,35 @@ public static class EventLogVariant
         };
     }
 
+    /// <summary>
+    /// The values <paramref name="insert"/> changes, each with its new text (2026-10-20, a review: only a plain string was rewritten, so an
+    /// ANSI string, a string array or a binary value under a secret's name reached the redacted message as it was): every value of
+    /// <paramref name="count"/> is read as text (<see cref="Text"/>), handed to <paramref name="insert"/> with its position, and kept when it
+    /// came back different — the caller writes each one back as a plain string. A value that decodes to nothing is handed over as empty.
+    /// </summary>
+    public static IReadOnlyList<(int Index, string Text)> Rewrites(ReadOnlySpan<byte> buffer, nint baseAddress, int count, Func<int, string, string> insert)
+    {
+        ArgumentNullException.ThrowIfNull(insert);
+        var rewrites = new List<(int, string)>();
+        for (int i = 0; i < count && (i + 1) * Size <= buffer.Length; i++)
+        {
+            int type = Type(buffer, i);
+            if (type == TypeNull)
+            {
+                continue;
+            }
+
+            string original = Text(Decode(buffer, baseAddress, i), type);
+            string rewritten = insert(i, original);
+            if (!string.Equals(rewritten, original, StringComparison.Ordinal))
+            {
+                rewrites.Add((i, rewritten));
+            }
+        }
+
+        return rewrites;
+    }
+
     /// <summary>A decoded value as text: a hex number as <c>0x…</c> where its type says so, a time in ISO 8601 UTC, bytes as hex, an array joined by commas.</summary>
     public static string Text(object? value, int type = TypeNull) => value switch
     {

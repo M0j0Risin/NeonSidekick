@@ -23,7 +23,7 @@ public sealed class FakeEventLogSystem : IEventLogSystem
     public List<string> ChannelNames { get; } = [];
 
     /// <summary>A log's facts; a log not here reads as enabled Admin with its event count.</summary>
-    public Dictionary<string, EventLogInfo> Infos { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, EventLogInfo> LogInfos { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The logs that refuse with 5 (access denied).</summary>
     public HashSet<string> Denied { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -35,6 +35,12 @@ public sealed class FakeEventLogSystem : IEventLogSystem
     public SemaphoreSlim? Gate { get; set; }
 
     public int BatchSize { get; set; } = 32;
+
+    /// <summary>What every reader says it stepped over as too large (<see cref="IEventLogReader.Skipped"/>).</summary>
+    public int Skip { get; set; }
+
+    /// <summary>How many times <see cref="Infos"/> was called (once per <c>eventlog_logs</c> call, one session).</summary>
+    public int InfosCalls { get; private set; }
 
     public List<(EventLogTarget Target, string Log, string XPath)> Queries { get; } = [];
 
@@ -66,7 +72,7 @@ public sealed class FakeEventLogSystem : IEventLogSystem
             throw new EventLogException(target.Kind == EventLogTargetKind.File ? 2 : 15007, "no such log");
         }
 
-        return new Reader(events, BatchSize);
+        return new Reader(events, BatchSize, Skip);
     }
 
     public IReadOnlyList<string> Channels(EventLogTarget target, CancellationToken cancellationToken)
@@ -89,7 +95,7 @@ public sealed class FakeEventLogSystem : IEventLogSystem
             throw new EventLogException(5, "access denied");
         }
 
-        if (Infos.TryGetValue(log, out var info))
+        if (LogInfos.TryGetValue(log, out var info))
         {
             return info;
         }
@@ -98,9 +104,30 @@ public sealed class FakeEventLogSystem : IEventLogSystem
         return new EventLogInfo(log, records, records * 1024L, ManualTimeProvider.DefaultUtcNow);
     }
 
-    private sealed class Reader(List<FakeEvent> events, int batch) : IEventLogReader
+    public IReadOnlyList<EventLogInfoResult> Infos(EventLogTarget target, IReadOnlyList<string> logs, CancellationToken cancellationToken)
+    {
+        InfosCalls++;
+        var results = new List<EventLogInfoResult>(logs.Count);
+        foreach (string log in logs)
+        {
+            try
+            {
+                results.Add(new EventLogInfoResult(log, Info(target, log, cancellationToken), null));
+            }
+            catch (EventLogException ex)
+            {
+                results.Add(new EventLogInfoResult(log, null, ex));
+            }
+        }
+
+        return results;
+    }
+
+    private sealed class Reader(List<FakeEvent> events, int batch, int skipped) : IEventLogReader
     {
         private int _at;
+
+        public int Skipped => skipped;
 
         public IReadOnlyList<RawEvent>? Next()
         {

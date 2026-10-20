@@ -281,7 +281,7 @@ public static class EventLogCommand
         var scan = access.Scan(source, scanLimit);
         var result = await access.RunAsync(source, (system, token) =>
         {
-            string channel = source.IsFile ? FileChannel(system, source, token) : source.Log;
+            string channel = EventLogAccess.ChannelOf(system, source, token);
             var query = parsed.For(source.Log, channel);
             var (xpath, built) = EventLogXPath.Build(query, serverFields: true);
             if (xpath is null)
@@ -335,14 +335,5 @@ public static class EventLogCommand
         string message = (view.FirstLine ?? EventLogRender.NoMessage(view)).Replace('\t', ' ');
         return EventLogText.Scrub("#" + s.Record.ToString(CultureInfo.InvariantCulture) + "  " + EventLogText.Time(s.Time, zone) + "  " + EventLogText.Level(s.Level, s.Keywords)
             + "  " + s.Provider + "  " + s.Id.ToString(CultureInfo.InvariantCulture) + "  " + message);
-    }
-
-    /// <summary>The channel an <c>.evtx</c> holds, from its newest event.</summary>
-    public static string FileChannel(IEventLogSystem system, EventLogSource source, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(system);
-        ArgumentNullException.ThrowIfNull(source);
-        using var reader = system.Query(source.Target, source.Log, "*", cancellationToken);
-        return reader.Next() is { Count: > 0 } batch ? batch[0].System.Channel : "";
     }
 }

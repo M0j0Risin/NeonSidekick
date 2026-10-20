@@ -22,6 +22,9 @@ internal static unsafe partial class EventLogNative
     public const int QueryFilePath = 0x2;
     public const int QueryReverseDirection = 0x200;
 
+    // EVT_SEEK_FLAGS.
+    public const int SeekRelativeToCurrent = 3;
+
     // EVT_RENDER_CONTEXT_FLAGS and EVT_RENDER_FLAGS.
     public const int RenderContextSystem = 1;
     public const int RenderContextUser = 2;
@@ -80,6 +83,10 @@ internal static unsafe partial class EventLogNative
     [LibraryImport(Library, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool EvtNext(nint resultSet, int eventsSize, nint* events, int timeout, int flags, out int returned);
+
+    [LibraryImport(Library, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EvtSeek(nint resultSet, long position, nint bookmark, int timeout, int flags);
 
     [LibraryImport(Library, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -14,7 +14,8 @@ public sealed record EventLogFile(string Path, long Size);
 /// The event-log tools' answers (2026-10-15, the event-log plan): a line per event in a list (about 400 characters: the record, the local
 /// time with its offset, the level, the provider, the id, the message's first line cut to fit), a header that says what was read and how,
 /// and the next page as the whole call to make. Every message and field value is fenced as quoted data (<see cref="EventLogText.Quote"/>),
-/// every text scrubbed of control characters once (<see cref="EventLogText.Scrub"/>), and an answer held to <see cref="MaxChars"/>
+/// and so is every other value the event itself carries — the provider, the source, the channel, the computer, the user and the fields'
+/// names (2026-10-20, a review: a crafted <c>.evtx</c> or source could name itself an instruction outside the marks) — every text scrubbed of control characters once (<see cref="EventLogText.Scrub"/>), and an answer held to <see cref="MaxChars"/>
 /// (<c>eventlog_event</c>'s to <see cref="EventMaxChars"/>). Pure.
 /// </summary>
 public static class EventLogRender
@@ -31,20 +32,20 @@ public static class EventLogRender
     /// <summary>How much of a provider's name a list line carries.</summary>
     public const int ProviderChars = 60;
 
-    /// <summary>One event's line in a list.</summary>
-    public static string Line(EventView view, TimeZoneInfo zone, string? computer = null)
+    /// <summary>One event's line in a list; <paramref name="tagged"/> (a forwarded log's page) gives its record with its source's tag (<see cref="EventCursor"/>).</summary>
+    public static string Line(EventView view, TimeZoneInfo zone, string? computer = null, bool tagged = false)
     {
         ArgumentNullException.ThrowIfNull(view);
         ArgumentNullException.ThrowIfNull(zone);
         var s = view.System;
         string message = Cut(view.FirstLine ?? NoMessage(view), LineMessageChars);
         var line = new StringBuilder();
-        line.Append('#').Append(s.Record.ToString(CultureInfo.InvariantCulture)).Append("  ").Append(EventLogText.Time(s.Time, zone))
-            .Append("  ").Append(EventLogText.Level(s.Level, s.Keywords)).Append("  ").Append(Cut(Clean(s.Provider), ProviderChars))
+        line.Append('#').Append(EventCursor.Of(s, tagged).ToString()).Append("  ").Append(EventLogText.Time(s.Time, zone))
+            .Append("  ").Append(EventLogText.Level(s.Level, s.Keywords)).Append("  ").Append(Fence(Cut(s.Provider, ProviderChars)))
             .Append("  ").Append(s.Id.ToString(CultureInfo.InvariantCulture));
         if (computer is not null)
         {
-            line.Append("  on ").Append(Clean(computer));
+            line.Append("  on ").Append(Fence(computer));
         }
 
         line.Append("  ").Append(EventLogText.Quote(Clean(message)));
@@ -82,18 +83,21 @@ public static class EventLogRender
             + EventLogText.Count(page.Scanned, "event") + ")" + (source.Redacted ? "; " + EventLogText.RedactedNote : "");
         if (page.Events.Count == 0 && !page.BudgetStop)
         {
-            return header + "\n" + EventLogText.NoEvents(Clean(source.Log), query.Levels, query.Audit, query.Since, now, zone) + (query.Text is { Length: > 0 } ? " holding that text" : "") + ".";
+            return header + "\n" + (page.CursorMissing && query.BeforeRecord is { } gone
+                ? EventLogText.CursorMissing(gone.ToString())
+                : EventLogText.NoEvents(Clean(source.Log), query.Levels, query.Audit, query.Since, now, zone) + (query.Text is { Length: > 0 } ? " holding that text" : "") + "."
+                    + (page.Skipped > 0 ? "\n" + EventLogText.SkippedNote(page.Skipped) : ""));
         }
 
         int budget = MaxChars - header.Length - EventLogText.QuoteNote.Length - 200;
-        long? cursor = page.Cursor;
+        var cursor = page.Cursor;
         int shown = 0;
         foreach (var view in page.Events)
         {
-            string line = Line(view, zone, ComputerOf(source, view));
+            string line = Line(view, zone, page.Tagged ? Nonblank(view.System.Computer) : ComputerOf(source, view), page.Tagged);
             if (budget - line.Length - 1 < 0 && shown > 0)
             {
-                cursor = page.Events[shown - 1].System.Record;
+                cursor = EventCursor.Of(page.Events[shown - 1].System, page.Tagged);
                 break;
             }
 
@@ -123,6 +127,16 @@ public static class EventLogRender
             answer.Append('\n').Append(BudgetNote(page.Scanned, page.ReachedTime, zone));
         }
 
+        if (page.Skipped > 0)
+        {
+            answer.Append('\n').Append(EventLogText.SkippedNote(page.Skipped));
+        }
+
+        if (page.CursorMissing && query.BeforeRecord is { } lost)
+        {
+            answer.Append('\n').Append(EventLogText.CursorMissing(lost.ToString()));
+        }
+
         bool more = page.More || shown < page.Events.Count;
         if (more && cursor is { } next)
         {
@@ -143,7 +157,7 @@ public static class EventLogRender
     /// The next page as the whole call (2026-10-15, the plan's rule: the model copies it), every argument restated with the times absolute:
     /// <c>next: log=System level=error since=2026-10-13T21:00:00-05:00 before_record=81100</c>. Pinned.
     /// </summary>
-    public static string NextCall(EventLogSource source, EventLogQuery query, long cursor, TimeZoneInfo zone)
+    public static string NextCall(EventLogSource source, EventLogQuery query, EventCursor cursor, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(query);
@@ -164,9 +178,10 @@ public static class EventLogRender
             parts.Add("id=" + string.Join(",", query.Ids));
         }
 
-        foreach (string provider in query.Providers)
+        if (query.Providers.Count > 0)
         {
-            parts.Add("provider=" + Value(provider));
+            // One argument, joined as the tool reads it (2026-10-20, a review: a part per provider could not be copied into one call).
+            parts.Add("provider=" + Value(string.Join(",", query.Providers)));
         }
 
         foreach (var field in query.Fields)
@@ -189,7 +204,7 @@ public static class EventLogRender
             parts.Add("text=" + Value(text));
         }
 
-        parts.Add("before_record=" + cursor.ToString(CultureInfo.InvariantCulture));
+        parts.Add("before_record=" + cursor.ToString());
         if (query.Limit != 20)
         {
             parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));
@@ -250,6 +265,11 @@ public static class EventLogRender
                 + (summary.ReachedTime is { } r ? ", back to " + EventLogText.Time(r, zone) : "") + ")");
         }
 
+        if (summary.Skipped > 0)
+        {
+            answer.Append('\n').Append(EventLogText.SkippedNote(summary.Skipped));
+        }
+
         return answer.ToString();
     }
 
@@ -257,13 +277,16 @@ public static class EventLogRender
     public static string SummaryLine(EventSummaryGroup group, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(group);
-        string line = group.Count.ToString(CultureInfo.InvariantCulture) + "×  " + Cut(Clean(group.Provider), ProviderChars) + " " + group.Id.ToString(CultureInfo.InvariantCulture)
+        string line = group.Count.ToString(CultureInfo.InvariantCulture) + "×  " + Fence(Cut(group.Provider, ProviderChars)) + " " + group.Id.ToString(CultureInfo.InvariantCulture)
             + "  " + EventLogText.Level(group.Level, group.Keywords) + "  newest " + EventLogText.Time(group.Newest, zone) + " #" + group.NewestRecord.ToString(CultureInfo.InvariantCulture)
             + "  " + EventLogText.Quote(Clean(Cut(group.Sample ?? "(no message)", LineMessageChars)));
         return group.Unregistered ? line + "  (" + EventLogText.UnregisteredSource + ")" : line;
     }
 
-    /// <summary><c>eventlog_event</c>'s answer: every system value, the message, the named fields, and the XML under the full detail; clipped at <see cref="EventMaxChars"/>.</summary>
+    /// <summary>
+    /// <c>eventlog_event</c>'s answer: every system value, the message, the named fields, and the XML under the full detail; clipped at
+    /// <see cref="EventMaxChars"/>, a fence the cut splits closed before the note (2026-10-20, a review: the note landed inside an open one).
+    /// </summary>
     public static string Event(EventLogSource source, EventView view, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -279,10 +302,10 @@ public static class EventLogRender
         page.Append('\n').Append(EventLogText.QuoteNote);
         page.Append("\ntime: ").Append(EventLogText.Time(s.Time, zone));
         page.Append("\nlevel: ").Append(EventLogText.Level(s.Level, s.Keywords));
-        page.Append("\nprovider: ").Append(Clean(s.Provider));
+        page.Append("\nprovider: ").Append(Fence(s.Provider));
         if (view.SourceName is { Length: > 0 } sourceName && !string.Equals(sourceName, s.Provider, StringComparison.OrdinalIgnoreCase))
         {
-            page.Append(" (source ").Append(Clean(sourceName)).Append(')');
+            page.Append(" (source ").Append(Fence(sourceName)).Append(')');
         }
 
         if (view.Unregistered)
@@ -292,10 +315,10 @@ public static class EventLogRender
 
         page.Append("\nid: ").Append(s.Id.ToString(CultureInfo.InvariantCulture)).Append("   task: ").Append(s.Task.ToString(CultureInfo.InvariantCulture))
             .Append("   opcode: ").Append(s.Opcode.ToString(CultureInfo.InvariantCulture)).Append("   keywords: 0x").Append(s.Keywords.ToString("X", CultureInfo.InvariantCulture));
-        page.Append("\nchannel: ").Append(Clean(s.Channel)).Append("   computer: ").Append(Clean(s.Computer));
+        page.Append("\nchannel: ").Append(Fence(s.Channel)).Append("   computer: ").Append(Fence(s.Computer));
         if (s.UserSid is { Length: > 0 } sid)
         {
-            page.Append("\nuser: ").Append(Clean(sid));
+            page.Append("\nuser: ").Append(Fence(sid));
         }
 
         if (s.ProcessId is { } process)
@@ -309,7 +332,7 @@ public static class EventLogRender
             page.Append("\nfields:");
             foreach (var field in view.Fields)
             {
-                page.Append("\n  ").Append(Clean(field.Name)).Append(": ").Append(EventLogText.Quote(Clean(field.Value)));
+                page.Append("\n  ").Append(Fence(field.Name)).Append(": ").Append(EventLogText.Quote(Clean(field.Value)));
             }
         }
 
@@ -319,7 +342,7 @@ public static class EventLogRender
         }
 
         string text = page.ToString();
-        return text.Length <= EventMaxChars ? text : text[..(EventMaxChars - 80)] + "\n(cut at " + EventMaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)";
+        return text.Length <= EventMaxChars ? text : Llm.Tools.UntrustedText.CutFenced(text, EventMaxChars - 80) + "\n(cut at " + EventMaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)";
     }
 
     /// <summary>
@@ -447,6 +470,11 @@ public static class EventLogRender
         text.Length > 0 && !text.Any(c => char.IsWhiteSpace(c) || c == '"') ? text : "\"" + text.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     private static string Clean(string text) => EventLogText.Scrub(text);
+
+    /// <summary>A value the event itself carries, scrubbed and fenced: a newline or a tab in it is a space, so the fence stays on its line.</summary>
+    private static string Fence(string text) => EventLogText.Quote(Clean(text).Replace('\n', ' ').Replace('\t', ' '));
+
+    private static string? Nonblank(string text) => text.Length > 0 ? text : null;
 
     private static string Cut(string text, int max)
     {

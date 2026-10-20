@@ -41,7 +41,7 @@ public sealed class EventLogSearchTool : EventLogTool
             "until": { "type": "string", "description": "Only events until then: an age or a moment." },
             "audit": { "type": "string", "enum": ["success", "failure", "any"], "description": "The Security log's audits: failure, success or any." },
             "text": { "type": "string", "description": "Only events whose provider, fields or message contain this text (case ignored)." },
-            "before_record": { "type": "integer", "description": "Only events older than this record number: the next page, as a previous answer's next: line gives it." },
+            "before_record": { "type": "string", "description": "The next page: the record (with its tag in a forwarded log, 1200@3f9a2c1b) exactly as a previous answer's next: line gives it." },
             "limit": { "type": "integer", "description": "How many events, 1 to 100 (default from the settings, 20)." },
             "computer": { "type": "string", "description": "Which computer, as eventlog_logs names them; leave out for this PC (or the only one offered). Not with an .evtx file." }
           },
@@ -86,7 +86,8 @@ public sealed class EventLogSearchTool : EventLogTool
         var scan = Access.Scan(source, ScanLimit);
         var result = await Access.RunAsync(source, (system, token) =>
         {
-            var query = parsed.Complete(ChannelOf(system, source, token));
+            // A file's channel is read only when its default view is wanted (2026-10-20, a review: it opened the file twice for nothing).
+            var query = parsed.LevelGiven || parsed.AuditGiven ? parsed.Query : parsed.Complete(ChannelOf(system, source, token));
             var (xpath, built) = EventLogXPath.Build(query, serverFields: !source.Redacted);
             if (xpath is null)
             {
@@ -184,13 +185,13 @@ public sealed class EventLogSearchTool : EventLogTool
             return (null, sinceError);
         }
 
-        var (until, untilError) = Moment(arguments, UntilArgument);
+        var (until, untilError) = Moment(arguments, UntilArgument, end: true);
         if (untilError is not null)
         {
             return (null, untilError);
         }
 
-        var (before, beforeError) = Number(arguments, BeforeRecordArgument, 1, long.MaxValue, null);
+        var (before, beforeError) = Cursor(arguments, BeforeRecordArgument);
         if (beforeError is not null)
         {
             return (null, beforeError);

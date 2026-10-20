@@ -22,7 +22,7 @@ public sealed class EventLogEventTool : EventLogTool
           "type": "object",
           "properties": {
             "log": { "type": "string", "description": "The log the event is in, as eventlog_search named it, or the .evtx file." },
-            "record": { "type": "integer", "description": "The event's record number (the # in eventlog_search's lines)." },
+            "record": { "type": "string", "description": "The event's record number as the # in eventlog_search's lines gives it (with its tag in a forwarded log, 1200@3f9a2c1b)." },
             "computer": { "type": "string", "description": "Which computer, as eventlog_logs names them; leave out for this PC (or the only one offered)." }
           },
           "required": ["log", "record"]
@@ -49,16 +49,18 @@ public sealed class EventLogEventTool : EventLogTool
             return EventLogText.Missing(LogArgument);
         }
 
-        var (record, recordError) = Number(arguments, RecordArgument, 1, long.MaxValue, null);
+        var (record, recordError) = Cursor(arguments, RecordArgument);
         if (recordError is not null)
         {
             return recordError;
         }
 
-        if (record is not { } number)
+        if (record is not { } cursor)
         {
             return EventLogText.Missing(RecordArgument);
         }
+
+        long number = cursor.Record;
 
         var (source, refused) = Access.Resolve(Optional(arguments, ComputerArgument), log, ForceRedacted);
         if (source is null)
@@ -70,9 +72,15 @@ public sealed class EventLogEventTool : EventLogTool
         {
             string xpath = "*[System[EventRecordID=" + number.ToString(CultureInfo.InvariantCulture) + "]]";
             using var reader = system.Query(source.Target, source.Log, xpath, token);
-            var view = EventLogSearch.Find(reader, number, source.Redacted, token);
-            EventLogAccess.LogQuery(source, xpath, null, view is null ? 0 : 1, view is null ? 0 : 1);
-            return view is null ? EventLogText.NoEvent(number, source.Log) : EventLogRender.Event(source, view, Zone);
+            var found = EventLogSearch.Find(reader, cursor, source.Redacted, token);
+            EventLogAccess.LogQuery(source, xpath, null, found.View is null ? 0 : 1, found.View is null ? 0 : 1);
+            if (found.Several.Count > 0)
+            {
+                // A record alone in a forwarded log, held by events of several computers or channels: which one is the model's to say.
+                return EventLogText.SeveralEvents(number, source.Log, found.Several.Select(s => (s.Cursor.ToString(), s.Computer)));
+            }
+
+            return found.View is not { } view ? EventLogText.NoEvent(number, source.Log) : EventLogRender.Event(source, view, Zone);
         }, cancellationToken).ConfigureAwait(false);
         return result.Error ?? result.Value;
     }

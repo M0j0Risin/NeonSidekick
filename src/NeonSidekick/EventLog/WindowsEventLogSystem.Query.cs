@@ -7,7 +7,7 @@ namespace NeonSidekick.EventLog;
 [SupportedOSPlatform("windows")]
 public sealed partial class WindowsEventLogSystem
 {
-    /// <summary>How many events one <c>EvtNext</c> asks for (halved on 1734).</summary>
+    /// <summary>How many events one <c>EvtNext</c> asks for (halved on 1734, doubled back after each batch read).</summary>
     public const int BatchSize = 32;
 
     /// <summary>The most publishers one read keeps open.</summary>
@@ -43,6 +43,7 @@ public sealed partial class WindowsEventLogSystem
         private nint _userContext;
         private int _count;
         private int _batch = BatchSize;
+        private int _skipped;
         private bool _done;
         private CancellationTokenRegistration _cancelQuery;
         private CancellationTokenRegistration _cancelSession;
@@ -93,6 +94,8 @@ public sealed partial class WindowsEventLogSystem
             }
         }
 
+        public int Skipped => _skipped;
+
         public IReadOnlyList<RawEvent>? Next()
         {
             ReleaseBatch();
@@ -114,6 +117,10 @@ public sealed partial class WindowsEventLogSystem
                 if (ok)
                 {
                     _count = returned;
+
+                    // Back toward the full batch once the large events are behind (2026-10-20, a review: one large event left the rest of
+                    // a remote read at one event a round trip, and its 10 s budget stopped the scan a few hundred events in).
+                    _batch = Math.Min(BatchSize, _batch * 2);
                     break;
                 }
 
@@ -131,6 +138,14 @@ public sealed partial class WindowsEventLogSystem
                     continue;
                 }
 
+                if (code == EventLogNative.RpcInvalidBound && EventLogNative.EvtSeek(_query, 1, 0, 0, EventLogNative.SeekRelativeToCurrent))
+                {
+                    // One event too large even alone (2026-10-20, a review: it failed the read, and every later page at that place): stepped
+                    // over and counted, so the page says so and the search goes on past it. Unproven against a real host's oversized event.
+                    _skipped++;
+                    continue;
+                }
+
                 _token.ThrowIfCancellationRequested();
                 throw new EventLogException(code, "EvtNext failed with " + code.ToString(CultureInfo.InvariantCulture));
             }
@@ -139,8 +154,9 @@ public sealed partial class WindowsEventLogSystem
             for (int i = 0; i < _count; i++)
             {
                 nint handle = _events[i];
-                var system = RenderSystem(handle);
-                batch.Add(new RawEvent(system, () => RenderXml(handle), insert => Format(handle, system.Provider, insert)));
+                RawEvent? raw = null;
+                raw = new RawEvent(() => RenderSystem(handle), () => RenderXml(handle), insert => Format(handle, raw!.System.Provider, insert));
+                batch.Add(raw);
             }
 
             return batch;
@@ -243,24 +259,17 @@ public sealed partial class WindowsEventLogSystem
                     var span = new ReadOnlySpan<byte>(_user.Pointer, used);
                     values = (byte*)NativeMemory.Alloc((nuint)Math.Max(EventLogVariant.Size, valueCount * EventLogVariant.Size));
                     Buffer.MemoryCopy(_user.Pointer, values, valueCount * EventLogVariant.Size, valueCount * EventLogVariant.Size);
-                    for (int i = 0; i < valueCount; i++)
+                    foreach (var (i, rewritten) in EventLogVariant.Rewrites(span, (nint)_user.Pointer, valueCount, insert))
                     {
-                        if (EventLogVariant.Type(span, i) != EventLogVariant.TypeString || EventLogVariant.Decode(span, (nint)_user.Pointer, i) is not string original)
-                        {
-                            continue;
-                        }
-
-                        string rewritten = insert(i, original);
-                        if (string.Equals(rewritten, original, StringComparison.Ordinal))
-                        {
-                            continue;
-                        }
-
-                        // The formatter reads a string by its count (the spike: a longer value was cut to the old length), so both are set.
+                        // Any value the redaction changed — an ANSI string, an array, a number under a secret's name — goes in as a plain
+                        // string (2026-10-20, a review). The formatter reads a string by its count (the spike: a longer value was cut to
+                        // the old length), so the pointer, the count and the type are all set.
                         nint text = Marshal.StringToHGlobalUni(rewritten);
                         strings.Add(text);
-                        *(nint*)(values + i * EventLogVariant.Size) = text;
-                        *(int*)(values + i * EventLogVariant.Size + 8) = rewritten.Length;
+                        byte* variant = values + i * EventLogVariant.Size;
+                        *(nint*)variant = text;
+                        *(int*)(variant + 8) = rewritten.Length;
+                        *(int*)(variant + 12) = EventLogVariant.TypeString;
                     }
                 }
 

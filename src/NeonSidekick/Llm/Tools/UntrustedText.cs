@@ -116,4 +116,34 @@ public static class UntrustedText
         ArgumentNullException.ThrowIfNull(text);
         return text.Length <= max ? text : text[..Math.Max(0, max - 1)] + "…";
     }
+
+    /// <summary>
+    /// <paramref name="body"/>'s first <paramref name="room"/> characters, a surrogate pair kept whole and a fence the cut leaves open closed
+    /// inside the room (2026-10-20, a review: moved out of <c>DirectoryRender.CutBody</c> so the event logs' page cuts the same way, its own
+    /// cut note never landing inside an open ⟪). Pure.
+    /// </summary>
+    public static string CutFenced(string body, int room)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        room = Math.Clamp(room - QuoteClose.Length, 0, body.Length);
+        if (room > 0 && room < body.Length && char.IsHighSurrogate(body[room - 1]))
+        {
+            room--;
+        }
+
+        string cut = body[..room];
+        int opens = 0;
+        int closes = 0;
+        for (int at = cut.IndexOf(QuoteOpen, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(QuoteOpen, at + 1, StringComparison.Ordinal))
+        {
+            opens++;
+        }
+
+        for (int at = cut.IndexOf(QuoteClose, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(QuoteClose, at + 1, StringComparison.Ordinal))
+        {
+            closes++;
+        }
+
+        return opens > closes ? cut + QuoteClose : cut;
+    }
 }

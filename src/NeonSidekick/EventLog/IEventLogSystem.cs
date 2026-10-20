@@ -90,19 +90,29 @@ public sealed record EventMessage(string? Text, EventMessageProblem Problem = Ev
 /// </summary>
 public sealed class RawEvent
 {
+    private readonly Func<EventSystemValues>? _systemValues;
     private readonly Func<string> _xml;
     private readonly Func<Func<int, string, string>?, EventMessage> _format;
+    private EventSystemValues? _system;
     private string? _xmlText;
     private EventMessage? _ownMessage;
 
     public RawEvent(EventSystemValues system, Func<string> xml, Func<Func<int, string, string>?, EventMessage> format)
     {
-        System = system ?? throw new ArgumentNullException(nameof(system));
+        _system = system ?? throw new ArgumentNullException(nameof(system));
         _xml = xml ?? throw new ArgumentNullException(nameof(xml));
         _format = format ?? throw new ArgumentNullException(nameof(format));
     }
 
-    public EventSystemValues System { get; }
+    /// <summary>An event whose system values are rendered on first use (2026-10-20, a review: a file's channel is read off its first event, so the rest of that batch is never rendered).</summary>
+    public RawEvent(Func<EventSystemValues> system, Func<string> xml, Func<Func<int, string, string>?, EventMessage> format)
+    {
+        _systemValues = system ?? throw new ArgumentNullException(nameof(system));
+        _xml = xml ?? throw new ArgumentNullException(nameof(xml));
+        _format = format ?? throw new ArgumentNullException(nameof(format));
+    }
+
+    public EventSystemValues System => _system ??= _systemValues!();
 
     /// <summary>The event as <c>EvtRenderEventXml</c> gives it; rendered once.</summary>
     public string Xml => _xmlText ??= _xml();
@@ -124,6 +134,9 @@ public interface IEventLogReader : IDisposable
 {
     /// <summary>The next batch, or null at the end. The batch before it is no longer valid.</summary>
     IReadOnlyList<RawEvent>? Next();
+
+    /// <summary>How many events so far were too large to read even alone and were stepped over (2026-10-20, a review); never counted among the batches.</summary>
+    int Skipped => 0;
 }
 
 /// <summary>A channel's kind, as its configuration says (<c>EvtChannelConfigType</c>).</summary>
@@ -155,7 +168,34 @@ public interface IEventLogSystem
 
     /// <summary>One log's facts: records, size, last write, whether it is enabled and its kind.</summary>
     EventLogInfo Info(EventLogTarget target, string log, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Each of <paramref name="logs"/>' facts, or the refusal that log met (2026-10-20, a review: <c>eventlog_logs</c> on a remote computer
+    /// signed in once per log, 41 times a call): the real reader opens one session for all of them. Only a cancel throws.
+    /// </summary>
+    IReadOnlyList<EventLogInfoResult> Infos(EventLogTarget target, IReadOnlyList<string> logs, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(logs);
+        var results = new List<EventLogInfoResult>(logs.Count);
+        foreach (string log in logs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                results.Add(new EventLogInfoResult(log, Info(target, log, cancellationToken), null));
+            }
+            catch (EventLogException ex)
+            {
+                results.Add(new EventLogInfoResult(log, null, ex));
+            }
+        }
+
+        return results;
+    }
 }
+
+/// <summary>One log's facts as <see cref="IEventLogSystem.Infos"/> reads them, or the refusal it met.</summary>
+public sealed record EventLogInfoResult(string Log, EventLogInfo? Info, EventLogException? Error);
 
 /// <summary>
 /// A failure of the event-log reader (2026-10-15): <see cref="Code"/> is the Win32 code (5 access denied, 15007 no such channel…),

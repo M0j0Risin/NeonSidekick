@@ -75,14 +75,12 @@ public sealed partial class WindowsEventLogSystem
     /// One log's facts: its configuration (enabled, kind) read first — it opens even where the log will not — then the log itself (records,
     /// size, last write), whose refusal is the call's (5 for Security unelevated). A file's facts come from the file.
     /// </summary>
-    public unsafe EventLogInfo Info(EventLogTarget target, string log, CancellationToken cancellationToken)
+    public EventLogInfo Info(EventLogTarget target, string log, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(log);
         cancellationToken.ThrowIfCancellationRequested();
         nint session = 0;
-        nint config = 0;
-        nint opened = 0;
         var registration = default(CancellationTokenRegistration);
         using var buffer = new NativeBuffer(256);
         try
@@ -94,6 +92,67 @@ public sealed partial class WindowsEventLogSystem
                 registration = cancellationToken.Register(() => EventLogNative.EvtCancel(held));
             }
 
+            return InfoIn(session, target, log, buffer);
+        }
+        finally
+        {
+            registration.Dispose();
+            Close(session);
+        }
+    }
+
+    /// <summary>
+    /// Every one of <paramref name="logs"/>' facts in one session (2026-10-20, a review: a remote <c>eventlog_logs</c> signed in once per
+    /// log); a log's refusal is its entry's, and a cancel ends the whole call.
+    /// </summary>
+    public IReadOnlyList<EventLogInfoResult> Infos(EventLogTarget target, IReadOnlyList<string> logs, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(logs);
+        cancellationToken.ThrowIfCancellationRequested();
+        nint session = 0;
+        var registration = default(CancellationTokenRegistration);
+        using var buffer = new NativeBuffer(256);
+        try
+        {
+            session = OpenSession(target);
+            if (session != 0)
+            {
+                nint held = session;
+                registration = cancellationToken.Register(() => EventLogNative.EvtCancel(held));
+            }
+
+            var results = new List<EventLogInfoResult>(logs.Count);
+            foreach (string log in logs)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    results.Add(new EventLogInfoResult(log, InfoIn(session, target, log, buffer), null));
+                }
+                catch (EventLogException ex)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    results.Add(new EventLogInfoResult(log, null, ex));
+                }
+            }
+
+            return results;
+        }
+        finally
+        {
+            registration.Dispose();
+            Close(session);
+        }
+    }
+
+    /// <summary>One log's facts in <paramref name="session"/>; the caller owns the session and the buffer.</summary>
+    private static unsafe EventLogInfo InfoIn(nint session, EventLogTarget target, string log, NativeBuffer buffer)
+    {
+        nint config = 0;
+        nint opened = 0;
+        try
+        {
             bool file = target.Kind == EventLogTargetKind.File;
             string path = file ? target.FilePath! : log;
             bool enabled = true;
@@ -147,10 +206,8 @@ public sealed partial class WindowsEventLogSystem
         }
         finally
         {
-            registration.Dispose();
             Close(opened);
             Close(config);
-            Close(session);
         }
     }
 
