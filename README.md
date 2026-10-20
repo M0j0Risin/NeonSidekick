@@ -24,7 +24,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 
 - [Features](#features)
 - [Getting started](#getting-started)
-- [Settings & menus](#settings--menus)
+- [Using the app](#using-the-app)
 - [About](#about)
 - More documentation:
   - [Using the app](docs/INTERFACE.md): the screen, keys, bars and windows
@@ -135,54 +135,50 @@ On a Mac:
 Each download's `.sha256` file lets you check it arrived intact.
 
 ### First launch
-Each profile offers, once, to put a shortcut on the desktop (one that also writes a log, if you like; `/shortcut` makes one later).
-
 If no model server answers when the app starts, it opens **Connect a model**:
 
 | Choice | When to pick it |
 |---|---|
 | Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on this machine or your network. |
 | Enter a server's URL | You know the address of an OpenAI-compatible server. |
-| Download an embedded model | You have no server: the app runs a model itself. |
+| Download an embedded model | You have no server: the app runs a model itself, best on a suitable graphics card or a Mac. |
 | Connect Docker container | You run vLLM or SGLang in Docker Desktop (Windows only). |
 | Use the Anthropic API / Use the OpenAI API | You have an API key (billed per message). |
 | Use Claude Code | You have Claude Code and a Claude subscription. |
 
-Pick one and the app walks you through it; Esc skips, and `/server` brings the page back. Then type a message and press Enter.
+Pick one and the app walks you through it, switching that server on for you; Esc skips. Then type a message and press Enter.
 
 Good to know:
+* `/server` switches servers later. It lists embedded models and the servers it finds; the APIs, Claude Code and Docker appear once switched on in `/settings` › Servers.
 * Settings, memories and conversations are saved in `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac).
-* The model can't touch your files, the web or the shell until you allow it in `/tools`.
+* The model can't touch your files, the web or the shell until you allow it; see [What the model may do](#what-the-model-may-do).
 * Voice is off at first. `/tts` turns on spoken replies and `/stt` voice input; each first downloads what it needs (about 330 MB and 150 MB).
+* Each profile offers, once, to put a shortcut on the desktop (one that also writes a log, if you like); `/shortcut` makes one later.
 
 ### Useful first commands
 | Command | What it does |
 |---|---|
-| `/server` | Connects to a model server, or switches. |
-| `/model` | Picks a model on the current server. |
+| `/help` | Every command and key. |
 | `/tools` | Chooses what the model may do: files, web, shell and more. |
 | `/cwd` | Changes the working directory, the folder the model works in. |
-| `/tts` / `/stt` | Turns spoken replies / voice input on or off. |
+| `/plan <requirement>` | Plans a change with read-only tools; nothing changes until you approve. |
+| `/webui` | Puts the chat on your phone: turn the Web UI on and scan its QR code. |
 
 Type `/` to list every command; [COMMANDS.md](docs/COMMANDS.md) has them all, and [COMMANDLINE.md](docs/COMMANDLINE.md) the options to start the app with.
 
-## Settings & menus
+### What the model may do
 
-Everything is set from panes, and each explains itself: the highlighted row's description and default show under the list. [Using the app](docs/INTERFACE.md) covers keys, bars and windows; [SETTINGS.md](docs/SETTINGS.md) lists every setting.
+| Setting | Where | What it does | Default |
+|---|---|---|---|
+| File tools | `/tools` › Files › File | The model reads and writes files in the working directory. | off |
+| Image tools | `/tools` › Files › Image | The model looks at and edits pictures. | off |
+| Web tools | `/tools` › Core › Web | The model searches the web and reads pages. | off |
+| Shell command policy | `/tools` › Core › Shell | `off`, `ask` (you approve any command not on the allowed list) or `yolo` (no asking). | `off` |
+| Memory mode | `/settings` › Client › Chat | Whether the model saves facts about you between conversations. | `read-write` |
 
-| Pane | Opens with | What's in it |
-|---|---|---|
-| `/settings` | Ctrl+/ or `//` | The app: chat, sessions and botchat (Client), the model servers (Servers), advisors, and voice. |
-| `/tools` | Ctrl+T | Which tools the model may use, and their options. |
-| `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
-| `/mcp` | Ctrl+Alt+D | External MCP servers. |
-| `/sys` | Ctrl+Y | What the model is sent. |
-| `/usage` | Ctrl+U | Speed and token statistics. |
+## Using the app
 
-### Getting around
-* **Keyboard:** ←/→ switch tabs (and the sub-tabs on a second row), Tab skips to the next main tab, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes.
-* **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
-* **Lost?** Ask the model where a setting is; its `neon_help` tool knows them all.
+The short version: [INTERFACE.md](docs/INTERFACE.md) has every key, bar and window, and [SETTINGS.md](docs/SETTINGS.md) every setting.
 
 ### The input line
 * **Enter** sends; during a reply it queues the message.
@@ -203,7 +199,9 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 | Ctrl+R | `/reasoning`: how hard the model thinks |
 | Ctrl+P | `/profile`: switch profile |
 | Ctrl+Z | `/theme`: pick a color theme |
-| Ctrl+Alt+N | `/new`: start a new conversation |
+| Ctrl+Alt+W | `/webui`: the Web UI and its QR code |
+| Ctrl+Alt+N | `/new`: a new conversation, keeping the screen |
+| Ctrl+Alt+C | `/clear`: a new conversation on a cleared screen |
 
 On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys and [Keyboard shortcuts](docs/INTERFACE.md#keyboard-shortcuts) list every key.
 
@@ -212,17 +210,25 @@ On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help`
 * **The [status bar](docs/INTERFACE.md#the-status-bar)** shows the model, the context used and what runs in the background; double-click the model to switch.
 * **The [toolbar](docs/INTERFACE.md#the-toolbar)** has an icon per pane and tool group: click to see what it is, double-click to open it. `/toolbar` hides it.
 
-### What the model may do
+### Panes
 
-| Setting | Where | What it does | Default |
-|---|---|---|---|
-| File tools | `/tools` › Files › File | The model reads and writes files in the working directory. | off |
-| Image tools | `/tools` › Files › Image | The model looks at and edits pictures. | off |
-| Web tools | `/tools` › Core › Web | The model searches the web and reads pages. | off |
-| Shell command policy | `/tools` › Core › Shell | `off`, `ask` (you approve any command not on the allowed list) or `yolo` (no asking). | `off` |
-| Memory mode | `/settings` › Client › Chat | Whether the model saves facts about you between conversations. | `read-write` |
+Everything is set from panes, and each explains itself: the highlighted row's description and default show under the list.
+
+| Pane | Opens with | What's in it |
+|---|---|---|
+| `/settings` | Ctrl+/ or `//` | The app: chat, sessions and botchat (Client), the model servers (Servers), advisors, and voice. |
+| `/tools` | Ctrl+T | Which tools the model may use, and their options. |
+| `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
+| `/mcp` | Ctrl+Alt+D | External MCP servers. |
+| `/sys` | Ctrl+Y | What the model is sent. |
+| `/usage` | Ctrl+U | Speed and token statistics. |
 
 A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/ENVIRONMENT.md) can override a few settings for one launch.
+
+### Getting around
+* **Keyboard:** ←/→ switch tabs (and the sub-tabs on a second row), Tab skips to the next main tab, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes.
+* **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
+* **Lost?** Ask the model where a setting is; its `neon_help` tool knows them all.
 
 ## About
 

@@ -1,6 +1,6 @@
 # Settings & menus
 
-Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, with what it does and its default, and what `/sys` shows. Moving around the panes, the keys, the bars and the windows are in [Using the app](INTERFACE.md); the basics are in the [README](../README.md#settings--menus).
+Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, with what it does and its default, and what `/sys` shows. Moving around the panes, the keys, the bars and the windows are in [Using the app](INTERFACE.md); the basics are in the [README](../README.md#using-the-app).
 
 * In the app, the highlighted row of any pane explains itself, and the model's `neon_help` tool answers questions about any setting.
 * Settings a variable or flag can override for one launch are listed in [Environment variables](ENVIRONMENT.md).
