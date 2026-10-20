@@ -169,45 +169,40 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// What a turn may offer of the services tools (2026-10-15, the plan's offering rule): the reads always; a change only with <c>Service writes</c>
     /// on, a pane to ask on, and a ticked <c>readwrite</c> computer whose <c>controlActions</c> allow it (<c>service_start_type</c> needs
-    /// <c>start_type</c>). Pure over the catalog.
+    /// <c>start_type</c>). Pure over the catalog. <c>service_control</c> is the turn's copy, its actions agreed from <paramref name="catalog"/>
+    /// (2026-10-20, <see cref="ServiceControlTool.ForCatalog"/>).
     /// </summary>
     public static IReadOnlyList<AIFunction> ServiceToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective, bool pane, ComputerCatalog<ServiceComputerConfig> catalog) =>
-        tools.Where(t => !ServiceWriteToolNames.Contains(t.Name) || ServiceWriteReason(t.Name, effective, pane, catalog) is null).ToList();
+        tools.Where(t => !ServiceWriteToolNames.Contains(t.Name) || ServiceWriteReason(t.Name, effective, pane, catalog) is null)
+            .Select(t => t is ServiceControlTool control ? control.ForCatalog(catalog) : t).ToList();
 
     /// <summary>Why a services change tool is not offered (the plan's item 30), or null when it is.</summary>
     public static string? ServiceWriteReason(string tool, AppSettingsData effective, bool pane, ComputerCatalog<ServiceComputerConfig> catalog)
     {
-        if (!effective.ServiceWrites)
-        {
-            return ToolsText.SwitchOffReason(SettingsField.ServiceWrites);
-        }
-
-        if (!pane)
-        {
-            return ToolsText.NoPaneReason;
-        }
-
-        var readWrite = catalog.Computers.Where(c => c.Config.ReadWrite).ToList();
-        if (readWrite.Count == 0)
-        {
-            return ToolsText.NoReadWriteComputerReason;
-        }
-
         string[] actions = tool == ServiceStartTypeTool.ToolName ? [ServiceActions.StartType] : [.. ServiceActions.Control];
-        return readWrite.Any(c => actions.Any(c.Config.AllowsAction)) ? null
-            : tool == ServiceStartTypeTool.ToolName ? ToolsText.NoStartTypeAllowedReason : ToolsText.NoActionAllowedReason;
+        return AdminWriteReason(effective.ServiceWrites, SettingsField.ServiceWrites, pane, catalog, c => actions.Any(c.AllowsAction),
+            tool == ServiceStartTypeTool.ToolName ? ToolsText.NoStartTypeAllowedReason : ToolsText.NoActionAllowedReason);
     }
 
-    /// <summary>What a turn may offer of the task tools: <c>task_control</c> as the services' changes are.</summary>
+    /// <summary>What a turn may offer of the task tools: <c>task_control</c> as the services' changes are, the turn's copy.</summary>
     public static IReadOnlyList<AIFunction> TaskToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective, bool pane, ComputerCatalog<TaskComputerConfig> catalog) =>
-        tools.Where(t => t is not TaskControlTool || TaskWriteReason(effective, pane, catalog) is null).ToList();
+        tools.Where(t => t is not TaskControlTool || TaskWriteReason(effective, pane, catalog) is null)
+            .Select(t => t is TaskControlTool control ? control.ForCatalog(catalog) : t).ToList();
 
     /// <summary>Why <c>task_control</c> is not offered, or null when it is.</summary>
-    public static string? TaskWriteReason(AppSettingsData effective, bool pane, ComputerCatalog<TaskComputerConfig> catalog)
+    public static string? TaskWriteReason(AppSettingsData effective, bool pane, ComputerCatalog<TaskComputerConfig> catalog) =>
+        AdminWriteReason(effective.TaskWrites, SettingsField.TaskWrites, pane, catalog, c => c.ControlActions is not { Count: 0 }, ToolsText.NoActionAllowedReason);
+
+    /// <summary>
+    /// Why a family's write tool is not offered, the order both share: its switch, a pane to ask on, a ticked <c>readwrite</c> computer, one
+    /// whose actions <paramref name="allows"/> (else <paramref name="noneAllowed"/>). Null when it is offered.
+    /// </summary>
+    private static string? AdminWriteReason<TConfig>(bool writes, SettingsField writesSwitch, bool pane, ComputerCatalog<TConfig> catalog, Func<TConfig, bool> allows, string noneAllowed)
+        where TConfig : ComputerConfig
     {
-        if (!effective.TaskWrites)
+        if (!writes)
         {
-            return ToolsText.SwitchOffReason(SettingsField.TaskWrites);
+            return ToolsText.SwitchOffReason(writesSwitch);
         }
 
         if (!pane)
@@ -217,8 +212,8 @@ internal sealed partial class ChatScreen
 
         var readWrite = catalog.Computers.Where(c => c.Config.ReadWrite).ToList();
         return readWrite.Count == 0 ? ToolsText.NoReadWriteComputerReason
-            : readWrite.Any(c => c.Config.ControlActions is not { Count: 0 }) ? null
-            : ToolsText.NoActionAllowedReason;
+            : readWrite.Any(c => allows(c.Config)) ? null
+            : noneAllowed;
     }
 
     /// <summary>

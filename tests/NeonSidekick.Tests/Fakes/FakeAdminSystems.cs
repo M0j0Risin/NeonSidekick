@@ -63,6 +63,15 @@ public sealed class FakeServiceSystem : IServiceSystem
     /// <summary>A code thrown by a change alone (access denied without elevation).</summary>
     public int? ChangeFailsWith { get; set; }
 
+    /// <summary>A stop leaves the service stopping, never stopped (2026-10-20: a restart's stop that does not end).</summary>
+    public bool StopsSlowly { get; set; }
+
+    /// <summary>A code the delayed flag is refused with after the start type was set (2026-10-20: a change made in part).</summary>
+    public int? DelayedFailsWith { get; set; }
+
+    /// <summary>Once a change is made, every status read is refused (2026-10-20: a change not read back).</summary>
+    public bool StatusFailsAfterChange { get; set; }
+
     public Service Add(string name, string display, ServiceRunState state = ServiceRunState.Running, ServiceStartType start = ServiceStartType.Automatic, string image = @"C:\Windows\System32\svchost.exe -k netsvcs", uint type = ServiceKinds.Win32OwnProcess, string? description = null, uint exit = 0)
     {
         var service = new Service
@@ -87,7 +96,8 @@ public sealed class FakeServiceSystem : IServiceSystem
 
     private sealed class Session(FakeServiceSystem owner) : IServiceSession
     {
-        private Service Find(string name) => owner.Services.TryGetValue(name, out var s) ? s : throw new ServiceException(1060, "no such service");
+        /// <summary>The service as OpenServiceW finds it: by the name up to its first NUL (the native layer's floor is not here, so the door's check is what a test proves).</summary>
+        private Service Find(string name) => owner.Services.TryGetValue(name.Split('\0')[0], out var s) ? s : throw new ServiceException(1060, "no such service");
 
         public IReadOnlyList<ServiceEntry> List(bool drivers) => owner.Services.Values.Select(s => s.Entry).Where(e => drivers || !e.IsDriver).ToList();
 
@@ -100,6 +110,11 @@ public sealed class FakeServiceSystem : IServiceSystem
 
         public ServiceStatus Status(string name)
         {
+            if (owner.StatusFailsAfterChange && owner.Changes.Count > 0)
+            {
+                throw new ServiceException(5, "status refused");
+            }
+
             var e = Find(name).Entry;
             return new ServiceStatus(e.State, e.ProcessId, e.Win32ExitCode, e.ServiceExitCode, 0, 0, 1);
         }
@@ -125,8 +140,8 @@ public sealed class FakeServiceSystem : IServiceSystem
         {
             Change("stop " + name);
             var s = Find(name);
-            s.Entry = s.Entry with { State = ServiceRunState.Stopped, ProcessId = 0 };
-            return Status(name);
+            s.Entry = s.Entry with { State = owner.StopsSlowly ? ServiceRunState.StopPending : ServiceRunState.Stopped, ProcessId = 0 };
+            return new ServiceStatus(s.Entry.State, 0, 0, 0, 0, 0, 1);
         }
 
         public void SetStartType(string name, ServiceStartChoice choice)
@@ -136,8 +151,12 @@ public sealed class FakeServiceSystem : IServiceSystem
             s.Config = s.Config with
             {
                 StartType = choice switch { ServiceStartChoice.Manual => ServiceStartType.Manual, ServiceStartChoice.Disabled => ServiceStartType.Disabled, _ => ServiceStartType.Automatic },
-                DelayedAutoStart = choice == ServiceStartChoice.Delayed,
+                DelayedAutoStart = choice == ServiceStartChoice.Delayed && owner.DelayedFailsWith is null,
             };
+            if (owner.DelayedFailsWith is { } code && choice is ServiceStartChoice.Delayed or ServiceStartChoice.Automatic)
+            {
+                throw new ServiceException(code, "delayed flag refused") { Applied = "automatic" };
+            }
         }
 
         private void Change(string what)
@@ -160,6 +179,15 @@ public sealed class FakeTaskSystem : ITaskSystem
     public List<string> Changes { get; } = [];
 
     public int? FailWith { get; set; }
+
+    /// <summary>The account the session connected as, in its forms (2026-10-20): <c>CORP\ops</c>, the fixtures' own user, by default.</summary>
+    public List<string> Self { get; } = ["ops", @"CORP\ops", "S-1-5-21-1-2-3-1001"];
+
+    /// <summary>A path the scheduler resolves to another task (2026-10-20: a path Windows reads otherwise than the checks did).</summary>
+    public Dictionary<string, string> Aliases { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Once a change is made, the task's read back is refused (2026-10-20).</summary>
+    public bool EntryFailsAfterChange { get; set; }
 
     public static string Xml(string command, string? user = "CORP\\ops", string? runLevel = null, string? group = null, string trigger = "<CalendarTrigger><StartBoundary>2026-01-01T03:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>", string? description = "a task") =>
         "<?xml version=\"1.0\" encoding=\"UTF-16\"?><Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">" +
@@ -191,6 +219,11 @@ public sealed class FakeTaskSystem : ITaskSystem
 
         public int HighestVersion => 0x10006;
 
+        public IReadOnlyList<string> Self => owner.Self;
+
+        public TaskEntry Entry(string path) =>
+            owner.EntryFailsAfterChange && owner.Changes.Count > 0 ? throw new TaskException(unchecked((int)0x80070005), "read refused") : Detail(path).Entry;
+
         public IReadOnlyList<TaskEntry> List(string folder, bool recursive)
         {
             string prefix = folder.TrimEnd('\\') + "\\";
@@ -198,7 +231,7 @@ public sealed class FakeTaskSystem : ITaskSystem
         }
 
         public TaskDetail Detail(string path) =>
-            owner.Tasks.TryGetValue(path, out var t) ? new TaskDetail(t.Entry, t.Xml, []) : throw new TaskException(unchecked((int)0x80070002), "no such task");
+            owner.Tasks.TryGetValue(owner.Aliases.GetValueOrDefault(path, path), out var t) ? new TaskDetail(t.Entry, t.Xml, []) : throw new TaskException(unchecked((int)0x80070002), "no such task");
 
         public void Run(string path) => Set(path, "run", e => e with { State = TaskRunState.Running });
 

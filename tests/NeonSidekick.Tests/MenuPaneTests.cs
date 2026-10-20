@@ -1882,14 +1882,16 @@ public class MenuPaneTests : IDisposable
     }
 
     [Fact]
-    public void CaptionRows_WrapOnWords_CutAnOverWideWord_AndJoinTheRestIntoTheLastRow()
+    public void CaptionRows_WrapOnWords_BreakAnOverWideWord_AndJoinTheRestIntoTheLastRow()
     {
         Assert.Equal(["Which color do you", "like best?"], MenuPane.CaptionRows("Which color  do you\nlike best?", 20, 3));
         Assert.Equal(["short"], MenuPane.CaptionRows("short", 20, 3));
         Assert.Empty(MenuPane.CaptionRows("   ", 20, 3));
         Assert.Empty(MenuPane.CaptionRows("x", 0, 3));
         Assert.Empty(MenuPane.CaptionRows("x", 20, 0));
-        Assert.Equal(["abcdefghi…", "next"], MenuPane.CaptionRows("abcdefghijkl next", 10, 3));
+        Assert.Equal(["abcdefghij", "kl next"], MenuPane.CaptionRows("abcdefghijkl next", 10, 3));   // broken, never cut (2026-10-20)
+        Assert.Equal(["ab", "cdefghijkl", "mnopqrstuv", "wx"], MenuPane.CaptionRows("ab cdefghijklmnopqrstuvwx", 10, 4));
+        Assert.Equal(["abcdefghij", "klmnopqrs…"], MenuPane.CaptionRows("abcdefghijklmnopqrstuvwxyz", 10, 2));   // the rows past the most still end on the ellipsis
         Assert.Equal(["one two", "three fo…"], MenuPane.CaptionRows("one two three four five six", 9, 2));
         Assert.Equal(3, MenuPane.CaptionMaxRows);
     }

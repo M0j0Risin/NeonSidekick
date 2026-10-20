@@ -5,8 +5,11 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Services;
 
-/// <summary>What one services call came to: its value, or the sentence that says why not (never both).</summary>
-public readonly record struct ServiceResult<T>(T? Value, string? Error)
+/// <summary>
+/// What one services call came to: its value, or the sentence that says why not (never both). <see cref="Partial"/>: the change took effect in
+/// part before its failure (2026-10-20), so the audit says so.
+/// </summary>
+public readonly record struct ServiceResult<T>(T? Value, string? Error, bool Partial = false)
 {
     public static ServiceResult<T> Ok(T value) => new(value, null);
 
@@ -35,6 +38,12 @@ public sealed class ServiceAccess
 {
     public static readonly TimeSpan LocalTimeout = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan RemoteTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>The longest service name the Service Control Manager takes (its key in the registry).</summary>
+    public const int MaxNameLength = 256;
+
+    /// <summary>The status a change answers with when none could be read after it (2026-10-20): its state <see cref="ServiceRunState.Unknown"/>.</summary>
+    public static readonly ServiceStatus Unread = new(ServiceRunState.Unknown, 0, 0, 0, 0, 0, 0);
 
     /// <summary>The longest a change's status is polled for, whatever the wait hint says.</summary>
     public static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(60);
@@ -92,6 +101,17 @@ public sealed class ServiceAccess
         return (new ServiceSource(found, new ServiceTarget(found.Config.Host!.Trim(), login), redacted), null);
     }
 
+    /// <summary>
+    /// Why <paramref name="name"/> is no service's name, or null (2026-10-20, a review): empty, past <see cref="MaxNameLength"/>, or holding a
+    /// control character, a slash or a backslash. A NUL ended the name OpenServiceW read, so the checks below judged one name and Windows opened
+    /// another; every name a call carries is checked here first. Pure.
+    /// </summary>
+    public static string? NameProblem(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return name.Length == 0 || name.Length > MaxNameLength || name.Any(c => char.IsControl(c) || c is '/' or '\\') ? ServiceText.BadName(name) : null;
+    }
+
     /// <summary>Whether <paramref name="name"/> is in the computer's visible list (absent, all).</summary>
     public static bool Visible(Computer<ServiceComputerConfig> computer, string name) =>
         computer.Config.Services is not { } patterns || NameGlob.Any(patterns, name);
@@ -127,7 +147,7 @@ public sealed class ServiceAccess
     }
 
     /// <summary>
-    /// The one order of checks a change goes through after the switch (2026-10-15, the plan's): <c>access</c> → the visible list → <c>control</c>
+    /// The one order of checks a change goes through after the switch and the name's own (<see cref="NameProblem"/>, 2026-10-20) (2026-10-15, the plan's): <c>access</c> → the visible list → <c>control</c>
     /// → a driver → the app's protected list → the file's → <c>controlActions</c>. The dependents (stop and restart) and the approval follow
     /// in the caller, which has the session. <paramref name="writesOn"/> false refuses first (the model's calls; the pane passes true). Null
     /// when the change may go on to them. Pure.
@@ -140,6 +160,11 @@ public sealed class ServiceAccess
         if (!writesOn)
         {
             return ServiceText.WritesOff;
+        }
+
+        if (NameProblem(name) is { } bad)
+        {
+            return bad;
         }
 
         if (!computer.Config.ReadWrite)
@@ -185,6 +210,9 @@ public sealed class ServiceAccess
     /// A change: <paramref name="act"/> on a pool thread inside one session, then the status polled until <paramref name="settled"/> or the
     /// bound (the wait hint, at least 1 s, at most <see cref="MaxWait"/>). The native calls are waited out, never abandoned; a cancel ends only
     /// the waiting (<see cref="ComputerText.StoppedWaiting"/>), the state at that moment logged. The final status, or the failure's sentence.
+    /// Once <paramref name="act"/> is done the change counts as made (2026-10-20, a review: a status read failing after it was a "failed"): a read
+    /// that fails then ends the wait with the last status read, or <see cref="Unread"/>; a failure that says what took effect
+    /// (<see cref="ServiceException.Applied"/>) is <see cref="ServiceResult{T}.Partial"/>.
     /// </summary>
     public async Task<ServiceResult<ServiceStatus>> ChangeAsync(ServiceSource source, string name, Action<IServiceSession> act, Func<ServiceStatus, bool> settled, CancellationToken cancellationToken)
     {
@@ -199,14 +227,23 @@ public sealed class ServiceAccess
         var change = Task.Run(() => system.Run(source.Target, session =>
         {
             act(session);
-            var status = session.Status(name);
+            if (TryStatus(session, name, source) is not { } status)
+            {
+                return Unread;
+            }
+
             var deadline = Time.GetUtcNow() + Bound(status.WaitHintMs);
             // The polls are counted too (at most MaxWait / 250 ms), so a clock that does not move (a test's) still ends the wait.
             int polls = 0;
             while (!settled(status) && Time.GetUtcNow() < deadline && !cancellationToken.IsCancellationRequested && polls++ < MaxWait.TotalMilliseconds / 250)
             {
                 Thread.Sleep(Math.Clamp((int)status.WaitHintMs / 10, 250, 2000));
-                status = session.Status(name);
+                if (TryStatus(session, name, source) is not { } next)
+                {
+                    break;
+                }
+
+                status = next;
                 deadline = Max(deadline, Time.GetUtcNow() + Bound(status.WaitHintMs) / 4);
                 deadline = Min(deadline, Time.GetUtcNow() + MaxWait);
             }
@@ -220,7 +257,24 @@ public sealed class ServiceAccess
         catch (ServiceException ex)
         {
             DiagnosticLog.Debug(ServiceText.Category, $"{Describe(source)} change failed: {ex.Message}");
-            return ServiceResult<ServiceStatus>.Failed(ServiceErrors.Sentence(ex.Code, source.Context(name, write: true), ex.Message));
+            string sentence = ServiceErrors.Sentence(ex.Code, source.Context(name, write: true), ex.Message);
+            return ex.Applied is { } applied
+                ? new ServiceResult<ServiceStatus>(null, ServiceText.Partly(name, source.Where, applied, sentence), Partial: true)
+                : ServiceResult<ServiceStatus>.Failed(sentence);
+        }
+    }
+
+    /// <summary>A status read after the change was made: null when it fails (logged), never a failure of the change.</summary>
+    private static ServiceStatus? TryStatus(IServiceSession session, string name, ServiceSource source)
+    {
+        try
+        {
+            return session.Status(name);
+        }
+        catch (ServiceException ex)
+        {
+            DiagnosticLog.Debug(ServiceText.Category, $"{Describe(source)} status after the change not read: {ex.Message}");
+            return null;
         }
     }
 

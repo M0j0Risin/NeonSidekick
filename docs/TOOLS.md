@@ -518,8 +518,9 @@ Under *Service tools*. The model reads the services on this PC and the computers
 
 * **A change passes these checks in order**, the first failure being the answer:
   * *Service writes* → `access` → the visible list → `control` → never a driver → the app's protected list → the computer's `protected` → `controlActions`.
-  * Then running dependents: a stop or restart names them and is refused.
-  * Last, your yes, showing the service, computer, account and full program path.
+  * Then running dependents: a stop or restart names them and is refused. Services outside the visible list are counted, never named.
+  * Last, your yes, showing the service, computer, account and full program path. The model's change is refused when that path is too long to show whole.
+* **A restart** whose stop doesn't finish within 60 s, or that you stop waiting for, isn't started again; the answer says so.
 * Headless and the bots never get the two changing tools.
 * **Protected by the app, always:**
   * RPC and DCOM, the session manager, security accounts, the event log, WMI, the firewall and Defender, the Task Scheduler.
@@ -562,9 +563,9 @@ Under *Task tools*. The model reads the scheduled tasks on this PC and the compu
 | `task_info` | `path, computer?` | One task whole: triggers in words ("every week on Monday at 02:30"), actions, who it runs as and how, last result, time limit. |
 | `task_control` | `path, action, computer?` | `run`, `end`, `enable` or `disable`, after your yes. Nothing is ever created, deleted or rewritten. |
 
-* **The order of checks:** *Task writes* → `access` → `folders` → `control` → a task of Windows' own (only by a `control` pattern starting `\Microsoft\`) → `controlActions` → **privileged** → your yes.
-* **Privileged:** a task that runs as SYSTEM, a service account or a group, or with highest privileges. Running or ending one needs the computer's `"privileged": true`; enabling and disabling don't. A definition that can't be read counts as privileged.
-* **A run's question** shows who it runs as, at what level, and every command line in full (never redacted: you decide on them).
+* **The order of checks:** *Task writes* → `access` → `folders` → `control` → a task of Windows' own (only when a `control` pattern starting `\Microsoft\` matches it) → `controlActions` → **privileged** → your yes.
+* **Privileged:** a task that runs as SYSTEM, a service account, a group, any account but the one the app signs in as, or with highest privileges. Running, ending or enabling one needs the computer's `"privileged": true`; disabling doesn't. A definition that can't be read counts as privileged.
+* **A run's question** shows who it runs as, at what level, and every command line in full (never redacted: you decide on them). The model's run is refused when they're too long to show whole.
 * **History:** `/tasks`' *history* button opens the runs on `/eventlog`, when Task Scheduler's *Enable All Tasks History* is on. Times are the computer's own clock.
 
 ### Active Directory
@@ -636,7 +637,7 @@ The same tools, `/ad` and `--ad-check`, read-only as on Windows.
 
 While *Service tools*, *Task tools* or *Directory tools* is on, with *Shell police*, a `run_command` line, a script file it runs, an `execute_code` script or a `process` write that would change one of them is refused before any approval, whatever *Shell command policy* says.
 
-* **Refused:** changing a service (`sc stop`, `net stop`, `Restart-Service`…), a task (`schtasks /run`, `Disable-ScheduledTask`…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, a changing `net user … /domain`…). On a Mac also `dscl` writing to `/Active Directory` or `/Search`, and `dsconfigad -add`, `-remove`, `-force` or `-leave`.
+* **Refused:** changing a service (`sc stop`, `net stop`, `Restart-Service`, a `ServiceController`'s `.Stop()`, WMI's `StopService`, its registry key…), a task (`schtasks /run`, `Disable-ScheduledTask`, the `Schedule.Service` object…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, a changing `net user … /domain`…). On a Mac also `dscl` writing to `/Active Directory` or `/Search`, and `dsconfigad -add`, `-remove`, `-force` or `-leave`.
 * **Reading passes** (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`); changes go through the tools and your yes. Like the forbidden strings, it's a tripwire, not a sandbox.
 
 ## Databases

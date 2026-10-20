@@ -739,7 +739,7 @@ See [Scheduled tasks](TOOLS.md#scheduled-tasks). The same rows over `tasks.json`
 | Setting | What it does | Default |
 |---|---|---|
 | Task tools | Offers `task_list` and `task_info`, read-only; with *Task writes* also `task_control`. `/tasks` works either way. | off |
-| Task writes | The master switch for `task_control` (run, end, enable, disable). Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`, never headless; a privileged task's run or end needs `privileged` in the entry. | off |
+| Task writes | The master switch for `task_control` (run, end, enable, disable). Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`, never headless; a privileged task's run, end or enable needs `privileged` in the entry. | off |
 | Task computers offered | As *Service computers offered*. | `local` |
 | Task set password | As *Event log set password*. | — |
 | Task add/edit computer | The wizard, with the folders visible in place of the services and *Privileged* in place of the protected list; its test lists the tasks. | — |

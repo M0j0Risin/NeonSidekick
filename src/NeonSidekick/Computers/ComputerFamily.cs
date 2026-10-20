@@ -33,6 +33,18 @@ public sealed record ComputerCatalog<TConfig>(IReadOnlyList<Computer<TConfig>> C
         return this with { Computers = kept, Hidden = Hidden + Computers.Count - kept.Count };
     }
 
+    /// <summary>
+    /// The actions of <paramref name="all"/> every <c>readwrite</c> computer here allows, when they agree; all of them when they disagree or none
+    /// is readwrite (each call is checked anyway): a write tool's <c>action</c> enum (2026-10-15; shared by the services and tasks since
+    /// 2026-10-20). Pure.
+    /// </summary>
+    public IReadOnlyList<string> AgreedActions(IReadOnlyList<string> all)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        var sets = Computers.Where(c => c.Config.ReadWrite).Select(c => all.Where(c.Config.AllowsAction).ToList()).ToList();
+        return sets.Count > 0 && sets.All(s => s.SequenceEqual(sets[0])) ? sets[0] : all;
+    }
+
     /// <summary>The ticked computer named <paramref name="name"/> (case ignored); null for none.</summary>
     public Computer<TConfig>? Named(string name) =>
         Computers.FirstOrDefault(c => string.Equals(c.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));

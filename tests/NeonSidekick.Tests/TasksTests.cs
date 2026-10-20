@@ -95,7 +95,7 @@ public sealed class TasksTests
         string dtd = "<?xml version=\"1.0\"?><!DOCTYPE Task [<!ENTITY x \"boom\">]><Task><RegistrationInfo><Author>&x;</Author></RegistrationInfo></Task>";
         Assert.StartsWith(TaskText.XmlUnreadable(""), Assert.Throws<TaskXmlException>(() => TaskXml.Parse(dtd)).Message);
         Assert.Equal(TaskText.XmlTooLarge, Assert.Throws<TaskXmlException>(() => TaskXml.Parse(new string(' ', (int)TaskXml.MaxCharacters + 1))).Message);
-        Assert.True(TaskPrincipal.IsPrivileged("<not xml"));   // unreadable: the safe reading
+        Assert.True(TaskPrincipal.IsPrivileged("<not xml", Ops));   // unreadable: the safe reading
     }
 
     [Theory]
@@ -103,7 +103,34 @@ public sealed class TasksTests
     [InlineData("highest", true)]
     [InlineData("group", true)]
     [InlineData("user", false)]
-    public void Principal_SystemHighestAndGroupArePrivileged(string fixture, bool privileged) => Assert.Equal(privileged, TaskPrincipal.IsPrivileged(Fixture(fixture)));
+    public void Principal_SystemHighestAndGroupArePrivileged(string fixture, bool privileged) => Assert.Equal(privileged, TaskPrincipal.IsPrivileged(Fixture(fixture), Ops));
+
+    /// <summary>The session's own account, as <see cref="FakeTaskSystem"/> connects (the fixtures' user).</summary>
+    private static readonly IReadOnlyCollection<string> Ops = ["ops", @"CORP\ops", "S-1-5-21-1-2-3-1001"];
+
+    /// <summary>
+    /// Another account's task is privileged however it signs in (2026-10-20, a review: one stored with a domain admin's password, or S4U, ran
+    /// unguarded), and so are a virtual service account, a service-account logon and a principal naming no account; the session's own is not,
+    /// by any of its forms.
+    /// </summary>
+    [Theory]
+    [InlineData(@"CORP\ops", "Password", false)]
+    [InlineData("ops", "S4U", false)]
+    [InlineData("S-1-5-21-1-2-3-1001", "InteractiveToken", false)]
+    [InlineData(@"corp\OPS", null, false)]
+    [InlineData(@"CORP\domain-admin", "Password", true)]
+    [InlineData(@"CORP\domain-admin", "S4U", true)]
+    [InlineData(@"CORP\domain-admin", "InteractiveToken", true)]
+    [InlineData(@"NT SERVICE\MSSQLSERVER", null, true)]
+    [InlineData("S-1-5-80-3880718306-3832830129-1677859214-2598158968-1052248003", null, true)]
+    [InlineData(@"CORP\ops", "ServiceAccount", true)]
+    [InlineData(null, "InteractiveToken", true)]
+    public void Principal_AnyAccountButTheSessionsOwn_IsPrivileged(string? user, string? logon, bool privileged) =>
+        Assert.Equal(privileged, TaskPrincipal.IsPrivileged(new TaskPrincipalInfo(user, null, logon, null), Ops));
+
+    [Fact]
+    public void Principal_WithTheSessionUnknown_EveryAccountIsAnothers() =>
+        Assert.True(TaskPrincipal.IsPrivileged(new TaskPrincipalInfo(@"CORP\ops", null, "InteractiveToken", null), null));
 
     [Fact]
     public void Principal_InWords()
@@ -112,7 +139,7 @@ public sealed class TasksTests
         Assert.Equal(@"CORP\ops with highest privileges", TaskRender.PrincipalWords(new TaskPrincipalInfo(@"CORP\ops", null, null, "HighestAvailable")));
         Assert.Equal("the group S-1-5-32-545", TaskRender.PrincipalWords(new TaskPrincipalInfo(null, "S-1-5-32-545", null, null)));
         Assert.Equal("the registering user", TaskRender.PrincipalWords(new TaskPrincipalInfo(null, null, null, null)));
-        Assert.True(TaskPrincipal.IsPrivileged(new TaskPrincipalInfo("NT AUTHORITY\\NETWORK SERVICE", null, null, null)));
+        Assert.True(TaskPrincipal.IsPrivileged(new TaskPrincipalInfo("NT AUTHORITY\\NETWORK SERVICE", null, null, null), Ops));
     }
 
     [Fact]
@@ -167,13 +194,94 @@ public sealed class TasksTests
         var enableOnly = new Computer<TaskComputerConfig>("local", new TaskComputerConfig { Access = "readwrite", Control = [@"\Backup\*"], ControlActions = ["enable"] });
         Assert.Equal(ComputerText.ActionNotAllowed(["enable"], TaskConfigFile.Info), TaskAccess.WriteRefusal(enableOnly, @"\Backup\Nightly", "run", null, true));
         Assert.Equal(TaskText.Privileged(@"\Backup\Nightly", "SYSTEM"), TaskAccess.WriteRefusal(local, @"\Backup\Nightly", "run", system, true));
-        Assert.Null(TaskAccess.WriteRefusal(local, @"\Backup\Nightly", "disable", system, true));   // enable and disable run nothing
-        Assert.Null(TaskAccess.WriteRefusal(local, @"\Backup\Weekly", "run", user, true));
+        Assert.Null(TaskAccess.WriteRefusal(local, @"\Backup\Nightly", "disable", system, true));   // a disable runs nothing
+        Assert.Equal(TaskText.Privileged(@"\Backup\Nightly", "SYSTEM"), TaskAccess.WriteRefusal(local, @"\Backup\Nightly", "enable", system, true));   // an enable runs it at its trigger (2026-10-20)
+        Assert.Null(TaskAccess.WriteRefusal(local, @"\Backup\Weekly", "run", user, true, Ops));
+        Assert.Equal(TaskText.Privileged(@"\Backup\Weekly", @"CORP\ops"), TaskAccess.WriteRefusal(local, @"\Backup\Weekly", "run", user, true, ["me", @"PC\me"]));
+        Assert.Equal(TaskText.BadPath(@"\Backup\../Nightly"), TaskAccess.WriteRefusal(local, @"\Backup\../Nightly", "run", null, true));
         var privileged = new Computer<TaskComputerConfig>("local", new TaskComputerConfig { Access = "readwrite", Control = [@"\Backup\*"], Privileged = true });
         Assert.Null(TaskAccess.WriteRefusal(privileged, @"\Backup\Nightly", "end", system, true));
     }
 
+    /// <summary>
+    /// The <c>\Microsoft\</c> guard asks of the pattern that matched (2026-10-20, a review): a Defrag pattern beside a broad one no longer opens
+    /// every Windows task to the broad one.
+    /// </summary>
+    [Fact]
+    public void WriteRefusal_AWindowsTask_NeedsAMicrosoftPatternThatMatchesIt()
+    {
+        var both = new Computer<TaskComputerConfig>("local", new TaskComputerConfig { Access = "readwrite", Control = [@"\Microsoft\Windows\Defrag\*", @"\*\*\*\*"] });
+        Assert.Equal(TaskText.MicrosoftTask(@"\Microsoft\Windows\Other\Thing"), TaskAccess.WriteRefusal(both, @"\Microsoft\Windows\Other\Thing", "disable", null, true));
+        Assert.Equal(TaskText.MicrosoftTask(@"\MICROSOFT\Windows\Other\Thing"), TaskAccess.WriteRefusal(both, @"\MICROSOFT\Windows\Other\Thing", "disable", null, true));
+        Assert.Null(TaskAccess.WriteRefusal(both, @"\Microsoft\Windows\Defrag\ScheduledDefrag", "disable", null, true));
+        Assert.Null(TaskAccess.WriteRefusal(both, @"\Ops\Deep\Er\Task", "disable", null, true));
+    }
+
+    [Theory]
+    [InlineData(@"\Backup\../Secret/Task")]
+    [InlineData(@"\Backup\..\Secret")]
+    [InlineData(@"\Backup\.\Nightly")]
+    [InlineData(@"\Backup\\Nightly")]
+    [InlineData(@"\")]
+    [InlineData("Backup")]
+    public void PathProblem_RefusesWhatNoTaskPathHolds(string path) => Assert.Equal(TaskText.BadPath(path), TaskAccess.PathProblem(path));
+
+    [Fact]
+    public void PathProblem_PassesAPath_AndRefusesAControlCharacter()
+    {
+        Assert.Null(TaskAccess.PathProblem(@"\Backup\Nightly copy (2)"));
+        Assert.Equal(TaskText.BadPath("\\Backup\\Night\0ly"), TaskAccess.PathProblem("\\Backup\\Night\0ly"));
+        Assert.Equal(TaskText.BadPath("\\Backup\\Night\nly"), TaskAccess.PathProblem("\\Backup\\Night\nly"));
+    }
+
     // ── A change ───────────────────────────────────────────────────────────
+
+    /// <summary>A run of another account's task, stored with its password, is privileged (2026-10-20, a review); so is enabling a SYSTEM one.</summary>
+    [Fact]
+    public async Task Change_AnotherAccountsTask_AndEnablingASystemOne_AreRefusedBeforeTheQuestion()
+    {
+        _system.Add(@"\Backup\Admin", FakeTaskSystem.Xml(@"C:\admin.exe", user: @"CORP\domain-admin").Replace("</Principal>", "<LogonType>Password</LogonType></Principal>", StringComparison.Ordinal));
+        Assert.Equal(TaskText.Privileged(@"\Backup\Admin", @"CORP\domain-admin"), await Change(@"\Backup\Admin", "run"));
+        _system.Add(@"\Backup\Off", Fixture("system"), TaskRunState.Disabled);
+        Assert.Equal(TaskText.Privileged(@"\Backup\Off", "SYSTEM"), await Change(@"\Backup\Off", "enable"));
+        Assert.Empty(_asked);
+        Assert.Empty(_system.Changes);
+    }
+
+    /// <summary>
+    /// The question shows each command on one line (2026-10-20, a review): a run of spaces or a newline no longer hides a command's tail, and an
+    /// unreadable definition's commands are said to be unknown, never "(no actions)". A model's run whose commands are too long to show is refused.
+    /// </summary>
+    [Fact]
+    public async Task Change_TheQuestion_ShowsEveryCommandOnOneLine_AndRefusesOneTooLongToShow()
+    {
+        _system.Add(@"\Backup\Padded", FakeTaskSystem.Xml("cmd.exe /c backup.cmd" + new string(' ', 300) + "\n&amp; net user x /add"));
+        await Change(@"\Backup\Padded", "run");
+        string question = Assert.Single(_asked);
+        Assert.Contains("cmd.exe /c backup.cmd & net user x /add", question);
+        Assert.Equal(@"Run \Backup\Padded on " + ComputerText.ThisPc + " now?", question[..question.IndexOf('\n', StringComparison.Ordinal)]);
+
+        _asked.Clear();
+        _system.Add(@"\Backup\Broken", "<not xml");
+        var allowed = new TaskComputerConfig { Access = "readwrite", Control = [@"\Backup\*"], Privileged = true };
+        await Change(@"\Backup\Broken", "run", allowed);
+        Assert.Contains(TaskText.CommandsUnknown, Assert.Single(_asked));
+        Assert.DoesNotContain("(no actions)", _asked[0]);
+
+        _asked.Clear();
+        _system.Add(@"\Backup\Long", FakeTaskSystem.Xml(@"C:\tools\" + new string('a', ComputerText.MaxShownInQuestion)));
+        Assert.Equal(TaskText.TooLongToAsk(@"\Backup\Long", ComputerText.MaxShownInQuestion + 9), await Change(@"\Backup\Long", "run"));
+        Assert.Empty(_asked);
+    }
+
+    /// <summary>A change made but not read back is said so, never "failed" (2026-10-20, a review: the model ran the task twice).</summary>
+    [Fact]
+    public async Task Change_MadeButNotReadBack_IsDoneUnread()
+    {
+        _system.EntryFailsAfterChange = true;
+        Assert.Equal(TaskText.DoneUnread("run", @"\Backup\Weekly", ComputerText.ThisPc), await Change(@"\Backup\Weekly", "run"));
+        Assert.Equal([@"run \Backup\Weekly"], _system.Changes);
+    }
 
     [Fact]
     public async Task Change_ARunAsksWithThePrincipalAndEveryCommandUnredacted()
@@ -259,6 +367,42 @@ public sealed class TasksTests
         _settings.TaskWrites = false;
         Assert.Equal(TaskText.WritesOff, await Call(control, ("path", @"\Backup\Weekly"), ("action", "run")));
         Assert.Same(control, control.AsRedacted());
+    }
+
+    /// <summary>
+    /// <c>task_info</c> refuses a path no task holds, and judges the task Windows found by its own path (2026-10-20, a review: a path read
+    /// otherwise than the folder check read it showed a hidden task).
+    /// </summary>
+    [Fact]
+    public async Task InfoTool_RefusesABadPath_AndJudgesTheTaskItFound()
+    {
+        var info = new TaskInfoTool(Access(new TaskComputerConfig { Folders = [@"\Backup\*"] }), () => _settings);
+        Assert.Equal(TaskText.BadPath(@"\Backup\../Ops/Sync"), await Call(info, ("path", @"\Backup\../Ops/Sync")));
+        _system.Aliases[@"\Backup\Link"] = @"\Ops\Sync";
+        Assert.Equal(ComputerText.NotVisible(@"\Backup\Link", ComputerText.ThisPc, TaskConfigFile.Info), await Call(info, ("path", @"\Backup\Link")));
+        Assert.Contains(@"\Backup\Weekly", await Call(info, ("path", @"\Backup\Weekly")));
+    }
+
+    /// <summary>
+    /// A turn's <c>task_control</c> holds its actions from the turn's catalog (2026-10-20, a review: each request's read of the description and
+    /// schema read the files again): reading them reads no catalog.
+    /// </summary>
+    [Fact]
+    public void ControlTool_ForATurn_ReadsNoCatalog()
+    {
+        int loads = 0;
+        var catalog = new ComputerCatalog<TaskComputerConfig>([new Computer<TaskComputerConfig>("local", new TaskComputerConfig { Access = "readwrite", Control = [@"\*"], ControlActions = ["run", "end"] })], [], TaskConfigFile.Info);
+        var access = new TaskAccess(_system, () => { loads++; return catalog; }, () => ["local"], _time);
+        var turn = Assert.IsType<TaskControlTool>(Assert.Single(NeonSidekick.App.ChatScreen.TaskToolsFor([new TaskControlTool(access, () => _settings, Confirm)], _settings, pane: true, access.Catalog()), t => t is TaskControlTool));
+        loads = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            Assert.Contains("run, end", turn.Description);
+            Assert.Contains("\"enum\": [\"run\", \"end\"]", turn.JsonSchema.ToString());
+        }
+
+        Assert.Equal(0, loads);
+        Assert.Equal(["run", "end"], turn.AgreedActions());
     }
 
     [Fact]

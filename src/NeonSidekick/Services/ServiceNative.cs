@@ -36,6 +36,7 @@ internal static partial class ServiceNative
 
     public const int ErrorAccessDenied = 5;
     public const int ErrorInsufficientBuffer = 122;
+    public const int ErrorInvalidName = 123;
     public const int ErrorMoreData = 234;
 
     [LibraryImport("advapi32.dll", EntryPoint = "OpenSCManagerW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]

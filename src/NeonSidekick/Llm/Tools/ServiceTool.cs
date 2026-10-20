@@ -191,6 +191,11 @@ public sealed class ServiceInfoTool(ServiceAccess access, Func<AppSettingsData> 
             return ServiceText.Missing(NameArgument);
         }
 
+        if (ServiceAccess.NameProblem(name) is { } bad)
+        {
+            return bad;
+        }
+
         var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), ForceRedacted);
         if (source is null)
         {
@@ -203,40 +208,40 @@ public sealed class ServiceInfoTool(ServiceAccess access, Func<AppSettingsData> 
         }
 
         var result = await Access.ReadAsync(source, name, session => session.Detail(name), cancellationToken).ConfigureAwait(false);
-        return result.Error ?? ServiceRender.Detail(source.Where, result.Value!, source.Redacted);
+        return result.Error ?? ServiceRender.Detail(source.Where, result.Value!, source.Redacted, n => ServiceAccess.Visible(source.Computer, n));
     }
 }
 
 /// <summary>
 /// <c>service_control(name, action, computer?)</c> (2026-10-15): start, stop or restart a service, after every check of the order and the
-/// user's yes. Its <c>action</c> enum and description list only the actions every ticked readwrite computer allows, when they agree.
+/// user's yes. Its <c>action</c> enum and description list only the actions every ticked readwrite computer allows, when they agree. A turn's
+/// copy (<see cref="ForCatalog"/>, 2026-10-20, a review: each request's read of the description and schema read both files again) holds them
+/// fixed from the turn's catalog, its schema parsed once.
 /// </summary>
-public sealed class ServiceControlTool(ServiceAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm) : ServiceTool(access, effective, forceRedacted: false)
+public sealed class ServiceControlTool(ServiceAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm, IReadOnlyList<string>? agreed = null)
+    : ServiceTool(access, effective, forceRedacted: false)
 {
     public const string ToolName = "service_control";
     public const string ActionArgument = "action";
 
+    private JsonElement? _schema;
+
     public override string Name => ToolName;
 
-    /// <summary>The control actions every ticked readwrite computer allows (all three when they disagree or none is ticked).</summary>
-    public IReadOnlyList<string> AgreedActions()
-    {
-        var computers = Access.Catalog().Computers.Where(c => c.Config.ReadWrite).ToList();
-        if (computers.Count == 0)
-        {
-            return ServiceActions.Control;
-        }
+    /// <summary>The control actions every ticked readwrite computer allows (all three when they disagree or none is ticked): the turn's, else read now.</summary>
+    public IReadOnlyList<string> AgreedActions() => agreed ?? Access.Catalog().AgreedActions(ServiceActions.Control);
 
-        var sets = computers.Select(c => ServiceActions.Control.Where(c.Config.AllowsAction).ToList()).ToList();
-        return sets.All(s => s.SequenceEqual(sets[0])) ? sets[0] : ServiceActions.Control;
-    }
+    /// <summary>This tool for one turn: its actions agreed from <paramref name="catalog"/>, the turn's own read.</summary>
+    public ServiceControlTool ForCatalog(ComputerCatalog<ServiceComputerConfig> catalog) => new(Access, Effective, confirm, catalog.AgreedActions(ServiceActions.Control));
 
     public override string Description => $"Changes whether a Windows service runs: {string.Join(", ", AgreedActions())}. Each call asks the user first. A protected or driver service cannot be stopped.";
 
-    public override JsonElement JsonSchema => ToolSchema.Parse(
+    public override JsonElement JsonSchema => agreed is null ? Schema(AgreedActions()) : _schema ??= Schema(agreed);
+
+    private static JsonElement Schema(IReadOnlyList<string> actions) => ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": {" +
         " \"name\": { \"type\": \"string\", \"description\": \"The service's name, as service_list shows it.\" }," +
-        " \"action\": { \"type\": \"string\", \"enum\": [" + string.Join(", ", AgreedActions().Select(a => "\"" + a + "\"")) + "] }," +
+        " \"action\": { \"type\": \"string\", \"enum\": [" + string.Join(", ", actions.Select(a => "\"" + a + "\"")) + "] }," +
         " \"computer\": { \"type\": \"string\", \"description\": \"Which computer; leave out for this PC (or the only one offered).\" } }," +
         " \"required\": [\"name\", \"action\"] }");
 

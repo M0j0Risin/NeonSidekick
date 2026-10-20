@@ -272,9 +272,18 @@ internal sealed partial class ChatScreen
         return new WebAskSpec("info", label, [new WebChoice("close", WebUiText.CloseChoice)], Lines: kept);
     }
 
-    /// <summary>The page's form of a yes/no: the PC's own No and Yes.</summary>
-    internal static WebAskSpec ConfirmSpec(string question) =>
-        new("confirm", question, [new WebChoice("no", SettingsMenu.ConfirmRows[0]), new WebChoice("yes", SettingsMenu.ConfirmRows[1])]);
+    /// <summary>
+    /// The page's form of a yes/no: the PC's own No and Yes. A question's lines after its first are its body (2026-10-20, the pane's caption's
+    /// twin: a service's or task's program line under its title).
+    /// </summary>
+    internal static WebAskSpec ConfirmSpec(string question)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        int newline = question.IndexOf('\n', StringComparison.Ordinal);
+        return newline > 0
+            ? new("confirm", question[..newline], [new WebChoice("no", SettingsMenu.ConfirmRows[0]), new WebChoice("yes", SettingsMenu.ConfirmRows[1])], Body: question[(newline + 1)..])
+            : new("confirm", question, [new WebChoice("no", SettingsMenu.ConfirmRows[0]), new WebChoice("yes", SettingsMenu.ConfirmRows[1])]);
+    }
 
     /// <summary>
     /// A command's yes/no from the page (later on 2026-10-14): raced on the PC's pane and the page (<see cref="RaceAsync"/>); no answer is a no.

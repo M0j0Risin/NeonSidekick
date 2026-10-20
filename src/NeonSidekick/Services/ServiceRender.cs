@@ -104,8 +104,12 @@ public static class ServiceRender
         return UntrustedText.Scrub(entry.Name) + "  " + UntrustedText.Fenced(UntrustedText.Cut(entry.DisplayName, 200)) + "  " + state;
     }
 
-    /// <summary>One service whole: status, configuration, recovery, dependencies and dependents.</summary>
-    public static string Detail(string where, ServiceDetail detail, bool redacted)
+    /// <summary>
+    /// One service whole: status, configuration, recovery, dependencies and dependents. <paramref name="visible"/> (the computer's
+    /// <c>services</c> list; null, all) names the related services it shows and counts the rest (2026-10-20, a review: a narrowed list's hidden
+    /// services were named here).
+    /// </summary>
+    public static string Detail(string where, ServiceDetail detail, bool redacted, Func<string, bool>? visible = null)
     {
         ArgumentNullException.ThrowIfNull(detail);
         var c = detail.Config;
@@ -128,7 +132,8 @@ public static class ServiceRender
 
         if (c.Dependencies.Count > 0)
         {
-            Add(text, "depends on", string.Join(", ", c.Dependencies.Select(UntrustedText.Scrub)));
+            var shown = c.Dependencies.Where(d => visible is null || visible(d)).ToList();
+            Add(text, "depends on", Related(shown.Select(UntrustedText.Scrub), c.Dependencies.Count - shown.Count));
         }
 
         if (!detail.DependentsKnown)
@@ -137,7 +142,8 @@ public static class ServiceRender
         }
         else if (detail.Dependents.Count > 0)
         {
-            Add(text, "needed by", string.Join(", ", detail.Dependents.Take(100).Select(d => UntrustedText.Scrub(d.Name) + " (" + ServiceText.StateWord(d.State) + ")")));
+            var shown = detail.Dependents.Where(d => visible is null || visible(d.Name)).ToList();
+            Add(text, "needed by", Related(shown.Take(100).Select(d => UntrustedText.Scrub(d.Name) + " (" + ServiceText.StateWord(d.State) + ")"), detail.Dependents.Count - shown.Count));
         }
 
         if (c.Failure is { } failure && (failure.Actions.Count > 0 || failure.Command is not null))
@@ -168,6 +174,10 @@ public static class ServiceRender
         text.Append('\n').Append(UntrustedText.QuoteNote);
         return text.Length > MaxChars ? text.ToString(0, MaxChars - 40) + "\n(cut at " + MaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)" : text.ToString();
     }
+
+    /// <summary>Related services' names, then the hidden ones counted.</summary>
+    private static string Related(IEnumerable<string> shown, int hidden) =>
+        string.Join(", ", hidden > 0 ? shown.Append(ServiceText.NotShown(hidden)) : shown);
 
     private static void Add(StringBuilder text, string label, string value) => text.Append("\n  ").Append(label).Append(": ").Append(value);
 

@@ -80,6 +80,12 @@ public sealed record ServiceDetail(ServiceConfiguration Config, ServiceStatus St
 public sealed class ServiceException(int code, string message) : Exception(message)
 {
     public int Code { get; } = code;
+
+    /// <summary>
+    /// What took effect before the failure, in words (2026-10-20, a review: a start type set to automatic whose delayed flag was then refused
+    /// was answered and audited as a plain failure); null when nothing did.
+    /// </summary>
+    public string? Applied { get; init; }
 }
 
 /// <summary>Who a session signs in as on a remote computer: the account and its password (never logged).</summary>

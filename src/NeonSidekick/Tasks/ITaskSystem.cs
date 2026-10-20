@@ -49,6 +49,15 @@ public interface ITaskSession
     /// <summary>The highest Task Scheduler version it speaks (high word major, low word minor).</summary>
     int HighestVersion { get; }
 
+    /// <summary>
+    /// The account the session connected as, in every form a task's <c>UserId</c> may name it (2026-10-20, a review): domain\name, the bare
+    /// name for this PC's own local account, and its SID when it could be looked up. A task that runs as anyone else is privileged (<see cref="TaskPrincipal"/>).
+    /// </summary>
+    IReadOnlyList<string> Self { get; }
+
+    /// <summary>One task's entry alone (a change's read back, 2026-10-20: <see cref="Detail"/> also lists its instances, which may be refused).</summary>
+    TaskEntry Entry(string path);
+
     /// <summary>The tasks in <paramref name="folder"/>, and with <paramref name="recursive"/> every folder under it; hidden ones too.</summary>
     IReadOnlyList<TaskEntry> List(string folder, bool recursive);
 

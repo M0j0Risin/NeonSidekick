@@ -6,6 +6,8 @@ namespace NeonSidekick.Tasks;
 /// One change to a task (2026-10-15, the admin-tools plan), the model's (<c>task_control</c>) and the pane's alike: the task and its definition
 /// read, <see cref="TaskAccess.WriteRefusal"/>'s order, the question — a run's naming the principal, the run level and every command line, since a
 /// run is a privilege boundary — then the change waited out and audited. Only IRegisteredTask's Run, Stop and put_Enabled are ever called.
+/// Since 2026-10-20 (a review): the principal judged against the session's own account, a model's run whose commands would not show whole in
+/// the question refused, an unreadable definition's commands said to be unknown, and a change made but not read back said and audited so.
 /// </summary>
 public static class TaskChanges
 {
@@ -20,25 +22,26 @@ public static class TaskChanges
             return early;
         }
 
-        var read = await access.ReadAsync(source, path, session => session.Detail(path), cancellationToken).ConfigureAwait(false);
+        var read = await access.ReadAsync(source, path, session => (Detail: session.Detail(path), session.Self), cancellationToken).ConfigureAwait(false);
         if (read.Error is { } failed)
         {
             return failed;
         }
 
-        var detail = read.Value!;
-        TaskDefinition? definition = null;
+        var (detail, self) = read.Value;
+        TaskDefinition? readable = null;
         try
         {
-            definition = TaskXml.Parse(detail.Xml);
+            readable = TaskXml.Parse(detail.Xml);
         }
         catch (TaskXmlException)
         {
             // An unreadable definition counts as privileged below (the safe reading).
-            definition = new TaskDefinition(null, null, null, new TaskPrincipalInfo("SYSTEM", null, null, "HighestAvailable"), [], [], false, null, null);
         }
 
-        if (TaskAccess.WriteRefusal(source.Computer, detail.Entry.Path, action, definition, writesOn) is { } refused)
+        var definition = readable ?? new TaskDefinition(null, null, null, new TaskPrincipalInfo("SYSTEM", null, null, "HighestAvailable"), [], [], false, null, null);
+        string taskPath = detail.Entry.Path;
+        if (TaskAccess.WriteRefusal(source.Computer, taskPath, action, definition, writesOn, self) is { } refused)
         {
             return refused;
         }
@@ -48,17 +51,22 @@ public static class TaskChanges
             return ComputerText.NoPaneToAsk;
         }
 
-        string principal = TaskRender.PrincipalWords(definition.Principal);
+        string principal = readable is null ? TaskText.PrincipalUnknown : TaskRender.PrincipalWords(definition.Principal);
+        string commands = TaskRender.Commands(readable);
+        if (!byUser && action == TaskActions.Run && commands.Length > ComputerText.MaxShownInQuestion)
+        {
+            return TaskText.TooLongToAsk(taskPath, commands.Length);
+        }
+
         string question = action == TaskActions.Run
-            ? TaskText.ConfirmRun(detail.Entry.Path, source.Where, principal, TaskRender.RunLevel(definition.Principal), TaskRender.Commands(definition))
-            : TaskText.ConfirmChange(action, detail.Entry.Path, source.Where, principal);
+            ? TaskText.ConfirmRun(taskPath, source.Where, principal, readable is null ? TaskText.RunLevelUnknown : TaskRender.RunLevel(definition.Principal), commands)
+            : TaskText.ConfirmChange(action, taskPath, source.Where, principal);
         if (await confirm(question, cancellationToken).ConfigureAwait(false) is not true)
         {
-            TaskAccess.Audit(byUser, action, path, source, "declined");
+            TaskAccess.Audit(byUser, action, taskPath, source, "declined");
             return ComputerText.Declined;
         }
 
-        string taskPath = detail.Entry.Path;
         var result = await access.ChangeAsync(source, taskPath, session =>
         {
             switch (action)
@@ -76,12 +84,17 @@ public static class TaskChanges
         }).ConfigureAwait(false);
         if (result.Error is { } error)
         {
-            TaskAccess.Audit(byUser, action, path, source, "failed: " + error);
+            TaskAccess.Audit(byUser, action, taskPath, source, "failed: " + error);
             return error;
         }
 
-        var state = result.Value!.State;
-        TaskAccess.Audit(byUser, action, path, source, TaskText.StateWord(state));
-        return cancellationToken.IsCancellationRequested ? ComputerText.StoppedWaiting : TaskText.Done(action, taskPath, source.Where, state);
+        if (result.Value is not { } entry)
+        {
+            TaskAccess.Audit(byUser, action, taskPath, source, "done, the task not read after");
+            return TaskText.DoneUnread(action, taskPath, source.Where);
+        }
+
+        TaskAccess.Audit(byUser, action, taskPath, source, TaskText.StateWord(entry.State));
+        return cancellationToken.IsCancellationRequested ? ComputerText.StoppedWaiting : TaskText.Done(action, taskPath, source.Where, entry.State);
     }
 }

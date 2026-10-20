@@ -178,6 +178,11 @@ public sealed class TaskInfoTool(TaskAccess access, Func<AppSettingsData> effect
         }
 
         string path = TaskPath(given);
+        if (TaskAccess.PathProblem(path) is { } bad)
+        {
+            return bad;
+        }
+
         var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), ForceRedacted);
         if (source is null)
         {
@@ -189,54 +194,59 @@ public sealed class TaskInfoTool(TaskAccess access, Func<AppSettingsData> effect
             return ComputerText.NotVisible(path, source.Where, TaskAccess.Family);
         }
 
-        var result = await Access.ReadAsync(source, path, session => session.Detail(path), cancellationToken).ConfigureAwait(false);
+        var result = await Access.ReadAsync(source, path, session => (Detail: session.Detail(path), session.Self), cancellationToken).ConfigureAwait(false);
         if (result.Error is { } error)
         {
             return error;
+        }
+
+        var (detail, self) = result.Value;
+        // The task Windows found is judged again by its own path (2026-10-20, a review), as a change's is.
+        if (!TaskAccess.Visible(source.Computer, detail.Entry.Path))
+        {
+            return ComputerText.NotVisible(path, source.Where, TaskAccess.Family);
         }
 
         TaskDefinition? definition = null;
         string? definitionError = null;
         try
         {
-            definition = TaskXml.Parse(result.Value!.Xml);
+            definition = TaskXml.Parse(detail.Xml);
         }
         catch (TaskXmlException ex)
         {
             definitionError = ex.Message;
         }
 
-        return TaskRender.Detail(source.Where, result.Value!, definition, definitionError, source.Redacted);
+        return TaskRender.Detail(source.Where, detail, definition, definitionError, source.Redacted, self);
     }
 }
 
 /// <summary><c>task_control(path, action, computer?)</c> (2026-10-15): run, end, enable or disable a task, after the order's checks and the user's yes.</summary>
-public sealed class TaskControlTool(TaskAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm) : TaskTool(access, effective, forceRedacted: false)
+public sealed class TaskControlTool(TaskAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm, IReadOnlyList<string>? agreed = null)
+    : TaskTool(access, effective, forceRedacted: false)
 {
     public const string ToolName = "task_control";
     public const string ActionArgument = "action";
 
+    private JsonElement? _schema;
+
     public override string Name => ToolName;
 
-    /// <summary>The actions every ticked readwrite computer allows (all four when they disagree or none is ticked).</summary>
-    public IReadOnlyList<string> AgreedActions()
-    {
-        var computers = Access.Catalog().Computers.Where(c => c.Config.ReadWrite).ToList();
-        if (computers.Count == 0)
-        {
-            return TaskActions.All;
-        }
+    /// <summary>The actions every ticked readwrite computer allows (all four when they disagree or none is ticked): the turn's, else read now.</summary>
+    public IReadOnlyList<string> AgreedActions() => agreed ?? Access.Catalog().AgreedActions(TaskActions.All);
 
-        var sets = computers.Select(c => TaskActions.All.Where(c.Config.AllowsAction).ToList()).ToList();
-        return sets.All(s => s.SequenceEqual(sets[0])) ? sets[0] : TaskActions.All;
-    }
+    /// <summary>This tool for one turn (2026-10-20, <see cref="ServiceControlTool.ForCatalog"/>'s twin): its actions agreed from <paramref name="catalog"/>.</summary>
+    public TaskControlTool ForCatalog(ComputerCatalog<TaskComputerConfig> catalog) => new(Access, Effective, confirm, catalog.AgreedActions(TaskActions.All));
 
     public override string Description => $"Changes a scheduled task: {string.Join(", ", AgreedActions())}. Each call asks the user first; Windows' own tasks and privileged ones are guarded.";
 
-    public override JsonElement JsonSchema => ToolSchema.Parse(
+    public override JsonElement JsonSchema => agreed is null ? Schema(AgreedActions()) : _schema ??= Schema(agreed);
+
+    private static JsonElement Schema(IReadOnlyList<string> actions) => ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": {" +
         " \"path\": { \"type\": \"string\", \"description\": \"The task's path as task_list shows it.\" }," +
-        " \"action\": { \"type\": \"string\", \"enum\": [" + string.Join(", ", AgreedActions().Select(a => "\"" + a + "\"")) + "] }," +
+        " \"action\": { \"type\": \"string\", \"enum\": [" + string.Join(", ", actions.Select(a => "\"" + a + "\"")) + "] }," +
         " \"computer\": { \"type\": \"string\", \"description\": \"Which computer; leave out for this PC (or the only one offered).\" } }," +
         " \"required\": [\"path\", \"action\"] }");
 

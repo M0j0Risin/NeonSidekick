@@ -235,7 +235,9 @@ public sealed class WindowsServiceSystem : IServiceSystem
                     int delayed = choice == ServiceStartChoice.Delayed ? 1 : 0;
                     if (!ServiceNative.ChangeServiceConfig2(service, ServiceNative.ServiceConfigDelayedAutoStartInfo, &delayed))
                     {
-                        throw Failure("ChangeServiceConfig2W");
+                        // The start type is already automatic (2026-10-20, a review: this was answered and audited as a plain failure).
+                        int code = Marshal.GetLastPInvokeError();
+                        throw new ServiceException(code, "ChangeServiceConfig2W failed: " + Marshal.GetPInvokeErrorMessage(code)) { Applied = ServiceText.ChoiceWord(ServiceStartChoice.Automatic) };
                     }
                 }
             }
@@ -245,8 +247,17 @@ public sealed class WindowsServiceSystem : IServiceSystem
             }
         }
 
+        /// <summary>
+        /// The service by its name. A name holding a NUL is refused here (2026-10-20, a review): OpenServiceW reads up to the first one, so
+        /// "TermService\0x" would open TermService past every check made on the whole name. The door refuses such a name first; this is the floor.
+        /// </summary>
         private nint OpenOne(string name, uint access)
         {
+            if (name.Contains('\0', StringComparison.Ordinal))
+            {
+                throw new ServiceException(ServiceNative.ErrorInvalidName, "OpenServiceW: the name holds a NUL");
+            }
+
             nint service = ServiceNative.OpenService(manager, name, access);
             return service != 0 ? service : throw Failure("OpenServiceW");
         }

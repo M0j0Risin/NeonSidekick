@@ -79,8 +79,8 @@ public static class TaskRender
             + "  next " + TaskText.When(entry.NextRun);
     }
 
-    /// <summary>One task whole.</summary>
-    public static string Detail(string where, TaskDetail detail, TaskDefinition? definition, string? definitionError, bool redacted)
+    /// <summary>One task whole; "(privileged)" judged for a session connected as <paramref name="self"/> (null: unknown, every account another's).</summary>
+    public static string Detail(string where, TaskDetail detail, TaskDefinition? definition, string? definitionError, bool redacted, IReadOnlyCollection<string>? self = null)
     {
         ArgumentNullException.ThrowIfNull(detail);
         var e = detail.Entry;
@@ -98,7 +98,7 @@ public static class TaskRender
         }
         else
         {
-            Add(text, "runs as", PrincipalWords(definition.Principal) + (TaskPrincipal.IsPrivileged(definition.Principal) ? " (privileged)" : ""));
+            Add(text, "runs as", PrincipalWords(definition.Principal) + (TaskPrincipal.IsPrivileged(definition.Principal, self) ? " (privileged)" : ""));
             if (definition.Description is { } description)
             {
                 Add(text, "description", UntrustedText.Fenced(UntrustedText.Cut(description)));
@@ -163,10 +163,15 @@ public static class TaskRender
         return action.Kind == "ComHandler" ? "COM handler " + UntrustedText.Scrub(action.ClassId ?? "?") : action.Kind + " (deprecated action)";
     }
 
-    /// <summary>The command lines a run's question shows: every Exec action whole, never redacted (the user decides on them).</summary>
+    /// <summary>
+    /// The command lines a run's question shows: every Exec action whole, never redacted (the user decides on them), each on one line
+    /// (<see cref="UntrustedText.OneLine"/>, 2026-10-20, a review: a run of spaces or a newline hid a command's tail). Null
+    /// <paramref name="definition"/> is one that could not be read: <see cref="TaskText.CommandsUnknown"/>, never "(no actions)".
+    /// </summary>
     public static string Commands(TaskDefinition? definition) =>
-        definition is null || definition.Actions.Count == 0 ? "(no actions)"
-        : string.Join("; ", definition.Actions.Select(a => a.Kind == "Exec" ? (a.Command ?? "") + (a.Arguments is { } args ? " " + args : "") : a.Kind + (a.ClassId is { } id ? " " + id : "")));
+        definition is null ? TaskText.CommandsUnknown
+        : definition.Actions.Count == 0 ? "(no actions)"
+        : string.Join("; ", definition.Actions.Select(a => UntrustedText.OneLine(a.Kind == "Exec" ? (a.Command ?? "") + (a.Arguments is { } args ? " " + args : "") : a.Kind + (a.ClassId is { } id ? " " + id : ""))));
 
     /// <summary>A principal as people say it: <c>SYSTEM</c>, <c>CORP\ops</c>, <c>the group Administrators</c>.</summary>
     public static string PrincipalWords(TaskPrincipalInfo principal)

@@ -246,7 +246,7 @@ internal sealed class TasksMenu
         bool changed = false;
         while (true)
         {
-            var read = await _access.ReadAsync(source, path, session => session.Detail(path), cancellationToken).ConfigureAwait(false);
+            var read = await _access.ReadAsync(source, path, session => (Detail: session.Detail(path), session.Self), cancellationToken).ConfigureAwait(false);
             if (read.Error is { } failed)
             {
                 Sink.Error(failed);
@@ -257,14 +257,14 @@ internal sealed class TasksMenu
             string? definitionError = null;
             try
             {
-                definition = TaskXml.Parse(read.Value!.Xml);
+                definition = TaskXml.Parse(read.Value.Detail.Xml);
             }
             catch (TaskXmlException ex)
             {
                 definitionError = ex.Message;
             }
 
-            string text = UntrustedText.Unfenced(TaskRender.Detail(source.Where, read.Value!, definition, definitionError, redacted: false));
+            string text = UntrustedText.Unfenced(TaskRender.Detail(source.Where, read.Value.Detail, definition, definitionError, redacted: false, read.Value.Self));
             var actions = new List<InfoAction> { CopyAction, AskAction };
             var config = source.Computer.Config;
             if (config.ReadWrite && config.Control is { } control && control.Any(p => TaskAccess.Matches(p.Trim(), path)))
@@ -284,7 +284,7 @@ internal sealed class TasksMenu
                 actions.Add(HistoryAction);
             }
 
-            await _info.ShowAsync(TitleFor(source.Where, path), [new InfoTab(read.Value!.Entry.Name, () => new Text(text))], 0, cancellationToken, actions).ConfigureAwait(false);
+            await _info.ShowAsync(TitleFor(source.Where, path), [new InfoTab(read.Value.Detail.Entry.Name, () => new Text(text))], 0, cancellationToken, actions).ConfigureAwait(false);
             string? action = _info.Pressed?.Key switch
             {
                 'c' => "copy",

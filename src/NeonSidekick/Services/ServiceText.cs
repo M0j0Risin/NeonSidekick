@@ -1,4 +1,5 @@
 using System.Globalization;
+using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.Services;
 
@@ -53,6 +54,13 @@ public static class ServiceText
 
     public static string BadAction(string word) => $"Error: action '{word}' is not start, stop or restart.";
 
+    /// <summary>
+    /// A name no service can have (2026-10-20, a review: a NUL ended the name Windows read, past the checks made on the whole): empty, over
+    /// <see cref="ServiceAccess.MaxNameLength"/> characters, or holding a control character, a slash or a backslash. Pinned.
+    /// </summary>
+    public static string BadName(string name) =>
+        $"Error: '{UntrustedText.OneLine(UntrustedText.Cut(name, 80))}' is not a service name; a service's name has no control characters, slashes or backslashes and is at most {ServiceAccess.MaxNameLength.ToString(CultureInfo.InvariantCulture)} characters.";
+
     public static string BadStartChoice(string word) => $"Error: start_type '{word}' is not automatic, delayed, manual or disabled.";
 
     public const string Canceled = "Error: the read was canceled.";
@@ -74,17 +82,34 @@ public static class ServiceText
     /// <summary>A detail's dependents when the account may not list them (2026-10-15). Pinned.</summary>
     public const string DependentsUnknown = "not listed (this account may not list them here)";
 
-    /// <summary>A stop with running dependents (error 1051), naming them. Pinned.</summary>
-    public static string DependentsRunning(string name, IReadOnlyList<string> dependents) =>
-        $"Error: {name} cannot be stopped while services that depend on it run: {string.Join(", ", dependents)}.";
+    /// <summary>
+    /// A stop with running dependents (error 1051), naming the ones the computer's <c>services</c> list shows and counting the rest
+    /// (2026-10-20, a review: the hidden ones were named too). Pinned.
+    /// </summary>
+    public static string DependentsRunning(string name, IReadOnlyList<string> dependents, int hidden = 0) =>
+        $"Error: {name} cannot be stopped while services that depend on it run: {string.Join(", ", dependents.Select(UntrustedText.OneLine).Append(hidden > 0 ? NotShown(hidden) : null).OfType<string>())}.";
 
-    /// <summary>The approval question: the action, the service, the computer, the account and the full image path. Pinned.</summary>
+    /// <summary>The related services the computer's <c>services</c> list hides, counted (2026-10-20). Pinned.</summary>
+    public static string NotShown(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " service" : " services") + " not shown here";
+
+    /// <summary>
+    /// The approval question: the action, the service and the computer on its title row, then the display name, the account and the full image
+    /// path under it, each on one line (2026-10-20, a review: a newline or a run of spaces in what a service's installer wrote hid the rest of the
+    /// row). Pinned.
+    /// </summary>
     public static string ConfirmQuestion(string action, string name, string display, string computer, string account, string imagePath) =>
-        $"{Act(action)} {name} ({display}) on {computer} as {account}? It runs {imagePath}";
+        $"{Act(action)} {UntrustedText.OneLine(name)} on {computer}?\n{UntrustedText.OneLine(display)}, as {UntrustedText.OneLine(account)}. It runs {UntrustedText.OneLine(imagePath)}";
 
-    /// <summary>The approval question for a start type change. Pinned.</summary>
+    /// <summary>The approval question for a start type change, its title row and the line under it. Pinned.</summary>
     public static string ConfirmStartType(string name, string display, string computer, string account, string from, string to) =>
-        $"Change {name} ({display}) on {computer} from {from} to {to} start, as {account}?";
+        $"Change {UntrustedText.OneLine(name)} on {computer} from {from} to {to} start?\n{UntrustedText.OneLine(display)}, as {UntrustedText.OneLine(account)}.";
+
+    /// <summary>
+    /// The model's change refused because its question would not show what runs whole (2026-10-20, a review): an image path over
+    /// <see cref="ComputerText.MaxShownInQuestion"/> characters. Pinned.
+    /// </summary>
+    public static string TooLongToAsk(string name, int length) =>
+        $"Error: {UntrustedText.OneLine(name)}'s program line is {length.ToString(CultureInfo.InvariantCulture)} characters, too long to show whole in the question; change it yourself with /services.";
 
     /// <summary>The verb as a question starts it.</summary>
     public static string Act(string action) => action switch
@@ -100,6 +125,18 @@ public static class ServiceText
         $"{Past(action)} {name} on {computer}: {StateWord(state)}.";
 
     public static string StartTypeDone(string name, string computer, string to) => $"Set {name} on {computer} to {to} start.";
+
+    /// <summary>A change made whose state could not be read after it (2026-10-20, a review: it was answered and audited as a failure). Pinned.</summary>
+    public static string DoneUnread(string action, string name, string computer) =>
+        $"{Past(action)} {name} on {computer}; its state could not be read after the change.";
+
+    /// <summary>A restart whose stop did not end in time or was stopped waiting: the start is not tried (2026-10-20, a review). Pinned.</summary>
+    public static string RestartNotStarted(string name, string computer, ServiceRunState state) =>
+        $"Error: {name} on {computer} did not stop in time (it is {StateWord(state)}), so it was not started again; start it once it has stopped.";
+
+    /// <summary>A change that took effect in part: what did, then the failure's sentence (2026-10-20, a review). Pinned.</summary>
+    public static string Partly(string name, string computer, string applied, string failure) =>
+        $"Error: {name} on {computer} now has {applied} start, but the rest of the change failed. {failure}";
 
     /// <summary>The state the poll gave up at (the wait hint ran out). Pinned.</summary>
     public static string StillPending(string action, string name, string computer, ServiceRunState state) =>

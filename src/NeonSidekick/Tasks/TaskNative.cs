@@ -33,6 +33,8 @@ internal static unsafe partial class TaskNative
     internal const int ServiceGetFolder = 7;
     internal const int ServiceConnect = 10;
     internal const int ServiceTargetServer = 12;
+    internal const int ServiceConnectedUser = 13;
+    internal const int ServiceConnectedDomain = 14;
     internal const int ServiceHighestVersion = 15;
 
     // ITaskFolder

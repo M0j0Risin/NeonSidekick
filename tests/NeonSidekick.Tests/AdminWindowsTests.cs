@@ -46,6 +46,26 @@ public sealed class AdminWindowsTests
         Assert.Throws<TaskException>(() => system.Run(TaskTarget.Local, s => s.Detail(@"\No\Such\Task")));
     }
 
+    /// <summary>
+    /// The session's own account (2026-10-20, a review: another account's task is privileged): ConnectedUser and ConnectedDomain read from
+    /// their vtable slots, this PC's token's SID with them; a task's entry read alone; a service name holding a NUL refused at the floor.
+    /// </summary>
+    [WindowsFact]
+    public void Tasks_TheSessionsOwnAccount_AndAnEntryAlone()
+    {
+        var system = new WindowsTaskSystem();
+        var (self, entry, first) = system.Run(TaskTarget.Local, s =>
+        {
+            var listed = s.List(@"\Microsoft\Windows", recursive: true)[0];
+            return (s.Self, s.Entry(listed.Path), listed);
+        });
+        Assert.Equal(string.Equals(Environment.UserDomainName, Environment.MachineName, StringComparison.OrdinalIgnoreCase), self.Contains(Environment.UserName, StringComparer.OrdinalIgnoreCase));
+        Assert.Contains(Environment.UserDomainName + "\\" + Environment.UserName, self, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value, self);
+        Assert.Equal(first.Path, entry.Path, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(123, Assert.Throws<ServiceException>(() => new WindowsServiceSystem().Run(ServiceTarget.Local, s => s.Status("EventLog\0x"))).Code);
+    }
+
     [WindowsFact]
     public async Task Ping_LoopbackAnswers()
     {

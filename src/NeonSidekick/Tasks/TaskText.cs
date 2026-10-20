@@ -1,4 +1,6 @@
 using System.Globalization;
+using NeonSidekick.Computers;
+using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.Tasks;
 
@@ -53,6 +55,13 @@ public static class TaskText
 
     public static string BadAction(string word) => $"Error: action '{word}' is not run, end, enable or disable.";
 
+    /// <summary>
+    /// A path no task can have (2026-10-20, a review: <c>\Backup\../Secret/Task</c> passed a folder pattern's star): holding a control
+    /// character or a slash, an empty, <c>.</c> or <c>..</c> part, or over 1,024 characters. Pinned.
+    /// </summary>
+    public static string BadPath(string path) =>
+        $"Error: '{UntrustedText.OneLine(UntrustedText.Cut(path, 120))}' is not a task path; a path is \\folder\\name with no slashes, control characters or . and .. parts.";
+
     public static string BadFolder(string folder) => $"Error: folder '{folder}' must start with \\.";
 
     public static string TimedOut(string computer) => $"Error: the read on {computer} took too long and was stopped.";
@@ -65,21 +74,47 @@ public static class TaskText
 
     public const string WritesOff = "Error: Task writes is off (" + MenuPath + "), so no task can be changed.";
 
-    /// <summary>A task under <c>\Microsoft\</c> with no <c>control</c> pattern there. Pinned.</summary>
+    /// <summary>
+    /// A task under <c>\Microsoft\</c> that no <c>control</c> pattern starting there matches (2026-10-20, a review: any such pattern on the
+    /// computer opened every Windows task to a broader one). Pinned.
+    /// </summary>
     public static string MicrosoftTask(string path) =>
-        $"Error: {path} is one of Windows' own tasks; it can be changed only when a \"control\" pattern on this computer starts with \\Microsoft\\.";
+        $"Error: {path} is one of Windows' own tasks; it can be changed only when a \"control\" pattern on this computer that starts with \\Microsoft\\ matches it.";
 
-    /// <summary>A privileged run or end refused. Pinned.</summary>
+    /// <summary>A privileged run, end or enable refused. Pinned.</summary>
     public static string Privileged(string path, string principal) =>
-        $"Error: {path} runs as {principal}, a privileged principal; running or ending it from here needs \"privileged\": true on this computer's entry in tasks.json.";
+        $"Error: {path} runs as {principal}, a privileged principal; running, ending or enabling it from here needs \"privileged\": true on this computer's entry in tasks.json.";
 
-    /// <summary>The approval question for a run: the principal, the run level and the full command line, since a run is a privilege boundary. Pinned.</summary>
+    /// <summary>
+    /// The approval question for a run: the path and the computer on its title row, then the principal, the run level and every command line
+    /// under it, each on one line (2026-10-20, a review: a command padded with spaces hid its tail), since a run is a privilege boundary. Pinned.
+    /// </summary>
     public static string ConfirmRun(string path, string computer, string principal, string runLevel, string commands) =>
-        $"Run {path} on {computer} now? It runs as {principal} ({runLevel}): {commands}";
+        $"Run {UntrustedText.OneLine(path)} on {computer} now?\nIt runs as {principal} ({runLevel}): {commands}";
 
-    /// <summary>The approval question for end, enable or disable. Pinned.</summary>
+    /// <summary>The approval question for end, enable or disable, the principal under its title row. Pinned.</summary>
     public static string ConfirmChange(string action, string path, string computer, string principal) =>
-        $"{Act(action)} {path} on {computer}? It runs as {principal}.";
+        $"{Act(action)} {UntrustedText.OneLine(path)} on {computer}?\nIt runs as {principal}.";
+
+    /// <summary>What a run's question says of the commands when the definition could not be read (2026-10-20, a review: it said "(no actions)"). Pinned.</summary>
+    public const string CommandsUnknown = "what it runs is not known (its definition could not be read)";
+
+    /// <summary>Who a task runs as in its question when the definition could not be read (2026-10-20). Pinned.</summary>
+    public const string PrincipalUnknown = "an account not known";
+
+    /// <summary>A run level in that question when the definition could not be read (2026-10-20). Pinned.</summary>
+    public const string RunLevelUnknown = "run level not known";
+
+    /// <summary>
+    /// The model's run refused because its question would not show the commands whole (2026-10-20, a review): over
+    /// <see cref="ComputerText.MaxShownInQuestion"/> characters. Pinned.
+    /// </summary>
+    public static string TooLongToAsk(string path, int length) =>
+        $"Error: {UntrustedText.OneLine(path)}'s command lines are {length.ToString(CultureInfo.InvariantCulture)} characters, too long to show whole in the question; run it yourself with /tasks.";
+
+    /// <summary>A change made whose task could not be read after it (2026-10-20, a review: it was answered and audited as a failure). Pinned.</summary>
+    public static string DoneUnread(string action, string path, string computer) =>
+        $"{Past(action)} {path} on {computer}; the task could not be read after the change.";
 
     public static string Act(string action) => action switch
     {

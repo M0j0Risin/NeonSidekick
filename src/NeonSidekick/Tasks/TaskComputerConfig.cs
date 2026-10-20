@@ -7,8 +7,8 @@ namespace NeonSidekick.Tasks;
 
 /// <summary>
 /// One computer of <c>tasks.json</c> (2026-10-15, the admin-tools plan): the shared keys (<see cref="ComputerConfig"/>) and the tasks' own —
-/// <see cref="Folders"/>, the visible folders (globs, <c>\</c> the separator; absent, all), and <see cref="Privileged"/>, which lets a run or
-/// an end reach a task whose principal is privileged (<see cref="TaskPrincipal"/>). <c>control</c> holds task-path globs; a pattern starting
+/// <see cref="Folders"/>, the visible folders (globs, <c>\</c> the separator; absent, all), and <see cref="Privileged"/>, which lets a run,
+/// an end or an enable reach a task whose principal is privileged (<see cref="TaskPrincipal"/>). <c>control</c> holds task-path globs; a pattern starting
 /// with <c>\Microsoft\</c> is the only way to change one of Windows' own. <c>controlActions</c> words: run, end, enable, disable.
 /// </summary>
 public sealed class TaskComputerConfig : ComputerConfig
@@ -16,7 +16,7 @@ public sealed class TaskComputerConfig : ComputerConfig
     /// <summary>The folders the model and <c>/tasks</c> may see here (<c>\Backup\*</c>); absent, all.</summary>
     public List<string>? Folders { get; set; }
 
-    /// <summary>Whether a run or an end may reach a privileged task here; absent or false, never.</summary>
+    /// <summary>Whether a run, an end or an enable may reach a privileged task here; absent or false, never.</summary>
     public bool? Privileged { get; set; }
 
     [JsonIgnore]
@@ -45,8 +45,11 @@ public static class TaskActions
 
     public static readonly IReadOnlyList<string> All = [Run, End, Enable, Disable];
 
-    /// <summary>Whether <paramref name="action"/> starts or stops a run (and so is held by the privileged guard).</summary>
-    public static bool Runs(string action) => action is Run or End;
+    /// <summary>
+    /// Whether <paramref name="action"/> is held by the privileged guard: a run or an end, and an enable (2026-10-20, a review: a disabled
+    /// SYSTEM task with a trigger, enabled, runs as SYSTEM at its next trigger). A disable runs nothing.
+    /// </summary>
+    public static bool NeedsPrivilege(string action) => action is Run or End or Enable;
 }
 
 /// <summary><c>tasks.json</c>, global and per profile (2026-10-15): the shared loader with the tasks' words.</summary>
@@ -89,8 +92,8 @@ public static class TaskConfigFile
         "  //\n" +
         "  // access: read (the default) or readwrite. folders: the folders visible (\\\\ the root; absent: all). control: the task\n" +
         "  // paths that may be changed (absent: nothing; Windows' own under \\\\Microsoft\\\\ only by a pattern starting there).\n" +
-        "  // controlActions: run, end, enable, disable (absent: all four; []: none). privileged: true lets run and end reach a task\n" +
-        "  // that runs as SYSTEM, a service account, a group or with highest privileges. detail: redacted (the default) or full.\n" +
+        "  // controlActions: run, end, enable, disable (absent: all four; []: none). privileged: true lets run, end and enable reach\n" +
+        "  // a task that runs as SYSTEM, a service account, another account, a group or with highest privileges. detail: redacted (the default) or full.\n" +
         "  // auth: windows (as you) or runas. A runas password typed here in plain text is encrypted (\"dpapi:…\") at the next read.\n" +
         "  \"computers\": {}\n" +
         "}\n";

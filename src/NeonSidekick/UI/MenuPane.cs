@@ -709,7 +709,7 @@ public sealed class MenuPane : INoticeSink
     /// <summary>
     /// A <see cref="MenuPage.Caption"/> laid out for a row of <paramref name="width"/> cells: the
     /// words (any whitespace between them, a line break included, reads as one space) wrapped
-    /// greedily by <see cref="TextCells"/>, a word wider than the row cut with an ellipsis, and at
+    /// greedily by <see cref="TextCells"/>, a word wider than the row broken across rows (2026-10-20; cut with an ellipsis until then), and at
     /// most <paramref name="maxRows"/> rows — what would not fit joins the last row, cut with an
     /// ellipsis. Empty for a blank caption or no room. Pure.
     /// </summary>
@@ -740,9 +740,36 @@ public sealed class MenuPane : INoticeSink
                 line.Clear();
             }
 
-            string fitted = cells > width ? ScreenPane.Fit(word, width) : word;
-            line.Append(fitted);
-            used = TextCells.Width(fitted);
+            // A word wider than a row is broken across rows, never cut (2026-10-20, a review: a task's command line with no spaces lost its
+            // tail in the approval's caption); the rows past the most still end on the ellipsis below.
+            string rest = word;
+            while (TextCells.Width(rest) > width)
+            {
+                int take = 0, taken = 0;
+                while (take < rest.Length)
+                {
+                    int w = TextCells.ElementWidth(rest, take, out int length);
+                    if (taken + w > width)
+                    {
+                        break;
+                    }
+
+                    taken += w;
+                    take += length;
+                }
+
+                if (take == 0)
+                {
+                    TextCells.ElementWidth(rest, 0, out int first);
+                    take = Math.Max(1, first);
+                }
+
+                rows.Add(rest[..take]);
+                rest = rest[take..];
+            }
+
+            line.Append(rest);
+            used = TextCells.Width(rest);
         }
 
         if (line.Length > 0)

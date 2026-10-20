@@ -220,8 +220,11 @@ public static class TaskXml
 
 /// <summary>
 /// Whether a task's run is a privilege boundary (2026-10-15, the admin-tools plan, the user's call): its principal is SYSTEM, LocalService or
-/// NetworkService (by SID or name), its run level is <c>HighestAvailable</c>, or it runs as a group. Run and End of such a task are refused
-/// unless the computer's entry sets <c>"privileged": true</c>; Enable and Disable are not, since they run nothing. Pure.
+/// NetworkService (by SID or name), its run level is <c>HighestAvailable</c>, or it runs as a group. Since 2026-10-20 (a review: a task stored
+/// with another account's password, or S4U, ran as that account unguarded) also any account but the session's own (<see cref="ITaskSession.Self"/>
+/// — a domain admin's, a virtual <c>NT SERVICE\…</c> one), a service-account logon, and a principal with no account named (the registering
+/// user, unknown here). Run, End and Enable of such a task are refused unless the computer's entry sets <c>"privileged": true</c>; Disable
+/// runs nothing. Pure.
 /// </summary>
 public static class TaskPrincipal
 {
@@ -232,20 +235,47 @@ public static class TaskPrincipal
         "S-1-5-20", "NETWORK SERVICE", "NT AUTHORITY\\NETWORK SERVICE", "NetworkService",
     };
 
-    public static bool IsPrivileged(TaskPrincipalInfo principal)
+    /// <summary>
+    /// Whether <paramref name="principal"/> is privileged for a session connected as <paramref name="self"/> (its forms; null or empty, unknown:
+    /// every account then counts as another's).
+    /// </summary>
+    public static bool IsPrivileged(TaskPrincipalInfo principal, IReadOnlyCollection<string>? self)
     {
         ArgumentNullException.ThrowIfNull(principal);
-        return (principal.UserId is { } user && ServiceAccounts.Contains(user.Trim()))
+        string? user = principal.UserId?.Trim() is { Length: > 0 } named ? named : null;
+        return (user is not null && ServiceAccounts.Contains(user))
             || string.Equals(principal.RunLevel?.Trim(), "HighestAvailable", StringComparison.OrdinalIgnoreCase)
-            || !string.IsNullOrWhiteSpace(principal.GroupId);
+            || !string.IsNullOrWhiteSpace(principal.GroupId)
+            || string.Equals(principal.LogonType?.Trim(), "ServiceAccount", StringComparison.OrdinalIgnoreCase)
+            || user is null
+            || !IsSelf(user, self);
     }
 
-    /// <summary>Whether <paramref name="xml"/>'s principal is privileged; an unreadable definition counts as privileged (the safe reading).</summary>
-    public static bool IsPrivileged(string xml)
+    /// <summary>
+    /// Whether <paramref name="user"/> names the session's own account: equal to one of <paramref name="self"/>'s forms (the name, domain\name
+    /// and the SID), case ignored.
+    /// </summary>
+    public static bool IsSelf(string user, IReadOnlyCollection<string>? self)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        if (self is null || self.Count == 0)
+        {
+            return false;
+        }
+
+        string trimmed = user.Trim();
+        return self.Any(s => string.Equals(s.Trim(), trimmed, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="xml"/>'s principal is privileged for <paramref name="self"/>; an unreadable definition counts as privileged (the
+    /// safe reading).
+    /// </summary>
+    public static bool IsPrivileged(string xml, IReadOnlyCollection<string>? self)
     {
         try
         {
-            return IsPrivileged(TaskXml.Parse(xml).Principal);
+            return IsPrivileged(TaskXml.Parse(xml).Principal, self);
         }
         catch (TaskXmlException)
         {

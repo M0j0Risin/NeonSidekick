@@ -104,8 +104,31 @@ public sealed class TaskAccess
     /// <summary>Whether <paramref name="path"/> is under <c>\Microsoft\</c>.</summary>
     public static bool IsMicrosoft(string path) => path.StartsWith(MicrosoftFolder, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Whether a <c>control</c> pattern on the computer reaches into <c>\Microsoft\</c>.</summary>
-    public static bool ControlsMicrosoft(TaskComputerConfig config) => config.Control is { } patterns && patterns.Any(p => IsMicrosoft(p.Trim()));
+    /// <summary>
+    /// Whether a <c>control</c> pattern that starts with <c>\Microsoft\</c> matches <paramref name="path"/> (2026-10-20, a review: any such
+    /// pattern on the computer once let a broader one, <c>\*\*\*</c>, reach every Windows task).
+    /// </summary>
+    public static bool ControlsMicrosoft(TaskComputerConfig config, string path) =>
+        config.Control is { } patterns && patterns.Any(p => IsMicrosoft(p.Trim()) && Matches(p.Trim(), path));
+
+    /// <summary>The longest task path a call may carry.</summary>
+    public const int MaxPathLength = 1024;
+
+    /// <summary>
+    /// Why <paramref name="path"/> is no task's path, or null (2026-10-20, a review: <c>\Backup\../Secret/Task</c> passed a <c>\Backup\*</c>
+    /// folder pattern, whose star does not cross <c>\</c> but does cross <c>/</c>): it must start with <c>\</c>, hold no control character and no
+    /// <c>/</c>, no empty, <c>.</c> or <c>..</c> part, and be at most <see cref="MaxPathLength"/> characters. Pure.
+    /// </summary>
+    public static string? PathProblem(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (path.Length is < 2 or > MaxPathLength || path[0] != '\\' || path.Any(c => char.IsControl(c) || c == '/'))
+        {
+            return TaskText.BadPath(path);
+        }
+
+        return path[1..].Split('\\').Any(part => part.Length == 0 || part.Trim() is "." or "..") ? TaskText.BadPath(path) : null;
+    }
 
     public async Task<TaskResult<T>> ReadAsync<T>(TaskSource source, string? task, Func<ITaskSession, T> work, CancellationToken cancellationToken)
     {
@@ -136,14 +159,18 @@ public sealed class TaskAccess
         }
     }
 
-    /// <summary>A change on a pool thread, waited out; the entry after it, or the failure's sentence.</summary>
-    public async Task<TaskResult<TaskEntry>> ChangeAsync(TaskSource source, string path, Action<ITaskSession> act)
+    /// <summary>
+    /// A change on a pool thread, waited out; the entry after it, or the failure's sentence. Once <paramref name="act"/> is done the change counts
+    /// as made (2026-10-20, a review: a read back that failed, the instances refused, answered "failed" and the model ran the task again): the
+    /// entry read back alone, and null when that fails.
+    /// </summary>
+    public async Task<TaskResult<TaskEntry?>> ChangeAsync(TaskSource source, string path, Action<ITaskSession> act)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(act);
         if (System is not { } system)
         {
-            return TaskResult<TaskEntry>.Failed(TaskText.NoneHere);
+            return TaskResult<TaskEntry?>.Failed(TaskText.NoneHere);
         }
 
         try
@@ -151,22 +178,31 @@ public sealed class TaskAccess
             var entry = await Task.Run(() => system.Run(source.Target, session =>
             {
                 act(session);
-                return session.Detail(path).Entry;
+                try
+                {
+                    return session.Entry(path);
+                }
+                catch (TaskException ex)
+                {
+                    DiagnosticLog.Debug(TaskText.Category, $"{Describe(source)} {path} not read after the change: {ex.Message}");
+                    return null;
+                }
             }), CancellationToken.None).ConfigureAwait(false);
-            return TaskResult<TaskEntry>.Ok(entry);
+            return TaskResult<TaskEntry?>.Ok(entry);
         }
         catch (TaskException ex)
         {
-            return TaskResult<TaskEntry>.Failed(TaskErrors.Sentence(ex.Code, source.Context(path, write: true), ex.Message));
+            return TaskResult<TaskEntry?>.Failed(TaskErrors.Sentence(ex.Code, source.Context(path, write: true), ex.Message));
         }
     }
 
     /// <summary>
-    /// The order of checks before the approval (2026-10-15, the plan's): the switch (<paramref name="writesOn"/>) → <c>access</c> → <c>folders</c>
-    /// → <c>control</c> → <c>\Microsoft\</c> → <c>controlActions</c> → privileged (run and end, from <paramref name="definition"/> when read).
-    /// Null when the change may go on to the approval. Pure.
+    /// The order of checks before the approval (2026-10-15, the plan's): the switch (<paramref name="writesOn"/>) → the path's own
+    /// (<see cref="PathProblem"/>, 2026-10-20) → <c>access</c> → <c>folders</c> → <c>control</c> → <c>\Microsoft\</c> (a pattern starting there
+    /// that matches) → <c>controlActions</c> → privileged (run, end and enable, from <paramref name="definition"/> when read, for a session
+    /// connected as <paramref name="self"/>). Null when the change may go on to the approval. Pure.
     /// </summary>
-    public static string? WriteRefusal(Computer<TaskComputerConfig> computer, string path, string action, TaskDefinition? definition, bool writesOn)
+    public static string? WriteRefusal(Computer<TaskComputerConfig> computer, string path, string action, TaskDefinition? definition, bool writesOn, IReadOnlyCollection<string>? self = null)
     {
         ArgumentNullException.ThrowIfNull(computer);
         ArgumentNullException.ThrowIfNull(path);
@@ -174,6 +210,11 @@ public sealed class TaskAccess
         if (!writesOn)
         {
             return TaskText.WritesOff;
+        }
+
+        if (PathProblem(path) is { } bad)
+        {
+            return bad;
         }
 
         if (!computer.Config.ReadWrite)
@@ -191,7 +232,7 @@ public sealed class TaskAccess
             return ComputerText.NotInControl(path, where, Family);
         }
 
-        if (IsMicrosoft(path) && !ControlsMicrosoft(computer.Config))
+        if (IsMicrosoft(path) && !ControlsMicrosoft(computer.Config, path))
         {
             return TaskText.MicrosoftTask(path);
         }
@@ -201,7 +242,7 @@ public sealed class TaskAccess
             return ComputerText.ActionNotAllowed(computer.Config.AllowedActions(Family), Family);
         }
 
-        if (TaskActions.Runs(action) && definition is not null && TaskPrincipal.IsPrivileged(definition.Principal) && !computer.Config.AllowsPrivileged)
+        if (TaskActions.NeedsPrivilege(action) && definition is not null && TaskPrincipal.IsPrivileged(definition.Principal, self) && !computer.Config.AllowsPrivileged)
         {
             return TaskText.Privileged(path, TaskRender.PrincipalWords(definition.Principal));
         }

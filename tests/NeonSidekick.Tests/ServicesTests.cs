@@ -52,12 +52,13 @@ public sealed class ServicesTests : IDisposable
         return Task.FromResult(_answer);
     }
 
-    private async Task<string> Change(string name, string action, ServiceStartChoice? choice = null, bool writesOn = true, bool pane = true)
+    private async Task<string> Change(string name, string action, ServiceStartChoice? choice = null, bool writesOn = true, bool pane = true, ServiceComputerConfig? local = null,
+        Func<string, CancellationToken, Task<bool?>>? confirm = null, CancellationToken cancellationToken = default)
     {
-        var access = Access();
+        var access = Access(local: local);
         var (source, error) = access.Computer(null, forceRedacted: false);
         Assert.Null(error);
-        return await ServiceChanges.RunAsync(access, source!, name, action, choice, writesOn, byUser: false, pane ? Confirm : null, CancellationToken.None);
+        return await ServiceChanges.RunAsync(access, source!, name, action, choice, writesOn, byUser: false, pane ? confirm ?? Confirm : null, cancellationToken);
     }
 
     private static async Task<string> Call(AIFunction tool, params (string Name, object? Value)[] arguments)
@@ -167,6 +168,39 @@ public sealed class ServicesTests : IDisposable
         Assert.Null(ServiceAccess.WriteRefusal(local, "Spooler", "stop", Config("Spooler"), true));
     }
 
+    /// <summary>
+    /// A name no service has is refused before every other check but the switch (2026-10-20, a review: "TermService\0x" passed the guard's
+    /// list, which compares whole names, and Windows opened TermService by the name up to the NUL).
+    /// </summary>
+    [Fact]
+    public async Task Change_ANameHoldingANul_IsRefused_BeforeWindowsReadsIt()
+    {
+        _system.Add("TermService", "Remote Desktop Services");
+        var everything = new ServiceComputerConfig { Access = "readwrite", Control = ["*"] };
+        Assert.Equal(ServiceText.BadName("TermService\0x"), await Change("TermService\0x", "stop", local: everything));
+        Assert.Equal(ServiceText.BadName("Spooler\0"), await Change("Spooler\0", "stop", local: everything));
+        Assert.Empty(_asked);
+        Assert.Empty(_system.Changes);
+        Assert.Equal(ServiceRunState.Running, _system.Services["TermService"].Entry.State);
+        Assert.Equal(ServiceText.ProtectedByApp("TermService"), await Change("TermService", "stop", local: everything));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("a/b")]
+    [InlineData(@"a\b")]
+    [InlineData("Spooler\tx")]
+    public void NameProblem_RefusesWhatNoServiceNameHolds(string name) => Assert.Equal(ServiceText.BadName(name), ServiceAccess.NameProblem(name));
+
+    [Fact]
+    public async Task NameProblem_PassesAName_RefusesALongOne_AndTheInfoToolAsks()
+    {
+        Assert.Null(ServiceAccess.NameProblem("MSSQL$EXPRESS"));
+        Assert.NotNull(ServiceAccess.NameProblem(new string('a', ServiceAccess.MaxNameLength + 1)));
+        Assert.Equal(ServiceText.BadName("Spooler\0"), await Call(new ServiceInfoTool(Access(), () => _settings), ("name", "Spooler\0")));
+        Assert.DoesNotContain('\0', ServiceText.BadName("Spooler\0"));   // scrubbed (a string "\0" is ignorable to a culture's comparison, so the char)
+    }
+
     [Fact]
     public void Guard_TheAppsListCannotBeUndone_TheFilesAdds()
     {
@@ -230,6 +264,87 @@ public sealed class ServicesTests : IDisposable
         Assert.True(_system.Services["MyAppWeb"].Config.DelayedAutoStart);
         Assert.Equal(ServiceText.Done("restart", "MyAppWorker", ComputerText.ThisPc, ServiceRunState.Running), await Change("MyAppWorker", "restart"));
         Assert.Equal(["start_type MyAppWeb Delayed", "stop MyAppWorker", "start MyAppWorker"], _system.Changes);
+    }
+
+    /// <summary>
+    /// A restart whose stop does not end, or whose wait is stopped, is not started (2026-10-20, a review: StartService on a service still
+    /// stopping failed with 1056 and left it down).
+    /// </summary>
+    [Fact]
+    public async Task Change_ARestartWhoseStopDoesNotEnd_IsNotStarted()
+    {
+        _system.StopsSlowly = true;
+        using var stop = new CancellationTokenSource();
+        Task<bool?> YesThenEsc(string question, CancellationToken cancellationToken)
+        {
+            stop.Cancel();   // the user's Esc while the stop is waited for
+            return Task.FromResult<bool?>(true);
+        }
+
+        string answer = await Change("MyAppWorker", "restart", confirm: YesThenEsc, cancellationToken: stop.Token);
+        Assert.Equal(ServiceText.RestartNotStarted("MyAppWorker", ComputerText.ThisPc, ServiceRunState.StopPending), answer);
+        Assert.Equal(["stop MyAppWorker"], _system.Changes);
+    }
+
+    /// <summary>A start type set whose delayed flag was refused is said to be in part (2026-10-20, a review: it read as a plain failure).</summary>
+    [Fact]
+    public async Task Change_AStartTypeMadeInPart_SaysWhatTookEffect()
+    {
+        _system.DelayedFailsWith = 87;
+        string answer = await Change("MyAppWeb", "start_type", ServiceStartChoice.Delayed);
+        Assert.StartsWith("Error: MyAppWeb on " + ComputerText.ThisPc + " now has automatic start, but the rest of the change failed. Error: ", answer);
+        Assert.Equal(ServiceStartType.Automatic, _system.Services["MyAppWeb"].Config.StartType);
+    }
+
+    /// <summary>A change made whose status could not be read after is said so, never "failed" (2026-10-20, a review).</summary>
+    [Fact]
+    public async Task Change_MadeButNotReadBack_IsDoneUnread()
+    {
+        _system.StatusFailsAfterChange = true;
+        Assert.Equal(ServiceText.DoneUnread("start", "MyAppWeb", ComputerText.ThisPc), await Change("MyAppWeb", "start"));
+        Assert.Equal(["start MyAppWeb"], _system.Changes);
+    }
+
+    /// <summary>
+    /// The related services a narrowed <c>services</c> list hides are counted, never named (2026-10-20, a review), in a refused stop and in
+    /// <c>service_info</c>.
+    /// </summary>
+    [Fact]
+    public async Task Change_AndInfo_NameOnlyTheVisibleRelatedServices()
+    {
+        var narrow = new ServiceComputerConfig { Access = "readwrite", Services = ["Spooler"], Control = ["*"] };
+        string refused = await Change("Spooler", "stop", local: narrow);
+        Assert.Equal(ServiceText.DependentsRunning("Spooler", [], 1), refused);
+        Assert.DoesNotContain("MyAppWorker", refused);
+        Assert.Contains("1 service not shown here", refused);
+
+        _system.Services["Spooler"].Config = _system.Services["Spooler"].Config with { Dependencies = ["RpcSs", "Spooler2"] };
+        string info = await Call(new ServiceInfoTool(Access(local: narrow), () => _settings), ("name", "Spooler"));
+        Assert.Contains("depends on: 2 services not shown here", info);
+        Assert.Contains("needed by: 1 service not shown here", info);
+        Assert.DoesNotContain("MyAppWorker", info);
+        Assert.Contains("needed by: MyAppWorker (running)", await Call(new ServiceInfoTool(Access(), () => _settings), ("name", "Spooler")));
+    }
+
+    /// <summary>
+    /// The question puts each value on one line under its title row (2026-10-20, a review: a newline or a run of spaces hid a program line's
+    /// tail), and a model's change whose program line is too long to show is refused.
+    /// </summary>
+    [Fact]
+    public async Task Change_TheQuestion_ShowsEachValueOnOneLine_AndRefusesOneTooLongToShow()
+    {
+        _system.Add("MyAppOdd", "My\nApp   Odd", state: ServiceRunState.Stopped, image: "worker.exe" + new string(' ', 300) + "& net user x /add");
+        await Change("MyAppOdd", "start");
+        string question = Assert.Single(_asked);
+        Assert.Equal("Start MyAppOdd on " + ComputerText.ThisPc + "?", question[..question.IndexOf('\n', StringComparison.Ordinal)]);
+        Assert.Contains("My App Odd, as ", question);
+        Assert.Contains("It runs worker.exe & net user x /add", question);
+        Assert.Single(question, c => c == '\n');
+
+        _asked.Clear();
+        _system.Add("MyAppLong", "Long", state: ServiceRunState.Stopped, image: new string('a', ComputerText.MaxShownInQuestion + 1));
+        Assert.Equal(ServiceText.TooLongToAsk("MyAppLong", ComputerText.MaxShownInQuestion + 1), await Change("MyAppLong", "start"));
+        Assert.Empty(_asked);
     }
 
     [Fact]
@@ -329,6 +444,28 @@ public sealed class ServicesTests : IDisposable
         Assert.Contains("\"enum\": [\"restart\"]", tool.JsonSchema.ToString());
         var both = new ServiceControlTool(Access(local: new ServiceComputerConfig { Access = "readwrite" }, more: restartOnly), () => _settings, Confirm);
         Assert.Equal(ServiceActions.Control, both.AgreedActions());   // they disagree: all three, each call checked
+    }
+
+    /// <summary>
+    /// A turn's <c>service_control</c> holds its actions from the turn's catalog (2026-10-20, a review: each request's read of the description
+    /// and schema read both files again): reading them reads no catalog.
+    /// </summary>
+    [Fact]
+    public void ControlTool_ForATurn_ReadsNoCatalog()
+    {
+        int loads = 0;
+        var catalog = new ComputerCatalog<ServiceComputerConfig>([new Computer<ServiceComputerConfig>("local", new ServiceComputerConfig { Access = "readwrite", Control = ["*"], ControlActions = ["restart"] })], [], ServiceConfigFile.Info);
+        var access = new ServiceAccess(_system, () => { loads++; return catalog; }, () => ["local"], _time);
+        var tools = NeonSidekick.App.ChatScreen.ServiceToolsFor([new ServiceControlTool(access, () => _settings, Confirm)], _settings, pane: true, access.Catalog());
+        var turn = Assert.IsType<ServiceControlTool>(Assert.Single(tools));
+        loads = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            Assert.Contains("runs: restart.", turn.Description);
+            Assert.Contains("\"enum\": [\"restart\"]", turn.JsonSchema.ToString());
+        }
+
+        Assert.Equal(0, loads);
     }
 
     [Fact]

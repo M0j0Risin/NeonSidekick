@@ -474,20 +474,38 @@ public static class ShellText
 
     /// <summary>
     /// What changes a service from a shell or a script (<see cref="AdminPolice"/>): <c>sc</c> with a changing verb (a server name allowed before
-    /// it), <c>net start|stop|pause|continue</c>, PowerShell's service cmdlets that change one. Regular expressions, case-blind. Pinned.
+    /// it), <c>net start|stop|pause|continue</c>, PowerShell's service cmdlets that change one. Since 2026-10-20 (a review): a quoted <c>sc.exe</c>
+    /// or <c>net.exe</c> path, a ServiceController's own methods on a service read into a variable or a line, WMI's and the Win32 API's service
+    /// calls (<c>Invoke-CimMethod … StopService</c>, <c>wmic service … call</c>, <c>ControlService</c>, <c>win32serviceutil.StopService</c>), and a
+    /// write to a service's registry key. Regular expressions, case-blind. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> AdminServiceWords =
     [
-        @"\bsc(?:\.exe)?\s+(?:\\\\\S+\s+)?(?:config|start|stop|delete|create|failure|failureflag|pause|continue|control|sdset|privs|sidtype)\b",
-        @"\bnet1?(?:\.exe)?\s+(?:start|stop|pause|continue)\s+\S",
+        @"\bsc(?:\.exe)?[""']?\s+(?:\\\\\S+\s+)?(?:config|start|stop|delete|create|failure|failureflag|pause|continue|control|sdset|privs|sidtype)\b",
+        @"\bnet1?(?:\.exe)?[""']?\s+(?:start|stop|pause|continue)\s+\S",
         @"\b(?:Start|Stop|Restart|Set|New|Remove|Suspend|Resume)-Service\b",
+        @"\b(?:Get-Service|gsv|ServiceController)\b[^\r\n;]*\.(?:Start|Stop|Pause|Continue|ExecuteCommand)\s*\(",
+        @"\$(?<v>\w+)\s*=\s*[^\r\n;]*\b(?:Get-Service|gsv|ServiceController)\b[\s\S]{0,4000}?\$\k<v>\.(?:Start|Stop|Pause|Continue|ExecuteCommand)\s*\(",
+        @"\b(?:StartService|StopService|RestartService|PauseService|ResumeService|ChangeStartMode|ControlService(?:Ex)?|ChangeServiceConfig2?|DeleteService|CreateService|UserControlService)[AW]?\b",
+        @"\bwmic(?:\.exe)?\b[^\r\n;&|]*\bservice\b[^\r\n;&|]*\b(?:call|delete|set)\b",
+        @"\b(?:Invoke-(?:Cim|Wmi)Method|Remove-(?:Cim|Wmi)(?:Instance|Object)|Set-(?:Cim|Wmi)Instance)\b[^\r\n]*\bWin32_(?:Base)?Service\b",
+        @"\bWin32_(?:Base)?Service\b[^\r\n]*\b(?:Invoke-(?:Cim|Wmi)Method|Remove-(?:Cim|Wmi)(?:Instance|Object)|Set-(?:Cim|Wmi)Instance)\b",
+        @"\breg(?:\.exe)?[""']?\s+(?:add|delete|import|copy|restore|load)\b[^\r\n;&|]*\\(?:CurrentControlSet|ControlSet\d{3})\\Services\\",
+        @"\b(?:Set|New|Remove|Rename|Clear|Copy|Move)-Item(?:Property)?\b[^\r\n;|]*\\(?:CurrentControlSet|ControlSet\d{3})\\Services\\",
     ];
 
-    /// <summary>What changes a scheduled task: <c>schtasks</c> with <c>/run</c>, <c>/end</c>, <c>/change</c>, <c>/create</c> or <c>/delete</c>; the task cmdlets that change one. Pinned.</summary>
+    /// <summary>
+    /// What changes a scheduled task: <c>schtasks</c> with <c>/run</c>, <c>/end</c>, <c>/change</c>, <c>/create</c> or <c>/delete</c> (or the
+    /// same with a dash, 2026-10-20); the task cmdlets that change one; and since 2026-10-20 (a review) the Task Scheduler's COM object
+    /// (<c>Schedule.Service</c>) with a member that changes a task, and WMI's <c>MSFT_ScheduledTask</c> with a method call. Pinned.
+    /// </summary>
     public static readonly IReadOnlyList<string> AdminTaskWords =
     [
-        @"\bschtasks(?:\.exe)?\b[^\r\n;&|]*?\s/(?:run|end|change|create|delete)\b",
+        @"\bschtasks(?:\.exe)?\b[^\r\n;&|]*?\s[/-](?:run|end|change|create|delete)\b",
         @"\b(?:Start|Stop|Enable|Disable|Set|Register|Unregister)-ScheduledTask\b",
+        @"\bSchedule\.Service\b[\s\S]{0,4000}?(?:\.(?:Run|RunEx|Stop|RegisterTask|RegisterTaskDefinition|DeleteTask|DeleteFolder|CreateFolder|SetSecurityDescriptor)\s*\(|\.Enabled\s*=)",
+        @"\bInvoke-CimMethod\b[^\r\n]*\bMSFT_ScheduledTask\b",
+        @"\bMSFT_ScheduledTask\b[^\r\n]*\bInvoke-CimMethod\b",
     ];
 
     /// <summary>

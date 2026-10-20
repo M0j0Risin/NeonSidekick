@@ -4475,6 +4475,13 @@ internal sealed partial class SettingsMenu
     {
         ArgumentNullException.ThrowIfNull(question);
         var page = new MenuPage(question, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+        // A question's lines after its first are a caption under the title on the pane, growing as the room allows (2026-10-20, a review: a
+        // service's or task's approval cut its program line at the title row's width); the prompt shows the whole question as its title.
+        if (_pane.Enabled && question.IndexOf('\n', StringComparison.Ordinal) is int newline and > 0)
+        {
+            page = page with { Title = question[..newline], Caption = question[(newline + 1)..], CaptionGrows = true };
+        }
+
         int? picked = close
             ? await PickOnceAsync(page, 0, cancellationToken).ConfigureAwait(false)
             : await PickAsync(page, 0, cancellationToken).ConfigureAwait(false);

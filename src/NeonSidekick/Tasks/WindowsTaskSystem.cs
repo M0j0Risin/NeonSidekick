@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using System.Runtime.Versioning;
+using System.Security.Principal;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.Tasks;
@@ -40,7 +41,7 @@ public sealed class WindowsTaskSystem : ITaskSystem
                 }
 
                 TaskNative.Connect(service, target.Host, user, domain, target.Login?.Password);
-                result = work(new Session(service));
+                result = work(new Session(service, target.Host is null));
             }
             catch (Exception ex)
             {
@@ -63,11 +64,56 @@ public sealed class WindowsTaskSystem : ITaskSystem
         return result;
     }
 
-    private sealed class Session(nint service) : ITaskSession
+    private sealed class Session(nint service, bool local) : ITaskSession
     {
+        private IReadOnlyList<string>? _self;
+
         public string TargetServer => TaskNative.GetString(service, TaskNative.ServiceTargetServer, "ITaskService.TargetServer");
 
         public int HighestVersion => TaskNative.GetInt(service, TaskNative.ServiceHighestVersion, "ITaskService.HighestVersion");
+
+        /// <summary>
+        /// The connected account's forms (2026-10-20, a review): ITaskService's ConnectedDomain\ConnectedUser, the bare name for a local account
+        /// on this PC alone, and the SID —
+        /// this PC's own token's on this PC, else the name looked up here (a remote computer's local account may not be: its SID is then left out,
+        /// and a task naming the account by SID counts as another's, the safe side). Read once per session.
+        /// </summary>
+        public IReadOnlyList<string> Self => _self ??= ReadSelf();
+
+        private IReadOnlyList<string> ReadSelf()
+        {
+            var forms = new List<string>(4);
+            string user = TaskNative.GetString(service, TaskNative.ServiceConnectedUser, "ITaskService.ConnectedUser").Trim();
+            string domain = TaskNative.GetString(service, TaskNative.ServiceConnectedDomain, "ITaskService.ConnectedDomain").Trim();
+            if (user.Length == 0)
+            {
+                return forms;
+            }
+
+            string qualified = domain.Length > 0 ? domain + "\\" + user : user;
+            forms.Add(qualified);
+            if (local && (domain.Length == 0 || string.Equals(domain, Environment.MachineName, StringComparison.OrdinalIgnoreCase)))
+            {
+                forms.Add(user);   // a bare name is this PC's own account here; elsewhere it may be another account of that name
+            }
+            try
+            {
+                if (local && WindowsIdentity.GetCurrent().User is { } own)
+                {
+                    forms.Add(own.Value);
+                }
+                else if (new NTAccount(qualified).Translate(typeof(SecurityIdentifier)) is SecurityIdentifier sid)
+                {
+                    forms.Add(sid.Value);
+                }
+            }
+            catch (SystemException)
+            {
+                // No SID: a task that names this account by its SID counts as another's.
+            }
+
+            return forms;
+        }
 
         public IReadOnlyList<TaskEntry> List(string folder, bool recursive)
         {
@@ -188,6 +234,8 @@ public sealed class WindowsTaskSystem : ITaskSystem
 
             return new TaskDetail(entry, xml, running);
         });
+
+        public TaskEntry Entry(string path) => WithTask(path, task => Entry(task));
 
         public void Run(string path) => WithTask(path, task =>
         {

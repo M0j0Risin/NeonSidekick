@@ -8,6 +8,12 @@ namespace NeonSidekick.Computers;
 public static class ComputerText
 {
     /// <summary>
+    /// The longest program or command line a model's change shows in its question (2026-10-20, a review: the pane cut a long one at its
+    /// width, so the user approved what they never saw). Past it, the model's change is refused; the user's own still asks.
+    /// </summary>
+    public const int MaxShownInQuestion = 600;
+
+    /// <summary>
     /// Names as a refusal lists them, each in single quotes (2026-10-15, the user's report: a model read "the ticked ones are: lab." as
     /// the name <c>lab.</c>, the sentence's full stop and all). Pinned.
     /// </summary>

@@ -74,6 +74,36 @@ public static class UntrustedText
         return bare.Replace(QuoteOpen, "", StringComparison.Ordinal).Replace(QuoteClose, "", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <paramref name="text"/> as one line of a question the user answers (2026-10-20, a review: a task's command padded with spaces, or a
+    /// name holding a newline, hid its tail from the approval): scrubbed, every run of whitespace (a newline and a tab too) one space,
+    /// trimmed. Pure.
+    /// </summary>
+    public static string OneLine(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var built = new StringBuilder(text.Length);
+        bool space = false;
+        foreach (char c in Scrub(text))
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                space = built.Length > 0;
+                continue;
+            }
+
+            if (space)
+            {
+                built.Append(' ');
+                space = false;
+            }
+
+            built.Append(c);
+        }
+
+        return built.ToString();
+    }
+
     /// <summary>The longest single value a tool answer shows (2026-10-15, the admin-tools plan's output caps): a description or a command line.</summary>
     public const int MaxValueChars = 1000;
 

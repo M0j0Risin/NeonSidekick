@@ -222,7 +222,7 @@ internal sealed class ServicesMenu
                 return (null, changed);
             }
 
-            string text = UntrustedText.Unfenced(ServiceRender.Detail(source.Where, read.Value!, redacted: false));
+            string text = UntrustedText.Unfenced(ServiceRender.Detail(source.Where, read.Value!, redacted: false, n => ServiceAccess.Visible(source.Computer, n)));
             var actions = new List<InfoAction> { CopyAction, AskAction };
             var config = source.Computer.Config;
             if (config.ReadWrite && config.InControl(name, NameGlob.NoSeparator) && !read.Value!.Config.IsDriver)
