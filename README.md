@@ -192,11 +192,12 @@ Type `/` to list every command; [COMMANDS.md](docs/COMMANDS.md) has them all, an
 The short version: [INTERFACE.md](docs/INTERFACE.md) has every key, bar and window, and [SETTINGS.md](docs/SETTINGS.md) every setting.
 
 ### The input line
-* **Enter** sends; during a reply it queues the message.
+* **Enter** sends; during a reply it queues the message. **Ctrl+Enter** starts a new line.
 * **Esc** stops a reply; twice on an empty line it opens `/rewind`.
 * **↑/↓** bring back earlier messages.
 * **`/`** lists commands, **`@`** files and folders, **`#`** skills and **`$`** tools.
-* **Ctrl+O** opens or folds tool calls, code and thinking.
+* **A right-click or Alt+V** pastes a copied picture (Windows Terminal keeps Ctrl+V for text; on a Mac, see [What differs](docs/MAC.md#what-differs)).
+* **Ctrl+O** opens or folds tool calls, code, diffs and thinking.
 * **☺** at the line's right end opens an emoji picker (Ctrl+J too, on Windows); the *Emoji picker* setting hides it.
 
 ### Handy shortcuts
@@ -216,10 +217,11 @@ The short version: [INTERFACE.md](docs/INTERFACE.md) has every key, bar and wind
 
 On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help` › Keys and [Keyboard shortcuts](docs/INTERFACE.md#keyboard-shortcuts) list every key.
 
-### Status bar, hints and toolbar
+### The bars
 * **The [hints bar](docs/INTERFACE.md#the-hints-bar)**, under the input line, shows the keys that apply right now.
 * **The [status bar](docs/INTERFACE.md#the-status-bar)** shows the model, the context used and what runs in the background; double-click the model to switch.
 * **The [toolbar](docs/INTERFACE.md#the-toolbar)** has an icon per pane and tool group: click to see what it is, double-click to open it. `/toolbar` hides it.
+* **The [performance bar](docs/INTERFACE.md#the-performance-bar)** shows CPU, RAM, GPU and VRAM once a second; `/perfbar` hides it.
 
 ### Panes
 
