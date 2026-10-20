@@ -13,6 +13,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Fully local:** it can run entirely on your machine, the model and the voice included, and it sends no telemetry.
 * **More than a terminal:** pictures in the transcript, its own windows for photos, video and the web, and your phone can join the same live session.
 * **Advisors:** pair a local model with a frontier one. Your model does the work; the advisor can review its plans and check its steps, or give a second opinion when asked.
+* **No black box:** `/sys` shows the exact system prompt and every tool the model is sent, and the persona and operating rules are files you can edit.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
