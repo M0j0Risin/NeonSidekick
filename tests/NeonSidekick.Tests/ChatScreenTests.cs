@@ -7374,7 +7374,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Profile_Add_CopiesTheSavedSettings_SwitchesAndReconnects()
     {
-        _settings.Update(d => { d.LlmModel = "llama"; d.SttWakePhrase = "computer"; d.ShortcutOffered = true; });
+        _settings.Update(d => { d.LlmModel = "llama"; d.SttWakePhrase = "computer"; d.ShortcutOffered = true; d.WebUiToken = "neon-token"; });
         PushLine("/profile add work");
         PushLine("/exit");
 
@@ -7388,6 +7388,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\"LlmModel\": \"llama\"", File.ReadAllText(Profiles.ProfileFile(_dir, "work")));
         Assert.Null(_settings.Current.ShortcutOffered);   // the new profile is asked for its own shortcut (2026-10-16)
         Assert.True(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, Profiles.DefaultName)).ShortcutOffered);
+        Assert.Equal("", Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).WebUiToken);   // never the source's sign-in token (2026-10-20)
         Assert.Equal(new[] { Profiles.FileName }, ProfileFiles(ProfileDir("work")));   // the default profile here has no memories, persona, operating rules or voice directive to copy
         Assert.True(File.Exists(Path.Combine(ProfileDir("work"), SessionStore.FolderName, SessionStore.FileName)));   // the /exit typed there (Keep message history, 2026-09-25), under db\sessions since 2026-10-10, never copied
         // Startup discovery, then the reconnect after the switch (LLM, TTS and voice).

@@ -14072,6 +14072,7 @@ internal sealed partial class ChatScreen
                     seed.WorkingDirectory = "";
                     seed.ModelAvatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
                     seed.ShortcutOffered = null;   // 2026-10-16: a new profile is offered its own shortcut as the switch below lands on it
+                    seed.WebUiToken = "";          // 2026-10-20, the review: a Web UI token never travels between profiles (Profiles.CopySettings' rule); one is minted when it first serves
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
                         _settings.ProfileDirectory, home, action.Name, Profiles.BasicSidekickFiles);

@@ -17,8 +17,9 @@ namespace NeonSidekick.Settings;
 /// <para><see cref="Current"/> is a snapshot, not the live object. Handing out the live instance
 /// would let a caller change a value without <see cref="Changed"/> ever firing, which is the
 /// failure that looks like the UI ignoring you. <see cref="Update"/> is the only mutation; saving
-/// is debounced and atomic (temp file then <c>File.Move</c>), and the target path is captured when
-/// the save is scheduled: a debounced write for the old profile must never land in the new one.</para>
+/// is debounced and atomic (temp file then <c>File.Move</c>), one write at a time, each taking the loaded data and the loaded
+/// profile's path together when it writes (2026-10-20; captured when the save was scheduled until then): a switch flushes first,
+/// which ends every older debounced save's turn, so a write for the old profile never lands in the new one.</para>
 /// </summary>
 public sealed class AppSettings : IDisposable
 {
@@ -41,6 +42,24 @@ public sealed class AppSettings : IDisposable
 
     private CancellationTokenSource? _pendingSave;
     private bool _disposed;
+
+    /// <summary>
+    /// Bumped under <see cref="_gate"/> by every scheduled save, flush, reload and the dispose (2026-10-20, the review of 827b6e94): a
+    /// debounced save writes only while it is still the latest turn, so an older one never lands after a newer one however the pool
+    /// orders them; the one that took over writes instead.
+    /// </summary>
+    private long _saveTurn;
+
+    /// <summary>
+    /// One write at a time (2026-10-20, the same review): a flush waits for a debounced save already inside its write, so a reset, a
+    /// pull or a switch that follows the flush is never overwritten by an older snapshot finishing late. Each write takes its snapshot
+    /// and path under <see cref="_gate"/> once it holds this, so the file always ends on the last snapshot taken. Never disposed: a
+    /// late save may still wait on it after <see cref="Dispose"/>, and it holds no wait handle.
+    /// </summary>
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
+
+    /// <summary>Awaited inside a write, after the temp file is written and before it moves into place: a test holds a save mid-write with it.</summary>
+    internal Func<Task>? WriteHook { get; set; }
 
     /// <param name="storageDirectory">The home: <c>models</c> and <c>profiles</c> live under it. Created on first save if absent.</param>
     /// <param name="profileOverride">
@@ -247,7 +266,9 @@ public sealed class AppSettings : IDisposable
     ///
     /// <para>The mutation runs under the lock; the event is raised outside it. Raising while
     /// holding a lock runs arbitrary subscriber code with it on the stack, which is the shape
-    /// that makes deadlocks.</para>
+    /// that makes deadlocks. The save is scheduled under the same lock as the mutation (2026-10-20, the review of 827b6e94: two
+    /// threads' updates — the viewer's window place and a menu's flip — scheduled after it in the other order, and the older
+    /// snapshot's save cancelled the newer one's and became the file).</para>
     /// </summary>
     public void Update(Action<AppSettingsData> mutate)
     {
@@ -255,14 +276,33 @@ public sealed class AppSettings : IDisposable
 
         AppSettingsData before;
         AppSettingsData snapshot;
-        string path;
+        CancellationTokenSource? superseded = null;
+        CancellationToken token = default;
+        TimeSpan debounce = default;
+        long turn = 0;
+        bool schedule;
         lock (_gate)
         {
             before = Copy(_data);
             mutate(_data);
             snapshot = Copy(_data);
-            path = Profiles.ProfileFile(StorageDirectory, _profileName);
+            schedule = !_disposed;
+            if (schedule)
+            {
+                superseded = _pendingSave;
+                _pendingSave = new CancellationTokenSource();
+                // The token taken here, under the lock (2026-10-16, the first launch's unobserved ObjectDisposedException): a flush straight
+                // after the update (MarkShortcutOfferedAsync) cancels and disposes the source before the pool runs the save, and the source's
+                // Token getter throws once disposed. A token taken before is only cancelled, which the delay below answers as such.
+                token = _pendingSave.Token;
+                turn = ++_saveTurn;
+                debounce = SaveDebounce;
+            }
         }
+
+        // Cancelled outside the lock (2026-10-20): a cancel runs the superseded delay's continuation inline, and its catch must
+        // never run with the lock on the stack.
+        Retire(superseded);
 
         // Every writer comes through here (the pickers, /tts off, /cwd, a /tools flip), so this is
         // the one place a change is logged: one line per property, none for a value picked again.
@@ -271,8 +311,37 @@ public sealed class AppSettings : IDisposable
             DiagnosticLog.Info(Category, ChangedLogLine(change));
         }
 
-        ScheduleSave(snapshot, path);
+        if (schedule)
+        {
+            // Fire-and-forget, deliberately: a menu submission must not block on the disk. A save superseded by a later edit, a
+            // flush, a reload or the dispose writes nothing (SaveLatestAsync's turn check); the one that superseded it writes.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(debounce, token).ConfigureAwait(false);
+                    await SaveLatestAsync(turn).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Superseded by a later edit, a flush, or shutdown.
+                }
+            });
+        }
+
         RaiseChanged(snapshot);
+    }
+
+    /// <summary>Cancels and disposes a debounce no longer wanted. Called outside <see cref="_gate"/> (2026-10-20, the review of 827b6e94).</summary>
+    private static void Retire(CancellationTokenSource? source)
+    {
+        if (source is null)
+        {
+            return;
+        }
+
+        source.Cancel();
+        source.Dispose();
     }
 
     /// <summary>The log line for one changed property: <c>Changed TtsSpeed: 1 → 1.2</c>.</summary>
@@ -408,16 +477,18 @@ public sealed class AppSettings : IDisposable
     {
         AppSettingsData snapshot;
         string name;
+        CancellationTokenSource? superseded;
         lock (_gate)
         {
-            _pendingSave?.Cancel();
-            _pendingSave?.Dispose();
+            superseded = _pendingSave;
             _pendingSave = null;
+            _saveTurn++;
             name = _profileName;
             _data = Load(Profiles.ProfileFile(StorageDirectory, name));
             snapshot = Copy(_data);
         }
 
+        Retire(superseded);
         DiagnosticLog.Info(Category, $"Reloaded profile \"{name}\" from disk.");
         EnsureProfileDirectories();
         RaiseChanged(snapshot);
@@ -437,62 +508,58 @@ public sealed class AppSettings : IDisposable
         }
     }
 
-    /// <summary>Writes now, skipping the debounce. Called on the way out and before a profile switch.</summary>
+    /// <summary>
+    /// Writes now, skipping the debounce. Called on the way out and before a profile switch, a reset or a copy. Since 2026-10-20 (the
+    /// review of 827b6e94) it waits for a debounced save already inside its write, so nothing older lands after it: a reset that
+    /// followed a flush was undone by a save finishing late.
+    /// </summary>
     public Task FlushAsync()
     {
-        AppSettingsData snapshot;
-        string path;
+        CancellationTokenSource? superseded;
         lock (_gate)
         {
-            _pendingSave?.Cancel();
-            _pendingSave?.Dispose();
+            superseded = _pendingSave;
             _pendingSave = null;
-            snapshot = Copy(_data);
-            path = Profiles.ProfileFile(StorageDirectory, _profileName);
+            _saveTurn++;
         }
 
-        return SaveAsync(snapshot, path);
+        Retire(superseded);
+        return SaveLatestAsync(turn: null);
     }
 
-    private void ScheduleSave(AppSettingsData snapshot, string path)
+    /// <summary>
+    /// One write, under <see cref="_writeGate"/>: the loaded profile's data to the loaded profile's file, both read under
+    /// <see cref="_gate"/> once the write is ours, so a switch can never pair one profile's values with another's file. A debounced
+    /// save passes its <paramref name="turn"/> and writes nothing once another turn has begun (that one writes); a flush passes null
+    /// and always writes.
+    /// </summary>
+    private async Task SaveLatestAsync(long? turn)
     {
-        CancellationToken token;
-        TimeSpan debounce;
-        lock (_gate)
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            if (_disposed)
+            AppSettingsData snapshot;
+            string path;
+            lock (_gate)
             {
-                return;
+                if (turn is { } mine && mine != _saveTurn)
+                {
+                    return;
+                }
+
+                snapshot = Copy(_data);
+                path = Profiles.ProfileFile(StorageDirectory, _profileName);
             }
 
-            _pendingSave?.Cancel();
-            _pendingSave?.Dispose();
-            _pendingSave = new CancellationTokenSource();
-            // The token taken here, under the lock (2026-10-16, the first launch's unobserved ObjectDisposedException): a flush straight
-            // after the update (MarkShortcutOfferedAsync) cancels and disposes the source before the pool runs the save, and the source's
-            // Token getter throws once disposed. A token taken before is only cancelled, which the delay below answers as such.
-            token = _pendingSave.Token;
-            debounce = SaveDebounce;
+            await SaveAsync(snapshot, path).ConfigureAwait(false);
         }
-
-        // Fire-and-forget, deliberately: a menu submission must not block on the disk. The
-        // snapshot and the path are captured at schedule time so a cancelled save cannot
-        // resurrect stale values and a switch cannot redirect an older profile's write.
-        _ = Task.Run(async () =>
+        finally
         {
-            try
-            {
-                await Task.Delay(debounce, token).ConfigureAwait(false);
-                await SaveAsync(snapshot, path).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Superseded by a later edit, a flush, or shutdown.
-            }
-        });
+            _writeGate.Release();
+        }
     }
 
-    private static async Task SaveAsync(AppSettingsData snapshot, string path)
+    private async Task SaveAsync(AppSettingsData snapshot, string path)
     {
         // Temp file then File.Move: a half-written settings file is indistinguishable from a
         // corrupt one on the next launch. The GUID suffix keeps two writers apart.
@@ -502,6 +569,11 @@ public sealed class AppSettings : IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var json = JsonSerializer.Serialize(snapshot, SettingsJsonContext.Default.AppSettingsData);
             await File.WriteAllTextAsync(tempPath, json).ConfigureAwait(false);
+            if (WriteHook is { } hook)
+            {
+                await hook().ConfigureAwait(false);
+            }
+
             File.Move(tempPath, path, overwrite: true);
         }
         catch (Exception ex)
@@ -1019,6 +1091,7 @@ public sealed class AppSettings : IDisposable
 
     public void Dispose()
     {
+        CancellationTokenSource? superseded;
         lock (_gate)
         {
             if (_disposed)
@@ -1027,9 +1100,11 @@ public sealed class AppSettings : IDisposable
             }
 
             _disposed = true;
-            _pendingSave?.Cancel();
-            _pendingSave?.Dispose();
+            superseded = _pendingSave;
             _pendingSave = null;
+            _saveTurn++;
         }
+
+        Retire(superseded);
     }
 }

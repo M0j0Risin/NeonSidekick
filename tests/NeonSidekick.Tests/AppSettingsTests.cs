@@ -1790,6 +1790,85 @@ public class AppSettingsTests : IDisposable
         Assert.Empty(faults);
     }
 
+    /// <summary>
+    /// A reset waits for a debounced save already inside its write (2026-10-20, the review of 827b6e94): the flush before it cancelled
+    /// only a save still in its debounce, so one mid-write moved the pre-reset values back over the reset's file and the reload read them.
+    /// </summary>
+    [Fact]
+    public async Task AReset_WaitsForASaveInsideItsWrite_AndStands()
+    {
+        using var settings = new AppSettings(_dir) { SaveDebounce = TimeSpan.FromMilliseconds(1) };
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int writes = 0;
+        settings.WriteHook = async () =>
+        {
+            if (Interlocked.Increment(ref writes) == 1)
+            {
+                entered.SetResult();
+                await release.Task.ConfigureAwait(false);
+            }
+        };
+
+        settings.Update(d => d.LlmModel = "before-reset");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));   // the debounced save is inside its write
+
+        Task reset = settings.ResetProfileAsync(Profiles.DefaultName, all: true);
+        await Task.Delay(100);
+        Assert.False(reset.IsCompleted);   // the flush waits for the write
+        release.SetResult();
+        await reset.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("", settings.Current.LlmModel);
+        Assert.Equal("", Profiles.ReadProfileFile(settings.FilePath).LlmModel);
+    }
+
+    /// <summary>
+    /// Updates from two threads at once leave the file on the last value (2026-10-20, the review of 827b6e94): the save was scheduled
+    /// after the lock, so the older snapshot's schedule could run second, cancel the newer one's and become the file.
+    /// </summary>
+    [Fact]
+    public async Task UpdatesFromTwoThreads_LeaveTheFileOnTheLastValue()
+    {
+        using var settings = new AppSettings(_dir) { SaveDebounce = TimeSpan.FromMilliseconds(1) };
+        for (int round = 0; round < 20; round++)
+        {
+            using var barrier = new Barrier(2);
+            Task Writer(string value) => Task.Run(() =>
+            {
+                barrier.SignalAndWait();
+                settings.Update(d => d.LlmModel = value);
+            });
+
+            await Task.WhenAll(Writer($"a{round}"), Writer($"b{round}"));
+            string expected = settings.Current.LlmModel;
+            string? onDisk = null;
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    onDisk = Profiles.ReadProfileFile(settings.FilePath).LlmModel;
+                }
+                catch (Exception ex) when (ex is IOException or JsonException)
+                {
+                    onDisk = null;   // read while a save moved the file in
+                }
+
+                if (onDisk == expected)
+                {
+                    break;
+                }
+
+                await Task.Delay(20);
+            }
+
+            Assert.Equal(expected, onDisk);
+            await Task.Delay(50);   // and no older save lands after it
+            Assert.Equal(expected, Profiles.ReadProfileFile(settings.FilePath).LlmModel);
+        }
+    }
+
     [Fact]
     public void Update_LogsOneChangedLinePerProperty_AndNothingForANoOp()
     {
