@@ -138,6 +138,22 @@ public sealed class ConversationHistory
         IsDocument(content) && content.AdditionalProperties?.TryGetValue(DocumentTextKey, out var text) == true ? text as string ?? "" : null;
 
     /// <summary>
+    /// The additional property on the text part a restored session gives an attached PDF (2026-10-20, review): its file's path (empty when
+    /// none was stored), so the rewind leaves that text out of what the user typed and can put the file back on the line. Never on the wire.
+    /// </summary>
+    public const string RestoredDocumentKey = "neon.restoredDocument";
+
+    /// <summary>
+    /// The file of a restored session's attached PDF when <paramref name="content"/> is its text part: tagged <see cref="RestoredDocumentKey"/>,
+    /// or, for a session stored before the tag, a text that opens as <see cref="Pdf.PdfText.AttachedText"/> does (<see cref="Pdf.PdfText.AttachedFrom"/>;
+    /// empty when the path cannot be read from it). Null for any other part.
+    /// </summary>
+    public static string? RestoredDocumentPath(AIContent content) =>
+        content is not TextContent text ? null
+            : text.AdditionalProperties?.TryGetValue(RestoredDocumentKey, out var path) == true ? path as string ?? ""
+            : Pdf.PdfText.AttachedFrom(text.Text);
+
+    /// <summary>
     /// <paramref name="messages"/> with every attached PDF's part as its text (2026-10-14, the PDF plan's phase 3): what an endpoint that takes
     /// no PDF is sent — an OpenAI-compatible server (Microsoft.Extensions.AI's adapter would send a chat-completions <c>file</c> part,
     /// which llama-server refuses), the Claude Code server. A message without one is the same instance; the history is never changed.

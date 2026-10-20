@@ -150,9 +150,13 @@ internal sealed partial class ChatScreen
         sink?.Notice(opened);
         lock (_browserGate)
         {
+            _visitsOpen++;
             if (_visit is { IsCompleted: false })
             {
-                _ = window.BrowseAsync(url);   // the same window, gone to the page; its close is the first visit's to report
+                // The same window, gone to the page; its close is the first visit's to report. Followed all the same, so the staged
+                // PDFs go only when the last open's window has closed: one made just as the window closed opens a new window, and
+                // the first visit's end cleared its copy out from under it (2026-10-20, review).
+                _ = FollowVisitAsync(window, url);
                 return opened;
             }
 
@@ -163,6 +167,39 @@ internal sealed partial class ChatScreen
     }
 
     private readonly Lock _browserGate = new();
+
+    /// <summary>The opens of the Browser window whose visit has not ended yet (under <see cref="_browserGate"/>): the staged PDFs go at the last.</summary>
+    private int _visitsOpen;
+
+    /// <summary>One open's visit ended: the PDFs <c>/view</c> staged go when it was the last (2026-10-14, the PDF plan's phase 4a).</summary>
+    private void VisitEnded()
+    {
+        lock (_browserGate)
+        {
+            if (--_visitsOpen <= 0)
+            {
+                _visitsOpen = 0;
+                PdfView.Clear();
+            }
+        }
+    }
+
+    /// <summary>A second open's visit, awaited only for its end (<see cref="VisitEnded"/>); a failure is the first visit's to report.</summary>
+    private async Task FollowVisitAsync(IBrowserWindow window, Uri? url)
+    {
+        try
+        {
+            await window.BrowseAsync(url).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Debug(WebFetcher.Category, $"A second open of the Browser window ended: {ex.Message}");
+        }
+        finally
+        {
+            VisitEnded();
+        }
+    }
 
     /// <summary>The page the window shows, never a Web UI sign-in link (later on 2026-10-15): the model is never handed the token.</summary>
     private static async Task<(string Url, string? Title)?> CurrentPageNoSignInAsync(IBrowserWindow window) =>
@@ -345,11 +382,29 @@ internal sealed partial class ChatScreen
 
     private async Task BrowseAsync(IBrowserWindow window, Uri? url)
     {
+        BrowserVisit visit;
         try
         {
-            var visit = await window.BrowseAsync(url).ConfigureAwait(false);
-            // The window closed: the PDFs /view staged for it go (2026-10-14, the PDF plan's phase 4a).
-            PdfView.Clear();
+            visit = await window.BrowseAsync(url).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            VisitEnded();
+            _flow.Error(ex.Message);
+            return;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            VisitEnded();
+            DiagnosticLog.Error(WebFetcher.Category, "The Browser window's visit failed.", ex);
+            _flow.Error(ex.Message);
+            return;
+        }
+
+        // The window closed: the PDFs /view staged for it go, unless another open's window still shows one (VisitEnded).
+        VisitEnded();
+        try
+        {
             if (visit.Failure is { } failure)
             {
                 _flow.Error(failure);

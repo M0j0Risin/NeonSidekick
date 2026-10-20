@@ -164,6 +164,31 @@ public sealed class PdfEditTests : IDisposable
     }
 
     [Fact]
+    public async Task Overwrite_WithNoTo_StillNumbers_NeverOverAFileOfThatName()
+    {
+        Pdf("contract.pdf");
+        Pdf("contract-rotated.pdf", "%PDF-1.7 the user's own");
+
+        string result = await _editing.EditAsync(new PdfEditRequest(PdfEditOp.Rotate, ["contract.pdf"], Angle: 90, Overwrite: true), CancellationToken.None);
+
+        Assert.StartsWith("Wrote contract-rotated-2.pdf ", result, StringComparison.Ordinal);
+        Assert.Equal("%PDF-1.7 the user's own", File.ReadAllText(Path.Combine(_root, "contract-rotated.pdf")));
+    }
+
+    [Fact]
+    public async Task ATo_EndingInASlash_IsAFolder_EvenOneNotMadeYet_AndNumbers()
+    {
+        Pdf("report.pdf");
+
+        string first = await _editing.EditAsync(new PdfEditRequest(PdfEditOp.Rotate, ["report.pdf"], Angle: 90, To: "out/"), CancellationToken.None);
+        string second = await _editing.EditAsync(new PdfEditRequest(PdfEditOp.Rotate, ["report.pdf"], Angle: 90, To: "out/"), CancellationToken.None);
+
+        Assert.StartsWith("Wrote " + Path.Combine("out", "report-rotated.pdf") + " ", first, StringComparison.Ordinal);
+        Assert.StartsWith("Wrote " + Path.Combine("out", "report-rotated-2.pdf") + " ", second, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_root, "out", ".pdf")));
+    }
+
+    [Fact]
     public async Task AMerge_TakesThePdfsInOrder()
     {
         Pdf("a.pdf", "%PDF-1.7 a");

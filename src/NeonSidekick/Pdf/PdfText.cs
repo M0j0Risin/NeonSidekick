@@ -236,6 +236,51 @@ public static class PdfText
     /// <summary>An outline cut at its cap. Pinned.</summary>
     public const string OutlineMore = "(more in the PDF's outline)";
 
+    /// <summary>The outline's caps in an answer (gap 91): its lines and its characters, heading included.</summary>
+    public const int MaxOutlineLines = 60;
+
+    public const int MaxOutlineChars = 4_000;
+
+    /// <summary>
+    /// <paramref name="outline"/> appended to <paramref name="text"/> under <see cref="OutlineHeading"/>, held to <see cref="MaxOutlineLines"/>
+    /// and <see cref="MaxOutlineChars"/>, <see cref="OutlineMore"/> where it was cut. The one drawing of it: <c>read_pdf</c> and <c>web_fetch</c>
+    /// each had their own until 2026-10-20 (review: <c>web_fetch</c>'s lacked the character cap).
+    /// </summary>
+    public static void AppendOutline(System.Text.StringBuilder text, IReadOnlyList<Web.PdfOutlineItem> outline)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(outline);
+        int start = text.Length;
+        text.Append(OutlineHeading);
+        int shown = 0;
+        foreach (var item in outline)
+        {
+            string line = OutlineLine(item.Title, item.Level, item.Page);
+            if (shown >= MaxOutlineLines || text.Length - start + line.Length > MaxOutlineChars)
+            {
+                text.Append('\n').Append(OutlineMore);
+                break;
+            }
+
+            text.Append('\n').Append(line);
+            shown++;
+        }
+    }
+
+    /// <summary>
+    /// A page appended to <paramref name="text"/>: its heading (<see cref="PageHeading"/>, a line break before it when the text holds anything),
+    /// then its text when it has any. Shared by <c>web_fetch</c>'s answer and an attached PDF's text (2026-10-20, review).
+    /// </summary>
+    public static void AppendPage(System.Text.StringBuilder text, int page, string? label, ReadOnlySpan<char> pageText)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        text.Append(text.Length > 0 ? "\n" : "").Append(PageHeading(page, label));
+        if (pageText.Length > 0)
+        {
+            text.Append('\n').Append(pageText);
+        }
+    }
+
     /// <summary>Where the pages' pictures went: <c>pictures of pages 1–4 are in the next message</c>, and the pages left out over the cap.</summary>
     public static string PicturesNote(IReadOnlyList<int> drawn, IReadOnlyList<int> leftOut) =>
         (drawn.Count == 1 ? "the picture of page " : "pictures of pages ") + Runs(drawn) + (drawn.Count == 1 ? " is" : " are") + " in the next message"
@@ -294,6 +339,34 @@ public static class PdfText
         return read.Empty ? head : head + "\n" + read.Text + tail;
     }
 
+    /// <summary>
+    /// The path an <see cref="AttachedText"/> names when <paramref name="text"/> opens as one (its first line <c>(the PDF name, attached from
+    /// path: …)</c>), empty when the path cannot be read from it, null for any other text: how a session stored before
+    /// <c>ConversationHistory.RestoredDocumentKey</c> tells an attached PDF's text from what the user typed (2026-10-20, review).
+    /// </summary>
+    public static string? AttachedFrom(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        const string open = "(the PDF ";
+        const string from = ", attached from ";
+        if (!text.StartsWith(open, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        int newline = text.IndexOf('\n', StringComparison.Ordinal);
+        string head = newline < 0 ? text : text[..newline];
+        int at = head.IndexOf(from, StringComparison.Ordinal);
+        if (at < 0 || !head.EndsWith(')'))
+        {
+            return null;
+        }
+
+        int pathStart = at + from.Length;
+        int end = Math.Max(head.LastIndexOf(": its text, ", StringComparison.Ordinal), head.LastIndexOf(": no text could be read", StringComparison.Ordinal));
+        return end > pathStart ? head[pathStart..end] : "";
+    }
+
     /// <summary>The send's spinner while an attached PDF's text is still being read (gap 17). Pinned.</summary>
     public const string ReadingAttached = "Reading the attached PDF";
 
@@ -314,6 +387,10 @@ public static class PdfText
     /// <summary>A PDF over what one request may carry (gaps 18, 51), refused when it is pasted. Pinned.</summary>
     public static string TooBigToAttach(string name, long bytes, long cap) =>
         $"{name} is {Web.WebText.Size(bytes)}; the line's pictures and PDFs may come to {Web.WebText.Size(cap)} (LLM max images (MB)), so it was left as its path";
+
+    /// <summary>A PDF over what the reader takes, pasted for a server sent its text alone (2026-10-20, review). Pinned.</summary>
+    public static string TooBigToAttachAsText(string name, long bytes) =>
+        $"{name} is {Web.WebText.Size(bytes)}; a PDF read for its text may be {Web.WebText.Size(Web.BrowserPdfReader.MaxBytes)} at most, so it was left as its path";
 
     /// <summary>What an attached PDF's text is cut to for a server whose window it would fill (gap 43): the note after the cut. Pinned.</summary>
     public static string AttachedCut(string name) => $"\n(the text of {name} was cut to fit this server's window; read_pdf reads the rest)";

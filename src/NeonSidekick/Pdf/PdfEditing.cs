@@ -62,7 +62,7 @@ public sealed class PdfEditing
         }
 
         string? to = string.IsNullOrWhiteSpace(request.To) ? null : request.To.Trim();
-        bool named = to is not null && !IsFolder(to);
+        bool named = to is not null && !PdfPlan.IntoFolder(to, IsFolder);
         if (named && Target(PdfPlan.WithPdf(to!), request.Overwrite) is { } badTarget)
         {
             return badTarget;
@@ -178,10 +178,11 @@ public sealed class PdfEditing
     }
 
     // The new PDF written: at a named path (over a file only with overwrite), or under the first free made-up name, -2, -3…, which
-    // never replaces anything (image_edit's loop).
+    // never replaces anything (image_edit's loop), overwrite or not: overwrite is for a named to alone (2026-10-20, review: overwrite
+    // with no to wrote over a file already called report-rotated.pdf).
     private WriteResult Write(string target, byte[] bytes, bool named, bool overwrite)
     {
-        if (named || overwrite)
+        if (named)
         {
             return _files.WriteBytes(target, bytes, overwrite);
         }

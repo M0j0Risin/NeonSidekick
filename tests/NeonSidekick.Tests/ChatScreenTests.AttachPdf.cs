@@ -57,6 +57,31 @@ public partial class ChatScreenTests
         Assert.Single(_browser.PdfReads);
     }
 
+    /// <summary>
+    /// A server sent the text alone weighs a PDF by its text, not its bytes (2026-10-20, review: a PDF over the request's byte cap was
+    /// refused as base64 though only its text went out).
+    /// </summary>
+    [Fact]
+    public async Task APdfOverTheByteCap_IsSentAsItsText_ToAServerThatTakesText()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmPictureMegabytes = 1; });
+        _chat.EnqueueText("Read it.");
+        BrowserReads("A short text.");
+        string file = Pdf("big.pdf");
+        var bytes = new byte[2_000_000];
+        bytes.AsSpan().Fill((byte)'x');
+        "%PDF-1.7\n"u8.CopyTo(bytes);
+        File.WriteAllBytes(file, bytes);
+        var input = new ScriptedInput();
+        input.PushPaste(file).Push(Keys.Enter);
+        PushLine(input, "/exit");
+
+        await RunAsync(input);
+
+        var sent = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.Contains("A short text.", ConversationHistory.DocumentText(Assert.Single(sent.Contents.OfType<DataContent>()))!, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task APdfWithNoText_IsRefused_OnAServerThatTakesText_TheDraftKept()
     {

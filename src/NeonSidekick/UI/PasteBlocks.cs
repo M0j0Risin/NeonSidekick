@@ -242,9 +242,11 @@ public sealed partial class PasteBlocks
         ArgumentNullException.ThrowIfNull(document);
         lock (_blocks)
         {
-            // The very attachment, else one of the same file (the send may carry a copy whose text it cut to fit, gap 43).
+            // The very attachment, else the one a copy was made from (the send may carry a copy whose text it cut to fit, gap 43): the
+            // copy shares its bytes, and each attachment read its own. By path until 2026-10-20 (review: the same PDF attached twice and
+            // cut gave both copies the second's number).
             return (_blocks.Find(b => ReferenceEquals(b.Image, document) && b.Image.IsDocument)
-                ?? _blocks.FindLast(b => b.Image is { IsDocument: true } held && held.Path == document.Path))?.Number;
+                ?? _blocks.Find(b => b.Image is { IsDocument: true } held && ReferenceEquals(held.Bytes, document.Bytes)))?.Number;
         }
     }
 
@@ -350,7 +352,9 @@ public sealed partial class PasteBlocks
     [GeneratedRegex(@"\[Image #(\d+), saved as [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
     private static partial Regex SavedLabelPattern();
 
-    [GeneratedRegex(@"\[PDF #(\d+), from ([^\]\r\n]*)\]", RegexOptions.CultureInvariant)]
+    // Up to the first ".pdf]", not the first ']' (2026-10-20, review): an attached PDF's path always ends in .pdf, and a name or folder may
+    // hold a ']' of its own (report [v2].pdf, C:\docs\[old]\a.pdf).
+    [GeneratedRegex(@"\[PDF #(\d+), from ([^\r\n]*?\.pdf)\]", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex SentDocumentPattern();
 
     private char Keep(Block block)

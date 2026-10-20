@@ -194,8 +194,7 @@ public static class PdfPlan
     {
         ArgumentNullException.ThrowIfNull(isFolder);
         string target = (to ?? "").Trim();
-        bool intoFolder = target.Length == 0 || target is "." || target.EndsWith('/') || target.EndsWith('\\') || isFolder(target);
-        if (!intoFolder)
+        if (!IntoFolder(target, isFolder))
         {
             return WithPdf(target);
         }
@@ -222,6 +221,18 @@ public static class PdfPlan
         }
 
         return (folder.Length == 0 ? "" : folder + "/") + file + ".pdf";
+    }
+
+    /// <summary>
+    /// Whether <paramref name="to"/> names a folder to make a name in rather than the file itself: blank, <c>.</c>, a trailing separator
+    /// (a folder not made yet, too) or an existing folder. <see cref="OutputFor"/>'s test, and <c>pdf_edit</c>'s for whether a <c>to</c>
+    /// is named (2026-10-20, review: <c>out/</c> was checked as the file <c>out/.pdf</c>, then written as a named file with no numbering).
+    /// </summary>
+    public static bool IntoFolder(string? to, Func<string, bool> isFolder)
+    {
+        ArgumentNullException.ThrowIfNull(isFolder);
+        string target = (to ?? "").Trim();
+        return target.Length == 0 || target is "." || target.EndsWith('/') || target.EndsWith('\\') || isFolder(target);
     }
 
     /// <summary><paramref name="target"/> ending in <c>.pdf</c>: kept when it does, the extension added when it does not.</summary>

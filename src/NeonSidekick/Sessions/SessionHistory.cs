@@ -60,6 +60,14 @@ public sealed class StoredPart
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Path { get; set; }
+
+    /// <summary>
+    /// A text part that is an attached PDF's text (2026-10-20, review), its file in <see cref="Path"/>: restored tagged
+    /// <see cref="ConversationHistory.RestoredDocumentKey"/>, so the rewind never reads it as what the user typed. Left out while false; an
+    /// older version reads the part as plain text, as it did before.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Document { get; set; }
 }
 
 /// <summary>The document a session row's <c>history_json</c> holds.</summary>
@@ -273,6 +281,10 @@ public static class SessionHistory
         {
             switch (content)
             {
+                // A restored PDF's text stays marked across the saves that follow (the session is written whole at each).
+                case TextContent text when text.AdditionalProperties?.TryGetValue(ConversationHistory.RestoredDocumentKey, out object? from) == true:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = text.Text, Document = true, Path = from as string is { Length: > 0 } path ? path : null });
+                    break;
                 case TextContent text:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = text.Text });
                     break;
@@ -289,9 +301,10 @@ public static class SessionHistory
                     break;
                 // An attached PDF (2026-10-14, the PDF plan's gaps 12 and 50): its text as a text part — never its bytes (the session is
                 // written whole at every save), and a resumed session reads what the PDF said, the session search finds its words. Simpler
-                // than the plan's stub refilled from the file: a restore stays pure, and a moved or changed PDF never matters.
+                // than the plan's stub refilled from the file: a restore stays pure, and a moved or changed PDF never matters. Marked as
+                // a PDF's, its file beside it (2026-10-20, review: restored as plain text, the rewind put it all on the line as typed).
                 case DataContent data when ConversationHistory.DocumentText(data) is { } pdf:
-                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = pdf });
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = pdf, Document = true, Path = ConversationHistory.PicturePath(data) });
                     break;
                 // A PDF page's picture (2026-10-14, the PDF plan's gap 21): a line naming the page, never its bytes — the session is
                 // written whole at every save, and the PDF is still on disk for read_pdf to draw again. No keep switch.
@@ -323,6 +336,9 @@ public static class SessionHistory
         {
             switch (part.Kind)
             {
+                case StoredPart.TextKind when part.Document:
+                    contents.Add(new TextContent(part.Text ?? "") { AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.RestoredDocumentKey] = part.Path ?? "" } });
+                    break;
                 case StoredPart.TextKind:
                     contents.Add(new TextContent(part.Text ?? ""));
                     break;

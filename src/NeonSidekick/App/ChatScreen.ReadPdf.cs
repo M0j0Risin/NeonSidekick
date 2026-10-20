@@ -18,6 +18,18 @@ internal sealed partial class ChatScreen
     /// the watch (<see cref="WaitUnderWatchAsync"/>): ESC stops it, and it is a <see cref="KillScopeKind.Work"/> scope, so the Web UI's Stop
     /// does too (gap 100). The text, whether it was cut, or the error to print (null with no text: stopped, the notice printed).
     /// </summary>
+    /// <summary>
+    /// The display path of the PDF <paramref name="path"/> names in the working directory (its extension and the tolerant header within the
+    /// first KB, <see cref="PdfFile.IsPdfFile"/>: only that much read), or null for anything else: <c>/read</c>'s test before any text read
+    /// (2026-10-20, review).
+    /// </summary>
+    private string? PdfAt(string path) =>
+        PdfFile.IsPdfPath(path) && _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && PdfFile.IsPdfFile(full) ? _files.Relative(full) : null;
+
+    /// <summary>Whether <paramref name="path"/> is a file in the working directory: a file named <c>a.pdf 5</c> is read whole, never as page 5 of <c>a.pdf</c>.</summary>
+    private bool FileAt(string path) =>
+        _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full);
+
     private async Task<(string? Text, bool Cut, string? Error)> PdfAloudAsync(string path, CancellationToken cancellationToken)
     {
         if (PdfReading.Locate(_files, path, out var key, out string display) is { } refused)

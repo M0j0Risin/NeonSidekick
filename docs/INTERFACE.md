@@ -64,7 +64,7 @@ From top to bottom:
 * **A PDF** dropped on the line (or its path pasted) is attached as `[PDF #n report.pdf]`; on a `/command` line it stays a path. Sending waits while its text is read (*Reading the attached PDF*; Esc there keeps the draft).
   * The Anthropic and OpenAI APIs get the PDF itself (Anthropic reads 100 pages at most and warns of a longer one).
   * Other servers get the text of its first 100 pages. A scan or a locked PDF is refused there; text over half the context window is cut, the rest left to `read_pdf`.
-  * The line's pictures and PDFs together may total at most *LLM max images (MB)*. A saved session keeps the PDF's text, not the file.
+  * The line's pictures and PDFs together may total at most *LLM max images (MB)*; a PDF sent as text counts its text (32 MB a file at most). A saved session keeps the PDF's text, not the file.
 * **On a Mac** the paste keys differ (Cmd+V is text only), and Option+Delete deletes a word: [What differs](MAC.md#what-differs).
 
 ### Completion lists

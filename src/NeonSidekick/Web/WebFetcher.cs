@@ -855,26 +855,13 @@ public sealed class WebFetcher
         var sb = new System.Text.StringBuilder();
         if (read.Outline is { Count: > 0 } outline)
         {
-            sb.Append(Pdf.PdfText.OutlineHeading);
-            foreach (var item in outline.Take(Llm.Tools.ReadPdfTool.MaxOutlineLines))
-            {
-                sb.Append('\n').Append(Pdf.PdfText.OutlineLine(item.Title, item.Level, item.Page));
-            }
-
-            if (outline.Count > Llm.Tools.ReadPdfTool.MaxOutlineLines)
-            {
-                sb.Append('\n').Append(Pdf.PdfText.OutlineMore);
-            }
+            Pdf.PdfText.AppendOutline(sb, outline);
         }
 
         foreach (var page in read.Pages)
         {
             string? label = read.Labels is { } labels && page.Number <= labels.Count ? labels[page.Number - 1] : null;
-            sb.Append(sb.Length > 0 ? "\n" : "").Append(Pdf.PdfText.PageHeading(page.Number, label));
-            if (page.Text.Length > 0)
-            {
-                sb.Append('\n').Append(page.Text);
-            }
+            Pdf.PdfText.AppendPage(sb, page.Number, label, page.Text);
         }
 
         if (read.Pages.All(p => p.Text.Length == 0))

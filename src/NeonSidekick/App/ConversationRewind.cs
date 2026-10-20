@@ -83,8 +83,11 @@ public static partial class ConversationRewind
     public static string UserLine(ChatMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
+        // A restored session's attached PDF is a text part of its own, never what the user typed (2026-10-20, review: its whole text
+        // went into the replay's user row and onto the line).
         string text = string.Concat(message.Contents
-            .Where(c => c is TextContent text && !ConversationCompactor.IsTurnProgress(c) && !text.Text.StartsWith(ConversationCompactor.TurnProgressPreamble, StringComparison.Ordinal))
+            .Where(c => c is TextContent text && !ConversationCompactor.IsTurnProgress(c) && !text.Text.StartsWith(ConversationCompactor.TurnProgressPreamble, StringComparison.Ordinal)
+                && ConversationHistory.RestoredDocumentPath(c) is null)
             .Select(c => ((TextContent)c).Text));
         return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : Shell.ShellText.CmdHistoryCommand(text) ?? text;
     }
@@ -103,6 +106,30 @@ public static partial class ConversationRewind
         return message.Contents.OfType<DataContent>().Where(ConversationHistory.IsDocument).ToList();
     }
 
+    /// <summary>
+    /// The files of the attached PDFs <paramref name="message"/> carries, in order: each live part's path (<see cref="Documents"/>), and each
+    /// restored session's PDF text part's (<see cref="ConversationHistory.RestoredDocumentPath"/>; empty when it named none), so a rewind after a
+    /// restore puts the file back on the line too (2026-10-20, review).
+    /// </summary>
+    public static IReadOnlyList<string> DocumentPaths(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var paths = new List<string>();
+        foreach (var content in message.Contents)
+        {
+            if (ConversationHistory.IsDocument(content))
+            {
+                paths.Add(ConversationHistory.PicturePath(content) ?? "");
+            }
+            else if (ConversationHistory.RestoredDocumentPath(content) is { } restored)
+            {
+                paths.Add(restored);
+            }
+        }
+
+        return paths;
+    }
+
     /// <summary>Where <paramref name="text"/> holds an attached PDF's label (<see cref="Pdf.PdfText.DocumentLabel"/>, <c>[PDF #2 report.pdf]</c>), in order.</summary>
     public static IReadOnlyList<(int Start, int Length)> DocumentLabels(string text)
     {
@@ -110,7 +137,8 @@ public static partial class ConversationRewind
         return [.. DocumentLabelPattern().Matches(text).Select(m => (m.Index, m.Length))];
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"\[PDF #\d+ [^\]\r\n]+\]", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    // Up to the first ".pdf]" (2026-10-20, review): a PDF's name may hold a ']' of its own, as PasteBlocks' sent label's pattern.
+    [System.Text.RegularExpressions.GeneratedRegex(@"\[PDF #\d+ [^\r\n]*?\.pdf\]", System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex DocumentLabelPattern();
 
     /// <summary>

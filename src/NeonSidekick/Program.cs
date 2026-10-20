@@ -524,6 +524,10 @@ else if (OperatingSystem.IsMacOSVersionAtLeast(14) && appKit)
     NeonSidekick.Viewer.MacBrowserWindows.Close();   // a backstop: the AppKit host's end closed it while its loop still ran
 }
 
+// The PDFs /view staged go with the run, the window closed (2026-10-20, review: a copy whose visit's own clear never ran stayed in
+// %TEMP% until another run's Sweep).
+NeonSidekick.Viewer.PdfView.Clear();
+
 // A Mac's share mounts (2026-10-11) go with the run: none is left in /Volumes (one NetFS is still making as the process ends aside).
 NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
 

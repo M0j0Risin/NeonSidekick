@@ -5,6 +5,7 @@ using NeonSidekick.Llm;
 using NeonSidekick.Llm.Anthropic;
 using NeonSidekick.Pdf;
 using NeonSidekick.UI;
+using NeonSidekick.Web;
 
 namespace NeonSidekick.App;
 
@@ -25,7 +26,7 @@ internal sealed partial class ChatScreen
     public static long AttachWireCap(int megabytes) => (megabytes > 0 ? megabytes : PictureBudget.DefaultMegabytes) * 1_000_000L;
 
     /// <summary>
-    /// The input line's <see cref="InputLine.DocumentLoader"/>: a dropped or pasted <c>.pdf</c> read (its size against <see cref="AttachWireCap"/>,
+    /// The input line's <see cref="InputLine.DocumentLoader"/>: a dropped or pasted <c>.pdf</c> read (its size against <see cref="AttachWireCap"/> for an endpoint that takes PDFs, else the reader's cap,
     /// its header), and its text's read started in the background through <c>read_pdf</c>'s reader and cache (gap 17), so the line goes on at
     /// once; the send waits for the read (<see cref="ReadyAttachedPdfsAsync"/>). The read is never cancelled: a token deleted from the line
     /// leaves it to finish into the cache, where a <c>read_pdf</c> of the same file finds it (the plan's gap 28 cancelled it; the cache made
@@ -41,8 +42,17 @@ internal sealed partial class ChatScreen
                 return (null, FileText.Missing(full));
             }
 
-            long cap = AttachWireCap(_effective().LlmPictureMegabytes);
-            if ((info.Length + 2) / 3 * 4 > cap)
+            // A server sent the text alone (a local one, the Claude Code server) is held to what the reader takes, not to the
+            // request's byte cap: only the text goes out (2026-10-20, review: a 19 MB PDF was refused as 25 MB of base64 there).
+            // The send weighs the line again for the endpoint it goes to (ReadyAttachedPdfsAsync).
+            if (!TakesPdf())
+            {
+                if (info.Length > BrowserPdfReader.MaxBytes)
+                {
+                    return (null, PdfText.TooBigToAttachAsText(info.Name, info.Length));
+                }
+            }
+            else if (AttachWireCap(_effective().LlmPictureMegabytes) is var cap && (info.Length + 2) / 3 * 4 > cap)
             {
                 return (null, PdfText.TooBigToAttach(info.Name, info.Length, cap * 3 / 4));
             }
@@ -88,11 +98,7 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
-                sb.Append(sb.Length > 0 ? "\n" : "").Append(heading);
-                if (text.Length > 0)
-                {
-                    sb.Append('\n').Append(text.Length > AttachChars ? text[..AttachChars] : text);
-                }
+                PdfText.AppendPage(sb, page, pages.LabelOf(page), text.AsSpan(0, Math.Min(text.Length, AttachChars)));
 
                 read++;
             }
@@ -131,15 +137,15 @@ internal sealed partial class ChatScreen
             }
         }
 
-        long total = images.Sum(i => (i.Bytes.LongLength + 2) / 3 * 4);
+        var baseUrl = _session.Endpoint?.BaseUrl;
+        bool takesPdf = TakesPdf();
+        long total = images.Sum(i => SentBytes(i, takesPdf));
         long cap = AttachWireCap(_effective().LlmPictureMegabytes);
         if (total > cap)
         {
             return (null, PdfText.TooBigToAttach(string.Join(", ", documents.Select(d => Path.GetFileName(d.Path))), total * 3 / 4, cap * 3 / 4));
         }
 
-        var baseUrl = _session.Endpoint?.BaseUrl;
-        bool takesPdf = ApiKeys.IsHostedApi(baseUrl);
         int? window = _session.ContextLength?.Tokens;
         var ready = new List<ImageAttachment>(images.Count);
         foreach (var image in images)
@@ -182,4 +188,16 @@ internal sealed partial class ChatScreen
 
         return (ready, null);
     }
+
+    /// <summary>Whether the chat's endpoint takes a PDF itself (a hosted API); every other one is sent its text (<see cref="PictureBudget.DocumentsAsText"/>).</summary>
+    private bool TakesPdf() => ApiKeys.IsHostedApi(_session.Endpoint?.BaseUrl);
+
+    /// <summary>
+    /// What one attachment weighs on the wire, as <see cref="PictureBudget.WireBytes"/> weighs it: base64 for a picture and for a PDF sent as
+    /// one, the text's bytes for a PDF sent as its text (its read done by the time the send weighs it).
+    /// </summary>
+    private static long SentBytes(ImageAttachment attachment, bool takesPdf) =>
+        !takesPdf && attachment.IsDocument && attachment.DocumentText is { IsCompletedSuccessfully: true } read
+            ? Encoding.UTF8.GetByteCount(read.Result.Text)
+            : (attachment.Bytes.LongLength + 2) / 3 * 4;
 }

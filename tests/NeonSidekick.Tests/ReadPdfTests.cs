@@ -413,4 +413,35 @@ public sealed class ReadPdfTests : IDisposable
 
         Assert.Equal(PdfReading.MaxDocuments, _reading.Held);
     }
+
+    /// <summary>web_fetch's PDF answer draws the outline as read_pdf does, held to its character cap too (2026-10-20, review).</summary>
+    [Fact]
+    public void AWebPdfsOutline_IsHeldToTheCharacterCap()
+    {
+        var outline = Enumerable.Range(1, 50).Select(i => new PdfOutlineItem(new string('t', 200), 1, i)).ToList();
+        var read = new PdfRead(true, "", 1, [new PdfPageRead(1, "body", null, 0, 0)]) { Outline = outline };
+
+        string text = WebFetcher.PdfAnswerText(read);
+
+        string head = text[..text.IndexOf("--- page 1", StringComparison.Ordinal)];
+        Assert.True(head.Length <= PdfText.MaxOutlineChars + PdfText.OutlineMore.Length + 2, head.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Contains(PdfText.OutlineMore, head, StringComparison.Ordinal);
+        Assert.EndsWith("--- page 1 ---\nbody", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADocumentOverTheLimitAlone_IsAnswered_NotKept_AndTheOthersStay()
+    {
+        Pages("one");
+        PutPdf("a.pdf");
+        await Text(("path", "a.pdf"));
+        PutPdf("b.pdf", [.. PdfHead, (byte)'b']);
+        await Text(("path", "b.pdf"));
+
+        Pages(new string('x', (int)PdfReading.MaxChars + 1));
+        PutPdf("huge.pdf", [.. PdfHead, (byte)'h']);
+        Assert.StartsWith("huge.pdf", await Text(("path", "huge.pdf")), StringComparison.Ordinal);
+
+        Assert.Equal(2, _reading.Held);   // a.pdf and b.pdf, not let go for a document that is never kept
+    }
 }

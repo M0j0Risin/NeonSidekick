@@ -152,13 +152,7 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
 
             var document = Keep(key, read);
             var pictures = read.Pages.Where(p => p.Png is not null).ToList();
-            var answer = Answer(document, pictures, read.Detail);
-            if (document.Chars > MaxChars)
-            {
-                Forget(key);   // over the limit alone: answered, not kept (the plan's gap 93)
-            }
-
-            return answer;
+            return Answer(document, pictures, read.Detail);   // a document over MaxChars alone is not held (Keep)
         }
         finally
         {
@@ -234,6 +228,14 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
             }
 
             document.Used = ++_tick;
+            if (document.Chars > MaxChars)
+            {
+                // Over the limit alone: answered, not kept (the plan's gap 93), and taken out before Evict would let every other
+                // document go to make room for it (2026-10-20, review).
+                _documents.Remove(key.Full);
+                return document;
+            }
+
             Evict(key.Full);
             return document;
         }
@@ -252,14 +254,6 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
 
             _documents.Remove(oldest.Key.Full);
             DiagnosticLog.Debug(PdfText.Category, $"read_pdf's cache let {oldest.Key.Full} go ({oldest.Chars.ToString(System.Globalization.CultureInfo.InvariantCulture)} characters).");
-        }
-    }
-
-    private void Forget(PdfDocKey key)
-    {
-        lock (_lock)
-        {
-            _documents.Remove(key.Full);
         }
     }
 

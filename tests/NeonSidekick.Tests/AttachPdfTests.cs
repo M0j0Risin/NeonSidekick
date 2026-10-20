@@ -50,6 +50,30 @@ public sealed class AttachPdfTests
         Assert.Equal("see [PDF #2 report.pdf] and [Image #1]", PasteBlocks.WithoutSavedPaths("see [PDF #2, from docs/report.pdf] and [Image #1, saved as C:\\p\\x.png]"));
     }
 
+    /// <summary>A name or folder holding a ']' keeps its label whole (2026-10-20, review: the labels' patterns stopped at the first ']').</summary>
+    [Fact]
+    public void APdfLabel_WithABracketInItsPath_ReadsBackWhole()
+    {
+        Assert.Equal("see [PDF #1 a.pdf] and [PDF #2 report [v2].pdf]",
+            PasteBlocks.WithoutSavedPaths("see [PDF #1, from docs/[old]/a.pdf] and [PDF #2, from report [v2].pdf]"));
+        string line = "see [PDF #1 a.pdf] and [PDF #2 report [v2].pdf] then";
+        Assert.Equal(["[PDF #1 a.pdf]", "[PDF #2 report [v2].pdf]"], App.ConversationRewind.DocumentLabels(line).Select(l => line.Substring(l.Start, l.Length)));
+    }
+
+    /// <summary>The same PDF attached twice, each sent as a copy (its text cut), keeps each its own number (2026-10-20, review).</summary>
+    [Fact]
+    public void TheSamePdfAttachedTwice_EachCopyKeepsItsNumber()
+    {
+        var pastes = new PasteBlocks();
+        var first = Document() with { Bytes = [.. Bytes] };
+        var second = Document() with { Bytes = [.. Bytes] };
+        pastes.AddDocument(first);
+        pastes.AddDocument(second);
+
+        Assert.Equal(1, pastes.DocumentNumberOf(first with { DocumentText = Task.FromResult(new PdfDocumentText("cut", 1, 1)) }));
+        Assert.Equal(2, pastes.DocumentNumberOf(second with { DocumentText = Task.FromResult(new PdfDocumentText("cut", 1, 1)) }));
+    }
+
     [Fact]
     public void APastedPdfPath_CountsOnlyWhenDocumentsAreTaken()
     {
@@ -122,6 +146,31 @@ public sealed class AttachPdfTests
         Assert.Contains(stored.Parts, p => p.Text!.Contains("--- page 1 ---\nHello", StringComparison.Ordinal));
         var restored = SessionHistory.Restore(stored)!;
         Assert.DoesNotContain(restored.Contents, c => c is DataContent);
+    }
+
+    /// <summary>
+    /// A restored session's PDF text is no part of what the user typed, and its file goes back on the line at a rewind (2026-10-20, review:
+    /// the rewind's user line joined it in, up to 100,000 characters, and the PDF was not put back). A second save keeps the mark; a session
+    /// stored before the mark is read by its text's opening.
+    /// </summary>
+    [Fact]
+    public void ARestoredSessionsPdfText_IsNoPartOfTheUsersLine_AndNamesItsFile()
+    {
+        var message = new ChatMessage(ChatRole.User, [new TextContent("summarize [PDF #1, from " + ReportPath + "]"), ConversationHistory.ImagePart(Document())]);
+
+        var restored = SessionHistory.Restore(SessionHistory.Store(message))!;
+        var again = SessionHistory.Restore(SessionHistory.Store(restored))!;
+        var legacy = new ChatMessage(ChatRole.User, [new TextContent("summarize [PDF #1, from " + ReportPath + "]"), new TextContent(ConversationHistory.DocumentText(ConversationHistory.ImagePart(Document()))!)]);
+
+        foreach (var m in new[] { restored, again, legacy })
+        {
+            Assert.Equal("summarize [PDF #1, from " + ReportPath + "]", App.ConversationRewind.UserLine(m));
+            Assert.Equal([ReportPath], App.ConversationRewind.DocumentPaths(m));
+            Assert.Contains("--- page 1 ---\nHello", m.Text, StringComparison.Ordinal);   // still what the model reads
+        }
+
+        Assert.Null(PdfText.AttachedFrom("(the PDF a thing I typed)"));
+        Assert.Equal("r.pdf", PdfText.AttachedFrom(PdfText.AttachedText("r.pdf", "r.pdf", new PdfDocumentText("", 0, 0, Problem: "no browser"))));
     }
 
     [Fact]

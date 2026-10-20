@@ -206,7 +206,7 @@ internal sealed partial class ChatScreen
 
         // From the Web UI's page (later on 2026-10-14) the text goes to the page's draft: its pictures, PDFs and pasted blocks stay the PC's.
         ToDraft(UI.PasteBlocks.WithoutSavedPaths(ConversationRewind.UserLine(picked)), () => _input.Chat.Load(RewindDraft(picked), prependToCurrent: true));
-        if (FromWebNow && (ConversationRewind.Images(picked).Count > 0 || ConversationRewind.Documents(picked).Count > 0))
+        if (FromWebNow && (ConversationRewind.Images(picked).Count > 0 || ConversationRewind.DocumentPaths(picked).Count > 0))
         {
             _transcript.Notice(WebUi.WebUiText.RewindAttachmentsNotice);
         }
@@ -373,7 +373,7 @@ internal sealed partial class ChatScreen
 
         // An attached PDF's label back as its token (2026-10-14, the PDF plan's gap 49): its file loaded again (the cache answers its text at
         // once); one gone or unreadable leaves the label as text.
-        var documents = ConversationRewind.Documents(picked);
+        var documents = ConversationRewind.DocumentPaths(picked);
         if (documents.Count > 0)
         {
             var withDocuments = new StringBuilder(line.Length);
@@ -383,7 +383,7 @@ internal sealed partial class ChatScreen
             {
                 withDocuments.Append(line, at, start - at);
                 at = start + length;
-                if (nextDocument < documents.Count && ConversationHistory.PicturePath(documents[nextDocument++]) is { } path
+                if (nextDocument < documents.Count && documents[nextDocument++] is { Length: > 0 } path
                     && LoadAttachedPdf(path) is ({ } document, _))
                 {
                     withDocuments.Append(_input.Pastes.AddDocument(document));

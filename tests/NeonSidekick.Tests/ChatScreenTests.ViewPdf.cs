@@ -43,6 +43,40 @@ public partial class ChatScreenTests
         Assert.Empty(_openedFiles);
     }
 
+    /// <summary>
+    /// A second <c>/view</c> while the window is open keeps the first's copy and its own until the window closes, then both go (2026-10-20,
+    /// review: the second open was never followed, so a copy staged as the window closed was cleared under a new window or never cleared).
+    /// </summary>
+    [Fact]
+    public async Task ViewTwoPdfs_InOneVisit_KeepsBothCopies_UntilTheWindowCloses()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        var window = new FakeBrowserWindow { HoldVisit = true };
+        _browserWindow = window;
+        WorkingPdf("a.pdf");
+        WorkingPdf("b.pdf");
+        bool bothWhileOpen = false;
+        StepsWhenIdle(
+            Line("/view a.pdf"),
+            Line("/view b.pdf"),
+            input =>
+            {
+                bothWhileOpen = window.Browses.Count == 2 && window.Browses.All(u => PdfView.StagedFileOf(u!.AbsoluteUri) is not null);
+                window.EndVisit();
+                PushLine(input, "/exit");
+            });
+
+        await RunAsync();
+
+        Assert.True(bothWhileOpen);
+        for (int i = 0; i < 100 && window.Browses.Any(u => PdfView.OriginalOf(u!.AbsoluteUri) is not null); i++)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.All(window.Browses, u => Assert.Null(PdfView.OriginalOf(u!.AbsoluteUri)));
+    }
+
     [Fact]
     public async Task ViewAPdf_GoesToItsOwnProgram_WhenTheWindowCantTakeIt()
     {

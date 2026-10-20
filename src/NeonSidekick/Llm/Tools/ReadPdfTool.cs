@@ -40,10 +40,10 @@ public sealed class ReadPdfTool : FileTool
     /// <summary>The most pages one call reads for its text (the rest are the next call's).</summary>
     public const int PagesPerCall = 40;
 
-    /// <summary>The outline's caps in an answer (gap 91).</summary>
-    public const int MaxOutlineLines = 60;
+    /// <summary>The outline's caps in an answer (gap 91): <see cref="PdfText.AppendOutline"/>'s, <c>web_fetch</c>'s too.</summary>
+    public const int MaxOutlineLines = PdfText.MaxOutlineLines;
 
-    public const int MaxOutlineChars = 4_000;
+    public const int MaxOutlineChars = PdfText.MaxOutlineChars;
 
     private static readonly JsonElement Schema = SchemaFor(shares: false);
     private static readonly JsonElement ShareSchema = SchemaFor(shares: true);
@@ -270,20 +270,7 @@ public sealed class ReadPdfTool : FileTool
         var body = new StringBuilder();
         if (request.Range is null && read.Outline is { Count: > 0 } outline)
         {
-            body.Append(PdfText.OutlineHeading);
-            int shownItems = 0;
-            foreach (var item in outline)
-            {
-                string line = PdfText.OutlineLine(item.Title, item.Level, item.Page);
-                if (shownItems >= MaxOutlineLines || body.Length + line.Length > MaxOutlineChars)
-                {
-                    body.Append('\n').Append(PdfText.OutlineMore);
-                    break;
-                }
-
-                body.Append('\n').Append(line);
-                shownItems++;
-            }
+            PdfText.AppendOutline(body, outline);
         }
 
         var shown = new List<int>();

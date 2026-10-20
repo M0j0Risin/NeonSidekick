@@ -16261,6 +16261,31 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// A PDF over the text read's 8 MB, with junk ahead of its header, goes to the PDF reader (2026-10-20, review: the text read's size cap
+    /// came first and refused it as too big, and a PDF whose first byte was not the header was spoken as raw syntax).
+    /// </summary>
+    [Fact]
+    public async Task Read_ALargePdf_WithJunkBeforeItsHeader_IsReadAsAPdf()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _browser.Executable = OperatingSystem.IsWindows() ? @"C:\Edge\msedge.exe" : "/Applications/Edge";
+        _browser.PdfReadPages.Add(new PdfPageRead(1, "Big manual text.", null, 0, 0));
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        var bytes = new byte[9 * 1024 * 1024];
+        bytes.AsSpan().Fill((byte)'x');
+        "junk\n%PDF-1.7\n"u8.CopyTo(bytes);
+        File.WriteAllBytes(Path.Combine(files, "big.pdf"), bytes);
+        PushLine("/read big.pdf");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("● Big manual text.", output);
+        Assert.Single(_browser.PdfReads);
+    }
+
     /// <summary>A PDF with no browser to read it is an error line, not a "not a text file" (2026-10-14).</summary>
     [Fact]
     public async Task Read_APdfWithoutABrowser_SaysWhatItNeeds()

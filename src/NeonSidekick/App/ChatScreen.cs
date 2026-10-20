@@ -9455,19 +9455,20 @@ internal sealed partial class ChatScreen
             return true;
         }
 
-        // The whole argument as a path first — a file named `notes 5` is read whole — then, when
-        // nothing is there, `<file> <n>`: the head read and the number the start sentence.
-        var read = _files.ReadText(args, null, null);
+        // A PDF (its extension and its header) goes to its reader before anything reads the file as text (2026-10-20, review: the
+        // text read's 8 MB cap refused a 12 MB PDF read_pdf takes, a small one was read whole twice, and one with junk before its
+        // header passed the binary probe and was spoken raw). Then the whole argument as a path first — a file named `notes 5` is
+        // read whole — then, when nothing is there, `<file> <n>`: the head read and the number the start sentence.
         int from = 1;
         string target = args;
-        if (read.Outcome == FileOutcome.Missing && SpeakReading.TrySplitPosition(args, out string head, out int position))
+        string? pdf = PdfAt(args);
+        if (pdf is null && !FileAt(args) && SpeakReading.TrySplitPosition(args, out string pdfHead, out int pdfFrom) && PdfAt(pdfHead) is { } headPdf)
         {
-            read = _files.ReadText(head, null, null);
-            from = position;
-            target = head;
+            (pdf, target, from) = (headPdf, pdfHead, pdfFrom);
         }
 
-        if (read.Outcome == FileOutcome.NotText && PdfFile.IsPdfPath(read.Relative))
+        ReadResult read;
+        if (pdf is not null)
         {
             var (text, cut, error) = await PdfAloudAsync(target, cancellationToken).ConfigureAwait(false);
             if (text is null)
@@ -9480,7 +9481,16 @@ internal sealed partial class ChatScreen
                 return false;
             }
 
-            read = new ReadResult(FileOutcome.Ok, read.Relative, text, 0, 0, 0, cut);
+            read = new ReadResult(FileOutcome.Ok, pdf, text, 0, 0, 0, cut);
+        }
+        else
+        {
+            read = _files.ReadText(args, null, null);
+            if (read.Outcome == FileOutcome.Missing && SpeakReading.TrySplitPosition(args, out string head, out int position))
+            {
+                read = _files.ReadText(head, null, null);
+                from = position;
+            }
         }
 
         if (read.Outcome != FileOutcome.Ok)
