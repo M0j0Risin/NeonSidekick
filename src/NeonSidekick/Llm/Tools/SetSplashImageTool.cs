@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// <c>set_splash_image(path, name?)</c> (2026-09-24, the user's ask: generated "splash / persona art"): copies a
-/// picture from the working directory into the loaded profile's splash folder (<c>splash</c>, <c>images\splash_images</c> since 2026-10-10), which the splash walk reads at
+/// picture from the working directory into the loaded profile's splash folder (<c>images\splash</c>; <c>images\splash_images</c> from 2026-10-10, <c>splash</c> under the profile before), which the splash walk reads at
 /// every show (<see cref="UI.SplashImages.FromDirectory"/>), so "make that my splash" ends with the picture on the next
 /// <c>/splash</c>. The folder is outside the sandbox, which is why this is a tool of its own rather than a
 /// <c>copy</c>: it writes there and nowhere else, never over a picture already there (a number is added to the name).

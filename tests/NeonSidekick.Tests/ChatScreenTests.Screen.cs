@@ -65,7 +65,7 @@ public partial class ChatScreenTests
         Assert.Contains(ScreenText.AllowTitle, output);
         Assert.Contains("Window \"notes.txt - Notepad\" (Notepad): To read the error.", output);
         string result = (string)Assert.Single(Results(_chat.Requests[^1])).Result!;
-        Assert.StartsWith("screenshot of window \"notes.txt - Notepad\" (Notepad) as 640x480, saved as " + Path.Combine(_settings.ProfileImagesDirectory, "screen_images"), result);
+        Assert.StartsWith("screenshot of window \"notes.txt - Notepad\" (Notepad) as 640x480, saved as " + Path.Combine(_settings.ProfileImagesDirectory, "screen"), result);
         Assert.Single(ScreenFiles());
         Assert.Equal(ScreenFiles(), _shotsShown);
         Assert.Contains(_chat.Requests[^1], m => m.Contents.OfType<DataContent>().Any());

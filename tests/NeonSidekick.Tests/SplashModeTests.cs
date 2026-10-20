@@ -54,9 +54,10 @@ public class SplashModeTests
     [Fact]
     public void Describe_IsPinned()
     {
-        Assert.Equal("one picture fills the screen under the banner at startup; ← → step through them", SplashMode.Describe("image"));
-        Assert.Equal("a robot standing above the draft line, watching your mouse and your typing, until your first line", SplashMode.Describe("robot"));
-        Assert.Equal("the banner alone at startup", SplashMode.Describe("off"));
+        // The user's words (2026-10-20).
+        Assert.Equal("a picture fills the transcript pane at startup", SplashMode.Describe("image"));
+        Assert.Equal("an animated robot occupies the transcript pane at startup", SplashMode.Describe("robot"));
+        Assert.Equal("the transcript pane is clear at startup", SplashMode.Describe("off"));
         Assert.Equal("", SplashMode.Describe("other"));
     }
 

@@ -785,6 +785,8 @@ main.youtube { display: flex; flex-direction: column; gap: 12px; }
 .yt-saved { display: flex; flex-direction: column; gap: 8px; }
 .yt-saved-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .yt-caption { flex: 1; min-width: 10em; margin: 0; font-size: 14px; font-weight: normal; color: var(--dim); }
+/* The count line while a video plays (2026-10-20): hidden, its room kept, so the buttons and the list never move. */
+.yt-caption-quiet { visibility: hidden; }
 .yt-save, .yt-clear { min-height: 44px; }
 .yt-filter { width: 100%; min-height: 44px; }
 .yt-note { margin: 0; color: var(--dim); font-size: 14px; }

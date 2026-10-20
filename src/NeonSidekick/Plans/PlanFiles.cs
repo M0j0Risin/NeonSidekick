@@ -27,6 +27,12 @@ public enum PlanPickMode
 
     /// <summary><c>/plan ralph &lt;name&gt;</c>: the plan carried out as a Ralph loop (its confirm and baseline first).</summary>
     Ralph,
+
+    /// <summary>
+    /// <c>/plan edit</c> alone (2026-10-20, the user's ask): the pick opened in its default app, plan mode untouched. The list holds the
+    /// template too, and the picker has no buttons, so nothing in it is opened or run as a plan.
+    /// </summary>
+    Edit,
 }
 
 /// <summary>A pick off <see cref="PlansMenu"/>: the plan and what to do with it.</summary>
@@ -41,6 +47,41 @@ public sealed record PlanPick(PlanListing Plan, PlanPickMode Mode);
 /// </summary>
 public static class PlanFiles
 {
+    /// <summary>
+    /// The example plan <c>/plan template</c> writes (2026-10-20, the user's ask), without <see cref="PlanSlug.Extension"/>: a reserved name, case
+    /// aside as Windows' file system has it. <see cref="List"/> and <see cref="Resolve"/> leave it out unless asked (<c>/plan edit</c>), and no new
+    /// plan takes it (<see cref="Taken"/>), so it is never opened, run or overwritten as a plan.
+    /// </summary>
+    public const string TemplateName = "plan-template";
+
+    /// <summary>The template's relative path, <c>.neon/plans/plan-template.md</c>.</summary>
+    public const string TemplatePath = PlanSlug.Folder + "/" + TemplateName + PlanSlug.Extension;
+
+    /// <summary>The embedded template's resource name (<c>assets/plans/plan-template.md</c>).</summary>
+    public const string TemplateResource = "plans/plan-template.md";
+
+    /// <summary>Whether <paramref name="path"/> (relative or a bare file name) is the template's file.</summary>
+    public static bool IsTemplate(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return string.Equals(Path.GetFileName(path.Replace('\\', '/')), TemplateName + PlanSlug.Extension, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <c>/plan template</c> (2026-10-20): the embedded template written to <see cref="TemplatePath"/>, an existing one overwritten (the
+    /// user's ask). Null when written, else the error sentence.
+    /// </summary>
+    public static string? WriteTemplate(WorkingDirectory files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        var written = files.WriteText(TemplatePath, TemplateText(), overwrite: true);
+        return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, TemplatePath, "write", written.Detail);
+    }
+
+    /// <summary>The template's text, LF line ends whatever the checkout's.</summary>
+    public static string TemplateText() =>
+        App.EmbeddedText.Read(TemplateResource, "The plan template").Replace("\r\n", "\n", StringComparison.Ordinal);
+
     /// <summary>
     /// <paramref name="markdown"/> saved as the session's plan: the first save picks the path (<see cref="PlanSlug"/>
     /// over <paramref name="name"/>, else the title), every later one overwrites it as the next revision, the header
@@ -188,9 +229,10 @@ public static class PlanFiles
     /// <summary>
     /// The relative path of the plan <paramref name="name"/> names — <c>x</c>, <c>x.md</c>, <c>plans/x.md</c> or <c>.neon/plans/x.md</c>, case aside
     /// as the file system has it — when that file exists directly under <see cref="PlanSlug.Folder"/>; null otherwise,
-    /// and for anything with a folder of its own or a way out.
+    /// and for anything with a folder of its own or a way out. The template (<see cref="TemplateName"/>, 2026-10-20) only with
+    /// <paramref name="includeTemplate"/> (<c>/plan edit</c>): it is never opened or run as a plan.
     /// </summary>
-    public static string? Resolve(WorkingDirectory files, string name)
+    public static string? Resolve(WorkingDirectory files, string name, bool includeTemplate = false)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(name);
@@ -216,14 +258,20 @@ public static class PlanFiles
         }
 
         string path = PlanSlug.Folder + "/" + bare + PlanSlug.Extension;
+        if (!includeTemplate && IsTemplate(path))
+        {
+            return null;
+        }
+
         return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? path : null;
     }
 
     /// <summary>
     /// Every <c>.neon/plans/*.md</c>, the most recently updated first (the file's time when its header has none); one that cannot be
     /// read whole is listed as <see cref="PlanListing.Unreadable"/> (2026-10-17), so <c>/plan open</c> names why rather than not finding it.
+    /// The template (<see cref="TemplateName"/>, 2026-10-20) only with <paramref name="includeTemplate"/> (<c>/plan edit</c>'s list).
     /// </summary>
-    public static IReadOnlyList<PlanListing> List(WorkingDirectory files)
+    public static IReadOnlyList<PlanListing> List(WorkingDirectory files, bool includeTemplate = false)
     {
         ArgumentNullException.ThrowIfNull(files);
         if (files.Resolve(PlanSlug.Folder, forWrite: false, out string folder) != FileOutcome.Ok || !Directory.Exists(folder))
@@ -245,6 +293,11 @@ public static class PlanFiles
         foreach (string full in found)
         {
             string path = PlanSlug.Folder + "/" + Path.GetFileName(full);
+            if (!includeTemplate && IsTemplate(path))
+            {
+                continue;
+            }
+
             if (ReadWhole(files, path) is not { } text)
             {
                 listings.Add((new PlanListing(path, Path.GetFileNameWithoutExtension(full), null, 0, 0, null, Unreadable: true), WrittenAt(full)));
@@ -280,7 +333,9 @@ public static class PlanFiles
     private static string? NullIfBlank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
     /// <summary>A plan path is taken by a file or folder of that name, and since 2026-10-18 by its own folder (<see cref="PlanReferences.FolderOf"/>: pictures, a Ralph log) left by a plan whose file went.</summary>
+    /// <remarks>The template's name is always taken (2026-10-20), so a plan titled "Plan template" is <c>plan-template-2</c>.</remarks>
     private static bool Taken(WorkingDirectory files, string path) =>
-        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full)
+        IsTemplate(path)
+        || files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full)
         || (files.Resolve(PlanReferences.FolderOf(path), forWrite: false, out string folder) == FileOutcome.Ok && Directory.Exists(folder));
 }

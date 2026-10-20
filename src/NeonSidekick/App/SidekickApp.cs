@@ -1648,10 +1648,28 @@ public sealed partial class SidekickApp
             command = plan.Active ? ChatScreen.PlanCommand.Detail : ChatScreen.PlanCommand.Enter;
         }
 
+        // /plan edit (2026-10-20): its several words that name no plan are detail or a requirement, as on the screen; else no editor here.
+        if (command == ChatScreen.PlanCommand.Edit && rest.Any(char.IsWhiteSpace) && Plans.PlanFiles.Resolve(files, rest, includeTemplate: true) is null)
+        {
+            command = plan.Active ? ChatScreen.PlanCommand.Detail : ChatScreen.PlanCommand.Enter;
+        }
+
         switch (command)
         {
             case ChatScreen.PlanCommand.List or ChatScreen.PlanCommand.ListChat:
                 await HeadlessListPlansAsync(files).ConfigureAwait(false);
+                return null;
+            case ChatScreen.PlanCommand.Edit or ChatScreen.PlanCommand.ListEdit:
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.EditNeedsScreenError).ConfigureAwait(false);
+                return null;
+            case ChatScreen.PlanCommand.Template:
+                if (Plans.PlanFiles.WriteTemplate(files) is { } failed)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + failed).ConfigureAwait(false);
+                    return null;
+                }
+
+                await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.TemplateWrittenNotice(Plans.PlanFiles.TemplatePath)).ConfigureAwait(false);
                 return null;
             case ChatScreen.PlanCommand.Open:
             {

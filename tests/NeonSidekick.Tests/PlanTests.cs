@@ -9,6 +9,7 @@ using NeonSidekick.Memory;
 using NeonSidekick.Plans;
 using NeonSidekick.Sessions;
 using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -307,8 +308,103 @@ public class PlanTests : IDisposable
     [InlineData("ready", true, "Ready")]
     [InlineData("ready", false, "NotPlanning")]
     [InlineData("ready now please", true, "Detail")]
+    // /plan edit and /plan template (2026-10-20): in or out of plan mode; edit's name is resolved (and fallen back) by the handler.
+    [InlineData("edit", false, "ListEdit")]
+    [InlineData(" EDIT ", true, "ListEdit")]
+    [InlineData("edit my-plan", false, "Edit")]
+    [InlineData("edit my-plan", true, "Edit")]
+    [InlineData("edit the steps to add tests", true, "Edit")]
+    [InlineData("template", false, "Template")]
+    [InlineData("Template", true, "Template")]
+    [InlineData("template for the release notes", false, "Enter")]
+    [InlineData("template for the release notes", true, "Detail")]
     public void ParsePlanArgs_SubcommandsOnlyWhole(string args, bool planning, string expected) =>
         Assert.Equal(expected, ChatScreen.ParsePlanArgs(args, planning).ToString());
+
+    // ── /plan template, the reserved name, /plan's completion (2026-10-20) ──
+
+    [Fact]
+    public void Template_IsWritten_Overwritten_AndFitsTheLoopsRules()
+    {
+        Assert.Null(PlanFiles.WriteTemplate(_files));
+        File.WriteAllText(Path.Combine(_dir, ".neon", "plans", "plan-template.md"), "scribbled over");
+
+        Assert.Null(PlanFiles.WriteTemplate(_files));   // an existing copy replaced (the user's ask)
+
+        string text = Read(PlanFiles.TemplatePath);
+        Assert.Equal(PlanFiles.TemplateText(), text);
+        var header = PlanDocument.TryParse(text);
+        Assert.NotNull(header);
+        Assert.Equal(PlanStatus.Draft, header.Status);
+        Assert.False(string.IsNullOrWhiteSpace(header.Verify));
+        Assert.False(string.IsNullOrWhiteSpace(header.Final));
+        string body = PlanDocument.Body(text);
+        var steps = PlanSteps.Parse(body);
+        Assert.True(steps.Count >= 3);
+        Assert.All(steps, step => Assert.False(string.IsNullOrWhiteSpace(step.DoneWhen)));
+        Assert.Contains(steps, step => step.Children.Count > 0);
+        Assert.Empty(PlanFit.Problems(body, new PlanChecks(header.Verify, header.Final), reviewed: false, RalphText.InlineLimit(128_000 * 4)));
+        Assert.True(text.Length < 20_000);   // PlanSizeLine's ceiling
+    }
+
+    [Fact]
+    public void Template_IsLeftOutOfTheList_AndResolve_UnlessAsked_AndNoNewPlanTakesItsName()
+    {
+        Assert.Null(PlanFiles.WriteTemplate(_files));
+        File.WriteAllText(Path.Combine(_dir, ".neon", "plans", "other.md"), Plan);
+
+        Assert.Equal(["other"], PlanFiles.List(_files).Select(p => p.Name));
+        Assert.Equal(["other", PlanFiles.TemplateName], PlanFiles.List(_files, includeTemplate: true).Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Null(PlanFiles.Resolve(_files, PlanFiles.TemplateName));
+        Assert.Null(PlanFiles.Resolve(_files, "Plan-Template.md"));   // case aside
+        Assert.Equal(PlanFiles.TemplatePath, PlanFiles.Resolve(_files, PlanFiles.TemplateName, includeTemplate: true));
+        Assert.True(PlanFiles.IsTemplate(".neon/plans/PLAN-TEMPLATE.md"));
+        Assert.False(PlanFiles.IsTemplate(".neon/plans/plan-template-2.md"));
+
+        var (saved, error) = PlanFiles.Save(new PlanSession(), _files, _time, "Plan template", Plan, null);
+        Assert.Null(error);
+        Assert.Equal(PlanSlug.Folder + "/plan-template-2.md", saved!.Path);
+    }
+
+    [Fact]
+    public void PlanVerbs_ListOnlyWhatRunsNow()
+    {
+        static IEnumerable<string> Words(ChatScreen.PlanCompletionState state) =>
+            ChatScreen.PlanVerbsFor(ChatScreen.PlanVerbs, state).Select(v => v.Text);
+
+        var nothing = new ChatScreen.PlanCompletionState(Presented: false, DraftReply: false, HasRequirement: true, Web: false);
+        Assert.Equal(["cancel", "open", "edit", "template", "chat", "ready", "show"], Words(nothing));
+
+        var presented = nothing with { Presented = true };
+        Assert.Equal(["approve", "approve --fresh", "approve --ralph", "cancel", "open", "edit", "template", "gaps", "chat", "ready", "show"], Words(presented));
+
+        Assert.Contains("save", Words(nothing with { DraftReply = true }));
+        Assert.DoesNotContain("ready", Words(nothing with { HasRequirement = false }));   // a /plan chat before its first message
+        Assert.DoesNotContain("edit", Words(presented with { Web = true }));                // the page refuses it
+        Assert.Equal(ChatScreen.PlanVerbs.Select(v => v.Text), Words(ChatScreen.PlanCompletionState.Unknown));
+        Assert.Equal(["open", "edit", "template", "chat", "ralph"], ChatScreen.PlanVerbsFor(ChatScreen.PlanVerbsIdle, nothing).Select(v => v.Text));
+    }
+
+    [Fact]
+    public void PlanCompletion_GapsReviewersWaitForAPresentation_AndEditListsTheTemplate_NotOnThePage()
+    {
+        IReadOnlyList<CompletionItem> Items(string argText, bool planning, ChatScreen.PlanCompletionState state) =>
+            ChatScreen.ArgumentItems("/plan", argText, new ChatScreen.ArgumentSources(
+                () => [], "default", [], _ => [], _ => new MentionResult(FileOutcome.Ok, [], false), _ => new MentionResult(FileOutcome.Ok, [], false),
+                Planning: planning,
+                Plans: () => [new CompletionItem("other", "")],
+                PlanState: state,
+                EditPlans: () => [new CompletionItem("other", ""), new CompletionItem(PlanFiles.TemplateName, "")]));
+
+        var nothing = new ChatScreen.PlanCompletionState(false, false, true, false);
+        var presented = nothing with { Presented = true };
+        Assert.Empty(Items("gaps ", planning: true, nothing));
+        Assert.Equal(ChatScreen.PlanGapsReviewers.Select(r => r.Text), Items("gaps ", planning: true, presented).Select(i => i.Text));
+        Assert.DoesNotContain(Items("g", planning: true, nothing), i => i.Text.StartsWith("gaps", StringComparison.Ordinal));
+        Assert.Equal(["edit other", "edit " + PlanFiles.TemplateName], Items("edit ", planning: false, nothing).Select(i => i.Text));
+        Assert.Equal(["open other"], Items("open ", planning: false, nothing).Select(i => i.Text));
+        Assert.Empty(Items("edit ", planning: false, nothing with { Web = true }));
+    }
 
     [Theory]
     [InlineData("", "Ok", null, null, "")]

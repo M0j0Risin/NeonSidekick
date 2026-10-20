@@ -34,7 +34,7 @@ public sealed class SetSplashImageToolTests : IDisposable
     [Fact]
     public void SetSplashImage_CopiesIntoTheSplashFolder_WarnsWhenItIsTheOnlyOne_AndNeverOverwrites()
     {
-        string splash = Path.Combine(_dir, "profile", "images", "splash_images");
+        string splash = Path.Combine(_dir, "profile", "images", "splash");
         File.WriteAllBytes(Path.Combine(_root, "art.bmp"), Picture());
         File.WriteAllText(Path.Combine(_root, "notes.txt"), "hi");
         var tool = new SetSplashImageTool(_files, () => splash);
@@ -53,7 +53,7 @@ public sealed class SetSplashImageToolTests : IDisposable
     [Fact]
     public void SetSplashImage_UnderTheRobotSplash_SaysThePicturesWaitForImage()
     {
-        string splash = Path.Combine(_dir, "profile", "images", "splash_images");
+        string splash = Path.Combine(_dir, "profile", "images", "splash");
         File.WriteAllBytes(Path.Combine(_root, "art.bmp"), Picture());
         bool robot = true;
         var tool = new SetSplashImageTool(_files, () => splash, robotSplash: () => robot);
@@ -65,7 +65,7 @@ public sealed class SetSplashImageToolTests : IDisposable
 
     /// <summary>
     /// With the profile's images folder (2026-10-10, when the splash folder moved under it): a generated picture is taken by its full
-    /// path and copied into splash_images; a picture already there is refused (the copy would land beside itself); a full path
+    /// path and copied into splash; a picture already there is refused (the copy would land beside itself); a full path
     /// elsewhere outside the working directory is still refused; the description and the schema name the folder.
     /// </summary>
     [Fact]
@@ -74,7 +74,7 @@ public sealed class SetSplashImageToolTests : IDisposable
         string imagesRoot = Path.Combine(_dir, "images");
         var images = new WorkingDirectory(() => imagesRoot, new ManualTimeProvider(), WorkingDirectoryOptions.Images);
         string splash = Path.Combine(imagesRoot, NeonSidekick.UI.SplashImages.ProfileFolderName);
-        string made = Path.Combine(imagesRoot, "comfy_images", "pony-1.bmp");
+        string made = Path.Combine(imagesRoot, "comfy", "pony-1.bmp");
         Directory.CreateDirectory(Path.GetDirectoryName(made)!);
         File.WriteAllBytes(made, Picture());
         string outside = Path.Combine(_dir, "elsewhere.bmp");

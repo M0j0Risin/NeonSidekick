@@ -26,7 +26,7 @@ public partial class ToolsMenuTests
         var data = new AppSettingsData();
         Assert.Equal(SettingsMenu.FirstCameraLabel, SettingsMenu.FieldValue(SettingsField.CameraDevice, data, _settings.ProfileDirectory));
         Assert.Equal("8%", SettingsMenu.FieldValue(SettingsField.CameraWatchThreshold, data, _settings.ProfileDirectory));
-        Assert.Equal("camera_images", SettingsMenu.FieldValue(SettingsField.CameraOutputFolder, data, _settings.ProfileDirectory));
+        Assert.Equal("camera", SettingsMenu.FieldValue(SettingsField.CameraOutputFolder, data, _settings.ProfileDirectory));
         Assert.Equal(SettingsMenu.CameraOutputHereLabel, SettingsMenu.FieldValue(SettingsField.CameraOutputFolder, new AppSettingsData { CameraOutputFolder = "" }, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatCamera, data, _settings.ProfileDirectory));
         Assert.Equal("Botchat camera", SettingsMenu.FieldName(SettingsField.BotChatCamera));
@@ -98,7 +98,7 @@ public partial class ToolsMenuTests
         Push([.. Enumerable.Repeat(Keys.Backspace, 20)]);
         Type("../elsewhere");                      // refused: it climbs out
         Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 20)]);
-        Type("comfy_images");                      // the ComfyUI folder is fine
+        Type("comfy");                             // the ComfyUI folder is fine
         Push([Keys.Enter, .. Enumerable.Repeat(Keys.Backspace, 20)]);
         Push(Keys.Enter);                          // empty: the working directory
         Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
@@ -106,8 +106,8 @@ public partial class ToolsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal("", _settings.Current.CameraOutputFolder);
-        Assert.Contains("Camera output folder " + SettingsMenu.CameraOutputFolderError + "; keeping camera_images.", Output);
-        Assert.Contains("  · Camera output folder: comfy_images", Output);
+        Assert.Contains("Camera output folder " + SettingsMenu.CameraOutputFolderError + "; keeping camera.", Output);
+        Assert.Contains("  · Camera output folder: comfy", Output);
         pane.Dispose();
     }
 

@@ -26,6 +26,21 @@ public static class PlanText
     public const string OpenWord = "open";
     public const string SaveWord = "save";
 
+    /// <summary>
+    /// <c>/plan edit [name]</c> and <c>/plan template</c> (2026-10-20, the user's ask): a plan file opened in its default app with plan mode
+    /// untouched (alone, the plans picker whose pick is opened so), and the example plan written to <see cref="PlanFiles.TemplatePath"/>
+    /// (alone only; with words after it, a requirement or detail as before). Both in or out of plan mode.
+    /// </summary>
+    public const string EditWord = "edit";
+    public const string TemplateWord = "template";
+
+    /// <summary><c>/plan template</c>'s notice (2026-10-20): where it went and the way on, since the template itself is never opened or run.</summary>
+    public static string TemplateWrittenNotice(string path) =>
+        $"{Glyph} Wrote {path}: copy it to a new name, fill it in, then /plan open or /plan ralph it; /plan edit {PlanFiles.TemplateName} opens it.";
+
+    /// <summary><c>/plan edit</c> headless or from the Web UI's page (2026-10-20): an editor opens on the PC's screen only.</summary>
+    public const string EditNeedsScreenError = "/plan edit opens the file in an editor on the PC's screen; it needs the screen";
+
     /// <summary><c>/plan approve --fresh</c>: the conversation cleared before the plan is carried out, the plan's text sent with the message.</summary>
     public const string FreshSwitch = "--fresh";
 
@@ -73,7 +88,7 @@ public static class PlanText
     public const string NeedsToolsError = "Plan mode needs the model's tools: switch LLM offer tools on (/settings) and try again";
     public const string NothingPresentedError = "No plan has been presented yet: ask for it (\"present the plan\") and approve it on the pane, or /plan cancel";
     public static string PlanUnreadableError(string path) => $"The plan file {path} could not be read; plan mode stays on — present it again, or /plan cancel";
-    public static string NoSuchPlanError(string name) => $"No plan named '{name}' under {PlanSlug.Folder}/ — /plan open lists them";
+    public static string NoSuchPlanError(string name, string verb = OpenWord) => $"No plan named '{name}' under {PlanSlug.Folder}/ — /plan {verb} lists them";
     public const string NoPlansNotice = Glyph + " No plans yet under " + PlanSlug.Folder + "/.";
     public const string NothingToSaveError = "No reply to save as the plan: ask the model for the plan first";
     public const string NotPlanningError ="Plan mode is not on: /plan <what you want done> starts it";
@@ -231,6 +246,8 @@ public static class PlanText
         {
             PlanPickMode.Talk => "Enter = talk · o = open · " + ralph + UI.MenuFilter.TypeOrShiftAndCloseKeys,
             PlanPickMode.Ralph => "Enter = Ralph loop · o = open · c = talk · " + UI.MenuFilter.TypeOrShiftAndCloseKeys,
+            // Bare /plan edit (2026-10-20): Enter alone, no buttons, so the template it lists is never opened or run as a plan.
+            PlanPickMode.Edit => "Enter = edit in its app · " + UI.MenuFilter.TypeOrShiftAndCloseKeys,
             _ => "Enter = open · c = talk · " + ralph + UI.MenuFilter.TypeOrShiftAndCloseKeys,
         };
     }

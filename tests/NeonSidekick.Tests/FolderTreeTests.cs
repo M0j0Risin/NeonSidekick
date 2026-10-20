@@ -354,7 +354,7 @@ public class FolderTreeTests
 
     /// <summary>
     /// Two shortcuts (2026-09-24): profile then images (splash until 2026-10-10, when the splash folder moved under images as
-    /// splash_images), each behind its own glyph; a path in images opens under the images row, not under the drive.
+    /// splash), each behind its own glyph; a path in images opens under the images row, not under the drive.
     /// </summary>
     [Fact]
     public void TwoShortcuts_EachDrawItsOwnGlyph_AndThePathUnderTheSecond_OpensThere()
@@ -366,7 +366,7 @@ public class FolderTreeTests
             .Add(P(C, "Users", "alice", ".neonsidekick"), "profiles")
             .Add(P(C, "Users", "alice", ".neonsidekick", "profiles"), "default")
             .Add(profileDir, "files", "images")
-            .Add(images, "splash_images");
+            .Add(images, "splash");
         var tree = new FolderTree(folders,
             [new FolderShortcut(FolderText.ProfileLabel, files, FolderText.ShortcutGlyph), new FolderShortcut(FolderText.ImagesLabel, images, FolderText.ImagesGlyph)]);
 
@@ -375,8 +375,8 @@ public class FolderTreeTests
         Assert.Equal(FolderText.CollapsedGlyph + " ▣ images", FolderText.RowMarkup(tree.Visible[1]));
         Assert.Null(tree.Visible[2].ShortcutGlyph);
 
-        Assert.Equal(2, tree.ExpandTo(P(images, "splash_images")));
-        Assert.Equal(["profile", "images", "splash_images", .. Roots], Names(tree));
+        Assert.Equal(2, tree.ExpandTo(P(images, "splash")));
+        Assert.Equal(["profile", "images", "splash", .. Roots], Names(tree));
         Assert.Equal(1, tree.RootOf(2));
     }
 

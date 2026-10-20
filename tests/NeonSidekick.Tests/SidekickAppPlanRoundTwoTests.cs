@@ -29,6 +29,21 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanTemplate_WritesIt_PlanEditNeedsTheScreen_AndTheListLeavesTheTemplateOut()
+    {
+        // 2026-10-20: /plan template headless writes the example; /plan edit is an editor on the PC; the template is never a listed plan.
+        ServerOn1234("llama");
+
+        string output = await Headless("/plan template\n/plan edit\n/plan edit plan-template\n/plan open\n");
+
+        Assert.Equal(PlanFiles.TemplateText(), File.ReadAllText(Path.Combine(HeadlessPlansFolder, "plan-template.md")));
+        Assert.Contains("[notice] " + PlanText.TemplateWrittenNotice(PlanFiles.TemplatePath), output);
+        Assert.Equal(2, output.Split("Neon: [error] " + PlanText.EditNeedsScreenError).Length - 1);
+        Assert.Contains("[notice] " + PlanText.NoPlansNotice, output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
     public async Task Headless_Plan_OpenChat_SendsNothing_TalksIt_AndAloneLists()
     {
         // 2026-10-18: /plan open <name> --chat headless, the screen's words; the next line talks it through; --chat alone lists.

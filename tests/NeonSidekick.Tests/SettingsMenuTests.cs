@@ -1320,9 +1320,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Welcome splash", SettingsMenu.FieldName(SettingsField.WelcomeSplash));
         Assert.Equal("image", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, data, _settings.ProfileDirectory));
         Assert.Equal("robot", SettingsMenu.FieldValue(SettingsField.WelcomeSplash, new AppSettingsData { WelcomeSplashMode = "robot" }, _settings.ProfileDirectory));
-        Assert.Equal("image [#9A8BB8]one picture fills the screen under the banner at startup; ← → step through them[/]", SettingsMenu.WelcomeSplashModeLabel("image"));
-        Assert.Equal("robot [#9A8BB8]a robot standing above the draft line, watching your mouse and your typing, until your first line[/]", SettingsMenu.WelcomeSplashModeLabel("robot"));
-        Assert.Equal("off   [#9A8BB8]the banner alone at startup[/]", SettingsMenu.WelcomeSplashModeLabel("off"));
+        // The padding and the dim hint; the hints' words are SplashModeTests' to pin.
+        Assert.Equal("image [#9A8BB8]" + SplashMode.Describe("image") + "[/]", SettingsMenu.WelcomeSplashModeLabel("image"));
+        Assert.Equal("robot [#9A8BB8]" + SplashMode.Describe("robot") + "[/]", SettingsMenu.WelcomeSplashModeLabel("robot"));
+        Assert.Equal("off   [#9A8BB8]" + SplashMode.Describe("off") + "[/]", SettingsMenu.WelcomeSplashModeLabel("off"));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.WelcomeSplash) || SettingsMenu.IsLlmField(SettingsField.WelcomeSplash) || SettingsMenu.IsTtsField(SettingsField.WelcomeSplash) || SettingsMenu.IsVoiceField(SettingsField.WelcomeSplash));
         // Menus max height (2026-10-01, the user's ask and name): a picker of three heights, full-screen by default (three-quarters until later that day), no reconnect.
         Assert.False(SettingsMenu.IsToggle(SettingsField.MenuMaxHeight));
@@ -4780,7 +4781,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("robot", _settings.Current.WelcomeSplashMode);
         Assert.Contains(Breadcrumb("Welcome splash"), Output);
         Assert.Contains("  · Welcome splash: robot", Output);
-        Assert.Contains("the banner alone at startup", Output);
+        Assert.Contains(SplashMode.Describe("off"), Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 

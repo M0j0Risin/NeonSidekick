@@ -117,11 +117,13 @@ public static class SplashImages
 
     /// <summary>
     /// The folder whose pictures replace the embedded set (later on 2026-09-19, the user's ask): <c>splash</c> under the loaded
-    /// profile's directory until 2026-10-10, <c>splash_images</c> under its images folder since (the user's call: every picture
+    /// profile's directory until 2026-10-10, <c>splash_images</c> under its images folder from then (the user's call: every picture
     /// folder under <c>images</c>, the camera's, the screen's, ComfyUI's and the pasted ones' shape; a fixed name, no setting; no
-    /// migration — an old <c>splash</c> folder is left as it is and no longer read).
+    /// migration — an old <c>splash</c> folder is left as it is and no longer read), and <c>splash</c> under it since 2026-10-20 (the
+    /// user's call, with the four settings' defaults: under <c>images</c> the suffix said nothing; no migration again — an
+    /// <c>images\splash_images</c> folder is no longer read).
     /// </summary>
-    public const string ProfileFolderName = "splash_images";
+    public const string ProfileFolderName = "splash";
 
     /// <summary>
     /// The profile's own splash (later on 2026-09-19): the files under <paramref name="directory"/>

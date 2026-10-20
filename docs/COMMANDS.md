@@ -41,7 +41,7 @@ Elsewhere:
 | `/new` | Starts a new conversation, keeping the screen. |
 | `/clear` | Starts a new conversation and clears the screen. |
 | `/splash` | Starts a new conversation and shows the splash screen. |
-| `/splash view`, `/splash thumbs` | The picture viewer or thumbnail browser on the profile's `images\splash_images` folder; while it's empty, the built-in pictures show. |
+| `/splash view`, `/splash thumbs` | The picture viewer or thumbnail browser on the profile's `images\splash` folder; while it's empty, the built-in pictures show. |
 | `/splash purge` | Deletes every splash picture of the profile, after a yes, per *File deletes to Recycle bin*; the built-in pictures show again. |
 | `/compact [<focus>]` | Shrinks the context (*LLM compact mode*); a focus tells the summary what to keep. |
 | `/rewind [<n>]` | Goes back to an earlier message after a yes: it and all after it leave the conversation and stored session, its text back on the input row. What tools changed stays. |
@@ -298,6 +298,8 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
 | `/plan open <name>` | Picks a plan up again; approving runs only the unticked steps. |
 | `/plan open <name> --chat`, `/plan open [--chat]` | Picks a plan up to talk it through (nothing sent); with no name, lists the plans to open, talk through or run as a Ralph loop ([keys](INTERFACE.md#pane-keys)). |
+| `/plan edit [<name>]` | Opens a plan file in its default app to change it by hand; plan mode is left as it is. Alone, lists the plans and the template to pick from. At the PC only. |
+| `/plan template` | Writes an example plan in the Ralph loop's shape to `.neon/plans/plan-template.md`, replacing an older copy. Copy it to a new name to use it. |
 | `/plan ralph [<name>] [passes]` | Runs a plan as a Ralph loop, a step a pass, each checked before it stands; alone, it resumes a paused loop, else lists the plans. See [Ralph loop](#ralph-loop). |
 | `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
 | `/code-audit open [<name>]` | Lists the reports, or shows one. |
@@ -319,7 +321,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Tools:** only read-only ones (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
   * With `neon_advisor` offered, the model consults the relevant [advisors](#advisor) first.
   * With the web tools, it checks the APIs and versions the plan depends on, and names its sources.
-* **The file:** `.neon/plans/<name>.md` in the working directory; 📝 shows while planning. Pictures in the conversation are saved beside it (`<name>/ref-1.png`…, under `## References`).
+* **The file:** `.neon/plans/<name>.md` in the working directory; 📝 shows while planning. Pictures in the conversation are saved beside it (`<name>/ref-1.png`…, under `## References`). `plan-template.md` there is `/plan template`'s example, never opened or run as a plan.
   * A run sends them with its first message when the model can see pictures (a Ralph pass, the ones its step names).
 * **Steps:** each is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check, with a `Done when:` line (a command where one can tell). The plan stays under 20,000 characters.
   * Its header may carry a `verify:` command (run after each Ralph step) and a `final:` one (run once at the end).

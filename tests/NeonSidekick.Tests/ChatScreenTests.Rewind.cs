@@ -153,11 +153,11 @@ public partial class ChatScreenTests
         using var store = OpenSessions();
         long id = store.Begin("look", "llama")!.Value;
         var history = new ConversationHistory("");
-        history.AddUser(NeonSidekick.Comfy.ComfyText.ImagineNote("generated 1 picture") + "\n\nlook", [new ImageAttachment("comfy_images\\pony-1.png", png, ImageFile.Png, 4, 4)]);
+        history.AddUser(NeonSidekick.Comfy.ComfyText.ImagineNote("generated 1 picture") + "\n\nlook", [new ImageAttachment("comfy\\pony-1.png", png, ImageFile.Png, 4, 4)]);
         history.AddAssistant("A pony.");
         ConversationHistory.SetTurnOrdinal(history.LastTurnStart()!, store.AppendTurn(id, "look", "A pony.", 0, [], [], 0, 1, 1, false)!.Value);
         history.AddUser("draw a dog");
-        history.AddToolImages([new ImageAttachment("comfy_images\\pony-2.png", png, ImageFile.Png, 4, 4)], NeonSidekick.Llm.Tools.GenerateImageTool.ToolName);
+        history.AddToolImages([new ImageAttachment("comfy\\pony-2.png", png, ImageFile.Png, 4, 4)], NeonSidekick.Llm.Tools.GenerateImageTool.ToolName);
         history.AddAssistant("Here is a dog.");
         ConversationHistory.SetTurnOrdinal(history.LastTurnStart()!, store.AppendTurn(id, "draw a dog", "Here is a dog.", 1, ["generate_image"], [], 0, 1, 1, false)!.Value);
         store.SaveHistory(id, SessionHistory.ToJson(history.Messages));

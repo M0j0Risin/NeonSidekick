@@ -11,7 +11,7 @@ public sealed record ScreenShot(ImageAttachment Image, string RelativePath, stri
 /// Taking a screenshot (2026-10-04, <see cref="CameraCapture"/>'s twin): the target resolved against the screen as it is now, the
 /// pixels captured off the calling thread (a window that stopped answering <c>PrintWindow</c> cannot hang the turn: the wait
 /// gives up after <see cref="Timeout"/>), encoded as JPEG at <see cref="ImageFile.MaxSide"/> at most, saved into the working
-/// directory's <c>Screen capture output folder</c> (<c>screen_images</c> by default) as <c>yyyyMMdd-HHmmss.jpg</c> (a <c>-2</c>,
+/// directory's <c>Screen capture output folder</c> (<c>screen</c> by default) as <c>yyyyMMdd-HHmmss.jpg</c> (a <c>-2</c>,
 /// <c>-3</c>… on a clash), the sandbox's own write. The attachment is marked <see cref="ImageAttachment.Screen"/>: a stored session
 /// keeps a line naming it unless <c>Screen capture keep in sessions</c> is on, since a screenshot can hold anything that was
 /// on the screen.

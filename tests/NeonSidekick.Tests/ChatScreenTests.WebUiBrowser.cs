@@ -185,4 +185,34 @@ public partial class ChatScreenTests
         Assert.StartsWith("http://localhost:", Assert.Single(_openedUrls), StringComparison.Ordinal);   // the tab's host
         Assert.Contains("/signin?once=", _openedUrls[0], StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task AQrCodeRow_OpensTheTabsHost_ABlankOrMixedLineNothing()
+    {
+        // 2026-10-20, the user's ask: a double-click anywhere on the QR code opens the link, as one on the link does.
+        _webUiHost = _ => new RecordingHost();
+        _settings.Update(d => { d.TtsOutput = false; d.WebUi = true; d.WebUiReach = "local"; });
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        string link = "";
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Char(WebUiText.CopyKey), Keys.Escape);
+            },
+            i =>
+            {
+                link = Assert.Single(_copied);
+                _running!.OpenLinkLine(link, "   ", _running.FlowForTests);                                  // blank: nothing
+                _running.OpenLinkLine(link, new string(QrView.Cell, 20) + " x", _running.FlowForTests);   // not all cells: nothing
+                _running.OpenLinkLine(link, "  " + new string(QrView.Cell, 41) + "  ", _running.FlowForTests);   // a row of the code: opened
+                WaitUntil(() => _openedUrls.Count == 1);
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.StartsWith("http://localhost:", Assert.Single(_openedUrls), StringComparison.Ordinal);
+    }
 }

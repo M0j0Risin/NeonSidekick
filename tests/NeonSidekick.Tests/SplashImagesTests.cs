@@ -45,7 +45,7 @@ public class SplashImagesTests
             Assert.Equal((6, 3), (a.Width, a.Height));
             Assert.Null(source.Load("broken.png"));   // the codecs refuse it: nothing drawn, never a throw
             Assert.Null(source.Load("missing.bmp"));
-            Assert.Equal("splash_images", SplashImages.ProfileFolderName);   // "splash" under the profile until 2026-10-10
+            Assert.Equal("splash", SplashImages.ProfileFolderName);   // under the profile until 2026-10-10, "splash_images" under images until 2026-10-20
             Assert.Equal("Splash: 1 picture from " + dir, SplashImages.FolderLogLine(1, dir));
             Assert.Equal("Splash: 3 pictures from " + dir, SplashImages.FolderLogLine(3, dir));
             Assert.Equal(dir, source.Directory);   // the folder the names are files in: what Delete Delete removes from (2026-09-24)

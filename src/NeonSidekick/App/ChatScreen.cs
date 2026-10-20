@@ -4846,7 +4846,7 @@ internal sealed partial class ChatScreen
         Func<string, MentionResult>? MachineFolders = null, Func<IReadOnlyList<CompletionItem>>? Advisors = null, Func<string, IReadOnlyList<CompletionItem>>? Shopping = null,
         Func<string, IReadOnlyList<CompletionItem>>? EventLog = null, Func<string, IReadOnlyList<CompletionItem>>? Net = null, Func<string, IReadOnlyList<CompletionItem>>? Services = null,
         Func<string, IReadOnlyList<CompletionItem>>? Tasks = null, Func<string, IReadOnlyList<CompletionItem>>? Ad = null,
-        Func<IReadOnlyList<CompletionItem>>? Audits = null);
+        Func<IReadOnlyList<CompletionItem>>? Audits = null, PlanCompletionState? PlanState = null, Func<IReadOnlyList<CompletionItem>>? EditPlans = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5428,15 +5428,26 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches(ralphPlans().Select(p => new CompletionItem(ralphHead + p.Text, p.Note)).ToList(), argText);
                 }
 
-                // /plan gaps <reviewer> (2026-10-13): the three words while planning.
+                // /plan edit <name> (2026-10-20): the plans and the template, in or out of plan mode; none on the Web UI, which refuses it.
+                var planState = sources.PlanState ?? PlanCompletionState.Unknown;
+                string editHead = PlanText.EditWord + " ";
+                if (argText.StartsWith(editHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    return !planState.Web && sources.EditPlans is { } editPlans
+                        ? MentionCompleter.Matches(editPlans().Select(p => new CompletionItem(editHead + p.Text, p.Note)).ToList(), argText)
+                        : [];
+                }
+
+                // /plan gaps <reviewer> (2026-10-13): the three words while planning, once a plan is presented (2026-10-20).
                 string gapsHead = PlanText.GapsWord + " ";
                 if (sources.Planning && argText.StartsWith(gapsHead, StringComparison.OrdinalIgnoreCase))
                 {
-                    return MentionCompleter.Matches(PlanGapsReviewers, argText);
+                    return planState.Presented ? MentionCompleter.Matches(PlanGapsReviewers, argText) : [];
                 }
 
-                // The subcommands while planning; before, only open — the rest of the argument is the requirement, free text.
-                return MentionCompleter.Matches(sources.Planning ? PlanVerbs : PlanVerbsIdle, argText);
+                // The subcommands while planning; before, only open — the rest of the argument is the requirement, free text. Since 2026-10-20
+                // (the user's ask) only those that would run now (PlanVerbsFor).
+                return MentionCompleter.Matches(PlanVerbsFor(sources.Planning ? PlanVerbs : PlanVerbsIdle, planState), argText);
             }
 
             case SlashCommand.CodeAudit:
@@ -5812,7 +5823,9 @@ internal sealed partial class ChatScreen
             ServiceChoices,
             TaskChoices,
             AdChoices,
-            Audits: AuditChoices);
+            Audits: AuditChoices,
+            PlanState: PlanCompletionNow(web: false),
+            EditPlans: EditPlanChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -11779,7 +11792,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The pictures in force (later on 2026-09-19, the user's ask): the loaded profile's own
-    /// splash folder (<see cref="AppSettings.ProfileSplashDirectory"/>, <c>images\splash_images</c> since 2026-10-10)
+    /// splash folder (<see cref="AppSettings.ProfileSplashDirectory"/>, <c>images\splash</c>; <c>images\splash_images</c> from 2026-10-10 until 2026-10-20)
     /// while it holds an image file (<see cref="SplashImages.FromDirectory"/>,
     /// read live so a switch or a dropped file counts), else the source the screen was built with
     /// — the embedded set in the app, a test's list, or nothing (headless, tests that pass none:

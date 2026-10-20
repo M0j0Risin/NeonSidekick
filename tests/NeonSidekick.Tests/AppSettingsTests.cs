@@ -1305,12 +1305,12 @@ public class AppSettingsTests : IDisposable
     {
         // 2026-09-22, the user's ask: nothing created it before, so using a profile's own splash
         // pictures meant making the folder by hand. Empty, it is no splash at all — SplashImages
-        // reads a folder with no picture as none and the embedded set stands. Under the images folder as splash_images since
+        // reads a folder with no picture as none and the embedded set stands. Under the images folder as splash since
         // 2026-10-10 (the user's call), so a load makes the images folder too.
         using var settings = new AppSettings(_dir);
 
         Assert.True(Directory.Exists(settings.ProfileSplashDirectory));
-        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "images", "splash_images"), settings.ProfileSplashDirectory);
+        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "images", "splash"), settings.ProfileSplashDirectory);
         Assert.Equal(settings.ProfileImagesDirectory, Path.GetDirectoryName(settings.ProfileSplashDirectory));
         Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "splash")));   // the old place is never made
         Assert.Equal(SplashImages.ProfileFolderName, Path.GetFileName(settings.ProfileSplashDirectory));
@@ -1328,7 +1328,7 @@ public class AppSettingsTests : IDisposable
         await settings.SwitchProfileAsync("work");
 
         Assert.True(Directory.Exists(settings.ProfileSplashDirectory));
-        Assert.EndsWith(Path.Combine("work", "images", "splash_images"), settings.ProfileSplashDirectory);
+        Assert.EndsWith(Path.Combine("work", "images", "splash"), settings.ProfileSplashDirectory);
         Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, "other"), "images")));   // nothing is created for a look
     }
 

@@ -64,12 +64,12 @@ public static class SplashMode
         _ => "image",
     };
 
-    /// <summary>The menu hint next to a mode. Pinned.</summary>
+    /// <summary>The menu hint next to a mode, the user's words since 2026-10-20 (the image hint's "← → step through them" went with it). Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "image" => "one picture fills the screen under the banner at startup; ← → step through them",
-        "robot" => "a robot standing above the draft line, watching your mouse and your typing, until your first line",
-        "off" => "the banner alone at startup",
+        "image" => "a picture fills the transcript pane at startup",
+        "robot" => "an animated robot occupies the transcript pane at startup",
+        "off" => "the transcript pane is clear at startup",
         _ => "",
     };
 

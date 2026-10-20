@@ -19,7 +19,7 @@ public sealed class CameraWatch : IDisposable
     /// <summary>
     /// The folder, relative to the working directory, a watch picture is written into when its thumbnail is double-clicked
     /// (2026-10-02, the user's call: under the camera's own folder, not the system's temp): <see cref="FolderName"/> in the
-    /// <c>Camera output folder</c> (<c>camera_images/.watch</c> by default). Only a clicked picture lands there; it is cleared
+    /// <c>Camera output folder</c> (<c>camera/.watch</c> by default). Only a clicked picture lands there; it is cleared
     /// when watch mode stops and when a profile loads (<c>ChatScreen.ClearWatchFolder</c>). Pure.
     /// </summary>
     public static string FolderFor(string? outputFolder) => CameraCapture.Under(CameraCapture.OutputFolder(outputFolder), FolderName);

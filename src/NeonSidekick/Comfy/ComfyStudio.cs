@@ -45,7 +45,7 @@ public sealed record ComfyGeneration(string Text, IReadOnlyList<ImageAttachment>
 /// <summary>
 /// The image tools' engine (2026-09-24): picks the workflow, uploads the input picture, fills the template, runs it on
 /// the ComfyUI server named by <c>ComfyUI URL</c> (<see cref="ComfyClient"/>) and saves what comes back under the
-/// working directory's <c>ComfyUI output folder</c> — <c>comfy_images\pony-txt2img-1234.png</c>, a number added when the
+/// working directory's <c>ComfyUI output folder</c> — <c>comfy\pony-txt2img-1234.png</c>, a number added when the
 /// name is taken, never an overwrite. One engine for the tool and <c>/imagine</c>, so a picture is made, named and
 /// reported the same way whoever asked. The client is kept while the URL stays the same.
 /// </summary>

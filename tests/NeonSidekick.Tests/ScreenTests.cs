@@ -140,8 +140,8 @@ public sealed class ScreenPureTests
         Assert.Equal("Error: screen_capture needs the app's screen to ask the user; there is none here.", ScreenText.NoScreen);
         Assert.Equal("The model asks to see your screen", ScreenText.AllowTitle);
         Assert.Equal("Monitor 1 (1920x1080, primary): To read the error.", ScreenText.AllowCaption("monitor 1 (1920x1080, primary)", "To read the error."));
-        Assert.Equal("[screenshot not kept in the session: D:\\w\\screen_images\\a.jpg]", ScreenText.NotKept("D:\\w\\screen_images\\a.jpg"));
-        Assert.Equal("🖥️ screen_images/a.jpg is on the input line.", ScreenText.Attached("screen_images/a.jpg"));
+        Assert.Equal("[screenshot not kept in the session: D:\\w\\screen\\a.jpg]", ScreenText.NotKept("D:\\w\\screen\\a.jpg"));
+        Assert.Equal("🖥️ screen/a.jpg is on the input line.", ScreenText.Attached("screen/a.jpg"));
         Assert.Equal("ask", ScreenAskMode.Default);
         Assert.Equal(["ask", "allow"], ScreenAskMode.Names);
         Assert.All(ScreenAskMode.Names, n => Assert.NotEmpty(ScreenAskMode.Describe(n)));
@@ -174,7 +174,7 @@ public sealed class ScreenPureTests
     [Fact]
     public void AScreenshot_IsMarked_AndAStoredSessionKeepsALineNamingIt_UnlessKept()
     {
-        var image = ScreenCapture.Attachment(new ScreenFrame(4000, 1000, new byte[4000 * 1000 * 4])) with { Path = "D:\\w\\screen_images\\a.jpg" };
+        var image = ScreenCapture.Attachment(new ScreenFrame(4000, 1000, new byte[4000 * 1000 * 4])) with { Path = "D:\\w\\screen\\a.jpg" };
         Assert.True(image.Screen);
         Assert.False(image.Camera);
         Assert.Equal(ImageFile.Jpeg, image.MediaType);
@@ -322,8 +322,8 @@ public sealed class ScreenCaptureTests : IDisposable
         var second = await capture.TakeAsync(aim, CancellationToken.None);
 
         string stem = CameraCapture.Stem(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone));
-        Assert.Equal(Path.Combine("screen_images", stem + ".jpg"), first.RelativePath);
-        Assert.Equal(Path.Combine("screen_images", stem + "-2.jpg"), second.RelativePath);
+        Assert.Equal(Path.Combine("screen", stem + ".jpg"), first.RelativePath);
+        Assert.Equal(Path.Combine("screen", stem + "-2.jpg"), second.RelativePath);
         Assert.Equal(first.FullPath, first.Image.Path);
         Assert.True(first.Image.Screen);
         Assert.Equal((640, 480), (first.Image.Width, first.Image.Height));

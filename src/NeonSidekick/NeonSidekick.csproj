@@ -271,6 +271,9 @@
     <!-- The shell police's starter list (2026-10-13, the user's ask): assets\police\strings.txt, its [all], [windows] and [mac]
          sections, is Shell/ForbiddenStrings.Defaults — a fresh profile's Shell police forbidden strings and what r restores. -->
     <EmbeddedResource Include="..\..\assets\police\strings.txt" LogicalName="police/strings.txt" Visible="false" />
+    <!-- The plan template (2026-10-20, the user's ask): assets\plans\plan-template.md is what /plan template writes to
+         .neon/plans/plan-template.md (Plans/PlanFiles.WriteTemplate), an example plan in the Ralph loop's shape. -->
+    <EmbeddedResource Include="..\..\assets\plans\plan-template.md" LogicalName="plans/plan-template.md" Visible="false" />
     <!-- The video window's page (2026-10-05): the IFrame Player API host Viewer/VideoPage writes into <home>\webview2\site and
          WebView2 serves from https://player.neonsidekick.example/ (a page with an origin, so YouTube's embeds get a Referer). -->
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />

@@ -48,14 +48,14 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public void TheImagesFolder_NamesItsPathsInFull_AndAFullPathInsideResolves()
     {
-        var written = _images.WriteBytes(Path.Combine("camera_images", "a.jpg"), [1, 2, 3], overwrite: false);
+        var written = _images.WriteBytes(Path.Combine("camera", "a.jpg"), [1, 2, 3], overwrite: false);
 
-        string full = Path.Combine(_imagesRoot, "camera_images", "a.jpg");
+        string full = Path.Combine(_imagesRoot, "camera", "a.jpg");
         Assert.Equal(FileOutcome.Ok, written.Outcome);
         Assert.Equal(full, written.Relative);   // what the model is given, and passes back
         Assert.Equal(FileOutcome.Ok, _images.Resolve(full, forWrite: false, out string resolved));
         Assert.Equal(full, resolved);
-        Assert.Equal(Path.Combine(_imagesRoot, "camera_images") + Path.DirectorySeparatorChar, _images.Relative(Path.Combine(_imagesRoot, "camera_images"), isDirectory: true));
+        Assert.Equal(Path.Combine(_imagesRoot, "camera") + Path.DirectorySeparatorChar, _images.Relative(Path.Combine(_imagesRoot, "camera"), isDirectory: true));
         Assert.Equal(_imagesRoot, _images.Relative(_imagesRoot));
         Assert.Equal(FileOutcome.OutsideRoot, _images.Resolve(Path.Combine(_imagesRoot, "..", "files", "x.png"), forWrite: false, out _));
         Assert.Equal("a.txt", _files.Relative(Path.Combine(_root, "a.txt")));   // the sandbox keeps its relative names
@@ -64,10 +64,10 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public void Contains_IsAFullPathAtOrUnderTheRoot_BySpelling()
     {
-        Assert.True(_images.Contains(Path.Combine(_imagesRoot, "comfy_images", "x.png")));
+        Assert.True(_images.Contains(Path.Combine(_imagesRoot, "comfy", "x.png")));
         Assert.True(_images.Contains(_imagesRoot));
         Assert.True(_images.Contains(" " + Path.Combine(_imagesRoot, "x.png") + " "));
-        Assert.False(_images.Contains(Path.Combine("comfy_images", "x.png")));   // relative: never
+        Assert.False(_images.Contains(Path.Combine("comfy", "x.png")));   // relative: never
         Assert.False(_images.Contains(_imagesRoot + "2"));                       // a sibling that starts the same
         Assert.False(_images.Contains(Path.Combine(_imagesRoot, "..", "files", "x.png")));
         Assert.False(_images.Contains(""));
@@ -95,7 +95,7 @@ public sealed class ImageStoreTests : IDisposable
             return;
         }
 
-        string saved = Picture(_imagesRoot, Path.Combine("camera_images", "shot.bmp"));
+        string saved = Picture(_imagesRoot, Path.Combine("camera", "shot.bmp"));
         Picture(_root, "local.bmp");
         string outside = Picture(Path.Combine(_dir, "elsewhere"), "x.bmp");
         var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
@@ -116,7 +116,7 @@ public sealed class ImageStoreTests : IDisposable
             return;
         }
 
-        string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "pony-5.bmp"));
+        string saved = Picture(_imagesRoot, Path.Combine("comfy", "pony-5.bmp"));
         var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
         var edit = tools.Single(t => t.Name == ImageEditTool.ToolName);
         var info = tools.Single(t => t.Name == ImageInfoTool.ToolName);
@@ -125,8 +125,8 @@ public sealed class ImageStoreTests : IDisposable
         Assert.StartsWith(saved, described, StringComparison.Ordinal);
 
         string beside = ToolAnswers.Text(await edit.InvokeAsync(Args(("path", saved), ("rotate", 90))));
-        Assert.True(File.Exists(Path.Combine(_imagesRoot, "comfy_images", "pony-5-edited.bmp")), beside);
-        Assert.Contains(Path.Combine(_imagesRoot, "comfy_images", "pony-5-edited.bmp"), beside, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(_imagesRoot, "comfy", "pony-5-edited.bmp")), beside);
+        Assert.Contains(Path.Combine(_imagesRoot, "comfy", "pony-5-edited.bmp"), beside, StringComparison.Ordinal);
 
         // The setting names a folder under the images folder since 2026-10-10 (the user's ask; a working-directory one until then),
         // the answer its full path; a picture in the working directory goes there too.
@@ -146,8 +146,8 @@ public sealed class ImageStoreTests : IDisposable
     {
         // The model's own call (2026-10-09): the newest pictures by order modified, the folder named in full.
         var time = new ManualTimeProvider();
-        string older = Picture(_imagesRoot, Path.Combine("comfy_images", "old.bmp"));
-        string newer = Picture(_imagesRoot, Path.Combine("camera_images", "new.bmp"));
+        string older = Picture(_imagesRoot, Path.Combine("comfy", "old.bmp"));
+        string newer = Picture(_imagesRoot, Path.Combine("camera", "new.bmp"));
         File.SetLastWriteTimeUtc(older, new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc));
         File.SetLastWriteTimeUtc(newer, new DateTime(2026, 10, 9, 0, 0, 0, DateTimeKind.Utc));
         Picture(_root, "local.bmp");
@@ -160,7 +160,7 @@ public sealed class ImageStoreTests : IDisposable
         Assert.True(at < recent.IndexOf(older, StringComparison.Ordinal), recent);
         Assert.DoesNotContain("local.bmp", recent, StringComparison.Ordinal);
 
-        string found = ToolAnswers.Text(await search.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "camera_images")), ("files", "*.bmp"))));
+        string found = ToolAnswers.Text(await search.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "camera")), ("files", "*.bmp"))));
         Assert.Contains(newer, found, StringComparison.Ordinal);
         Assert.DoesNotContain(older, found, StringComparison.Ordinal);
 
@@ -175,7 +175,7 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public async Task FileInfo_ReadsAFullPathInTheImagesFolder()
     {
-        string saved = Picture(_imagesRoot, Path.Combine("pasted_images", "p.bmp"));
+        string saved = Picture(_imagesRoot, Path.Combine("pasted", "p.bmp"));
         var info = new FileInfoTool(_files, _images);
 
         string answer = ToolAnswers.Text(await info.InvokeAsync(Args(("path", saved))));
@@ -192,7 +192,7 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public async Task Open_OpensAFullPathInTheImagesFolder()
     {
-        string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "c.bmp"));
+        string saved = Picture(_imagesRoot, Path.Combine("comfy", "c.bmp"));
         _files.ImagesFolder = () => _imagesRoot;
         var pictures = new List<string>();
         var opened = new List<string>();
@@ -208,17 +208,17 @@ public sealed class ImageStoreTests : IDisposable
         Assert.Contains("or a full path in the user's images folder", open.JsonSchema.GetRawText(), StringComparison.Ordinal);
 
         // Code review, later that day: there only pictures and folders open, never a file the shell would run.
-        string script = Path.Combine(_imagesRoot, "comfy_images", "run.bat");
+        string script = Path.Combine(_imagesRoot, "comfy", "run.bat");
         File.WriteAllText(script, "echo hi");
         Assert.Equal(FileText.OpenImagesFolderNotPicture(script), ToolAnswers.Text(await open.InvokeAsync(Args(("path", script)))));
         Assert.Empty(opened);
-        Assert.DoesNotContain("Error", ToolAnswers.Text(await open.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "comfy_images"))))), StringComparison.Ordinal);
-        Assert.Equal(new[] { Path.Combine(_imagesRoot, "comfy_images") }, opened);
+        Assert.DoesNotContain("Error", ToolAnswers.Text(await open.InvokeAsync(Args(("path", Path.Combine(_imagesRoot, "comfy"))))), StringComparison.Ordinal);
+        Assert.Equal(new[] { Path.Combine(_imagesRoot, "comfy") }, opened);
 
         // Code review, later still: a picture image_edit writes and the viewer cannot read (TIFF, JXL, HEIF) is a picture too.
         opened.Clear();
         pictures.Clear();
-        string tiff = Path.Combine(_imagesRoot, "comfy_images", "photo-edited.tiff");
+        string tiff = Path.Combine(_imagesRoot, "comfy", "photo-edited.tiff");
         File.WriteAllBytes(tiff, [0x49, 0x49, 0x2A, 0x00]);
         Assert.DoesNotContain("Error", ToolAnswers.Text(await open.InvokeAsync(Args(("path", tiff)))), StringComparison.Ordinal);
         Assert.Equal(new[] { tiff }, opened.Concat(pictures));   // the registered app on Windows, the viewer on macOS (it reads TIFF there)
@@ -263,7 +263,7 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public async Task TheOtherFileTools_RefuseTheImagesFolder_NamingTheToolsThatReachIt()
     {
-        string saved = Picture(_imagesRoot, Path.Combine("comfy_images", "a.bmp"));
+        string saved = Picture(_imagesRoot, Path.Combine("comfy", "a.bmp"));
         string elsewhere = Path.Combine(_dir, "elsewhere", "x.txt");
         _files.ImagesFolder = () => _imagesRoot;
         var tools = (IReadOnlyList<AIFunction>)[.. ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings, images: _images), .. ChatScreen.ImageTools(_files, () => _settings, _images)];
@@ -289,7 +289,7 @@ public sealed class ImageStoreTests : IDisposable
     [Fact]
     public void SavedLabel_AndBackAgain_ArePinned()
     {
-        string path = Path.Combine(_imagesRoot, "pasted_images", "pasted-20261009-142233.png");
+        string path = Path.Combine(_imagesRoot, "pasted", "pasted-20261009-142233.png");
         Assert.Equal("[Image #2, saved as " + path + "]", PasteBlocks.SavedLabel(2, path));
         Assert.Equal("see [Image #2] and [Image #3]", PasteBlocks.WithoutSavedPaths("see " + PasteBlocks.SavedLabel(2, path) + " and " + PasteBlocks.SavedLabel(3, "x.png")));
         Assert.Equal("[Image #2] stays", PasteBlocks.WithoutSavedPaths("[Image #2] stays"));
@@ -312,10 +312,10 @@ public sealed class ImageStoreTests : IDisposable
         Assert.Null(pastes.SavedPath(1));
         Assert.Null(pastes.Original(1)!.Path);
 
-        pastes.MarkSaved(1, Path.Combine(_imagesRoot, "pasted_images", "p.png"));
+        pastes.MarkSaved(1, Path.Combine(_imagesRoot, "pasted", "p.png"));
 
-        Assert.Equal(Path.Combine(_imagesRoot, "pasted_images", "p.png"), pastes.SavedPath(1));
-        Assert.Equal(Path.Combine(_imagesRoot, "pasted_images", "p.png"), pastes.Original(1)!.Path);
+        Assert.Equal(Path.Combine(_imagesRoot, "pasted", "p.png"), pastes.SavedPath(1));
+        Assert.Equal(Path.Combine(_imagesRoot, "pasted", "p.png"), pastes.Original(1)!.Path);
         Assert.Equal([9, 9], pastes.Original(1)!.Bytes);
     }
 
@@ -323,7 +323,7 @@ public sealed class ImageStoreTests : IDisposable
     public void TheImagesFolder_IsUnderTheProfile()
     {
         Assert.Equal("images", AppSettings.ImagesFolderName);
-        Assert.Equal("pasted_images", AppSettingsData.DefaultPastedImagesFolder);
+        Assert.Equal("pasted", AppSettingsData.DefaultPastedImagesFolder);
         Assert.True(WorkingDirectoryOptions.Images.FullPaths);
         Assert.False(WorkingDirectoryOptions.Sandbox.FullPaths);
     }

@@ -42,6 +42,44 @@ let hello = false;
 let source = null;
 let tapHint = '';
 
+// Playing or not (2026-10-20, the user's asks): this page's player as its state reports say, on for playing (1) and buffering (3, so a
+// mid-play buffer doesn't flash the caption), off for any other state, an error, a taken player or a closed video. While it is on, the saved
+// list's count line is hidden (visibility, so nothing under it moves); a saved play's message (the "Resumed …" sentence) is cleared
+// playNoteMs after the video first reports playing, unless something else has been said since.
+let playing = false;
+let playNote = '';
+let playNoteMs = 4000;
+let playNoteTimer = null;
+
+function setPlaying(on) {
+  if (on === playing) return;
+  playing = on;
+  drawCaption();
+}
+
+function drawCaption() {
+  const caption = document.getElementById('saved-caption');
+  if (caption) caption.classList.toggle('yt-caption-quiet', playing);
+}
+
+// The note's timer, once: started when the video plays (or at once when the reply came with it already playing).
+function notePlaying() {
+  if (!playNote || playNoteTimer) return;
+  const note = playNote;
+  playNoteTimer = setTimeout(() => {
+    playNoteTimer = null;
+    const line = document.getElementById('message');
+    if (playNote === note && line && line.textContent === note) Neon.say('');
+    if (playNote === note) playNote = '';
+  }, playNoteMs);
+}
+
+function dropPlayNote() {
+  playNote = '';
+  clearTimeout(playNoteTimer);
+  playNoteTimer = null;
+}
+
 // A report: the player's own JSON as a string inside the post. A tick that hits the limit costs nothing (the next comes a second later); a
 // report that changes who plays or closes a video waits Retry-After and goes once more.
 async function report(message) {
@@ -69,7 +107,10 @@ function send(message) {
     // The phone's autoplay rules (2026-10-16): muted for want of a tap, the sound comes with one.
     tapHint = message.gesture && message.muted ? (words && words.tapForSound) || '' : '';
     if (message.state === 1 || message.state === 3) draw();
+    setPlaying(message.state === 1 || message.state === 3);
+    if (message.state === 1) notePlaying();
   }
+  if (message.ev === 'error') setPlaying(false);
   if (owner) report(message);
 }
 
@@ -111,6 +152,7 @@ async function resume(o) {
   offer = null;
   loaded = true;
   tapHint = '';
+  dropPlayNote();
   Neon.say('');
   draw();
   await report({ ev: 'resumed' });
@@ -178,18 +220,21 @@ function connect(claim) {
     loaded = false;
     tapHint = '';
     core.onMessage({ cmd: 'stop' });
+    setPlaying(false);
     draw();
   });
   source.addEventListener('close', () => {
     loaded = false;
     tapHint = '';
     core.onMessage({ cmd: 'stop' });
+    dropPlayNote();
+    setPlaying(false);
     Neon.say(words ? words.closed : '');
     draw();
   });
 }
 
-playHereBtn.addEventListener('click', () => { Neon.say(''); connect(newId()); });
+playHereBtn.addEventListener('click', () => { dropPlayNote(); Neon.say(''); connect(newId()); });
 
 resumeBtn.addEventListener('click', () => { if (offer) resume(offer); });
 
@@ -232,7 +277,13 @@ async function change(path, body) {
 
 async function playSaved(v) {
   const r = await Neon.post('/api/youtube/saved/play', { page, id: v.id });
+  dropPlayNote();
   Neon.say(r.message || '');
+  // A played video's sentence fades once it plays (2026-10-20); a refusal stays until something else is said.
+  if (r.ok && r.message) {
+    playNote = r.message;
+    if (playing) notePlaying();
+  }
   if (r.ok && frameEl && frameEl.scrollIntoView) frameEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   savedPoller.now();
 }
@@ -300,6 +351,7 @@ function drawSaved() {
   const sw = words.saved;
   savedEl.classList.remove('hidden');
   savedCaption.textContent = saved.items.length > 0 ? saved.caption : '';
+  drawCaption();
   savedFilter.placeholder = sw.filter;
   savedFilter.setAttribute('aria-label', sw.filter);
   savedFilter.classList.toggle('hidden', saved.items.length === 0);

@@ -412,14 +412,14 @@ public class ImageFileTests : IDisposable
     {
         byte[] png = BlackPng(64, 48);
 
-        Assert.True(ImageFile.TryLoad(png, "comfy_images/a.png", out var image, out var failure, photo: true));
+        Assert.True(ImageFile.TryLoad(png, "comfy/a.png", out var image, out var failure, photo: true));
 
         Assert.Equal(ImageLoadFailure.None, failure);
         Assert.NotNull(image);
         Assert.Equal(ImageFile.Jpeg, image.MediaType);
         Assert.True(IsJpeg(image.Bytes));
         Assert.Equal((64, 48), (image.Width, image.Height));
-        Assert.Equal("comfy_images/a.png", image.Path);
+        Assert.Equal("comfy/a.png", image.Path);
     }
 
     [Fact]

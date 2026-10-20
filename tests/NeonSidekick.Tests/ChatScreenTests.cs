@@ -10684,7 +10684,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 170;   // the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 173;   // /plan edit's two forms and /plan template's 2026-10-20; the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -17118,7 +17118,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\"text\":\"score_9, score_8_up, (1girl:1.2)\"", body);   // as typed, nothing added
         Assert.Contains("\"text\":\"score_4\"", body);
         Assert.Contains(NeonSidekick.Comfy.ComfyText.TextToImageGlyph + "generated 1 picture with pony (seed 5, 1024×1024): ", output);   // the full path after it (2026-10-09), wrapped at the console's width
-        Assert.True(File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", "pony-5.png")));
+        Assert.True(File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy", "pony-5.png")));
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);   // drawn as /view draws, centred
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
         Assert.StartsWith("(the user made a picture with /imagine", user.Text);
@@ -17163,7 +17163,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── The picture strip (later still on 2026-09-24) ───────────────────────
 
-    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", name);
+    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileImagesDirectory, "comfy", name);
 
     /// <summary>The model's picture and an /imagine one gather in the strip, the newest leftmost: → takes the newest, → again the older, Enter opens it.</summary>
     [Fact]
@@ -17875,17 +17875,17 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ComfyPurge_Wording_IsPinned()
     {
-        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
-        Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.PurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
-        Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.PurgeEmptyNotice(@"D:\x\comfy_images"));
+        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy", 3, 1, 1_234, false));
+        Assert.Equal(@"(🗑️ purged D:\x\comfy: 2 files, 1 folder, 8 B)", ChatScreen.PurgedNotice(@"D:\x\comfy", 2, 1, 8));
+        Assert.Equal(@"(🗑️ nothing in D:\x\comfy)", ChatScreen.PurgeEmptyNotice(@"D:\x\comfy"));
         Assert.Equal("Usage: /comfy, /comfy status, /comfy offered, /comfy purge, /comfy view, /comfy thumbs, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
         // Through the bin (2026-10-18): the bin's name is this system's (the Trash on a Mac).
         string bin = FileText.RecycleBinName;
-        Assert.Equal(@"🗑️ Send everything in D:\x\camera_images to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera_images", 3, 1, 1_234, false, toBin: true));
-        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 3, noBin: 0));
-        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B; 1 item deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 2, noBin: 1));
-        Assert.Equal(@"(🗑️ purged D:\x\camera_images: 2 files, 1 folder, 8 B; deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 0, noBin: 3));
-        Assert.Equal(@"The purge of D:\x\camera_images stopped after 1 of 3 items: too long. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera_images", 1, 3, "too long"));
+        Assert.Equal(@"🗑️ Send everything in D:\x\camera to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera", 3, 1, 1_234, false, toBin: true));
+        Assert.Equal(@"(🗑️ sent D:\x\camera's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera", 2, 1, 8, recycled: 3, noBin: 0));
+        Assert.Equal(@"(🗑️ sent D:\x\camera's contents to the " + bin + ": 2 files, 1 folder, 8 B; 1 item deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera", 2, 1, 8, recycled: 2, noBin: 1));
+        Assert.Equal(@"(🗑️ purged D:\x\camera: 2 files, 1 folder, 8 B; deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera", 2, 1, 8, recycled: 0, noBin: 3));
+        Assert.Equal(@"The purge of D:\x\camera stopped after 1 of 3 items: too long. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera", 1, 3, "too long"));
         Assert.Equal("Not purging: the Pasted images folder is the profile's images folder itself; set a folder under it first.", ChatScreen.PurgeHereError(ChatScreen.PastedFolderLabel));
         Assert.Equal("Moving 1 item to the " + bin, ChatScreen.PurgeMovingLabel(1));
     }
