@@ -8,7 +8,9 @@ using NeonSidekick.Llm.Tools;
 namespace NeonSidekick.ActiveDirectory;
 
 /// <summary>The domain's password and lockout policy: the domain head's, or a fine-grained one's.</summary>
-public sealed record AdPolicy(string? Name, AdInterval? MaxPasswordAge, AdInterval? LockoutDuration, long? LockoutThreshold, AdInterval? ObservationWindow, long? MinLength, long? History, bool Complex);
+/// <remarks><see cref="UnreadPso"/>: the fine-grained policy that applies but whose settings this account cannot read, the domain's used in its place.</remarks>
+public sealed record AdPolicy(string? Name, AdInterval? MaxPasswordAge, AdInterval? LockoutDuration, long? LockoutThreshold, AdInterval? ObservationWindow, long? MinLength, long? History, bool Complex,
+    string? UnreadPso = null);
 
 /// <summary>A lockout and a password expiry worked out, and how.</summary>
 public sealed record AdAccountState(bool Locked, DateTimeOffset? LockedAt, DateTimeOffset? Unlocks, bool LockedForever, string LockedHow, DateTimeOffset? PasswordSet, DateTimeOffset? Expires, bool NeverExpires, bool MustChange, string ExpiresHow);
@@ -182,19 +184,30 @@ public static class DirectoryQueries
         };
     }
 
-    /// <summary>The domain head's policy, and a fine-grained one's over it when <paramref name="psoDn"/> names one that can be read.</summary>
-    public static AdPolicy Policy(IDirectorySession session, string baseDn, string? psoDn)
+    /// <summary>
+    /// The domain head's policy, and a fine-grained one's over it when <paramref name="psoDn"/> names one that can be read. A PSO this account
+    /// reads the object of but none of its settings (an ordinary account on Samba, 2026-10-15; <see cref="SettingsUnreadable"/>) or may not read at
+    /// all is the domain's policy with <see cref="AdPolicy.UnreadPso"/> naming it (2026-10-20, a review's finding: its all-null intervals had read a
+    /// stale <c>lockoutTime</c> as locked forever); <paramref name="domain"/>, when the caller has the domain's already, saves the head's read.
+    /// </summary>
+    public static AdPolicy Policy(IDirectorySession session, string baseDn, string? psoDn, DirectoryDeadline deadline = default, AdPolicy? domain = null)
     {
+        string? unread = null;
         if (psoDn is { Length: > 0 })
         {
+            unread = AdValues.FirstName(psoDn);
             try
             {
-                var pso = session.Search(psoDn, DirectoryScope.Base, "(objectClass=*)", AdAttributes.PasswordSettings, 1, paged: false);
+                var pso = session.Search(psoDn, DirectoryScope.Base, "(objectClass=*)", AdAttributes.PasswordSettings, 1, paged: false, deadline.Limit);
                 if (pso.Entries.Count > 0)
                 {
                     var p = pso.Entries[0];
-                    return new AdPolicy(p.Text("name") ?? AdValues.FirstName(psoDn), AdValues.Interval(p.Text("msDS-MaximumPasswordAge")), AdValues.Interval(p.Text("msDS-LockoutDuration")),
-                        AdValues.Integer(p.Text("msDS-LockoutThreshold")), AdValues.Interval(p.Text("msDS-LockoutObservationWindow")), AdValues.Integer(p.Text("msDS-MinimumPasswordLength")), null, false);
+                    unread = p.Text("name") ?? unread;
+                    if (!SettingsUnreadable(p))
+                    {
+                        return new AdPolicy(unread, AdValues.Interval(p.Text("msDS-MaximumPasswordAge")), AdValues.Interval(p.Text("msDS-LockoutDuration")),
+                            AdValues.Integer(p.Text("msDS-LockoutThreshold")), AdValues.Interval(p.Text("msDS-LockoutObservationWindow")), AdValues.Integer(p.Text("msDS-MinimumPasswordLength")), null, false);
+                    }
                 }
             }
             catch (DirectoryException)
@@ -203,7 +216,61 @@ public static class DirectoryQueries
             }
         }
 
-        var head = session.Search(baseDn, DirectoryScope.Base, "(objectClass=*)", AdAttributes.DomainHead, 1, paged: false);
+        var fallback = domain ?? DomainPolicy(session, baseDn, deadline);
+        return unread is null ? fallback : fallback with { Name = null, UnreadPso = unread };
+    }
+
+    /// <summary>
+    /// Whether a PSO's entry came back without its settings (every one is a must-have of <c>msDS-PasswordSettings</c>, so none read means none
+    /// readable). Shared by the user's policy and the domain card's list.
+    /// </summary>
+    private static bool SettingsUnreadable(DirectoryEntry p) =>
+        p.Text("msDS-PasswordSettingsPrecedence") is null && p.Text("msDS-MaximumPasswordAge") is null && p.Text("msDS-MinimumPasswordLength") is null
+        && p.Text("msDS-LockoutDuration") is null && p.Text("msDS-LockoutThreshold") is null;
+
+    /// <summary>
+    /// Each account's policy for a find (2026-10-20, a review's finding: <c>locked</c> read a PSO per candidate and <c>password_expiring</c> none):
+    /// the domain's once, each PSO once by its DN; null when one not yet read cannot start under the deadline.
+    /// </summary>
+    private sealed class PolicyCache(IDirectorySession session, string baseDn, DirectoryDeadline deadline)
+    {
+        private readonly Dictionary<string, AdPolicy> _psos = new(StringComparer.OrdinalIgnoreCase);
+        private AdPolicy? _domain;
+
+        public AdPolicy? For(DirectoryEntry account)
+        {
+            if (_domain is null)
+            {
+                if (!deadline.CanStart)
+                {
+                    return null;
+                }
+
+                _domain = DomainPolicy(session, baseDn, deadline);
+            }
+
+            if (account.Text("msDS-ResultantPSO") is not { Length: > 0 } pso)
+            {
+                return _domain;
+            }
+
+            if (_psos.TryGetValue(pso, out var known))
+            {
+                return known;
+            }
+
+            if (!deadline.CanStart)
+            {
+                return null;
+            }
+
+            return _psos[pso] = Policy(session, baseDn, pso, deadline, _domain);
+        }
+    }
+
+    private static AdPolicy DomainPolicy(IDirectorySession session, string baseDn, DirectoryDeadline deadline)
+    {
+        var head = session.Search(baseDn, DirectoryScope.Base, "(objectClass=*)", AdAttributes.DomainHead, 1, paged: false, deadline.Limit);
         if (head.Entries.Count == 0)
         {
             return new AdPolicy(null, null, null, null, null, null, null, false);
@@ -271,18 +338,28 @@ public static class DirectoryQueries
     }
 
     /// <summary>The PDC emulator's DNS name: the domain head's <c>fSMORoleOwner</c> (an NTDS Settings object) → its server's <c>dNSHostName</c>.</summary>
-    public static string? RoleHolder(IDirectorySession session, string objectDn)
+    public static string? RoleHolder(IDirectorySession session, string objectDn, DirectoryDeadline deadline = default)
     {
         try
         {
-            var holder = session.Search(objectDn, DirectoryScope.Base, "(objectClass=*)", ["fSMORoleOwner"], 1, paged: false);
+            if (!deadline.CanStart)
+            {
+                return null;
+            }
+
+            var holder = session.Search(objectDn, DirectoryScope.Base, "(objectClass=*)", ["fSMORoleOwner"], 1, paged: false, deadline.Limit);
             if (holder.Entries.Count == 0 || holder.Entries[0].Text("fSMORoleOwner") is not { } ntds)
             {
                 return null;
             }
 
             string server = AdValues.Parent(ntds);
-            var host = session.Search(server, DirectoryScope.Base, "(objectClass=*)", ["dNSHostName"], 1, paged: false);
+            if (!deadline.CanStart)
+            {
+                return AdValues.FirstName(server);
+            }
+
+            var host = session.Search(server, DirectoryScope.Base, "(objectClass=*)", ["dNSHostName"], 1, paged: false, deadline.Limit);
             return host.Entries.Count > 0 ? host.Entries[0].Text("dNSHostName") ?? AdValues.FirstName(server) : AdValues.FirstName(server);
         }
         catch (DirectoryException)
@@ -347,8 +424,8 @@ public static class DirectoryQueries
 
     // ── A user ──────────────────────────────────────────────────────────────
 
-    public static string User(IDirectorySession session, DirectorySource source, string name, DateTimeOffset now, TimeZoneInfo zone) =>
-        DirectoryRender.ForModel(UserAnswer(session, source, name, now, zone));
+    public static string User(IDirectorySession session, DirectorySource source, string name, DateTimeOffset now, TimeZoneInfo zone, DirectoryDeadline deadline = default) =>
+        DirectoryRender.ForModel(UserAnswer(session, source, name, now, zone, deadline: deadline));
 
     /// <summary>A user's card, by a name or (a clicked row) by its DN.</summary>
     public static DirectoryAnswer UserAnswer(IDirectorySession session, DirectorySource source, string name, DateTimeOffset now, TimeZoneInfo zone, string? dn = null, DirectoryDeadline deadline = default)
@@ -361,7 +438,7 @@ public static class DirectoryQueries
             return candidates.Count > 0 ? Ambiguous(name, candidates) : DirectoryAnswer.Refused(dn is null ? DirectoryText.NotFound("user", name, source.Where) : DirectoryText.Gone(name, source.Where));
         }
 
-        var policy = Policy(session, baseDn, user.Text("msDS-ResultantPSO"));
+        var policy = Policy(session, baseDn, user.Text("msDS-ResultantPSO"), deadline);
         var state = State(user, policy, now);
         int uac = (int)(AdValues.Integer(user.Text("userAccountControl")) ?? 0);
         string account = user.Text("sAMAccountName") ?? name;
@@ -372,7 +449,8 @@ public static class DirectoryQueries
         Add(answer, "dn", Fence(user.Dn));
         if (state.Locked)
         {
-            string pdc = RoleHolder(session, baseDn) ?? "the PDC emulator";
+            answer.Pdc = RoleHolder(session, baseDn, deadline);
+            string pdc = answer.Pdc ?? "the PDC emulator";
             Add(answer, DirectoryText.LockedLabel, (state.LockedAt is { } at ? "since " + Time(at, zone) : "yes") + (state.LockedForever ? ", " + DirectoryText.ForeverWord : state.Unlocks is { } unlocks ? ", unlocks " + Time(unlocks, zone) : "")
                 + " (" + state.LockedHow + "); " + DirectoryText.LockoutSource(pdc));
         }
@@ -385,7 +463,9 @@ public static class DirectoryQueries
         Add(answer, "password", (state.PasswordSet is { } set ? "set " + Time(set, zone) + ", " : "")
             + (state.MustChange ? DirectoryText.MustChange : state.NeverExpires ? "never expires" : state.Expires is { } expires ? (expires < now ? "expired " : "expires ") + Time(expires, zone) : "expiry unknown")
             + " (" + state.ExpiresHow + ")");
-        Add(answer, "policy", policy.Name is { } pso ? "fine-grained: " + Fence(pso) : user.Text("msDS-ResultantPSO") is null ? DirectoryText.DomainPolicyMaybe : "the domain policy");
+        Add(answer, "policy", policy.Name is { } pso ? "fine-grained: " + Fence(pso)
+            : policy.UnreadPso is { } unread ? DirectoryText.PolicyUnreadOver(Fence(unread))
+            : user.Text("msDS-ResultantPSO") is null ? DirectoryText.DomainPolicyMaybe : "the domain policy");
         Add(answer, "last sign-in", (AdValues.FileTime(user.Text("lastLogonTimestamp")) is { } logon ? Time(logon, zone) : DirectoryText.NeverWord) + " (" + DirectoryText.StaleNote + ")");
         Add(answer, "account expires", AdValues.FileTime(user.Text("accountExpires")) is { } ends ? Time(ends, zone) : DirectoryText.NeverWord);
         foreach (string field in (string[])["title", "department", "company", "description"])
@@ -481,7 +561,9 @@ public static class DirectoryQueries
         }
 
         var walk = Walk(session, baseDn, [group], nested, members, cap, deadline);
-        var listed = walk.Members.Values.Where(m => Wanted(m, members)).OrderBy(m => SortKey(m), StringComparer.OrdinalIgnoreCase).ToList();
+        // A cycle (A holds B, B holds A) brings the group back in through a nested one: never listed or counted as its own member (2026-10-20, a review's finding).
+        var listed = walk.Members.Values.Where(m => Wanted(m, members) && !string.Equals(m.Dn, group.Dn, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(m => SortKey(m), StringComparer.OrdinalIgnoreCase).ToList();
         int total = listed.Count;
         int direct = listed.Count(m => m.Direct);
         int primary = listed.Count(m => !m.Direct && m.Primary);
@@ -686,6 +768,9 @@ public static class DirectoryQueries
 
         public string? PrimaryGroup { get; set; }
 
+        /// <summary>The walked group whose RID is its <c>primaryGroupID</c>, by DN (<c>privileged</c> reaches its members through it).</summary>
+        public string? PrimaryGroupDn { get; set; }
+
         /// <summary>The walked groups whose member list holds it, in the walk's order (the first is its "via").</summary>
         public List<string> Via { get; } = [];
 
@@ -733,14 +818,14 @@ public static class DirectoryQueries
         var queue = new Queue<DirectoryEntry>(roots);
         var visited = new HashSet<string>(roots.Select(r => r.Dn), StringComparer.OrdinalIgnoreCase);
         var rootDns = new HashSet<string>(visited, StringComparer.OrdinalIgnoreCase);
-        var rids = new Dictionary<uint, string>();
+        var rids = new Dictionary<uint, (string Dn, string Name)>();
         int searches = 0;
         void Walked(DirectoryEntry group)
         {
             result.Groups.Add((group.Dn, Display(group)));
             if (group.Values("objectSid") is { Count: > 0 } sid && AdValues.Rid(sid[0]) is { } rid)
             {
-                rids.TryAdd(rid, Display(group));
+                rids.TryAdd(rid, (group.Dn, Display(group)));
             }
         }
 
@@ -863,12 +948,14 @@ public static class DirectoryQueries
                     }
 
                     uint rid = (uint)(AdValues.Integer(e.Text("primaryGroupID")) ?? 0);
+                    bool known = rids.TryGetValue(rid, out var primaryGroup);
                     result.Members[e.Dn] = new WalkMember(e.Dn)
                     {
                         Entry = e,
                         Kind = AdValues.KindOf(e.Texts("objectClass")),
                         Primary = true,
-                        PrimaryGroup = rids.TryGetValue(rid, out var groupName) ? groupName : rid.ToString(CultureInfo.InvariantCulture),
+                        PrimaryGroup = known ? primaryGroup.Name : rid.ToString(CultureInfo.InvariantCulture),
+                        PrimaryGroupDn = known ? primaryGroup.Dn : null,
                     };
                 }
             }
@@ -884,8 +971,8 @@ public static class DirectoryQueries
 
     // ── A computer ──────────────────────────────────────────────────────────
 
-    public static string Computer(IDirectorySession session, DirectorySource source, string name, TimeZoneInfo zone) =>
-        DirectoryRender.ForModel(ComputerAnswer(session, source, name, zone));
+    public static string Computer(IDirectorySession session, DirectorySource source, string name, TimeZoneInfo zone, DirectoryDeadline deadline = default) =>
+        DirectoryRender.ForModel(ComputerAnswer(session, source, name, zone, deadline: deadline));
 
     /// <summary>A computer's card — or a service account's, which <c>ad_computer</c> finds by name too (2026-10-15, the AD gaps plan) — by a name or a DN.</summary>
     public static DirectoryAnswer ComputerAnswer(IDirectorySession session, DirectorySource source, string name, TimeZoneInfo zone, string? dn = null, DirectoryDeadline deadline = default)
@@ -1016,10 +1103,15 @@ public static class DirectoryQueries
             case "locked":
             {
                 what = "locked users";
-                var policy = Policy(session, baseDn, null);
+                var policies = new PolicyCache(session, baseDn, deadline);
                 foreach (var e in Search(LdapFilter.LockedCandidates, AdAttributes.Find, cap).Entries)
                 {
-                    var own = e.Text("msDS-ResultantPSO") is { } pso ? Policy(session, baseDn, pso) : policy;
+                    if (policies.For(e) is not { } own)
+                    {
+                        timed = true;
+                        break;
+                    }
+
                     var state = State(e, own, now);
                     if (state.Locked)
                     {
@@ -1034,9 +1126,21 @@ public static class DirectoryQueries
             case "password_expiring":
             {
                 what = "passwords ending within " + o.Days.ToString(CultureInfo.InvariantCulture) + " days";
-                var policy = Policy(session, baseDn, null);
+                var policies = new PolicyCache(session, baseDn, deadline);
                 var limitDate = now.AddDays(o.Days);
-                foreach (var (e, state) in Search(LdapFilter.ExpiringCandidates, AdAttributes.Find, cap).Entries.Select(e => (e, State(e, policy, now))).Where(p => p.Item2.Expires is { } x && x <= limitDate).OrderBy(p => p.Item2.Expires))
+                var states = new List<(DirectoryEntry Entry, AdAccountState State)>();
+                foreach (var e in Search(LdapFilter.ExpiringCandidates, AdAttributes.Find, cap).Entries)
+                {
+                    if (policies.For(e) is not { } own)
+                    {
+                        timed = true;
+                        break;
+                    }
+
+                    states.Add((e, State(e, own, now)));
+                }
+
+                foreach (var (e, state) in states.Where(p => p.State.Expires is { } x && x <= limitDate).OrderBy(p => p.State.Expires))
                 {
                     main.Rows.Add(Row(Acct(e) + "  " + Fence(Display(e)) + "  " + (state.Expires < now ? "expired " : "expires ") + Time(state.Expires!.Value, zone) + " (" + state.ExpiresHow + ")",
                         e, [e.Text("sAMAccountName"), Display(e), DirectoryCell.At(state.Expires), state.ExpiresHow]));
@@ -1353,6 +1457,28 @@ public static class DirectoryQueries
             }
         }
 
+        // The members by primary group (a Domain Admin whose primaryGroupID is 512 is in no member list): reached by the roots that reach that
+        // group, or the root it is (2026-10-20, a review's finding: they were left out, then listed among the leftovers as no longer protected).
+        var rootNames = roots.ToDictionary(r => r.Dn, Display, StringComparer.OrdinalIgnoreCase);
+        foreach (var m in walk.Members.Values.Where(m => m.Primary && m.PrimaryGroupDn is not null))
+        {
+            var through = new List<string>();
+            if (rootNames.TryGetValue(m.PrimaryGroupDn!, out var rootName))
+            {
+                through.Add(rootName);
+            }
+
+            if (reach.TryGetValue(m.PrimaryGroupDn!, out var above))
+            {
+                through.AddRange(above.Roots.Where(r => !through.Contains(r)));
+            }
+
+            if (through.Count > 0)
+            {
+                reach[m.Dn] = (through, rootName is null ? m.PrimaryGroup : null);
+            }
+        }
+
         var accounts = walk.Members.Values.Where(m => m.Kind is "user" or "computer" or AdValues.KindServiceAccount && reach.ContainsKey(m.Dn)).OrderBy(SortKey, StringComparer.OrdinalIgnoreCase).ToList();
         foreach (var m in accounts)
         {
@@ -1618,7 +1744,7 @@ public static class DirectoryQueries
 
     // ── The domain ──────────────────────────────────────────────────────────
 
-    public static string Domain(IDirectorySession session, DirectorySource source) => DirectoryRender.ForModel(DomainAnswer(session, source));
+    public static string Domain(IDirectorySession session, DirectorySource source, DirectoryDeadline deadline = default) => DirectoryRender.ForModel(DomainAnswer(session, source, deadline));
 
     /// <summary>The domain's facts, and its fine-grained password policies (2026-10-15, the AD gaps plan, §5): as many as this account may see.</summary>
     public static DirectoryAnswer DomainAnswer(IDirectorySession session, DirectorySource source, DirectoryDeadline deadline = default)
@@ -1626,7 +1752,7 @@ public static class DirectoryQueries
         ArgumentNullException.ThrowIfNull(source);
         string baseDn = source.Domain.BaseDn;
         var root = session.RootDse();
-        var policy = Policy(session, baseDn, null);
+        var policy = Policy(session, baseDn, null, deadline);
         var answer = Start("domain", DateTimeOffset.UtcNow, TimeZoneInfo.Utc);
         answer.Head = $"Domain {source.Where} ({Fence(baseDn)}): functional level {AdValues.FunctionalLevel(AdValues.Integer(root.Text("domainFunctionality")))}, forest {AdValues.FunctionalLevel(AdValues.Integer(root.Text("forestFunctionality")))}";
         var dcs = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.DomainControllers, ["dNSHostName", "cn", "operatingSystem"], 200, paged: true, deadline.Limit);
@@ -1642,18 +1768,18 @@ public static class DirectoryQueries
         string schema = root.Text("schemaNamingContext") ?? "";
         var roles = new List<string>(5)
         {
-            "PDC emulator " + Fence(RoleHolder(session, baseDn) ?? "?"),
-            "RID master " + Fence(RoleHolder(session, "CN=RID Manager$,CN=System," + baseDn) ?? "?"),
-            "infrastructure " + Fence(RoleHolder(session, "CN=Infrastructure," + baseDn) ?? "?"),
+            "PDC emulator " + Fence(RoleHolder(session, baseDn, deadline) ?? "?"),
+            "RID master " + Fence(RoleHolder(session, "CN=RID Manager$,CN=System," + baseDn, deadline) ?? "?"),
+            "infrastructure " + Fence(RoleHolder(session, "CN=Infrastructure," + baseDn, deadline) ?? "?"),
         };
         if (schema.Length > 0)
         {
-            roles.Add("schema master " + Fence(RoleHolder(session, schema) ?? "?"));
+            roles.Add("schema master " + Fence(RoleHolder(session, schema, deadline) ?? "?"));
         }
 
         if (config.Length > 0)
         {
-            roles.Add("naming master " + Fence(RoleHolder(session, "CN=Partitions," + config) ?? "?"));
+            roles.Add("naming master " + Fence(RoleHolder(session, "CN=Partitions," + config, deadline) ?? "?"));
         }
 
         Add(answer, "roles", string.Join(" · ", roles));
@@ -1694,7 +1820,7 @@ public static class DirectoryQueries
         {
             string name = p.Text("name") ?? AdValues.FirstName(p.Dn);
             var precedence = AdValues.Integer(p.Text("msDS-PasswordSettingsPrecedence"));
-            if (precedence is null && p.Text("msDS-MaximumPasswordAge") is null && p.Text("msDS-MinimumPasswordLength") is null)
+            if (SettingsUnreadable(p))
             {
                 table.Rows.Add(new DirectoryRow(Fence(name) + "  " + DirectoryText.PolicyUnreadable, [name, null, null, null, DirectoryText.PolicyUnreadable, null], p.Dn, name));
                 continue;
@@ -1782,7 +1908,8 @@ public static class DirectoryQueries
 
     private static string Described(DirectoryEntry e) => e.Text("description") is { } description ? "  " + Fence(description) : "";
 
-    private static string Plural(string type) => type switch
+    /// <summary>A find type's plural ("OUs", "service accounts", "users"), for the finds' heads and <c>/ad</c>'s titles.</summary>
+    internal static string Plural(string type) => type switch
     {
         "ou" => "OUs",
         "service" => "service accounts",

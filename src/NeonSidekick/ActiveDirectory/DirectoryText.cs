@@ -179,6 +179,10 @@ public static class DirectoryText
 
     public static string TimedOut(string domain) => $"Error: the search in {domain} took too long and was stopped.";
 
+    /// <summary>A call refused while earlier ones to the same server are still waiting on it (a bind it never answered).</summary>
+    public static string StillWaiting(string domain, string server) =>
+        $"Error: earlier calls to {server} for {domain} are still waiting on the server, which is not answering; try again later.";
+
     // ── Domains (ad.json) ────────────────────────────────────────────────────
 
     public const string NoDomain = "\"domain\" is required";
@@ -274,6 +278,9 @@ public static class DirectoryText
     public const string PoliciesNone = "none found (an account without rights to see them sees none)";
 
     public const string PolicyUnreadable = "its settings are not readable by this account";
+
+    /// <summary>A user card's policy row for a PSO it cannot read (the name already fenced).</summary>
+    public static string PolicyUnreadOver(string fencedName) => "fine-grained: " + fencedName + " (" + PolicyUnreadable + "; worked out from the domain policy)";
 
     // ── to ───────────────────────────────────────────────────────────────────
 

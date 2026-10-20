@@ -277,7 +277,7 @@ public sealed partial class ActiveDirectoryTests
         string loop = Model(GroupOf("Loop A", nested: true));
         Assert.Contains("\n  ⟪Loop B⟫ (group Loop B) direct\n", loop);
         Assert.Contains("\n  ⟪Grace Hu⟫ (user grace) via ⟪Loop B⟫\n", loop);
-        Assert.Contains("\n  ⟪Loop A⟫ (group Loop A) via ⟪Loop B⟫\n", loop);   // the group itself, met again, ends the walk
+        Assert.DoesNotContain("(group Loop A)", loop);   // the group itself, met again, ends the walk and is no member of itself (2026-10-20)
         string previous = Ops;
         for (int i = 0; i < DirectoryLimits.MaxWalkedGroups + 5; i++)
         {

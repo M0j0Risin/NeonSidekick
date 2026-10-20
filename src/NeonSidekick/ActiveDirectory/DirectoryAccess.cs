@@ -40,6 +40,60 @@ public sealed class DirectoryAccess
         Convert.ToHexString(global::System.Security.Cryptography.SHA256.HashData(global::System.Text.Encoding.UTF8.GetBytes(
             source.Domain.DomainName.ToLowerInvariant() + "\n" + login.User + "\n" + login.Password)));
 
+    /// <summary>
+    /// The calls abandoned at <see cref="Timeout"/> or ESC whose work still runs, by server and port (2026-10-20, a review's finding):
+    /// wldap32's Negotiate bind (<c>ldap_bind_s</c>) takes no timeout, so a DC that accepts the connection and never answers the bind holds a
+    /// pool thread and its connection until it lets go. At most <see cref="MaxAbandoned"/> such calls stand per server; past them a call is
+    /// answered <see cref="DirectoryText.StillWaiting"/> without connecting, so a model retrying cannot pile up threads. Locked: pool threads.
+    /// </summary>
+    private static readonly Dictionary<string, int> s_abandoned = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The abandoned calls one server may hold before the next is refused.</summary>
+    public const int MaxAbandoned = 2;
+
+    private static string AbandonKey(DirectoryTarget target) => target.Server + ":" + target.Port.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>How many abandoned calls to <paramref name="target"/> still run (the tests' look).</summary>
+    public static int AbandonedRunning(DirectoryTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        lock (s_abandoned)
+        {
+            return s_abandoned.GetValueOrDefault(AbandonKey(target));
+        }
+    }
+
+    /// <summary>A call given up on while its work runs: counted against its server until the work returns (its fault observed then).</summary>
+    private static void Abandon(Task running, string key)
+    {
+        if (running.IsCompleted)
+        {
+            _ = running.Exception;
+            return;
+        }
+
+        lock (s_abandoned)
+        {
+            s_abandoned[key] = s_abandoned.GetValueOrDefault(key) + 1;
+        }
+
+        _ = running.ContinueWith(done =>
+        {
+            _ = done.Exception;
+            lock (s_abandoned)
+            {
+                if (s_abandoned.TryGetValue(key, out int left) && left > 1)
+                {
+                    s_abandoned[key] = left - 1;
+                }
+                else
+                {
+                    s_abandoned.Remove(key);
+                }
+            }
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
     /// <summary>Whether <paramref name="code"/> with <paramref name="detail"/> is a refused password (never Windows' NTLM-blocked variant, never an unreachable KDC).</summary>
     public static bool RefusedPassword(int code, string detail) =>
         code == 0x31 && !detail.Contains("NTLM", StringComparison.OrdinalIgnoreCase);
@@ -137,12 +191,23 @@ public sealed class DirectoryAccess
             }
         }
 
+        string abandonKey = AbandonKey(source.Target);
+        lock (s_abandoned)
+        {
+            if (s_abandoned.GetValueOrDefault(abandonKey) >= MaxAbandoned)
+            {
+                DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name}: {MaxAbandoned.ToString(CultureInfo.InvariantCulture)} earlier calls to {source.Target.Server} still waiting; refused");
+                return DirectoryResult<T>.Failed(DirectoryText.StillWaiting(source.Where, source.Target.Server));
+            }
+        }
+
         using var timeout = new CancellationTokenSource(Timeout, Time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         var started = Stopwatch.GetTimestamp();
+        var running = Task.Run(() => system.Run(source.Target, session => work(session, deadline)), CancellationToken.None);
         try
         {
-            var value = await Task.Run(() => system.Run(source.Target, session => work(session, deadline)), CancellationToken.None).WaitAsync(linked.Token).ConfigureAwait(false);
+            var value = await running.WaitAsync(linked.Token).ConfigureAwait(false);
             DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name} ({source.Target.Server}) read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
             return DirectoryResult<T>.Ok(value);
         }
@@ -161,8 +226,14 @@ public sealed class DirectoryAccess
 
             return DirectoryResult<T>.Failed(DirectoryErrors.Sentence(ex.Code, source.Where, source.Target.Server, source.Target.Port, source.Domain.Account, ex.Message));
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            Abandon(running, abandonKey);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
             return DirectoryResult<T>.Failed(DirectoryText.TimedOut(source.Where));
         }
     }

@@ -244,23 +244,14 @@ public static class DirectoryCommand
             return Failed(refused!);
         }
 
-        string? pdc = null;
-        var result = await access.RunAsync(source, (session, deadline) =>
-        {
-            var answer = work(session, source, deadline);
-            if (answer.Kind == "user" && answer.Locked)
-            {
-                pdc = DirectoryQueries.RoleHolder(session, source.Domain.BaseDn);
-            }
-
-            return answer;
-        }, cancellationToken).ConfigureAwait(false);
+        var result = await access.RunAsync(source, (session, deadline) => work(session, source, deadline), cancellationToken).ConfigureAwait(false);
         if (result.Error is { } failed)
         {
             return Failed(failed);
         }
 
         var read = result.Value!;
+        string? pdc = read.Kind == "user" && read.Locked ? read.Pdc : null;
         return read.Failed
             ? new DirectoryCommandResult(read, Bare(read.Error!).Split('\n'), true, null, read.CandidatesTitle ?? title, Domain: source.Domain.Name)
             : new DirectoryCommandResult(read, DirectoryRender.CardText(read), false, pdc, titled?.Invoke(read) ?? title, Domain: source.Domain.Name);
@@ -361,8 +352,8 @@ public static class DirectoryCommand
             "domain" => "the domain",
             "ou" => line.Argument.Length > 0 ? "the OU " + line.Argument : "the OU tree",
             "name" => "the accounts whose names hold \"" + line.Argument + "\"",
-            "find:name" => line.Type is { } t ? "the " + Plural(t) + " whose names hold \"" + line.Argument + "\"" : "the accounts whose names hold \"" + line.Argument + "\"",
-            "find:field" => "the " + Plural(line.Type ?? "user") + " whose " + (line.Field ?? "description") + " holds \"" + line.Argument + "\"",
+            "find:name" => line.Type is { } t ? "the " + DirectoryQueries.Plural(t) + " whose names hold \"" + line.Argument + "\"" : "the accounts whose names hold \"" + line.Argument + "\"",
+            "find:field" => "the " + DirectoryQueries.Plural(line.Type ?? "user") + " whose " + (line.Field ?? "description") + " holds \"" + line.Argument + "\"",
             "find:os" => "the computers whose OS holds \"" + line.Argument + "\"",
             "find:locked" => "the locked users",
             "find:password_expiring" => "the passwords ending within " + days + " days",
@@ -371,7 +362,7 @@ public static class DirectoryCommand
             "find:stale_computers" => "the computers not signed in for " + days + " days",
             "find:password_never_expires" => "the users whose password never expires",
             "find:account_expiring" => "the accounts expiring within " + days + " days",
-            "find:created" => "the " + (line.Type is { } c ? Plural(c) : "objects") + " created in the last " + days + " days",
+            "find:created" => "the " + (line.Type is { } c ? DirectoryQueries.Plural(c) : "objects") + " created in the last " + days + " days",
             "find:privileged" => "the privileged accounts",
             "find:empty_groups" => "the empty groups",
             _ => line.Verb + " " + line.Argument,
@@ -384,13 +375,6 @@ public static class DirectoryCommand
     {
         "users" or "computers" or "groups" => "the " + members + (nested ? " in " + name + " at any depth" : " directly in " + name),
         _ => "the group " + name + (nested ? " and its nested members" : ""),
-    };
-
-    private static string Plural(string type) => type switch
-    {
-        "ou" => "OUs",
-        "service" => "service accounts",
-        _ => type + "s",
     };
 
     /// <summary>The draft an answer's <c>ask</c> leaves: what was looked up and the domain by its entry's name and DNS name. Pinned.</summary>

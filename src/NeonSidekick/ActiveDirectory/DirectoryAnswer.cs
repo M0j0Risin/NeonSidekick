@@ -118,6 +118,12 @@ public sealed class DirectoryAnswer
     /// <summary>Whether the user card shows a lockout (its <c>locked</c> row): <c>/ad</c>'s "Search 4740" reads it.</summary>
     public bool Locked => Fields.Any(f => f.Label == DirectoryText.LockedLabel);
 
+    /// <summary>
+    /// A locked user's PDC emulator, found once for the card's <c>locked</c> row (2026-10-20, a review's finding: <c>/ad</c>'s "Search 4740"
+    /// looked it up a second time); null when not locked or not found.
+    /// </summary>
+    public string? Pdc { get; set; }
+
     public bool Failed => Error is not null;
 
     /// <summary>A cap or the time limit cut what was read: a save of it says it is partial.</summary>

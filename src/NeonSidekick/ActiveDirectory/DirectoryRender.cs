@@ -72,16 +72,46 @@ public static class DirectoryRender
             }
         }
 
+        // The notes and the quote note always end the text: a cut takes the body alone and closes a fence it splits (2026-10-20, a review's
+        // finding: the cut ran after the quote note, so a long answer lost it and could end inside an open ⟪).
+        var tail = new StringBuilder();
         foreach (string note in answer.Notes)
         {
-            text.Append('\n').Append(note);
+            tail.Append('\n').Append(note);
         }
 
-        text.Append('\n').Append(UntrustedText.QuoteNote);
-        string finished = text.Length > DirectoryQueries.MaxChars
-            ? text.ToString(0, DirectoryQueries.MaxChars - 40) + "\n(cut at " + DirectoryQueries.MaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)"
-            : text.ToString();
+        tail.Append('\n').Append(UntrustedText.QuoteNote);
+        string finished = text.Length + tail.Length > DirectoryQueries.MaxChars
+            ? CutBody(text.ToString(), DirectoryQueries.MaxChars - tail.Length - CutMarker.Length) + CutMarker + tail
+            : text.Append(tail).ToString();
         return answer.Saved is { } saved ? finished + "\n" + saved : finished;
+    }
+
+    private static readonly string CutMarker = "\n(cut at " + DirectoryQueries.MaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)";
+
+    /// <summary>The body's first <paramref name="room"/> characters, a surrogate pair kept whole and a fence left open closed (inside the room).</summary>
+    internal static string CutBody(string body, int room)
+    {
+        room = Math.Clamp(room - UntrustedText.QuoteClose.Length, 0, body.Length);
+        if (room > 0 && room < body.Length && char.IsHighSurrogate(body[room - 1]))
+        {
+            room--;
+        }
+
+        string cut = body[..room];
+        int opens = 0;
+        int closes = 0;
+        for (int at = cut.IndexOf(UntrustedText.QuoteOpen, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(UntrustedText.QuoteOpen, at + 1, StringComparison.Ordinal))
+        {
+            opens++;
+        }
+
+        for (int at = cut.IndexOf(UntrustedText.QuoteClose, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(UntrustedText.QuoteClose, at + 1, StringComparison.Ordinal))
+        {
+            closes++;
+        }
+
+        return opens > closes ? cut + UntrustedText.QuoteClose : cut;
     }
 
     /// <summary>

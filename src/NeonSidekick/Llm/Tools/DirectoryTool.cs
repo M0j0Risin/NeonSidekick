@@ -69,8 +69,11 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
         return word is null || choices.Contains(word) ? (word, null) : (null, DirectoryText.BadChoice(name, word, choices));
     }
 
-    /// <summary>The domain the call names, then <paramref name="work"/> on a bound session; the answer or the refusal.</summary>
-    protected async Task<string> AskAsync(AIFunctionArguments arguments, Func<IDirectorySession, DirectorySource, string> work, CancellationToken cancellationToken)
+    /// <summary>
+    /// The domain the call names, then <paramref name="work"/> on a bound session under the call's deadline (2026-10-20, a review's finding: the
+    /// cards ran with none, so ESC and the timeout left their searches running); the answer or the refusal.
+    /// </summary>
+    protected async Task<string> AskAsync(AIFunctionArguments arguments, Func<IDirectorySession, DirectorySource, DirectoryDeadline, string> work, CancellationToken cancellationToken)
     {
         var (source, refused) = Access.Domain(Optional(arguments, DomainArgument), ForceRedacted);
         if (source is null)
@@ -78,7 +81,7 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
             return refused!;
         }
 
-        var result = await Access.RunAsync(source, session => work(session, source), cancellationToken).ConfigureAwait(false);
+        var result = await Access.RunAsync(source, (session, deadline) => work(session, source, deadline), cancellationToken).ConfigureAwait(false);
         return result.Error ?? result.Value!;
     }
 
@@ -163,7 +166,7 @@ public sealed class AdUserTool(DirectoryAccess access, bool forceRedacted = fals
             return DirectoryText.Missing(NameArgument);
         }
 
-        return await AskAsync(arguments, (session, source) => DirectoryQueries.User(session, source, name, Access.Time.GetUtcNow(), Zone), cancellationToken).ConfigureAwait(false);
+        return await AskAsync(arguments, (session, source, deadline) => DirectoryQueries.User(session, source, name, Access.Time.GetUtcNow(), Zone, deadline), cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -251,7 +254,7 @@ public sealed class AdComputerTool(DirectoryAccess access, bool forceRedacted = 
             return DirectoryText.Missing(NameArgument);
         }
 
-        return await AskAsync(arguments, (session, source) => DirectoryQueries.Computer(session, source, name, Zone), cancellationToken).ConfigureAwait(false);
+        return await AskAsync(arguments, (session, source, deadline) => DirectoryQueries.Computer(session, source, name, Zone, deadline), cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -388,5 +391,5 @@ public sealed class AdDomainTool(DirectoryAccess access, bool forceRedacted = fa
     public override AIFunction AsRedacted() => ForceRedacted ? this : new AdDomainTool(Access, forceRedacted: true);
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        await AskAsync(arguments, (session, source) => DirectoryQueries.Domain(session, source), cancellationToken).ConfigureAwait(false);
+        await AskAsync(arguments, (session, source, deadline) => DirectoryQueries.Domain(session, source, deadline), cancellationToken).ConfigureAwait(false);
 }
