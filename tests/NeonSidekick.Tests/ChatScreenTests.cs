@@ -18044,7 +18044,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› hi", output);
 
         // Without the pane (a redirected console) the switch on draws nothing either.
-        _settings.Update(d => d.WelcomeSplashMode = "fullsize");
+        _settings.Update(d => d.WelcomeSplashMode = "image");
         _geometry = null;
         _console.Clear();
         PushLine("/exit");
@@ -18528,132 +18528,6 @@ public partial class ChatScreenTests : IDisposable
     {
         d.LlmUrl = "http://127.0.0.1:1234/v1";
         d.LlmModel = "llama";
-    }
-
-    /// <summary>Ten 480 × 240 pictures: at the small thumbnail (48 × 12) each is 48 cells by twelve lines, four to a 240-wide strip row (a fifth needs 248), two rows (12 + 1 + 12) under the banner of a 40-row screen — eight a page, then two.</summary>
-    private void TiledSplashOfTen()
-    {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; d.ImageThumbnailSize = "small"; });
-        PaneOf40Rows();
-        _renderClears = true;
-        SplashOf(Enumerable.Range(0, 10).Select(_ => (480, 240)).ToArray());
-    }
-
-    private static readonly string TileLine = new('▀', 48);
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_ShowsAScreenfulOfThumbnails_AndLeftRightPage_Wrapping()
-    {
-        // Welcome splash tiled (2026-09-24, the user's ask): the pictures in name order at Image thumbnail size, only as
-        // many as fit; Right the next set, wrapping; Left back. Every picture is read once, whatever the paging.
-        TiledSplashOfTen();
-        StepsWhenIdle(Key(Keys.Right), Key(Keys.Right), Key(Keys.Left), Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(Enumerable.Range(0, 10).Select(SplashName), _splashLoads);
-        Assert.Equal(4, Refreshes(output));   // three pages, then the sent line's wipe
-        int[] screens = Enumerable.Range(0, 5).Select(i => NthScreen(output, i)).ToArray();
-        Assert.Equal(8 * 12, Count(output[screens[0]..screens[1]], TileLine));   // page 1: eight tiles, twelve lines each
-        Assert.Equal(2 * 12, Count(output[screens[1]..screens[2]], TileLine));   // page 2: the last two
-        Assert.Equal(8 * 12, Count(output[screens[2]..screens[3]], TileLine));   // Right wrapped to page 1
-        Assert.Equal(2 * 12, Count(output[screens[3]..screens[4]], TileLine));   // Left wrapped back to page 2
-        Assert.DoesNotContain("▀", output[screens[4]..]);
-        Assert.Contains(ChatScreen.SplashPageHint(0, 2), output[screens[0]..screens[1]]);
-        Assert.Contains(ChatScreen.SplashPageHint(1, 2), output[screens[1]..screens[2]]);
-        Assert.DoesNotContain(ChatScreen.SplashHint, output);
-        Assert.Empty(_chat.Requests);
-    }
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_AHeldArrowsQueuedPresses_PageOnce_AndARunBackWhereItStoodDrawsNothing()
-    {
-        // 2026-10-05, the user's ask: the queued run is one page step, one redraw — three → over two pages is page 2 — and
-        // a run that nets to nothing (→ ←) draws nothing at all.
-        TiledSplashOfTen();
-        StepsWhenIdle(
-            input => { input.Push(Keys.Right); input.Push(Keys.Right); input.Push(Keys.Right); },
-            input => { input.Push(Keys.Right); input.Push(Keys.Left); },
-            Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(2, Refreshes(output));   // the folded run and the sent line's wipe: the run back drew nothing
-        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
-        Assert.Equal(8 * 12, Count(output[screens[0]..screens[1]], TileLine));   // page 1
-        Assert.Equal(2 * 12, Count(output[screens[1]..screens[2]], TileLine));   // page 2, straight from page 1
-        Assert.DoesNotContain(ChatScreen.SplashPageHint(0, 2), output[screens[1]..screens[2]]);
-        Assert.DoesNotContain("▀", output[screens[2]..]);
-    }
-
-    [Fact]
-    public void SplashPageHint_IsOneBased_AndJoinsTheRest()
-    {
-        Assert.Equal("← → page 2 of 5", ChatScreen.SplashPageHint(1, 5));
-        Assert.Equal("← → page 1 of 2 · 3%", ChatScreen.SplashHintLine("3%", ChatScreen.SplashPageHint(0, 2)));
-        Assert.Equal("← → page 1 of 2", ChatScreen.SplashHintLine("", ChatScreen.SplashPageHint(0, 2)));
-    }
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_OnePage_ShowsNoPageHint_AndTheArrowsAreTheLines()
-    {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
-        PaneOf40Rows();
-        SplashOf((480, 240), (480, 240), (480, 240));
-        StepsWhenIdle(Key(Keys.Right), Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(3 * 12, Count(output, TileLine));   // all three, on one strip row
-        Assert.Equal(1, Refreshes(output));              // Right paged nothing: /exit's wipe alone
-        Assert.DoesNotContain("← → page", output);
-    }
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_DeleteTwice_OverTheProfilesPictures_TrashesNothing()
-    {
-        // No one picture stands on a page of tiles, so Delete is the line's key (2026-09-24, the user's call).
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
-        PaneOf40Rows();
-        SplashOf((480, 240));
-        string folder = _settings.ProfileSplashDirectory;
-        Directory.CreateDirectory(folder);
-        File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(480, 240));
-        File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(480, 240));
-        StepsWhenIdle(Key(Keys.Delete), Key(Keys.Delete), Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(2 * 12, Count(output, TileLine));   // the folder's two, the seam's never loaded
-        Assert.Empty(_splashLoads);
-        Assert.True(File.Exists(Path.Combine(folder, "one.bmp")));
-        Assert.True(File.Exists(Path.Combine(folder, "two.bmp")));
-        Assert.False(Directory.Exists(Path.Combine(folder, SplashImages.TrashFolderName)));
-        Assert.DoesNotContain("Del again", output);
-        Assert.Equal(1, Refreshes(output));
-    }
-
-    [WindowsFact]
-    public async Task Splash_Command_ShowsTheTiledPages_WhenTheModeIsTiled_AndOnePictureWhenDisabled()
-    {
-        TiledSplashOfTen();
-        _settings.Update(d => d.WelcomeSplashMode = "off");
-        _random = new Random(7);
-        StepsWhenIdle(Line("/splash"),
-            input => { _settings.Update(d => d.WelcomeSplashMode = "tiled"); PushLine(input, "/splash"); },
-            Key(Keys.Right),
-            Line("/exit"));
-
-        string output = await RunAsync();
-
-        // Screens: the start, /splash, the second /splash's dismissal of the picture, its own wipe, the page flip, /exit's wipe.
-        Assert.Equal(5, Refreshes(output));
-        int[] screens = Enumerable.Range(0, 6).Select(i => NthScreen(output, i)).ToArray();
-        Assert.DoesNotContain("▀", output[screens[0]..screens[1]]);   // disabled: nothing at startup
-        Assert.Contains(new string('▀', 100), output[screens[1]..screens[2]]);   // /splash over disabled: one picture, far wider than a tile
-        Assert.DoesNotContain("▀", output[screens[2]..screens[3]]);
-        Assert.Equal(8 * 12, Count(output[screens[3]..screens[4]], TileLine));     // /splash over tiled: page 1
-        Assert.Equal(2 * 12, Count(output[screens[4]..screens[5]], TileLine));     // and the arrows page it
     }
 
     [WindowsFact]
@@ -19783,7 +19657,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Theme_Named_SplashOn_StartsOverWithThePicture()
     {
         using var theme = new ThemeScope();
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "fullsize"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "image"; });
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf(2380, 100);
@@ -25386,13 +25260,14 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task ATiledSplashPictureDoubleClicked_Opens_WithNoNoticeLine()
+    public async Task ASplashPictureDoubleClicked_Opens_WithNoNoticeLine()
     {
         // The splash's pictures open without the "(🖼️ opened …)" line; only an error would print (2026-09-24, the user's call).
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; d.ImageThumbnailSize = "small"; });
+        // The tiled splash's tiles until it went (2026-10-20); the image's one picture since.
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "image"; });
         PaneOf40Rows();
-        SplashOf((480, 240), (480, 240), (480, 240));
-        StepsWhenIdle(DoubleClickDown(10), Line("/exit"));
+        SplashOf((480, 240));
+        StepsWhenIdle(DoubleClickDown(120), Line("/exit"));   // the picture centered on the 240 columns
 
         string output = await RunAsync();
 

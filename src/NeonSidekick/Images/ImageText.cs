@@ -270,6 +270,12 @@ public static class ImageText
         $"copied {relative} to {target}; the splash shows it from the next /splash or start"
         + (onlyOne ? " — it is the only picture in the profile's splash folder, so it stands in for the bundled set until more are added" : "");
 
+    /// <summary>
+    /// Added to <see cref="SplashSet"/> while <c>Welcome splash</c> is <c>robot</c> (2026-10-20): the pictures show at neither the start nor
+    /// <c>/splash</c> then. Pinned.
+    /// </summary>
+    public const string SplashRobotNote = "; Welcome splash is robot, so the pictures show only when it is image (/settings › Client › Chat)";
+
     /// <summary>A splash source that is no picture. Pinned.</summary>
     public static string SplashNotAnImage(string relative) => $"Error: '{relative}' is not a picture the splash can show (png, jpg, gif, webp or bmp)";
 

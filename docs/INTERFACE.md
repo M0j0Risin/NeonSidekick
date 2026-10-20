@@ -250,7 +250,7 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
 2. A waiting second press: Ctrl+C to exit, Esc to rewind, Delete for a splash picture.
 3. An open pane's keys.
-4. What the arrows do right now: the splash's pages, the picture strip, `/read`'s keys.
+4. What the arrows do right now: the splash's pictures, the picture strip, `/read`'s keys.
 
 * **auto** (the default): the row comes with a hint and stays, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 idle seconds pass. Typing never moves the input line.
 * **always** keeps the row; **off** puts the hints at the end of the status bar's left group.
@@ -374,10 +374,11 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 ## The welcome splash
 
-* *Welcome splash* `fullsize`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
-* *Welcome splash* `tiled`: thumbnails at *Image thumbnail size*; ←/→ page, a double-click opens one.
+* *Welcome splash* `image`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
+* *Welcome splash* `robot`: a robot stands just above the draft line and follows the mouse and your typing. Your first line takes it away.
+* **The robot** shows just its head when the room above the line is short, all of it again when there's room, nothing when there's none. Following the mouse needs a terminal that reports it.
 * **Your own pictures** in the profile's `images\splash_images\` replace the built-in ones; `/splash view` or `/splash thumbs` opens the folder, `/splash purge` empties it.
-* `/splash` shows the splash whatever *Welcome splash* says. On the Web UI it leads the transcript and goes at the first message sent from either side.
+* `/splash` shows the splash whatever *Welcome splash* says (the picture when it's `off`). On the Web UI the picture leads the transcript and goes at the first message sent from either side; the robot isn't shown there.
 
 ## The app's windows
 

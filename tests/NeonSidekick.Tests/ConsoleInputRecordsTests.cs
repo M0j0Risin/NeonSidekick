@@ -188,6 +188,18 @@ public class ConsoleInputRecordsTests
     }
 
     [Fact]
+    public void AMoveWithNoButton_IsAHover_ADragAWheelOrAPressIsNot()
+    {
+        // 2026-10-20, the welcome splash's robot: a hover is never an event, but the reader hands it on (IMouseInput.PointerMoved).
+        Assert.True(ConsoleInputRecords.IsHover(Mouse(5, 5, 0, MouseMoved)));
+        Assert.False(ConsoleInputRecords.IsHover(Mouse(5, 5, FromLeft1stButtonPressed, MouseMoved)));
+        Assert.False(ConsoleInputRecords.IsHover(Mouse(5, 5, RightmostButtonPressed, MouseMoved)));
+        Assert.False(ConsoleInputRecords.IsHover(Mouse(5, 5, 0x00780000, MouseWheeled)));
+        Assert.False(ConsoleInputRecords.IsHover(Mouse(5, 5, 0)));
+        Assert.False(ConsoleInputRecords.IsHover(Mouse(5, 5, 0, ConsoleInputNative.DoubleClick)));
+    }
+
+    [Fact]
     public void AMove_IsNothing_AndAWheelIsAWheel()
     {
         uint buttons = 0;

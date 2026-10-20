@@ -19,13 +19,16 @@ public sealed class ScreenGeometry
 
     private readonly Func<int?> _cursorRow;
     private readonly Func<int?> _cursorTop;
+    private readonly Func<int?>? _windowTop;
 
     /// <param name="cursorRow">The cursor's row within the window.</param>
     /// <param name="cursorTop">The cursor's row within the screen buffer — the frame a mouse click is reported in; null = unknown.</param>
-    public ScreenGeometry(Func<int?> cursorRow, Func<int?>? cursorTop = null)
+    /// <param name="windowTop">The buffer row the window's top row is (<see cref="WindowTop"/>); null = the cursor's buffer row less its window row.</param>
+    public ScreenGeometry(Func<int?> cursorRow, Func<int?>? cursorTop = null, Func<int?>? windowTop = null)
     {
         _cursorRow = cursorRow ?? throw new ArgumentNullException(nameof(cursorRow));
         _cursorTop = cursorTop ?? Unknown;
+        _windowTop = windowTop;
     }
 
     /// <summary>The cursor's screen row (0 = the top row of the window), or null when unknown.</summary>
@@ -33,6 +36,13 @@ public sealed class ScreenGeometry
 
     /// <summary>The cursor's buffer row (0 = the top of the screen buffer, scrollback included), or null when unknown. A click's <c>Y</c> is in this frame.</summary>
     public int? CursorTop() => Read(_cursorTop);
+
+    /// <summary>
+    /// The buffer row of the window's top row (2026-10-20, the welcome splash's robot following the mouse): a pointer's <c>Y</c> less
+    /// this is its screen row. Asked on every frame that saw the pointer move, so it never asks the terminal: the console's own
+    /// number on Windows, 0 for a terminal whose cursor is asked by a query (its reports are in screen cells already). Null when unknown.
+    /// </summary>
+    public int? WindowTop() => _windowTop is { } top ? Read(top) : CursorTop() - CursorRow();
 
     private static int? Read(Func<int?> probe)
     {
@@ -57,7 +67,7 @@ public sealed class ScreenGeometry
             return null;
         }
 
-        var geometry = new ScreenGeometry(ReadConsoleCursorRow, ReadConsoleCursorTop);
+        var geometry = new ScreenGeometry(ReadConsoleCursorRow, ReadConsoleCursorTop, ReadConsoleWindowTop);
         return geometry.CursorRow() is null ? null : geometry;
     }
 
@@ -68,7 +78,7 @@ public sealed class ScreenGeometry
     public static ScreenGeometry FromCursorQuery(Func<int?> screenRow)
     {
         ArgumentNullException.ThrowIfNull(screenRow);
-        return new ScreenGeometry(screenRow, screenRow);
+        return new ScreenGeometry(screenRow, screenRow, static () => 0);
     }
 
     private static int? ReadConsoleCursorRow()
@@ -80,6 +90,12 @@ public sealed class ScreenGeometry
     private static int? ReadConsoleCursorTop()
     {
         int top = Console.CursorTop;
+        return top >= 0 ? top : null;
+    }
+
+    private static int? ReadConsoleWindowTop()
+    {
+        int top = Console.WindowTop;
         return top >= 0 ? top : null;
     }
 }

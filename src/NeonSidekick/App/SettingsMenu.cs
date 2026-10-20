@@ -201,7 +201,7 @@ public enum SettingsField
     /// <summary>A toggle: whether a sent line that is a command's bare name offers the command first (<see cref="Settings.AppSettingsData.CommandTypoIntercept"/>). The Chat tab's row under Keep message history (2026-10-01; before Welcome splash from 2026-09-18); no reconnect (read at each Enter).</summary>
     CommandTypoIntercept,
 
-    /// <summary>A picker: how the splash greets you under the banner at startup — <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The Chat tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
+    /// <summary>A picker: how the splash greets you under the banner at startup — <c>image</c> / <c>robot</c> / <c>off</c> (since 2026-10-20; <c>fullsize</c> / <c>tiled</c> / <c>disabled</c> before) (<see cref="Settings.AppSettingsData.WelcomeSplashMode"/>; a toggle until 2026-09-24). The Chat tab's row under Theme (2026-10-01; before Show working directory from 2026-09-18, the user's order); no reconnect (read at each show).</summary>
     WelcomeSplash,
 
     /// <summary>A toggle: whether the banner is drawn at all — startup, <c>/clear</c>, <c>/splash</c>, <c>/theme</c>, a profile switch (<see cref="Settings.AppSettingsData.ShowHeader"/>, on by default). The Chat tab's row under Welcome splash (2026-10-01, the user's ask); no reconnect (read at each banner draw). <c>/header</c> flips it too (later that day; Ctrl+Alt+H as well until 2026-10-18).</summary>
@@ -4011,7 +4011,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>One row of the welcome-splash picker: the mode and its hint (padded to nine: <c>fullsize</c> and <c>disabled</c> are eight). Pinned.</summary>
     public static string WelcomeSplashModeLabel(string name) =>
-        Markup.Escape(name.PadRight(9)) + Theme.DimMarkup(UI.SplashMode.Describe(name));
+        Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(UI.SplashMode.Describe(name));
 
     /// <summary>One row of the Hints bar picker (2026-10-14): the word and its note (padded to eight: <c>always</c> is six).</summary>
     public static string HintsBarLabel(string name) =>

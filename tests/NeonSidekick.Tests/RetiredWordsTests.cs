@@ -64,7 +64,7 @@ public class RetiredWordsTests : IDisposable
         Assert.Equal(["none", "all", "new", "edit"], ReflectionConfirmMode.Names);
         Assert.Equal(["all", "model-written", "none"], SessionShowName.Names);
         Assert.Equal(["half", "three-quarters", "full"], MenuHeight.Names);
-        Assert.Equal(["fullsize", "tiled", "off"], SplashMode.Names);
+        Assert.Equal(["image", "robot", "off"], SplashMode.Names);
         Assert.Equal(["read-write", "read-only", "off"], MemoryMode.Names);
         Assert.Equal(["automatic", "manual", "off"], QueueMode.Names);
         Assert.Equal(["off", "generate"], BotChatImageMentionMode.Names);
@@ -106,6 +106,18 @@ public class RetiredWordsTests : IDisposable
 
         // Another profile's file read for a copy (/profile push|pull, botchat, advisors) reads the same way.
         Assert.Equal("lan", Profiles.ReadProfileFile(path).WebBrowserNetworkMode);
+    }
+
+    [Theory]
+    [InlineData("fullsize")]
+    [InlineData("tiled")]
+    [InlineData("Tiled")]
+    public void TheSplashsOldPictureWords_LoadAsImage(string word)
+    {
+        // 2026-10-20 (the user's call): tiled retired, fullsize renamed image; a profile saved before reads as image.
+        var data = new AppSettingsData { WelcomeSplashMode = word };
+        RetiredWords.Upgrade(data);
+        Assert.Equal("image", data.WelcomeSplashMode);
     }
 
     [Fact]

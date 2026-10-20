@@ -136,7 +136,7 @@ function renderEntry(entry) {
     case 'picture':
       if (entry.pictures && entry.pictures.length) {
         // The welcome splash (2026-10-18, the user's ask): first on the page, centered and filling it as on the PC (fitSplash), until the
-        // first sent line takes it out; a lone picture at its middle size, the tiled one's thumbnails as they are.
+        // first sent line takes it out; a lone picture at its middle size (the tiled splash, thumbnails, went on 2026-10-20; the robot has no entry).
         node = el('div', 'entry pictures' + (entry.splash ? ' splash' : ''));
         const lone = !!entry.splash && entry.pictures.length === 1;
         const grid = el('div', 'grid' + (lone ? ' lone' : ''));

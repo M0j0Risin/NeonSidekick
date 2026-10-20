@@ -64,7 +64,7 @@ public readonly record struct BusyReading(string Label, TimeSpan Elapsed, TimeSp
 /// screen thread (flow writes, the input line), the key watcher's preview and the pane's own
 /// tick (spinner frames, a size change, a changed hint).</para>
 /// </summary>
-public sealed class ScreenPane : IAnsiConsole, IDisposable
+public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 {
     /// <summary>Rule (the session's name at its right edge, <see cref="RuleTitle"/>), one input row, rule, hint: the pane at its smallest (a longer draft or an overlay adds rows).</summary>
     public const int PaneRows = 4;
@@ -3307,6 +3307,7 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The screen is wiped: the flow starts at the top and the pane is off the screen until the next write.</summary>
     public void Clear(bool home)
     {
+        bool hadCompanion;
         _inner.Clear(home);
         if (!Enabled)
         {
@@ -3327,6 +3328,13 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
             _blank = false;
             _flowCut = false;
             ForgetLive();
+            hadCompanion = _companion is not null;
+            StopCompanionLocked();   // the welcome splash's robot goes with the screen (2026-10-20)
+        }
+
+        if (hadCompanion)
+        {
+            Hover?.Invoke(false);
         }
     }
 
@@ -4073,9 +4081,12 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
 
     public void Dispose()
     {
+        bool hadCompanion;
         lock (_gate)
         {
             _disposed = true;
+            hadCompanion = _companion is not null;
+            StopCompanionLocked();
             while (_syncDepth > 0)
             {
                 EndSync();   // nothing held past the pane's end
@@ -4085,6 +4096,10 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         }
 
         _timer?.Dispose();
+        if (hadCompanion)
+        {
+            Hover?.Invoke(false);
+        }
     }
 
     // ── The input row ───────────────────────────────────────────────────────
@@ -5402,6 +5417,8 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
         int liveRows = 0;
         if (window is not null)
         {
+            _companionAt = null;   // scrolled back: the robot stands nowhere (2026-10-20)
+
             // The region from the top row: the flow the screen held is erased (a lift from the
             // bottom shape left the cursor on it), the window's rows written in its place, the
             // live block left in its slot — its rows only counted, for the hint.
@@ -5540,8 +5557,15 @@ public sealed class ScreenPane : IAnsiConsole, IDisposable
                 }
             }
 
+            // The welcome splash's robot (2026-10-20, round 2) stands on the padding's last rows, part of this frame.
+            int companionFrom = PlaceCompanion(start + liveRows, _pad, w);
             for (int i = 0; i < _pad; i++)
             {
+                if (i >= companionFrom)
+                {
+                    WriteCompanionRow(i - companionFrom);
+                }
+
                 EndRow();
             }
 

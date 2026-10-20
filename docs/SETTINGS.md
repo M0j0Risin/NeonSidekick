@@ -57,7 +57,7 @@ The app itself, this side of the connection.
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
-| Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `off`. `/splash view` opens the profile's pictures; see [The welcome splash](INTERFACE.md#the-welcome-splash). | `fullsize` |
+| Welcome splash | What greets you under the banner at startup until your first line: `image`, `robot` or `off`. See [The welcome splash](INTERFACE.md#the-welcome-splash). | `image` |
 | Show header | The banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |

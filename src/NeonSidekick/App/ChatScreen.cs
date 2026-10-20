@@ -27,6 +27,7 @@ using NeonSidekick.Settings;
 using NeonSidekick.Shell;
 using NeonSidekick.Sql;
 using NeonSidekick.Comfy;
+using NeonSidekick.Companion;
 using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Timers;
@@ -364,14 +365,6 @@ internal sealed partial class ChatScreen
     public const string SplashHint = "← → slideshow";
 
     /// <summary>
-    /// The hint row's lead while the tiled splash stands with two or more pages (2026-09-24,
-    /// <c>Welcome splash</c> <c>tiled</c>): the arrows and where they are — <c>← → page 2 of 5</c>,
-    /// one-based. Stands where <see cref="SplashHint"/> does, under the same rules. Pinned.
-    /// </summary>
-    public static string SplashPageHint(int page, int count) =>
-        string.Create(CultureInfo.InvariantCulture, $"← → page {page + 1} of {count}");
-
-    /// <summary>
     /// The hint row after one Delete over a profile's splash picture; the next Delete in a row within
     /// <see cref="SplashDeleteWindow"/> moves the file into the folder's <c>.trash</c> (2026-09-24). The
     /// only hint the feature has: the idle row never advertises it (the user's call). Pinned.
@@ -651,19 +644,15 @@ internal sealed partial class ChatScreen
     // folder (CycleSplash reads the folder live, so a file dropped or removed mid-session moves the
     // walk and not the hint until the next show). The folder (2026-09-24) is the source's
     // SplashSource.Directory at the show — the profile's own splash folder, null over the embedded
-    // set — what Delete Delete removes the named file from. The page (2026-09-24) is the tiled
-    // splash's (Welcome splash tiled): the page on screen, zero-based, null while one picture stands —
-    // then the count is the pages', the name and the folder null (no one picture to step from or to
-    // trash). All six fall together (ForgetSplash). The tiles are the tiled splash's pictures read
-    // once for a source and a box (ShowSplashPage), kept across a page flip and the redraw it makes —
-    // registered for a double-click once, too — and read again when the names, the folder or the box change.
+    // set — what Delete Delete removes the named file from. The robot (2026-10-20, Welcome splash robot) is the splash with no
+    // picture: shown with no name, count or folder, so the arrows and Delete leave it alone. All of them fall together
+    // (ForgetSplash). The tiled splash's page and tiles went with it on 2026-10-20 (the user's call).
     private bool _splashShown;
     private bool _splashForced;
     private string? _splashName;
     private int _splashCount;
     private string? _splashFolder;
-    private int? _splashPage;
-    private SplashTiles? _splashTiles;
+    private bool _splashRobot;
 
     // The welcome splash drawn first (2026-10-11, the user's ask: at once, not after the LLM's connect): the place in the pane's
     // store right after the picture (ScreenPane.StoreMark), so what the connects wrote under it is put back under a refitted one (RefitSplash); null once the
@@ -677,9 +666,6 @@ internal sealed partial class ChatScreen
     /// </summary>
     private long? _splashFeedSeq;
     private int _splashReserve;
-
-    /// <summary>The tiled splash's decoded pictures for one source and one thumbnail box, with their double-click ids.</summary>
-    private sealed record SplashTiles(IReadOnlyList<string> Names, string? Directory, ThumbnailBox Box, List<ImageThumbnail> Thumbnails, List<int> Ids);
     private readonly IReadOnlyList<AIFunction> _clockTools;
     private readonly IReadOnlyList<AIFunction> _helpTools = HelpTools();
     private readonly WorkingDirectory _files;
@@ -988,6 +974,18 @@ internal sealed partial class ChatScreen
     /// any thread; <see cref="SidekickApp"/> hands it to the console input as its callback.
     /// </summary>
     public Action FlushConsole => _pane.Touch;
+
+    /// <summary>The mouse over cell (x, y) with no button held (2026-10-20, the welcome splash's robot): handed to the pane's companion. The input reader's thread; never blocks.</summary>
+    public void PointerMoved(int x, int y) => _pane.PointerMoved(x, y);
+
+    /// <summary>The window gained or lost focus (2026-10-20): handed to the pane's companion. The input reader's thread; never blocks.</summary>
+    public void FocusChanged(bool focused) => _pane.FocusChanged(focused);
+
+    /// <summary>The input reader's hover switch (<see cref="IMouseInput.Hover"/>, 2026-10-20), which the pane turns on while the robot stands.</summary>
+    public void UseHover(Action<bool>? hover) => _pane.Hover = hover;
+
+    /// <summary>Whether the welcome splash's robot is on the pane (2026-10-20; tests).</summary>
+    public bool RobotSplashStanding => _pane.HasCompanion;
 
     // The console input's mouse hooks (WindowsConsoleInput.Capture / HoldWheel; null without a real console).
     private readonly Action<bool>? _mouse;
@@ -1653,14 +1651,10 @@ internal sealed partial class ChatScreen
     /// <paramref name="rest"/> (the timers / usage / reading line) is empty, else the two with
     /// <see cref="HintJoin"/> between — <c>← → slideshow · 4.6k / 151.4k · 3%</c>. Pinned.
     /// </summary>
-    public static string SplashHintLine(string rest) => SplashHintLine(rest, SplashHint);
-
-    /// <summary>As <see cref="SplashHintLine(string)"/> with <paramref name="lead"/> in place of <see cref="SplashHint"/> (the tiled splash's <see cref="SplashPageHint"/>, 2026-09-24).</summary>
-    public static string SplashHintLine(string rest, string lead)
+    public static string SplashHintLine(string rest)
     {
         ArgumentNullException.ThrowIfNull(rest);
-        ArgumentNullException.ThrowIfNull(lead);
-        return rest.Length == 0 ? lead : lead + HintJoin + rest;
+        return rest.Length == 0 ? SplashHint : SplashHint + HintJoin + rest;
     }
 
     /// <summary>
@@ -2752,7 +2746,7 @@ internal sealed partial class ChatScreen
             return at >= 0 ? ComfyText.StripSelectedHint(at + 1, _pictureStrip.Count) : ComfyText.StripHint;
         }
 
-        return _splashPage is { } page ? SplashPageHint(page, _splashCount) : SplashHint;
+        return SplashHint;
     }
 
     /// <summary>A first Ctrl+C is still fresh: the next one exits.</summary>
@@ -6336,7 +6330,7 @@ internal sealed partial class ChatScreen
         var tools = new List<AIFunction> { new ViewImageTool(files, effective, images), new ImageInfoTool(files, effective, images), new ImageEditTool(files, effective, images) };
         if (splashDirectory is not null)
         {
-            tools.Add(new SetSplashImageTool(files, splashDirectory, images));
+            tools.Add(new SetSplashImageTool(files, splashDirectory, images, () => SplashMode.TryParse(effective().WelcomeSplashMode, out var style) && style == SplashStyle.Robot));
         }
 
         return tools;
@@ -11656,7 +11650,7 @@ internal sealed partial class ChatScreen
         ForgetSplash();
     }
 
-    /// <summary>The splash is off the screen: its flags, its name, its count, its folder, its page and the delete's arm fall together (the tiles stay: they are read again only when their source or box changes).</summary>
+    /// <summary>The splash is off the screen: its flags, its name, its count, its folder, the robot's flag and the delete's arm fall together.</summary>
     private void ForgetSplash()
     {
         _splashShown = false;
@@ -11664,7 +11658,7 @@ internal sealed partial class ChatScreen
         _splashName = null;
         _splashCount = 0;
         _splashFolder = null;
-        _splashPage = null;
+        _splashRobot = false;
         _splashMark = null;
         Volatile.Write(ref _splashDeleteArmedUntil, 0);
     }
@@ -11681,22 +11675,27 @@ internal sealed partial class ChatScreen
     /// <paramref name="force"/> is <c>/splash</c>'s (later on 2026-09-19, the user's ask): the
     /// picture whatever <c>Welcome splash</c> says, and the arrows walk it whatever it says too
     /// (<see cref="CycleSplash"/> reads <c>_splashForced</c>). Since 2026-09-24 <c>Welcome splash</c> is
-    /// a pick (<see cref="SplashMode"/>): <c>fullsize</c> is all of the above, <c>disabled</c> the old off,
-    /// and <c>tiled</c> the first page of thumbnails instead (<see cref="ShowSplashPage"/>) — forced too,
-    /// so <c>/splash</c> shows the style chosen, one picture when that is <c>disabled</c>.
+    /// a pick (<see cref="SplashMode"/>): <c>image</c> (<c>fullsize</c> until 2026-10-20) is all of the above, <c>off</c> the old
+    /// off, and since 2026-10-20 <c>robot</c> the animated robot instead (<see cref="ShowRobotSplash"/>), which needs no picture
+    /// source — forced too, so <c>/splash</c> shows the style chosen, one picture when that is <c>off</c>.
     /// </summary>
     private void ShowSplash(bool force = false)
     {
         var style = SplashMode.Resolve(_effective());
-        if (!_pane.Enabled || (!force && style == SplashStyle.Disabled) || CurrentSplash(log: true) is not { } source)
+        if (!_pane.Enabled || (!force && style == SplashStyle.Disabled))
         {
             return;
         }
 
-        if (style == SplashStyle.Tiled)
+        if (style == SplashStyle.Robot)
         {
-            ShowSplashPage(source, 0);
+            ShowRobotSplash();
             _splashForced = force && _splashShown;
+            return;
+        }
+
+        if (CurrentSplash(log: true) is not { } source)
+        {
             return;
         }
 
@@ -11718,14 +11717,18 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void RefitSplash(Action head)
     {
-        if (!_splashShown || _splashMark is not { } mark || _pane.LinesSince(mark) is not { } lines || CurrentSplash() is not { } source)
+        if (!_splashShown || _splashMark is not { } mark || _pane.LinesSince(mark) is not { } lines)
+        {
+            return;
+        }
+
+        if (CurrentSplash() is not { } source)
         {
             return;
         }
 
         bool forced = _splashForced;
         string? name = _splashName;
-        int? page = _splashPage;
         long? entry = _splashFeedSeq;
         using (_pane.Batch())
         {
@@ -11734,11 +11737,7 @@ internal sealed partial class ChatScreen
             _splashReserve = lines.Rows;
             try
             {
-                if (page is { } at)
-                {
-                    ShowSplashPage(source, at);
-                }
-                else if (name is not null)
+                if (name is not null)
                 {
                     ShowSplash(source, name);
                 }
@@ -11826,65 +11825,41 @@ internal sealed partial class ChatScreen
         _splashName = name;
         _splashCount = source.Names.Count;
         _splashFolder = source.Directory;
-        _splashPage = null;
         _splashMark = _pane.StoreMark;
     }
 
     /// <summary>
     /// The transcript's rows under the banner and the startup lines: the <c>/view</c> box with the flow's rows reserved too — the
-    /// whole splash's, and the tiled splash's page — and, while <see cref="RefitSplash"/> draws it again, the rows of the lines it
+    /// picture's, and the robot's block — and, while <see cref="RefitSplash"/> draws it again, the rows of the lines it
     /// puts back under it.
     /// </summary>
     private ThumbnailBox SplashArea() =>
         ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.ReservedBarRows);   // the Hints bar counted: the arrows' hint brings it (2026-10-14)
 
     /// <summary>
-    /// The tiled splash (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>): page
-    /// <paramref name="page"/> (wrapped into range, so a resize or a removed file that leaves fewer pages
-    /// still lands on one) of <paramref name="source"/>'s pictures as thumbnails at <c>Image thumbnail size</c>
-    /// (<see cref="ThumbnailSize.Resolve"/> over <see cref="SplashArea"/>, so <c>fullsize</c> is one picture a
-    /// page), in name order, only as many as fit under the banner (<see cref="SplashImages.Paginate"/>),
-    /// tiled left to right by the sent pictures' own strip (<see cref="TranscriptRenderer.Images"/>) — a
-    /// double-click opens one. The pictures are read once per source and box (<c>_splashTiles</c>); one
-    /// that does not load is left out. Nothing, and the splash gone, when none loads.
+    /// The robot splash (2026-10-20, the user's ask: <c>Welcome splash</c> <c>robot</c>, the AnimationTrials proof of concept moved in):
+    /// the robot handed to the pane (<see cref="ScreenPane.ShowCompanion"/>), which stands it just above the draft line in its padding —
+    /// whole, its head alone, or not at all, as the room there says at every draw — following the mouse and the caret, until the first
+    /// sent line takes it away (<see cref="DismissSplash"/>). Until later that day (the user's call, round 2) it stood over a block of blank
+    /// rows under the banner, sized once, and played a goodbye. Nothing on a console without colors. Wears <see cref="Theme.Current"/>; a
+    /// theme change draws a new one. Its own <see cref="Random"/>: the frames run on the pane's timer, the screen's own is this thread's.
+    /// No Web UI entry, and no mark: <see cref="RefitSplash"/> has nothing to fit (the startup's lines go above the padding).
     /// </summary>
-    private void ShowSplashPage(SplashSource source, int page)
+    private void ShowRobotSplash()
     {
-        var area = SplashArea();
-        var box = ThumbnailSize.Resolve(_effective(), area);
-        var tiles = _splashTiles;
-        if (tiles is null || tiles.Box != box || !string.Equals(tiles.Directory, source.Directory, StringComparison.Ordinal)
-            || !tiles.Names.SequenceEqual(source.Names, StringComparer.Ordinal))
-        {
-            var thumbnails = new List<ImageThumbnail>(source.Names.Count);
-            var ids = new List<int>(source.Names.Count);
-            foreach (string name in source.Names)
-            {
-                if (source.Load(name) is { } image && ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
-                {
-                    thumbnails.Add(thumbnail);
-                    ids.Add(RegisterPicture(image, sandbox: false));
-                }
-            }
-
-            tiles = _splashTiles = new SplashTiles(source.Names.ToArray(), source.Directory, box, thumbnails, ids);
-        }
-
-        var pages = SplashImages.Paginate(tiles.Thumbnails, _pane.Profile.Width, area.MaxRows);
-        if (pages.Count == 0)
+        if (_pane.Profile.Capabilities.ColorSystem == ColorSystem.NoColors)
         {
             return;
         }
 
-        int at = (page % pages.Count + pages.Count) % pages.Count;
-        var (start, count) = pages[at];
-        _splashFeedSeq = _transcript.Images(tiles.Thumbnails.GetRange(start, count), tiles.Ids.GetRange(start, count), splash: true);
+        var robot = new RobotAnimator(_time, new Random(_random.Next()), RobotPalette.Default) { Theme = ThemeRoles.From(Theme.Current) };
+        _pane.ShowCompanion(robot);
         _splashShown = true;
+        _splashRobot = true;
         _splashName = null;
-        _splashCount = pages.Count;
+        _splashCount = 0;
         _splashFolder = null;
-        _splashPage = at;
-        _splashMark = _pane.StoreMark;
+        _splashMark = null;
     }
 
     /// <summary>
@@ -11906,40 +11881,12 @@ internal sealed partial class ChatScreen
     /// line's, a no-op on an empty draft — once the splash is gone, without the pane or a source,
     /// with <c>Welcome splash</c> off (read live, so a flip mid-session stops the walk — unless
     /// <c>/splash</c> drew the picture, which the setting never gates) or with
-    /// fewer than two pictures. The input line's <c>emptyArrow</c> hook. Over the tiled splash
-    /// (2026-09-24) the arrows page instead: the previous or next set, wrapping, re-paged live
-    /// (<see cref="ShowSplashPage"/>), so a resize or a dropped file counts. A held arrow's queued presses
+    /// fewer than two pictures (the robot has none). The input line's <c>emptyArrow</c> hook. A held arrow's queued presses
     /// (2026-10-05, the user's ask, the <c>/sys</c> pane's fold of 2026-10-03) are one step, drawn once
     /// (<see cref="FoldQueuedSplashArrows"/>).
     /// </summary>
     private bool CycleSplash(int step)
     {
-        if (_splashPage is { } page)
-        {
-            if (!SplashArrowsOffered() || CurrentSplash() is not { } pages)
-            {
-                return false;
-            }
-
-            step += FoldQueuedSplashArrows();
-            if (step == 0)
-            {
-                return true;
-            }
-
-            bool pageForced = _splashForced;
-            long? pageEntry = _splashFeedSeq;
-            using (_pane.Batch())
-            {
-                RedrawScreen();
-                ShowSplashPage(pages, page + step);
-                _splashForced = pageForced && _splashShown;
-            }
-
-            ReplaceSplashEntry(pageEntry);
-            return true;
-        }
-
         if (!SplashArrowsOffered() || CurrentSplash() is not { } source || source.Names.Count < 2)
         {
             return false;
@@ -12078,6 +12025,16 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void DismissSplash()
     {
+        if (_splashShown && _splashRobot)
+        {
+            // The robot (2026-10-20, round 2, the user's call: it played a goodbye until then): gone at once. The line's commit draws
+            // the pane next, and the padding it stood in comes out blank — no wipe, the startup lines stay as they were written.
+            _pane.HideCompanion();
+            ForgetSplash();
+            DiagnosticLog.Debug("Splash", "Robot gone at the first line.");
+            return;
+        }
+
         if (_splashShown)
         {
             long? entry = _splashFeedSeq;

@@ -323,12 +323,12 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <remarks>
     /// <paramref name="webIds"/> (later on 2026-10-14) are the pictures the Web UI's entry offers — every picture of the set, a codec-refused one too
     /// — written before the PC's early return, so a set the terminal drew none of still reaches the page; without them, <paramref name="ids"/>.
-    /// Returns the entry's seq, or null with no feed or nothing to record. <paramref name="splash"/> (2026-10-18) marks the tiled welcome splash's entry.
+    /// Returns the entry's seq, or null with no feed or nothing to record. (A <c>splash</c> flag marked the tiled welcome splash's entry from 2026-10-18 until the tiled splash went, 2026-10-20.)
     /// </remarks>
-    public long? Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null, IReadOnlyList<int>? webIds = null, bool splash = false)
+    public long? Images(IReadOnlyList<ImageThumbnail> thumbnails, IReadOnlyList<int>? ids = null, IReadOnlyList<int>? webIds = null)
     {
         ArgumentNullException.ThrowIfNull(thumbnails);
-        long? seq = webIds is { Count: > 0 } ? FeedPictures(webIds, webIds.Count, splash) : FeedPictures(ids ?? [], thumbnails.Count, splash);
+        long? seq = webIds is { Count: > 0 } ? FeedPictures(webIds, webIds.Count) : FeedPictures(ids ?? [], thumbnails.Count);
         if (thumbnails.Count == 0)
         {
             return seq;

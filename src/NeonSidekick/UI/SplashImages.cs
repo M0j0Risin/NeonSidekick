@@ -7,7 +7,7 @@ namespace NeonSidekick.UI;
 /// <summary>
 /// The screen's splash seam (2026-09-19): the pictures' names in the order Left / Right walk them and
 /// the loader for one of them. <see cref="SplashImages.Source"/> in the app; a test hands a list of
-/// names over generated pictures; null = no splash whatever the setting says. <see cref="Directory"/>
+/// names over generated pictures; null = no picture splash whatever the setting says (the robot needs none). <see cref="Directory"/>
 /// (2026-09-24) is the folder the names are files in — set by <see cref="SplashImages.FromDirectory"/>
 /// alone, so Delete Delete may remove a picture of the profile's own and never an embedded one.
 /// </summary>
@@ -110,54 +110,6 @@ public static class SplashImages
         }
 
         return names[0];
-    }
-
-    /// <summary>
-    /// The tiled splash's pages (2026-09-24, the user's ask: <c>Welcome splash</c> <c>tiled</c>, "only so
-    /// many as can fit on the screen at one time"): <paramref name="tiles"/> cut into runs, each the
-    /// longest that <see cref="ImageStrip"/> lays out at <paramref name="width"/> in no more than
-    /// <paramref name="rows"/> lines — its rows packed by <see cref="ImageStrip.Pack"/>, a strip row as tall
-    /// as its tallest tile (two pixels a line, the <see cref="ImageThumbnail"/> canvas), one spacer line
-    /// between strip rows. A page always holds at least one tile, so one taller than the rows stands
-    /// alone. Empty over none. Pure; pinned.
-    /// </summary>
-    public static IReadOnlyList<(int Start, int Count)> Paginate(IReadOnlyList<ImageThumbnail> tiles, int width, int rows)
-    {
-        ArgumentNullException.ThrowIfNull(tiles);
-        var pages = new List<(int Start, int Count)>();
-        int start = 0;
-        while (start < tiles.Count)
-        {
-            int count = 1;
-            while (start + count < tiles.Count && StripLines(tiles, start, count + 1, width) <= rows)
-            {
-                count++;
-            }
-
-            pages.Add((start, count));
-            start += count;
-        }
-
-        return pages;
-    }
-
-    /// <summary>The lines <see cref="ImageStrip"/> takes for <paramref name="count"/> tiles from <paramref name="start"/> at <paramref name="width"/>.</summary>
-    private static int StripLines(IReadOnlyList<ImageThumbnail> tiles, int start, int count, int width)
-    {
-        var run = new ImageThumbnail[count];
-        for (int i = 0; i < count; i++)
-        {
-            run[i] = tiles[start + i];
-        }
-
-        var packed = ImageStrip.Pack(run, width);
-        int lines = packed.Count - 1;
-        foreach (var row in packed)
-        {
-            lines += row.Max(tile => (tile.Height + 1) / 2);
-        }
-
-        return lines;
     }
 
     /// <summary>The production splash: the embedded names over <see cref="Load"/>. What <c>SidekickApp</c> hands the screen.</summary>

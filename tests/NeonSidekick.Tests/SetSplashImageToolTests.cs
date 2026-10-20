@@ -47,6 +47,23 @@ public sealed class SetSplashImageToolTests : IDisposable
     }
 
     /// <summary>
+    /// Under <c>Welcome splash</c> <c>robot</c> (2026-10-20) the pictures show at neither the start nor <c>/splash</c>: the result says so,
+    /// and says nothing of it under any other mode.
+    /// </summary>
+    [Fact]
+    public void SetSplashImage_UnderTheRobotSplash_SaysThePicturesWaitForImage()
+    {
+        string splash = Path.Combine(_dir, "profile", "images", "splash_images");
+        File.WriteAllBytes(Path.Combine(_root, "art.bmp"), Picture());
+        bool robot = true;
+        var tool = new SetSplashImageTool(_files, () => splash, robotSplash: () => robot);
+
+        Assert.Equal(ImageText.SplashSet("art.bmp", Path.Combine(splash, "art.bmp"), onlyOne: true) + ImageText.SplashRobotNote, tool.Set("art.bmp", null));
+        robot = false;
+        Assert.Equal(ImageText.SplashSet("art.bmp", Path.Combine(splash, "art-2.bmp"), onlyOne: false), tool.Set("art.bmp", null));
+    }
+
+    /// <summary>
     /// With the profile's images folder (2026-10-10, when the splash folder moved under it): a generated picture is taken by its full
     /// path and copied into splash_images; a picture already there is refused (the copy would land beside itself); a full path
     /// elsewhere outside the working directory is still refused; the description and the schema name the folder.

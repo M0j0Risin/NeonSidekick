@@ -184,7 +184,7 @@ main { flex: 1; padding: 12px 16px 16px; max-width: 900px; width: 100%; margin: 
 .entry.pictures .tile img.original { max-width: min(100%, 320px); }   /* a thumbnail the server could not make: the original, scaled down */
 .entry.pictures .tile.fallback { padding: 10px 12px; color: var(--dim); font-size: 14px; text-align: left; }
 /* The welcome splash (2026-10-18, the user's ask): first in the transcript (order: -1 keeps it above the startup lines, as on the PC, a refit
-   having fed it after them), centered both ways in the room fitSplash gives it; a lone picture as large as that room, the tiled one's thumbnails centered. */
+   having fed it after them), centered both ways in the room fitSplash gives it; a lone picture as large as that room (the only kind since the tiled splash went, 2026-10-20). */
 .entry.pictures.splash { order: -1; display: flex; align-items: center; justify-content: center; min-height: var(--splash-room, 60vh); }
 .entry.pictures.splash .grid { width: 100%; justify-content: center; }
 .entry.pictures.splash .grid.lone .tile { max-width: 100%; }

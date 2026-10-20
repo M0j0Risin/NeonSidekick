@@ -82,6 +82,21 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IMous
     /// <summary>Raised (on the thread pool) after the mouse was taken or handed back: the screen should write something.</summary>
     public Action? ModeChanged { get; set; }
 
+    /// <summary>Raised on the reader thread for a move with no button held while the mouse is taken and hover is asked for (2026-10-20).</summary>
+    public Action<int, int>? PointerMoved { get; set; }
+
+    /// <summary>Raised on the reader thread for a focus record (2026-10-20).</summary>
+    public Action<bool>? FocusChanged { get; set; }
+
+    /// <summary>
+    /// Asks for hover (2026-10-20, the welcome splash's robot). Nothing changes in the console's mode: with mouse input on, ConPTY
+    /// already asks the terminal for any-event tracking and every move comes as a record; this only says whether to raise
+    /// <see cref="PointerMoved"/> for the ones with no button held.
+    /// </summary>
+    public void Hover(bool on) => _hover = on;
+
+    private volatile bool _hover;
+
     /// <summary>The mouse is the app's right now (false while released, and between a wheel notch and the next key).</summary>
     public bool MouseCaptured
     {
@@ -279,6 +294,24 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IMous
                         break;
 
                     case MouseEvent:
+                        if (ConsoleInputRecords.IsHover(record.MouseEvent) && (buttons & FromLeft1stButtonPressed) == 0)
+                        {
+                            // A hover (2026-10-20) is no event and never ends a paste's run: the run goes when the buffer is empty.
+                            // No button is down now (a right button let go during it: the next press is a click again).
+                            buttons = 0;
+                            if (_hover && MouseCaptured && PointerMoved is { } moved)
+                            {
+                                moved(record.MouseEvent.X, record.MouseEvent.Y);
+                            }
+
+                            if (!(GetNumberOfConsoleInputEvents(_handle, out uint left) && left > 0))
+                            {
+                                FlushRun();
+                            }
+
+                            break;
+                        }
+
                         FlushRun();
                         if (ConsoleInputRecords.TryTranslateMouse(record.MouseEvent, ref buttons, out var mouse, out bool wheel))
                         {
@@ -305,8 +338,14 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IMous
 
                         break;
 
+                    case FocusEvent:
+                        // The window's focus (2026-10-20): the robot goes idle on a loss. It ends a run, as before.
+                        FlushRun();
+                        FocusChanged?.Invoke(record.FocusSetFocus != 0);
+                        break;
+
                     default:
-                        // A focus, menu or buffer-size record: nothing to the app, but it ends a run.
+                        // A menu or buffer-size record: nothing to the app, but it ends a run.
                         FlushRun();
                         break;
                 }
