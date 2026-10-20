@@ -2364,7 +2364,7 @@ function walkStep(delta) {
 
 draft.addEventListener('focus', () => { readHistory(); });
 draft.addEventListener('input', () => { msgHistory.walking = false; });   // a typed key ends the walk (the PC's "any other key")
-draft.addEventListener('keydown', async ev => {
+draft.addEventListener('keydown', ev => {
   if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
   if (completion || ev.isComposing || composing || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return;
   const up = ev.key === 'ArrowUp';
@@ -2373,13 +2373,21 @@ draft.addEventListener('keydown', async ev => {
   const atEnd = none && (up ? caret === 0 : caret === draft.value.length);
   if (!msgHistory.walking && !atEnd && !oneRow()) return;   // the box moves the caret a row
   ev.preventDefault();
+  walkKeys = walkKeys.then(() => walkKey(up)).catch(() => {});
+});
+
+// The walk's keys one after another (2026-10-19): a second ↑ pressed while the first still read the app's lines started a read of its own,
+// then took the first's recalled line for a typed one and was dropped.
+let walkKeys = Promise.resolve();
+
+async function walkKey(up) {
   if (!msgHistory.walking && msgHistory.index < 0) {
     const before = draft.value;
     await readHistory();   // a walk starts on the app's lines now
-    if (draft.value !== before) return;
+    if (draft.value !== before) return;   // typed into meanwhile: the key is spent
   }
   walkStep(up ? -1 : 1);
-});
+}
 draft.addEventListener('blur', () => setTimeout(hideList, 150));
 
 sendBtn.addEventListener('click', () => send(false));
