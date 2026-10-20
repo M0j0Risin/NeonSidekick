@@ -172,4 +172,20 @@ public sealed class PlanReferencesTests : IDisposable
 
         Assert.Equal(".neon/plans/guide-2.md", saved!.Path);
     }
+
+    [Fact]
+    public void Hashed_NamesAPrunedPicture_AsItsBytesWould_WithoutCarryingThem()
+    {
+        // 2026-10-20, a review: every planning turn read each pruned picture whole and hashed it again.
+        string full = Path.Combine(_dir, "shot.png");
+        File.WriteAllBytes(full, Red);
+
+        var hashed = PlanReferences.Hashed(full)!;
+
+        Assert.Empty(hashed.Bytes);
+        Assert.Equal(PlanReferences.Names(_files, PlanPath, [new PlanPicture(Red, "image/png", null)]), PlanReferences.Names(_files, PlanPath, [hashed]));
+        Assert.Null(PlanReferences.Hashed(Path.Combine(_dir, "gone.png")));
+        File.WriteAllBytes(full, Other);   // a new size: read again
+        Assert.NotEqual(hashed.Hash, PlanReferences.Hashed(full)!.Hash);
+    }
 }

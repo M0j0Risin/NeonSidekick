@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.Advisors;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
@@ -25,6 +26,20 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var snapshot = loop.Snapshot;
         bool byAdvisor = RalphReviewers.ByAdvisor(snapshot.Reviewer, AdvisorPassOffered());
+        if (byAdvisor && effective.AdvisorConfirm && _neonAdvisor.Advisors.FirstOrDefault() is { } advisor
+            && !await RalphConfirmAsync(AdvisorText.ConfirmQuestion(advisor, RalphText.ReviewConfirmQuestion(step.Text)), cancellationToken).ConfigureAwait(false))
+        {
+            // Advisor confirm holds for the loop's review too (2026-10-20, a review: it called the advisor directly, past the yes the setting asks
+            // for, and every step's diff went out unasked): a no has the model review instead, as headless always does under the setting.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            DiagnosticLog.Info(AppCategory, $"ralph: the advisor's review of pass {loop.Pass} was declined; the model reviews");
+            byAdvisor = false;
+        }
+
         string request = RalphReviewers.Request(step, report, delta, _session.ContextLength?.Tokens ?? 0);
         RalphVerdict verdict = RalphVerdict.Unclear();
         long tokens = 0;

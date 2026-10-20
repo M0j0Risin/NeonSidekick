@@ -200,6 +200,13 @@ internal static class RalphStart
         }
 
         bool forget = false;
+        if (stop == RalphStop.Locked)
+        {
+            // Another instance holds the plan now (2026-10-20, a review, RalphLog.StillHeld): its plan and its log are that one's to write.
+            lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2), true));
+            return new RalphEnded(lines, forget);
+        }
+
         if (stop == RalphStop.Done)
         {
             if (PlanFiles.MarkFile(files, path, PlanStatus.Done, time.GetLocalNow(), requirement, counts) is { } problem)

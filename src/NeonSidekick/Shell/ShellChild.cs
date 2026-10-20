@@ -109,8 +109,16 @@ internal sealed class ProcessChild : ShellChild
     {
         // The job first (2026-10-12): it holds what the tree walk misses, a grandchild whose parent already exited. The walk
         // stays for a child that runs outside one; on one already gone it does nothing.
-        EmbeddedLlm.ChildJob.Terminate(_job, -1);
-        _process.Kill(entireProcessTree: true);
+        bool ended = EmbeddedLlm.ChildJob.Terminate(_job, -1);
+        try
+        {
+            _process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex) when (ended && ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException)
+        {
+            // The job ended everything in it, so the kill landed (2026-10-20, a review: a throw from the walk after that, on a shell already
+            // gone while its leftovers drained, made ProcessSession.Kill report a stop that had worked as failed).
+        }
     }
 
     public override void Dispose()

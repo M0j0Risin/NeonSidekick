@@ -31,9 +31,11 @@ internal interface IRalphHost
 /// <summary>
 /// What judging a pass found: the facts for the loop, and what the log keeps. <paramref name="Target"/> is the step's line as the judge left it and
 /// <paramref name="Parent"/> the parent it ticked (2026-10-19, the third review: the checkpoint's Redo unticked the step's line as it was before the
-/// pass, and left a parent the judge had ticked standing).
+/// pass, and left a parent the judge had ticked standing). <paramref name="PlanUnread"/> (2026-10-20, a review) says the plan could not be read whole
+/// after the pass, so nothing was put back: the log keeps the in-pass mark, whose lines are the only copy of the plan's from before the pass, for a later
+/// start to put back.
 /// </summary>
-internal sealed record RalphJudged(RalphPassFacts Facts, string Check, string? Tail, string Review, IReadOnlyList<string> Flags, string Diff, PlanStep? Target = null, PlanStep? Parent = null);
+internal sealed record RalphJudged(RalphPassFacts Facts, string Check, string? Tail, string Review, IReadOnlyList<string> Flags, string Diff, PlanStep? Target = null, PlanStep? Parent = null, bool PlanUnread = false);
 
 /// <summary>
 /// The Ralph loop's judgment of a pass (2026-10-18), shared by the screen and headless (<see cref="IRalphHost"/>): the plan read again, the boxes put
@@ -58,7 +60,7 @@ internal static class RalphJudge
         cancelled |= cancellationToken.IsCancellationRequested;
         if (PlanFiles.ReadWhole(host.Files, path) is not { } text)
         {
-            return new RalphJudged(RalphPassFacts.None with { Cancelled = cancelled, TurnFailed = failed }, "none", null, "off", [], "");
+            return new RalphJudged(RalphPassFacts.None with { Cancelled = cancelled, TurnFailed = failed }, "none", null, "off", [], "", PlanUnread: true);
         }
 
         // The task lines put back as they were (Restore: every other box, every step's words, the pass's own box too when it was stopped, the lines it
@@ -551,9 +553,15 @@ internal static class RalphJudge
     /// <summary>The shell a snapshot names (PowerShell for one it does not know).</summary>
     public static ShellKind ShellOf(RalphSnapshot snapshot) => ShellKinds.TryParse(snapshot.Shell, out var kind) ? kind : ShellKind.PowerShell;
 
-    /// <summary>The pass's entry in the log, its learned facts merged; the error sentence when it could not be written.</summary>
+    /// <summary>
+    /// The pass's entry in the log, its learned facts merged; the error sentence when it could not be written. The head it writes clears the in-pass
+    /// mark, the pass being judged, unless the judge could not read the plan (<see cref="RalphJudged.PlanUnread"/>: kept for a later start's put-back);
+    /// and when the entry could not be written, the mark is cleared alone (2026-10-20, a review: left standing, a later start put back a step the
+    /// judge had passed, and the user's edits between runs with it).
+    /// </summary>
     public static string? LogPass(WorkingDirectory files, RalphLoop loop, PlanStep? step, RalphJudged judged, TimeProvider time)
     {
+        ArgumentNullException.ThrowIfNull(judged);
         var snapshot = loop.Snapshot;
         var record = loop.History.Count > 0 ? loop.History[^1] : null;
         var report = loop.Report;
@@ -566,8 +574,18 @@ internal static class RalphJudge
         if (RalphLog.Read(files, snapshot.Path)?.Head is { } kept)
         {
             head = head with { Started = kept.Started };
+            if (judged.PlanUnread)
+            {
+                head = head with { InPassLine = kept.InPassLine, InPassStep = kept.InPassStep, InPassLines = kept.InPassLines, InPassHeaded = kept.InPassHeaded };
+            }
         }
 
-        return RalphLog.Append(files, snapshot.Path, head, entry, report?.Learned ?? []);
+        string? problem = RalphLog.Append(files, snapshot.Path, head, entry, report?.Learned ?? []);
+        if (problem is not null && !judged.PlanUnread)
+        {
+            RalphLog.ClearInPass(files, snapshot.Path);
+        }
+
+        return problem;
     }
 }

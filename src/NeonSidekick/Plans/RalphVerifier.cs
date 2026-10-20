@@ -78,7 +78,7 @@ public sealed class RalphVerifier : IRalphVerifier
 
     /// <summary>
     /// Why <paramref name="command"/> may not run as a check: <c>Shell command policy</c> off (null result in <paramref name="off"/>: no check, the
-    /// steps unchecked), the police's refusal, or a shell that is not installed; null when it may.
+    /// steps unchecked), the police's refusal, a shell that is not installed, or a PowerShell command too long to pass; null when it may.
     /// </summary>
     public static string? Refusal(string command, ShellKind shell, string workdir, WorkingDirectory files, AppSettingsData effective, Func<ShellKind, string?> locate, out bool off)
     {
@@ -95,6 +95,13 @@ public sealed class RalphVerifier : IRalphVerifier
         if (locate(shell) is null)
         {
             return ShellText.ShellNotInstalled(shell);
+        }
+
+        // As run_command and /cmd refuse it (2026-10-20, a review: a model-written check past the encoded command line's room failed to start, read as
+        // a failed check, and the baseline asked "start anyway?" instead of saying why).
+        if (shell == ShellKind.PowerShell && command.Length > ShellCommandLine.MaxCommandChars)
+        {
+            return ShellText.CommandTooLong(ShellCommandLine.MaxCommandChars);
         }
 
         var request = new CommandRequest(ShellKinds.Name(shell), command, CommandPrefix.All(command, shell));

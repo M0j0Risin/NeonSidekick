@@ -64,6 +64,23 @@ public sealed class MessageQueue
         }
     }
 
+    private long _added;
+
+    /// <summary>
+    /// How many messages were ever added (2026-10-20, a review: the Ralph loop paused on lines queued before it began, and never on one typed under
+    /// <c>Queue mode</c> manual): a reader compares it with what it read before.
+    /// </summary>
+    public long Added
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _added;
+            }
+        }
+    }
+
     /// <summary>Adds <paramref name="message"/> at the back.</summary>
     public void Enqueue(QueuedMessage message)
     {
@@ -72,6 +89,7 @@ public sealed class MessageQueue
         lock (_gate)
         {
             _entries.Add(message);
+            _added++;
             count = _entries.Count;
         }
 

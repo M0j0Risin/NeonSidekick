@@ -453,6 +453,10 @@ internal sealed partial class ChatScreen
         RalphStop? stop = null;
         bool exit = false;
         _ralphSpoken = null;
+        // The lines queued and held so far as the run begins: one typed after it pauses the loop, whatever the queue mode; lines waiting before stay
+        // for after it.
+        long typed = _queue.Added;
+        long pended = PendedCount;
         try
         {
             while (stop is null)
@@ -475,13 +479,20 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
+                if (!RalphLog.StillHeld(files, path, RalphLockAlive))
+                {
+                    stop = RalphStop.Locked;
+                    break;
+                }
+
                 string body = PlanDocument.Body(text);
                 // The file whole (2026-10-19, the review): a step's line is the file's, so the loop's tick lands on that step and no other.
                 var steps = PlanSteps.Parse(text);
                 loop.SetChildren(steps);
-                // A message waiting pauses the loop: the PC's queue as it drains, and the page's, which the idle line takes whatever the queue mode
-                // (2026-10-19, the third review: a message sent from the Web UI during a pass never paused it).
-                var next = loop.Next(steps, (QueueDrains && _queue.Count > 0) || _webUi.LinesReady);
+                // A message pauses the loop: one typed on the PC since the run began (2026-10-20, a review: the queue's count paused it on lines
+                // waiting before its first pass, and under Queue mode manual a typed line never did), and the page's, which the idle line takes
+                // whatever the queue mode (2026-10-19, the third review: a message sent from the Web UI during a pass never paused it).
+                var next = loop.Next(steps, _queue.Added != typed || PendedCount != pended || _webUi.LinesReady);
                 switch (next.Kind)
                 {
                     case RalphNextKind.Stop:
@@ -574,7 +585,7 @@ internal sealed partial class ChatScreen
         }
         string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text));
         bool reviewed = snapshot.Reviewer != RalphReviewer.Off;
-        string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.StepCheck ?? (step is null ? snapshot.FinalCheck : null), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null);
+        string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null);
         _ralphTurn = new PlanTurn(directive, _finishStep);
         int windowChars = RalphWindowChars();
         string message = step is null

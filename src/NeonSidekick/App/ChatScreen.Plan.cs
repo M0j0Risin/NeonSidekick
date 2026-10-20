@@ -765,16 +765,23 @@ internal sealed partial class ChatScreen
 
     // ── Plan reference pictures (2026-10-18) ──
 
-    /// <summary>The conversation's pictures a plan may keep (<see cref="PlanReferences.FromHistory"/>), under the keep-in-sessions settings.</summary>
-    private IReadOnlyList<PlanPicture> ConversationPictures(AppSettingsData effective) =>
-        PlanReferences.FromHistory(_session.History.Messages, effective.CameraKeepInSessions, effective.ScreenKeepInSessions, ReloadPicture);
+    /// <summary>
+    /// The conversation's pictures a plan may keep (<see cref="PlanReferences.FromHistory"/>), under the keep-in-sessions settings; with
+    /// <paramref name="hashOnly"/> a pruned one carries its hash and no bytes (<see cref="PlanReferences.Hashed"/>: only to be named).
+    /// </summary>
+    private IReadOnlyList<PlanPicture> ConversationPictures(AppSettingsData effective, bool hashOnly = false) =>
+        PlanReferences.FromHistory(_session.History.Messages, effective.CameraKeepInSessions, effective.ScreenKeepInSessions,
+            hashOnly ? path => PictureToReload(path) is { } full ? PlanReferences.Hashed(full) : null : ReloadPicture);
+
+    /// <summary>A pruned picture read again from its path (<see cref="PictureToReload"/>).</summary>
+    private PlanPicture? ReloadPicture(string path) => PictureToReload(path) is { } full ? PlanReferences.Reload(full) : null;
 
     /// <summary>
-    /// A pruned picture read again from its path: an absolute one as it is, a relative one under the working directory. Never one in the camera's or
+    /// The full path a pruned picture is read again from: an absolute one as it is, a relative one under the working directory. Never one in the camera's or
     /// the screen capture's output folder that its keep-in-sessions setting leaves out (2026-10-19, the review: a stand-in restored from a session
     /// has lost its mark, and the folder still tells).
     /// </summary>
-    private PlanPicture? ReloadPicture(string path)
+    private string? PictureToReload(string path)
     {
         string? full = System.IO.Path.IsPathFullyQualified(path) ? path : _files.Resolve(path, forWrite: false, out string resolved) == FileOutcome.Ok ? resolved : null;
         if (full is null)
@@ -783,12 +790,9 @@ internal sealed partial class ChatScreen
         }
 
         var effective = _effective();
-        if ((!effective.CameraKeepInSessions && InPictureFolder(full, effective.CameraOutputFolder)) || (!effective.ScreenKeepInSessions && InPictureFolder(full, effective.ScreenOutputFolder)))
-        {
-            return null;
-        }
-
-        return PlanReferences.Reload(full);
+        return (!effective.CameraKeepInSessions && InPictureFolder(full, effective.CameraOutputFolder)) || (!effective.ScreenKeepInSessions && InPictureFolder(full, effective.ScreenOutputFolder))
+            ? null
+            : full;
     }
 
     /// <summary>
@@ -825,7 +829,8 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        var pictures = ConversationPictures(effective).Concat(_turnPictures
+        // Hashes only for the pictures a compaction took out (2026-10-20, a review: each was read whole again every planning turn).
+        var pictures = ConversationPictures(effective, hashOnly: true).Concat(_turnPictures
             .Where(i => !i.IsDocument && i.PdfPage is null && !i.Reference && (effective.CameraKeepInSessions || !i.Camera) && (effective.ScreenKeepInSessions || !i.Screen))
             .Select(i => new PlanPicture(i.Bytes, i.MediaType, i.Path))).ToList();
         return pictures.Count == 0 ? null : PlanReferences.Names(_files, _plan.Path, pictures);

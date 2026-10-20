@@ -24,6 +24,12 @@ public static class MarkText
     /// <summary>The mark taken off. Pinned.</summary>
     public const string DefaultNotice = "The rules around the draft line are the theme's again.";
 
+    /// <summary>A color's note in the <c>/mark</c> completion list.</summary>
+    public static string ChoiceNote(string name) => "the rules around the draft line in " + name;
+
+    /// <summary><c>default</c>'s note in the completion list.</summary>
+    public const string DefaultChoiceNote = "the theme's rules again";
+
     /// <summary>Bare <c>/mark</c>: the mark in force (or none) and the choices. Pinned.</summary>
     public static string ShowLine(string? name) =>
         (name is null ? "The rules are the theme's" : $"The rules are {name}") + "; /mark takes " + Choices + ".";

@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
@@ -7,8 +9,12 @@ using NeonSidekick.Llm;
 
 namespace NeonSidekick.Plans;
 
-/// <summary>A picture from the conversation a plan may keep (2026-10-18, <see cref="PlanReferences"/>): its bytes, their type and where it came from (null for none known).</summary>
-public sealed record PlanPicture(byte[] Bytes, string MediaType, string? Source);
+/// <summary>
+/// A picture from the conversation a plan may keep (2026-10-18, <see cref="PlanReferences"/>): its bytes, their type and where it came from (null for
+/// none known). <paramref name="Hash"/> is its SHA-256 when known already (2026-10-20, <see cref="PlanReferences.Hashed"/>: a picture only named needs
+/// no bytes).
+/// </summary>
+public sealed record PlanPicture(byte[] Bytes, string MediaType, string? Source, string? Hash = null);
 
 /// <summary>A reference picture saved beside a plan: its name (<c>ref-1</c>) and its path relative to the working directory.</summary>
 public sealed record PlanReference(string Name, string Path);
@@ -72,7 +78,12 @@ public static class PlanReferences
                         continue;
                     }
 
-                    found.Add(new PlanPicture(data.Data.ToArray(), data.MediaType, ConversationHistory.PicturePath(data)));
+                    // The history's own array when the content holds one whole (2026-10-20, a review: copied each planning turn, every picture's bytes
+                    // were hashed again; the same array is the hash cache's key from turn to turn). Never written to.
+                    byte[] bytes = MemoryMarshal.TryGetArray(data.Data, out var segment) && segment.Array is { } array && segment.Offset == 0 && segment.Count == array.Length
+                        ? array
+                        : data.Data.ToArray();
+                    found.Add(new PlanPicture(bytes, data.MediaType, ConversationHistory.PicturePath(data)));
                 }
                 else if (content is TextContent text && reload is not null && LeftOutPath(text.Text) is { } path
                     && !Marked(text, ConversationHistory.ReferenceKey) && (keepCamera || !Marked(text, ConversationHistory.CameraKey)) && (keepScreen || !Marked(text, ConversationHistory.ScreenKey))
@@ -140,7 +151,7 @@ public static class PlanReferences
         var names = new List<string>();
         foreach (var picture in pictures)
         {
-            string hash = Hash(picture.Bytes);
+            string hash = HashOf(picture);
             if (!hashes.TryGetValue(hash, out string? name))
             {
                 name = Prefix + N(next++);
@@ -176,7 +187,7 @@ public static class PlanReferences
         string folder = FolderOf(planPath);
         foreach (var picture in pictures)
         {
-            string hash = Hash(picture.Bytes);
+            string hash = HashOf(picture);
             if (!hashes.Add(hash))
             {
                 continue;
@@ -368,16 +379,69 @@ public static class PlanReferences
 
     private static int Number(string name) => int.TryParse(name.AsSpan(Prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : 0;
 
-    private static string? HashOf(WorkingDirectory files, string path)
+    private static string? HashOf(WorkingDirectory files, string path) =>
+        files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok ? FileHash(full) : null;
+
+    /// <summary>
+    /// A picture file as <see cref="Names"/> needs it, its hash alone (no bytes): what the planning directive's names read for a pruned picture every
+    /// turn (2026-10-20, a review: up to 20 MB each was read and hashed again per turn); null as <see cref="Reload"/> is.
+    /// </summary>
+    public static PlanPicture? Hashed(string fullPath)
     {
-        if (files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok)
+        try
+        {
+            var info = new FileInfo(fullPath);
+            return !info.Exists || info.Length > MaxPictureBytes || !ImageFile.IsImagePath(fullPath) || FileHash(fullPath) is not { } hash
+                ? null
+                : new PlanPicture([], "", fullPath, hash);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return null;
         }
+    }
 
+    // The hashes known (2026-10-20, a review: every planning turn hashed every picture of the conversation and every saved ref-N file again): a
+    // picture's by its bytes' array (the history's own, the turn's attachment's), a file's by its path while its size and write time hold.
+    private static readonly ConditionalWeakTable<byte[], string> s_hashes = new();
+    private static readonly Lock s_fileGate = new();
+    private static readonly Dictionary<string, (long Length, DateTime Written, string Hash)> s_fileHashes = new(StringComparer.Ordinal);
+    private const int MaxFileHashes = 256;
+
+    /// <summary><paramref name="picture"/>'s SHA-256: the one it carries, else its bytes', once per array.</summary>
+    private static string HashOf(PlanPicture picture) => picture.Hash ?? s_hashes.GetValue(picture.Bytes, static bytes => Hash(bytes));
+
+    /// <summary>A file's SHA-256, read again only when its size or write time changed; null when it cannot be read.</summary>
+    private static string? FileHash(string full)
+    {
         try
         {
-            return Hash(File.ReadAllBytes(full));
+            var info = new FileInfo(full);
+            if (!info.Exists)
+            {
+                return null;
+            }
+
+            lock (s_fileGate)
+            {
+                if (s_fileHashes.TryGetValue(full, out var kept) && kept.Length == info.Length && kept.Written == info.LastWriteTimeUtc)
+                {
+                    return kept.Hash;
+                }
+            }
+
+            string hash = Hash(File.ReadAllBytes(full));
+            lock (s_fileGate)
+            {
+                if (s_fileHashes.Count >= MaxFileHashes)
+                {
+                    s_fileHashes.Clear();
+                }
+
+                s_fileHashes[full] = (info.Length, info.LastWriteTimeUtc, hash);
+            }
+
+            return hash;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

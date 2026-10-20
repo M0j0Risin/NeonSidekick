@@ -340,9 +340,25 @@ internal sealed partial class ChatScreen
         lock (_pendingGate)
         {
             _pendingLines.Enqueue(line);
+            _pended++;
         }
 
         return true;
+    }
+
+    /// <summary>How many lines <see cref="Pend"/> ever held (2026-10-20, a review): with <see cref="MessageQueue.Added"/>, what tells a Ralph loop a line was typed during it.</summary>
+    private long _pended;
+
+    /// <summary><see cref="_pended"/> read under its lock.</summary>
+    private long PendedCount
+    {
+        get
+        {
+            lock (_pendingGate)
+            {
+                return _pended;
+            }
+        }
     }
 
     /// <summary>The page's lines held for the idle line, handed back to the page's draft (a conversation cleared, a profile switch); their count.</summary>

@@ -108,4 +108,17 @@ public class MessageQueueTests
         Assert.All(lines, e => Assert.Equal(NeonSidekick.Diagnostics.DiagnosticLevel.Debug, e.Level));
         Assert.Equal("Queue dropped (2 messages)", MessageQueue.DroppedLogLine(2));
     }
+
+    [Fact]
+    public void Added_CountsEveryMessageEverQueued()
+    {
+        // 2026-10-20, a review: what tells a Ralph loop a line was typed during it, whatever was waiting before.
+        var queue = new MessageQueue();
+        queue.Enqueue(Line("a"));
+        long before = queue.Added;
+        Assert.True(queue.TryDequeue(out _));
+        Assert.Equal(before, queue.Added);
+        queue.Enqueue(Line("b"));
+        Assert.Equal(before + 1, queue.Added);
+    }
 }

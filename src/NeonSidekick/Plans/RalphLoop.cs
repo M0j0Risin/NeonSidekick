@@ -102,6 +102,12 @@ public sealed record RalphSnapshot(
     /// <summary>The command run once every step stands: <see cref="Final"/>, else under <see cref="FinalOnly"/> the verify command; none while <see cref="Unchecked"/>.</summary>
     public string? FinalCheck => Unchecked ? null : FinalCheckOf(Final, Verify, FinalOnly);
 
+    /// <summary>
+    /// The check that judges a pass on <paramref name="step"/>: <see cref="StepCheck"/>, or for the final fix (null) <see cref="FinalCheck"/> — what the
+    /// pass's directive names (2026-10-20, a review: the final fix was told the per-step command whenever there was one, though the final one runs).
+    /// </summary>
+    public string? CheckFor(PlanStep? step) => step is null ? FinalCheck : StepCheck;
+
     /// <summary><see cref="FinalCheck"/> from a stored loop's fields (2026-10-19: a paused loop's resume asks it too).</summary>
     public static string? FinalCheckOf(string? final, string? verify, bool finalOnly) => final ?? (finalOnly ? verify : null);
 

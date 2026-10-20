@@ -298,4 +298,50 @@ public sealed class RalphLogTests : IDisposable
         Assert.Null(RalphLog.HeldElsewhere(_files, Plan));   // this process's own
         RalphLog.Unlock(_files, Plan, RalphLog.Me);
     }
+
+    [Fact]
+    public void AHugePass_IsCut_SoTheLogStillWrites()
+    {
+        // 2026-10-20, a review: finish_step's fields and a check's lines had no cap, Bounded keeps the newest pass whole, and one long pass made every
+        // write of the log refused, the in-pass mark with it.
+        string tail = string.Join('\n', Enumerable.Range(1, RalphLog.TailLines).Select(i => new string('x', 8000) + i));
+        var huge = Entry(1, 1, "Write the body", "check failed", tail) with
+        {
+            Summary = new string('s', 300_000),
+            Verified = Enumerable.Range(1, 500).Select(i => new string('v', 1000) + i).ToList(),
+            Notes = new string('n', 300_000),
+            Changed = Enumerable.Range(1, 5000).Select(i => "src/f" + i + ".cs").ToList(),
+        };
+
+        Assert.Null(RalphLog.Append(_files, Plan, Head, huge, []));
+
+        var kept = RalphLog.Read(_files, Plan)!.Entries.Single();
+        Assert.True(kept.Summary.Length <= RalphLog.EntryTextChars);
+        Assert.Equal(RalphLog.VerifiedLines, kept.Verified.Count);
+        Assert.All(kept.Verified, v => Assert.True(v.Length <= RalphLog.VerifiedChars));
+        Assert.True(kept.Notes!.Length <= RalphLog.EntryTextChars);
+        Assert.True(kept.Tail!.Length <= RalphLog.TailChars);
+        Assert.EndsWith("x40", kept.Tail);   // the end is what is kept
+        Assert.Equal(RalphLog.ChangedKept + 1, kept.Changed.Count);
+        Assert.Equal(RalphText.ChangedMore(5000 - RalphLog.ChangedKept), kept.Changed[^1]);
+    }
+
+    [Fact]
+    public void StillHeld_TakesBackALockThatWent_AndIsFalseWhileAnotherLiveProcessHoldsIt()
+    {
+        // 2026-10-20, a review: the lock was read only as the loop began, so a pass that deleted it let a second instance run the same plan.
+        string lockFile = Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName);
+        Assert.True(RalphLog.TryLock(_files, Plan, RalphLog.Me, _ => true));
+        Assert.True(RalphLog.StillHeld(_files, Plan, _ => true));
+
+        File.Delete(lockFile);
+        Assert.True(RalphLog.StillHeld(_files, Plan, _ => true));
+        Assert.True(File.Exists(lockFile));
+
+        File.Delete(lockFile);
+        Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(4242, T0), _ => true));
+        Assert.False(RalphLog.StillHeld(_files, Plan, _ => true));
+        Assert.Equal("🔁 Ralph loop stopped: another NeonSidekick took over .neon/plans/guide.md (1 of 3 steps done); it runs the plan now.",
+            RalphText.StopNotice(RalphStop.Locked, Plan, 1, 3));
+    }
 }

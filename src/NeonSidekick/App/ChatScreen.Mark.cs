@@ -72,5 +72,5 @@ internal sealed partial class ChatScreen
 
     /// <summary>The <c>/mark</c> list: the colors, then <c>default</c>.</summary>
     private static IReadOnlyList<CompletionItem> MarkChoices() =>
-        [.. RuleMarks.Names.Select(name => new CompletionItem(name, "the rules around the draft line in " + name)), new(RuleMarks.Default, "the theme's rules again")];
+        [.. RuleMarks.Names.Select(name => new CompletionItem(name, MarkText.ChoiceNote(name))), new(RuleMarks.Default, MarkText.DefaultChoiceNote)];
 }

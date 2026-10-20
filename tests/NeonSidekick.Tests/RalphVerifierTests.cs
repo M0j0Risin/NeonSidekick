@@ -113,4 +113,15 @@ public sealed class RalphVerifierTests : IDisposable
         Assert.NotNull(RalphVerifier.Refusal(OperatingSystem.IsWindows() ? "type C:\\Windows\\win.ini" : "cat /etc/passwd", Shell, _dir, files, settings, _interpreters.Locate, out _));
         Assert.Equal(ShellText.ShellNotInstalled(Shell), RalphVerifier.Refusal("echo ok", Shell, _dir, files, settings, _ => null, out _));
     }
+
+    [Fact]
+    public void Refusal_APowerShellCommandTooLongToPass_IsRefused()
+    {
+        // 2026-10-20, a review: run_command and /cmd refused it; a check failed to start and read as a failed check.
+        var files = new WorkingDirectory(() => _dir, new ManualTimeProvider());
+        var settings = new AppSettingsData { ShellCommandPolicy = "yolo" };
+        string command = "Write-Output '" + new string('a', ShellCommandLine.MaxCommandChars) + "'";
+
+        Assert.Equal(ShellText.CommandTooLong(ShellCommandLine.MaxCommandChars), RalphVerifier.Refusal(command, ShellKind.PowerShell, _dir, files, settings, _ => "pwsh", out _));
+    }
 }

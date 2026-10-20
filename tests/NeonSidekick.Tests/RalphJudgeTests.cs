@@ -272,4 +272,37 @@ public sealed class RalphJudgeTests
         Assert.Equal(done, restore.Text);
         Assert.Null(restore.Own);
     }
+
+    [Fact]
+    public void LogPass_KeepsTheInPassMark_OnlyWhenThePlanWasNotRead()
+    {
+        // 2026-10-20, a review: a plan the judge could not read lost the mark that held its lines from before the pass, the only copy.
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
+            const string plan = ".neon/plans/guide.md";
+            var snapshot = new RalphSnapshot(plan, dir, "Guide", null, null, false, "pwsh", RalphReviewer.Off, 0, 0, 4, 600, 0, 1);
+            var loop = new RalphLoop(snapshot, 4);
+            var step = Step(Before, "One");
+            Assert.Null(RalphLog.SetHead(files, plan, RalphStart.Head(snapshot, DateTimeOffset.UnixEpoch)));
+
+            loop.BeginPass(step, null);
+            Assert.Null(RalphLog.MarkInPass(files, plan, step, Lines(Before), headed: true));
+            var unread = new RalphJudged(RalphPassFacts.None, "none", null, "off", [], "", PlanUnread: true);
+            loop.EndPass(unread.Facts, null);
+            Assert.Null(RalphJudge.LogPass(files, loop, step, unread, TimeProvider.System));
+            Assert.True(RalphLog.InPass(RalphLog.Read(files, plan)!.Head));
+
+            loop.BeginPass(step, null);
+            var judged = new RalphJudged(RalphPassFacts.None, "none", null, "off", [], "");
+            loop.EndPass(judged.Facts, null);
+            Assert.Null(RalphJudge.LogPass(files, loop, step, judged, TimeProvider.System));
+            Assert.False(RalphLog.InPass(RalphLog.Read(files, plan)!.Head));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
 }

@@ -406,6 +406,12 @@ public sealed partial class SidekickApp
                 return;
             }
 
+            if (!RalphLog.StillHeld(files, path, RalphLog.OwnerAlive))
+            {
+                await HeadlessRalphEndAsync(state, files, RalphStop.Locked).ConfigureAwait(false);
+                return;
+            }
+
             string body = PlanDocument.Body(text);
             // The file whole (2026-10-19, the review): a step's line is the file's, so the loop's tick lands on that step and no other.
             var steps = PlanSteps.Parse(text);
@@ -468,7 +474,7 @@ public sealed partial class SidekickApp
                 Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: " + unmarked);
             }
             string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text));
-            string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.StepCheck ?? (step is null ? snapshot.FinalCheck : null),
+            string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step),
                 snapshot.Reviewer != RalphReviewer.Off && step is not null, canAsk: false, notes, RalphLog.LearnedText(log), finalFix: step is null);
             ralph.Turn = new PlanTurn(directive, ralph.Tool);
             ralph.Step = step;

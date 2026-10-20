@@ -156,9 +156,44 @@ public static class RalphLog
         }
 
         var entries = document.Entries.ToList();
-        entries.Add(entry with { Summary = Clean(entry.Summary), Verified = entry.Verified.Select(Clean).ToList(), Tail = entry.Tail is { } tail ? CleanTail(tail) : null, Notes = entry.Notes is { } notes ? Clean(notes) : null });
+        entries.Add(Capped(entry));
         return Write(files, planPath, new RalphLogDocument(head, MergeLearned(document.Learned, learned), entries));
     }
+
+    /// <summary>The most characters an entry's summary and notes keep, each.</summary>
+    public const int EntryTextChars = 2000;
+
+    /// <summary>The most lines of an entry's <c>verified</c> kept, and the characters of each.</summary>
+    public const int VerifiedLines = 20;
+    public const int VerifiedChars = 300;
+
+    /// <summary>The most characters of a check's tail an entry keeps (its end).</summary>
+    public const int TailChars = 8000;
+
+    /// <summary>The most changed files an entry lists, a count of the rest after them.</summary>
+    public const int ChangedKept = 200;
+
+    /// <summary>
+    /// <paramref name="entry"/> cleaned and cut as the log keeps it (2026-10-20, a review: finish_step's summary, verified lines and notes, a check's
+    /// lines and the files changed had no cap, and <see cref="Bounded"/> always keeps the newest pass, so one long pass made every write of the log
+    /// refused, the in-pass mark with it). Pure.
+    /// </summary>
+    internal static RalphLogEntry Capped(RalphLogEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        var changed = entry.Changed.Count <= ChangedKept ? entry.Changed : [.. entry.Changed.Take(ChangedKept), RalphText.ChangedMore(entry.Changed.Count - ChangedKept)];
+        return entry with
+        {
+            Summary = Shorten(Clean(entry.Summary), EntryTextChars),
+            Verified = entry.Verified.Take(VerifiedLines).Select(v => Shorten(Clean(v), VerifiedChars)).ToList(),
+            Tail = entry.Tail is { } tail ? KeepEnd(CleanTail(tail), TailChars) : null,
+            Notes = entry.Notes is { } notes ? Shorten(Clean(notes), EntryTextChars) : null,
+            Changed = changed,
+        };
+    }
+
+    /// <summary><paramref name="text"/>'s last <paramref name="max"/> characters, led by "…" when it was longer.</summary>
+    private static string KeepEnd(string text, int max) => text.Length <= max ? text : "…" + text[^(max - 1)..];
 
     /// <summary>The head set (a start, a resume, a stop), the rest as it was; null when written.</summary>
     public static string? SetHead(WorkingDirectory files, string planPath, RalphLogHead head)
@@ -714,6 +749,13 @@ public static class RalphLog
 
         return false;
     }
+
+    /// <summary>
+    /// Whether a running loop still holds <paramref name="planPath"/>'s lock, asked at each pass's top (2026-10-20, a review: the lock was read only as
+    /// the loop began, so a pass that deleted it, every tool being kept, let a second instance start the same plan while the first ran on): this
+    /// process's still, or taken again when it went; false while another live process holds it (the loop stops, <see cref="RalphStop.Locked"/>).
+    /// </summary>
+    public static bool StillHeld(WorkingDirectory files, string planPath, Func<LockOwner, bool> alive) => TryLock(files, planPath, Me, alive);
 
     /// <summary><paramref name="text"/> as a new file at <paramref name="full"/>: false when one is there (or it could not be written).</summary>
     private static bool TryCreate(string full, string text)

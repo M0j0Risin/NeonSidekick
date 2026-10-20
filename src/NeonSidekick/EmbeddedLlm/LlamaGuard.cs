@@ -94,7 +94,16 @@ public static class LlamaGuard
                 if (!server.HasExited)
                 {
                     server.Kill();
-                    await server.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                    try
+                    {
+                        await server.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                    }
+                    catch (TimeoutException)
+                    {
+                        // Killed but not reaped within the wait (2026-10-20, a review: the timeout ran out of RunAsync and the guard died on
+                        // it): SIGKILL has been sent, the record goes below, and the guard exits as for any kill.
+                    }
+
                     return 1;
                 }
 
