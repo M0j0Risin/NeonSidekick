@@ -120,7 +120,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 
 ### What you need
 * **A 64-bit Windows PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac (M1 and later). Nothing else to install.
-* **Windows Terminal:** it comes with Windows 11, and the app is designed for it. On a Mac, Terminal or iTerm2 (iTerm2 shows pictures in full color).
+* **Windows Terminal:** it comes with Windows 11, and the app is designed for it. On a Mac, use [iTerm2](https://iterm2.com): the app works best there ([why](docs/MAC.md#install-and-first-run)). Terminal.app works too, with less.
 * **A language model:** the app can download one and run it, use one you already run, or connect to the OpenAI or Anthropic API, or to Claude Code on your Claude subscription.
 * **For local models, a graphics card with 16 GB of VRAM or more** (NVIDIA with driver 580 or newer, or any Vulkan card) **or an Apple Silicon Mac.** Without one they run, but slowly.
 
@@ -141,7 +141,7 @@ Only for some features:
 On a Mac:
 1. Download `NeonSidekick-v<version>-osx-arm64.tar.gz` from the same page and unpack it (double-click, or `tar -xzf`).
 2. The build isn't notarized, so clear macOS's quarantine once: `xattr -dr com.apple.quarantine NeonSidekick-v<version>-osx-arm64`.
-3. In Terminal or iTerm2, run `./NeonSidekick` in that folder. Keep everything in the folder together.
+3. In iTerm2 (recommended) or Terminal, run `./NeonSidekick` in that folder. Keep everything in the folder together.
 4. When macOS asks whether the app may use its Keychain key, choose **Always Allow**. For the Ctrl+Option shortcuts, let Option act as Meta ([how](docs/MAC.md#install-and-first-run)).
 
 **Updating:** unpack the new version into a fresh folder (on a Mac, clear its quarantine again). Your settings, memories and conversations live in `.neonsidekick`, not the app's folder, so they carry over.

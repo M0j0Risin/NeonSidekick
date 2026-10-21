@@ -13,13 +13,15 @@ How Neon Sidekick runs on an Apple Silicon Mac: setting it up, what works, and w
 
 ## Install and first run
 
-You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [README's install steps](../README.md#install) say and run `./NeonSidekick` in Terminal or iTerm2, or [build it yourself](BUILD.md#building-on-a-mac).
+You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [README's install steps](../README.md#install) say and run `./NeonSidekick` in iTerm2 or Terminal, or [build it yourself](BUILD.md#building-on-a-mac).
 
+* **Use iTerm2.** The app works best in [iTerm2](https://iterm2.com), and we recommend it over Terminal.app. Terminal.app runs it, with less.
+* **What iTerm2 adds.** Pictures, the splash and the robot in full color (256 banded colors in Terminal.app), and a right Option that still types å with Meta set up.
 * **The Keychain question.** On the first run and after each new build, macOS asks whether the app may use its Keychain key. Choose **Always Allow**, or it asks every time.
 * **Option as Meta.** The Ctrl+Alt shortcuts are Ctrl+Option on a Mac, and reach the app only if Option acts as Meta.
-* **Setting it up.** Turn on Terminal.app's *Use Option as Meta key* (Settings › Profiles › Keyboard), or set iTerm2's *Left Option key* to *Esc+* (Settings › Profiles › Keys).
+* **Setting it up.** Set iTerm2's *Left Option key* to *Esc+* (Settings › Profiles › Keys), or turn on Terminal.app's *Use Option as Meta key* (Settings › Profiles › Keyboard).
 * **What it costs.** Option then no longer types characters such as å (iTerm2's right Option still can). `/keycheck` says whether your terminal is set up.
-* **Permissions belong to the terminal app** (Terminal or iTerm2). macOS asks the first time the microphone, camera or screen is used, and the answer covers everything run in that terminal.
+* **Permissions belong to the terminal app** (iTerm2 or Terminal). macOS asks the first time the microphone, camera or screen is used, and the answer covers everything run in that terminal.
 * **Changing a refusal.** Turn the terminal on in System Settings › Privacy & Security › Microphone, Camera, or Screen & System Audio Recording. After allowing Screen Recording, quit and reopen the terminal.
 * **Being asked again.** Quit the app and run `tccutil reset Microphone com.apple.Terminal` (or `Camera`, `ScreenCapture`; `com.googlecode.iterm2` for iTerm2).
 * **The app's windows need the Mac's desktop.** Over SSH there are none, and a double-clicked picture opens in its default app.
