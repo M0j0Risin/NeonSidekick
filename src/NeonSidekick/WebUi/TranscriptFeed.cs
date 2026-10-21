@@ -133,9 +133,10 @@ public sealed class TranscriptFeed
     /// A whole entry of <paramref name="kind"/>; whatever grows now is ended first. A tool line (<see cref="FeedKind.Tool"/>,
     /// <see cref="FeedKind.ToolResult"/>) joins the open run, opening one while <see cref="ToolKeep"/> is above 0; any other kind ends the run.
     /// <paramref name="joins"/> marks a tool line that completes the call before it (one unit); <paramref name="diff"/> is an edit's rows;
-    /// <paramref name="splash"/> (2026-10-18) marks the welcome splash's pictures, which the page draws first, centered and filling it.
+    /// <paramref name="splash"/> (2026-10-18) marks the welcome splash's pictures, which the page draws first, centered and filling it;
+    /// <paramref name="tone"/> (2026-10-21) is a notice's role, the page's <c>tone-</c> class (<see cref="ToneWord"/>).
     /// </summary>
-    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null, bool splash = false)
+    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null, bool splash = false, UI.NoticeTone tone = UI.NoticeTone.Plain)
     {
         ArgumentNullException.ThrowIfNull(text);
         if (kind == FeedKind.ToolResult && text.Length > MaxResultChars)
@@ -169,6 +170,7 @@ public sealed class TranscriptFeed
 
             entry.Diff = diff;
             entry.Splash = splash;
+            entry.Tone = tone;
             _replyWrote |= _replyOpen;
             added = entry.ToWeb(null);
         }
@@ -700,6 +702,20 @@ public sealed class TranscriptFeed
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
+    /// <summary>
+    /// The page's word for a notice's tone (2026-10-21): null for a plain one, else the <c>tone-</c> class <c>app.css</c> draws it in. A fixed
+    /// set, so nothing but these words reaches the page's class list.
+    /// </summary>
+    public static string? ToneWord(UI.NoticeTone tone) => tone switch
+    {
+        UI.NoticeTone.Plain => null,
+        UI.NoticeTone.Bad => "bad",
+        UI.NoticeTone.Warn => "warn",
+        UI.NoticeTone.Dim => "dim",
+        UI.NoticeTone.Progress => "progress",
+        _ => throw new ArgumentOutOfRangeException(nameof(tone), tone, null),
+    };
+
     private sealed class Entry(long seq, FeedKind kind, string? glyph, bool failed, IReadOnlyList<WebPicture>? pictures)
     {
         private string? _html;
@@ -750,6 +766,9 @@ public sealed class TranscriptFeed
 
         /// <summary>The welcome splash's pictures (2026-10-18).</summary>
         public bool Splash { get; set; }
+
+        /// <summary>A notice's role (2026-10-21).</summary>
+        public UI.NoticeTone Tone { get; set; }
 
         /// <summary>A finished reply's Markdown as HTML, rendered once and cached (re-rendered only if its text changed); null for anything else.</summary>
         public string? Html(Func<string, string> html)
@@ -804,6 +823,7 @@ public sealed class TranscriptFeed
                 Diff = deferDiff ? Diff! with { Rows = [], More = null } : Diff,
                 Deferred = deferText || deferDiff ? true : null,
                 Splash = Splash ? true : null,
+                Tone = ToneWord(Tone),
             };
         }
     }

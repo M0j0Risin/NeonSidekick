@@ -167,6 +167,29 @@ public class TranscriptRendererTests : IDisposable
         Assert.Equal(new[] { "› hi", "  · n", "  ! w", "  ✗ e" }, _console.Lines);
     }
 
+    /// <summary>
+    /// A review's pass line (2026-10-21): bold in the tertiary accent after the notice's own glyph, the user color left to the user's lines;
+    /// the feed carries the tone's word to the page, and a plain notice carries none.
+    /// </summary>
+    [Fact]
+    public void Notice_Progress_IsTheTertiaryStyle_AndTheFeedCarriesItsWord()
+    {
+        using var console = new TestConsole().Colors(ColorSystem.TrueColor).EmitAnsiSequences();
+        var feed = new WebUi.TranscriptFeed();
+        var t = new TranscriptRenderer(console) { Feed = feed };
+
+        t.Notice("pass [1]", NoticeTone.Progress);
+        t.Notice("plain");
+
+        var tertiary = Theme.Tertiary;
+        Assert.Contains($"\u001b[1;38;2;{tertiary.R};{tertiary.G};{tertiary.B}mpass [1]", console.Output);
+        var secondary = Theme.Secondary;
+        Assert.DoesNotContain($"38;2;{secondary.R};{secondary.G};{secondary.B}m", console.Output);
+        var entries = feed.Snapshot(s => s);
+        Assert.Equal(["pass [1]", "plain"], entries.Select(e => e.Text));
+        Assert.Equal(["progress", null], entries.Select(e => e.Tone));
+    }
+
     [Fact]
     public void Tool_TruncatesBeforeEscaping()
     {

@@ -176,6 +176,9 @@ public sealed record WebEntry(long Seq, string Kind, string Text, string? Glyph,
     public bool? Deferred { get; init; }
 
     public bool? Splash { get; init; }
+
+    /// <summary>A notice's role (2026-10-21, <see cref="TranscriptFeed.ToneWord"/>): <c>bad</c>, <c>warn</c>, <c>dim</c> or <c>progress</c>; null when plain.</summary>
+    public string? Tone { get; init; }
 }
 
 /// <summary>
@@ -386,7 +389,8 @@ public sealed record WebAskView(
 /// What the page's header and composer show: the profile and its two avatars, the model, whether a reply runs (Stop) or a model loads,
 /// plan mode, the session's title, the phone's lines waiting, what the PC is waiting on, the app's version, and the page's own files' tag
 /// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself). The tabs on; and (2026-10-16) the banner's words while a video
-/// waits for a YouTube tab (<see cref="Watch"/>: the flag and the text in one, null for none).
+/// waits for a YouTube tab (<see cref="Watch"/>: the flag and the text in one, null for none). <see cref="UserLine"/> (2026-10-21, the
+/// user's call: the page draws the user's lines as the terminal does) is <i>User line style</i>, resolved; empty reads as <c>bold</c>.
 /// </summary>
 public sealed record WebState(
     string Profile,
@@ -407,7 +411,8 @@ public sealed record WebState(
     bool ShoppingTab = true,
     bool YouTubeTab = false,
     string? Watch = null,
-    string? QueueHeld = null);
+    string? QueueHeld = null,
+    string UserLine = "");
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for

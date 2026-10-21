@@ -53,7 +53,7 @@ The app itself, this side of the connection.
 | Show image thumbnails | A small thumbnail of each picture you send, a tool fetches or makes, or `/botchat` draws. | on |
 | Image thumbnail size | In columns × rows: `tiny` 32×8, `small` 48×12, `medium` 64×16, `large` 80×20, `xlarge` 96×24, or `fullsize`. | `small` |
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
-| User line style | Your sent line: `quiet` (plain), `slab` (on a faint fill) or `bold` (bold in the user color). | `bold` |
+| User line style | Your sent line, in the transcript and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (bold in the user color). | `bold` |
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
@@ -128,7 +128,7 @@ A browser front end for this profile, for a phone on the home network: the chat 
 | Web UI commands | The Chat tab only: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, the page only sends messages. | off |
 | Web UI connection details | The Chat tab only: the page's dropdown shows the `%` and `*` connections' server and database, not just their names. The chat shows whatever the model says either way. | off |
 | Web UI bot check control | The Chat tab only: the page shows a running bot check live, and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off, the page only answers the allow question and *Give up*. | on |
-| Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once. Off, they keep their own look. | on |
+| Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and the review lines take the terminal's colors. Off, they keep their own look. | on |
 | Web UI chat controls | Shows the Chat tab: the transcript, the message line and the app's questions. Off, the page opens on another tab ([the tabs](INTERFACE.md#web-ui)); the PC is unchanged. | on |
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask on the page; `/ha` from the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change and remove lines and change the store from the phone. `/shopping` at the PC is unchanged. | off |

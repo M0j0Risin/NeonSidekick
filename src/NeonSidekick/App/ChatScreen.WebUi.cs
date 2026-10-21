@@ -646,7 +646,9 @@ internal sealed partial class ChatScreen
             YouTubeTab: WebTabsNow().YouTube,
             Watch: _webVideo?.Waiting == true ? WebUiText.WatchBanner : null,
             // The held queue's banner (2026-10-17): while the hold stands and something waits behind it, the PC's queue or the page's held lines.
-            QueueHeld: _queue.Held && (_queue.Count > 0 || _webUi.CancelHeldCount > 0) ? WebUiText.QueueHeld : null);
+            QueueHeld: _queue.Held && (_queue.Count > 0 || _webUi.CancelHeldCount > 0) ? WebUiText.QueueHeld : null,
+            // User line style (2026-10-21): the page draws the user's lines as the transcript does.
+            UserLine: UserLineStyle.Resolve(effective.UserLineStyle));
     }
 
     /// <summary>

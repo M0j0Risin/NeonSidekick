@@ -12,6 +12,12 @@ namespace NeonSidekick.WebUi;
 /// colors from. The pages are dark: a theme whose ink does not read on its own ground (under <see cref="MinContrast"/>) lends its accents and
 /// tones alone, the page keeping its own grounds and inks. Off, an empty sheet: <c>app.css</c> stands. Pure.
 /// </summary>
+/// <remarks>
+/// The transcript's roles follow the terminal's (2026-10-21, the user's call: a consistent experience): <c>--user</c> is the theme's <c>user</c>
+/// style, the one the terminal draws the user's line in (the palette's tertiary until then, which left the page's user lines another color than
+/// the PC's), and <c>--accent-3</c> its <c>accentTertiary</c> style, a review's pass lines (<see cref="UI.NoticeTone.Progress"/>). Each style
+/// travels whole (<see cref="StyleTokens"/>), so a theme's <c>"bold": false</c> on its <c>user</c> (miami, commodore) reaches the page too.
+/// </remarks>
 public static class WebTheme
 {
     /// <summary>The least contrast (WCAG's ratio) between the theme's ink and its ground for the page to take its grounds.</summary>
@@ -34,9 +40,11 @@ public static class WebTheme
 
         var css = new StringBuilder("/* The profile's theme, ").Append(CommentSafe(palette.Name)).Append(" (2026-10-15, Web UI profile theme). */\n:root {\n");
         void Token(string name, Color color) => css.Append("  ").Append(name).Append(": ").Append(Hex(color)).Append(";\n");
+        var styles = Theme.StylesOf(palette);
         Token("--accent", palette.Primary);
         Token("--accent-2", palette.Secondary);
-        Token("--user", palette.Tertiary);
+        StyleTokens(css, "--accent-3", styles(ThemeStyleSlot.AccentTertiary));
+        StyleTokens(css, "--user", styles(ThemeStyleSlot.User));
         Token("--ok", palette.Good);
         Token("--error", palette.Bad);
         Token("--warn", palette.Warn);
@@ -51,6 +59,24 @@ public static class WebTheme
         }
 
         return css.Append("}\n").ToString();
+    }
+
+    /// <summary>
+    /// A theme style as the page's tokens (2026-10-21): <paramref name="name"/> its foreground, then <c>-weight</c>, <c>-font-style</c> and
+    /// <c>-decoration</c> from its decoration, and <c>-bg</c> only when it has a background (<c>app.css</c> holds each one's default).
+    /// </summary>
+    internal static void StyleTokens(StringBuilder css, string name, Style style)
+    {
+        ArgumentNullException.ThrowIfNull(css);
+        void Line(string suffix, string value) => css.Append("  ").Append(name).Append(suffix).Append(": ").Append(value).Append(";\n");
+        Line("", Hex(style.Foreground));
+        Line("-weight", style.Decoration.HasFlag(Decoration.Bold) ? "700" : "400");
+        Line("-font-style", style.Decoration.HasFlag(Decoration.Italic) ? "italic" : "normal");
+        Line("-decoration", style.Decoration.HasFlag(Decoration.Underline) ? "underline" : "none");
+        if (style.Background != Color.Default)
+        {
+            Line("-bg", Hex(style.Background));
+        }
     }
 
     /// <summary>

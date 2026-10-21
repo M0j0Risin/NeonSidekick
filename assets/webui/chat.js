@@ -148,7 +148,8 @@ function renderEntry(entry) {
       }
       break;
     default:
-      node = el('div', 'entry ' + entry.kind + (entry.failed ? ' failed' : ''), entry.text);
+      // A notice's tone (2026-10-21): one of the server's fixed words (TranscriptFeed.ToneWord), its tone- class in app.css.
+      node = el('div', 'entry ' + entry.kind + (entry.failed ? ' failed' : '') + (entry.tone ? ' tone-' + entry.tone : ''), entry.text);
       if (entry.diff) {
         const block = diffBlock(entry.diff);
         node.appendChild(block);
@@ -700,6 +701,8 @@ function applyState(s) {
   if (Neon.tabs(s.chatTab, s.homeTab, s.shoppingTab, s.youTubeTab)) return;   // Chat turned off at the PC: on to a tab that is on
   state = s;
   Neon.theme(s.theme);
+  // User line style (2026-10-21): the user's lines as the transcript draws them, app.css's body[data-user-line] rules.
+  document.body.dataset.userLine = s.userLine || 'bold';
   profileEl.textContent = (s.modelAvatar ? s.modelAvatar + ' ' : '') + s.profile + (s.planMode ? ' · plan' : '');
   modelEl.textContent = s.model + (s.title ? ' · ' + s.title : '');
   stopBtn.classList.toggle('hidden', !s.busy);

@@ -6,13 +6,23 @@ using Spectre.Console.Rendering;
 
 namespace NeonSidekick.UI;
 
-/// <summary>The theme role a <see cref="TranscriptRenderer.Notice(string, NoticeTone)"/> is drawn in (2026-10-18): plain, as an error, as a warning, dim.</summary>
+/// <summary>
+/// The theme role a <see cref="TranscriptRenderer.Notice(string, NoticeTone)"/> is drawn in (2026-10-18): plain, as an error, as a warning, dim,
+/// and (2026-10-21) <see cref="Progress"/>. The Web UI's page gets it too, as <see cref="WebUi.TranscriptFeed"/>'s entry word.
+/// </summary>
 public enum NoticeTone
 {
     Plain,
     Bad,
     Warn,
     Dim,
+
+    /// <summary>
+    /// A review's pass, done and stop lines (2026-10-21, the user's ask: they were lost among the dim notices): the tertiary accent's style,
+    /// bold, since the user's own lines (and each pass's request line) wear the user color, the secondary; bold so the monochrome themes
+    /// (hal, noir: a gray tertiary next to the dim notices) still set them apart.
+    /// </summary>
+    Progress,
 }
 
 /// <summary>
@@ -385,7 +395,8 @@ public sealed class TranscriptRenderer : INoticeSink
 
     /// <summary>
     /// A notice in one of the theme's existing roles (2026-10-18, the code audit's severities: critical and high as errors are, medium as
-    /// warnings, low dim): the same glyph and feed as <see cref="Notice(string)"/>, no new theme key.
+    /// warnings, low dim): the same glyph and feed as <see cref="Notice(string)"/>, no new theme key. <see cref="NoticeTone.Progress"/>
+    /// (2026-10-21) is the tertiary accent's style; since that day the feed carries the tone, so the page draws each in its own role too.
     /// </summary>
     public void Notice(string text, NoticeTone tone)
     {
@@ -395,12 +406,13 @@ public sealed class TranscriptRenderer : INoticeSink
             return;
         }
 
-        Feed?.Add(WebUi.FeedKind.Notice, text);
+        Feed?.Add(WebUi.FeedKind.Notice, text, tone: tone);
         string spaced = TextCells.Spaced(text);
         string inline = tone switch
         {
             NoticeTone.Bad => Theme.StyleMarkup(Theme.ErrorText, spaced),
             NoticeTone.Warn => Theme.ColorMarkup(Theme.Warn, spaced),
+            NoticeTone.Progress => Theme.StyleMarkup(Theme.AccentTertiary, spaced),
             _ => Theme.DimMarkup(spaced),
         };
         Line(Theme.StyleMarkup(Theme.SystemText, NoticeGlyph) + inline, inline);

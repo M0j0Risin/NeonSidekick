@@ -169,6 +169,22 @@ public sealed partial class WebUiTests : IDisposable
         Assert.EndsWith("bbb…", text, StringComparison.Ordinal);
     }
 
+    /// <summary>A notice's tone rides its entry as the page's word (2026-10-21), a reconnect's snapshot too; a plain one carries none.</summary>
+    [Fact]
+    public void ANoticesTone_IsItsEntrysWord()
+    {
+        var feed = new TranscriptFeed();
+        WebEntry? appended = null;
+        feed.Changed += change => appended = (change as FeedChange.Appended)?.Entry ?? appended;
+        feed.Add(FeedKind.Notice, "careful", tone: UI.NoticeTone.Warn);
+        Assert.Equal("warn", appended?.Tone);
+        feed.Add(FeedKind.Notice, "plain");
+
+        var entries = feed.Snapshot(m => m, defer: true);
+        Assert.Equal(["warn", null], entries.Select(e => e.Tone));
+        Assert.Equal(["bad", "warn", "dim", "progress"], new[] { UI.NoticeTone.Bad, UI.NoticeTone.Warn, UI.NoticeTone.Dim, UI.NoticeTone.Progress }.Select(TranscriptFeed.ToneWord));
+    }
+
     [Fact]
     public void Output_GroupsAStreamsLines_AndASwitchStartsAnother()
     {
@@ -777,6 +793,33 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(WebTheme.Readable(palette), css.Contains("--bg: ", StringComparison.Ordinal));
         Assert.Contains("\"background_color\": \"" + WebTheme.PageGround + "\"", WebTheme.Manifest(palette, on: false), StringComparison.Ordinal);
         Assert.Contains("/icon-512.png", WebTheme.Manifest(palette, on: true), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The page's user lines and review lines wear the terminal's styles (2026-10-21): <c>--user</c> is the theme's <c>user</c> style whole
+    /// (orbit's tint, miami's without bold), <c>--accent-3</c> its <c>accentTertiary</c>; a style with no background writes none.
+    /// </summary>
+    [Fact]
+    public void TheSheet_GivesTheUserAndTertiaryStyles_AsTheTerminalDrawsThem()
+    {
+        static UI.ThemePalette Named(string name) => UI.ThemeLibrary.All.Single(p => p.Name == name);
+        static string Sheet(UI.ThemePalette palette) => WebTheme.Css(palette, on: true);
+
+        var synthwave = Named("synthwave");
+        string css = Sheet(synthwave);
+        Assert.Contains("  --user: " + WebTheme.Hex(synthwave.Secondary) + ";\n", css, StringComparison.Ordinal);
+        Assert.Contains("  --user-weight: 700;\n", css, StringComparison.Ordinal);
+        Assert.Contains("  --user-font-style: normal;\n", css, StringComparison.Ordinal);
+        Assert.Contains("  --user-decoration: none;\n", css, StringComparison.Ordinal);
+        Assert.Contains("  --accent-3: " + WebTheme.Hex(synthwave.Tertiary) + ";\n", css, StringComparison.Ordinal);
+        Assert.Contains("  --accent-3-weight: 700;\n", css, StringComparison.Ordinal);
+        Assert.Contains("  --accent-3-font-style: normal;\n", css, StringComparison.Ordinal);
+        Assert.DoesNotContain("--user-bg: ", css, StringComparison.Ordinal);
+        Assert.DoesNotContain("--accent-3-bg: ", css, StringComparison.Ordinal);
+
+        var orbit = Named("orbit");
+        Assert.Contains("  --user: " + WebTheme.Hex(orbit.Tint) + ";\n", Sheet(orbit), StringComparison.Ordinal);
+        Assert.Contains("  --user-weight: 400;\n", Sheet(Named("miami")), StringComparison.Ordinal);
     }
 
     [Fact]

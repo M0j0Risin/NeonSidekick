@@ -466,7 +466,7 @@ internal sealed partial class ChatScreen
         {
             _transcript.Notice(loop.PassGaps.Count > 0
                 ? AuditText.PassDoneNotice(loop.Pass, loop.Limit, loop.PassGaps.Count, loop.PassMinor.Count, coverage.Read, coverage.Scope)
-                : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses));
+                : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses), NoticeTone.Progress);
             return new AuditAfterTurn(BeginAuditPass(loop, body), null);
         }
 
@@ -520,7 +520,7 @@ internal sealed partial class ChatScreen
 
         _transcript.Notice(reason == PlanGapStop.Converged
             ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope)
-            : AuditText.StopNotice(reason, name, loop.Pass));
+            : AuditText.StopNotice(reason, name, loop.Pass), NoticeTone.Progress);
         return reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed ? new AuditAfterTurn(null, path) : null;
     }
 

@@ -8,6 +8,7 @@ using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using NeonSidekick.WebUi;
+using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
@@ -62,6 +63,22 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Pass 2 done.");    // 4
         _chat.Enqueue(CleanCall("a3"));       // 5: pass 3 confirms: converged
         _chat.EnqueueText("Pass 3 done.");    // 6
+    }
+
+    /// <summary>The audit's pass lines and its done line in the progress style (2026-10-21, as the gap review's); a finding keeps its severity's.</summary>
+    [Fact]
+    public async Task CodeAudit_ThePassAndDoneLines_AreTheProgressStyle()
+    {
+        AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
+        _console.EmitAnsiSequences();
+        ThreePasses();
+
+        string output = await RunAsync();
+
+        Assert.Contains(ProgressStart(AuditText.PassDoneNotice(1, 5, 1, 0, 1, 1)), output);
+        Assert.Contains(ProgressStart(AuditText.CleanPassNotice(2, 5, 1, 2)), output);
+        Assert.Contains(ProgressStart(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1)), output);
+        Assert.DoesNotContain(ProgressStart("🔎 Pass 1: A1 [high]"), output);
     }
 
     [Fact]

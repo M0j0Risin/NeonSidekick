@@ -443,6 +443,21 @@ public partial class ChatScreenTests
         Assert.Contains(WebUiText.NotAvailableError, output);
     }
 
+    /// <summary>User line style on the page (2026-10-21): the state carries it resolved, so a word the setting doesn't know reads as bold.</summary>
+    [Theory]
+    [InlineData("quiet", "quiet")]
+    [InlineData("SLAB ", "slab")]
+    [InlineData("nonsense", "bold")]
+    public async Task ThePagesState_CarriesUserLineStyle_Resolved(string saved, string sent)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.UserLineStyle = saved; });
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(sent, Web.Snapshot().State.UserLine);
+    }
+
     // ── Pictures on the page (later on 2026-10-14) ──────────────────────────
 
     private List<WebPicture> PagePictures() => [.. Web.Feed.Snapshot(m => m).Where(e => e.Kind == "picture").SelectMany(e => e.Pictures ?? [])];

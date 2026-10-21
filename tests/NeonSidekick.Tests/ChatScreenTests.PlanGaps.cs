@@ -5,6 +5,7 @@ using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
@@ -190,6 +191,58 @@ public partial class ChatScreenTests
         Assert.Equal("Use xUnit", LastUserText(_chat.Requests[2]));
         Assert.Contains(PlanText.GapsYieldedNotice, output);
         Assert.DoesNotContain("A gap review is running", _chat.Requests[2][0].Text);
+    }
+
+    /// <summary>
+    /// The start of <paramref name="line"/> as the terminal draws it in <see cref="NoticeTone.Progress"/> (2026-10-21): bold in the tertiary
+    /// accent. Only the start, so a line the window wraps still matches.
+    /// </summary>
+    private static string ProgressStart(string line)
+    {
+        var tertiary = Theme.Tertiary;
+        return $"\u001b[1;38;2;{tertiary.R};{tertiary.G};{tertiary.B}m" + line[..Math.Min(line.Length, 24)];
+    }
+
+    /// <summary>A review's pass lines and its done line stand out (2026-10-21, the user's ask): the tertiary style; each gap under a pass stays plain.</summary>
+    [Fact]
+    public async Task PlanGaps_ThePassAndDoneLines_AreTheProgressStyle_AndTheirItemsPlain()
+    {
+        PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _console.EmitAnsiSequences();
+        _chat.Enqueue(PresentPlanCall());
+        _chat.EnqueueText("Closing the gaps.");
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown));
+        _chat.EnqueueText("Pass 2 clean.");
+        _chat.Enqueue(PresentGapsCall("p4", RevisedPlanMarkdown));
+        _chat.EnqueueText("Approved, starting.");
+        _chat.EnqueueText("Done.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ProgressStart(PlanText.PassNoticeLines(1, 5, 2, ["Add a test step"])[0]), output);
+        Assert.Contains(ProgressStart(PlanText.CleanPassNotice(2, 5, 1, 2)), output);
+        Assert.Contains(ProgressStart(PlanText.ConvergedNotice(PlanPath, 3, 1, 2)), output);
+        Assert.Contains("Add a test step", output);
+        Assert.DoesNotContain(ProgressStart("  · Add a test step"), output);
+    }
+
+    /// <summary>A review stopped at its limit says so in the progress style too (2026-10-21).</summary>
+    [Fact]
+    public async Task PlanGaps_TheStopLine_IsTheProgressStyle()
+    {
+        _settings.Update(d => d.PlanGapPasses = 1);
+        PlanGapsFixture([[Keys.Char('g'), Keys.Enter]], Line("/plan Add a guide"), Key(Keys.Escape), Line("/exit"));
+        _console.EmitAnsiSequences();
+        _chat.Enqueue(PresentPlanCall());
+        _chat.EnqueueText("Closing the gaps.");
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));
+        _chat.EnqueueText("Pass 1 done.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ProgressStart(PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1)), output);
     }
 
     [Fact]

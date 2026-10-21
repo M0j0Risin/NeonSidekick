@@ -1249,6 +1249,18 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// A pass's notice (2026-10-21, the user's ask): its head line in <see cref="NoticeTone.Progress"/>, so it stands out from the dim notices
+    /// around it, and its item lines (each gap, each check) plain under it.
+    /// </summary>
+    private void HeadedNotice(IReadOnlyList<string> lines)
+    {
+        for (int i = 0; i < lines.Count; i++)
+        {
+            _transcript.Notice(lines[i], i == 0 ? NoticeTone.Progress : NoticeTone.Plain);
+        }
+    }
+
+    /// <summary>
     /// A stop tone rung, not awaited (2026-10-21, the Ralph loop's ring shared with the gap review and the code audit): the timer tones' player,
     /// its own device; <c>silent</c> and no audio play nothing, and a tone still sounding keeps the device (this one is dropped).
     /// </summary>
@@ -1320,10 +1332,7 @@ internal sealed partial class ChatScreen
         if (loop.PassGaps.Count > 0)
         {
             DiagnosticLog.Info(AppCategory, PlanText.PassLogLine(loop.Pass, _plan.Revision, loop.PassGaps, advisorAsked, loop.PassMinor, cost));
-            foreach (string line in PlanText.PassNoticeLines(loop.Pass, loop.Limit, _plan.Revision, loop.PassGaps, loop.PassMinor))
-            {
-                _transcript.Notice(line);
-            }
+            HeadedNotice(PlanText.PassNoticeLines(loop.Pass, loop.Limit, _plan.Revision, loop.PassGaps, loop.PassMinor));
         }
         else if (loop.PassClean && !loop.Converged)
         {
@@ -1331,10 +1340,7 @@ internal sealed partial class ChatScreen
             DiagnosticLog.Info(AppCategory, PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, cost));
             if (stop is null)
             {
-                foreach (string line in PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor))
-                {
-                    _transcript.Notice(line);
-                }
+                HeadedNotice(PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor));
             }
         }
 
@@ -1379,7 +1385,7 @@ internal sealed partial class ChatScreen
         {
             bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
             DiagnosticLog.Info(AppCategory, PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
-            _transcript.Notice(PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed, loop.CleanPasses));
+            _transcript.Notice(PlanText.ConvergedNotice(path ?? "", loop.Pass, loop.Closed, loop.CleanPasses), NoticeTone.Progress);
             foreach (string line in PlanText.ReportLines(loop.PassChecked, loop.PassMinor))
             {
                 _transcript.Notice(line);
@@ -1388,7 +1394,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        _transcript.Notice(PlanText.GapStopNotice(reason, loop.Pass, loop.Closed));
+        _transcript.Notice(PlanText.GapStopNotice(reason, loop.Pass, loop.Closed), NoticeTone.Progress);
         if (reason is not (PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed) || path is null)
         {
             return null;

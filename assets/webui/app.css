@@ -8,7 +8,18 @@
   --dim: #9a8bb8;
   --accent: #ff4fd8;
   --accent-2: #4fe3ff;
+  /* The tertiary accent's style (2026-10-21): synthwave's, a review's pass lines as the terminal draws them; /theme.css sends the theme's. */
+  --accent-3: #b15bff;
+  --accent-3-weight: 700;
+  --accent-3-font-style: normal;
+  --accent-3-decoration: none;
+  --accent-3-bg: transparent;
   --user: #b7f171;
+  /* The user style's rest (2026-10-21): the built-in's, bold; /theme.css sends the theme's (miami's and commodore's are not bold). */
+  --user-weight: 700;
+  --user-font-style: normal;
+  --user-decoration: none;
+  --user-bg: transparent;
   --warn: #ffb454;
   --error: #ff6b6b;
   --ok: #5eea9a;
@@ -117,6 +128,18 @@ main { flex: 1; padding: 12px 16px 16px; max-width: 900px; width: 100%; margin: 
 .entry { overflow-wrap: anywhere; }
 .entry .glyph { margin-right: 6px; }
 .entry.user { color: var(--user); white-space: pre-wrap; }
+/* User line style (2026-10-21, the page as the terminal draws it, InputLine.SubmittedMarkup): bold, the whole line in the theme's user style;
+   quiet, the glyph in it and the words in the body ink; slab, the line on the faint fill. chat.js sets body[data-user-line]. */
+body[data-user-line="bold"] .entry.user,
+body[data-user-line="quiet"] .entry.user .glyph {
+  font-weight: var(--user-weight);
+  font-style: var(--user-font-style);
+  text-decoration: var(--user-decoration);
+  background: var(--user-bg);
+}
+body[data-user-line="quiet"] .entry.user { color: var(--text); }
+body[data-user-line="quiet"] .entry.user .glyph { color: var(--user); }
+body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--panel-2); border-radius: 6px; padding: 2px 8px; }
 .entry.speaker { font-weight: 700; color: var(--accent-2); }
 .entry.assistant { display: flex; gap: 6px; }
 .entry.assistant .body { flex: 1; min-width: 0; }
@@ -127,6 +150,17 @@ main { flex: 1; padding: 12px 16px 16px; max-width: 900px; width: 100%; margin: 
 .entry.result { padding-left: 18px; }
 .entry.result.failed { color: var(--warn); }
 .entry.notice { color: var(--dim); font-style: italic; white-space: pre-wrap; }
+/* A notice's tone (2026-10-21, TranscriptFeed.ToneWord; dim is the notice's own look): progress is a review's pass, done and stop lines, the
+   theme's accentTertiary style as the terminal draws them (bold, not italic). */
+.entry.notice.tone-progress {
+  color: var(--accent-3);
+  font-weight: var(--accent-3-weight);
+  font-style: var(--accent-3-font-style);
+  text-decoration: var(--accent-3-decoration);
+  background: var(--accent-3-bg);
+}
+.entry.notice.tone-bad { color: var(--error); }
+.entry.notice.tone-warn { color: var(--warn); }
 .entry.warning, .entry.alert { color: var(--warn); white-space: pre-wrap; }
 .entry.error { color: var(--error); white-space: pre-wrap; }
 .entry.separator { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
