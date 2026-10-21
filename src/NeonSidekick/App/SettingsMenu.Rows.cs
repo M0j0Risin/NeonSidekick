@@ -20,7 +20,7 @@ internal sealed partial class SettingsMenu
     /// page may do and which tabs it shows. Common's Plan mode (2026-10-17, the user's ask): the gap review's two rows,
     /// <c>LLM plan gap passes</c> and <c>LLM plan gap clean passes</c>, between Tools and limits and Context (four since 2026-10-21, the
     /// first renamed <c>LLM plan gap max passes</c> and <c>LLM plan gap stop tone</c> last). Plan mode, Ralph loop and Code audit left
-    /// Common for the Automation tab on 2026-10-21 (the user's ask), as they were. TTS's first run is Text-to-speech and STT's
+    /// Common for the Automation tab on 2026-10-21 (the user's ask), as they were, and their rows lost "LLM " the same day (<c>Plan gap max passes</c>…). TTS's first run is Text-to-speech and STT's
     /// Speech-to-text since the same day (the user's ask; Read aloud and Listening until then). Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
@@ -74,9 +74,9 @@ internal sealed partial class SettingsMenu
             ],
             [SettingsTab.Automation] =
             [
-                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, LLM plan gap ask user; four since 2026-10-21, LLM plan gap stop tone); on Common until 2026-10-21
+                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, Plan gap ask user; four since 2026-10-21, Plan gap stop tone; "LLM plan gap …" until 2026-10-21); on Common until 2026-10-21
                 (SettingsField.RalphLoopReviewer, "Ralph loop"),   // later on 2026-10-18: the loop's seven rows, a section of their own (they would swamp Plan mode's three, four since 2026-10-21)
-                (SettingsField.CodeAuditPasses, "Code audit"),   // 2026-10-18, /code-audit's six rows after Plan mode (seven since 2026-10-21, LLM code audit stop tone)
+                (SettingsField.CodeAuditPasses, "Code audit"),   // 2026-10-18, /code-audit's six rows after Plan mode (seven since 2026-10-21, Code audit stop tone; "LLM code audit …" until 2026-10-21)
             ],
             [SettingsTab.Tts] =
             [

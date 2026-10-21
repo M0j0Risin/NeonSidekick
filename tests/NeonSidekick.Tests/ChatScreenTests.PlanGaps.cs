@@ -307,7 +307,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_ACount_CapsThisRun_InsteadOfTheSetting()
     {
-        // 2026-10-17, the user's ask: /plan gaps 2 runs two passes while LLM plan gap max passes says 5.
+        // 2026-10-17, the user's ask: /plan gaps 2 runs two passes while Plan gap max passes says 5.
         PlanGapsFixture([[Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps 2"), Key(Keys.Escape), Line("/exit"));
         _chat.Enqueue(PresentPlanCall());                                                                      // 0: presented; Esc keeps refining
         _chat.EnqueueText("Noted.");                                                                           // 1

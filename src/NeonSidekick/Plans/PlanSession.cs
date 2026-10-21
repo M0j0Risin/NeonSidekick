@@ -325,8 +325,9 @@ public sealed class PlanSession
     }
 
     /// <summary>
-    /// The turn's plan-mode part while planning, else null. <paramref name="gapAsks"/> is
-    /// <see cref="Settings.AppSettingsData.PlanGapAskUser"/> (2026-10-18): false, a gap pass's directive tells the model to ask
+    /// The turn's plan-mode part while planning, else null. <paramref name="gapAsks"/> is whether a gap pass may and can ask:
+    /// <see cref="Settings.AppSettingsData.PlanGapAskUser"/> (2026-10-18) with <c>ask_user</c> offered (2026-10-21: the screen's <c>GapMayAsk</c>,
+    /// false headless): false, a gap pass's directive tells the model to ask
     /// nothing and to write the user's calls into the plan as open questions. <paramref name="references"/> (2026-10-18) are the <c>ref-N</c>
     /// names the conversation's pictures are saved under beside the plan (<see cref="PlanReferences.Names"/>), for the directive's pictures bullet.
     /// </summary>

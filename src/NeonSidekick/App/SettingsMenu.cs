@@ -1073,7 +1073,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     WebOpenLinksIn,
 
-    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 100 (50 until 2026-10-21, 20 until 2026-10-18; <c>LLM plan gap max passes</c> since 2026-10-21, <c>LLM plan gap passes</c> before), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). The first row of the Automation tab, heading its Plan mode section (on the Common tab under <see cref="LlmMaxToolIterations"/> from 2026-10-13 until 2026-10-21), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
+    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 100 (50 until 2026-10-21, 20 until 2026-10-18; <c>Plan gap max passes</c> since 2026-10-21 (<c>LLM plan gap max passes</c> earlier that day, <c>LLM plan gap passes</c> before)), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). The first row of the Automation tab, heading its Plan mode section (on the Common tab under <see cref="LlmMaxToolIterations"/> from 2026-10-13 until 2026-10-21), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
     PlanGapPasses,
 
     /// <summary>A toggle: whether this profile hosts the Web UI (<see cref="Settings.AppSettingsData.WebUi"/>). The Web UI tab under Client (2026-10-14, the user's ask); a flip starts or stops the server (<see cref="SettingsChanges.WebUi"/>), so it is refused mid-turn. Last in the enum, as every newcomer.</summary>
@@ -2381,24 +2381,24 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmPictureKeep => "LLM max images",
         SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
-        SettingsField.PlanGapPasses => "LLM plan gap max passes",
-        SettingsField.PlanGapCleanPasses => "LLM plan gap clean passes",
-        SettingsField.PlanGapAskUser => "LLM plan gap ask user",
-        SettingsField.PlanGapStopTone => "LLM plan gap stop tone",
-        SettingsField.RalphLoopReviewer => "LLM Ralph loop reviewer",
-        SettingsField.RalphLoopCheckpoint => "LLM Ralph loop checkpoint",
-        SettingsField.RalphLoopPasses => "LLM Ralph loop max passes",
-        SettingsField.RalphLoopPassesPerStep => "LLM Ralph loop max step passes",
-        SettingsField.RalphLoopCheckTimeoutSeconds => "LLM Ralph loop check timeout",
-        SettingsField.RalphLoopTokenBudget => "LLM Ralph loop token budget",
-        SettingsField.RalphLoopStopTone => "LLM Ralph loop stop tone",
-        SettingsField.CodeAuditPasses => "LLM code audit max passes",
-        SettingsField.CodeAuditCleanPasses => "LLM code audit clean passes",
-        SettingsField.CodeAuditAskUser => "LLM code audit ask user",
-        SettingsField.CodeAuditFocus => "LLM code audit focus",
-        SettingsField.CodeAuditWebResearch => "LLM code audit web research",
-        SettingsField.CodeAuditPassToolCalls => "LLM code audit pass tool calls",
-        SettingsField.CodeAuditStopTone => "LLM code audit stop tone",
+        SettingsField.PlanGapPasses => "Plan gap max passes",
+        SettingsField.PlanGapCleanPasses => "Plan gap clean passes",
+        SettingsField.PlanGapAskUser => "Plan gap ask user",
+        SettingsField.PlanGapStopTone => "Plan gap stop tone",
+        SettingsField.RalphLoopReviewer => "Ralph loop reviewer",
+        SettingsField.RalphLoopCheckpoint => "Ralph loop checkpoint",
+        SettingsField.RalphLoopPasses => "Ralph loop max passes",
+        SettingsField.RalphLoopPassesPerStep => "Ralph loop max step passes",
+        SettingsField.RalphLoopCheckTimeoutSeconds => "Ralph loop check timeout",
+        SettingsField.RalphLoopTokenBudget => "Ralph loop token budget",
+        SettingsField.RalphLoopStopTone => "Ralph loop stop tone",
+        SettingsField.CodeAuditPasses => "Code audit max passes",
+        SettingsField.CodeAuditCleanPasses => "Code audit clean passes",
+        SettingsField.CodeAuditAskUser => "Code audit ask user",
+        SettingsField.CodeAuditFocus => "Code audit focus",
+        SettingsField.CodeAuditWebResearch => "Code audit web research",
+        SettingsField.CodeAuditPassToolCalls => "Code audit pass tool calls",
+        SettingsField.CodeAuditStopTone => "Code audit stop tone",
         SettingsField.WebUi => "Web UI",
         SettingsField.WebUiPort => "Web UI port",
         SettingsField.WebUiReach => "Web UI reach",
@@ -7698,7 +7698,7 @@ internal sealed partial class SettingsMenu
     public static string ReflectionConfirmModeLabel(string name) =>
         Markup.Escape(name.PadRight(6)) + Theme.DimMarkup(Skills.ReflectionConfirmMode.Describe(name));   // fourteen until the confirm- prefix went (2026-10-13)
 
-    /// <summary>A <c>LLM Ralph loop reviewer</c> choice and its hint (2026-10-18). Pinned.</summary>
+    /// <summary>A <c>Ralph loop reviewer</c> choice and its hint (2026-10-18). Pinned.</summary>
     public static string RalphReviewerLabel(string name) =>
         Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Plans.RalphReviewerMode.Describe(name));
 
@@ -10351,7 +10351,7 @@ internal sealed partial class SettingsMenu
     public const string NoBudgetLabel = "no budget";
 
     /// <summary>
-    /// <c>LLM Ralph loop checkpoint</c>'s value: off, <c>every step</c>, <c>every 3 steps</c> (2026-10-20, a review: written inline beside the named
+    /// <c>Ralph loop checkpoint</c>'s value: off, <c>every step</c>, <c>every 3 steps</c> (2026-10-20, a review: written inline beside the named
     /// labels). Pinned.
     /// </summary>
     public static string RalphCheckpointValue(int steps) =>
@@ -10379,7 +10379,7 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The focus checklist's error when its last ticked dimension would go (2026-10-18). Pinned.</summary>
-    public const string CodeAuditFocusLastError = "LLM code audit focus: tick at least one";
+    public const string CodeAuditFocusLastError = "Code audit focus: tick at least one";
 
     /// <summary>The focus checklist's buttons: all and default, no none (2026-10-18: an empty focus can never be saved).</summary>
     public static readonly IReadOnlyList<MenuButton> CodeAuditFocusButtons = [new(SelectAllButton, SelectAllKey), new(DefaultsButton, DefaultsKey)];

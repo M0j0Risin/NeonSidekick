@@ -350,7 +350,8 @@ public sealed class PlanGapLoop
 /// What the plan directive says of a running loop (<see cref="PlanText.Directive(string, string?, int, IReadOnlyList{Settings.AdvisorEntry}?, PlanGapState?)"/>):
 /// the pass, its limit (0 for none) and the reviewer chosen; since 2026-10-17 the clean passes in a row before this one, the count the
 /// review ends on, this pass's confirmation (0 when it is not confirming) and who reviews this pass (null for the reviewer chosen); since
-/// 2026-10-18 whether the pass may ask the user (<see cref="Settings.AppSettingsData.PlanGapAskUser"/>: false, the directive says to ask
+/// 2026-10-18 whether the pass may and can ask the user (<see cref="Settings.AppSettingsData.PlanGapAskUser"/> with <c>ask_user</c> offered, since
+/// 2026-10-21: false, the directive says to ask
 /// nothing and to write a decision only the user can make into <c>## Risks</c> as an open question).
 /// </summary>
 public sealed record PlanGapState(int Pass, int Limit, PlanReviewer Reviewer, int CleanSoFar = 0, int CleanPasses = 1, int Confirmation = 0, PlanReviewer? PassReviewer = null, bool AskUser = true)

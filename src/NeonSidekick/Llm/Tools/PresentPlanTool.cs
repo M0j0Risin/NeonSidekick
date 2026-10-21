@@ -78,7 +78,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     /// after each gap pass's save for <see cref="PlanFit.Shape"/>; null for <see cref="RalphText.InlinePlanChars"/>.
     /// </param>
     /// <param name="converged">
-    /// Called once as a gap review converges, before its approval pane opens (2026-10-21, the screen's <c>LLM plan gap stop tone</c>: the pane waits
+    /// Called once as a gap review converges, before its approval pane opens (2026-10-21, the screen's <c>Plan gap stop tone</c>: the pane waits
     /// inside the turn, and the review's end is said only once it is answered); null for none (headless, the tests).
     /// </param>
     public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null, Action? converged = null)

@@ -980,7 +980,7 @@ internal sealed partial class ChatScreen
     // ── The checkpoint ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// The checkpoint after a step that stood (2026-10-18, <c>LLM Ralph loop checkpoint</c> above 0): Keep, Redo with a note (the step unticked, the
+    /// The checkpoint after a step that stood (2026-10-18, <c>Ralph loop checkpoint</c> above 0): Keep, Redo with a note (the step unticked, the
     /// note the next pass's), View the changes, or Stop — on the PC and the page at once, waiting until answered.
     /// </summary>
     private async Task<RalphStop?> RalphCheckpointAsync(RalphLoop loop, PlanStep step, RalphJudged judged, CancellationToken cancellationToken)

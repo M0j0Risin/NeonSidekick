@@ -25,7 +25,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 * **A group appears only when it can work:** Obsidian needs a vault, the databases and UNC a connection or share you ticked, Home Assistant its URL and key, ComfyUI its URL and a workflow.
 * **Headless** leaves some tools out, and refuses anything that would stop to ask you: [Before you start](HEADLESS.md#before-you-start).
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops the MCP tools and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
-* **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads join only under *LLM code audit web research*; an advisor asked in a pass gets the same set.
+* **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads join only under *Code audit web research*; an advisor asked in a pass gets the same set.
 * **On a Mac:** what runs there is in [MAC.md](MAC.md#what-works); a group that behaves differently has its own "… on a Mac" section below.
 
 ## Core

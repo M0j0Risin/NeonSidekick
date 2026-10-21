@@ -16,7 +16,7 @@ public partial class SettingsMenuTests
         var section = SettingsMenu.TabSections[SettingsTab.Automation].Single(s => s.Title == "Code audit");
         Assert.Equal(SettingsField.CodeAuditPasses, section.First);
         Assert.Equal(
-            ["LLM code audit max passes", "LLM code audit clean passes", "LLM code audit ask user", "LLM code audit focus", "LLM code audit web research", "LLM code audit pass tool calls", "LLM code audit stop tone"],
+            ["Code audit max passes", "Code audit clean passes", "Code audit ask user", "Code audit focus", "Code audit web research", "Code audit pass tool calls", "Code audit stop tone"],
             new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }.Select(SettingsMenu.FieldName));
         Assert.True(SettingsMenu.IsToggle(SettingsField.CodeAuditAskUser));
         Assert.True(SettingsMenu.IsToggle(SettingsField.CodeAuditWebResearch));

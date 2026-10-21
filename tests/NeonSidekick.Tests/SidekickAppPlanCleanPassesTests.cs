@@ -93,6 +93,25 @@ public partial class SidekickAppTests
         Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
     }
 
+    /// <summary>2026-10-21: headless never offers <c>ask_user</c>, so a pass is told not to ask with the setting on too.</summary>
+    [Fact]
+    public async Task Headless_PlanGaps_AskUserOn_StillCannotAsk()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => { d.PlanGapCleanPasses = 1; d.PlanGapAskUser = true; });
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGaps("p2", []));
+        _chat.EnqueueText("Clean.");
+
+        await Headless("/plan Add a guide\n/plan gaps\n");
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Contains(PlanText.GapNoAskLine, _chat.Requests[2][0].Text);
+        Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
+        Assert.DoesNotContain(PlanText.GapAskSentence, _chat.Requests[2][0].Text);
+    }
+
     [Fact]
     public async Task Headless_PlanChat_TheLineOpensIt_ReadyAsks_AndAfterAPresentationSaysWhereItStands()
     {

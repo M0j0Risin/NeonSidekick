@@ -21,7 +21,7 @@ internal sealed partial class ChatScreen
     private RalphLoop? _ralphConfirmFallbackSaid;
 
     /// <summary>
-    /// An independent look at a step whose checks stood (<c>LLM Ralph loop reviewer</c>, <see cref="RalphReviewers"/>): the model or the first
+    /// An independent look at a step whose checks stood (<c>Ralph loop reviewer</c>, <see cref="RalphReviewers"/>): the model or the first
     /// advisor, under the watch with a spinner; Esc stops the loop (null).
     /// </summary>
     private async Task<RalphVerdict?> ReviewRalphStepAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)

@@ -16,7 +16,7 @@ public enum RalphCheckpointChoice
 public sealed record RalphCheckpointAnswer(RalphCheckpointChoice Choice, string? Note);
 
 /// <summary>
-/// The Ralph loop's checkpoint pane (2026-10-18, <c>LLM Ralph loop checkpoint</c> above 0): after a step that stood, Keep, Redo with a note… (the
+/// The Ralph loop's checkpoint pane (2026-10-18, <c>Ralph loop checkpoint</c> above 0): after a step that stood, Keep, Redo with a note… (the
 /// pane's input slot for what the next pass should do differently), View the changes (the pass's diff on an info page, then back), or Stop the
 /// loop, with <c>k</c> / <c>r</c> / <c>v</c> / <c>s</c> as hotkeys and the cursor on Keep. Esc is Keep: the loop goes on. The
 /// <see cref="PlanApprovalMenu"/> shape; the page asks the same at once (<c>ChatScreen</c>'s race), the first answer winning.

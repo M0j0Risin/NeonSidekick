@@ -339,13 +339,13 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 **Close gaps…** or `/plan gaps` reviews the plan pass by pass. Each pass is one turn that fixes what would make the work stall (a missing step, an open choice, an unread file, an unchecked source, a step too big, a plan too long) and saves a revision.
 
-* **Clean passes:** a review ends after *LLM plan gap clean passes* in a row find no gaps. Small fixes (wording, formatting) don't break a streak.
+* **Clean passes:** a review ends after *Plan gap clean passes* in a row find no gaps. Small fixes (wording, formatting) don't break a streak.
   * Each pass after a clean one looks at another area (the steps' order, verification, risks, assumptions, size) and must say what it checked.
 * **Who reviews** (with advisors offered): the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
-* **Unattended:** with *LLM plan gap ask user* off, a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, which isn't a gap.
+* **Unattended:** with *Plan gap ask user* off, or where `ask_user` isn't offered, a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, which isn't a gap.
 * **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on a typed message or Esc.
-  * At the limit, the count given or *LLM plan gap max passes*; a clean pass there returns the pane unconfirmed. A limit below the clean count lowers that count for the run.
-* **The stop tone:** a stop you didn't cause rings *LLM plan gap stop tone*, a failed pass too; a converged review rings as its pane opens.
+  * At the limit, the count given or *Plan gap max passes*; a clean pass there returns the pane unconfirmed. A limit below the clean count lowers that count for the run.
+* **The stop tone:** a stop you didn't cause rings *Plan gap stop tone*, a failed pass too; a converged review rings as its pane opens.
 * **The record:** a stop lists every pass (gaps, minor fixes, focus, time, tokens). A review that ends on its own writes a `review:` line into the header.
   * `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`. Ticking steps is no edit; a new revision drops the line.
 
@@ -356,7 +356,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
-* **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*LLM Ralph loop reviewer*).
+* **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*Ralph loop reviewer*).
   * The diff the reviewer reads is redacted, and a secrets file (`.env`, a key) is named, never shown.
   * Only the app ticks boxes. A box, a step's words or its `Done when:` line a pass changed are put back, as are the `## Steps` heading and the header's `verify:` and `final:` lines, and a step it added is taken out; a stopped pass decides nothing.
   * The plan as the pass left it is kept in `as-left.md` beside the log, so an edit of your own made during a pass isn't lost. Type a message to pause the loop before you edit the plan.
@@ -373,7 +373,7 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * If only `final:` fails (say, a test of the work still to do), starting anyway keeps the steps checked.
 * **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan: while the loop runs, the other can't run, open, revise or approve it. Mind that folder before you commit `.neon/`.
   * A lock another PC wrote (a shared or synced folder) is never taken over: the error names that PC and the file to delete if its run is gone.
-* **Checkpoint:** with *LLM Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
+* **Checkpoint:** with *Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
   * Only then may a pass ask you anything (`ask_user`, the camera, the screen). With neither the pane nor the Web UI to ask on, a run has no checkpoint.
   * Each answer goes in the log, so a Redo's note reaches the next pass after a pause or a restart too.
 * **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
@@ -381,9 +381,9 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 #### When a loop stops
 
 * **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
-* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop max step passes*, a pass that deleted unfinished steps, a check refused as it was due, or an error.
-* **At a limit or by hand:** the pass cap (*LLM Ralph loop max passes*, or the count given), the token budget, Esc, the Web UI's Stop, the wake phrase (its request runs once the loop has stopped), or a working directory change.
-* **The stop tone:** a stop you didn't cause rings *LLM Ralph loop stop tone*.
+* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *Ralph loop max step passes*, a pass that deleted unfinished steps, a check refused as it was due, or an error.
+* **At a limit or by hand:** the pass cap (*Ralph loop max passes*, or the count given), the token budget, Esc, the Web UI's Stop, the wake phrase (its request runs once the loop has stopped), or a working directory change.
+* **The stop tone:** a stop you didn't cause rings *Ralph loop stop tone*.
 * **A message typed** during a pass, at the PC or on the Web UI, pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
 * **A paused loop resumes only in its own folder.** After a working directory change, `/plan ralph <name>` starts that folder's plan afresh, its checks confirmed again.
 * **A plan done or canceled while paused** is never resumed; `/plan ralph` says so and forgets the loop.
@@ -394,22 +394,22 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **Scope:** the working directory, or a path (quote one with a blank); `diff` the working changes (unstaged, staged, untracked), `staged` the staged ones, `branch [<base>]` the commits since its base (`main`, else `master`). Past 5,000 files the list is cut, and the start says so.
 * **Left out:** git's ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` folders unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.
-* **Focus:** security, correctness, performance, maintainability and tests, any mix (`all`; none means *LLM code audit focus*). A pass after a clean one takes one in turn (with one chosen, an angle: edge cases, error paths, concurrency, outside input).
+* **Focus:** security, correctness, performance, maintainability and tests, any mix (`all`; none means *Code audit focus*). A pass after a clean one takes one in turn (with one chosen, an angle: edge cases, error paths, concurrency, outside input).
 * **The brief:** the first other word, or all after `--`, starts the brief (`/code-audit src -- tests are flaky`); a path-like word that names nothing is refused.
 * **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies each line it cites), `any` (asking advisors where a role fits) or `confirm` (an advisor on each pass after a clean one; at least 2 clean passes).
-  * A number (0–100, 0 for no cap) replaces *LLM code audit max passes* for the run.
-* **Tools:** the file, picture, PDF and git reads, advisors, the manual, the clock, skills, memory's recall, `ask_user` and `present_audit`. The web's reads only under *LLM code audit web research* (off: audited code may carry instructions, and the web could send code out).
-* **Unattended:** with *LLM code audit ask user* off, a pass asks nothing, takes no photo and captures no screen; a question only you can answer goes into the report's Open questions.
+  * A number (0–100, 0 for no cap) replaces *Code audit max passes* for the run.
+* **Tools:** the file, picture, PDF and git reads, advisors, the manual, the clock, skills, memory's recall, `ask_user` and `present_audit`. The web's reads only under *Code audit web research* (off: audited code may carry instructions, and the web could send code out).
+* **Unattended:** with *Code audit ask user* off, a pass asks nothing, takes no photo and captures no screen; a question only you can answer goes into the report's Open questions.
 
 #### The report
 
 * **What it holds:** `.neon/audits/<name>.md`, written by the app. Findings come by severity with stable ids (`A3`, never reused), each with its file and line, fix and quoted evidence the app checked against the file.
   * Then nits, open questions, coverage, what clean passes checked, and the retracted findings.
 * **Its rules:** a finding needs its file read this session (a window is enough, a diff is not). You may edit the report during an audit: a ticked box settles a finding; reporting it again reopens it. `<name>.coverage.txt` keeps the files read, so `resume` carries on.
-* **Clean passes:** an audit ends after *LLM code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first.
-  * *LLM code audit pass tool calls* is guidance, never a cut-off. The pane says how much of the scope was read.
+* **Clean passes:** an audit ends after *Code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first.
+  * *Code audit pass tool calls* is guidance, never a cut-off. The pane says how much of the scope was read.
 * **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a message typed at the PC or sent from the Web UI, on Esc, `/new`, `/clear`, a profile switch or a working directory change (its report stays in its own folder). Each stop says why; `/code-audit resume <name>` runs more passes.
-* **The stop tone:** a stop you didn't cause rings *LLM code audit stop tone*, a failed pass or a working directory change too.
+* **The stop tone:** a stop you didn't cause rings *Code audit stop tone*, a failed pass or a working directory change too.
 * **The pane:** the open findings, then its choices ([keys](INTERFACE.md#pane-keys)); the Web UI page gets the same ones.
   * **Fix via plan:** plan mode on the open findings, the report marked `fixing`.
   * **More passes…:** the reviewer page when advisors are offered.

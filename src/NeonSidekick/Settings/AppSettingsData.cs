@@ -798,7 +798,7 @@ public sealed class AppSettingsData
     /// has no ESC. Read when a loop starts. The first row of <c>/settings</c> › Automation, heading its Plan mode section (on Servers › Common,
     /// under <see cref="LlmMaxToolIterations"/>, until 2026-10-21, the user's ask). No variable.
     /// The most went 20 → 50 on 2026-10-18 (the user's ask: long reviews lean on 43e4cfae's compaction) and 50 → 100 on 2026-10-21 (the user's
-    /// ask; the row reads <c>LLM plan gap max passes</c> since); <see cref="MaxCodeAuditPasses"/> follows. The default went 5 → 50 on 2026-10-21
+    /// ask; the row reads <c>Plan gap max passes</c> since, "LLM plan gap max passes" until later that day); <see cref="MaxCodeAuditPasses"/> follows. The default went 5 → 50 on 2026-10-21
     /// (the user's ask); a profile that saved 5 keeps it.
     /// </summary>
     public int PlanGapPasses { get; set; } = DefaultPlanGapPasses;

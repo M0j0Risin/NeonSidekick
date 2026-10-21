@@ -4465,7 +4465,7 @@ internal sealed partial class ChatScreen
             effective.ShellPreferNative,
             // Plan mode's advisors bullet (2026-10-10) as the turn would send it: neon_advisor offered and not off on /tools.
             // ...and its web research bullet (2026-10-17) with the research tools the turn offers.
-            (_plan.Turn(_presentPlan, effective.PlanGapAskUser, PlanReferenceNames(effective)) ?? AuditTurn(effective))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null)
+            (_plan.Turn(_presentPlan, GapMayAsk(effective), PlanReferenceNames(effective)) ?? AuditTurn(effective))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null)
                 ?? RalphPassTurn()?.Directive,   // a Ralph pass's directive (2026-10-18) in plan mode's place
             HomeAssistantOffered(effective),
             Without(_haTools, disabled).Count,
@@ -7269,9 +7269,9 @@ internal sealed partial class ChatScreen
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost; so does a Ralph pass
         // with the checkpoint off (later that day: an unattended loop never stops on a question).
         Disabled = GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(ToolsText.DisabledSet(effective.ToolsDisabled)) : ToolsText.DisabledSet(effective.ToolsDisabled),
-        Plan = _plan.Turn(_presentPlan, effective.PlanGapAskUser, PlanReferenceNames(effective)) ?? AuditTurn(effective),
+        Plan = _plan.Turn(_presentPlan, GapMayAsk(effective), PlanReferenceNames(effective)) ?? AuditTurn(effective),
         Pass = RalphPassTurn(),
-        // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under LLM code audit web research; an advisor asked in it the same.
+        // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under Code audit web research; an advisor asked in it the same.
         OnlyTools = _audit.InPass ? AuditTools.Allowed(effective) : null,
     }, effective);
 

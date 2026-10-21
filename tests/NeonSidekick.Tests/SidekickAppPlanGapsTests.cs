@@ -135,7 +135,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_PlanGaps_ACount_CapsThisRun_AndZeroSaysItWasTyped()
     {
-        // 2026-10-17, the user's ask: the count replaces LLM plan gap max passes for the run; 0 is still the most headless (50 since 2026-10-18, 100 since 2026-10-21).
+        // 2026-10-17, the user's ask: the count replaces Plan gap max passes for the run; 0 is still the most headless (50 since 2026-10-18, 100 since 2026-10-21).
         ServerOn1234("llama");
         _chat.Enqueue(HeadlessPresentPlan());
         _chat.EnqueueText("Saved.");

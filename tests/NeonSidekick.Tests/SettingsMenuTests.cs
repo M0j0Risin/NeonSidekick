@@ -384,7 +384,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task ThePlanGapCleanPassesRow_IsTyped_OneToFive_OutOfRangeRefused()
     {
         _console.Profile.Width = 240;
-        Assert.Equal("LLM plan gap clean passes", SettingsMenu.FieldName(SettingsField.PlanGapCleanPasses));
+        Assert.Equal("Plan gap clean passes", SettingsMenu.FieldName(SettingsField.PlanGapCleanPasses));
         Assert.Equal("2 passes", SettingsMenu.FieldValue(SettingsField.PlanGapCleanPasses, new AppSettingsData(), _settings.ProfileDirectory));
         Assert.Equal("1 pass", SettingsMenu.FieldValue(SettingsField.PlanGapCleanPasses, new AppSettingsData { PlanGapCleanPasses = 1 }, _settings.ProfileDirectory));
         Assert.Equal("2", SettingsMenu.EditableValue(SettingsField.PlanGapCleanPasses, new AppSettingsData()));
@@ -401,14 +401,14 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
         Assert.Equal(3, _settings.Current.PlanGapCleanPasses);
-        Assert.Contains("LLM plan gap clean passes " + SettingsMenu.PlanGapCleanPassesRangeError + "; keeping 2.", Output);
+        Assert.Contains("Plan gap clean passes " + SettingsMenu.PlanGapCleanPassesRangeError + "; keeping 2.", Output);
     }
 
     /// <summary>Whether a gap pass may ask (2026-10-18): a toggle right under the clean passes in the Plan mode run, on by default; its on/off picker turns it off, no reconnect.</summary>
     [Fact]
     public async Task ThePlanGapAskUserRow_IsAToggle_UnderTheCleanPasses_ThePickerTurnsItOff()
     {
-        Assert.Equal("LLM plan gap ask user", SettingsMenu.FieldName(SettingsField.PlanGapAskUser));
+        Assert.Equal("Plan gap ask user", SettingsMenu.FieldName(SettingsField.PlanGapAskUser));
         Assert.True(SettingsMenu.IsToggle(SettingsField.PlanGapAskUser));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.PlanGapAskUser));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.PlanGapAskUser, new AppSettingsData(), _settings.ProfileDirectory));
@@ -1774,7 +1774,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());   // the four panes together, every field once
         Assert.Equal(29, SettingsMenu.TabLabelWidth(SettingsTab.Chat));   // "Working directory in header", 27 (2026-09-21; "Hide /exit autocomplete", 23, from 2026-09-18; "Show image thumbnails", 21, before)
         Assert.Equal(26, SettingsMenu.TabLabelWidth(SettingsTab.Common));       // "LLM compact show summary" again since 2026-10-21 (the plan, Ralph and audit rows moved to Automation); "LLM code audit pass tool calls", 32 (2026-10-18); "LLM plan gap clean passes", 27 (2026-10-17; "LLM compact show summary", 26, from 2026-10-10, the Http tab's rows gone; "LLM sampling from Hugging Face", 32, from 2026-09-28; "LLM compact show summary", 24, from 2026-09-21; "LLM request timeout (s)", 23, before)
-        Assert.Equal(32, SettingsMenu.TabLabelWidth(SettingsTab.Automation));       // "LLM code audit pass tool calls" (2026-10-21, off Common)
+        Assert.Equal(28, SettingsMenu.TabLabelWidth(SettingsTab.Automation));       // "Code audit pass tool calls" and "Ralph loop max step passes" (2026-10-21, their rows without "LLM "); "LLM code audit pass tool calls", 32, off Common earlier that day
         Assert.Equal(32, SettingsMenu.TabLabelWidth(SettingsTab.Http));       // "LLM sampling from Hugging Face" (2026-10-10)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(30, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard (%)" (2026-10-13; 26 without the unit)
@@ -3481,8 +3481,8 @@ public partial class SettingsMenuTests : IDisposable
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n  LLM API key                     em•••\n" + MenuLayout.Heading("Thinking", 120) + "\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n" + MenuLayout.Heading("Sampling", 120) + "\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 120);
-        // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, off Common, padded to 32.
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Plan mode", 120) + "\n▸ LLM plan gap max passes         5 passes\n  LLM plan gap clean passes       2 passes\n  LLM plan gap ask user           on\n  LLM plan gap stop tone          silent\n" + MenuLayout.Heading("Ralph loop", 120) + "\n  LLM Ralph loop reviewer         any\n  LLM Ralph loop checkpoint       off\n  LLM Ralph loop max passes       auto (3 a step)\n  LLM Ralph loop max step passes  4 passes\n  LLM Ralph loop check timeout    600 s\n  LLM Ralph loop token budget     no budget\n  LLM Ralph loop stop tone        silent\n" + MenuLayout.Heading("Code audit", 120) + "\n  LLM code audit max passes       5 passes\n  LLM code audit clean passes     2 passes\n  LLM code audit ask user         on\n  LLM code audit focus            all\n  LLM code audit web research     off\n  LLM code audit pass tool calls  40 tool calls\n  LLM code audit stop tone        silent\n", 120);
+        // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, off Common, padded to 28 (32 until the rows lost "LLM " later that day).
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Plan mode", 120) + "\n▸ Plan gap max passes         5 passes\n  Plan gap clean passes       2 passes\n  Plan gap ask user           on\n  Plan gap stop tone          silent\n" + MenuLayout.Heading("Ralph loop", 120) + "\n  Ralph loop reviewer         any\n  Ralph loop checkpoint       off\n  Ralph loop max passes       auto (3 a step)\n  Ralph loop max step passes  4 passes\n  Ralph loop check timeout    600 s\n  Ralph loop token budget     no budget\n  Ralph loop stop tone        silent\n" + MenuLayout.Heading("Code audit", 120) + "\n  Code audit max passes       5 passes\n  Code audit clean passes     2 passes\n  Code audit ask user         on\n  Code audit focus            all\n  Code audit web research     off\n  Code audit pass tool calls  40 tool calls\n  Code audit stop tone        silent\n", 120);
         AssertTabEnds("\n \n" + MenuLayout.Heading("Text-to-speech", 120) + "\n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n" + MenuLayout.Heading("Voices", 120) + "\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix (%)  80 % / 20 %\n  Speed          1.2\n", 120);
         AssertTabEnds("\n \n" + MenuLayout.Heading("Speech-to-text", 120) + "\n▸ Input                     off\n  Destination               chat\n  Push-to-talk key          F4\n  Whisper model             ggml-base.en.bin\n" + MenuLayout.Heading("Wake word", 120) + "\n  Wake                      off\n  Wake phrase               hey neon\n  Vosk model                vosk-model-small-en-us-0.15\n" + MenuLayout.Heading("Interruptions", 120) + "\n  Interrupt                 off\n  Interrupt echo guard (%)  100 %\n  Interrupt hold (ms)       200 ms\n", 120);
         Assert.DoesNotContain("Ask user", Output);   // /tools' since 2026-09-19

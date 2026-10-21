@@ -299,7 +299,7 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Contains("this pass checks again (clean pass 2 of 2)", _session.Turn(_tool)!.Directive);
     }
 
-    // ── LLM plan gap ask user (2026-10-18) ──────────────────────────────────
+    // ── Plan gap ask user (2026-10-18) ──────────────────────────────────
 
     [Fact]
     public void Directive_AskUserOff_AsksNothing_AndTheUsersCallsAreOpenQuestionsInTheRisks()
@@ -309,28 +309,35 @@ public class PlanCleanPassesTests : IDisposable
 
         Assert.Equal("- Do not ask the user anything during this review, and take no photo or screen capture: settle what research can, and fold the user's later messages into the plan.", PlanText.GapNoAskLine);
         Assert.Equal("A decision only the user can make, write into ## Risks as a plain bullet starting \"Open question (your call):\", never a checkbox; it is not a gap, so leave it out of gaps and list it in minor as \"open question: …\".", PlanText.GapOpenQuestionSentence);
+        Assert.Equal("A choice only the user can make (a preference, a trade-off, the scope, anything no file or page can tell you) is theirs: ask them with ask_user, a few questions in one call, rather than picking for them, and close the gap with their answer; settle yourself what research can. " +
+            "Ask too about any \"Open question (your call):\" bullet in ## Risks you have not asked about yet. " +
+            "A question the user leaves unanswered goes into ## Risks as such a bullet, never a checkbox; it is not a gap, so leave it out of gaps, list it in minor as \"open question: …\", and do not ask it again.", PlanText.GapAskSentence);
+        Assert.Equal(" (one only the user can make is closed by asking them; one they left unanswered, written into ## Risks as an open question, is not a gap)", PlanText.GapAskException);
         Assert.Contains(PlanText.GapNoAskLine + "\n", off);
         Assert.Contains("- Research what you need with the read-only tools. " + PlanText.GapOpenQuestionSentence + "\n", off);
         Assert.Contains("a missing or out-of-order step, a choice left open (except an open question written into ## Risks as the user's call), a file", off);
         Assert.DoesNotContain("ask_user", off);
+        Assert.DoesNotContain(PlanText.GapAskException, off);
         Assert.DoesNotContain("- Ask what you need to know", off);
         Assert.Contains("on the web for whatever the plan rests on from outside the working directory. " + PlanText.GapOpenQuestionSentence + "\n", offWeb);
         Assert.DoesNotContain("ask_user", offWeb);
     }
 
     [Fact]
-    public void Directive_AskUserOn_IsAsBefore_AndNoGapStateIsUnchanged()
+    public void Directive_AskUserOn_AsksForTheUsersCalls_AndNoGapStateIsUnchanged()
     {
         string on = PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model));
         string none = PlanText.Directive("R", "p.md", 1, null, null);
 
         Assert.Equal(on, PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model, AskUser: true)));
         Assert.Contains("- Ask what you need to know, a few questions at a time (with ask_user when it is offered), and fold the user's answers and later messages into the plan.\n", on);
-        Assert.Contains("- Research what you need with the read-only tools. A decision only the user can make, ask them (with ask_user when it is offered).\n", on);
-        Assert.Contains("a missing or out-of-order step, a choice left open, a file", on);
+        Assert.Contains("- Research what you need with the read-only tools. " + PlanText.GapAskSentence + "\n", on);
+        Assert.Contains("a missing or out-of-order step, a choice left open" + PlanText.GapAskException + ", a file", on);
+        Assert.DoesNotContain("with ask_user when it is offered).\n", on);   // 2026-10-21: the old half sentence, gone from the research bullet
         Assert.DoesNotContain(PlanText.GapNoAskLine, on);
         Assert.DoesNotContain(PlanText.GapOpenQuestionException, on);
         Assert.Contains("- Ask what you need to know", none);
+        Assert.DoesNotContain(PlanText.GapAskSentence, none);
         Assert.DoesNotContain(PlanText.GapNoAskLine, none);
     }
 
@@ -559,8 +566,8 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Equal("Gap review pass 3 of 5 for the plan in p.md (reviewer: model): the last pass found no gaps; review it again, close any you find, then call present_plan.", PlanText.GapPassMessage("p.md", 3, 5, PlanReviewer.Model, cleanSoFar: 1));
         Assert.Equal(PlanText.Glyph + " Gap review pass 2 of 5: no gaps found (1 of 2 clean passes); checking again.", PlanText.CleanPassNotice(2, 5, 1, 2));
         Assert.Equal(PlanText.Glyph + " Gap review pass 2 of 5: no gaps found (1 of 2 clean passes), 2 minor fixes; checking again.", PlanText.CleanPassNotice(2, 5, 1, 2, 2));
-        Assert.Equal(PlanText.Glyph + " The pass limit (1) is below LLM plan gap clean passes (2): this review finishes on 1 clean pass.", PlanText.CleanLoweredNotice(1, 2));
-        Assert.Equal(PlanText.Glyph + " The pass limit (2) is below LLM plan gap clean passes (3): this review finishes on 2 clean passes in a row.", PlanText.CleanLoweredNotice(2, 3));
+        Assert.Equal(PlanText.Glyph + " The pass limit (1) is below Plan gap clean passes (2): this review finishes on 1 clean pass.", PlanText.CleanLoweredNotice(1, 2));
+        Assert.Equal(PlanText.Glyph + " The pass limit (2) is below Plan gap clean passes (3): this review finishes on 2 clean passes in a row.", PlanText.CleanLoweredNotice(2, 3));
         Assert.Equal("no gaps in the last pass, but the limit came after 1 of 2 clean passes", PlanText.StoppedNote(PlanGapStop.Unconfirmed, 5, 0, 1, 2));
         Assert.Equal(PlanText.Glyph + " Gap review stopped at its limit after 5 passes, 3 gaps closed: the last pass found no gaps, but there was no pass left to check it again.", PlanText.GapStopNotice(PlanGapStop.Unconfirmed, 5, 3));
         Assert.Equal("no gaps left after 3 passes, 1 gap closed, confirmed by 2 clean passes", PlanText.ConvergedNote(3, 1, 2));

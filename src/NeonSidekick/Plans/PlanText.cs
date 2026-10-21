@@ -356,7 +356,7 @@ public static class PlanText
 
     /// <summary>A pass limit below the clean count (2026-10-17, the user's call): said once as pass 1 begins. Pinned.</summary>
     public static string CleanLoweredNotice(int limit, int asked) =>
-        $"{Glyph} The pass limit ({N(limit)}) is below LLM plan gap clean passes ({N(asked)}): this review finishes on {CleanRun(limit)}.";
+        $"{Glyph} The pass limit ({N(limit)}) is below Plan gap clean passes ({N(asked)}): this review finishes on {CleanRun(limit)}.";
 
     /// <summary>The approval pane's note once enough passes found no gaps; with <paramref name="clean"/> above 1 (2026-10-17), the confirmation said.</summary>
     public static string ConvergedNote(int passes, int closed, int clean = 1) =>
@@ -420,7 +420,7 @@ public static class PlanText
     /// <summary>Headless (2026-10-13): no Esc to stop a loop with no limit; <paramref name="fromCommand"/> (2026-10-17) when the 0 was typed as <c>/plan gaps 0</c>.</summary>
     public static string GapsHeadlessCapNotice(int cap, bool fromCommand = false) => fromCommand
         ? $"{Glyph} /plan gaps 0 means no limit, but headless has no Esc: at most {N(cap)} passes."
-        : $"{Glyph} LLM plan gap max passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
+        : $"{Glyph} Plan gap max passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
     /// <summary>The --log line of a pass: its gaps whole, whether it asked an advisor, and since 2026-10-17 its minor fixes and its cost.</summary>
     public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked, IReadOnlyList<string>? minor = null, PlanPassRecord? cost = null)
@@ -727,6 +727,26 @@ public static class PlanText
     public const string GapOpenQuestionException = " (except an open question written into ## Risks as the user's call)";
 
     /// <summary>
+    /// The research bullet's second sentence in a gap pass that may and can ask (2026-10-21, the user's report that gap passes never asked: the
+    /// half sentence "ask them (with ask_user when it is offered)" lost to the gap definition's "a choice left open" a pass must close, and the
+    /// easiest close was to pick an answer). The user's call is theirs to make through <c>ask_user</c>, an earlier pass's open questions in
+    /// <c>## Risks</c> asked too; a question left unanswered (Esc, <c>AskUserTool</c>'s "do not ask again") becomes such an open question, a plain
+    /// bullet listed in <c>minor</c> as <see cref="GapOpenQuestionSentence"/>'s is, so the next pass has no gap it cannot close. Only sent where
+    /// <c>ask_user</c> is offered (<c>ChatScreen.GapMayAsk</c>), so it names the tool outright. Pinned.
+    /// </summary>
+    public const string GapAskSentence =
+        "A choice only the user can make (a preference, a trade-off, the scope, anything no file or page can tell you) is theirs: ask them with ask_user, a few questions in one call, rather than picking for them, and close the gap with their answer; settle yourself what research can. " +
+        "Ask too about any \"Open question (your call):\" bullet in ## Risks you have not asked about yet. " +
+        "A question the user leaves unanswered goes into ## Risks as such a bullet, never a checkbox; it is not a gap, so leave it out of gaps, list it in minor as \"open question: …\", and do not ask it again.";
+
+    /// <summary>
+    /// What the gap definition's "a choice left open" gains in a gap pass that may ask (2026-10-21), the twin of <see cref="GapOpenQuestionException"/>:
+    /// the user's call is closed by asking, and one left unanswered is no gap, so the review can still converge. Pinned.
+    /// </summary>
+    public const string GapAskException =
+        " (one only the user can make is closed by asking them; one they left unanswered, written into ## Risks as an open question, is not a gap)";
+
+    /// <summary>
     /// The plan's shape as the directive asks for it (2026-10-18, the Ralph loop: each step carries its own check, and the only checkboxes are the
     /// steps', so a loop and the progress line count the same things). Pinned. The step size (later on 2026-10-18, the user's sample plan: 46 gap
     /// passes left one checkbox with the whole build as a numbered list under it, which a loop's three passes a step never finished; always on, the
@@ -810,8 +830,9 @@ public static class PlanText
     {
         ArgumentNullException.ThrowIfNull(gap);
         bool confirming = gap.CleanSoFar > 0;
-        // A pass that may not ask (2026-10-18): the user's call becomes an open question in ## Risks, never a question on a pane.
-        string decision = gap.AskUser ? "A decision only the user can make, ask them (with ask_user when it is offered)." : GapOpenQuestionSentence;
+        // A pass that may not ask (2026-10-18): the user's call becomes an open question in ## Risks, never a question on a pane;
+        // one that may (2026-10-21) is asked to put it to the user rather than pick.
+        string decision = gap.AskUser ? GapAskSentence : GapOpenQuestionSentence;
         string focus = ConfirmFocuses[(Math.Max(1, gap.Confirmation) - 1) % ConfirmFocuses.Count];
         string reviewer = gap.Who switch
         {
@@ -827,7 +848,7 @@ public static class PlanText
             (confirming
                 ? $"- The last pass found no gaps; this pass checks again (clean pass {N(gap.CleanSoFar + 1)} of {N(gap.CleanPasses)}). Review the plan as if seeing it for the first time, and look hardest at {focus}, which an earlier pass may have skimmed; then the rest as usual. Report every gap you find; an empty gaps list is right only when you find none.\n"
                 : "") +
-            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? "" : GapOpenQuestionException) + ", " +
+            "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? GapAskException : GapOpenQuestionException) + ", " +
             (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
             // The fit (later on 2026-10-18): a step one fresh pass cannot finish, a plan too long to send whole, and a Done when: only a person can judge.
             ", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell), " +

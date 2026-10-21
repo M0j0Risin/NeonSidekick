@@ -33,7 +33,7 @@ public static class AuditFocus
     /// <summary>The five dimensions in their order. Pinned.</summary>
     public static readonly IReadOnlyList<string> Dimensions = [Security, Correctness, Performance, Maintainability, Tests];
 
-    /// <summary><c>LLM code audit focus</c>'s default: all five (a fresh list, the setting's own copy).</summary>
+    /// <summary><c>Code audit focus</c>'s default: all five (a fresh list, the setting's own copy).</summary>
     public static List<string> Default() => [.. Dimensions];
 
     /// <summary>The dimension <paramref name="word"/> names, case aside; null for any other word (<see cref="AllWord"/> included).</summary>

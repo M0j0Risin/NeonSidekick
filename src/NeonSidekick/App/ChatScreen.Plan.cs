@@ -51,7 +51,7 @@ internal sealed partial class ChatScreen
 
         /// <summary>
         /// <c>/plan gaps [model|advisor|any] [passes]</c> while planning (2026-10-13): the gap-closing loop; the words are the rest
-        /// (<see cref="PlanText.ParseGapsArgs"/>), a pass count capping this run instead of <c>LLM plan gap max passes</c> (2026-10-17).
+        /// (<see cref="PlanText.ParseGapsArgs"/>), a pass count capping this run instead of <c>Plan gap max passes</c> (2026-10-17).
         /// </summary>
         CloseGaps,
 
@@ -454,11 +454,21 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Whether this turn is a gap pass that may not wait on the user (2026-10-18, the user's ask): a pass under way and
-    /// <see cref="AppSettingsData.PlanGapAskUser"/> off, read every turn. Such a pass is offered none of <see cref="PlanTools.AskingTools"/>;
-    /// the turn whose pane chose <c>Close gaps…</c> (the loop still pending) and every other plan-mode turn keep them.
+    /// Whether this turn is a gap pass that may not wait on the user (2026-10-18, the user's ask): a pass under way that may not ask
+    /// (<see cref="GapMayAsk"/> false since 2026-10-21; <see cref="AppSettingsData.PlanGapAskUser"/> off until then), read every turn. Such a pass
+    /// is offered none of <see cref="PlanTools.AskingTools"/>, so its directive and its tools agree; the turn whose pane chose <c>Close gaps…</c>
+    /// (the loop still pending) and every other plan-mode turn keep them.
     /// </summary>
-    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !effective.PlanGapAskUser) || (_audit.InPass && !effective.CodeAuditAskUser);
+    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !GapMayAsk(effective)) || (_audit.InPass && !effective.CodeAuditAskUser);
+
+    /// <summary>
+    /// Whether a gap pass may and can ask the user (2026-10-21, the review of the user's question why a pass never asked): <see cref="AppSettingsData.PlanGapAskUser"/>
+    /// on, and <c>ask_user</c> really offered (the pane up, <see cref="AppSettingsData.AskUser"/> on, the tool not off on <c>/tools</c>). Without the
+    /// tool the "ask" wording would send the pass to a question it cannot put, and it might ask in prose and end without <c>present_plan</c>, so such a
+    /// pass gets the open-question wording instead (<see cref="PlanText.GapOpenQuestionSentence"/>).
+    /// </summary>
+    private bool GapMayAsk(AppSettingsData effective) =>
+        effective.PlanGapAskUser && _pane.Enabled && effective.AskUser && !ToolsText.DisabledSet(effective.ToolsDisabled).Contains(AskUserTool.ToolName);
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
@@ -1216,7 +1226,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A fresh loop for <paramref name="reviewer"/> over the presented plan, its first pass sent: <c>/plan gaps</c> and an idle-line verdict.
-    /// <paramref name="passes"/> is <c>/plan gaps</c>' count (2026-10-17), else <c>LLM plan gap max passes</c>.
+    /// <paramref name="passes"/> is <c>/plan gaps</c>' count (2026-10-17), else <c>Plan gap max passes</c>.
     /// </summary>
     private async Task<bool> StartGapsAsync(PlanReviewer reviewer, int? passes, CancellationToken cancellationToken)
     {

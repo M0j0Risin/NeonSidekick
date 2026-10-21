@@ -205,7 +205,7 @@ public static class AuditText
     /// <summary>Headless: no Esc to stop an audit with no limit; <paramref name="fromCommand"/> when the 0 was typed on the line.</summary>
     public static string HeadlessCapNotice(int cap, bool fromCommand) => fromCommand
         ? $"{Glyph} /code-audit 0 means no limit, but headless has no Esc: at most {N(cap)} passes."
-        : $"{Glyph} LLM code audit max passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
+        : $"{Glyph} Code audit max passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
     public static string ResumedNotice(string name, bool newest) => newest ? $"{Glyph} Resuming {name} (the newest report)." : $"{Glyph} Resuming {name}.";
 
@@ -380,7 +380,7 @@ public static class AuditText
     /// <summary>The ask bullet while a pass may ask the user.</summary>
     public const string AskLine = "- A question only the user can answer: ask it (with ask_user when it is offered), or put it in present_audit's questions.";
 
-    /// <summary>The ask bullet under <c>LLM code audit ask user</c> off (2026-10-18): the audit runs unattended. Pinned.</summary>
+    /// <summary>The ask bullet under <c>Code audit ask user</c> off (2026-10-18): the audit runs unattended. Pinned.</summary>
     public const string NoAskLine = "- Do not ask the user anything during this audit, and take no photo or screen capture: put a question only the user can answer in present_audit's questions.";
 
     /// <summary>The bullet for a pass with nothing new.</summary>
@@ -596,7 +596,7 @@ public static class AuditText
         $"{Glyph} Code audit pass {PlanText.PassOf(pass, limit)}: nothing new ({N(clean)} of {CleanPasses(needed)}); checking again.";
 
     public static string CleanLoweredNotice(int limit, int asked) =>
-        $"{Glyph} The pass limit ({N(limit)}) is below LLM code audit clean passes ({N(asked)}): this audit finishes on {CleanRun(limit)}.";
+        $"{Glyph} The pass limit ({N(limit)}) is below Code audit clean passes ({N(asked)}): this audit finishes on {CleanRun(limit)}.";
 
     /// <summary>The convergence (2026-10-18): with the share read, so a quick convergence over a big tree is never taken for a full audit. Pinned.</summary>
     public static string ConvergedNotice(string name, int passes, int clean, int read, int scope) =>

@@ -205,14 +205,21 @@ public partial class ChatScreenTests
         Assert.NotNull(PlanHeaderNow.Review);
     }
 
-    // ── LLM plan gap ask user (2026-10-18) ──────────────────────────────────
+    // ── Plan gap ask user (2026-10-18) ──────────────────────────────────
 
-    /// <summary>A plan presented and kept (Esc), then <c>/plan gaps</c>: one clean pass converging, its pane Esc'd; with the camera and screen on.</summary>
-    private async Task<string> GapPassWithAsksAsync(bool gapAsks)
+    /// <summary>
+    /// A plan presented and kept (Esc), then <c>/plan gaps</c>: one clean pass converging, its pane Esc'd; with the camera and screen on.
+    /// <paramref name="setup"/> (2026-10-21) changes the settings after that, to take <c>ask_user</c> away.
+    /// </summary>
+    private async Task<string> GapPassWithAsksAsync(bool gapAsks, Action<Settings.AppSettingsData>? setup = null)
     {
         _cameraSystem = new FakeCameraSystem();
         _screenSystem = new FakeScreenSystem();
         _settings.Update(d => { d.PlanGapCleanPasses = 1; d.PlanGapAskUser = gapAsks; d.AskUser = true; d.CameraTools = true; d.ScreenTools = true; });
+        if (setup is not null)
+        {
+            _settings.Update(setup);
+        }
         PlanGapsFixture([[Keys.Escape], [Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps"), Line("/exit"));
         _chat.Enqueue(PresentPlanCall());                     // 0: the planning turn; Esc keeps refining
         _chat.EnqueueText("Noted.");                          // 1
@@ -240,6 +247,7 @@ public partial class ChatScreenTests
         Assert.Contains(PresentPlanTool.ToolName, pass);
         Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
         Assert.Contains(PlanText.GapNoAskLine, _chat.Requests[2][0].Text);
+        Assert.DoesNotContain(PlanText.GapAskSentence, _chat.Requests[2][0].Text);   // the user's question of 2026-10-21: off never shows it
         Assert.DoesNotContain(PlanText.GapNoAskLine, _chat.Requests[0][0].Text);
     }
 
@@ -253,7 +261,37 @@ public partial class ChatScreenTests
         Assert.Contains(CameraCaptureTool.ToolName, pass);
         Assert.Contains(ScreenCaptureTool.ToolName, pass);
         Assert.DoesNotContain(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
-        Assert.Contains("A decision only the user can make, ask them (with ask_user when it is offered).", _chat.Requests[2][0].Text);
+        Assert.Contains(PlanText.GapAskSentence, _chat.Requests[2][0].Text);
+    }
+
+    /// <summary>
+    /// 2026-10-21, the review of the user's question: the setting on but <c>ask_user</c> not offered (<c>Ask user</c> off, or the tool off on
+    /// <c>/tools</c>), the pass gets the unattended wording and no camera or screen pane, as with the setting off.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PlanGaps_AskUserOn_ButAskUserToolOff_ThePassCannotAsk(bool offOnTools)
+    {
+        await GapPassWithAsksAsync(gapAsks: true, d =>
+        {
+            if (offOnTools)
+            {
+                d.ToolsDisabled.Add(AskUserTool.ToolName);   // added, not replaced: the default list holds tools of its own
+            }
+            else
+            {
+                d.AskUser = false;
+            }
+        });
+
+        var pass = OfferedNames(_chat.Options[2]);
+        Assert.DoesNotContain(AskUserTool.ToolName, pass);
+        Assert.DoesNotContain(CameraCaptureTool.ToolName, pass);
+        Assert.DoesNotContain(ScreenCaptureTool.ToolName, pass);
+        Assert.Contains(PlanText.GapNoAskLine, _chat.Requests[2][0].Text);
+        Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
+        Assert.DoesNotContain(PlanText.GapAskSentence, _chat.Requests[2][0].Text);
     }
 
     // ── /plan chat and /plan ready ──────────────────────────────────────────

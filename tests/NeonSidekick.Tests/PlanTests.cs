@@ -481,7 +481,7 @@ public class PlanTests : IDisposable
         Assert.Equal("'101' passes: /plan gaps takes 0 to 100, 0 for no cap", PlanText.GapPassesRangeError("101"));
         Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor, any or confirm, and a pass count (0–100)", PlanText.UnknownReviewerError("x"));
         Assert.Equal(PlanText.Glyph + " /plan gaps 0 means no limit, but headless has no Esc: at most 100 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses, fromCommand: true));
-        Assert.Equal(PlanText.Glyph + " LLM plan gap max passes is 0 (no limit), but headless has no Esc: at most 100 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses));
+        Assert.Equal(PlanText.Glyph + " Plan gap max passes is 0 (no limit), but headless has no Esc: at most 100 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses));
     }
 
     [Fact]

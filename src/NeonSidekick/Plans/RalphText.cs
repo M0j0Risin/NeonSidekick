@@ -418,7 +418,7 @@ public static class RalphText
     private static string FitPart(IReadOnlyList<string>? problems) => problems is { Count: > 0 } p ? ". " + FitSentence(p) : "";
 
     /// <summary>
-    /// <c>LLM Ralph loop checkpoint</c> above 0 with no pane and no Web UI to ask it on (2026-10-20, a review): the run has no checkpoint, and its passes
+    /// <c>Ralph loop checkpoint</c> above 0 with no pane and no Web UI to ask it on (2026-10-20, a review): the run has no checkpoint, and its passes
     /// ask nothing. Pinned.
     /// </summary>
     public const string CheckpointNowhereNotice = Glyph + " No pane or Web UI to ask at a checkpoint: this run has none, and its passes ask nothing.";

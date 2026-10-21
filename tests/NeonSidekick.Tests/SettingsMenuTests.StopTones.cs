@@ -18,8 +18,8 @@ public partial class SettingsMenuTests
     {
         var data = new AppSettingsData();
         Assert.Equal((TimerTones.Silent, TimerTones.Silent, TimerTones.Silent), (data.PlanGapStopTone, data.CodeAuditStopTone, data.RalphLoopStopTone));
-        Assert.Equal("LLM plan gap stop tone", SettingsMenu.FieldName(SettingsField.PlanGapStopTone));
-        Assert.Equal("LLM code audit stop tone", SettingsMenu.FieldName(SettingsField.CodeAuditStopTone));
+        Assert.Equal("Plan gap stop tone", SettingsMenu.FieldName(SettingsField.PlanGapStopTone));
+        Assert.Equal("Code audit stop tone", SettingsMenu.FieldName(SettingsField.CodeAuditStopTone));
         Assert.Equal("silent", SettingsMenu.FieldValue(SettingsField.PlanGapStopTone, data, _settings.ProfileDirectory));
         Assert.Equal("chime", SettingsMenu.FieldValue(SettingsField.CodeAuditStopTone, new AppSettingsData { CodeAuditStopTone = "Chime" }, _settings.ProfileDirectory));
         Assert.Equal("silent", SettingsMenu.FieldValue(SettingsField.CodeAuditStopTone, new AppSettingsData { CodeAuditStopTone = "gong" }, _settings.ProfileDirectory));   // unknown reads as silent
@@ -31,7 +31,7 @@ public partial class SettingsMenuTests
         Assert.Equal(automation.IndexOf(SettingsField.CodeAuditPassToolCalls) + 1, automation.IndexOf(SettingsField.CodeAuditStopTone));
         // The pass rows read as caps.
         Assert.Equal(
-            ["LLM plan gap max passes", "LLM code audit max passes", "LLM Ralph loop max passes", "LLM Ralph loop max step passes"],
+            ["Plan gap max passes", "Code audit max passes", "Ralph loop max passes", "Ralph loop max step passes"],
             new[] { SettingsField.PlanGapPasses, SettingsField.CodeAuditPasses, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep }.Select(SettingsMenu.FieldName));
     }
 
@@ -81,7 +81,7 @@ public partial class SettingsMenuTests
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("LLM plan gap max passes " + SettingsMenu.PlanGapPassesRangeError, Output);
+        Assert.Contains("Plan gap max passes " + SettingsMenu.PlanGapPassesRangeError, Output);
         Assert.Equal(PreFlipDefaults.Data().PlanGapPasses, _settings.Current.PlanGapPasses);   // unchanged: the fixture's 5 (PreFlipDefaults; the default is 50 since 2026-10-21)
         Assert.Equal("must be 0 to 100 passes (0 for no limit)", SettingsMenu.PlanGapPassesRangeError);
     }

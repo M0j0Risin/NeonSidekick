@@ -3,7 +3,7 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Plans;
 
-/// <summary>Who checks a Ralph pass's work once its own checks stand (<c>LLM Ralph loop reviewer</c>, 2026-10-18).</summary>
+/// <summary>Who checks a Ralph pass's work once its own checks stand (<c>Ralph loop reviewer</c>, 2026-10-18).</summary>
 public enum RalphReviewer
 {
     /// <summary>No review: the verify command and the evidence alone.</summary>

@@ -20,7 +20,7 @@ public static class AuditTools
         NeonAdvisorTool.ToolName, NeonHelpTool.ToolName, GetCurrentTimeTool.ToolName, LoadSkillTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName,
     ];
 
-    /// <summary>The web's reads, kept only under <c>LLM code audit web research</c>.</summary>
+    /// <summary>The web's reads, kept only under <c>Code audit web research</c>.</summary>
     public static readonly IReadOnlyList<string> Web = [WebSearchTool.ToolName, WebFetchTool.ToolName, WebLinksTool.ToolName];
 
     /// <summary>The set a pass keeps for <paramref name="effective"/>, read per turn.</summary>

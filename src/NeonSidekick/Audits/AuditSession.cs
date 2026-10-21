@@ -168,8 +168,8 @@ public sealed class AuditSession
 
     /// <summary>
     /// The turn's audit part while a pass is under way, else null: the directive (with the advisors and web lines through <c>Compose</c>) and
-    /// <paramref name="tool"/>, <c>present_audit</c>. <paramref name="askUser"/> is <c>LLM code audit ask user</c>; <paramref name="toolBudget"/>
-    /// <c>LLM code audit pass tool calls</c>, named against <paramref name="maxToolIterations"/>.
+    /// <paramref name="tool"/>, <c>present_audit</c>. <paramref name="askUser"/> is <c>Code audit ask user</c>; <paramref name="toolBudget"/>
+    /// <c>Code audit pass tool calls</c>, named against <paramref name="maxToolIterations"/>.
     /// <para>2026-10-19, the review: built afresh on every call it parsed the report, read the sidecar and checked every scope file (up to
     /// 5,000) each time the turn's inputs were built — every advisor call and <c>/sys</c> too. Now the directive's state is built once per pass
     /// and kept until <see cref="Changed"/> (a recorded <c>present_audit</c> call, a start or a stop) or a setting it names changes; an edit
