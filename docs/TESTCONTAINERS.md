@@ -53,4 +53,6 @@ printf "dn: CN=Frank Ode,OU=Sales,OU=Neon,$B\nchangetype: modify\nreplace: manag
 
 Then, in the shell that runs the tests or the app:
 * `KRB5_CONFIG` names a `krb5.conf` holding `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`.
-* `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=localhost;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).
+* `/etc/hosts` holds `127.0.0.1 dc1.lab.neon.test`. A Mac signs in as `ldap/<server>`, and the DC answers to its own name only: `localhost` fails.
+* `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=dc1.lab.neon.test;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).
+* The refused-password test can't prove the hold here. The app asks port 88 of the DC's address, and on 127.0.0.1 that is macOS's own KDC, which knows no domain account. The test then checks that nothing is held.

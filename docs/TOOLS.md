@@ -629,9 +629,15 @@ The same tools, `/ad` and `--ad-check`, read-only as on Windows.
 
 * **Kerberos only.** `windows` uses your default ticket: run `kinit you@CORP.EXAMPLE` first (`klist` shows it). `runas` takes `name@REALM`, the realm in capitals; a `DOMAIN\name` is refused when used, so an `ad.json` shared with a PC still loads. Its password is a Keychain item (`NeonSidekick/ad/<name>`).
 * **No `current`:** name each domain in `ad.json`. A DC is the `server` when given, else found in DNS (`_ldap._tcp.dc._msdcs.<domain>`), else the domain's own name.
+* **Name the DC itself:** the sign-in asks for `ldap/<the name connected to>`, as Windows does. An alias, `localhost` or an IP has no such name, and neither does the domain's own name when DNS lists no DCs, so give `server` the DC's full name (a hosts entry can point it at another address).
 * **Sealed:** on 389 always signed and sealed (a DC offering neither is refused); on LDAPS the DC's certificate must be trusted in the Keychain. A DC auditing unsigned binds (event 2889) logs these sealed ones too.
 * **A `runas` ticket** goes in its own cache, which macOS may make the default when you have none (`klist -l`); `kdestroy -p <name@REALM>` removes it.
-* **A refused password or an unreachable KDC:** a failed `runas` sign-in tries the DC's port 88. If it answers, the password is held as refused; if not, the KDC is named unreachable (also when a firewall blocks 88 but not 389).
+* **A refused password or an unreachable KDC:** macOS doesn't say why a `runas` sign-in got no ticket, so the app asks the DC's own KDC (port 88) about the account, sending no password.
+  * It knows the account, or says the account is locked or disabled: the password is held as refused.
+  * Its clock is more than 5 minutes off yours: the clock is named. Nothing is held.
+  * It doesn't know the account: the account is named. Nothing is held.
+  * Nothing answers: the KDC is named unreachable, also when a firewall blocks 88 but not 389. Nothing is held.
+  * A failure after the ticket (the DC's service name, its reply) is never held.
 * **A test realm** with no DNS records needs its KDC in a `krb5.conf` named by `KRB5_CONFIG`: `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`.
 
 ### What the shell may not do while these are on

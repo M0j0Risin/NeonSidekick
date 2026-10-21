@@ -16,8 +16,8 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// The managed LDAP client (2026-10-18, the Mac AD plan's phase 1): the filter codec, the messages against bytes Samba exchanged with
 /// Phase 0's spike (the made-up <c>LAB.NEON.TEST</c>, cleartext, the bind's credentials replaced), the framing, SASL GSSAPI's exchange over a
-/// fake wrapping layer, and <see cref="ManagedDirectorySystem"/> over a loopback fake server through its internal constructor — the DC's
-/// Kerberos name, the KDC check behind the hold, paging, limits, references, the server leaving — and the read-only pins. Portable: no KDC,
+/// fake wrapping layer, and <see cref="ManagedDirectorySystem"/> over a loopback fake server through its internal constructor — the Kerberos
+/// name (the one connected to), the KDC check behind the hold, paging and its abandon, limits, deadlines, references, the server leaving — and the read-only pins. Portable: no KDC,
 /// no network beyond loopback.
 /// </summary>
 public sealed class LdapManagedTests
@@ -188,6 +188,28 @@ public sealed class LdapManagedTests
         Assert.Equal(LdapResultCodes.DecodingError, Assert.Throws<DirectoryException>(() => LdapMessages.Read(new byte[] { 0x30, 0x05, 0x02, 0x01, 0x01, 0x04, 0x00 })).Code);
     }
 
+    /// <summary>
+    /// Values past an <see cref="int"/> are decoding errors (2026-10-20, the code review): a five-byte message id threw OverflowException past
+    /// every catch, and a five-byte result code shifted its top byte out and read as success.
+    /// </summary>
+    [Theory]
+    [InlineData("300C" + "02050100000000" + "6503" + "0A0100")]   // id 2^32
+    [InlineData("3007" + "0201FF" + "6502" + "0A00")]                // id -1 (and an empty code)
+    [InlineData("3009" + "020101" + "6504" + "0A0101")]              // short
+    [InlineData("3010" + "020101" + "650B" + "0A050100000000" + "04000400")]   // result code 2^32
+    public void AnOutOfRangeNumber_IsADecodingError(string hex)
+    {
+        var refused = Assert.Throws<DirectoryException>(() => LdapMessages.Read(Convert.FromHexString(hex)));
+        Assert.Equal(LdapResultCodes.DecodingError, refused.Code);
+    }
+
+    [Fact]
+    public void AFourByteResultCode_StillReads()
+    {
+        var reply = LdapMessages.Read(Convert.FromHexString("300F" + "020101" + "650A" + "0A0401000000" + "04000400"));
+        Assert.Equal(0x01000000, reply.ResultCode);
+    }
+
     // ── Read-only by construction ───────────────────────────────────────────
 
     /// <summary>The client writes a bind, a search and an unbind, nothing else: no add, modify, delete, rename, compare or extended request.</summary>
@@ -204,6 +226,25 @@ public sealed class LdapManagedTests
         foreach (string file in Directory.EnumerateFiles(folder, "*.cs").Where(f => !f.EndsWith("LdapMessages.cs", StringComparison.Ordinal)))
         {
             Assert.DoesNotContain("TagClass.Application", File.ReadAllText(file), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The connection sends only typed operations (2026-10-20, the code review: a public <c>Send(byte[])</c> let any caller put any LDAP
+    /// operation on the wire): its public and internal methods are exactly these, and <see cref="LdapMessages"/>' writers are called from
+    /// <c>LdapConnection.cs</c> alone.
+    /// </summary>
+    [Fact]
+    public void TheConnection_SendsOnlyTypedOperations()
+    {
+        var methods = typeof(LdapConnection).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(m => (m.IsPublic || m.IsAssembly || m.IsFamilyOrAssembly) && !m.IsSpecialName).Select(m => m.Name).Distinct().Order().ToList();
+        Assert.Equal(["Bind", "Dispose", "Open", "Receive", "Search", "StartSecurity", "Unbind", "Within"], methods);
+
+        string src = Path.Combine(RepoRoot(), "src", "NeonSidekick");
+        foreach (string file in Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories).Where(f => !f.EndsWith("LdapConnection.cs", StringComparison.Ordinal) && !f.EndsWith("LdapMessages.cs", StringComparison.Ordinal)))
+        {
+            Assert.DoesNotMatch(@"LdapMessages\.(Bind|Search|Unbind)\(", File.ReadAllText(file));
         }
     }
 
@@ -293,16 +334,6 @@ public sealed class LdapManagedTests
     }
 
     // ── Names, discovery ────────────────────────────────────────────────────
-
-    [Theory]
-    [InlineData("DC1.lab.neon.test", "localhost", "lab.neon.test", "DC1.lab.neon.test")]
-    [InlineData("dc1.LAB.neon.test.", "10.0.0.5", "lab.neon.test", "dc1.LAB.neon.test")]
-    [InlineData("evil.example", "dc1.lab.neon.test", "lab.neon.test", "dc1.lab.neon.test")]
-    [InlineData("notlab.neon.test", "dc1.lab.neon.test", "lab.neon.test", "dc1.lab.neon.test")]
-    [InlineData(null, "dc1.lab.neon.test", "lab.neon.test", "dc1.lab.neon.test")]
-    [InlineData("DC1.lab.neon.test", "localhost", null, "DC1.lab.neon.test")]
-    public void TheKerberosHost_IsTheDcsOwnName_OnlyInsideTheDomain(string? dnsHostName, string connected, string? domain, string expected) =>
-        Assert.Equal(expected, ManagedDirectorySystem.KerberosHost(dnsHostName, connected, domain));
 
     [Fact]
     public void TheServiceName_IsHostBased_InLowerCase() =>
@@ -454,58 +485,152 @@ public sealed class LdapManagedTests
 
     // ── The system over the fake server ─────────────────────────────────────
 
+    /// <summary>
+    /// The SPN is the name connected to, with no RootDSE read before the bind (2026-10-20, the code review: an unsigned <c>dnsHostName</c> chose
+    /// it, so a machine in the middle could name another computer of the domain): the first request the server sees is the bind.
+    /// </summary>
     [Fact]
-    public async Task Run_SignsInAsTheDcsOwnName_AndUnbinds()
+    public async Task Run_SignsInAsTheNameConnectedTo_AndUnbinds()
     {
         await using var server = FakeLdapServer.Start(async s =>
         {
-            await s.ServeRootDseAsync(wrapped: false, dnsHostName: "DC1.lab.neon.test");
             await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
-            await s.ServeRootDseAsync(wrapped: true);
+            await s.ServeRootDseAsync(wrapped: true, dnsHostName: "evil.lab.neon.test");
             var unbind = await s.ReadAsync(wrapped: true);
             Assert.Equal(2, unbind.Op);
         });
 
         string? host = null;
         var layer = new FakeLayer { Signed = true, Encrypted = true };
-        var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return layer; }, _ => true, _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+        var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return layer; }, (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [], (_, _, _) => new LdapConnection(server.Connect()));
 
-        string? name = system.Run(new DirectoryTarget("localhost", 389, false, null, "lab.neon.test"), s => s.RootDse().Text("dnsHostName"));
+        string? name = system.Run(new DirectoryTarget("DC1.lab.neon.test", 389, false, null, "lab.neon.test"), s => s.RootDse().Text("dnsHostName"));
 
-        Assert.Equal("DC1.lab.neon.test", name);
+        Assert.Equal("evil.lab.neon.test", name);
         Assert.Equal("DC1.lab.neon.test", host);
         Assert.True(layer.Disposed);
         await server.Finished;
     }
 
-    [Theory]
-    [InlineData(true, LdapResultCodes.InvalidCredentials)]
-    [InlineData(false, LdapResultCodes.KdcUnreachable)]
-    public async Task ARunasSignInThatFailsBeforeTheBind_IsRefusedOnlyWhenTheKdcAnswers(bool kdcAnswers, int expected)
+    /// <summary>For the domain's own name, the DC DNS gave is both the one connected to and the Kerberos name.</summary>
+    [Fact]
+    public async Task Run_ForTheDomainsName_SignsInAsTheDcDnsGave()
     {
-        await using var server = FakeLdapServer.Start(s => s.ServeRootDseAsync(wrapped: false));
-        var layer = new FakeLayer { FailAtStep = 1 };
-        string? probed = null;
-        var system = new ManagedDirectorySystem((_, _, _, _) => layer, address => { probed = address; return kdcAnswers; }, _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+        });
+
+        string? host = null;
+        string? opened = null;
+        var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return new FakeLayer(); }, (_, _) => Kdc(KdcVerdict.KnowsTheAccount),
+            _ => ["dc2.lab.neon.test", "dc1.lab.neon.test"],
+            (h, _, _) =>
+            {
+                if (h == "dc2.lab.neon.test")
+                {
+                    throw new DirectoryException(LdapResultCodes.ConnectError, "down");
+                }
+
+                opened = h;
+                return new LdapConnection(server.Connect());
+            });
+
+        system.Run(new DirectoryTarget("lab.neon.test", 389, false, null, "lab.neon.test"), _ => 0);
+
+        Assert.Equal("dc1.lab.neon.test", opened);
+        Assert.Equal("dc1.lab.neon.test", host);
+    }
+
+    /// <summary>
+    /// A <c>runas</c> sign-in with no first ticket is what the DC's KDC says of the account (2026-10-20, the code review): a refused password only
+    /// when it knows the account (clocks agreeing), or says it is locked or disabled; an unknown account, the clock, silence and the rest are worded apart.
+    /// </summary>
+    [Theory]
+    [InlineData(KdcVerdict.KnowsTheAccount, LdapResultCodes.InvalidCredentials)]
+    [InlineData(KdcVerdict.Revoked, LdapResultCodes.InvalidCredentials)]
+    [InlineData(KdcVerdict.UnknownAccount, LdapResultCodes.UnknownAccount)]
+    [InlineData(KdcVerdict.ClockSkew, LdapResultCodes.ClockSkew)]
+    [InlineData(KdcVerdict.Unreachable, LdapResultCodes.KdcUnreachable)]
+    [InlineData(KdcVerdict.Other, LdapResultCodes.KerberosFailed)]
+    public async Task ARunasSignInWithNoTicket_IsWhatTheKdcSays(KdcVerdict verdict, int expected)
+    {
+        await using var server = FakeLdapServer.Start(_ => Task.CompletedTask);
+        var layer = new FakeLayer { FailAtStep = 1, FailCode = LdapResultCodes.TicketRefused };
+        (string Address, string Principal)? probed = null;
+        var system = new ManagedDirectorySystem((_, _, _, _) => layer, (a, p) => { probed = (a, p); return Kdc(verdict); }, _ => [], (_, _, _) => new LdapConnection(server.Connect()));
 
         var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("localhost", 389, false, new DirectoryLogin("reader@LAB.NEON.TEST", "x"), "lab.neon.test"), _ => 0));
 
         Assert.Equal(expected, refused.Code);
-        Assert.Equal("localhost", probed);
+        Assert.Equal(("localhost", "reader@LAB.NEON.TEST"), probed);
+        Assert.Equal(expected == LdapResultCodes.InvalidCredentials, DirectoryAccess.RefusedPassword(refused.Code, refused.Message));
+    }
+
+    /// <summary>A failure after the ticket (a later step, another status) never asks the KDC and is never a refused password.</summary>
+    [Fact]
+    public async Task ARunasSignInThatFailsLater_IsNeverTakenForARefusedPassword()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            var first = await s.ReadAsync(wrapped: false);
+            await s.SendAsync(Replies.Bind(first.Id, LdapResultCodes.SaslBindInProgress, creds: "s1"u8.ToArray()), wrapped: false);
+        });
+
+        bool probed = false;
+        var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer { FailAtStep = 2 }, (_, _) => { probed = true; return Kdc(KdcVerdict.KnowsTheAccount); }, _ => [],
+            (_, _, _) => new LdapConnection(server.Connect()));
+
+        var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("localhost", 389, false, new DirectoryLogin("reader@LAB.NEON.TEST", "x"), "lab.neon.test"), _ => 0));
+
+        Assert.Equal(LdapResultCodes.KerberosFailed, refused.Code);
+        Assert.False(probed);
+    }
+
+    /// <summary>The DC's own 0x31 to a GSSAPI bind is a ticket it would not take, not a password to hold.</summary>
+    [Fact]
+    public async Task TheServersInvalidCredentials_ToAGssapiBind_IsAKerberosFailure()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            var bind = await s.ReadAsync(wrapped: false);
+            await s.SendAsync(Replies.Bind(bind.Id, LdapResultCodes.InvalidCredentials, diagnostic: "80090308: LdapErr"), wrapped: false);
+        });
+
+        var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer(), (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+
+        var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("dc1.lab.neon.test", 389, false, new DirectoryLogin("reader@LAB.NEON.TEST", "x"), "lab.neon.test"), _ => 0));
+
+        Assert.Equal(LdapResultCodes.KerberosFailed, refused.Code);
+        Assert.False(DirectoryAccess.RefusedPassword(refused.Code, refused.Message));
     }
 
     [Fact]
     public async Task AWindowsSignInThatFails_IsNeverTakenForARefusedPassword()
     {
-        await using var server = FakeLdapServer.Start(s => s.ServeRootDseAsync(wrapped: false));
+        await using var server = FakeLdapServer.Start(_ => Task.CompletedTask);
         bool probed = false;
-        var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer { FailAtStep = 1 }, _ => probed = true, _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+        var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer { FailAtStep = 1, FailCode = LdapResultCodes.TicketRefused }, (_, _) => { probed = true; return Kdc(KdcVerdict.KnowsTheAccount); }, _ => [],
+            (_, _, _) => new LdapConnection(server.Connect()));
 
         var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("localhost", 389, false, null, "lab.neon.test"), _ => 0));
 
         Assert.Equal(LdapResultCodes.KerberosFailed, refused.Code);
         Assert.False(probed);
     }
+
+    /// <summary>Only an explicit credential's first step answered <c>Unsupported</c> is a ticket refused (the AS exchange); the rest failed after it.</summary>
+    [Theory]
+    [InlineData(true, 1, NegotiateAuthenticationStatusCode.Unsupported, LdapResultCodes.TicketRefused)]
+    [InlineData(false, 1, NegotiateAuthenticationStatusCode.Unsupported, LdapResultCodes.KerberosFailed)]
+    [InlineData(true, 2, NegotiateAuthenticationStatusCode.Unsupported, LdapResultCodes.KerberosFailed)]
+    [InlineData(true, 1, NegotiateAuthenticationStatusCode.GenericFailure, LdapResultCodes.KerberosFailed)]
+    [InlineData(true, 1, NegotiateAuthenticationStatusCode.UnknownCredentials, LdapResultCodes.KerberosFailed)]
+    [InlineData(true, 2, NegotiateAuthenticationStatusCode.MessageAltered, LdapResultCodes.KerberosFailed)]
+    public void AFailedStep_IsATicketRefused_OnlyAtTheAsExchange(bool explicitCredential, int step, NegotiateAuthenticationStatusCode status, int expected) =>
+        Assert.Equal(expected, NegotiateSaslLayer.FailureCode(explicitCredential, step, status));
+
+    private static KdcAnswer Kdc(KdcVerdict verdict) => new(verdict, Skew: verdict == KdcVerdict.ClockSkew ? TimeSpan.FromMinutes(-12) : TimeSpan.Zero);
 
     [Theory]
     [InlineData(LdapResultCodes.SizeLimitExceeded, true, false)]
@@ -529,8 +654,9 @@ public sealed class LdapManagedTests
     }
 
     [Fact]
-    public async Task TheSizeLimit_EndsPaging_AndMarksItCut()
+    public async Task TheSizeLimit_EndsPaging_MarksItCut_AndAbandonsThePages()
     {
+        (int Size, byte[] Cookie)? abandoned = null;
         await using var server = FakeLdapServer.Start(async s =>
         {
             await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
@@ -540,13 +666,48 @@ public sealed class LdapManagedTests
                 await s.SendAsync(Replies.Entry(request.Id, "CN=e" + i), wrapped: true);
             }
 
-            await s.SendAsync(Replies.Done(request.Id, 0, cookie: [1]), wrapped: true);
+            await s.SendAsync(Replies.Done(request.Id, 0, cookie: [1, 7]), wrapped: true);
+
+            // The abandon (2026-10-20, the code review: as wldap32's ldap_search_abandon_page): the same search, a page size of 0, the cookie.
+            var abandon = await s.ReadAsync(wrapped: true);
+            abandoned = abandon.Paged;
+            await s.SendAsync(Replies.Done(abandon.Id, 0, cookie: []), wrapped: true);
+            var next = await s.ReadAsync(wrapped: true);
+            await s.SendAsync(Replies.Done(next.Id, 0), wrapped: true);
         });
 
-        var results = SessionOver(BoundOver(server)).Search("DC=x", DirectoryScope.Subtree, "(cn=*)", ["cn"], 2, paged: true);
+        var session = SessionOver(BoundOver(server));
+        var results = session.Search("DC=x", DirectoryScope.Subtree, "(cn=*)", ["cn"], 2, paged: true);
+        var after = session.Search("DC=y", DirectoryScope.Base, "(cn=*)", ["cn"], 1, paged: false);
 
         Assert.Equal(2, results.Entries.Count);
         Assert.True(results.Truncated);
+        Assert.NotNull(abandoned);
+        Assert.Equal(0, abandoned.Value.Size);
+        Assert.Equal([1, 7], abandoned.Value.Cookie);
+        Assert.Empty(after.Entries);   // the connection is clean for the next search
+    }
+
+    /// <summary>An abandon the server never answers: the results read stand, and the connection is closed (best effort).</summary>
+    [Fact]
+    public async Task AnAbandonThatFails_KeepsTheResults_AndClosesTheConnection()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+            var request = await s.ReadAsync(wrapped: true);
+            await s.SendAsync(Replies.Entry(request.Id, "CN=e0"), wrapped: true);
+            await s.SendAsync(Replies.Done(request.Id, 0, cookie: [1]), wrapped: true);
+            await s.ReadAsync(wrapped: true);
+            s.Close();
+        });
+
+        var connection = BoundOver(server);
+        var results = SessionOver(connection).Search("DC=x", DirectoryScope.Subtree, "(cn=*)", ["cn"], 1, paged: true);
+
+        Assert.Single(results.Entries);
+        Assert.True(results.Truncated);
+        Assert.Throws<DirectoryException>(() => SessionOver(connection).Search("DC=y", DirectoryScope.Base, "(cn=*)", ["cn"], 1, paged: false));
     }
 
     [Theory]
@@ -595,6 +756,114 @@ public sealed class LdapManagedTests
         Assert.Equal(LdapResultCodes.Timeout, refused.Code);
     }
 
+    /// <summary>
+    /// A server sending a byte now and then beats every read's timeout; the search's own deadline (its time limit and the margin, 6 s here) closes
+    /// the connection under the read (2026-10-20, the code review).
+    /// </summary>
+    [Fact]
+    public async Task ATricklingServer_IsATimeout_AtTheSearchsDeadline()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+            var request = await s.ReadAsync(wrapped: true);
+            await s.TrickleAsync(Replies.Entry(request.Id, "CN=a", ("description", [new string('x', 400)])), TimeSpan.FromMilliseconds(100));
+        });
+
+        var connection = BoundOver(server);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var refused = Assert.Throws<DirectoryException>(() => SessionOver(connection).Search("DC=x", DirectoryScope.Base, "(cn=*)", ["cn"], 1, paged: false, TimeSpan.FromMilliseconds(1)));
+
+        Assert.Equal(LdapResultCodes.Timeout, refused.Code);
+        Assert.True(connection.Expired);
+        Assert.InRange(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds, 5, 20);
+    }
+
+    /// <summary>A deadline ends a read the stream itself would wait 15 s for, as a timeout, and the connection with it.</summary>
+    [Fact]
+    public async Task ADeadline_EndsABlockedRead_AsATimeout()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+            await Task.Delay(TimeSpan.FromSeconds(10));
+        });
+
+        var connection = BoundOver(server);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        DirectoryException refused;
+        using (connection.Within(TimeSpan.FromMilliseconds(300)))
+        {
+            refused = Assert.Throws<DirectoryException>(() => connection.Receive());
+        }
+
+        Assert.Equal(LdapResultCodes.Timeout, refused.Code);
+        Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(5));
+        Assert.Equal(LdapResultCodes.Timeout, Assert.Throws<DirectoryException>(() => connection.Receive()).Code);
+    }
+
+    /// <summary>A server sending replies without end is cut off past what was asked for and the references allowed, its connection closed.</summary>
+    [Fact]
+    public async Task AFloodingServer_IsCutOff()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+            var request = await s.ReadAsync(wrapped: true);
+            byte[] reference = Replies.Reference(request.Id);
+            for (int i = 0; i < 3000; i++)
+            {
+                await s.SendAsync(reference, wrapped: true);
+            }
+        });
+
+        var connection = BoundOver(server);
+        var refused = Assert.Throws<DirectoryException>(() => SessionOver(connection).Search("DC=x", DirectoryScope.Subtree, "(cn=*)", ["cn"], 5, paged: false));
+
+        Assert.Equal(LdapResultCodes.DecodingError, refused.Code);
+        Assert.Throws<DirectoryException>(() => connection.Receive());
+    }
+
+    /// <summary>A bind answered for another request is a decoding error (2026-10-20, the code review).</summary>
+    [Fact]
+    public async Task ABindReply_ToAnotherRequest_IsRefused()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            var bind = await s.ReadAsync(wrapped: false);
+            await s.SendAsync(Replies.Bind(bind.Id + 1, LdapResultCodes.SaslBindInProgress, creds: "s1"u8.ToArray()), wrapped: false);
+        });
+
+        using var connection = new LdapConnection(server.Connect());
+        var refused = Assert.Throws<DirectoryException>(() => SaslGssapiExchange.Bind(connection, new FakeLayer(), tls: false));
+        Assert.Equal(LdapResultCodes.DecodingError, refused.Code);
+    }
+
+    /// <summary>The SASL reader's one buffer (2026-10-20, the code review): two messages in one wrapped buffer, then one split across three.</summary>
+    [Fact]
+    public async Task WrappedBuffers_HoldManyMessages_OrPartsOfOne()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+            byte[] first = Replies.Entry(5, "CN=one");
+            byte[] second = Replies.Done(5, 0);
+            await s.SendAsync([.. first, .. second], wrapped: true);
+            byte[] big = Replies.Entry(6, "CN=big", ("description", [new string('y', 3000)]));
+            await s.SendAsync(big[..7], wrapped: true);
+            await s.SendAsync(big[7..2000], wrapped: true);
+            await s.SendAsync([.. big[2000..], .. Replies.Done(6, 0)], wrapped: true);
+        });
+
+        var connection = BoundOver(server);
+        Assert.Equal("CN=one", connection.Receive().Dn);
+        Assert.Equal(LdapOp.SearchResultDone, connection.Receive().Op);
+        var entry = connection.Receive();
+        Assert.Equal("CN=big", entry.Dn);
+        Assert.Equal(3000, entry.Attributes![0].Values[0].Length);
+        Assert.Equal(6, connection.Receive().MessageId);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     /// <summary>A bound, sealed connection to <paramref name="server"/>, whose script starts with <c>ServeBindAsync</c>.</summary>
@@ -617,6 +886,8 @@ public sealed class LdapManagedTests
 
         public int FailAtStep { get; init; }
 
+        public int FailCode { get; init; } = LdapResultCodes.KerberosFailed;
+
         public bool Signed { get; init; } = true;
 
         public bool Encrypted { get; init; } = true;
@@ -628,7 +899,7 @@ public sealed class LdapManagedTests
             Steps++;
             if (Steps == FailAtStep)
             {
-                throw new DirectoryException(LdapResultCodes.KerberosFailed, "the fake sign-in failed");
+                throw new DirectoryException(FailCode, "the fake sign-in failed");
             }
 
             return Steps == 1 ? new SaslStep("t1"u8.ToArray(), false) : new SaslStep([], true);
@@ -655,7 +926,28 @@ public sealed class LdapManagedTests
     }
 
     /// <summary>A request the fake server read: its id and op tag.</summary>
-    private readonly record struct Request(int Id, int Op);
+    private readonly record struct Request(int Id, int Op, byte[] Message)
+    {
+        /// <summary>A search's paged-results control: its size and cookie; null without one.</summary>
+        public (int Size, byte[] Cookie)? Paged
+        {
+            get
+            {
+                var outer = new AsnReader(Message, AsnEncodingRules.BER).ReadSequence();
+                outer.ReadInteger();
+                outer.ReadEncodedValue();
+                if (!outer.HasData)
+                {
+                    return null;
+                }
+
+                var control = outer.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)).ReadSequence();
+                Assert.Equal(LdapMessages.PagedResultsOid, Encoding.UTF8.GetString(control.ReadOctetString()));
+                var value = new AsnReader(control.ReadOctetString(), AsnEncodingRules.BER).ReadSequence();
+                return ((int)value.ReadInteger(), value.ReadOctetString());
+            }
+        }
+    }
 
     /// <summary>A loopback LDAP server running one script for one client.</summary>
     private sealed class FakeLdapServer : IAsyncDisposable
@@ -734,10 +1026,20 @@ public sealed class LdapManagedTests
 
             var outer = new AsnReader(message, AsnEncodingRules.BER).ReadSequence();
             int id = (int)outer.ReadInteger();
-            return new Request(id, outer.PeekTag().TagValue);
+            return new Request(id, outer.PeekTag().TagValue, message);
         }
 
         public Task SendAsync(byte[] message, bool wrapped, bool encrypted = true) => _stream!.WriteAsync(wrapped ? Frame(message, encrypted) : message).AsTask();
+
+        /// <summary>One wrapped buffer, a byte at a time every <paramref name="every"/>, until it is written or the client goes.</summary>
+        public async Task TrickleAsync(byte[] message, TimeSpan every)
+        {
+            foreach (byte b in Frame(message, true))
+            {
+                await _stream!.WriteAsync(new[] { b });
+                await Task.Delay(every);
+            }
+        }
 
         private static byte[] Frame(byte[] message, bool encrypted)
         {
@@ -774,7 +1076,7 @@ public sealed class LdapManagedTests
             {
                 await Finished.WaitAsync(TimeSpan.FromSeconds(5));
             }
-            catch (Exception ex) when (ex is TimeoutException or SocketException or ObjectDisposedException)
+            catch (Exception ex) when (ex is TimeoutException or SocketException or ObjectDisposedException or InvalidOperationException)   // the last: stopped before the accept began
             {
             }
         }

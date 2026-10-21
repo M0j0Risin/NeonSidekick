@@ -56,7 +56,7 @@ public sealed partial class ActiveDirectoryTests
         Assert.Equal(4, _system.Runs);
 
         // A KDC or a DC that cannot be reached refused nothing.
-        foreach (int code in new[] { LdapResultCodes.KdcUnreachable, LdapResultCodes.KerberosFailed, 0x51, LdapResultCodes.Timeout })
+        foreach (int code in new[] { LdapResultCodes.KdcUnreachable, LdapResultCodes.KerberosFailed, LdapResultCodes.ClockSkew, LdapResultCodes.UnknownAccount, 0x51, LdapResultCodes.Timeout })
         {
             _system.FailWith = code;
             int before = _system.Runs;
@@ -72,6 +72,8 @@ public sealed partial class ActiveDirectoryTests
     [InlineData(0x51, "", false)]
     [InlineData(LdapResultCodes.KdcUnreachable, "", false)]
     [InlineData(LdapResultCodes.KerberosFailed, "", false)]
+    [InlineData(LdapResultCodes.ClockSkew, "12 minutes behind", false)]
+    [InlineData(LdapResultCodes.TicketRefused, "", false)]
     public void RefusedPassword_IsOnlyTheBadCredentialsCode(int code, string detail, bool refused) =>
         Assert.Equal(refused, DirectoryAccess.RefusedPassword(code, detail));
 

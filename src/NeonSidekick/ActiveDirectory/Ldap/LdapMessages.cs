@@ -47,6 +47,27 @@ public static class LdapResultCodes
     /// "did not answer LDAP" under <see cref="ConnectError"/>). The message names what was wrong with it.
     /// </summary>
     public const int TlsRefused = 0x1003;
+
+    /// <summary>
+    /// This client's own (2026-10-20, the code review): a <c>runas</c> sign-in could not get the account's first ticket. On a Mac .NET runs the
+    /// AS exchange as the credential is made, and every failure there (the password, the account, the clock, a KDC that isn't there) comes back
+    /// as one status, <c>Unsupported</c>, its reason lost; <see cref="ManagedDirectorySystem"/> asks the DC's KDC itself (<see cref="KdcProbe"/>)
+    /// and words it as one of <see cref="InvalidCredentials"/>, <see cref="ClockSkew"/>, <see cref="KdcUnreachable"/> or
+    /// <see cref="KerberosFailed"/>, so it never reaches a sentence.
+    /// </summary>
+    public const int TicketRefused = 0x1004;
+
+    /// <summary>
+    /// This client's own (2026-10-20, the code review): the DC's KDC answered with a time more than <see cref="KdcProbe.MaxSkew"/> from this
+    /// machine's, which Kerberos refuses whatever the password. The message is <see cref="DirectoryText.ClockOff"/>'s phrase.
+    /// </summary>
+    public const int ClockSkew = 0x1005;
+
+    /// <summary>
+    /// This client's own (2026-10-20, the code review): the KDC asked does not know the account. Never held: an account that isn't there can't be
+    /// locked, and on a Mac whose own KDC holds <c>localhost</c>'s port 88 this is what that KDC says of every domain account (seen that day).
+    /// </summary>
+    public const int UnknownAccount = 0x1006;
 }
 
 /// <summary>Which reply a message is (RFC 4511's protocolOp tags).</summary>
@@ -223,7 +244,11 @@ public static class LdapMessages
         try
         {
             var outer = new AsnReader(message, AsnEncodingRules.BER).ReadSequence();
-            int id = (int)outer.ReadInteger();
+            if (!outer.TryReadInt32(out int id) || id < 0)
+            {
+                throw new DirectoryException(LdapResultCodes.DecodingError, "a reply with a message id out of range");
+            }
+
             var tag = outer.PeekTag();
             if (tag.TagClass != TagClass.Application)
             {
@@ -241,8 +266,10 @@ public static class LdapMessages
                 _ => throw new DirectoryException(LdapResultCodes.DecodingError, "a reply of an unexpected kind (" + tag.TagValue.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")"),
             };
         }
-        catch (AsnContentException ex)
+        catch (Exception ex) when (ex is AsnContentException or OverflowException or ArgumentException or InvalidOperationException)
         {
+            // Every way the server's bytes can fail to decode is a decoding error (2026-10-20, the code review: a cast of a too-large INTEGER
+            // threw OverflowException past every caller's catch).
             throw new DirectoryException(LdapResultCodes.DecodingError, "a reply that could not be read: " + ex.Message);
         }
     }
@@ -326,9 +353,17 @@ public static class LdapMessages
         writer.WriteEncodedValue(integer);
     }
 
+    /// <summary>
+    /// An ENUMERATED as an <see cref="int"/>; more than four content bytes is a decoding error (2026-10-20, the code review: <c>0A 05 01 00 00 00
+    /// 00</c> shifted its top byte out and read as 0, success).
+    /// </summary>
     private static int ReadEnumerated(AsnReader reader)
     {
         var bytes = reader.ReadEnumeratedBytes().Span;
+        if (bytes.Length > 4)
+        {
+            throw new DirectoryException(LdapResultCodes.DecodingError, "a result code out of range");
+        }
         int value = bytes.Length > 0 && (bytes[0] & 0x80) != 0 ? -1 : 0;
         foreach (byte b in bytes)
         {

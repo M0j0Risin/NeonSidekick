@@ -56,6 +56,16 @@ public static class DirectoryText
     public static string Held(string domain, string account) =>
         $"Error: {domain} refused the password for {account}, so it is not tried again (repeated tries can lock the account). Set it again with Directory set password on {MenuPath}.";
 
+    /// <summary>
+    /// How far this machine's clock is from a KDC's (2026-10-20, the code review), whole minutes rounded up, for <see cref="DirectoryErrors"/>'
+    /// clock sentence: "12 minutes behind" when the KDC's time is later, "ahead of" when earlier. Pinned.
+    /// </summary>
+    public static string ClockOff(TimeSpan kdcAhead)
+    {
+        int minutes = Math.Max(1, (int)Math.Ceiling(kdcAhead.Duration().TotalMinutes));
+        return minutes.ToString(CultureInfo.InvariantCulture) + (minutes == 1 ? " minute " : " minutes ") + (kdcAhead > TimeSpan.Zero ? "behind" : "ahead of");
+    }
+
     /// <summary>What was wrong with a DC's LDAPS certificate (2026-10-18), for <see cref="DirectoryErrors"/>' refusal. Pinned.</summary>
     public static string CertificateRefused(string host, System.Net.Security.SslPolicyErrors errors)
     {

@@ -224,8 +224,9 @@ public sealed class LiveAdminTests : IDisposable
 
     /// <summary>
     /// A refused password, on both systems (2026-10-18, the Mac AD plan's hold): the first call reaches the DC and is refused, worded as wldap32's
-    /// 0x31 (on a Mac the DC's port 88 answered, so the failed Kerberos sign-in was a refusal, not an unreachable KDC); the second is held
-    /// here and never reaches it. Costs the account one bad password, under any lockout threshold.
+    /// 0x31 (on a Mac the DC's KDC, asked with no password, knew the account; 2026-10-20, the code review); the second is held here and never
+    /// reaches it. Costs the account one bad password, under any lockout threshold. On a Mac the probe asks port 88 of the address connected to:
+    /// with the emulated Samba's KDC on 1088 that is macOS's own KDC, which knows no domain account, so nothing may be held there.
     /// </summary>
     [LiveDirectoryFact]
     public async Task Directory_ARefusedPassword_IsWorded_ThenHeld()
@@ -233,6 +234,12 @@ public sealed class LiveAdminTests : IDisposable
         var access = DirectoryFromScratchHome("not-the-password-" + Guid.NewGuid().ToString("N"));
         var domain = access.Catalog().Domains.Single();
         string first = await Call(new AdDomainTool(access));
+        if (OperatingSystem.IsMacOS() && first.Contains("does not know", StringComparison.Ordinal))
+        {
+            Assert.DoesNotContain("not tried again", await Call(new AdDomainTool(access)), StringComparison.Ordinal);
+            return;
+        }
+
         Assert.Contains("refused the sign-in as " + domain.Account, first);
         Assert.Equal(DirectoryText.Held(domain.DomainName, domain.Account), await Call(new AdDomainTool(access)));
     }

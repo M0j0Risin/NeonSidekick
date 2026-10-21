@@ -13,23 +13,30 @@ namespace NeonSidekick.ActiveDirectory.Ldap;
 /// <list type="number">
 /// <item>Find a DC: the server named, or for the domain's own name its DCs from DNS (<c>_ldap._tcp.dc._msdcs.&lt;domain&gt;</c> through
 /// the app's own <see cref="DnsClient"/>, best priority first), falling back to the domain's name through the system's resolver, which
-/// honours a VPN's split DNS (AD's domain name points at its DCs).</item>
-/// <item>Read the RootDSE anonymously, for the DC's <c>dnsHostName</c>: the Kerberos name, so an alias, a load-balanced name,
-/// <c>localhost</c> or an IP all sign in to the DC actually answering. That read is unsigned, so the name is taken only inside the
-/// configured domain; otherwise the name connected to stands.</item>
-/// <item>Bind with SASL GSSAPI (<see cref="SaslGssapiExchange"/>): sealed on 389, no layer under LDAPS.</item>
-/// <item>Run the work's searches, then unbind and close, whatever happened.</item>
+/// honours a VPN's split DNS (AD's domain name points at its DCs). Since 2026-10-20 that last one signs in as <c>ldap/&lt;domain&gt;</c>,
+/// which AD does not register, so where the app's DNS finds no DCs the server must name one.</item>
+/// <item>Bind with SASL GSSAPI (<see cref="SaslGssapiExchange"/>) as <c>ldap/&lt;the name connected to&gt;</c>: the server named, or the DC DNS
+/// gave (2026-10-20, the code review: the RootDSE's <c>dnsHostName</c>, read unsigned before the bind, chose the name until then, so a
+/// machine in the middle could name any computer of the domain holding an <c>ldap/</c> name and pass mutual authentication as it; wldap32
+/// uses the name as given too). An alias, <c>localhost</c> or an IP therefore needs a name the DC's account holds: name the DC itself.
+/// Sealed on 389, no layer under LDAPS; the bind under <see cref="BindTime"/>.</item>
+/// <item>Run the work's searches, each under its own deadline and message cap, then unbind and close, whatever happened.</item>
 /// </list>
-/// A <c>runas</c> sign-in that fails before the bind cannot be told from a KDC that isn't there by its status on a Mac (Phase 0: both are
-/// <c>Unsupported</c>), so the DC's own port 88 is tried (every AD DC is a KDC; the user's call, 2026-10-18): answering, the failure is a
-/// refused password (<see cref="LdapResultCodes.InvalidCredentials"/>, which <see cref="DirectoryAccess"/> holds); silent, the KDC is
-/// unreachable and nothing is held. A firewall that passes 389 but not 88 reads as unreachable. Read-only by construction: the client has
-/// no write operation (<see cref="LdapMessages"/>).
+/// A <c>runas</c> sign-in that cannot get its first ticket says no more on a Mac (Phase 0: a wrong password and a KDC that isn't there are
+/// both <c>Unsupported</c>; <see cref="LdapResultCodes.TicketRefused"/>), so the DC's own KDC is asked about the account with no password
+/// (<see cref="KdcProbe"/>; every AD DC is a KDC; the user's call, 2026-10-18, narrowed 2026-10-20 after the code review found a skewed clock or a
+/// Mac's own KDC on <c>localhost</c>'s port 88 held a right password): one that knows the account with the clocks agreeing, or says it is locked
+/// or disabled, makes the failure a refused password (<see cref="LdapResultCodes.InvalidCredentials"/>, which <see cref="DirectoryAccess"/>
+/// holds); an account it does not know is <see cref="LdapResultCodes.UnknownAccount"/> (what a Mac's own KDC says of any domain account, and
+/// nothing to lock); a clock off by more than five minutes is <see cref="LdapResultCodes.ClockSkew"/>; silence is
+/// <see cref="LdapResultCodes.KdcUnreachable"/>; anything else <see cref="LdapResultCodes.KerberosFailed"/>. None but the first is held. Any other
+/// Kerberos failure came after the password was taken and is never a refused one, nor is the server's own 0x31 to a GSSAPI bind. Read-only by
+/// construction: the client has no write operation (<see cref="LdapMessages"/>).
 /// </summary>
 public sealed class ManagedDirectorySystem : IDirectorySystem
 {
-    /// <summary>How long the KDC check may take.</summary>
-    public static readonly TimeSpan KdcProbeTimeout = TimeSpan.FromSeconds(2);
+    /// <summary>How long the bind may take, every round trip together (wldap32's connect timeout, as <see cref="DirectoryAccess"/> counts it).</summary>
+    public static readonly TimeSpan BindTime = TimeSpan.FromSeconds(10);
 
     /// <summary>How long a DC lookup in DNS may take.</summary>
     public static readonly TimeSpan LocateTimeout = TimeSpan.FromSeconds(5);
@@ -38,25 +45,25 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
     public const int MaxCandidates = 3;
 
     private readonly Func<DirectoryLogin?, string, bool, ChannelBinding?, ISaslLayer> _layers;
-    private readonly Func<string, bool> _kdcAnswers;
+    private readonly Func<string, string, KdcAnswer> _askKdc;
     private readonly Func<string, IReadOnlyList<string>> _locate;
     private readonly Func<string, int, bool, LdapConnection> _open;
 
-    /// <summary>The app's: Kerberos through .NET, the DC's port 88, DNS for DCs, real sockets.</summary>
+    /// <summary>The app's: Kerberos through .NET, the DC's KDC asked on port 88, DNS for DCs, real sockets.</summary>
     public ManagedDirectorySystem()
-        : this((login, host, tls, binding) => new NegotiateSaslLayer(login, host, tls, binding), KdcAnswers, Locate, LdapConnection.Open)
+        : this((login, host, tls, binding) => new NegotiateSaslLayer(login, host, tls, binding), KdcProbe.Ask, Locate, LdapConnection.Open)
     {
     }
 
     /// <summary>The tests' (internal: a source pin keeps the app on the public one).</summary>
     internal ManagedDirectorySystem(
         Func<DirectoryLogin?, string, bool, ChannelBinding?, ISaslLayer> layers,
-        Func<string, bool> kdcAnswers,
+        Func<string, string, KdcAnswer> askKdc,
         Func<string, IReadOnlyList<string>> locate,
         Func<string, int, bool, LdapConnection> open)
     {
         _layers = layers;
-        _kdcAnswers = kdcAnswers;
+        _askKdc = askKdc;
         _locate = locate;
         _open = open;
     }
@@ -70,27 +77,40 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
         ISaslLayer? layer = null;
         try
         {
-            string? dnsHostName = Session.RootDseOf(connection).Text("dnsHostName");
-            string host = KerberosHost(dnsHostName, connectedTo, target.Domain);
-            layer = _layers(target.Login, host, target.Tls, connection.Binding);
+            layer = _layers(target.Login, connectedTo, target.Tls, connection.Binding);
             SaslSecurity security;
             int serverMaximum;
             try
             {
-                (security, serverMaximum) = SaslGssapiExchange.Bind(connection, layer, target.Tls);
+                using (connection.Within(BindTime))
+                {
+                    (security, serverMaximum) = SaslGssapiExchange.Bind(connection, layer, target.Tls);
+                }
             }
-            catch (DirectoryException ex) when (ex.Code == LdapResultCodes.KerberosFailed && target.Login is not null)
+            catch (DirectoryException ex) when (ex.Code == LdapResultCodes.TicketRefused)
             {
-                bool kdc = _kdcAnswers(connection.Remote ?? connectedTo);
-                DiagnosticLog.Debug(DirectoryText.Category, $"Kerberos sign-in as {target.Login.User} failed; the DC's KDC {(kdc ? "answers" : "does not answer")}");
-                throw kdc
-                    ? new DirectoryException(LdapResultCodes.InvalidCredentials, "the Kerberos sign-in as " + target.Login.User + " was refused")
-                    : new DirectoryException(LdapResultCodes.KdcUnreachable, "the KDC on " + connectedTo + " could not be reached");
+                if (target.Login is not { } login)
+                {
+                    throw new DirectoryException(LdapResultCodes.KerberosFailed, ex.Message);
+                }
+
+                string address = connection.Remote ?? connectedTo;
+                var answer = _askKdc(address, login.User);
+                DiagnosticLog.Debug(DirectoryText.Category, $"Kerberos sign-in as {login.User} got no ticket; the KDC on {address} says {answer.Verdict}"
+                    + (answer.ErrorCode is { } code ? " (" + code.ToString(CultureInfo.InvariantCulture) + ")" : ""));
+                throw Refusal(answer, login.User, connectedTo);
+            }
+            catch (DirectoryException ex) when (ex.Code == LdapResultCodes.InvalidCredentials)
+            {
+                // The password was taken at the KDC before the bind: the DC's own 0x31 to a GSSAPI bind is a ticket it would not take (a clock
+                // off, a key out of date), never a wrong password to hold (2026-10-20, the code review).
+                throw new DirectoryException(LdapResultCodes.KerberosFailed, ex.Message);
             }
 
             connection.StartSecurity(layer, security, serverMaximum);
-            DiagnosticLog.Debug(DirectoryText.Category, $"bound to {connectedTo}:{target.Port.ToString(CultureInfo.InvariantCulture)} as {NegotiateSaslLayer.ServiceName(host)}, {security} ({Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms)");
-            string transport = DirectoryText.Transport(target.Port, target.Tls, NegotiateSaslLayer.ServiceName(host), DirectoryText.LayerWord(security.ToString()));
+            string service = NegotiateSaslLayer.ServiceName(connectedTo);
+            DiagnosticLog.Debug(DirectoryText.Category, $"bound to {connectedTo}:{target.Port.ToString(CultureInfo.InvariantCulture)} as {service}, {security} ({Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms)");
+            string transport = DirectoryText.Transport(target.Port, target.Tls, service, DirectoryText.LayerWord(security.ToString()));
             var result = work(new Session(connection, transport));
             connection.Unbind();
             return result;
@@ -103,25 +123,24 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
     }
 
     /// <summary>
-    /// The Kerberos host: the RootDSE's <c>dnsHostName</c> when it lies inside <paramref name="domain"/> (or no domain is known), else the name
-    /// connected to.
+    /// What a ticket refused before the bind is, by the KDC's answer about the account (<see cref="KdcProbe"/>): a refused password when it knows
+    /// the account and the clocks agree, or says it is locked or disabled; otherwise the account, the clock, the KDC or the sign-in, none of them
+    /// held.
     /// </summary>
-    public static string KerberosHost(string? dnsHostName, string connectedTo, string? domain)
+    public static DirectoryException Refusal(KdcAnswer answer, string user, string connectedTo)
     {
+        ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(connectedTo);
-        if (string.IsNullOrWhiteSpace(dnsHostName))
+        return answer.Verdict switch
         {
-            return connectedTo;
-        }
-
-        string name = dnsHostName.Trim().TrimEnd('.');
-        if (domain is null)
-        {
-            return name;
-        }
-
-        string suffix = domain.Trim().TrimEnd('.');
-        return name.Equals(suffix, StringComparison.OrdinalIgnoreCase) || name.EndsWith("." + suffix, StringComparison.OrdinalIgnoreCase) ? name : connectedTo;
+            KdcVerdict.KnowsTheAccount or KdcVerdict.Revoked =>
+                new DirectoryException(LdapResultCodes.InvalidCredentials, "the Kerberos sign-in as " + user + " was refused"),
+            KdcVerdict.UnknownAccount => new DirectoryException(LdapResultCodes.UnknownAccount, "the KDC on " + connectedTo + " does not know " + user),
+            KdcVerdict.ClockSkew when answer.Skew is { } skew => new DirectoryException(LdapResultCodes.ClockSkew, DirectoryText.ClockOff(skew)),
+            KdcVerdict.Unreachable => new DirectoryException(LdapResultCodes.KdcUnreachable, "the KDC on " + connectedTo + " could not be reached"),
+            _ => new DirectoryException(LdapResultCodes.KerberosFailed, "the Kerberos sign-in as " + user + " failed; the KDC on " + connectedTo + " answered "
+                + (answer.ErrorCode is { } code ? "error " + code.ToString(CultureInfo.InvariantCulture) : "nothing this client reads")),
+        };
     }
 
     /// <summary>The DCs to try: the server named, or for the domain's own name the DCs DNS gives, then the name itself.</summary>
@@ -189,27 +208,15 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
         return found.OrderBy(f => f.Priority).ThenByDescending(f => f.Weight).Select(f => f.Host).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>Whether something answers on <paramref name="address"/>'s port 88, in <see cref="KdcProbeTimeout"/>.</summary>
-    public static bool KdcAnswers(string address)
-    {
-        ArgumentNullException.ThrowIfNull(address);
-        try
-        {
-            using var client = new TcpClient();
-            using var timeout = new CancellationTokenSource(KdcProbeTimeout);
-            client.ConnectAsync(address, 88, timeout.Token).AsTask().GetAwaiter().GetResult();
-            return true;
-        }
-        catch (Exception ex) when (ex is SocketException or OperationCanceledException or IOException)
-        {
-            return false;
-        }
-    }
-
     /// <summary>The session over a connection already bound (the tests').</summary>
     internal static IDirectorySession SessionOver(LdapConnection connection) => new Session(connection, null);
 
-    /// <summary>One bound session: RootDSE and searches, sequential, each with its own time limit and read deadline.</summary>
+    /// <summary>
+    /// One bound session: RootDSE and searches, sequential, each with its own time limit and read deadline, and (2026-10-20, the code review)
+    /// a deadline over the whole search, every page and the abandon, and a cap on the replies one request may take, so a server trickling bytes or
+    /// sending entries without end cannot hold the thread: past either the connection is closed. A paged search cut at its size limit with a
+    /// cookie left is abandoned (a page size of 0 with the cookie, RFC 2696), as wldap32's <c>ldap_search_abandon_page</c>, so the server frees it.
+    /// </summary>
     private sealed class Session(LdapConnection connection, string? transport) : IDirectorySession
     {
         public string? Transport => transport;
@@ -217,9 +224,12 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
         /// <summary>The read deadline's margin past the server's own time limit.</summary>
         private static readonly TimeSpan Margin = TimeSpan.FromSeconds(5);
 
+        /// <summary>The replies beyond the entries asked for (references, mostly) one request may take.</summary>
+        public const int MaxExtraReplies = 1000;
+
         public DirectoryEntry RootDse() => RootDseOf(connection);
 
-        public static DirectoryEntry RootDseOf(LdapConnection connection)
+        private static DirectoryEntry RootDseOf(LdapConnection connection)
         {
             var results = SearchOn(connection, "", DirectoryScope.Base, "(objectClass=*)", AdAttributes.RootDse, 1, paged: false, null);
             return results.Entries.Count > 0 ? results.Entries[0] : throw new DirectoryException(LdapResultCodes.NoSuchObject, "RootDSE answered nothing");
@@ -235,40 +245,20 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
             ArgumentNullException.ThrowIfNull(attributes);
             int seconds = Math.Max(1, (int)Math.Ceiling((timeLimit ?? DirectoryLimits.SearchTime).TotalSeconds));
             connection.ReadTimeout = TimeSpan.FromSeconds(seconds) + Margin;
+            using var deadline = connection.Within(TimeSpan.FromSeconds(seconds) + Margin);
             var entries = new List<DirectoryEntry>();
             byte[]? cookie = null;
             while (true)
             {
                 int? pageSize = paged ? Math.Max(1, Math.Min(DirectoryLimits.PageSize, sizeLimit - entries.Count)) : null;
-                int id = connection.NextId();
-                connection.Send(LdapMessages.Search(id, baseDn, scope, filter, attributes, sizeLimit, seconds, pageSize, cookie));
-                LdapReply done;
-                while (true)
+                int id = connection.Search(baseDn, scope, filter, attributes, sizeLimit, seconds, pageSize, cookie);
+                var done = Replies(connection, id, Math.Max(1, pageSize ?? sizeLimit), reply =>
                 {
-                    var reply = connection.Receive();
-                    if (reply.MessageId != id)
+                    if (entries.Count < sizeLimit)
                     {
-                        throw new DirectoryException(LdapResultCodes.DecodingError, "a reply to another request");
+                        entries.Add(ToEntry(reply));
                     }
-
-                    if (reply.Op == LdapOp.SearchResultEntry)
-                    {
-                        if (entries.Count < sizeLimit)
-                        {
-                            entries.Add(ToEntry(reply));
-                        }
-
-                        continue;
-                    }
-
-                    if (reply.Op == LdapOp.SearchResultReference)
-                    {
-                        continue;   // referrals are off, as on Windows
-                    }
-
-                    done = reply;
-                    break;
-                }
+                });
 
                 if (done.ResultCode is LdapResultCodes.SizeLimitExceeded or LdapResultCodes.TimeLimitExceeded)
                 {
@@ -283,8 +273,67 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
                 cookie = done.Cookie;
                 if (!paged || cookie is not { Length: > 0 } || entries.Count >= sizeLimit)
                 {
-                    return new DirectoryResults(entries, entries.Count >= sizeLimit && cookie is { Length: > 0 }, false);
+                    bool cut = entries.Count >= sizeLimit && cookie is { Length: > 0 };
+                    if (cut && paged)
+                    {
+                        Abandon(connection, baseDn, scope, filter, attributes, sizeLimit, seconds, cookie!);
+                    }
+
+                    return new DirectoryResults(entries, cut, false);
                 }
+            }
+        }
+
+        /// <summary>
+        /// The replies to request <paramref name="id"/> up to its result: each entry handed to <paramref name="entry"/>, references passed over,
+        /// at most <paramref name="asked"/> entries and <see cref="MaxExtraReplies"/> more before the connection is closed as broken.
+        /// </summary>
+        private static LdapReply Replies(LdapConnection connection, int id, int asked, Action<LdapReply> entry)
+        {
+            int taken = 0;
+            while (true)
+            {
+                var reply = connection.Receive();
+                if (reply.MessageId != id)
+                {
+                    throw new DirectoryException(LdapResultCodes.DecodingError, "a reply to another request");
+                }
+
+                if (reply.Op is LdapOp.SearchResultEntry or LdapOp.SearchResultReference)
+                {
+                    if (++taken > asked + MaxExtraReplies)
+                    {
+                        connection.Dispose();
+                        throw new DirectoryException(LdapResultCodes.DecodingError, "the server sent more replies than were asked for");
+                    }
+
+                    if (reply.Op == LdapOp.SearchResultEntry)
+                    {
+                        entry(reply);
+                    }
+
+                    continue;   // a reference: referrals are off, as on Windows
+                }
+
+                return reply;
+            }
+        }
+
+        /// <summary>
+        /// Ends a paged search before its last page (RFC 2696: the same search with a page size of 0 and the cookie), reading the server's answer
+        /// so the next request starts clean. Best effort: a failure closes the connection, the results already read standing.
+        /// </summary>
+        private static void Abandon(LdapConnection connection, string baseDn, DirectoryScope scope, string filter, IReadOnlyList<string> attributes, int sizeLimit, int seconds, byte[] cookie)
+        {
+            try
+            {
+                int id = connection.Search(baseDn, scope, filter, attributes, sizeLimit, seconds, 0, cookie);
+                Replies(connection, id, 0, _ => { });
+            }
+            catch (DirectoryException ex)
+            {
+                DiagnosticLog.Debug(DirectoryText.Category, $"abandoning a paged search failed ({ex.Message}); the connection is closed");
+                connection.Dispose();
             }
         }
 

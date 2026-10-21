@@ -53,17 +53,25 @@ public static partial class SmokeChecks
                     gss.Step([]);
                     return new SmokeCheck(name, false, "a Kerberos sign-in for a made-up realm did not fail");
                 }
-                catch (DirectoryException)
+                catch (DirectoryException ex) when (ex.Code == LdapResultCodes.TicketRefused)
                 {
+                    // The one failure the system asks the KDC about (2026-10-20, the code review): any other code here and a refused
+                    // password could never be told on this build.
                     kerberos = $"; a made-up realm's Kerberos sign-in refused ({gss.Failure})";
+                }
+                catch (DirectoryException ex)
+                {
+                    return new SmokeCheck(name, false, $"a made-up realm's Kerberos sign-in failed as 0x{ex.Code.ToString("X", System.Globalization.CultureInfo.InvariantCulture)} ({gss.Failure}), not as a ticket refused");
                 }
             }
 
             return new SmokeCheck(name, true, $"loopback: bound {security}, RootDSE read, {entries.ToString(System.Globalization.CultureInfo.InvariantCulture)} entries over 2 pages{kerberos}");
         }
-        catch (Exception ex) when (ex is DirectoryException or SocketException or IOException or AggregateException)
+        catch (Exception ex)
         {
-            return new SmokeCheck(name, false, ex.Message);
+            // Every failure is this probe's FAIL, as the other probes' (2026-10-20, the code review: a GSS shim's TypeInitializationException
+            // or a DllNotFoundException ended --smoke itself).
+            return new SmokeCheck(name, false, ex.GetType().Name + ": " + ex.Message);
         }
     }
 

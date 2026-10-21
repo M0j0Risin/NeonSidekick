@@ -23,7 +23,11 @@ public static class DirectoryErrors
         0x34 => $"Error: {server} is unavailable (it may be shutting down or not yet ready).",
         // The managed client's own (2026-10-18, the Mac AD plan): a Kerberos sign-in that never reached the bind.
         Ldap.LdapResultCodes.KdcUnreachable => $"Error: the Kerberos sign-in to {domain} could not reach its KDC on {server} (port 88). Check the network or VPN, and that the realm's KDC can be found (its DNS records, or a krb5.conf).",
-        Ldap.LdapResultCodes.KerberosFailed => $"Error: the Kerberos sign-in to {domain} as {account} failed. Run kinit for a ticket (the realm in capitals), check the clock is within 5 minutes, and that {server} is a DC of {domain}.",
+        Ldap.LdapResultCodes.KerberosFailed => $"Error: the Kerberos sign-in to {domain} as {account} failed. Run kinit for a ticket (the realm in capitals), check the clock is within 5 minutes, and that {server} is a DC of {domain} named by its own name (not an alias, localhost or an IP).",
+        // 2026-10-20, the code review: the DC's KDC answered with a time Kerberos refuses (detail: DirectoryText.ClockOff's phrase).
+        Ldap.LdapResultCodes.ClockSkew => $"Error: this computer's clock is {detail} {server}'s, more than the 5 minutes Kerberos allows, so the sign-in to {domain} cannot work. Set the clock to the network's time and try again.",
+        // 2026-10-20, the code review: the DC's KDC (port 88 on the address connected to) does not know the account; never held.
+        Ldap.LdapResultCodes.UnknownAccount => $"Error: the KDC on {server} does not know {account}. Check the account and its realm (name@REALM), and that {server} is a DC of {domain} whose own KDC answers on port 88.",
         Ldap.LdapResultCodes.TlsRefused => $"Error: {server}:{port.ToString(CultureInfo.InvariantCulture)} answered, but its certificate was refused: {detail}. Trust the DC's certificate authority here (on a Mac, in the Keychain), and name the DC in server as its certificate does.",
         _ => $"Error: the directory {domain} failed (LDAP code 0x{code.ToString("X2", CultureInfo.InvariantCulture)})" + (detail.Length > 0 ? ": " + detail : "."),
     };

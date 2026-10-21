@@ -35,16 +35,25 @@ public interface ISaslLayer : IDisposable
 /// explicit credential; <c>windows</c> the default one (a <c>kinit</c> ticket). Under TLS the channel binding goes with it. A failed step's
 /// status is kept in <see cref="Failure"/>, for <see cref="ManagedDirectorySystem"/> to word. Excluded from coverage: it needs a KDC, and
 /// is proven by the live tests and the published exe.
+/// <para>
+/// 2026-10-20, the code review: with an explicit credential .NET runs the AS exchange as it is made, and on a Mac any failure there comes
+/// back from the first step as <c>Unsupported</c> (Phase 0, and the smoke's made-up realm): that alone is
+/// <see cref="LdapResultCodes.TicketRefused"/>, which the system asks the KDC about. Any other status, or a failure at a later step, came after
+/// the password was taken (a service ticket, the DC's mutual reply) and is <see cref="LdapResultCodes.KerberosFailed"/>, never a refused password.
+/// </para>
 /// </summary>
 public sealed class NegotiateSaslLayer : ISaslLayer
 {
     public const string Package = "Kerberos";
 
     private readonly NegotiateAuthentication _auth;
+    private readonly bool _explicit;
+    private int _steps;
 
     public NegotiateSaslLayer(DirectoryLogin? login, string host, bool tls, ChannelBinding? binding)
     {
         ArgumentNullException.ThrowIfNull(host);
+        _explicit = login is not null;
         _auth = new NegotiateAuthentication(new NegotiateAuthenticationClientOptions
         {
             Package = Package,
@@ -73,14 +82,23 @@ public sealed class NegotiateSaslLayer : ISaslLayer
     public SaslStep Step(ReadOnlySpan<byte> incoming)
     {
         byte[]? blob = _auth.GetOutgoingBlob(incoming, out var status);
+        _steps++;
         if (status is not (NegotiateAuthenticationStatusCode.Completed or NegotiateAuthenticationStatusCode.ContinueNeeded))
         {
             Failure = status;
-            throw new DirectoryException(LdapResultCodes.KerberosFailed, "the Kerberos sign-in failed (" + status + ")");
+            int code = FailureCode(_explicit, _steps, status);
+            throw new DirectoryException(code, "the Kerberos sign-in failed (" + status + ")");
         }
 
         return new SaslStep(blob ?? [], status == NegotiateAuthenticationStatusCode.Completed);
     }
+
+    /// <summary>
+    /// A failed step's code: <see cref="LdapResultCodes.TicketRefused"/> only for an explicit credential's first step answered
+    /// <c>Unsupported</c> (its AS exchange failed), else <see cref="LdapResultCodes.KerberosFailed"/>.
+    /// </summary>
+    public static int FailureCode(bool explicitCredential, int step, NegotiateAuthenticationStatusCode status) =>
+        explicitCredential && step == 1 && status == NegotiateAuthenticationStatusCode.Unsupported ? LdapResultCodes.TicketRefused : LdapResultCodes.KerberosFailed;
 
     public byte[] Wrap(ReadOnlySpan<byte> data, bool encrypt, out bool encrypted)
     {
@@ -159,12 +177,7 @@ public static class SaslGssapiExchange
                 outgoing = layer.Wrap(reply, encrypt: false, out _);
             }
 
-            var answer = connection.Exchange(LdapMessages.Bind(connection.NextId(), outgoing));
-            if (answer.Op != LdapOp.BindResponse)
-            {
-                throw new DirectoryException(LdapResultCodes.DecodingError, "the bind was answered with something else");
-            }
-
+            var answer = connection.Bind(outgoing);
             if (answer.ResultCode == LdapResultCodes.Success)
             {
                 if (chosen is { } done)
