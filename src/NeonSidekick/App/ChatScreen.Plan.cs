@@ -90,6 +90,18 @@ internal sealed partial class ChatScreen
 
         /// <summary><c>/plan ralph x 500</c> or <c>/plan approve --ralph 500</c>: a pass count out of range; the number as typed is the rest.</summary>
         BadRalphPasses,
+
+        /// <summary>
+        /// <c>/plan edit &lt;name&gt;</c> (2026-10-20, the user's ask), in or out of plan mode: the plan file opened in its default app, plan mode
+        /// untouched; the name is the rest, resolved as <see cref="Open"/>'s is (the template included) with the same fallback.
+        /// </summary>
+        Edit,
+
+        /// <summary><c>/plan edit</c> alone (2026-10-20): the plans picker (<see cref="PlanPickMode.Edit"/>), the template listed too.</summary>
+        ListEdit,
+
+        /// <summary><c>/plan template</c> alone (2026-10-20), in or out of plan mode: the example plan written to <see cref="PlanFiles.TemplatePath"/>.</summary>
+        Template,
     }
 
     /// <summary>The <c>/plan</c> list while planning: the subcommands, each with its note. Pinned.</summary>
@@ -100,6 +112,8 @@ internal sealed partial class ChatScreen
         new(PlanText.ApproveWord + " " + RalphText.RalphSwitch, "approve it and run it as a Ralph loop, one step per fresh conversation: /plan approve --ralph [passes]"),
         new(PlanText.CancelWord, "leave plan mode; the plan file is kept, marked canceled"),
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
+        new(PlanText.EditWord, EditVerbNote),
+        new(PlanText.TemplateWord, TemplateVerbNote),
         new(PlanText.SaveWord, "keep the last reply as the plan and ask for approval: /plan save [name]"),
         new(PlanText.GapsWord, "review the presented plan pass after pass until no gaps are left: /plan gaps [model|advisor|any|confirm] [passes]"),
         new(PlanText.ChatWord, "talk the plan through again; the model won't present until you ask"),
@@ -120,9 +134,46 @@ internal sealed partial class ChatScreen
     public static readonly IReadOnlyList<CompletionItem> PlanVerbsIdle =
     [
         new(PlanText.OpenWord, "pick up a plan under .neon/plans/: /plan open <name>, or alone to list them"),
+        new(PlanText.EditWord, EditVerbNote),
+        new(PlanText.TemplateWord, TemplateVerbNote),
         new(PlanText.ChatWord, "talk a plan through before it's written; /plan ready when you want it"),
         new(RalphText.RalphWord, "run a plan as a Ralph loop, or resume the paused one: /plan ralph [name] [passes]"),
     ];
+
+    private const string EditVerbNote = "open a plan file in its app, plan mode untouched: /plan edit <name>, or alone to pick one";
+    private const string TemplateVerbNote = "write an example plan in the Ralph loop's shape to .neon/plans/plan-template.md";
+
+    /// <summary>
+    /// What a <c>/plan</c> completion knows of the plan (2026-10-20, the user's ask: no verb listed that would be refused): a plan presented
+    /// (<c>gaps</c>, the three <c>approve</c> forms), a reply the save hint pointed at (<c>save</c>), a requirement yet (<c>ready</c>: not before a
+    /// <c>/plan chat</c>'s first message), and whether the list is the Web UI's (no <c>edit</c>: the page refuses it). <see cref="Unknown"/>
+    /// filters nothing.
+    /// </summary>
+    public readonly record struct PlanCompletionState(bool Presented, bool DraftReply, bool HasRequirement, bool Web)
+    {
+        /// <summary>Every verb listed: a caller that knows nothing of the plan.</summary>
+        public static PlanCompletionState Unknown => new(true, true, true, false);
+    }
+
+    /// <summary>
+    /// <paramref name="verbs"/> (<see cref="PlanVerbs"/> or <see cref="PlanVerbsIdle"/>) less the ones <paramref name="state"/> says would be
+    /// refused now (2026-10-20). Only the plan's own state filters; what changes under it (no server, tools off, an audit running) stays the
+    /// handler's error. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> PlanVerbsFor(IReadOnlyList<CompletionItem> verbs, PlanCompletionState state)
+    {
+        ArgumentNullException.ThrowIfNull(verbs);
+        return verbs.Where(verb => Runs(verb.Text.Split(' ')[0])).ToList();
+
+        bool Runs(string word) => word switch
+        {
+            PlanText.GapsWord or PlanText.ApproveWord => state.Presented,
+            PlanText.SaveWord => state.DraftReply,
+            PlanText.ReadyWord => state.HasRequirement,
+            PlanText.EditWord => !state.Web,
+            _ => true,
+        };
+    }
 
     /// <summary>The /sys Tools tab's name for the group that holds <c>present_plan</c>.</summary>
     public const string PlanGroupName = "Plan";
@@ -192,6 +243,13 @@ internal sealed partial class ChatScreen
             return after.Length == 0 ? chat ? PlanCommand.ListChat : PlanCommand.List : chat ? PlanCommand.OpenChat : PlanCommand.Open;
         }
 
+        // /plan edit [name] (2026-10-20, the user's ask): open's shape, in or out of plan mode; the handler falls back as open's does.
+        if (first == PlanText.EditWord)
+        {
+            rest = after;
+            return after.Length == 0 ? PlanCommand.ListEdit : PlanCommand.Edit;
+        }
+
         if (planning && first == PlanText.SaveWord && !after.Contains(' ', StringComparison.Ordinal) && !after.Contains('\t', StringComparison.Ordinal))
         {
             rest = after;
@@ -225,6 +283,12 @@ internal sealed partial class ChatScreen
         if (words == PlanText.ChatWord)
         {
             return PlanCommand.Chat;
+        }
+
+        // /plan template (2026-10-20): alone, in plan mode or out of it; with words after it, a requirement or detail as before.
+        if (words == PlanText.TemplateWord)
+        {
+            return PlanCommand.Template;
         }
 
         PlanCommand? verb = words switch
@@ -447,8 +511,37 @@ internal sealed partial class ChatScreen
             command = _plan.Active ? PlanCommand.Detail : PlanCommand.Enter;
         }
 
+        // /plan edit <name> (2026-10-20): open's resolve and fallback, the template a name it takes.
+        if (command == PlanCommand.Edit && PlanFiles.Resolve(_files, rest, includeTemplate: true) is null)
+        {
+            if (!rest.Any(char.IsWhiteSpace))
+            {
+                _transcript.Error(PlanText.NoSuchPlanError(rest, PlanText.EditWord));
+                return await ListPlansAsync(PlanPickMode.Edit, cancellationToken, asNotices: FromWebNow).ConfigureAwait(false);
+            }
+
+            command = _plan.Active ? PlanCommand.Detail : PlanCommand.Enter;
+        }
+
         switch (command)
         {
+            case PlanCommand.ListEdit:
+                return await ListPlansAsync(PlanPickMode.Edit, cancellationToken).ConfigureAwait(false);
+
+            case PlanCommand.Edit:
+                EditPlan(PlanFiles.Resolve(_files, rest, includeTemplate: true)!);
+                return false;
+
+            case PlanCommand.Template:
+                if (PlanFiles.WriteTemplate(_files) is { } failed)
+                {
+                    _transcript.Error(failed);
+                    return false;
+                }
+
+                _transcript.Notice(PlanText.TemplateWrittenNotice(PlanFiles.TemplatePath));
+                return false;
+
             case PlanCommand.List or PlanCommand.ListChat:
                 return await ListPlansAsync(command == PlanCommand.ListChat ? PlanPickMode.Talk : PlanPickMode.Open, cancellationToken).ConfigureAwait(false);
 
@@ -879,6 +972,14 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> PlanChoices() =>
         PlanFiles.List(_files).Select(plan => new CompletionItem(plan.Name, PlanText.CompletionNote(plan))).ToList();
 
+    /// <summary><c>/plan edit</c>'s names (2026-10-20): the plans and the template.</summary>
+    private IReadOnlyList<CompletionItem> EditPlanChoices() =>
+        PlanFiles.List(_files, includeTemplate: true).Select(plan => new CompletionItem(plan.Name, PlanText.CompletionNote(plan))).ToList();
+
+    /// <summary>What <c>/plan</c>'s completion knows of the plan now (2026-10-20, <see cref="PlanVerbsFor"/>); <paramref name="web"/> for the page's list.</summary>
+    private PlanCompletionState PlanCompletionNow(bool web) =>
+        new(_plan.Path is not null, _planDraftReply is not null, _plan.Requirement.Length > 0, web);
+
     /// <summary>
     /// <c>/plan open</c> alone (<paramref name="mode"/> <see cref="PlanPickMode.Open"/>), <c>/plan open --chat</c> (<see cref="PlanPickMode.Talk"/>)
     /// and, with nothing paused, bare <c>/plan ralph</c> (<see cref="PlanPickMode.Ralph"/>): the plans on <see cref="PlansMenu"/> (2026-10-18, the
@@ -888,7 +989,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> ListPlansAsync(PlanPickMode mode, CancellationToken cancellationToken, bool asNotices = false)
     {
-        var plans = PlanFiles.List(_files);
+        // Bare /plan edit (2026-10-20) lists the template too: the one list it may be picked from.
+        var plans = PlanFiles.List(_files, includeTemplate: mode == PlanPickMode.Edit);
         if (plans.Count == 0)
         {
             _transcript.Notice(PlanText.NoPlansNotice);
@@ -929,9 +1031,33 @@ internal sealed partial class ChatScreen
         }
 
         var picked = pcPick is { } pc && pc.Plan.Path == chosen ? pc.Mode : mode;
+        if (picked == PlanPickMode.Edit)
+        {
+            EditPlan(chosen);
+            return false;
+        }
+
         return picked == PlanPickMode.Ralph
             ? await RalphPickedAsync(chosen, cancellationToken).ConfigureAwait(false)
             : await OpenPlanAsync(chosen, picked == PlanPickMode.Talk, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>/plan edit</c>'s open (2026-10-20, the user's ask): the plan file at <paramref name="path"/> handed to the file's default app through
+    /// the sandbox (<see cref="WorkingDirectory.Open"/>, <c>/open</c>'s call over <c>_openFile</c>: a launch that fails is its sentence, no new
+    /// process-start site), plan mode untouched. A plan another instance runs as a Ralph loop opens too: the editor is the user's own hand, and
+    /// the lock guards the app's writes.
+    /// </summary>
+    private void EditPlan(string path)
+    {
+        var result = _files.Open(path, _openFile, filesOnly: true);
+        if (result.Outcome != FileOutcome.Ok)
+        {
+            _transcript.Error(FileText.Opened(result));
+            return;
+        }
+
+        _transcript.Notice(OpenOpenedNotice(result.Relative));
     }
 
     /// <summary>

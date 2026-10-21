@@ -16,7 +16,7 @@ public class PictureBudgetTests
         for (int i = 1; i <= carriers; i++)
         {
             history.AddUser("draw " + i);
-            history.AddToolImages([Picture("comfy_images\\p" + i + ".png", bytes)], "generate_image");
+            history.AddToolImages([Picture("comfy\\p" + i + ".png", bytes)], "generate_image");
         }
 
         return history;
@@ -30,7 +30,7 @@ public class PictureBudgetTests
         Assert.Equal(new PictureBudget(20, 24), PictureBudget.Default);
         Assert.True(new PictureBudget(0, 0).IsNone);
         Assert.False(PictureBudget.Default.IsNone);
-        Assert.Equal("(picture comfy_images\\a.png taken out to keep the request small)", PictureBudget.LeftOut("comfy_images\\a.png"));
+        Assert.Equal("(picture comfy\\a.png taken out to keep the request small)", PictureBudget.LeftOut("comfy\\a.png"));
         Assert.Equal("(a picture, taken out to keep the request small)", PictureBudget.LeftOut(null));
         Assert.Equal("31 MB", PictureBudget.FormatMegabytes(31_400_000));
         Assert.Equal("0.4 MB", PictureBudget.FormatMegabytes(400_000));
@@ -69,7 +69,7 @@ public class PictureBudgetTests
         Assert.Equal(2, Pictures(history.Messages));
         var carriers = history.Messages.Where(ConversationHistory.IsImageCarrier).ToList();
         Assert.Equal(5, carriers.Count);                 // still carriers, tags and order kept
-        Assert.Equal("(picture comfy_images\\p1.png taken out to keep the request small)", carriers[0].Contents.OfType<TextContent>().Last().Text);
+        Assert.Equal("(picture comfy\\p1.png taken out to keep the request small)", carriers[0].Contents.OfType<TextContent>().Last().Text);
         Assert.Equal("generate_image", ConversationHistory.CarrierSource(carriers[0]));
         Assert.Contains(carriers[3].Contents, c => c is DataContent);
         Assert.Contains(carriers[4].Contents, c => c is DataContent);
@@ -113,7 +113,7 @@ public class PictureBudgetTests
 
         var again = history.ApplyPictureBudget(budget);
         history.AddUser("one more");
-        history.AddToolImages([Picture("comfy_images\\p10.png")], "generate_image");
+        history.AddToolImages([Picture("comfy\\p10.png")], "generate_image");
         var third = history.ApplyPictureBudget(budget);
 
         Assert.Equal(0, again.Pictures);

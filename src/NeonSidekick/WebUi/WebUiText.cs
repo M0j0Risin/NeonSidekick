@@ -85,8 +85,8 @@ public static class WebUiText
 
     public const string CopyButton = "copy";
 
-    /// <summary>The pane's hint under the link: a double-click opens it here.</summary>
-    public const string LinkOpenHint = "Double-click the link to open it on this PC; c copies it.";
+    /// <summary>The pane's hint under the link: a double-click on it, or on the QR code (2026-10-20), opens it here.</summary>
+    public const string LinkOpenHint = "Double-click the link or the QR code to open it on this PC; c copies it.";
 
     /// <summary><c>/webui copy</c> with nothing serving. Pinned.</summary>
     public const string NoLinkError = "/webui copy: the Web UI is not serving, so there is no link (/webui on).";
@@ -775,6 +775,9 @@ public static class WebUiText
         Failed: "YouTube's player didn't load: is this phone online?",
         Closed: "The video was closed.")
     {
+        // The video filling the browser's window, the page's chrome out of the way, without the screen's full screen (2026-10-20).
+        Windowed = "⛶ Fill window",
+        ExitWindowed = "✕ Exit",
         // The saved list under the player (later on 2026-10-16).
         Saved = new WebSavedWords(
             Filter: "Filter the saved videos",

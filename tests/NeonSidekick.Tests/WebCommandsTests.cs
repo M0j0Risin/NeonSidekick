@@ -123,6 +123,8 @@ public sealed class WebCommandsTests
     [InlineData("/plan open", WebCommandKind.Pick)]   // the plans picker since 2026-10-18, a list until then
     [InlineData("/plan open --chat", WebCommandKind.Pick)]
     [InlineData("/plan open x --chat", WebCommandKind.Run)]
+    [InlineData("/plan template", WebCommandKind.Run)]                     // 2026-10-20
+    [InlineData("/plan edit the steps to add tests", WebCommandKind.Run)]   // several words: detail or a requirement, as on the PC
     [InlineData("/print", WebCommandKind.List)]
     [InlineData("/print printers", WebCommandKind.List)]
     [InlineData("/camera list", WebCommandKind.List)]
@@ -142,6 +144,8 @@ public sealed class WebCommandsTests
     [InlineData("/memory", WebCommandKind.Refused)]
     [InlineData("/memory forget", WebCommandKind.Refused)]
     [InlineData("/cwd D:\\work", WebCommandKind.Refused)]
+    [InlineData("/plan edit", WebCommandKind.Refused)]   // 2026-10-20: an editor on the PC
+    [InlineData("/plan edit my-plan", WebCommandKind.Refused)]
     [InlineData("/learn sessions", WebCommandKind.Refused)]
     [InlineData("/shopping", WebCommandKind.Refused)]
     [InlineData("/shopping add", WebCommandKind.Refused)]

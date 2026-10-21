@@ -57,7 +57,7 @@ The app itself, this side of the connection.
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
-| Welcome splash | Pictures under the banner at startup until your first line: `fullsize`, `tiled` or `off`. `/splash view` opens the profile's pictures; see [The welcome splash](INTERFACE.md#the-welcome-splash). | `fullsize` |
+| Welcome splash | What greets you under the banner at startup until your first line: `image`, `robot` or `off`. See [The welcome splash](INTERFACE.md#the-welcome-splash). | `image` |
 | Show header | The banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
@@ -496,7 +496,7 @@ The tools most profiles use, and the pane's own options.
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: an address (`example.com`, `localhost:3000`), or empty for a blank page. | empty |
 | Web browser privacy | `keep-history` keeps the Browser window's visited pages for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). | `clear-history` |
 | Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* while *YouTube tools* is on. | `default-browser` |
-| Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link sign your default browser in: `one-time-link` (good once, for a minute, so its history keeps no token) or `url-with-token` (the usual link, which it may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
+| Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so its history keeps no token) or `url-with-token` (the usual link, which it may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
@@ -617,7 +617,7 @@ The file tools and the places beyond the working directory they reach.
 | Image edit metadata | What metadata `image_edit` keeps: `none`, `basic` (author, date taken, camera…) or `all` (basic plus the GPS position). | `none` |
 | Image edit mode | `beside-original` writes an edited picture to a new file beside the source; `overwrite-original` replaces the source without asking. It rules `image_edit` and the picture windows' right-click menu. | `beside-original` |
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the profile's `images` folder. Empty writes beside the source. | empty (beside the source) |
-| Pasted images folder | Where a picture pasted from the clipboard is saved, under the profile's `images` folder, so the picture tools can use it. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted_images` |
+| Pasted images folder | Where a picture pasted from the clipboard is saved, under the profile's `images` folder, so the picture tools can use it. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted` |
 
 #### UNC
 
@@ -670,7 +670,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 | ComfyUI reinforce negatives | When the model writes the prompt, adds a few tags to the negative where the image model tends to drift. | on |
 | ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
 | ComfyUI picture strip | The session's pictures as thumbnails above the input line: with the line empty, ←/→ highlight one and Enter opens it; **×** hides the strip until **🎞️** brings it back. It also rules the Web UI's picture drawer. | on |
-| ComfyUI output folder | Where pictures are saved, under the profile's `images` folder. | `comfy_images` |
+| ComfyUI output folder | Where pictures are saved, under the profile's `images` folder. | `comfy` |
 
 #### YouTube
 
@@ -874,7 +874,7 @@ The camera, screen and printer tools.
 | Camera preview | `live`: a [camera window](INTERFACE.md#the-camera-window) shows the picture while you frame it. `post`: the picture viewer opens on the photo. `off`: no window. | `live` |
 | Camera device | The camera, by its system name. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
-| Camera output folder | Where photos are saved, under the profile's `images` folder. | `camera_images` |
+| Camera output folder | Where photos are saved, under the profile's `images` folder. | `camera` |
 | Camera keep in sessions | Keeps photos in stored sessions. Off, a stored session keeps a line naming the photo instead. | off |
 | Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
 | Camera watch change (%) | How much of the picture must change to count (1–100). `--camera-check` prints your camera's noise. | 8% |
@@ -888,7 +888,7 @@ The camera, screen and printer tools.
 | Screen tools | Offers `screen_capture` and `screen_list`, so the model can see a monitor or a window; never headless or to an embedded model without vision. On a Mac: macOS 14 or later, with the [Screen Recording permission](COMMANDS.md#screen-capture). | off |
 | Screen policy | `ask`: the app asks you first, naming what would be captured and why. `allow`: taken without asking. | `ask` |
 | Screen preview | The picture viewer opens on each screenshot, so you see what was sent. | on |
-| Screen output folder | Where screenshots are saved, under the profile's `images` folder. | `screen_images` |
+| Screen output folder | Where screenshots are saved, under the profile's `images` folder. | `screen` |
 | Screen keep in sessions | Keeps screenshots in stored sessions. Off, a stored session keeps a line naming the screenshot instead. | off |
 
 #### Print

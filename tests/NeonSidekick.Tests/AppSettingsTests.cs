@@ -68,7 +68,7 @@ public class AppSettingsTests : IDisposable
         QueueMode = "manual",
         ShowImageThumbnails = false,
         TranscriptMarkdown = false,
-        WelcomeSplashMode = "tiled",
+        WelcomeSplashMode = "robot",
         MenuMaxHeight = "half",
         ShowWorkingDirectory = false,
         ShowHeader = false,
@@ -929,7 +929,7 @@ public class AppSettingsTests : IDisposable
         // FileStaleGuard, ViewImageMaxPerCall and SearxngUrl are old spellings now, skipped the same way.
         // Later still that day Reflection verbose went altogether: a retired key, skipped like ShowProfileName.
         // Later still on 2026-09-19 FileStaleLineNumberGuard went with edit_lines (the eight file tools folded into four): retired, skipped the same way.
-        // On 2026-09-24 the on/off WelcomeSplash became the WelcomeSplashMode pick: no migration (the user's call), so an old off is fullsize again.
+        // On 2026-09-24 the on/off WelcomeSplash became the WelcomeSplashMode pick: no migration (the user's call), so an old off is fullsize again (image since 2026-10-20).
         // On 2026-09-28 ComfyPictureStripSync went (the user's call: the strip and the viewer always follow each other): retired, skipped the same way.
         // On 2026-10-04 BotChatPreloadedSkills became BotChatLimitedSkills (no migration) and BotChatSkillMode went: both skipped the same way.
         // Later on 2026-10-04 BotChatImages, BotChatTxt2ImgWorkflow and BotChatImg2ImgWorkflow went for BotChatComfy and
@@ -947,7 +947,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(settings.Current.TtsOutput);   // the old key, skipped
         Assert.True(settings.Current.CopyUserPrompt);   // the retired key, skipped
         Assert.Equal("internet", settings.Current.WebBrowserNetworkMode);   // the retired switch, skipped
-        Assert.Equal("fullsize", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24)
+        Assert.Equal("image", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24); image since 2026-10-20
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.Null(settings.Current.BotChatLimitedSkills);   // the renamed BotChatPreloadedSkills is not carried over (2026-10-04)
@@ -1305,12 +1305,12 @@ public class AppSettingsTests : IDisposable
     {
         // 2026-09-22, the user's ask: nothing created it before, so using a profile's own splash
         // pictures meant making the folder by hand. Empty, it is no splash at all — SplashImages
-        // reads a folder with no picture as none and the embedded set stands. Under the images folder as splash_images since
+        // reads a folder with no picture as none and the embedded set stands. Under the images folder as splash since
         // 2026-10-10 (the user's call), so a load makes the images folder too.
         using var settings = new AppSettings(_dir);
 
         Assert.True(Directory.Exists(settings.ProfileSplashDirectory));
-        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "images", "splash_images"), settings.ProfileSplashDirectory);
+        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "images", "splash"), settings.ProfileSplashDirectory);
         Assert.Equal(settings.ProfileImagesDirectory, Path.GetDirectoryName(settings.ProfileSplashDirectory));
         Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "splash")));   // the old place is never made
         Assert.Equal(SplashImages.ProfileFolderName, Path.GetFileName(settings.ProfileSplashDirectory));
@@ -1328,7 +1328,7 @@ public class AppSettingsTests : IDisposable
         await settings.SwitchProfileAsync("work");
 
         Assert.True(Directory.Exists(settings.ProfileSplashDirectory));
-        Assert.EndsWith(Path.Combine("work", "images", "splash_images"), settings.ProfileSplashDirectory);
+        Assert.EndsWith(Path.Combine("work", "images", "splash"), settings.ProfileSplashDirectory);
         Assert.False(Directory.Exists(Path.Combine(Profiles.Directory(_dir, "other"), "images")));   // nothing is created for a look
     }
 
@@ -1609,7 +1609,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the toggle (the Options tab of /skills since 2026-10-01) says not
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
-        Assert.Equal("fullsize", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize)
+        Assert.Equal("image", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize; image since 2026-10-20)
         Assert.Equal("full", s.MenuMaxHeight);   // 2026-10-01; three-quarters until later that day
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.True(s.ShowHeader);   // 2026-10-01, the user's ask

@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// <c>set_splash_image(path, name?)</c> (2026-09-24, the user's ask: generated "splash / persona art"): copies a
-/// picture from the working directory into the loaded profile's splash folder (<c>splash</c>, <c>images\splash_images</c> since 2026-10-10), which the splash walk reads at
+/// picture from the working directory into the loaded profile's splash folder (<c>images\splash</c>; <c>images\splash_images</c> from 2026-10-10, <c>splash</c> under the profile before), which the splash walk reads at
 /// every show (<see cref="UI.SplashImages.FromDirectory"/>), so "make that my splash" ends with the picture on the next
 /// <c>/splash</c>. The folder is outside the sandbox, which is why this is a tool of its own rather than a
 /// <c>copy</c>: it writes there and nowhere else, never over a picture already there (a number is added to the name).
@@ -35,11 +35,14 @@ public sealed class SetSplashImageTool : AIFunction
     private readonly WorkingDirectory _files;
     private readonly WorkingDirectory? _images;
     private readonly Func<string> _splashDirectory;
+    private readonly Func<bool>? _robotSplash;
 
     /// <param name="splashDirectory">The loaded profile's splash folder, read at each call (a profile switch needs no rebuild).</param>
     /// <param name="images">The profile's images folder, whose pictures are read by their full paths (2026-10-10); null = the working directory alone.</param>
-    public SetSplashImageTool(WorkingDirectory files, Func<string> splashDirectory, WorkingDirectory? images = null)
+    /// <param name="robotSplash">Whether <c>Welcome splash</c> is <c>robot</c> now (2026-10-20): the result then says the pictures wait for <c>image</c>; null = never.</param>
+    public SetSplashImageTool(WorkingDirectory files, Func<string> splashDirectory, WorkingDirectory? images = null, Func<bool>? robotSplash = null)
     {
+        _robotSplash = robotSplash;
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _splashDirectory = splashDirectory ?? throw new ArgumentNullException(nameof(splashDirectory));
         _images = images;
@@ -114,7 +117,7 @@ public sealed class SetSplashImageTool : AIFunction
 
             File.Copy(source, target, overwrite: false);
             bool only = Directory.EnumerateFiles(folder).Count(ImageFile.IsImagePath) == 1;
-            return ImageText.SplashSet(read.Relative, target, only);
+            return ImageText.SplashSet(read.Relative, target, only) + (_robotSplash?.Invoke() == true ? ImageText.SplashRobotNote : "");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

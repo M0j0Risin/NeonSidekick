@@ -433,7 +433,7 @@ public class TextToolCallFilterTests
 
     // ── The brace form (2026-10-11, the user's report from /botchat on Gemma 4 E2B/E4B) ──
 
-    private const string UsersPath = @"C:\Users\cnels\.neonsidekick\profiles\neon\images\comfy_images\juggernautxl_ragnarok_img2img-253494935477047.png";
+    private const string UsersPath = @"C:\Users\cnels\.neonsidekick\profiles\neon\images\comfy\juggernautxl_ragnarok_img2img-253494935477047.png";
 
     private const string UsersPrompt = "Gnostic Sophia, female divine revelation, absolute extreme chiaroscuro, 85mm lens, f/1.8, ultimate cinematic photo style";
 
@@ -565,7 +565,7 @@ public class TextToolCallFilterTests
 
     private const string UsersObjectAfter = "That new iteration really pushes the 'forbidden fruit' angle, don't you think?";
 
-    private const string UsersObject = "{\n  \"workflow\": \"juggernautxl_ragnarok_img2img\",\n  \"image\": \"C:\\\\Users\\\\cnels\\\\.neonsidekick\\\\profiles\\\\neon\\\\images\\\\comfy_images\\\\juggernautxl_ragnarok_img2img-132769972628284.png\",\n  \"prompt\": \"Gnostic Sophia, divine temptation, soft intimate lighting, 85mm, f/1.8\",\n  \"negative\": \"worst quality, low quality, blurry\"\n}\n\n";
+    private const string UsersObject = "{\n  \"workflow\": \"juggernautxl_ragnarok_img2img\",\n  \"image\": \"C:\\\\Users\\\\cnels\\\\.neonsidekick\\\\profiles\\\\neon\\\\images\\\\comfy\\\\juggernautxl_ragnarok_img2img-132769972628284.png\",\n  \"prompt\": \"Gnostic Sophia, divine temptation, soft intimate lighting, 85mm, f/1.8\",\n  \"negative\": \"worst quality, low quality, blurry\"\n}\n\n";
 
     [Fact]
     public void TheObjectForm_TheUsersReply_IsTheOneToolsCall_WholeOrSplitAnywhere()
@@ -575,7 +575,7 @@ public class TextToolCallFilterTests
         Assert.Equal(UsersObjectLead + UsersObjectAfter, whole);
         Assert.Equal(Tool, Assert.Single(filter.Calls).Name);
         Assert.Equal(Workflow, Argument(filter, "workflow").GetString());
-        Assert.Equal(@"C:\Users\cnels\.neonsidekick\profiles\neon\images\comfy_images\juggernautxl_ragnarok_img2img-132769972628284.png", Argument(filter, "image").GetString());
+        Assert.Equal(@"C:\Users\cnels\.neonsidekick\profiles\neon\images\comfy\juggernautxl_ragnarok_img2img-132769972628284.png", Argument(filter, "image").GetString());
         Assert.Equal("Gnostic Sophia, divine temptation, soft intimate lighting, 85mm, f/1.8", Argument(filter, "prompt").GetString());
         Assert.Equal("worst quality, low quality, blurry", Argument(filter, "negative").GetString());
         Assert.Equal(UsersObjectAfter, whole[filter.LastCallEnd..]);

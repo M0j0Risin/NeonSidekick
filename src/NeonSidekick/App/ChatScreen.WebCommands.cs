@@ -444,7 +444,8 @@ internal sealed partial class ChatScreen
             Services: ServiceChoices,
             Tasks: TaskChoices,
             Ad: AdChoices,
-            Audits: () => audits);
+            Audits: () => audits,
+            PlanState: PlanCompletionNow(web: true));   // 2026-10-20: only the /plan verbs that run, and no edit (the page refuses it)
         var sources = new CompletionSources(
             () => commands,
             (command, argText) => ArgumentPaths(command, argText, arguments) is { } paths

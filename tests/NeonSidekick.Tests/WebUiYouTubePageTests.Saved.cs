@@ -197,6 +197,65 @@ public sealed partial class WebUiYouTubePageTests
     }
 
     [WindowsFact]
+    public async Task ASavedPlaysMessage_FadesOnceItPlays_AndALaterMessageStays()
+    {
+        // 2026-10-20, the user's ask: "Resumed the saved video at …" goes shortly after the video starts. The player's state reports are
+        // fed to the page's own send (offline, YouTube's script never loads); the wait is shortened.
+        Saved(Bunny);
+        if (await SignedInAsync("/youtube") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("document.querySelectorAll('.yt-row').length === 1", "the row");
+        SpinWait.SpinUntil(() => Player.Owner is not null, TimeSpan.FromSeconds(10));
+        await page.EvalAsync("playNoteMs = 200");
+        await page.EvalAsync("document.querySelector('.yt-play').click()");
+        await page.WaitAsync("document.getElementById('message').textContent.includes('0:57')", "the play's sentence");
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 1, position: 57, duration: 635 })");
+        await page.WaitAsync("document.getElementById('message').textContent === ''", "the sentence gone once it plays");
+
+        // Paused, played again, and something else said before it starts: that stays.
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 2, position: 60, duration: 635 })");
+        await page.EvalAsync("document.querySelector('.yt-play').click()");
+        await page.WaitAsync("document.getElementById('message').textContent.includes('0:57')", "the second play's sentence");
+        await page.EvalAsync("Neon.say('something else')");
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 1, position: 57, duration: 635 })");
+        await Task.Delay(800);
+        Assert.Equal("something else", await page.TextAsync("document.getElementById('message').textContent"));
+    }
+
+    [WindowsFact]
+    public async Task TheCountLine_HidesWhileAVideoPlays_AndShowsWhenPausedOrClosed()
+    {
+        // 2026-10-20, the user's ask: "N saved videos; …" hidden while playing (its room kept), shown paused, stopped or with nothing loaded.
+        Saved(Bunny, Zoo);
+        if (await SignedInAsync("/youtube") is not { } page)
+        {
+            return;
+        }
+
+        const string Quiet = "document.getElementById('saved-caption').classList.contains('yt-caption-quiet')";
+        await page.WaitAsync("document.querySelectorAll('.yt-row').length === 2", "the rows");
+        Assert.NotEqual("", await page.TextAsync("document.getElementById('saved-caption').textContent"));
+        Assert.False((await page.EvalAsync(Quiet)).GetBoolean());
+
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 1, position: 3, duration: 635 })");
+        await page.WaitAsync(Quiet, "hidden while it plays");
+        Assert.Equal("hidden", await page.TextAsync("getComputedStyle(document.getElementById('saved-caption')).visibility"));
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 3, position: 3, duration: 635 })");   // a buffer mid-play
+        Assert.True((await page.EvalAsync(Quiet)).GetBoolean());
+
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 2, position: 4, duration: 635 })");   // paused
+        await page.WaitAsync("!" + Quiet, "shown while paused");
+
+        await page.EvalAsync("send({ ev: 'state', id: 'aqz-KE-bpKQ', state: 1, position: 4, duration: 635 })");
+        await page.WaitAsync(Quiet, "hidden again");
+        await page.EvalAsync("source.dispatchEvent(new MessageEvent('close', { data: '{}' }))");   // the app closed the video
+        await page.WaitAsync("!" + Quiet, "shown once closed");
+    }
+
+    [WindowsFact]
     public async Task TheSaveButton_TurnsFromStarToSaved()
     {
         _backend.SavedPlaying = new WebSavedPlaying("aqz-KE-bpKQ", "Big Buck Bunny", false);

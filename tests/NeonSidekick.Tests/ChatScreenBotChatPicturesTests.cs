@@ -32,7 +32,7 @@ public partial class ChatScreenTests
 
     private static IList<AITool> ToolsOf(ChatOptions? options) => options?.Tools ?? [];
 
-    private string ComfyImages => Path.Combine(_settings.ProfileImagesDirectory, "comfy_images");
+    private string ComfyImages => Path.Combine(_settings.ProfileImagesDirectory, "comfy");
 
     /// <summary>
     /// The app's picture is drawn at <c>Image thumbnail size</c> (later on 2026-09-25, the user's report: it filled the window

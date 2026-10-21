@@ -78,7 +78,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 * **Tab** returns the focus to the terminal (except in the Browser window, whose pages keep Tab), and so does closing the last window.
 * **Shared keys.** ⌘W closes, ⌃⌘F is full screen (F11 too, once macOS's Show Desktop shortcut is off) and ⌫ stands in for Del. Each window's keys are in [The app's windows](INTERFACE.md#the-apps-windows).
 * **The [picture menu](INTERFACE.md#the-picture-menu)** opens with a Control-click too, and has *Show in Finder*.
-* **Thumbnails and the splash** are drawn in half blocks: full color in iTerm2, 256 colors (banded) in Terminal.app.
+* **Thumbnails, the splash and its robot** are drawn in half blocks: full color in iTerm2, 256 colors (banded) in Terminal.app.
 * **The [video window](INTERFACE.md#the-video-window)** sends a link clicked in the player where *YouTube open links in* says (anything but a video or playlist to your default browser). Delete `~/Library/WebKit/NeonSidekick/WebsiteDataStore/` to clear its cookies and cache.
 
 ### Files & printing
@@ -172,3 +172,4 @@ A connection with `"auth": "runas"` signs in as another account, its password in
 * **With Bluetooth headphones the microphone may open on the reply's last word**, since they play about a fifth of a second behind.
 * **A large picture is decoded whole:** one at the 40-megapixel limit takes about 160 MB of memory for a moment.
 * **Screen capture on macOS 14.0–15.1, and on a 1× screen beside a Retina one,** hasn't been tried on a real Mac.
+* **The robot splash following the mouse** hasn't been tried on a Mac. Terminal.app reports the mouse only with View › Allow Mouse Reporting on.

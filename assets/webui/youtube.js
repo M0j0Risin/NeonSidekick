@@ -42,6 +42,44 @@ let hello = false;
 let source = null;
 let tapHint = '';
 
+// Playing or not (2026-10-20, the user's asks): this page's player as its state reports say, on for playing (1) and buffering (3, so a
+// mid-play buffer doesn't flash the caption), off for any other state, an error, a taken player or a closed video. While it is on, the saved
+// list's count line is hidden (visibility, so nothing under it moves); a saved play's message (the "Resumed …" sentence) is cleared
+// playNoteMs after the video first reports playing, unless something else has been said since.
+let playing = false;
+let playNote = '';
+let playNoteMs = 4000;
+let playNoteTimer = null;
+
+function setPlaying(on) {
+  if (on === playing) return;
+  playing = on;
+  drawCaption();
+}
+
+function drawCaption() {
+  const caption = document.getElementById('saved-caption');
+  if (caption) caption.classList.toggle('yt-caption-quiet', playing);
+}
+
+// The note's timer, once: started when the video plays (or at once when the reply came with it already playing).
+function notePlaying() {
+  if (!playNote || playNoteTimer) return;
+  const note = playNote;
+  playNoteTimer = setTimeout(() => {
+    playNoteTimer = null;
+    const line = document.getElementById('message');
+    if (playNote === note && line && line.textContent === note) Neon.say('');
+    if (playNote === note) playNote = '';
+  }, playNoteMs);
+}
+
+function dropPlayNote() {
+  playNote = '';
+  clearTimeout(playNoteTimer);
+  playNoteTimer = null;
+}
+
 // A report: the player's own JSON as a string inside the post. A tick that hits the limit costs nothing (the next comes a second later); a
 // report that changes who plays or closes a video waits Retry-After and goes once more.
 async function report(message) {
@@ -69,7 +107,10 @@ function send(message) {
     // The phone's autoplay rules (2026-10-16): muted for want of a tap, the sound comes with one.
     tapHint = message.gesture && message.muted ? (words && words.tapForSound) || '' : '';
     if (message.state === 1 || message.state === 3) draw();
+    setPlaying(message.state === 1 || message.state === 3);
+    if (message.state === 1) notePlaying();
   }
+  if (message.ev === 'error') setPlaying(false);
   if (owner) report(message);
 }
 
@@ -104,13 +145,100 @@ function draw() {
     : tapHint ? tapHint
     : !loaded && !canResume ? (hello ? words.idle : words.loading)
     : '';
+  const fill = canFill();
+  fillBtn.textContent = windowed ? words.exitWindowed : words.windowed;
+  fillBtn.classList.toggle('hidden', !fill);
+  if (!fill) leaveWindowed();   // the video closed, another page took it, a Resume offer, the player failed
 }
+
+// ── Fill the window (2026-10-20, the user's ask: a "windowed fullscreen") ──
+// The video fills the browser's window, the hint strip a slim black bar above it with ✕ Exit, without the screen's full screen (YouTube's own
+// button). A body class restyles in place: the iframe is never moved in the DOM (that reloads the player), so the video keeps its place and
+// sound. Nothing covers the video (a phone starts one only on a tap on the video itself). Ways out: the button, Esc, Back (one history entry,
+// the sheets' pattern), and on its own whenever draw() hides the button; every way but Back goes through history.back() while the top entry
+// is ours, so entries never pile up. Not remembered: every load starts in the normal layout.
+const fillBtn = document.getElementById('fill');
+const stripEl = document.querySelector('.yt-strip');
+const messageEl = document.getElementById('message');
+let windowed = false;
+let windowedScroll = 0;
+let backPending = false;
+
+function canFill() { return owner && loaded && !apiFailed; }
+
+function filledEntry() { return !!(history.state && history.state.filled); }
+
+// The bar's height: the strip's, and the message's while it shows (a sentence said while filled is seen). The CSSOM, not a style attribute:
+// the page's CSP refuses inline styles but not this.
+function measureBar() {
+  if (!windowed) return;
+  const strip = stripEl.offsetHeight;
+  const message = messageEl.classList.contains('hidden') ? 0 : messageEl.offsetHeight;
+  document.body.style.setProperty('--yt-strip', strip + 'px');
+  document.body.style.setProperty('--yt-bar', (strip + message) + 'px');
+}
+
+if (typeof ResizeObserver === 'function') {
+  const bar = new ResizeObserver(measureBar);
+  bar.observe(stripEl);
+  bar.observe(messageEl);
+}
+
+// pushed: false when Forward came back to our entry (it is there already).
+function enterWindowed(pushed) {
+  if (windowed || backPending || !canFill()) return;
+  windowed = true;
+  windowedScroll = window.scrollY;
+  if (pushed !== false) history.pushState({ filled: true }, '');
+  document.body.classList.add('yt-windowed');
+  measureBar();
+  fillBtn.textContent = words.exitWindowed;
+  fillBtn.focus();   // Enter or Esc acts at once, and a screen reader hears the change
+}
+
+// popped: Back itself, the entry gone already.
+function leaveWindowed(popped) {
+  if (!windowed) return;
+  windowed = false;
+  document.body.classList.remove('yt-windowed');
+  document.body.style.removeProperty('--yt-strip');
+  document.body.style.removeProperty('--yt-bar');
+  window.scrollTo(0, windowedScroll);   // the hidden content had dropped it to 0
+  if (words) fillBtn.textContent = words.windowed;
+  if (!popped && filledEntry()) {
+    backPending = true;
+    history.back();
+  }
+}
+
+fillBtn.addEventListener('click', () => { if (windowed) leaveWindowed(); else enterWindowed(); });
+
+document.addEventListener('keydown', e => {
+  // YouTube's own full screen takes Esc first (the browser's); inside the video's frame the keys are YouTube's.
+  if (e.key === 'Escape' && windowed && !document.fullscreenElement) {
+    e.preventDefault();
+    leaveWindowed();
+  }
+});
+
+window.addEventListener('popstate', () => {
+  backPending = false;
+  const filled = filledEntry();
+  if (windowed && !filled) leaveWindowed(true);
+  else if (!windowed && filled) {
+    if (canFill()) enterWindowed(false); else history.replaceState(null, '');
+  }
+});
+
+// A reload starts in the normal layout, so an entry of ours left on top goes (the chat page's rule).
+if (filledEntry()) history.replaceState(null, '');
 
 // The offer resumed on this page: the app told first (its player switches here), then the page's own load.
 async function resume(o) {
   offer = null;
   loaded = true;
   tapHint = '';
+  dropPlayNote();
   Neon.say('');
   draw();
   await report({ ev: 'resumed' });
@@ -178,18 +306,21 @@ function connect(claim) {
     loaded = false;
     tapHint = '';
     core.onMessage({ cmd: 'stop' });
+    setPlaying(false);
     draw();
   });
   source.addEventListener('close', () => {
     loaded = false;
     tapHint = '';
     core.onMessage({ cmd: 'stop' });
+    dropPlayNote();
+    setPlaying(false);
     Neon.say(words ? words.closed : '');
     draw();
   });
 }
 
-playHereBtn.addEventListener('click', () => { Neon.say(''); connect(newId()); });
+playHereBtn.addEventListener('click', () => { dropPlayNote(); Neon.say(''); connect(newId()); });
 
 resumeBtn.addEventListener('click', () => { if (offer) resume(offer); });
 
@@ -232,7 +363,13 @@ async function change(path, body) {
 
 async function playSaved(v) {
   const r = await Neon.post('/api/youtube/saved/play', { page, id: v.id });
+  dropPlayNote();
   Neon.say(r.message || '');
+  // A played video's sentence fades once it plays (2026-10-20); a refusal stays until something else is said.
+  if (r.ok && r.message) {
+    playNote = r.message;
+    if (playing) notePlaying();
+  }
   if (r.ok && frameEl && frameEl.scrollIntoView) frameEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   savedPoller.now();
 }
@@ -300,6 +437,7 @@ function drawSaved() {
   const sw = words.saved;
   savedEl.classList.remove('hidden');
   savedCaption.textContent = saved.items.length > 0 ? saved.caption : '';
+  drawCaption();
   savedFilter.placeholder = sw.filter;
   savedFilter.setAttribute('aria-label', sw.filter);
   savedFilter.classList.toggle('hidden', saved.items.length === 0);

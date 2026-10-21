@@ -5,7 +5,7 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// The picture folders' three words (2026-10-18, the user's ask: every folder under the profile's <c>images</c> folder gets <c>/comfy</c>'s
-/// <c>view</c>, <c>thumbs</c> and <c>purge</c>): <c>/splash view|thumbs|purge</c> on the profile's <c>splash_images</c> and <c>/pasted
+/// <c>view</c>, <c>thumbs</c> and <c>purge</c>): <c>/splash view|thumbs|purge</c> on the profile's <c>splash</c> and <c>/pasted
 /// view|thumbs|purge</c> on the <c>Pasted images folder</c>. <c>view</c> and <c>thumbs</c> are windows of their own (quick under a reply);
 /// <c>purge</c> waits for the idle line, as <c>/comfy purge</c> does (<see cref="PurgePictureFolderAsync"/>).
 /// </summary>

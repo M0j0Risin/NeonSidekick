@@ -20,6 +20,9 @@ public static partial class ConsoleInputNative
     public const ushort KeyEvent = 0x0001;
     public const ushort MouseEvent = 0x0002;
 
+    /// <summary><c>FOCUS_EVENT</c>: the window gained or lost focus (2026-10-20, the welcome splash's robot goes idle on a loss).</summary>
+    public const ushort FocusEvent = 0x0010;
+
     // Console input modes.
     public const uint EnableProcessedInput = 0x0001;
     public const uint EnableLineInput = 0x0002;
@@ -100,6 +103,10 @@ public static partial class ConsoleInputNative
 
         [FieldOffset(4)]
         public MouseEventRecord MouseEvent;
+
+        /// <summary><c>FOCUS_EVENT_RECORD.bSetFocus</c>: nonzero when the window gained focus.</summary>
+        [FieldOffset(4)]
+        public int FocusSetFocus;
     }
 
     [LibraryImport("kernel32.dll", SetLastError = true)]

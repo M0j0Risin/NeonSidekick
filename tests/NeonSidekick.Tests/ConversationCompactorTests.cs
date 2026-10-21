@@ -212,7 +212,7 @@ public class ConversationCompactorTests
     {
         var history = new ConversationHistory("s");
         history.AddUser("one");
-        history.AddToolImages([new NeonSidekick.Files.ImageAttachment("comfy_images\\a.png", [1, 2, 3], NeonSidekick.Files.ImageFile.Jpeg, 4, 4)], "generate_image");
+        history.AddToolImages([new NeonSidekick.Files.ImageAttachment("comfy\\a.png", [1, 2, 3], NeonSidekick.Files.ImageFile.Jpeg, 4, 4)], "generate_image");
         history.AddAssistant("reply one");
         history.AddUser("two");
         var entries = new List<ConversationCompactor.PrunedEntry>();

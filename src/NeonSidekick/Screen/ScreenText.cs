@@ -164,7 +164,7 @@ public static class ScreenText
 
     /// <summary>
     /// The tool's result for a screenshot: <c>screenshot of monitor 1 (2560x1440, primary) as 2048x1152, saved as
-    /// screen_images/20261004-140203.jpg: the picture is in the next message</c> (the <c>view_image</c> shape). Pinned.
+    /// screen/20261004-140203.jpg: the picture is in the next message</c> (the <c>view_image</c> shape). Pinned.
     /// </summary>
     public static string Taken(ScreenShot shot)
     {
@@ -230,7 +230,7 @@ public static class ScreenText
 
     public const string Glyph = "🖥️";
 
-    /// <summary>The note under the model's call for a screenshot it got: <c>🖥️ screen_images/20261004-140203.jpg</c>.</summary>
+    /// <summary>The note under the model's call for a screenshot it got: <c>🖥️ screen/20261004-140203.jpg</c>.</summary>
     public static string Note(string relativePath) => Glyph + " " + relativePath;
 
     public static string Attached(string relativePath) => $"{Glyph} {relativePath} is on the input line.";

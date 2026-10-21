@@ -141,6 +141,23 @@ public sealed class QrCodeTests
     }
 
     [Fact]
+    public void EveryDrawnRow_IsAQrRow_AndNoOtherLineIs()
+    {
+        // 2026-10-20: /webui's double-click opens the link from any row of the code.
+        var code = QrCode.Encode("http://localhost:8765/signin?t=" + WebUiAuth.NewToken());
+        var console = new TestConsole { Profile = { Width = 200 } };
+
+        console.Write(new QrView(code));
+
+        Assert.All(console.Output.TrimEnd('\n').Split('\n'), line => Assert.True(QrView.IsQrRow(line)));
+        Assert.True(QrView.IsQrRow("  " + QrView.Cell + "\r"));
+        Assert.False(QrView.IsQrRow(""));
+        Assert.False(QrView.IsQrRow("   "));
+        Assert.False(QrView.IsQrRow(QrView.Cell + " http://localhost:8765/"));
+        Assert.False(QrView.IsQrRow(WebUiText.TokenWarning));
+    }
+
+    [Fact]
     public void ANewToken_IsBase64Url_AndAnOldHexOneStillSignsIn()
     {
         string token = WebUiAuth.NewToken();

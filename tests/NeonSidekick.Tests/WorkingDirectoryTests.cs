@@ -1446,16 +1446,16 @@ public sealed class WorkingDirectoryTests : IDisposable
     public void PurgeFolder_RemovesEverythingUnderTheFolder_KeepsTheFolder()
     {
         Put("keep.txt", "stays");
-        Put(@"comfy_images\a.png", "12345");
-        Put(@"comfy_images\.pasted\pasted-1.png", "678");
-        File.SetAttributes(Full(@"comfy_images\a.png"), FileAttributes.ReadOnly);
+        Put(@"comfy\a.png", "12345");
+        Put(@"comfy\.pasted\pasted-1.png", "678");
+        File.SetAttributes(Full(@"comfy\a.png"), FileAttributes.ReadOnly);
 
-        var result = _files.PurgeFolder("comfy_images");
+        var result = _files.PurgeFolder("comfy");
 
         Assert.Equal(FileOutcome.Ok, result.Outcome);
         Assert.Equal((2, 1, 8L), (result.Files, result.Folders, result.Bytes));
-        Assert.True(Directory.Exists(Full("comfy_images")));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("comfy_images")));
+        Assert.True(Directory.Exists(Full("comfy")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("comfy")));
         Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
     }
 

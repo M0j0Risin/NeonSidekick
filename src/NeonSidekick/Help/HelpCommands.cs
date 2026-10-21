@@ -306,6 +306,9 @@ public static class HelpCommands
             new("/plan open <name>", "Pick a plan up again, in or out of plan mode (names complete from `.neon/plans/`). Plan mode turns on over that file, the file goes back to `draft`, and the model reads it and asks what should change; `/plan approve` then carries out only the unticked steps."),
             new("/plan open <name> --chat", "Pick a plan up to talk it through: plan mode turns on over that file as `/plan open <name>` does, but nothing is sent; your next message starts the talk, `/plan ready` asks for the revised plan and `/plan approve` starts it as it stands. `--chat` may come first."),
             new("/plan open [--chat]", "Pick a plan from a list of the plans with their status and progress, the highlighted one's path and requirement under it; type to filter. Enter opens it (with `--chat`, to talk it through), `o` opens, `c` opens to talk and, outside plan mode, `l` runs it as a Ralph loop."),
+            new("/plan edit <name>", "Open a plan file in its default app (an editor) to change it by hand, in or out of plan mode; plan mode is left as it is. Names complete from `.neon/plans/`, the template's too. At the PC only."),
+            new("/plan edit", "Pick a plan to open in its default app from the plans list, the template included; Enter opens the highlighted one, type to filter."),
+            new("/plan template", "Write an example plan in the shape the Ralph loop runs well to `.neon/plans/plan-template.md`, replacing an older copy: a header with example checks, then Goal, Context, Steps with `Done when:` lines, Files and areas, Risks and Verification. Copy it to a new name before you fill it in: the template itself is never opened or run as a plan."),
             new("/plan ralph [<name>] [passes]", "Outside plan mode, run a plan as a Ralph loop: each pass a fresh conversation that does the next unticked step and reports with `finish_step`, then the app runs the plan's `verify:` command (asked once, with the plan) and a review before the step stands; the passes are logged in `ralph.md` beside the plan. Bare, it resumes a paused loop, else lists the plans to pick one. Esc stops it and a message typed during a pass pauses it after that pass; *LLM Ralph loop passes* caps the passes, and a number (0–200) caps this run. Its confirm also names what may not suit a loop: one long step, steps with no `Done when:` line, or a plan too long to send whole."),
         ]),
         new("/print",
@@ -441,7 +444,7 @@ public static class HelpCommands
         new("/splash",
         [
             new("/splash", "Start a new conversation and show the splash screen."),
-            new("/splash view", "Open the picture viewer on the profile's splash pictures (`images\\splash_images`), made when missing; an empty folder means the built-in pictures show. Works while a reply runs."),
+            new("/splash view", "Open the picture viewer on the profile's splash pictures (`images\\splash`), made when missing; an empty folder means the built-in pictures show. Works while a reply runs."),
             new("/splash thumbs", "Open the thumbnail browser on the profile's splash pictures. Works while a reply runs."),
             new("/splash purge", "Delete every splash picture of the profile, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes; the built-in pictures show again. Waits for a running reply."),
         ]),
@@ -517,7 +520,7 @@ public static class HelpCommands
         ]),
         new("/webui",
         [
-            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser; its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes, c copies the shown link. A double-click on the link opens it on this PC, as `/webui browser` does. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Opens over a reply too. Ctrl+Alt+W runs it too."),
+            new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with a QR code to scan with a phone on the same network and the sign-in link to open in a browser; its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes, c copies the shown link. A double-click on the link or the QR code opens it on this PC, as `/webui browser` does. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Opens over a reply too. Ctrl+Alt+W runs it too."),
             new("/webui on|off", "Turn the Web UI on or off for this profile: the server starts or stops at once."),
             new("/webui copy", "Copy the first sign-in link (Tailscale's when there is one) to the clipboard."),
             new("/webui browser [--external]", "Open the Web UI on this PC, signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says (a link good once for a minute, or the usual link). `--external` always uses the default browser. The Web UI must be on. Ctrl+W runs it too."),

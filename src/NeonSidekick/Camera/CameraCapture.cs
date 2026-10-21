@@ -8,7 +8,7 @@ public sealed record CameraShot(ImageAttachment Image, string RelativePath, stri
 
 /// <summary>
 /// Taking a photo (2026-10-02): a settled frame through the lease, encoded as JPEG at the size the settings ask for (its
-/// longer side), saved into the working directory's <c>Camera output folder</c> (<see cref="OutputFolder"/>; <c>camera_images</c> by
+/// longer side), saved into the working directory's <c>Camera output folder</c> (<see cref="OutputFolder"/>; <c>camera</c> by
 /// default) as <c>yyyyMMdd-HHmmss.jpg</c> (a <c>-2</c>, <c>-3</c>…
 /// on a clash), the sandbox's own write (atomic, refused outside the root). A retaken or declined shot is deleted again
 /// (<see cref="Discard"/>), so the folder keeps only what was sent or attached.

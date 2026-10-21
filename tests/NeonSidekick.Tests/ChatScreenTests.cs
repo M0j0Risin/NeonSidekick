@@ -10684,7 +10684,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 170;   // the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 173;   // /plan edit's two forms and /plan template's 2026-10-20; the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -17118,7 +17118,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\"text\":\"score_9, score_8_up, (1girl:1.2)\"", body);   // as typed, nothing added
         Assert.Contains("\"text\":\"score_4\"", body);
         Assert.Contains(NeonSidekick.Comfy.ComfyText.TextToImageGlyph + "generated 1 picture with pony (seed 5, 1024×1024): ", output);   // the full path after it (2026-10-09), wrapped at the console's width
-        Assert.True(File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", "pony-5.png")));
+        Assert.True(File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy", "pony-5.png")));
         Assert.Contains("\n" + new string(' ', 118) + "▀▀▀▀", output);   // drawn as /view draws, centred
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
         Assert.StartsWith("(the user made a picture with /imagine", user.Text);
@@ -17163,7 +17163,7 @@ public partial class ChatScreenTests : IDisposable
 
     // ── The picture strip (later still on 2026-09-24) ───────────────────────
 
-    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileImagesDirectory, "comfy_images", name);
+    private string ComfyPicture(string name) => Path.Combine(_settings.ProfileImagesDirectory, "comfy", name);
 
     /// <summary>The model's picture and an /imagine one gather in the strip, the newest leftmost: → takes the newest, → again the older, Enter opens it.</summary>
     [Fact]
@@ -17875,15 +17875,15 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ComfyPurge_Wording_IsPinned()
     {
-        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234));
-        Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.PurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
-        Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.PurgeEmptyNotice(@"D:\x\comfy_images"));
+        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy", 3, 1, 1_234));
+        Assert.Equal(@"(🗑️ purged D:\x\comfy: 2 files, 1 folder, 8 B)", ChatScreen.PurgedNotice(@"D:\x\comfy", 2, 1, 8));
+        Assert.Equal(@"(🗑️ nothing in D:\x\comfy)", ChatScreen.PurgeEmptyNotice(@"D:\x\comfy"));
         Assert.Equal("Usage: /comfy, /comfy status, /comfy offered, /comfy purge, /comfy view, /comfy thumbs, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
         // Through the bin (2026-10-18): the bin's name is this system's (the Trash on a Mac).
         string bin = FileText.RecycleBinName;
-        Assert.Equal(@"🗑️ Send everything in D:\x\camera_images to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera_images", 3, 1, 1_234, toBin: true));
-        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8));
-        Assert.Equal(@"The purge of D:\x\camera_images stopped after 1 of 3 items: too long. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera_images", 1, 3, "too long"));
+        Assert.Equal(@"🗑️ Send everything in D:\x\camera to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera", 3, 1, 1_234, toBin: true));
+        Assert.Equal(@"(🗑️ sent D:\x\camera's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera", 2, 1, 8));
+        Assert.Equal(@"The purge of D:\x\camera stopped after 1 of 3 items: too long. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera", 1, 3, "too long"));
         Assert.Equal("Not purging: the Pasted images folder is the profile's images folder itself; set a folder under it first.", ChatScreen.PurgeHereError(ChatScreen.PastedFolderLabel));
         Assert.Equal("Moving 1 item to the " + bin, ChatScreen.PurgeMovingLabel(1));
         // 2026-10-20, the code review: the way known before the question (a drive with no bin says so and for good), links and items gone counted
@@ -18053,7 +18053,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› hi", output);
 
         // Without the pane (a redirected console) the switch on draws nothing either.
-        _settings.Update(d => d.WelcomeSplashMode = "fullsize");
+        _settings.Update(d => d.WelcomeSplashMode = "image");
         _geometry = null;
         _console.Clear();
         PushLine("/exit");
@@ -18537,132 +18537,6 @@ public partial class ChatScreenTests : IDisposable
     {
         d.LlmUrl = "http://127.0.0.1:1234/v1";
         d.LlmModel = "llama";
-    }
-
-    /// <summary>Ten 480 × 240 pictures: at the small thumbnail (48 × 12) each is 48 cells by twelve lines, four to a 240-wide strip row (a fifth needs 248), two rows (12 + 1 + 12) under the banner of a 40-row screen — eight a page, then two.</summary>
-    private void TiledSplashOfTen()
-    {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; d.ImageThumbnailSize = "small"; });
-        PaneOf40Rows();
-        _renderClears = true;
-        SplashOf(Enumerable.Range(0, 10).Select(_ => (480, 240)).ToArray());
-    }
-
-    private static readonly string TileLine = new('▀', 48);
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_ShowsAScreenfulOfThumbnails_AndLeftRightPage_Wrapping()
-    {
-        // Welcome splash tiled (2026-09-24, the user's ask): the pictures in name order at Image thumbnail size, only as
-        // many as fit; Right the next set, wrapping; Left back. Every picture is read once, whatever the paging.
-        TiledSplashOfTen();
-        StepsWhenIdle(Key(Keys.Right), Key(Keys.Right), Key(Keys.Left), Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(Enumerable.Range(0, 10).Select(SplashName), _splashLoads);
-        Assert.Equal(4, Refreshes(output));   // three pages, then the sent line's wipe
-        int[] screens = Enumerable.Range(0, 5).Select(i => NthScreen(output, i)).ToArray();
-        Assert.Equal(8 * 12, Count(output[screens[0]..screens[1]], TileLine));   // page 1: eight tiles, twelve lines each
-        Assert.Equal(2 * 12, Count(output[screens[1]..screens[2]], TileLine));   // page 2: the last two
-        Assert.Equal(8 * 12, Count(output[screens[2]..screens[3]], TileLine));   // Right wrapped to page 1
-        Assert.Equal(2 * 12, Count(output[screens[3]..screens[4]], TileLine));   // Left wrapped back to page 2
-        Assert.DoesNotContain("▀", output[screens[4]..]);
-        Assert.Contains(ChatScreen.SplashPageHint(0, 2), output[screens[0]..screens[1]]);
-        Assert.Contains(ChatScreen.SplashPageHint(1, 2), output[screens[1]..screens[2]]);
-        Assert.DoesNotContain(ChatScreen.SplashHint, output);
-        Assert.Empty(_chat.Requests);
-    }
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_AHeldArrowsQueuedPresses_PageOnce_AndARunBackWhereItStoodDrawsNothing()
-    {
-        // 2026-10-05, the user's ask: the queued run is one page step, one redraw — three → over two pages is page 2 — and
-        // a run that nets to nothing (→ ←) draws nothing at all.
-        TiledSplashOfTen();
-        StepsWhenIdle(
-            input => { input.Push(Keys.Right); input.Push(Keys.Right); input.Push(Keys.Right); },
-            input => { input.Push(Keys.Right); input.Push(Keys.Left); },
-            Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(2, Refreshes(output));   // the folded run and the sent line's wipe: the run back drew nothing
-        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
-        Assert.Equal(8 * 12, Count(output[screens[0]..screens[1]], TileLine));   // page 1
-        Assert.Equal(2 * 12, Count(output[screens[1]..screens[2]], TileLine));   // page 2, straight from page 1
-        Assert.DoesNotContain(ChatScreen.SplashPageHint(0, 2), output[screens[1]..screens[2]]);
-        Assert.DoesNotContain("▀", output[screens[2]..]);
-    }
-
-    [Fact]
-    public void SplashPageHint_IsOneBased_AndJoinsTheRest()
-    {
-        Assert.Equal("← → page 2 of 5", ChatScreen.SplashPageHint(1, 5));
-        Assert.Equal("← → page 1 of 2 · 3%", ChatScreen.SplashHintLine("3%", ChatScreen.SplashPageHint(0, 2)));
-        Assert.Equal("← → page 1 of 2", ChatScreen.SplashHintLine("", ChatScreen.SplashPageHint(0, 2)));
-    }
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_OnePage_ShowsNoPageHint_AndTheArrowsAreTheLines()
-    {
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
-        PaneOf40Rows();
-        SplashOf((480, 240), (480, 240), (480, 240));
-        StepsWhenIdle(Key(Keys.Right), Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(3 * 12, Count(output, TileLine));   // all three, on one strip row
-        Assert.Equal(1, Refreshes(output));              // Right paged nothing: /exit's wipe alone
-        Assert.DoesNotContain("← → page", output);
-    }
-
-    [WindowsFact]
-    public async Task Startup_TiledSplash_DeleteTwice_OverTheProfilesPictures_TrashesNothing()
-    {
-        // No one picture stands on a page of tiles, so Delete is the line's key (2026-09-24, the user's call).
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; });
-        PaneOf40Rows();
-        SplashOf((480, 240));
-        string folder = _settings.ProfileSplashDirectory;
-        Directory.CreateDirectory(folder);
-        File.WriteAllBytes(Path.Combine(folder, "one.bmp"), SmokeChecks.SolidBmp(480, 240));
-        File.WriteAllBytes(Path.Combine(folder, "two.bmp"), SmokeChecks.SolidBmp(480, 240));
-        StepsWhenIdle(Key(Keys.Delete), Key(Keys.Delete), Line("/exit"));
-
-        string output = await RunAsync();
-
-        Assert.Equal(2 * 12, Count(output, TileLine));   // the folder's two, the seam's never loaded
-        Assert.Empty(_splashLoads);
-        Assert.True(File.Exists(Path.Combine(folder, "one.bmp")));
-        Assert.True(File.Exists(Path.Combine(folder, "two.bmp")));
-        Assert.False(Directory.Exists(Path.Combine(folder, SplashImages.TrashFolderName)));
-        Assert.DoesNotContain("Del again", output);
-        Assert.Equal(1, Refreshes(output));
-    }
-
-    [WindowsFact]
-    public async Task Splash_Command_ShowsTheTiledPages_WhenTheModeIsTiled_AndOnePictureWhenDisabled()
-    {
-        TiledSplashOfTen();
-        _settings.Update(d => d.WelcomeSplashMode = "off");
-        _random = new Random(7);
-        StepsWhenIdle(Line("/splash"),
-            input => { _settings.Update(d => d.WelcomeSplashMode = "tiled"); PushLine(input, "/splash"); },
-            Key(Keys.Right),
-            Line("/exit"));
-
-        string output = await RunAsync();
-
-        // Screens: the start, /splash, the second /splash's dismissal of the picture, its own wipe, the page flip, /exit's wipe.
-        Assert.Equal(5, Refreshes(output));
-        int[] screens = Enumerable.Range(0, 6).Select(i => NthScreen(output, i)).ToArray();
-        Assert.DoesNotContain("▀", output[screens[0]..screens[1]]);   // disabled: nothing at startup
-        Assert.Contains(new string('▀', 100), output[screens[1]..screens[2]]);   // /splash over disabled: one picture, far wider than a tile
-        Assert.DoesNotContain("▀", output[screens[2]..screens[3]]);
-        Assert.Equal(8 * 12, Count(output[screens[3]..screens[4]], TileLine));     // /splash over tiled: page 1
-        Assert.Equal(2 * 12, Count(output[screens[4]..screens[5]], TileLine));     // and the arrows page it
     }
 
     [WindowsFact]
@@ -19792,7 +19666,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Theme_Named_SplashOn_StartsOverWithThePicture()
     {
         using var theme = new ThemeScope();
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "fullsize"; });
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "image"; });
         PaneOf40Rows();
         _random = new Random(7);
         SplashOf(2380, 100);
@@ -25395,13 +25269,14 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [WindowsFact]
-    public async Task ATiledSplashPictureDoubleClicked_Opens_WithNoNoticeLine()
+    public async Task ASplashPictureDoubleClicked_Opens_WithNoNoticeLine()
     {
         // The splash's pictures open without the "(🖼️ opened …)" line; only an error would print (2026-09-24, the user's call).
-        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "tiled"; d.ImageThumbnailSize = "small"; });
+        // The tiled splash's tiles until it went (2026-10-20); the image's one picture since.
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "image"; });
         PaneOf40Rows();
-        SplashOf((480, 240), (480, 240), (480, 240));
-        StepsWhenIdle(DoubleClickDown(10), Line("/exit"));
+        SplashOf((480, 240));
+        StepsWhenIdle(DoubleClickDown(120), Line("/exit"));   // the picture centered on the 240 columns
 
         string output = await RunAsync();
 

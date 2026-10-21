@@ -595,9 +595,9 @@ public sealed class AppSettingsData
     /// <summary>
     /// How the splash pictures (<c>UI.SplashImages</c>, the repo's <c>assets\splash</c> or the profile's
     /// own folder) greet the user under the banner at startup, until the first sent line wipes the
-    /// screen back to the banner (2026-09-18): one of <see cref="UI.SplashMode.Names"/> — <c>fullsize</c>
-    /// (one picture filling the transcript region, the default), <c>tiled</c> (thumbnails at
-    /// <see cref="ImageThumbnailSize"/>, a screenful at a time, Left / Right page) or <c>disabled</c>.
+    /// screen back to the banner (2026-09-18): one of <see cref="UI.SplashMode.Names"/> — <c>image</c>
+    /// (one picture filling the transcript region, the default), <c>robot</c> (2026-10-20: the animated robot just above the draft
+    /// line, gone at the first line) or <c>off</c>; <c>fullsize</c> and <c>tiled</c> (retired 2026-10-20) still read as <c>image</c>.
     /// Anything else reads as <see cref="UI.SplashMode.Default"/>. <c>/clear</c> never brings it back.
     /// Read at each show; nothing without the pane. Replaced the on/off <c>WelcomeSplash</c> on
     /// 2026-09-24, no migration (the user's call: the old key is skipped, its default stands). No variable.
@@ -1840,11 +1840,14 @@ public sealed class AppSettingsData
     /// may even be the same folder), made on first use. Under the profile's images folder since 2026-10-09 (the user's ask: kept
     /// out of the working directory; <see cref="AppSettings.ProfileImagesDirectory"/>), under the working directory until then — no
     /// migration, no files moved; empty = the images folder itself. Watch mode's double-clicked pictures go in its <c>.watch</c>
-    /// subfolder. A path that leaves the folder is refused on the settings row and at every save. <c>camera_images</c>, after <c>comfy_images</c>.
+    /// subfolder. A path that leaves the folder is refused on the settings row and at every save. <c>camera</c>, after <c>comfy</c>.
+    /// <c>camera_images</c> until 2026-10-20 (the user's call: every picture folder is under <c>images</c>, so the suffix said nothing,
+    /// <see cref="DefaultCameraOutputFolder"/> and its three siblings shortened together); no migration — a profile saved with the old
+    /// word keeps it.
     /// </summary>
     public string CameraOutputFolder { get; set; } = DefaultCameraOutputFolder;
 
-    public const string DefaultCameraOutputFolder = "camera_images";
+    public const string DefaultCameraOutputFolder = "camera";
 
     /// <summary>Watch mode's sampling interval in seconds (2026-10-02): <see cref="MinCameraWatchSeconds"/>–<see cref="MaxCameraWatchSeconds"/>.</summary>
     public int CameraWatchSeconds { get; set; } = DefaultCameraWatchSeconds;
@@ -1910,11 +1913,12 @@ public sealed class AppSettingsData
     /// <summary>
     /// The folder the screenshots are saved in (2026-10-04, <see cref="CameraOutputFolder"/>'s shape), made on first use: under the
     /// profile's images folder since 2026-10-09, as the camera's; empty = the images folder itself. A path that leaves the folder is
-    /// refused on the settings row and at every save. <c>screen_images</c>.
+    /// refused on the settings row and at every save. <c>screen</c>; <c>screen_images</c> until 2026-10-20 (<see cref="CameraOutputFolder"/>'s
+    /// note), no migration.
     /// </summary>
     public string ScreenOutputFolder { get; set; } = DefaultScreenOutputFolder;
 
-    public const string DefaultScreenOutputFolder = "screen_images";
+    public const string DefaultScreenOutputFolder = "screen";
 
     // ─── Files ──────────────────────────────────────────────────────────────────
 
@@ -2050,11 +2054,12 @@ public sealed class AppSettingsData
     /// paste lived in memory, written only as <c>generate_image</c>'s input or for a double-click): under the profile's images folder
     /// (<see cref="AppSettings.ProfileImagesDirectory"/>), made on first use; empty = the images folder itself. The sent text names the
     /// file (<c>[Image #1, saved as …]</c>) so the picture tools can reach it. A dropped file keeps its own and is not copied. A path
-    /// that leaves the folder is refused on the settings row. Read at each send. No variable.
+    /// that leaves the folder is refused on the settings row. Read at each send. No variable. <c>pasted</c>; <c>pasted_images</c> until
+    /// 2026-10-20 (<see cref="CameraOutputFolder"/>'s note), no migration.
     /// </summary>
     public string PastedImagesFolder { get; set; } = DefaultPastedImagesFolder;
 
-    public const string DefaultPastedImagesFolder = "pasted_images";
+    public const string DefaultPastedImagesFolder = "pasted";
 
     // ─── GitLib ─────────────────────────────────────────────────────────────────
     // Renamed Git native … on 2026-09-21 (the user's call): the in-process LibGit2Sharp tools as
@@ -2752,12 +2757,13 @@ public sealed class AppSettingsData
     /// The folder the generated pictures are saved in (2026-09-24), made on first use: under the profile's images folder since
     /// 2026-10-09 (the user's ask; <see cref="AppSettings.ProfileImagesDirectory"/>), under the working directory until then — no
     /// migration; empty = the images folder itself. A path that leaves the folder is refused at the call.
-    /// <c>comfy_images</c> since later still on 2026-09-24 (the user's call: <c>images</c> said nothing of where they came
-    /// from); a profile saved with the old <c>images</c> keeps it — no migration, no files moved.
+    /// <c>comfy_images</c> from later still on 2026-09-24 (the user's call: <c>images</c> said nothing of where they came
+    /// from); a profile saved with the old <c>images</c> keeps it — no migration, no files moved. <c>comfy</c> since 2026-10-20
+    /// (<see cref="CameraOutputFolder"/>'s note: under <c>images</c> the suffix said nothing), no migration again.
     /// </summary>
     public string ComfyOutputFolder { get; set; } = DefaultComfyOutputFolder;
 
-    public const string DefaultComfyOutputFolder = "comfy_images";
+    public const string DefaultComfyOutputFolder = "comfy";
 
     // ─── Shell ──────────────────────────────────────────────────────────────────
 

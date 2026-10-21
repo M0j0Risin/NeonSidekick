@@ -202,13 +202,13 @@ public class SessionHistoryTests
     {
         var history = new ConversationHistory("");
         history.AddUser("draw");
-        history.AddToolImages([new ImageAttachment("comfy_images\\a.png", [9, 9], "image/jpeg", 1, 2)], "generate_image");
+        history.AddToolImages([new ImageAttachment("comfy\\a.png", [9, 9], "image/jpeg", 1, 2)], "generate_image");
 
         string json = SessionHistory.ToJson(history.Messages);
         var back = SessionHistory.FromJson(json);
 
         Assert.Equal("generate_image", ConversationHistory.CarrierSource(back[1]));
-        Assert.Equal("comfy_images\\a.png", ConversationHistory.PicturePath(Assert.IsType<DataContent>(back[1].Contents[1])));
+        Assert.Equal("comfy\\a.png", ConversationHistory.PicturePath(Assert.IsType<DataContent>(back[1].Contents[1])));
         Assert.Null(ConversationHistory.CarrierSource(back[0]));
         Assert.Equal(1, json.Split("\"Source\"").Length - 1);
         var old = SessionHistory.FromJson("{\"SchemaVersion\":1,\"Messages\":[{\"Role\":\"user\",\"Carrier\":true,\"Parts\":[{\"Kind\":\"image\",\"Bytes\":\"CQk=\",\"MediaType\":\"image/png\"}]}]}");

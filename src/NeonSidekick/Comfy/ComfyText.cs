@@ -233,7 +233,7 @@ public static class ComfyText
 
     /// <summary>
     /// A generation's result, the first line the transcript's one tool line: <c>generated 2 pictures with
-    /// pony-txt2img (seed 1234, 1024×1024): comfy_images\pony-txt2img-1234.png, comfy_images\pony-txt2img-1235.png — the
+    /// pony-txt2img (seed 1234, 1024×1024): comfy\pony-txt2img-1234.png, comfy\pony-txt2img-1235.png — the
     /// pictures are in the next message</c>; <paramref name="attached"/> false (the <c>/imagine</c> note, or a picture
     /// the codecs refused) drops the tail. The prompt follows on its own line, so what was sent is on record, and after it
     /// (2026-09-25, the user's ask) the line of <paramref name="parameters"/> (<see cref="Parameters"/>). Pinned.

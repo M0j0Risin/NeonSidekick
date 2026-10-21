@@ -26,9 +26,11 @@ namespace NeonSidekick.UI;
 /// held a drag, the left release a release, the wheel (64 up, 65 down) a notch; 1-based cells become 0-based.</item>
 /// <item>A cursor position report (<c>ESC[row;colR</c>) answers <see cref="CursorReport"/> while one is awaited
 /// (<see cref="AwaitingCursor"/>); otherwise it is xterm's modified F3, which shares the form.</item>
+/// <item>A motion with no button held (any-event tracking, <c>?1003h</c>) and the focus reports (<c>ESC[I</c>, <c>ESC[O</c>, <c>?1004h</c>)
+/// are no events (2026-10-20, the welcome splash's robot): they go to <see cref="PointerMoved"/> and <see cref="FocusChanged"/>.</item>
 /// </list>
 ///
-/// Anything else (focus reports, a kitty key, an unknown CSI) is dropped whole, never typed into the draft.
+/// Anything else (a kitty key, an unknown CSI) is dropped whole, never typed into the draft.
 /// </summary>
 public sealed class VtInputParser
 {
@@ -52,6 +54,12 @@ public sealed class VtInputParser
 
     /// <summary>Called with the 0-based row and column of a cursor position report while <see cref="AwaitingCursor"/>.</summary>
     public Action<int, int>? CursorReport { get; set; }
+
+    /// <summary>Called with the 0-based column and row of a motion report with no button held (2026-10-20).</summary>
+    public Action<int, int>? PointerMoved { get; set; }
+
+    /// <summary>Called with true for a focus-in report, false for a focus-out one (2026-10-20).</summary>
+    public Action<bool>? FocusChanged { get; set; }
 
     /// <summary>True while bytes wait for the rest of a sequence (an ESC, an unfinished CSI); the reader flushes after its timeout.</summary>
     public bool HasPending => _pending.Length > 0;
@@ -207,11 +215,21 @@ public sealed class VtInputParser
 
         if (body.StartsWith('<') && (fin == 'M' || fin == 'm'))
         {
-            if (Mouse(body.AsSpan(1), fin == 'M') is { } mouse)
+            if (Mouse(body.AsSpan(1), fin == 'M', out var hover) is { } mouse)
             {
                 events.Add(mouse);
             }
+            else if (hover is { } at)
+            {
+                PointerMoved?.Invoke(at.X, at.Y);
+            }
 
+            return used;
+        }
+
+        if (body.Length == 0 && fin is 'I' or 'O')
+        {
+            FocusChanged?.Invoke(fin == 'I');
             return used;
         }
 
@@ -266,8 +284,9 @@ public sealed class VtInputParser
         return used;
     }
 
-    private static InputEvent? Mouse(ReadOnlySpan<char> body, bool press)
+    private static InputEvent? Mouse(ReadOnlySpan<char> body, bool press, out (int X, int Y)? hover)
     {
+        hover = null;
         Span<int> n = stackalloc int[3];
         int field = 0;
         int value = 0;
@@ -319,6 +338,13 @@ public sealed class VtInputParser
 
         if (motion)
         {
+            if (button == 3)
+            {
+                // No button held: a hover (2026-10-20), never an event.
+                hover = (x, y);
+                return null;
+            }
+
             return press && button == 0 ? new InputEvent.Drag(x, y) : null;
         }
 

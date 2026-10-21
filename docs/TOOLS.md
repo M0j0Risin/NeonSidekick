@@ -166,7 +166,7 @@ Under *Image tools* (`/tools image`, or the toolbar's 🌄), apart from *File to
 | `view_image` | `path?, paths?` | Attaches pictures to the next message (up to *File view image max images*) for the model to see. |
 | `image_info` | `path?, paths?` | Format, size, frames, transparency, orientation and metadata (EXIF, GPS, XMP…), and what `image_edit` can write. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x?, crop_y?, crop_width?, crop_height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, rotates, recolors or converts a picture into a new file ([Editing pictures](#editing-pictures)). |
-| `set_splash_image` | `path, name?` | Copies a picture into the profile's `images\splash_images` for the welcome splash; the first replaces the bundled set. |
+| `set_splash_image` | `path, name?` | Copies a picture into the profile's `images\splash` for the welcome splash; the first replaces the bundled set. |
 
 #### Editing pictures
 

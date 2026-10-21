@@ -12,7 +12,8 @@ namespace NeonSidekick.App;
 /// a letter a button has). Enter or a double-click picks in the typed mode (<see cref="PlanPickMode"/>); the buttons pick in theirs: <c>o</c>
 /// open, <c>c</c> talk, and — outside plan mode, once <c>/plan ralph</c> exists — <c>l</c> Ralph loop. A single click only moves the
 /// highlight; an unreadable plan picked says so on the status line and stays. The cursor starts on the plan being planned, else the newest.
-/// <see cref="SavedPromptsMenu"/>'s shape.
+/// <see cref="SavedPromptsMenu"/>'s shape. Bare <c>/plan edit</c> (2026-10-20, <see cref="PlanPickMode.Edit"/>): no buttons, Enter opens the
+/// pick in its default app, an unreadable plan too.
 /// </summary>
 internal sealed class PlansMenu
 {
@@ -64,7 +65,7 @@ internal sealed class PlansMenu
                 int at = on is null ? -1 : shown.FindIndex(p => p.Path == on);
                 var page = new MenuPage(PlanText.PickerTitle, rows, MenuFilter.Hint(PlanText.PickerKeys(_mode, _ralphButton), filter))
                 {
-                    Buttons = ButtonsFor(_ralphButton),
+                    Buttons = _mode == PlanPickMode.Edit ? [] : ButtonsFor(_ralphButton),
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, _plans.Count),
                     Footer = (_, row) => row >= 0 && row < shown.Count ? PlanText.PickerFooter(shown[row], _ralph.GetValueOrDefault(shown[row].Path)) : null,
@@ -87,14 +88,15 @@ internal sealed class PlansMenu
 
                 var plan = shown[pick.Row];
                 on = plan.Path;
-                var mode = pick.Button switch
+                var mode = _mode == PlanPickMode.Edit ? _mode : pick.Button switch
                 {
                     OpenAt => PlanPickMode.Open,
                     TalkAt => PlanPickMode.Talk,
                     RalphAt when _ralphButton => PlanPickMode.Ralph,
                     _ => _mode,
                 };
-                if (plan.Unreadable)
+                // A plan too long to read whole opens in its editor all the same (2026-10-20): that is how it gets shorter.
+                if (plan.Unreadable && mode != PlanPickMode.Edit)
                 {
                     _pane.Error(PlanText.PickerUnreadableError(plan.Path));
                     continue;

@@ -780,9 +780,9 @@ public sealed class CameraCaptureTests : IDisposable
         var second = await capture.SnapAsync(lease, CancellationToken.None);
 
         string stem = CameraCapture.Stem(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone));
-        Assert.Equal(Path.Combine("camera_images", stem + ".jpg"), first.RelativePath);   // the sandbox's own spelling of a relative path
-        Assert.Equal(Path.Combine("camera_images", stem + "-2.jpg"), second.RelativePath);
-        Assert.Equal(Path.Combine(_dir, "camera_images", stem + ".jpg"), first.FullPath);
+        Assert.Equal(Path.Combine("camera", stem + ".jpg"), first.RelativePath);   // the sandbox's own spelling of a relative path
+        Assert.Equal(Path.Combine("camera", stem + "-2.jpg"), second.RelativePath);
+        Assert.Equal(Path.Combine(_dir, "camera", stem + ".jpg"), first.FullPath);
         Assert.Equal(first.FullPath, first.Image.Path);
         Assert.True(first.Image.Camera);
         Assert.Equal("Fake Cam", first.Device);
@@ -808,7 +808,7 @@ public sealed class CameraCaptureTests : IDisposable
         _settings.CameraOutputFolder = "";
         var here = await capture.SnapAsync(lease, CancellationToken.None);
 
-        Assert.Equal(Path.Combine(_dir, "comfy_images"), Path.GetDirectoryName(shared.FullPath));
+        Assert.Equal(Path.Combine(_dir, "comfy"), Path.GetDirectoryName(shared.FullPath));
         Assert.Equal(Path.Combine(_dir, "shots", "today"), Path.GetDirectoryName(nested.FullPath));
         Assert.Equal(_dir, Path.GetDirectoryName(here.FullPath));
         Assert.True(File.Exists(here.FullPath));
@@ -817,14 +817,14 @@ public sealed class CameraCaptureTests : IDisposable
     [Fact]
     public void TheOutputFolder_AndTheWatchFolderUnderIt_ReadTheSetting()
     {
-        Assert.Equal("camera_images", new AppSettingsData().CameraOutputFolder);
-        Assert.Equal("camera_images", CameraCapture.OutputFolder("camera_images"));
+        Assert.Equal("camera", new AppSettingsData().CameraOutputFolder);
+        Assert.Equal("camera", CameraCapture.OutputFolder("camera"));
         Assert.Equal(".", CameraCapture.OutputFolder("  "));
         Assert.Equal(".", CameraCapture.OutputFolder(null));
         Assert.Equal("x.jpg", CameraCapture.Under(".", "x.jpg"));
         Assert.Equal("a/b/x.jpg", CameraCapture.Under("a/b/", "x.jpg"));
-        Assert.Equal("camera_images/.watch", CameraWatch.FolderFor("camera_images"));
-        Assert.Equal("comfy_images/.watch", CameraWatch.FolderFor("comfy_images"));
+        Assert.Equal("camera/.watch", CameraWatch.FolderFor("camera"));
+        Assert.Equal("comfy/.watch", CameraWatch.FolderFor("comfy"));
         Assert.Equal(".watch", CameraWatch.FolderFor(""));
     }
 
@@ -844,7 +844,7 @@ public sealed class CameraCaptureTests : IDisposable
     [Fact]
     public async Task ASaveTheSandboxRefuses_IsACameraFailure()
     {
-        await File.WriteAllTextAsync(Path.Combine(_dir, "camera_images"), "a file where the folder goes");
+        await File.WriteAllTextAsync(Path.Combine(_dir, "camera"), "a file where the folder goes");
         var capture = Capture();
         using var lease = _session.Acquire("test");
 

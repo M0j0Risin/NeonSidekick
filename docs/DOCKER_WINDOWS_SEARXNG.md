@@ -49,7 +49,7 @@ cd ~/searxng/core-config
 
 curl -fsSL -O https://raw.githubusercontent.com/searxng/searxng/master/container/settings.template.yml
 cp -i settings.template.yml settings.yml
-nano settings.yml
+sudo nano settings.yml
 ```
 
 ### settings.yml content

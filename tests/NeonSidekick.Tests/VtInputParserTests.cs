@@ -192,6 +192,24 @@ public class VtInputParserTests
     }
 
     [Fact]
+    public void AMotionWithNoButton_AndTheFocusReports_GoToTheirCallbacks_NeverTheEvents()
+    {
+        // 2026-10-20, the welcome splash's robot: any-event tracking's hover and ?1004's focus reports.
+        var parser = new VtInputParser();
+        var moves = new List<(int, int)>();
+        var focus = new List<bool>();
+        parser.PointerMoved = (x, y) => moves.Add((x, y));
+        parser.FocusChanged = focus.Add;
+        var events = new List<InputEvent>();
+
+        parser.Feed(Encoding.UTF8.GetBytes("\x1b[<35;2;3M\x1b[O\x1b[<35;40;12M\x1b[Ia\x1b[<32;5;5M"), events);
+
+        Assert.Equal([(1, 2), (39, 11)], moves);
+        Assert.Equal([false, true], focus);
+        Assert.Equal(new InputEvent[] { new InputEvent.Key(VtInputParser.Plain('a', alt: false)), new InputEvent.Drag(4, 4) }, events);
+    }
+
+    [Fact]
     public void CursorReport_AnswersAnAwaitedQuery_AndIsF3Otherwise()
     {
         var parser = new VtInputParser();

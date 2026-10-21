@@ -144,8 +144,15 @@ public static class WebCommands
             SlashCommand.MsgClear => WebCommandVerdict.Run,
             SlashCommand.Rewind => WebCommandVerdict.Pick,
             SlashCommand.Model or SlashCommand.Reasoning => text.Length > 0 ? WebCommandVerdict.Run : WebCommandVerdict.Pick,
-            // Bare /plan open and /plan open --chat are the plans picker (2026-10-18), a pick card on the page; a list until then.
-            SlashCommand.Plan => ChatScreen.ParsePlanArgs(args, planning: false) is ChatScreen.PlanCommand.List or ChatScreen.PlanCommand.ListChat ? WebCommandVerdict.Pick : WebCommandVerdict.Run,
+            // Bare /plan open and /plan open --chat are the plans picker (2026-10-18), a pick card on the page; a list until then. /plan edit
+            // (2026-10-20) opens an editor on the PC: refused, unless its several words are detail or a requirement (the handler's fallback).
+            SlashCommand.Plan => ChatScreen.ParsePlanArgs(args, planning: false, out string planRest) switch
+            {
+                ChatScreen.PlanCommand.List or ChatScreen.PlanCommand.ListChat => WebCommandVerdict.Pick,
+                ChatScreen.PlanCommand.ListEdit => Refused(WebUiText.PcOnly("/plan edit")),
+                ChatScreen.PlanCommand.Edit when !planRest.Any(char.IsWhiteSpace) => Refused(WebUiText.PcOnly("/plan edit")),
+                _ => WebCommandVerdict.Run,
+            },
             // 2026-10-18: the reports' list is lines; a report, a fix, a resume and an audit run (their pane asked on the page too).
             SlashCommand.CodeAudit => Is(first, Audits.AuditText.OpenWord) && FirstWord(text[first.Length..].Trim()).Length == 0 ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.Learn => Is(first, LearnSessionsWord) ? Pane(word, "/learn [<note>]") : WebCommandVerdict.Run,

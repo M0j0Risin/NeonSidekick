@@ -101,6 +101,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/rewind` | Enter rewinds to before the message |
 | `/sessions` | Enter opens · type to filter |
 | `/plan open` | Enter opens (with `--chat`, to talk it through) · `o` open · `c` talk it through · `l` run as a [Ralph loop](COMMANDS.md#ralph-loop), outside plan mode · type to filter |
+| `/plan edit` | Enter opens the file in its default app · type to filter |
 | The plan approval pane | `a` approve & run · `f` clear context & run · `l` Ralph loop · `r` keep refining · `g` close gaps · `c` cancel plan · Esc keeps refining |
 | Close gaps: who reviews? (after `g`, while advisors are offered) | `m` the model · `a` an advisor finds the gaps · `y` any (the model, asking an advisor where one fits) · `c` the model, an advisor confirms · Esc back |
 | A Ralph loop's checkpoint | `k` keep · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc keeps |
@@ -250,7 +251,7 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
 2. A waiting second press: Ctrl+C to exit, Esc to rewind, Delete for a splash picture.
 3. An open pane's keys.
-4. What the arrows do right now: the splash's pages, the picture strip, `/read`'s keys.
+4. What the arrows do right now: the splash's pictures, the picture strip, `/read`'s keys.
 
 * **auto** (the default): the row comes with a hint and stays, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 idle seconds pass. Typing never moves the input line.
 * **always** keeps the row; **off** puts the hints at the end of the status bar's left group.
@@ -374,10 +375,11 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 ## The welcome splash
 
-* *Welcome splash* `fullsize`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
-* *Welcome splash* `tiled`: thumbnails at *Image thumbnail size*; ←/→ page, a double-click opens one.
-* **Your own pictures** in the profile's `images\splash_images\` replace the built-in ones; `/splash view` or `/splash thumbs` opens the folder, `/splash purge` empties it.
-* `/splash` shows the splash whatever *Welcome splash* says. On the Web UI it leads the transcript and goes at the first message sent from either side.
+* *Welcome splash* `image`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
+* *Welcome splash* `robot`: a robot stands just above the draft line and follows the mouse and your typing. Your first line takes it away.
+* **The robot** shows just its head when the room above the line is short, all of it again when there's room, nothing when there's none. Following the mouse needs a terminal that reports it.
+* **Your own pictures** in the profile's `images\splash\` replace the built-in ones; `/splash view` or `/splash thumbs` opens the folder, `/splash purge` empties it.
+* `/splash` shows the splash whatever *Welcome splash* says (the picture when it's `off`). On the Web UI the picture leads the transcript and goes at the first message sent from either side; the robot isn't shown there.
 
 ## The app's windows
 
@@ -515,7 +517,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 * **The strip:** `📱 Web UI │ enabled │ lan │ reset │ 192.168.1.217 · 100.78.20.125`, three buttons ahead of the address tabs.
 * `e` turns *Web UI* on or off, `l` switches *Web UI reach* between `lan` and `local`, and `r` makes a new token after a yes, as `/webui reset` does. The server restarts at once.
 * **copy** (`c`) puts the shown tab's sign-in link on the clipboard; `/webui copy` puts the first tab's.
-* **A double-click on the link** opens it on this PC, as `/webui browser` does.
+* **A double-click on the link or the QR code** opens it on this PC, as `/webui browser` does.
 * **Over a reply** the pane opens too, its buttons acting at once; a phone watching that reply drops for a moment and reconnects.
 
 #### On this PC: `/webui browser`
@@ -628,6 +630,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 * **Sound:** a phone starts a video only after a tap on the video itself. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
 * **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever *YouTube open links in* says; ⋯ moves or removes it; ☆ saves the playing video.
+* **⛶ Fill window** fills the browser's window with the video under a slim bar; YouTube's own button is still full screen. ✕ Exit, Esc or Back leave (after a tap on the video, Esc is YouTube's).
 * **Limits:** on an iPhone *YouTube while speaking* `duck` does nothing (`pause` works).
 * A `/youtube` command typed in Chat is refused from the page, except bare `/youtube` and `/youtube list`, which point to this tab's saved videos; ask the model to play instead.
 * **Trust:** the tab runs YouTube's player script in the Web UI's own page, so while it's open that script can do what the page can, though it can never read the sign-in cookie.
@@ -644,7 +647,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …`, `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
-| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
+| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |
 

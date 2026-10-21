@@ -285,17 +285,17 @@ public sealed class ComfyTests : IDisposable
 
         var result = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "score_9, score_8_up, 1girl"), ("seed", 1234))));
 
-        Assert.StartsWith("generated 1 picture with pony-txt2img (seed 1234, 1024×1024): comfy_images\\pony-txt2img-1234.png — the picture is in the next message", result.Text);
+        Assert.StartsWith("generated 1 picture with pony-txt2img (seed 1234, 1024×1024): comfy\\pony-txt2img-1234.png — the picture is in the next message", result.Text);
         Assert.Contains("\nnegative: " + ComfyFamilies.PonyNegative, result.Text);   // not verbatim: the family's negative
         // The params as the graph carried them (2026-09-25): the family's size, steps and cfg, the graph's own denoise; no sampler input, no sampler.
         var pony = ComfyFamilies.Defaults(ComfyFamily.Pony);
         Assert.EndsWith("\n" + ComfyText.Parameters(new ComfyParameters(pony.Width, pony.Height, pony.Steps, pony.Cfg, 1, 1234)), result.Text);
         Assert.DoesNotContain("sampler", result.Text);
-        Assert.Equal("comfy_images\\pony-txt2img-1234.png", Assert.Single(result.Images).Path);
-        Assert.True(File.Exists(Path.Combine(_root, "comfy_images", "pony-txt2img-1234.png")));
+        Assert.Equal("comfy\\pony-txt2img-1234.png", Assert.Single(result.Images).Path);
+        Assert.True(File.Exists(Path.Combine(_root, "comfy", "pony-txt2img-1234.png")));
         // To the model as a JPEG (2026-10-03, a render rides every request after); the file saved is the server's own bytes.
         Assert.Equal(ImageFile.Jpeg, result.Images[0].MediaType);
-        Assert.Equal(Picture(), File.ReadAllBytes(Path.Combine(_root, "comfy_images", "pony-txt2img-1234.png")));
+        Assert.Equal(Picture(), File.ReadAllBytes(Path.Combine(_root, "comfy", "pony-txt2img-1234.png")));
         Assert.Equal("score_9, score_8_up, 1girl", QueuedGraph().GetProperty("6").GetProperty("inputs").GetProperty("text").GetString());
         Assert.Contains("pony (Pony Diffusion XL)", tool.Description);
         Assert.Contains("pony-txt2img · pony · text → image · 1024×1024", tool.Description);
@@ -373,8 +373,8 @@ public sealed class ComfyTests : IDisposable
     {
         Workflow("pony-txt2img", Txt2Img);
         ServeOnePicture();
-        Directory.CreateDirectory(Path.Combine(_root, "comfy_images"));
-        File.WriteAllBytes(Path.Combine(_root, "comfy_images", "pony-txt2img-7.png"), [1]);
+        Directory.CreateDirectory(Path.Combine(_root, "comfy"));
+        File.WriteAllBytes(Path.Combine(_root, "comfy", "pony-txt2img-7.png"), [1]);
         const string typed = "score_9, score_8_up, score_7_up, source_anime, rating_safe, (neon city:1.3), 1girl";
 
         var result = Assert.IsType<ToolImageResult>(await new GenerateImageTool(_studio).InvokeAsync(Args(("prompt", typed), ("verbatim", true), ("seed", 7))));
@@ -382,7 +382,7 @@ public sealed class ComfyTests : IDisposable
         var graph = QueuedGraph();
         Assert.Equal(typed, graph.GetProperty("6").GetProperty("inputs").GetProperty("text").GetString());
         Assert.Equal("", graph.GetProperty("7").GetProperty("inputs").GetProperty("text").GetString());
-        Assert.Equal("comfy_images\\pony-txt2img-7-2.png", Assert.Single(result.Images).Path);
+        Assert.Equal("comfy\\pony-txt2img-7-2.png", Assert.Single(result.Images).Path);
     }
 
     [Fact]
@@ -415,13 +415,13 @@ public sealed class ComfyTests : IDisposable
             url => new ComfyClient(url, new HttpClient(_stub), TimeSpan.FromMilliseconds(1)), new Random(7), images: images);
         Workflow("restyle", Img2Img);
         ServeOnePicture();
-        string earlier = Path.Combine(imagesRoot, "comfy_images", "pony-1.bmp");
+        string earlier = Path.Combine(imagesRoot, "comfy", "pony-1.bmp");
         Directory.CreateDirectory(Path.GetDirectoryName(earlier)!);
         File.WriteAllBytes(earlier, Picture());
 
         var result = Assert.IsType<ToolImageResult>(await new GenerateImageTool(studio).InvokeAsync(Args(("prompt", "ink"), ("image", earlier), ("seed", 3))));
 
-        string made = Path.Combine(imagesRoot, "comfy_images", "restyle-3.png");
+        string made = Path.Combine(imagesRoot, "comfy", "restyle-3.png");
         Assert.True(File.Exists(made));
         Assert.Contains(made, result.Text, StringComparison.Ordinal);
         Assert.Equal(made, Assert.Single(result.Images).Path);
@@ -610,7 +610,7 @@ public sealed class ComfyTests : IDisposable
         var first = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "watercolor"), ("image", "[Image #1]"))));
         var second = Assert.IsType<ToolImageResult>(await tool.InvokeAsync(Args(("prompt", "ink"), ("image", "image 1"))));
 
-        Assert.False(Directory.Exists(Path.Combine(_root, "comfy_images", ".pasted")));   // nothing saved here any more
+        Assert.False(Directory.Exists(Path.Combine(_root, "comfy", ".pasted")));   // nothing saved here any more
         Assert.Equal(2, asked);
         var uploads = _stub.Requests.Where(r => r.Uri.AbsolutePath == "/upload/image").ToList();
         Assert.Equal(2, uploads.Count);
@@ -685,7 +685,7 @@ public sealed class ComfyTests : IDisposable
     [Fact]
     public void PastedInputWording_IsPinned()
     {
-        Assert.Equal("input: comfy_images\\.pasted\\pasted-1.png (the pasted [Image #1], saved at full size)", ComfyText.PastedInput("comfy_images\\.pasted\\pasted-1.png", 1));
+        Assert.Equal("input: comfy\\.pasted\\pasted-1.png (the pasted [Image #1], saved at full size)", ComfyText.PastedInput("comfy\\.pasted\\pasted-1.png", 1));
         Assert.Equal("Error: there is no pasted picture [Image #3] in this session", ComfyText.NoPastedPicture(3));
         string input = ComfyText.PastedInput("in.png", 1);
         Assert.Equal("generated 1 picture with a (seed 1, 8×8): x.png\n" + input + "\nprompt: p", ComfyText.Generated("a", 1, 8, 8, ["x.png"], "p", "", attached: false, input: input));
@@ -762,9 +762,9 @@ public sealed class ComfyTests : IDisposable
     [Fact]
     public void SplitGenerated_HeadThenThePromptLines()
     {
-        string result = ComfyText.Generated("pony", 5, 1024, 1024, [@"comfy_images\pony-5.png"], "a cat", "blurry", attached: true);
+        string result = ComfyText.Generated("pony", 5, 1024, 1024, [@"comfy\pony-5.png"], "a cat", "blurry", attached: true);
         var (head, details) = ComfyText.SplitGenerated(result);
-        Assert.Equal(@"generated 1 picture with pony (seed 5, 1024×1024): comfy_images\pony-5.png — the picture is in the next message", head);
+        Assert.Equal(@"generated 1 picture with pony (seed 5, 1024×1024): comfy\pony-5.png — the picture is in the next message", head);
         Assert.Equal(["prompt: a cat", "negative: blurry"], details);
 
         Assert.Equal(["prompt: a cat"], ComfyText.SplitGenerated(ComfyText.Generated("flux", 1, 1024, 1024, ["a.png"], "a cat", "", attached: false)).Details);

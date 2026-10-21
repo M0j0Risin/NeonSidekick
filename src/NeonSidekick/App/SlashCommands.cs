@@ -13,7 +13,7 @@ public enum SlashCommand
     /// <summary><c>/new</c>: forget the conversation and keep the screen — a rule and a notice mark the boundary in the transcript (2026-09-16).</summary>
     New,
 
-    /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask): its tiled pages when it says <c>tiled</c>, else one picture, <c>disabled</c> included (2026-09-24). No argument until 2026-10-18 (the user's ask): <c>view</c>, <c>thumbs</c> and <c>purge</c> open or empty the profile's <c>splash_images</c> folder (<c>UI.SplashCommand</c>); another word is the usage error, nothing wiped.</summary>
+    /// <summary><c>/splash</c>: forget the conversation, wipe the screen and show the welcome splash again — the startup view, whatever <c>Welcome splash</c> says (2026-09-19, the user's ask): the robot when it says <c>robot</c> (2026-10-20; the tiled pages of <c>tiled</c> until then), else one picture, <c>off</c> included (2026-09-24). No argument until 2026-10-18 (the user's ask): <c>view</c>, <c>thumbs</c> and <c>purge</c> open or empty the profile's <c>splash</c> folder (<c>UI.SplashCommand</c>); another word is the usage error, nothing wiped.</summary>
     Splash,
 
     /// <summary>

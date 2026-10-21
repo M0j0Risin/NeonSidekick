@@ -95,7 +95,7 @@ They need no server unless the row says so.
 
 ### Plans, gap reviews, audits and Ralph loops
 
-- **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md`, named in a `[notice]`. Then type `/plan approve [--fresh | --ralph [<passes>]]`, `cancel`, `show`, `save [<name>]`, `open [<name>] [--chat]` (alone, it lists the plans), `gaps [model|advisor|any|confirm]`, `chat` or `ready`.
+- **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md`, named in a `[notice]`. Then type `/plan approve [--fresh | --ralph [<passes>]]`, `cancel`, `show`, `save [<name>]`, `open [<name>] [--chat]` (alone, it lists the plans), `gaps [model|advisor|any|confirm]`, `chat` or `ready`. `/plan template` writes the example plan; `/plan edit` needs the screen.
 - **`/plan chat`** sends nothing; your next line opens the conversation, and the model writes the plan when you ask. `/plan ready` asks for it, or, once one is presented, prints where it stands.
 - **`/plan gaps` and `/code-audit`** run every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run; 0 (no limit) means 50, as there's no Esc. Under *Advisor confirm* the model works alone.
 - **A gap review** stops as on the screen; a clean pass cut short at the limit names `/plan approve`.

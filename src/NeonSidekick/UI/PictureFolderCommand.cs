@@ -53,7 +53,7 @@ public static class PictureFolderCommand
 
 /// <summary>
 /// <c>/splash [view|thumbs|purge]</c> (2026-10-18, the user's ask): bare, the startup view over a fresh conversation as always; the words open
-/// or empty the profile's <c>splash_images</c> folder (<see cref="SplashImages.ProfileFolderName"/>), its <c>.trash</c> too. A word it does not
+/// or empty the profile's <c>splash</c> folder (<see cref="SplashImages.ProfileFolderName"/>), its <c>.trash</c> too. A word it does not
 /// know is the usage error and wipes nothing — <c>/splash</c> took no argument until then, so <c>/splash view</c> was refused before any handler.
 /// </summary>
 public static class SplashCommand

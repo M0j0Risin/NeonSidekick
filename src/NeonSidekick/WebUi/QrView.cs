@@ -32,6 +32,23 @@ public sealed class QrView : IRenderable
 
     public Measurement Measure(RenderOptions options, int maxWidth) => new(Columns, Columns);
 
+    /// <summary>The one character every cell is drawn with, quiet zone included.</summary>
+    public const char Cell = '▀';
+
+    private const string CellText = "▀";
+
+    /// <summary>
+    /// Whether <paramref name="line"/>, a drawn content line's plain text, is a row of the code (2026-10-20, the user's ask: a double-click
+    /// anywhere on <c>/webui</c>'s QR code opens the link, as one on the link does): not blank, and nothing but <see cref="Cell"/> once
+    /// trimmed. Pure.
+    /// </summary>
+    public static bool IsQrRow(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        string row = line.Trim();
+        return row.Length > 0 && row.All(c => c == Cell);
+    }
+
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
     {
         for (int row = 0; row < Rows; row++)
@@ -39,7 +56,7 @@ public sealed class QrView : IRenderable
             int y = (row * 2) - QuietZone;
             for (int x = -QuietZone; x < _code.Size + QuietZone; x++)
             {
-                yield return new Segment("▀", new Style(_code[x, y] ? Dark : Light, _code[x, y + 1] ? Dark : Light));
+                yield return new Segment(CellText, new Style(_code[x, y] ? Dark : Light, _code[x, y + 1] ? Dark : Light));
             }
 
             yield return Segment.LineBreak;

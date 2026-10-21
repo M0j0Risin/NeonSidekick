@@ -39,7 +39,12 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
     public static readonly TimeSpan CursorTimeout = TimeSpan.FromMilliseconds(500);
 
     private const string MouseOn = "\x1b[?1000h\x1b[?1002h\x1b[?1006h";
-    private const string MouseOff = "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
+
+    // Any-event tracking and focus reports (2026-10-20, the welcome splash's robot): after 1002 so 1003 is the mode in force while
+    // hover is asked for; the off sequence clears them first, always, so the shell never inherits a hovering mouse.
+    private const string HoverOn = "\x1b[?1003h\x1b[?1004h";
+    private const string HoverOff = "\x1b[?1004l\x1b[?1003l";
+    private const string MouseOff = HoverOff + "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
     private const string PasteOn = "\x1b[?2004h";
     private const string PasteOff = "\x1b[?2004l";
 
@@ -55,14 +60,45 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
     private bool _captured;
     private volatile bool _wanted;
     private volatile bool _wheelWanted;
+    private volatile bool _hover;
 
     private UnixConsoleInput(Termios original)
     {
         _original = original;
         _parser.CursorReport = (row, column) => _cursor?.TrySetResult((row, column));
+        _parser.PointerMoved = (column, row) =>
+        {
+            if (_hover && MouseCaptured)
+            {
+                PointerMoved?.Invoke(column, row);
+            }
+        };
+        _parser.FocusChanged = focused => FocusChanged?.Invoke(focused);
     }
 
     public Action? ModeChanged { get; set; }
+
+    /// <summary>Raised on the reader thread for a motion report with no button held while hover is asked for (2026-10-20).</summary>
+    public Action<int, int>? PointerMoved { get; set; }
+
+    /// <summary>Raised on the reader thread for a focus report (2026-10-20; reported only while hover is asked for).</summary>
+    public Action<bool>? FocusChanged { get; set; }
+
+    /// <summary>
+    /// Asks the terminal for any-event tracking and focus reports while true (2026-10-20, the welcome splash's robot), and stops
+    /// them when false; while the mouse is handed back nothing is asked, and taking it again asks again.
+    /// </summary>
+    public void Hover(bool on)
+    {
+        lock (_gate)
+        {
+            _hover = on;
+            if (_captured && !_disposed)
+            {
+                Write(on ? HoverOn : HoverOff);
+            }
+        }
+    }
 
     /// <summary>The held stdout the pane draws through (<c>Program</c>'s <see cref="FrameWriter"/>; <see cref="Console.Out"/> is its synchronized wrapper), settled after each cursor query.</summary>
     public IFrameHold? Frames { get; set; }
@@ -353,7 +389,7 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
                 return;
             }
 
-            Write(on ? MouseOn : MouseOff);
+            Write(on ? (_hover ? MouseOn + HoverOn : MouseOn) : MouseOff);
             _captured = on;
         }
 

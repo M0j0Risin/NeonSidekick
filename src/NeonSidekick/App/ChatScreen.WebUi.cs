@@ -890,17 +890,19 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>
-    /// A double-click on <paramref name="line"/> of an address's tab: when the line is the link (or, wrapped, a piece of it), that address opened on
-    /// this PC, behind the pane, which stays open.
-    /// </summary>
     /// <summary>For the tests: the flow sink, a notice from any thread.</summary>
     internal INoticeSink FlowForTests => _flow;
 
+    /// <summary>
+    /// A double-click on <paramref name="line"/> of an address's tab: when the line is the link (or, wrapped, a piece of it), or since
+    /// 2026-10-20 a row of the QR code above it (the user's ask: the bigger target, <see cref="QrView.IsQrRow"/>), that address opened on
+    /// this PC, behind the pane, which stays open.
+    /// </summary>
     internal void OpenLinkLine(string url, string line, INoticeSink sink)
     {
         string piece = line.Trim();
-        if (piece.Length < 8 || !url.Contains(piece, StringComparison.Ordinal) || !Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+        bool link = piece.Length >= 8 && url.Contains(piece, StringComparison.Ordinal);
+        if (!(link || QrView.IsQrRow(line)) || !Uri.TryCreate(url, UriKind.Absolute, out var parsed))
         {
             return;
         }
@@ -1092,7 +1094,8 @@ internal sealed partial class ChatScreen
                 // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself; Tailscale's
                 // headed by its note (later that day, the user's ask).
                 string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, audience));
-                // A double-click on the link opens it on this PC (later on 2026-10-15, the user's ask), as /webui browser does, at that tab's host.
+                // A double-click on the link opens it on this PC (later on 2026-10-15, the user's ask), as /webui browser does, at that tab's host;
+                // on the QR code too since 2026-10-20 (OpenLinkLine).
                 tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link.Url), () => new Spectre.Console.Rows(
                     new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Tailscale)),
                     new QrView(QrCode.Encode(link.Url)),

@@ -122,8 +122,8 @@ public sealed class AppSettings : IDisposable
 
     /// <summary>
     /// The loaded profile's own splash folder, whose pictures stand in for the embedded set (<see cref="UI.SplashImages.FromDirectory"/>):
-    /// <c>splash_images</c> under <see cref="ProfileImagesDirectory"/> since 2026-10-10 (the user's call), <c>splash</c> under
-    /// <see cref="ProfileDirectory"/> until then.
+    /// <c>splash</c> under <see cref="ProfileImagesDirectory"/> since 2026-10-20, <c>splash_images</c> there from 2026-10-10 (the user's
+    /// call), <c>splash</c> under <see cref="ProfileDirectory"/> until then.
     /// </summary>
     public string ProfileSplashDirectory => Path.Combine(ProfileImagesDirectory, UI.SplashImages.ProfileFolderName);
 

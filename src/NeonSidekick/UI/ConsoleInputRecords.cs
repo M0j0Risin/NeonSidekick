@@ -130,6 +130,15 @@ public static class ConsoleInputRecords
         return false;
     }
 
+    /// <summary>
+    /// Whether a mouse record is a move with no button held (2026-10-20, the welcome splash's robot following the mouse): never an
+    /// <see cref="InputEvent"/> — a new kind would close a menu and reset the line's double-click on every hover — but the reader's
+    /// <see cref="IMouseInput.PointerMoved"/>. Read after <see cref="TryTranslateMouse"/> said no, so a move that lets go of the
+    /// left button is still its release. Pinned.
+    /// </summary>
+    public static bool IsHover(in MouseEventRecord record) =>
+        (record.dwEventFlags & (MouseMoved | MouseWheeled | MouseHWheeled)) == MouseMoved && record.dwButtonState == 0;
+
     /// <summary>One wheel record's notches from its button state: the signed high word over <c>WHEEL_DELTA</c> (120), a fraction of a notch rounded up to one, 0 for no delta.</summary>
     public static int WheelNotches(uint buttonState)
     {

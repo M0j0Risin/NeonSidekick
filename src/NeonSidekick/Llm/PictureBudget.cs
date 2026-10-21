@@ -40,7 +40,7 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes, bool Do
     public bool IsNone => Pictures <= 0 && Megabytes <= 0;
 
     /// <summary>
-    /// What a picture taken out becomes (a <see cref="TextContent"/> in its place): <c>(picture comfy_images\a.png taken
+    /// What a picture taken out becomes (a <see cref="TextContent"/> in its place): <c>(picture comfy\a.png taken
     /// out to keep the request small)</c>, or <c>(a picture, taken out to keep the request small)</c> when it had no path
     /// (a session stored before the path was). Pinned.
     /// </summary>
