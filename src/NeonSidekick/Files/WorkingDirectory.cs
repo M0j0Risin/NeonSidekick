@@ -339,14 +339,126 @@ public sealed record PurgeResult(FileOutcome Outcome, int Files, int Folders, lo
     /// <summary>A purge through the Recycle bin (2026-10-18, <c>File deletes to Recycle bin</c>): its entries went one by one, the folder kept.</summary>
     public bool ToBin { get; init; }
 
-    /// <summary>The folder's own entries (files and subfolders at its top) when a purge through the bin began.</summary>
+    /// <summary>The folder's own entries (files and subfolders at its top) the purge's listing held.</summary>
     public int Entries { get; init; }
+
+    /// <summary>How many of <see cref="Entries"/> the purge reached before it ended or stopped (2026-10-20).</summary>
+    public int Done { get; init; }
 
     /// <summary>How many of <see cref="Entries"/> went to the bin.</summary>
     public int Recycled { get; init; }
 
-    /// <summary>How many of <see cref="Entries"/> were deleted for good on a drive with no bin (<see cref="DeleteWay.DeletedNoBin"/>), or a link removed.</summary>
-    public int DeletedNoBin { get; init; }
+    /// <summary>How many of <see cref="Entries"/> were deleted for good (2026-10-20: a purge without the bin; a purge through it never deletes for good).</summary>
+    public int Deleted { get; init; }
+
+    /// <summary>
+    /// How many of <see cref="Entries"/> were links, removed directly, the link and never what it points at (2026-10-20, the code review: they
+    /// were counted as deleted on a drive with no bin, and the notice blamed a missing bin). Not in <see cref="PurgeResult.Files"/> or <see cref="PurgeResult.Folders"/>.
+    /// </summary>
+    public int Links { get; init; }
+
+    /// <summary>How many of <see cref="Entries"/> were already gone when the purge came to them (2026-10-20).</summary>
+    public int Vanished { get; init; }
+
+    /// <summary>How many of <see cref="Entries"/> the bin or the delete refused, left in place (2026-10-20); the first reason is the <see cref="PurgeResult.Detail"/>.</summary>
+    public int Left { get; init; }
+
+    /// <summary>Why the purge stopped before its last entry, if it did (2026-10-20).</summary>
+    public PurgeStop Stop { get; init; }
+
+    /// <summary>The entries the purge took away: to the bin, for good, or a link removed.</summary>
+    public int Removed => Recycled + Deleted + Links;
+
+    /// <summary>
+    /// Two runs over one listing as one (2026-10-20: a purge through the bin that met a volume with no bin before anything went there, then the
+    /// rest for good after a second yes): the counts added, the way and the stop the second run's.
+    /// </summary>
+    public PurgeResult Then(PurgeResult next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        return next with
+        {
+            Outcome = Left + next.Left == 0 && next.Stop == PurgeStop.None ? next.Outcome : FileOutcome.Failed,
+            Files = Files + next.Files,
+            Folders = Folders + next.Folders,
+            Bytes = Bytes + next.Bytes,
+            Entries = Entries,
+            Done = Done + next.Done,
+            Recycled = Recycled + next.Recycled,
+            Deleted = Deleted + next.Deleted,
+            Links = Links + next.Links,
+            Vanished = Vanished + next.Vanished,
+            Left = Left + next.Left,
+            Detail = next.Detail.Length > 0 ? next.Detail : Detail,
+        };
+    }
+}
+
+/// <summary>Why a purge stopped before its last entry (2026-10-20, the code review).</summary>
+public enum PurgeStop
+{
+    /// <summary>It reached every entry.</summary>
+    None,
+
+    /// <summary>Esc (or the Web UI's Stop), read between entries.</summary>
+    Cancelled,
+
+    /// <summary>The bin answered that the drive has none: nothing was deleted for good, since the question promised the bin.</summary>
+    NoBin,
+
+    /// <summary>The bin didn't answer within <see cref="RecycleBin.Cap"/>: the next call would wait as long.</summary>
+    NoAnswer,
+}
+
+/// <summary>
+/// One of a purge's top entries (2026-10-20, <see cref="WorkingDirectory.ListPurge"/>): its full path, a folder or not, a link or not, and what it
+/// holds (a file is one file; a folder counts itself and everything under it it could read; a link nothing).
+/// </summary>
+public sealed record PurgeEntry(string FullPath, bool IsDirectory, bool IsLink, int Files, int Folders, long Bytes);
+
+/// <summary>
+/// A folder listed once for its purge (2026-10-20, the code review: the question, the spinner's label and the work each listed it again):
+/// what the question counts and what the purge works through. <see cref="FileOutcome.Missing"/> for no folder.
+/// </summary>
+public sealed class PurgeListing
+{
+    internal PurgeListing(FileOutcome outcome, string fullPath, IReadOnlyList<PurgeEntry> entries, string detail)
+    {
+        Outcome = outcome;
+        FullPath = fullPath;
+        Entries = entries;
+        Detail = detail;
+        foreach (var entry in entries)
+        {
+            Files += entry.Files;
+            Folders += entry.Folders;
+            Bytes += entry.Bytes;
+            Links += entry.IsLink ? 1 : 0;
+        }
+    }
+
+    internal static PurgeListing Refused(FileOutcome outcome, string fullPath, string detail = "") => new(outcome, fullPath, [], detail);
+
+    public FileOutcome Outcome { get; }
+
+    public string FullPath { get; }
+
+    /// <summary>The folder's own entries in name order.</summary>
+    public IReadOnlyList<PurgeEntry> Entries { get; }
+
+    public string Detail { get; }
+
+    public int Files { get; }
+
+    public int Folders { get; }
+
+    public long Bytes { get; }
+
+    /// <summary>The top entries that are links (not in <see cref="Files"/> or <see cref="Folders"/>).</summary>
+    public int Links { get; }
+
+    /// <summary>The entries from <paramref name="skip"/> on, for a second run after the first stopped there.</summary>
+    public PurgeListing Rest(int skip) => skip <= 0 ? this : new(Outcome, FullPath, Entries.Skip(skip).ToList(), Detail);
 }
 
 public sealed record ZipResult(FileOutcome Outcome, string Relative, string Archive, int Entries, long Bytes, string Detail = "");
@@ -2702,150 +2814,339 @@ public sealed class WorkingDirectory
     /// ask: <c>/comfy purge</c> empties the ComfyUI output folder, its <c>.pasted</c> inputs included), reached only by
     /// a slash command after a typed confirmation, never by a tool. Refused outside the sandbox, on the root itself (an
     /// empty output folder setting means the working directory — purging that would take everything) and on a file.
-    /// A missing folder is nothing to do. With <paramref name="bin"/> (2026-10-18, the user's pick: the purges follow
-    /// <c>File deletes to Recycle bin</c>) each of the folder's own entries goes to the bin through <see cref="FileDeletes.Remove"/>, so
-    /// each restores to its place, and the folder stays: the picture viewer and the thumbnail browser watch it, and a folder moved to
-    /// the bin and made again would leave them watching the copy there. A drive with no bin deletes them for good, counted; a refusal
-    /// stops there (<see cref="FileOutcome.Failed"/>, its reason), the rest left.
+    /// A missing folder is nothing to do. <see cref="ListPurge"/> then <see cref="PurgeFolder(PurgeListing, IRecycleBin?, CancellationToken)"/>
+    /// in one call, for a caller with no question between them.
     /// </summary>
-    public PurgeResult PurgeFolder(string relative, IRecycleBin? bin = null)
+    public PurgeResult PurgeFolder(string relative, IRecycleBin? bin = null) => PurgeFolder(ListPurge(relative), bin);
+
+    /// <summary>
+    /// A folder's purge listed once, before its question (2026-10-20, the code review: the question's count, the spinner's label and the work
+    /// each listed the folder again, and could disagree): the folder's own entries in name order, each with its own files, folders and
+    /// bytes, so the purge's notice adds up only what really went. Dot-names count off Windows too (<see cref="Info"/>'s walk leaves them out,
+    /// and the purge takes them). A top entry that is a link is listed as one, never walked. A folder under a top entry that can't be read is
+    /// left out of the count rather than failing the listing (the bin takes the top entry whole; a delete for good that fails on it is that
+    /// entry's, reported, and the rest go on). Refused as <see cref="PurgeFolder(string, IRecycleBin?)"/> refuses; a missing folder is
+    /// <see cref="FileOutcome.Missing"/>.
+    /// </summary>
+    public PurgeListing ListPurge(string relative)
     {
         var outcome = Resolve(relative, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
         {
-            return new PurgeResult(outcome, 0, 0, 0);
+            return PurgeListing.Refused(outcome, full);
         }
 
         if (string.Equals(full, Root, StringComparison.OrdinalIgnoreCase))
         {
-            return new PurgeResult(FileOutcome.OutsideRoot, 0, 0, 0, PurgeRootRefusal);
+            return PurgeListing.Refused(FileOutcome.OutsideRoot, full, PurgeRootRefusal);
         }
 
         if (File.Exists(full))
         {
-            return new PurgeResult(FileOutcome.IsAFile, 0, 0, 0);
+            return PurgeListing.Refused(FileOutcome.IsAFile, full);
         }
 
-        var result = EmptyContents(full, bin);
-        if (result.Outcome == FileOutcome.Ok && Directory.Exists(full))
+        if (!Directory.Exists(full))
         {
-            DiagnosticLog.Info(Category, FolderPurgedLogLine(Relative(full, isDirectory: true), result.Files, result.Folders, result.Bytes));
+            return PurgeListing.Refused(FileOutcome.Missing, full);
+        }
+
+        try
+        {
+            // Everything at the top, hidden and system included (the default skips them) — nothing in the folder is spared.
+            var top = new FileSystemEnumerable<PurgeEntry>(
+                full,
+                (ref FileSystemEntry entry) => new PurgeEntry(
+                    entry.ToFullPath(),
+                    entry.IsDirectory,
+                    (entry.Attributes & FileAttributes.ReparsePoint) != 0,
+                    entry.IsDirectory ? 0 : 1,
+                    entry.IsDirectory ? 1 : 0,
+                    entry.IsDirectory ? 0 : entry.Length),
+                new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = 0, ReturnSpecialDirectories = false });
+            var entries = new List<PurgeEntry>();
+            foreach (var entry in top)
+            {
+                if (entry.IsLink)
+                {
+                    entries.Add(entry with { Files = 0, Folders = 0, Bytes = 0 });
+                }
+                else if (entry.IsDirectory)
+                {
+                    var (files, folders, bytes) = CountUnder(entry.FullPath);
+                    entries.Add(entry with { Files = files, Folders = folders + 1, Bytes = bytes });
+                }
+                else
+                {
+                    entries.Add(entry);
+                }
+            }
+
+            entries.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullPath, b.FullPath));
+            return new PurgeListing(FileOutcome.Ok, full, entries, "");
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return PurgeListing.Refused(FileOutcome.Failed, full, ex.Message);
+        }
+    }
+
+    // A top folder's own count: everything under it, hidden included, never through a link, a folder it can't read left out — the top
+    // folder itself too (unreadable, or gone mid-walk): what was counted stands, and the purge meets that entry on its own.
+    private static (int Files, int Folders, long Bytes) CountUnder(string folder)
+    {
+        int files = 0, folders = 0;
+        long bytes = 0;
+        try
+        {
+            foreach (var entry in new FileSystemEnumerable<WalkEntry>(
+                folder,
+                (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, default, entry.IsDirectory),
+                new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, ReturnSpecialDirectories = false }))
+            {
+                if (entry.IsDirectory)
+                {
+                    folders++;
+                }
+                else
+                {
+                    files++;
+                    bytes += entry.Length;
+                }
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            // Counted as far as it could read; the listing goes on.
+        }
+
+        return (files, folders, bytes);
+    }
+
+    /// <summary>
+    /// The purge of a <see cref="ListPurge"/> listing, the way its question said (2026-10-20, the code review): with <paramref name="bin"/>
+    /// (2026-10-18, the user's pick: the purges follow <c>File deletes to Recycle bin</c>) each of the folder's own entries goes to the bin
+    /// through <see cref="IRecycleBin.Move"/>, so each restores to its place, and the folder stays: the picture viewer and the thumbnail browser
+    /// watch it, and a folder moved to the bin and made again would leave them watching the copy there. Without one each is deleted for good,
+    /// read-only cleared where a delete is refused. The caller decided which before it asked (<see cref="IRecycleBin.Probe"/>), and the purge
+    /// never deletes for good what the user agreed to send to the bin. One bad entry never stops it: a link is removed (the link goes, never
+    /// what it points at) and counted apart; an entry gone since the listing is skipped and counted; an entry the bin refuses (a path too long
+    /// for the shell among them) or a delete refuses is left, counted, its first reason kept. It stops only where going on can't help: a bin
+    /// that didn't answer (30 s a call), a drive with no bin after all (a Mac's volume, which <see cref="MacTrash"/> can't tell beforehand:
+    /// <see cref="PurgeStop.NoBin"/>, nothing deleted for good), and <paramref name="cancellationToken"/> (Esc), checked between entries.
+    /// Never throws for a file failure or a cancel: the result says how far it got.
+    /// </summary>
+    public PurgeResult PurgeFolder(PurgeListing listing, IRecycleBin? bin, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(listing);
+        if (listing.Outcome == FileOutcome.Missing)
+        {
+            return new PurgeResult(FileOutcome.Ok, 0, 0, 0);
+        }
+
+        if (listing.Outcome != FileOutcome.Ok)
+        {
+            return new PurgeResult(listing.Outcome, 0, 0, 0, listing.Detail);
+        }
+
+        if (!IsInside(Root, listing.FullPath) || string.Equals(listing.FullPath, Root, StringComparison.OrdinalIgnoreCase))
+        {
+            return new PurgeResult(FileOutcome.OutsideRoot, 0, 0, 0);
+        }
+
+        var result = EmptyContents(listing, bin, cancellationToken);
+        if (result.Outcome == FileOutcome.Ok)
+        {
+            DiagnosticLog.Info(Category, FolderPurgedLogLine(Relative(listing.FullPath, isDirectory: true), result.Files, result.Folders, result.Bytes));
         }
 
         return result;
     }
 
-    /// <summary>Why <see cref="PurgeFolder"/> will not empty the root. Pinned.</summary>
+    /// <summary>Why <see cref="PurgeFolder(string, IRecycleBin?)"/> will not empty the root. Pinned.</summary>
     public const string PurgeRootRefusal = "that is the working directory itself";
 
     public static string FolderPurgedLogLine(string relative, int files, int folders, long bytes) =>
         string.Create(CultureInfo.InvariantCulture, $"Purged {relative}: {files} files, {folders} folders, {bytes:N0} bytes");
 
-    /// <summary>
-    /// The walk-and-delete behind <see cref="PurgeFolder"/>: everything under
-    /// <paramref name="target"/> counted, read-only cleared, then deleted; the folder itself stays. Absent = nothing to do.
-    /// With <paramref name="bin"/> nothing is cleared (a restore brings each file back as it was) and the top entries go to the bin one by one.
-    /// </summary>
-    private static PurgeResult EmptyContents(string target, IRecycleBin? bin = null)
+    // The walk-and-delete behind PurgeFolder, one entry at a time in the listing's order; see PurgeFolder(PurgeListing, …) for the rules.
+    private static PurgeResult EmptyContents(PurgeListing listing, IRecycleBin? bin, CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(target))
-        {
-            return new PurgeResult(FileOutcome.Ok, 0, 0, 0);
-        }
-
-        int files = 0, folders = 0;
+        int files = 0, folders = 0, recycled = 0, deleted = 0, links = 0, vanished = 0, left = 0, done = 0;
         long bytes = 0;
-        try
+        string why = "";
+        var stop = PurgeStop.None;
+        foreach (var entry in listing.Entries)
         {
-            // Everything, hidden and system included — nothing in the folder is spared — but never
-            // through a reparse point, which Directory.Delete below removes as a link too.
-            var options = new EnumerationOptions
+            if (cancellationToken.IsCancellationRequested)
             {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = false,
-                AttributesToSkip = FileAttributes.ReparsePoint,
-                ReturnSpecialDirectories = false,
-            };
-            foreach (var entry in new FileSystemEnumerable<WalkEntry>(
-                target,
-                (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory),
-                options))
-            {
-                if (entry.IsDirectory)
-                {
-                    folders++;
-                    continue;
-                }
-
-                files++;
-                bytes += entry.Length;
-                if (bin is not null)
-                {
-                    continue;
-                }
-
-                var attributes = File.GetAttributes(entry.FullPath);
-                if ((attributes & FileAttributes.ReadOnly) != 0)
-                {
-                    File.SetAttributes(entry.FullPath, attributes & ~FileAttributes.ReadOnly);
-                }
+                stop = PurgeStop.Cancelled;
+                break;
             }
 
-            if (bin is not null)
-            {
-                return EmptyIntoBin(target, bin, files, folders, bytes);
-            }
-
-            foreach (var folder in Directory.EnumerateDirectories(target))
-            {
-                Directory.Delete(folder, recursive: true);
-            }
-
-            foreach (var file in Directory.EnumerateFiles(target))
-            {
-                File.Delete(file);
-            }
-
-            return new PurgeResult(FileOutcome.Ok, files, folders, bytes);
-        }
-        catch (Exception ex) when (IsFileFailure(ex))
-        {
-            return new PurgeResult(FileOutcome.Failed, files, folders, bytes, ex.Message);
-        }
-    }
-
-    // The folder's own entries to the bin, one call each (IRecycleBin.Move takes one path), in name order; a refusal stops there.
-    private static PurgeResult EmptyIntoBin(string target, IRecycleBin bin, int files, int folders, long bytes)
-    {
-        string[] entries = Directory.EnumerateFileSystemEntries(target).Order(StringComparer.OrdinalIgnoreCase).ToArray();
-        int recycled = 0, noBin = 0;
-        PurgeResult Counted(FileOutcome outcome, string detail = "") =>
-            new(outcome, files, folders, bytes, detail) { ToBin = true, Entries = entries.Length, Recycled = recycled, DeletedNoBin = noBin };
-
-        foreach (string entry in entries)
-        {
             try
             {
-                var attributes = File.GetAttributes(entry);
-                bool isDirectory = (attributes & FileAttributes.Directory) != 0;
-                bool isLink = (attributes & FileAttributes.ReparsePoint) != 0;
-                switch (FileDeletes.Remove(entry, isDirectory, isLink, bin))
+                if (entry.IsLink)
                 {
-                    case DeleteWay.Recycled:
+                    FileDeletes.Remove(entry.FullPath, entry.IsDirectory, isLink: true, bin: null);
+                    links++;
+                }
+                else if (!(entry.IsDirectory ? Directory.Exists(entry.FullPath) : File.Exists(entry.FullPath)))
+                {
+                    vanished++;
+                }
+                else if (bin is not null)
+                {
+                    var moved = bin.Move(entry.FullPath);
+                    if (moved.Outcome == RecycleOutcome.Recycled)
+                    {
                         recycled++;
+                        Went(entry);
+                    }
+                    else if (moved.Outcome == RecycleOutcome.NoBin)
+                    {
+                        stop = PurgeStop.NoBin;
                         break;
-                    default:
-                        noBin++;
+                    }
+                    else if (moved.Message == FileText.RecycleNoAnswer)
+                    {
+                        stop = PurgeStop.NoAnswer;
+                        why = moved.Message;
                         break;
+                    }
+                    else
+                    {
+                        Left(moved.Message);
+                    }
+                }
+                else
+                {
+                    DeleteForGood(entry);
+                    deleted++;
+                    Went(entry);
                 }
             }
             catch (Exception ex) when (IsFileFailure(ex))
             {
-                return Counted(FileOutcome.Failed, ex.Message);
+                if (Present(entry.FullPath))
+                {
+                    Left(ex.Message);
+                }
+                else if (ex is FileNotFoundException or DirectoryNotFoundException)
+                {
+                    // Taken by someone else between the check and the delete.
+                    vanished++;
+                }
+                else if (entry.IsLink)
+                {
+                    links++;
+                }
+                else
+                {
+                    // A delete for good that got there in the end (a last step refused, then the item gone anyway).
+                    deleted++;
+                    Went(entry);
+                }
             }
+
+            done++;
         }
 
-        return Counted(FileOutcome.Ok);
+        bool finished = stop == PurgeStop.None && left == 0;
+        return new PurgeResult(finished ? FileOutcome.Ok : FileOutcome.Failed, files, folders, bytes, why)
+        {
+            ToBin = bin is not null,
+            Entries = listing.Entries.Count,
+            Done = done,
+            Recycled = recycled,
+            Deleted = deleted,
+            Links = links,
+            Vanished = vanished,
+            Left = left,
+            Stop = stop,
+        };
+
+        void Went(PurgeEntry entry)
+        {
+            files += entry.Files;
+            folders += entry.Folders;
+            bytes += entry.Bytes;
+        }
+
+        void Left(string reason)
+        {
+            left++;
+            if (why.Length == 0)
+            {
+                why = reason;
+            }
+        }
+    }
+
+    // One entry for good: a delete refused (a read-only file on Windows, a folder with no write permission on a Mac) clears read-only
+    // under it and tries once more, as the walk before every delete did until 2026-10-20 — now only where it is needed.
+    private static void DeleteForGood(PurgeEntry entry)
+    {
+        try
+        {
+            Remove(entry);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            ClearReadOnly(entry.FullPath, entry.IsDirectory);
+            Remove(entry);
+        }
+
+        static void Remove(PurgeEntry entry)
+        {
+            if (entry.IsDirectory)
+            {
+                Directory.Delete(entry.FullPath, recursive: true);
+            }
+            else
+            {
+                File.Delete(entry.FullPath);
+            }
+        }
+    }
+
+    private static void ClearReadOnly(string path, bool isDirectory)
+    {
+        Clear(path);
+        if (!isDirectory)
+        {
+            return;
+        }
+
+        foreach (string inner in new FileSystemEnumerable<string>(
+            path,
+            (ref FileSystemEntry entry) => entry.ToFullPath(),
+            new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, ReturnSpecialDirectories = false }))
+        {
+            Clear(inner);
+        }
+
+        static void Clear(string path)
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReadOnly) != 0)
+            {
+                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+            }
+        }
+    }
+
+    // Whether anything is at the path, a dangling link included (File.Exists and Directory.Exists follow it).
+    private static bool Present(string path)
+    {
+        try
+        {
+            return File.Exists(path) || Directory.Exists(path) || new FileInfo(path).LinkTarget is not null;
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return false;
+        }
     }
 
     // ---- archives ----

@@ -18,6 +18,26 @@ public sealed class FakeRecycleBin : IRecycleBin
     /// <summary>An answer per call (2026-10-18, a purge refused part-way), read after the path is recorded; null: <see cref="Answer"/>.</summary>
     public Func<string, RecycleResult>? AnswerFor { get; set; }
 
+    /// <summary>The folders a purge probed before its question (2026-10-20), in order.</summary>
+    public List<string> Probed { get; } = [];
+
+    /// <summary><see cref="Probe"/>'s answer (2026-10-20): null, the default, goes on and tries, as a Mac's Trash does.</summary>
+    public RecycleResult? ProbeAnswer { get; set; }
+
+    /// <summary>Run on each <see cref="Probe"/> before it answers (2026-10-20: a setting changed while the purge's question waits).</summary>
+    public Action<string>? OnProbe { get; set; }
+
+    public RecycleResult? Probe(string fullPath)
+    {
+        lock (Moved)
+        {
+            Probed.Add(fullPath);
+        }
+
+        OnProbe?.Invoke(fullPath);
+        return ProbeAnswer;
+    }
+
     public RecycleResult Move(string fullPath)
     {
         lock (Moved)

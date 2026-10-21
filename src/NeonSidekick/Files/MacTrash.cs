@@ -27,6 +27,19 @@ public sealed unsafe partial class MacTrash : IRecycleBin
         return RecycleBin.RunCapped(() => Trash(fullPath), RecycleBin.Cap, sta: false);
     }
 
+    /// <summary>
+    /// Always null, go on and try (2026-10-20, the code review asked what the Trash could tell before a purge's question): nothing cheap and
+    /// sure. A file system's type is no answer (a FAT or exFAT stick has a <c>.Trashes</c> of its own, a network volume may not), and
+    /// <c>URLForDirectory:NSTrashDirectory … appropriateForURL:</c> answers nil with <c>create:NO</c> for a volume whose Trash isn't made
+    /// yet and makes one with <c>create:YES</c>. So the purge asks for the Trash and, when the first move answers no Trash, stops with
+    /// nothing deleted for good and asks again in a for-good question (<see cref="PurgeStop.NoBin"/>).
+    /// </summary>
+    public RecycleResult? Probe(string fullPath)
+    {
+        ArgumentNullException.ThrowIfNull(fullPath);
+        return null;
+    }
+
     private static RecycleResult Trash(string fullPath)
     {
         nint pool = objc_autoreleasePoolPush();

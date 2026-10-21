@@ -760,6 +760,101 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         Assert.Equal("stays", File.ReadAllText(Full("keep.txt")));
     }
 
+    /// <summary>
+    /// Top-level links (2026-10-20, the code review: they were counted as deleted on a drive with no bin, and a dangling one's attributes ended
+    /// the purge): removed directly, the link and never what it points at, a dangling one too, counted as links and asked about as links.
+    /// </summary>
+    [UnixFact]
+    public void PurgeFolder_TopLevelLinks_AreRemovedAndCountedAsLinks_TheirTargetsKept_Unix()
+    {
+        Put("target/kept.txt", "stays");
+        Put("out/a.png", "12");
+        Directory.CreateSymbolicLink(Full("out/to-folder"), Full("target"));
+        File.CreateSymbolicLink(Full("out/dangling"), Full("nowhere.txt"));
+        var bin = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
+
+        var listing = _files.ListPurge("out");
+        Assert.Equal((3, 1, 0, 2L), (listing.Entries.Count, listing.Files, listing.Folders, listing.Links));
+        var result = _files.PurgeFolder(listing, bin);
+
+        Assert.Equal((FileOutcome.Ok, 1, 2, 0), (result.Outcome, result.Recycled, result.Links, result.Left));
+        Assert.Equal([Full("out/a.png")], bin.Moved);   // the links never reach the bin
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
+        Assert.Equal("stays", File.ReadAllText(Full("target/kept.txt")));
+    }
+
+    /// <summary>
+    /// A folder under a top entry that can't be read (2026-10-20, the code review: the count's walk failed the purge before anything moved):
+    /// left out of the count, and the bin takes the top entry whole.
+    /// </summary>
+    [UnixFact]
+    public void PurgeFolder_AnUnreadableNestedFolder_IsLeftOutOfTheCount_AndTheBinTakesItsParent_Unix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;   // [UnixFact] skips it; the guard is for the platform analyzer (File.SetUnixFileMode)
+        }
+
+        Put("out/top/a.png", "12");
+        Put("out/top/locked/b.png", "345");
+        Put("out/zlocked/c.png", "6789");
+        string locked = Full("out/top/locked");
+        string topLocked = Full("out/zlocked");
+        File.SetUnixFileMode(locked, UnixFileMode.None);
+        File.SetUnixFileMode(topLocked, UnixFileMode.None);   // a top entry itself unreadable: counted as the folder alone
+        try
+        {
+            var bin = new NeonSidekick.Tests.Fakes.FakeRecycleBin { Folder = Full("bin") };
+
+            var listing = _files.ListPurge("out");
+            Assert.Equal((FileOutcome.Ok, 2, 1, 3), (listing.Outcome, listing.Entries.Count, listing.Files, listing.Folders));
+            // The fake bin moves by rename, which a folder with no write permission refuses off Windows; the real bin answers for itself.
+            File.SetUnixFileMode(topLocked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var result = _files.PurgeFolder(listing, bin);
+
+            Assert.Equal((FileOutcome.Ok, 2, 1), (result.Outcome, result.Recycled, result.Files));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
+        }
+        finally
+        {
+            var dirs = Directory.Exists(Full("bin"))
+                ? Directory.EnumerateDirectories(Full("bin")).Where(d => Path.GetFileName(d).StartsWith("zlocked", StringComparison.Ordinal)).ToList()
+                : [];
+            foreach (string dir in dirs.Append(topLocked).Where(Directory.Exists))
+            {
+                File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            foreach (string dir in Directory.EnumerateDirectories(Full("bin"), "locked", SearchOption.AllDirectories).Append(locked).Where(Directory.Exists))
+            {
+                File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A delete for good refused part-way (2026-10-20, the code review: the purge stopped at the first entry a delete refused): read-only cleared
+    /// under that entry and the delete tried once more — here a folder with no write permission, which a Mac refuses as Windows refuses a
+    /// read-only file — and an entry that still can't go is left while the rest go on.
+    /// </summary>
+    [UnixFact]
+    public void PurgeFolder_ForGood_ClearsReadOnlyWhereADeleteIsRefused_Unix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;   // [UnixFact] skips it; the guard is for the platform analyzer (File.SetUnixFileMode)
+        }
+
+        Put("out/a/inner.png", "12");
+        Put("out/b.png", "3");
+        File.SetUnixFileMode(Full("out/a"), UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
+        var result = _files.PurgeFolder("out");
+
+        Assert.Equal((FileOutcome.Ok, 2, 2, 1, 3L), (result.Outcome, result.Deleted, result.Files, result.Folders, result.Bytes));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
+    }
+
     [UnixFact]
     public void ReadText_Empty_Missing_Directory_Binary_TooBig_Outside_Unix()
     {

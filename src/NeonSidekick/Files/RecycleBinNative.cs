@@ -40,6 +40,22 @@ public sealed partial class WindowsRecycleBin : IRecycleBin
         }, RecycleBin.Cap, sta: true);
     }
 
+    /// <summary>
+    /// <see cref="Move"/>'s own checks before the shell, on the purge's folder (2026-10-20, the code review): a UNC path or a drive that is not
+    /// fixed has no bin; a folder whose path is already too long for the shell can never send it an entry. Anything that passes here is the
+    /// shell's to answer per entry. The same checks <see cref="Move"/> makes, so a purge that passed this never meets "no bin" part-way.
+    /// </summary>
+    public RecycleResult? Probe(string fullPath)
+    {
+        ArgumentNullException.ThrowIfNull(fullPath);
+        return RecycleBin.CheckWindows(fullPath) switch
+        {
+            { Outcome: RecycleOutcome.NoBin } noBin => noBin,
+            { } refused => refused.Message == FileText.RecycleTooLong ? new RecycleResult(RecycleOutcome.Failed, FileText.RecycleFolderTooLong) : refused,
+            null => OnFixedDrive(fullPath) ? null : new RecycleResult(RecycleOutcome.NoBin),
+        };
+    }
+
     /// <summary>The shell's call itself, its code and abort flag: the smoke's probe runs it on a path that does not exist.</summary>
     public static (int Code, bool Aborted) Call(string fullPath)
     {

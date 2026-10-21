@@ -80,6 +80,8 @@ if (($Filter -or $Repeat -gt 1) -and -not $TestOnly) { Fail "-Filter and -Repeat
 if ($Repeat -lt 1) { Fail "-Repeat is a count of runs, 1 or more." }
 if ($PSBoundParameters.ContainsKey('Cores') -and -not $CiLike) { Fail "-Cores needs -CiLike." }
 if ($Cores -lt 1) { Fail "-Cores is a count of cores, 1 or more." }
+# An affinity mask is one processor group's, 64 bits (2026-10-20, the code review); past 64 there is nothing it could pin.
+if ($Cores -gt 64) { Fail "-Cores is at most 64 (one processor group's affinity)." }
 if ($Publish -and $CiLike) { Fail "-CiLike shapes the test step; -Publish has none." }
 
 # -CiLike (2026-10-19, the pre-CI check in .notes/ci_test_debug_guidance.md): the test step as a GitHub runner meets it, since
@@ -110,17 +112,31 @@ function New-CiFolder([string]$parent, [int]$length, [int]$least = 4) {
     return $path
 }
 
-function Enter-CiLike {
+# What -CiLike changed, kept as it changes (2026-10-20, the code review: Enter-CiLike ran before the try, so a throw after it had changed the
+# environment skipped Exit-CiLike, and the variables, the temp folders and a Mac's busy loops outlived the run). Enter-CiLike fills it step by
+# step, each value saved before it is changed and each folder and loop recorded the moment it exists, so Exit-CiLike undoes exactly what was
+# done, however far Enter-CiLike got.
+function New-CiState {
+    return @{
+        Folders = New-Object System.Collections.Generic.List[string]
+        Saved = @{}
+        Affinity = $null
+        Loops = New-Object System.Collections.Generic.List[System.Diagnostics.Process]
+    }
+}
+
+function Enter-CiLike($state) {
     $machineTemp = [System.IO.Path]::GetTempPath()
     $machineTrimmed = $machineTemp.TrimEnd('/')
     $ciTemp = if ($OnWindows) { New-CiFolder $machineTemp 39 }
         elseif ($IsMacOS) { New-CiFolder (Split-Path $machineTrimmed -Parent) $machineTrimmed.Length 1 }
         else { New-CiFolder "/tmp" $machineTrimmed.Length }
+    $state.Folders.Add($ciTemp)
     $ciHome = New-CiFolder $machineTemp 0
+    $state.Folders.Add($ciHome)
     $cleared = @(Get-ChildItem env: | Where-Object { $_.Name -like 'NEONSIDEKICK_*' } | ForEach-Object { $_.Name })
-    $saved = @{}
     foreach ($name in $cleared + @('NEONSIDEKICK_HOME', 'NEONSIDEKICK_TEST_LLM_URL', 'TEMP', 'TMP', 'TMPDIR', 'DOTNET_PROCESSOR_COUNT')) {
-        $saved[$name] = [Environment]::GetEnvironmentVariable($name)
+        $state.Saved[$name] = [Environment]::GetEnvironmentVariable($name)
     }
     foreach ($name in $cleared) { Remove-Item "env:$name" }
     $env:NEONSIDEKICK_HOME = $ciHome
@@ -130,28 +146,27 @@ function Enter-CiLike {
     if (-not $OnWindows) { $env:TMPDIR = $ciTemp + "/" }
     $cores = [Math]::Min($Cores, [Environment]::ProcessorCount)
     $env:DOTNET_PROCESSOR_COUNT = $cores.ToString($Invariant)
-    $affinity = $null
     if ($OnWindows) {
         $self = [System.Diagnostics.Process]::GetCurrentProcess()
-        $affinity = $self.ProcessorAffinity
-        $self.ProcessorAffinity = [IntPtr]((1L -shl $cores) - 1)
+        $state.Affinity = $self.ProcessorAffinity
+        # 64 cores is every bit of the mask (2026-10-20, the code review: 1L -shl 64 wraps to 1, so the mask came out 0 and the set threw).
+        $mask = if ($cores -ge 64) { [long]-1 } else { (1L -shl $cores) - 1 }
+        $self.ProcessorAffinity = [IntPtr]$mask
     }
-    $loops = @()
     if ($IsMacOS) {
         $count = [Environment]::ProcessorCount * [Math]::Max(1, [int][Math]::Floor(4 / $cores))
         $busy = "while kill -0 $PID 2>/dev/null; do :; done"
-        $loops = @(1..$count | ForEach-Object {
+        for ($i = 0; $i -lt $count; $i++) {
             $start = New-Object System.Diagnostics.ProcessStartInfo "/bin/sh"
             $start.ArgumentList.Add("-c")
             $start.ArgumentList.Add($busy)
             $start.UseShellExecute = $false
-            [System.Diagnostics.Process]::Start($start)
-        })
+            $state.Loops.Add([System.Diagnostics.Process]::Start($start))
+        }
     }
-    $how = if ($OnWindows) { "affinity" } elseif ($IsMacOS) { "DOTNET_PROCESSOR_COUNT, $($loops.Count) busy loops" } else { "DOTNET_PROCESSOR_COUNT only" }
+    $how = if ($OnWindows) { "affinity" } elseif ($IsMacOS) { "DOTNET_PROCESSOR_COUNT, $($state.Loops.Count) busy loops" } else { "DOTNET_PROCESSOR_COUNT only" }
     Write-Host "  CI-like: $cores of $([Environment]::ProcessorCount) cores ($how); home $ciHome; temp $ciTemp ($($ciTemp.Length) characters);" -ForegroundColor Yellow
     Write-Host "  $($cleared.Count) NEONSIDEKICK_* variable(s) cleared, the LLM URL dead (http://127.0.0.1:9/v1)." -ForegroundColor Yellow
-    return @{ Folders = @($ciHome, $ciTemp); Saved = $saved; Affinity = $affinity; Loops = $loops }
 }
 
 function Exit-CiLike($state) {
@@ -229,26 +244,33 @@ if (-not $Publish) {
     if (Test-Path $CoverageDir) { Remove-Item -Recurse -Force $CoverageDir }
     $partial = $Filter -or $Repeat -gt 1
     $testFilter = if ($Filter) { "Category!=LoadsEmbeddedModel&($Filter)" } else { "Category!=LoadsEmbeddedModel" }
-    $ciState = if ($CiLike) { Enter-CiLike } else { $null }
+    # -CiLike is entered and left once per run (2026-10-20, the code review: under -Repeat every run shared one home and one temp folder,
+    # so runs 2..N met what run 1 left), each inside its own try, so whatever Enter-CiLike changed is put back even when it throws part-way.
     $failedRuns = New-Object System.Collections.Generic.List[int]
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         for ($run = 1; $run -le $Repeat; $run++) {
-            $results = if ($Repeat -gt 1) { Join-Path $CoverageDir "run-$run" } else { $CoverageDir }
-            $testArgs = @("test", $TestProject, "-c", "Release", "--no-build", "--verbosity", "minimal", "--filter", $testFilter,
-                "--blame-hang", "--blame-hang-timeout", $HangTimeout, "--blame-hang-dump-type", "mini", "--results-directory", $results)
-            if (-not $partial) { $testArgs += @("--collect:XPlat Code Coverage", "--settings", $RunSettings) }
-            if ($CiLike) { $testArgs += "--disable-build-servers" }
-            dotnet @testArgs
-            if ($LASTEXITCODE -ne 0) { $failedRuns.Add($run) }
+            $ciState = if ($CiLike) { New-CiState } else { $null }
+            try {
+                if ($null -ne $ciState) { Enter-CiLike $ciState }
+                $results = if ($Repeat -gt 1) { Join-Path $CoverageDir "run-$run" } else { $CoverageDir }
+                $testArgs = @("test", $TestProject, "-c", "Release", "--no-build", "--verbosity", "minimal", "--filter", $testFilter,
+                    "--blame-hang", "--blame-hang-timeout", $HangTimeout, "--blame-hang-dump-type", "mini", "--results-directory", $results)
+                if (-not $partial) { $testArgs += @("--collect:XPlat Code Coverage", "--settings", $RunSettings) }
+                if ($CiLike) { $testArgs += "--disable-build-servers" }
+                dotnet @testArgs
+                $exitCode = $LASTEXITCODE
+            } finally {
+                if ($null -ne $ciState) { Exit-CiLike $ciState }
+            }
+            if ($exitCode -ne 0) { $failedRuns.Add($run) }
             if ($Repeat -gt 1) {
-                $verdict = if ($LASTEXITCODE -eq 0) { "passed" } else { "FAILED" }
-                Write-Host "  Run $run of ${Repeat}: $verdict" -ForegroundColor $(if ($LASTEXITCODE -eq 0) { "Green" } else { "Red" })
+                $verdict = if ($exitCode -eq 0) { "passed" } else { "FAILED" }
+                Write-Host "  Run $run of ${Repeat}: $verdict" -ForegroundColor $(if ($exitCode -eq 0) { "Green" } else { "Red" })
             }
         }
     } finally {
         $watch.Stop()
-        if ($null -ne $ciState) { Exit-CiLike $ciState }
     }
 
     Write-Host "  Tests took $($watch.Elapsed.ToString('hh\:mm\:ss', $Invariant))$(if ($Repeat -gt 1) { " for $Repeat runs" })."

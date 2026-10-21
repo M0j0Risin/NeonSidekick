@@ -101,9 +101,45 @@ public static class HaText
         return $"Let the model run {domain}.{service}{on}{with} in Home Assistant?";
     }
 
-    /// <summary>The question on the pane before an asked <c>ha_assist</c>: the sentence Assist would act on. Pinned.</summary>
+    /// <summary>
+    /// The question on the pane before an asked <c>ha_assist</c>: the sentence Assist would act on, exactly as it is sent (2026-10-20, the code
+    /// review: it was cut at 200 characters and its lines joined, so a yes could pass words the user never saw). The sentence is the
+    /// question's second line, the pane's caption, which grows with the room (the title row is cut at its width); <see cref="AssistUnshowable"/>
+    /// refuses one that can't be shown whole first. Pinned.
+    /// </summary>
     public static string AssistQuestion(string text) =>
-        $"Let the model tell Home Assistant's Assist \"{Clip(Single(text), 200)}\"?";
+        $"Let the model tell Home Assistant's Assist this?\n\"{text}\"";
+
+    /// <summary>The longest sentence <c>ha_assist</c> asks the user about (2026-10-20): a pane's caption shows it whole.</summary>
+    public const int AssistMaxChars = 200;
+
+    /// <summary>
+    /// Why an asked <c>ha_assist</c> sentence can't be shown whole, or null (2026-10-20, the code review): past <see cref="AssistMaxChars"/>,
+    /// or with a line break, a tab or another control character, or a format character (a bidirectional override, a zero-width space), any of
+    /// which can hide or reorder words on the pane. Refused before the question, so the yes is always to the whole sentence. Pinned.
+    /// </summary>
+    public static string? AssistUnshowable(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length > AssistMaxChars)
+        {
+            return $"Error: that sentence is {text.Length.ToString(CultureInfo.InvariantCulture)} characters; the user is asked about one of at most {AssistMaxChars.ToString(CultureInfo.InvariantCulture)}, shown whole. Send one short plain sentence.";
+        }
+
+        // By rune, not by char: a tag character (U+E0020–E007F, invisible, spelling ASCII to a model) is a surrogate pair, each half of
+        // which reads as Surrogate; an unpaired half comes back as U+FFFD and is refused too. U+2028/U+2029 break the line as \n does.
+        foreach (var rune in text.EnumerateRunes())
+        {
+            var category = Rune.GetUnicodeCategory(rune);
+            if (category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator
+                || rune == Rune.ReplacementChar)
+            {
+                return "Error: that sentence holds a line break, a tab or an invisible character, which the user's question can't show as it is. Send one short plain sentence on one line.";
+            }
+        }
+
+        return null;
+    }
 
     // ─── results ────────────────────────────────────────────────────────────────
 

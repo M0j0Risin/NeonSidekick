@@ -134,6 +134,11 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 
 Each purge asks first and follows *File deletes to Recycle bin*: to the Recycle bin (the Trash on a Mac), else for good.
 
+* The question says which. A folder on a drive with no bin (a share, a removable drive) is asked about for good, and says why.
+* An item the bin refuses (a path too long for it, say) stays where it is; the rest go on, and the notice counts what went.
+* On a Mac a volume with no Trash is found at the first move: nothing is deleted, and you're asked again for good.
+* A top-level link is removed, never what it points at. Esc stops a purge between items.
+
 | Command | What it does |
 |---|---|
 | `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window) (on a Mac before macOS 14, in Preview). |

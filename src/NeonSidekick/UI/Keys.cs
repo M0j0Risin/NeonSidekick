@@ -74,8 +74,6 @@ public static class Keys
     /// <summary>Ctrl+S as the console delivers it: the DC3 character with the key and Control (<c>/server</c>).</summary>
     public static ConsoleKeyInfo CtrlS => new('\x13', ConsoleKey.S, false, false, true);
 
-    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/tools</c> since 2026-10-18).</summary>
-
     /// <summary>Ctrl+B as the console delivers it: the STX character with the key and Control (<c>/browser</c>, 2026-10-18).</summary>
     public static ConsoleKeyInfo CtrlB => new('\x02', ConsoleKey.B, false, false, true);
 
@@ -84,6 +82,8 @@ public static class Keys
 
     /// <summary>Ctrl+W as the console delivers it: the ETB character with the key and Control (<c>/webui browser</c>, 2026-10-18).</summary>
     public static ConsoleKeyInfo CtrlW => new('\x17', ConsoleKey.W, false, false, true);
+
+    /// <summary>Ctrl+T as the console delivers it: the DC4 character with the key and Control (<c>/tools</c> since 2026-10-18).</summary>
     public static ConsoleKeyInfo CtrlT => new('\x14', ConsoleKey.T, false, false, true);
 
     /// <summary>Ctrl+/ as the console delivers it on a US layout: no character, the Oem2 key with Control (<c>/settings</c>).</summary>

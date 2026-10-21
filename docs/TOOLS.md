@@ -902,7 +902,7 @@ Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API 
 | `ha_media` | `action, target?, volume_pct?, source?` | Power, volume, mute, `source` (by name or prefix), play, pause, stop, next and previous for a media player. |
 | `ha_todo` | `action, item?, list?` | `list`, `add`, `complete` or `remove` to-do items; `list` runs under every policy. Off in a new profile. |
 | `ha_call_service` | `domain, service, entity?, data?` | Any other service (`button.press`, `script.turn_on`), under the policy. |
-| `ha_assist` | `text` | Hands a sentence to Home Assistant's Assist agent. Under `ask` it waits for your yes (add `conversation.process` to the safe services to skip that); refused under `off`. |
+| `ha_assist` | `text` | Hands a sentence to Home Assistant's Assist agent. Under `ask` it waits for your yes, the question showing the whole sentence (one of more than 200 characters, or with a line break or an invisible character, is refused; add `conversation.process` to the safe services to skip asking); refused under `off`. |
 
 ### Shopping list
 

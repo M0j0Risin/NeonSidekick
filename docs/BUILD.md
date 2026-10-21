@@ -42,7 +42,7 @@ dotnet run --project src/NeonSidekick -c Release
 | `.\build.ps1 -Package` | The full run, then the release package in `publish\package\`: a `.zip` on Windows or a `.tar.gz` on a Mac, with the README, the docs, the license and a `.sha256`. It can't be combined with `-TestOnly`. |
 | `.\build.ps1 -Package -Tag v1.2.3` | The same, refusing a tag that isn't `v` plus the project's `<Version>`. |
 | `.\build.ps1 -CoverageFloor 0` | Reports coverage without failing under the floor (80% by default). |
-| `.\build.ps1 -TestOnly -CiLike` | Runs the tests the way a CI runner meets them: an empty home and temp folder, every `NEONSIDEKICK_*` variable cleared (so the live tests skip), and only 2 CPU cores (`-Cores <n>` for another count). It catches timing races a fast machine hides. |
+| `.\build.ps1 -TestOnly -CiLike` | Runs the tests the way a CI runner meets them: an empty home and temp folder, every `NEONSIDEKICK_*` variable cleared (so the live tests skip), and only 2 CPU cores (`-Cores <n>` for another count, at most 64). With `-Repeat` each run gets a fresh home and temp folder. Everything is put back afterwards, even when a run fails. It catches timing races a fast machine hides. |
 | `.\build.ps1 -TestOnly -Filter "<filter>" -Repeat 20` | Runs only the tests a `dotnet test` filter picks, as many times as asked, and counts the runs that pass. Coverage isn't measured. Add `-HangTimeout 60s` to stop a hung test sooner than 10 minutes. |
 | `.\build.ps1 -Clean` | Deletes every `bin\` and `obj\` folder and `publish\`. |
 | `.\build.ps1 -Runtime <rid>` | Picks the runtime: `win-x64` by default on Windows, `osx-arm64` on an Apple Silicon Mac. NativeAOT can't publish for another OS. |

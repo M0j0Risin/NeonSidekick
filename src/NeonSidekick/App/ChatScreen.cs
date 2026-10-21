@@ -10053,39 +10053,54 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The confirmation line before a purge (<c>/comfy purge</c>; <c>/camera</c>, <c>/screen</c>, <c>/splash</c> and <c>/pasted purge</c> since
-    /// 2026-10-18): the folder and what is in it, to the Recycle bin (the Trash on a Mac) under <paramref name="toBin"/>, else for good. Pinned.
+    /// 2026-10-18): the folder and what is in it, to the Recycle bin (the Trash on a Mac) under <paramref name="toBin"/>, else for good, and
+    /// then with <paramref name="noBinWhy"/> when the setting asked for the bin and the folder's drive has none (2026-10-20, the code review:
+    /// the question promised the bin there and the purge deleted for good). Its top-level links counted apart (<paramref name="links"/>). The
+    /// count is the purge's own listing, whole (until 2026-10-20 <c>Info</c>'s, cut at <see cref="WorkingDirectory.MaxInfoEntries"/>). Pinned.
     /// </summary>
-    public static string PurgePrompt(string path, int files, int folders, long bytes, bool truncated, bool toBin = false) =>
-        (toBin ? $"{TrashGlyph}Send everything in {path} to the {FileText.RecycleBinName} — " : $"{TrashGlyph}Delete everything in {path} for good — ")
+    public static string PurgePrompt(string path, int files, int folders, long bytes, bool toBin = false, string? noBinWhy = null, int links = 0) =>
+        (toBin
+            ? $"{TrashGlyph}Send everything in {path} to the {FileText.RecycleBinName} — "
+            : $"{TrashGlyph}Delete everything in {path} for good" + (string.IsNullOrEmpty(noBinWhy) ? "" : $" ({noBinWhy})") + " — ")
         + TrashContents(files, folders, bytes)
-        + (truncated ? $", counted the first {WorkingDirectory.MaxInfoEntries.ToString("N0", CultureInfo.InvariantCulture)} entries only" : "")
+        + (links > 0 ? ", " + Plural(links, "link") : "")
         + "?";
 
     public static string PurgeEmptyNotice(string path) => $"({TrashGlyph}nothing in {path})";
 
-    public static string PurgedNotice(string path, int files, int folders, long bytes) => $"({TrashGlyph}purged {path}: {TrashContents(files, folders, bytes)})";
+    /// <summary>A purge for good done: what went (the entries it removed, added up), then <see cref="PurgeTail"/>. Pinned.</summary>
+    public static string PurgedNotice(string path, int files, int folders, long bytes, int links = 0, int vanished = 0) =>
+        $"({TrashGlyph}purged {path}: {TrashContents(files, folders, bytes)}{PurgeTail(links, vanished)})";
 
     /// <summary>
-    /// A purge through the bin done (2026-10-18): its contents sent there, and how many of the folder's items a drive with no bin took for good
-    /// (<paramref name="noBin"/>; all of them when <paramref name="recycled"/> is 0). Pinned.
+    /// A purge through the bin done (2026-10-18): what went there, then <see cref="PurgeTail"/>. A purge through the bin never deletes for good
+    /// since 2026-10-20 (the code review), so the "deleted for good: no Recycle bin on that drive" parts are gone: a drive with no bin is known
+    /// before the question, which says for good. Pinned.
     /// </summary>
-    public static string PurgedToBinNotice(string path, int files, int folders, long bytes, int recycled, int noBin)
-    {
-        string contents = TrashContents(files, folders, bytes);
-        string noBinWords = "deleted for good: no " + FileText.RecycleBinName + " on that drive";
-        if (recycled == 0)
-        {
-            return $"({TrashGlyph}purged {path}: {contents}; {noBinWords})";
-        }
+    public static string PurgedToBinNotice(string path, int files, int folders, long bytes, int links = 0, int vanished = 0) =>
+        $"({TrashGlyph}sent {path}'s contents to the {FileText.RecycleBinName}: {TrashContents(files, folders, bytes)}{PurgeTail(links, vanished)})";
 
-        return $"({TrashGlyph}sent {path}'s contents to the {FileText.RecycleBinName}: {contents}"
-            + (noBin == 0 ? "" : $"; {Plural(noBin, "item")} {noBinWords}")
-            + ")";
-    }
+    /// <summary>The notices' tail (2026-10-20, the code review): links removed (the link, never what it points at), items already gone. Pinned.</summary>
+    public static string PurgeTail(int links, int vanished) =>
+        (links > 0 ? "; " + Plural(links, "link") + " removed" : "")
+        + (vanished > 0 ? "; " + Plural(vanished, "item") + " already gone" : "");
 
-    /// <summary>A purge through the bin that the bin refused part-way (2026-10-18): how many of the folder's items went, why it stopped, the rest left. Pinned.</summary>
+    /// <summary>A purge that stopped part-way (2026-10-18; Esc, a bin that didn't answer or a drive with no bin after all since 2026-10-20): how many of the folder's items went, why it stopped, the rest left. Pinned.</summary>
     public static string PurgeStoppedError(string path, int gone, int entries, string why) =>
         $"The purge of {path} stopped after {gone.ToString(CultureInfo.InvariantCulture)} of {Plural(entries, "item")}: {why}. The rest are still there.";
+
+    /// <summary>
+    /// A purge that reached every item but left some (2026-10-20, the code review: one refusal stopped the whole purge): how many went, how many
+    /// the bin or the delete refused, and the first reason. Pinned.
+    /// </summary>
+    public static string PurgeLeftError(string path, int gone, int entries, int left, string why) =>
+        $"The purge of {path} took {gone.ToString(CultureInfo.InvariantCulture)} of {Plural(entries, "item")}; {Plural(left, "item")} could not go: {why}. {(left == 1 ? "It is" : "They are")} still there.";
+
+    /// <summary>Why a purge stopped at Esc (2026-10-20, the code review: Esc couldn't stop one). Pinned.</summary>
+    public const string PurgeCancelledWhy = "you stopped it";
+
+    /// <summary>Why a purge through the bin stopped when the drive had none after all (2026-10-20): nothing deleted for good behind the question's back. Pinned.</summary>
+    public static string PurgeNoBinWhy => FileText.RecycleNoBinHere + ", so nothing was deleted for good";
 
     /// <summary>
     /// A purge whose folder setting is the profile's images folder itself (the working directory until 2026-10-09): refused, it would take
@@ -10097,6 +10112,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>The spinner's label while a purge sends its items to the bin one by one (2026-10-18). Pinned.</summary>
     public static string PurgeMovingLabel(int entries) => $"Moving {Plural(entries, "item")} to the {FileText.RecycleBinName}";
+
+    /// <summary>The spinner's label while a purge deletes its items for good (2026-10-20: off the screen's thread, Esc stops it). Pinned.</summary>
+    public static string PurgeDeletingLabel(int entries) => $"Deleting {Plural(entries, "item")}";
 
     /// <summary>The folder labels the purges name (2026-10-18): the settings' own names, and the splash's fixed folder. Pinned.</summary>
     public const string ComfyFolderLabel = "ComfyUI output folder";
@@ -10110,12 +10128,16 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/comfy purge</c> (later still on 2026-09-24, the user's ask): everything in the ComfyUI output folder — the pictures,
     /// the <c>.pasted</c> inputs, anything else put there — deleted for good, the folder kept; shaped like <c>/emptytrash</c> was
-    /// (the count, one typed confirmation, then <see cref="WorkingDirectory.PurgeFolder"/>). An output folder that is the working
+    /// (the count, one typed confirmation, then <see cref="WorkingDirectory.PurgeFolder(PurgeListing, IRecycleBin?, CancellationToken)"/>). An output folder that is the working
     /// directory itself is refused rather than asked about. A paste saved before is written again at its next use.
     /// Made generic on 2026-10-18 (the user's ask: <c>/camera purge</c>, <c>/screen purge</c>, <c>/splash purge</c>, <c>/pasted purge</c>): any
     /// folder under the profile's images folder by its setting, <paramref name="folderLabel"/> naming it in the refusal; and the purges follow
-    /// <c>File deletes to Recycle bin</c> (the user's pick, <c>/comfy purge</c> too), read as the purge runs: with the bin each item goes there
-    /// on a pool thread under the transcript's spinner, one shell call each, so a big folder takes a while.
+    /// <c>File deletes to Recycle bin</c> (the user's pick, <c>/comfy purge</c> too).
+    /// Since 2026-10-20 (the code review) the way is decided before the question and never read again: the setting, and whether the folder's
+    /// drive has a bin (<see cref="IRecycleBin.Probe"/>; a drive with none gets the for-good question, its reason said); the folder is listed once
+    /// (<see cref="WorkingDirectory.ListPurge"/>) for the question, the spinner and the work; either way runs on a pool thread under the spinner
+    /// and Esc stops it between items. A Mac's Trash can't be probed: a first move that finds no Trash stops with nothing deleted, and the
+    /// rest is asked again for good.
     /// </summary>
     private async Task PurgePictureFolderAsync(string? folderSetting, string folderLabel, CancellationToken cancellationToken)
     {
@@ -10133,74 +10155,109 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var info = _images.Info(folder);
-        if (info.Outcome == FileOutcome.Missing || (info.Outcome == FileOutcome.Ok && info.Files == 0 && info.Folders == 0))
+        var listing = _images.ListPurge(folder);
+        if (listing.Outcome == FileOutcome.Missing || (listing.Outcome == FileOutcome.Ok && listing.Entries.Count == 0))
         {
             _flow.Notice(PurgeEmptyNotice(full));
             return;
         }
 
-        if (info.Outcome != FileOutcome.Ok)
-        {
-            _flow.Error(PurgeFailedError(full, info.Detail));
-            return;
-        }
-
-        if (!info.IsDirectory)
+        if (listing.Outcome == FileOutcome.IsAFile)
         {
             _flow.Error(PurgeFailedError(full, "it is a file, not a folder"));
             return;
         }
 
-        bool toBin = _effective().FileDeletesToRecycleBin && _recycleBin is not null;
-        if (!await ConfirmAsync(PurgePrompt(full, info.Files, info.Folders, info.Bytes, info.Truncated, toBin), cancellationToken).ConfigureAwait(false))
+        if (listing.Outcome != FileOutcome.Ok)
+        {
+            _flow.Error(PurgeFailedError(full, listing.Detail.Length > 0 ? listing.Detail : listing.Outcome.ToString()));
+            return;
+        }
+
+        // The way, decided once: the yes below is to this question, so the purge is handed this bin (or none), never the setting again.
+        IRecycleBin? bin = null;
+        string? noBinWhy = null;
+        if (_effective().FileDeletesToRecycleBin && _recycleBin is { } recycle)
+        {
+            if (recycle.Probe(full) is { } refused)
+            {
+                noBinWhy = refused.Outcome == RecycleOutcome.NoBin || refused.Message.Length == 0 ? FileText.RecycleNoBinHere : refused.Message;
+            }
+            else
+            {
+                bin = recycle;
+            }
+        }
+
+        if (!await ConfirmAsync(PurgePrompt(full, listing.Files, listing.Folders, listing.Bytes, bin is not null, noBinWhy, listing.Links), cancellationToken).ConfigureAwait(false))
         {
             _flow.Notice(KeptNotice);
             return;
         }
 
-        // The setting read again as the purge runs: the question may have waited.
-        var bin = _effective().FileDeletesToRecycleBin ? _recycleBin : null;
-        if (bin is null)
+        var result = await RunPurgeAsync(listing, bin, cancellationToken).ConfigureAwait(false);
+        if (result.Stop == PurgeStop.NoBin && result.Recycled == 0)
         {
-            RunOrPost(() =>
+            // Nothing went to a bin that isn't there, and nothing was deleted for good: the rest asked again, for good.
+            var rest = listing.Rest(result.Done);
+            if (!await ConfirmAsync(PurgePrompt(full, rest.Files, rest.Folders, rest.Bytes, toBin: false, FileText.RecycleNoBinHere, rest.Links), cancellationToken).ConfigureAwait(false))
             {
-                ReportPurge(full, _images.PurgeFolder(folder));
-                DrainDiagnostics();
-            });
-            return;
+                if (result.Removed == 0)
+                {
+                    _flow.Notice(KeptNotice);
+                }
+                else
+                {
+                    ReportPurge(full, result);
+                }
+
+                return;
+            }
+
+            result = result.Then(await RunPurgeAsync(rest, null, cancellationToken).ConfigureAwait(false));
         }
 
-        int entries = CountEntries(full);
-        var moved = await _transcript.WithSpinnerAsync(PurgeMovingLabel(entries), () => Task.Run(() => _images.PurgeFolder(folder, bin), CancellationToken.None)).ConfigureAwait(false);
-        ReportPurge(full, moved);
+        ReportPurge(full, result);
         DrainDiagnostics();
     }
 
-    // The folder's own entries, for the spinner's label; 0 when it cannot be read (the purge then says why).
-    private static int CountEntries(string full)
+    /// <summary>
+    /// One run of a purge on a pool thread under the spinner, Esc (and Ctrl+C, the Web UI's Stop) watched: the purge reads the token between
+    /// items and says where it stopped (2026-10-20, the code review: one shell call per item under a spinner Esc couldn't stop).
+    /// </summary>
+    private async Task<PurgeResult> RunPurgeAsync(PurgeListing listing, IRecycleBin? bin, CancellationToken cancellationToken)
     {
-        try
+        PurgeResult? result = null;
+        string label = bin is null ? PurgeDeletingLabel(listing.Entries.Count) : PurgeMovingLabel(listing.Entries.Count);
+        await WaitUnderWatchAsync(token => _transcript.WithSpinnerAsync(label, async () =>
         {
-            return Directory.EnumerateFileSystemEntries(full).Count();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return 0;
-        }
+            result = await Task.Run(() => _images.PurgeFolder(listing, bin, token), CancellationToken.None).ConfigureAwait(false);
+            return true;
+        }), KeySource.IsTurnCancel, cancellationToken).ConfigureAwait(false);
+        return result ?? new PurgeResult(FileOutcome.Failed, 0, 0, 0) { ToBin = bin is not null, Entries = listing.Entries.Count, Stop = PurgeStop.Cancelled };
     }
 
     private void ReportPurge(string full, PurgeResult result)
     {
-        if (result.Outcome == FileOutcome.Ok)
+        if (result.Stop != PurgeStop.None)
+        {
+            string why = result.Stop switch
+            {
+                PurgeStop.Cancelled => PurgeCancelledWhy,
+                PurgeStop.NoBin => PurgeNoBinWhy,
+                _ => result.Detail,
+            };
+            _transcript.Error(PurgeStoppedError(full, result.Removed, result.Entries, why));
+        }
+        else if (result.Left > 0)
+        {
+            _transcript.Error(PurgeLeftError(full, result.Removed, result.Entries, result.Left, result.Detail));
+        }
+        else if (result.Outcome == FileOutcome.Ok)
         {
             _transcript.Notice(result.ToBin
-                ? PurgedToBinNotice(full, result.Files, result.Folders, result.Bytes, result.Recycled, result.DeletedNoBin)
-                : PurgedNotice(full, result.Files, result.Folders, result.Bytes));
-        }
-        else if (result.ToBin && result.Entries > 0)
-        {
-            _transcript.Error(PurgeStoppedError(full, result.Recycled + result.DeletedNoBin, result.Entries, result.Detail));
+                ? PurgedToBinNotice(full, result.Files, result.Folders, result.Bytes, result.Links, result.Vanished)
+                : PurgedNotice(full, result.Files, result.Folders, result.Bytes, result.Links, result.Vanished));
         }
         else
         {
@@ -17515,14 +17572,15 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The picture viewer on <paramref name="folderSetting"/>'s folder under the profile's images folder (<see cref="OpenViewer"/>'s body;
-    /// <c>/camera view</c> and <c>/screen view</c> since 2026-10-09, the user's ask), made when it is not there yet. Any thread.
+    /// <c>/camera view</c> and <c>/screen view</c> since 2026-10-09, the user's ask), made when it is not there yet. Any thread. True when the
+    /// viewer opened (2026-10-20, the code review: <c>/splash view</c>'s note on the built-in pictures followed a refusal too).
     /// </summary>
-    private void OpenViewerOn(string? folderSetting, bool notice)
+    private bool OpenViewerOn(string? folderSetting, bool notice)
     {
         if (_openViewer is null)
         {
             _flow.Error(ViewerText.UnavailableHere);
-            return;
+            return false;
         }
 
         string folder = ComfyStudio.OutputFolder(folderSetting);
@@ -17530,7 +17588,7 @@ internal sealed partial class ChatScreen
         if (outcome != FileOutcome.Ok)
         {
             _flow.Error(FileText.Error(outcome, folder, "watch"));
-            return;
+            return false;
         }
 
         try
@@ -17543,10 +17601,13 @@ internal sealed partial class ChatScreen
                 _flow.Notice(ViewerText.Opened(full));
                 _flow.Notice(ViewerText.KeysHere);
             }
+
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)
         {
             _flow.Error(ViewerText.Failed(full, ex.Message));
+            return false;
         }
     }
 

@@ -17875,19 +17875,28 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ComfyPurge_Wording_IsPinned()
     {
-        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234, false));
+        Assert.Equal(@"🗑️ Delete everything in D:\x\comfy_images for good — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\comfy_images", 3, 1, 1_234));
         Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B)", ChatScreen.PurgedNotice(@"D:\x\comfy_images", 2, 1, 8));
         Assert.Equal(@"(🗑️ nothing in D:\x\comfy_images)", ChatScreen.PurgeEmptyNotice(@"D:\x\comfy_images"));
         Assert.Equal("Usage: /comfy, /comfy status, /comfy offered, /comfy purge, /comfy view, /comfy thumbs, or /comfy edit json|markdown <workflow>", ChatScreen.ComfyUsageError);
         // Through the bin (2026-10-18): the bin's name is this system's (the Trash on a Mac).
         string bin = FileText.RecycleBinName;
-        Assert.Equal(@"🗑️ Send everything in D:\x\camera_images to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera_images", 3, 1, 1_234, false, toBin: true));
-        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 3, noBin: 0));
-        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B; 1 item deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 2, noBin: 1));
-        Assert.Equal(@"(🗑️ purged D:\x\camera_images: 2 files, 1 folder, 8 B; deleted for good: no " + bin + " on that drive)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, recycled: 0, noBin: 3));
+        Assert.Equal(@"🗑️ Send everything in D:\x\camera_images to the " + bin + " — 3 files, 1 folder, 1.2 KB?", ChatScreen.PurgePrompt(@"D:\x\camera_images", 3, 1, 1_234, toBin: true));
+        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8));
         Assert.Equal(@"The purge of D:\x\camera_images stopped after 1 of 3 items: too long. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera_images", 1, 3, "too long"));
         Assert.Equal("Not purging: the Pasted images folder is the profile's images folder itself; set a folder under it first.", ChatScreen.PurgeHereError(ChatScreen.PastedFolderLabel));
         Assert.Equal("Moving 1 item to the " + bin, ChatScreen.PurgeMovingLabel(1));
+        // 2026-10-20, the code review: the way known before the question (a drive with no bin says so and for good), links and items gone counted
+        // apart, the items left, Esc's stop, and the label of a purge for good.
+        Assert.Equal(@"🗑️ Delete everything in D:\x\camera_images for good (no " + bin + " on that drive) — 3 files, 1 folder, 1.2 KB, 2 links?", ChatScreen.PurgePrompt(@"D:\x\camera_images", 3, 1, 1_234, toBin: false, FileText.RecycleNoBinHere, links: 2));
+        Assert.Equal(@"(🗑️ sent D:\x\camera_images's contents to the " + bin + ": 2 files, 1 folder, 8 B; 1 link removed; 2 items already gone)", ChatScreen.PurgedToBinNotice(@"D:\x\camera_images", 2, 1, 8, links: 1, vanished: 2));
+        Assert.Equal(@"(🗑️ purged D:\x\comfy_images: 2 files, 1 folder, 8 B; 2 links removed)", ChatScreen.PurgedNotice(@"D:\x\comfy_images", 2, 1, 8, links: 2));
+        Assert.Equal(@"The purge of D:\x\camera_images took 2 of 3 items; 1 item could not go: too long. It is still there.", ChatScreen.PurgeLeftError(@"D:\x\camera_images", 2, 3, 1, "too long"));
+        Assert.Equal(@"The purge of D:\x\camera_images took 1 of 4 items; 3 items could not go: too long. They are still there.", ChatScreen.PurgeLeftError(@"D:\x\camera_images", 1, 4, 3, "too long"));
+        Assert.Equal(@"The purge of D:\x\camera_images stopped after 1 of 3 items: you stopped it. The rest are still there.", ChatScreen.PurgeStoppedError(@"D:\x\camera_images", 1, 3, ChatScreen.PurgeCancelledWhy));
+        Assert.Equal("no " + bin + " on that drive, so nothing was deleted for good", ChatScreen.PurgeNoBinWhy);
+        Assert.Equal("Deleting 3 items", ChatScreen.PurgeDeletingLabel(3));
+        Assert.Equal("the " + bin + " can't take paths that long", FileText.RecycleFolderTooLong);
     }
 
     [Fact]

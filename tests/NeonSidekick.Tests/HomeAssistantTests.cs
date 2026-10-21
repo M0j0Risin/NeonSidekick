@@ -577,7 +577,7 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal(HaText.NotAsked, await Invoke(new HaAssistTool(_ha, Answer(null)), ("text", "unlock the front door")));
         Assert.Equal(HaText.Declined, await Invoke(new HaAssistTool(_ha, Answer(false)), ("text", "unlock the front door")));
         Assert.Equal(0, Sent());
-        Assert.Equal("Let the model tell Home Assistant's Assist \"unlock the front door\"?", _asked[^1]);
+        Assert.Equal("Let the model tell Home Assistant's Assist this?\n\"unlock the front door\"", _asked[^1]);
 
         Assert.Equal("Assist (action done): Unlocked the front door", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "unlock the front door")));
         Assert.Equal(1, Sent());
@@ -591,6 +591,38 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.StartsWith("Assist", await Invoke(new HaAssistTool(_ha, Answer(false)), ("text", "unlock the front door")));
         Assert.Empty(_asked);
         Assert.Equal(3, Sent());
+    }
+
+    /// <summary>
+    /// The question shows exactly what is sent (2026-10-20, the code review: it cut the sentence at 200 characters and joined its lines, so a yes
+    /// could send words the user never saw): a sentence too long, on more than one line or with an invisible character is refused before it is
+    /// asked; one at the cap is asked whole. Allowed, nothing is shown, so nothing is refused.
+    /// </summary>
+    [Fact]
+    public async Task Assist_UnderAsk_ASentenceTheQuestionCannotShowWhole_IsRefusedUnasked()
+    {
+        _stub.Map(Server + "/api/conversation/process", HttpStatusCode.OK, """{"response":{"response_type":"action_done","speech":{"plain":{"speech":"Done"}}},"conversation_id":"x"}""");
+        int Sent() => _stub.Requests.Count(r => r.Uri.AbsolutePath == "/api/conversation/process");
+        string hidden = "turn on the porch light" + new string(' ', 200) + "and unlock the front door";
+
+        Assert.StartsWith("Error: that sentence is", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", hidden)));
+        Assert.StartsWith("Error: that sentence holds", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "turn on the porch light\nunlock the front door")));
+        Assert.StartsWith("Error: that sentence holds", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "turn on the porch light\u202Erood tnorf eht kcolnu")));
+        Assert.StartsWith("Error: that sentence holds", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "turn on the porch light\u2028unlock the front door")));
+        string tagged = "turn on the porch light" + string.Concat("unlock".Select(c => char.ConvertFromUtf32(0xE0000 + c)));   // invisible tag characters
+        Assert.StartsWith("Error: that sentence holds", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", tagged)));
+        Assert.StartsWith("Error: that sentence holds", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "turn on the porch light\uD800")));
+        Assert.Empty(_asked);
+        Assert.Equal(0, Sent());
+
+        string whole = new('a', HaText.AssistMaxChars);
+        Assert.StartsWith("Assist", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", whole)));
+        Assert.Equal(HaText.AssistQuestion(whole), _asked.Single());
+        Assert.EndsWith("\n\"" + whole + "\"", _asked.Single());
+
+        _settings.HomeAssistantActionPolicy = HaPolicy.Allow;
+        Assert.StartsWith("Assist", await Invoke(new HaAssistTool(_ha, Answer(false)), ("text", "turn on the porch light\nand the hall")));
+        Assert.Equal(2, Sent());
     }
 
     [Fact]

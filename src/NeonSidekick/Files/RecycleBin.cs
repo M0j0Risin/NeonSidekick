@@ -21,6 +21,14 @@ public interface IRecycleBin
 {
     /// <summary>Moves the file or folder at <paramref name="fullPath"/> (a full path) to the bin; a folder goes whole.</summary>
     RecycleResult Move(string fullPath);
+
+    /// <summary>
+    /// Whether the bin could take items from the folder at <paramref name="fullPath"/>, judged without moving anything (2026-10-20, the code
+    /// review: a purge promised the bin and then deleted for good on a drive with none): null to go on and try, else why not —
+    /// <see cref="RecycleOutcome.NoBin"/> for a drive with no bin, <see cref="RecycleOutcome.Failed"/> with the sentence for a folder the bin can
+    /// never take from. A purge asks this before its question, so the question says what will happen.
+    /// </summary>
+    RecycleResult? Probe(string fullPath);
 }
 
 /// <summary>How a delete went: for good, to the bin, or for good on a drive with no bin.</summary>

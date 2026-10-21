@@ -56,6 +56,13 @@ public sealed class HaAssistTool : HaTool
             return HaText.NotConfigured;
         }
 
+        // A sentence the question can't show whole is refused before it is asked (2026-10-20, the code review: the question cut and joined it,
+        // and the yes sent the whole): the user approves exactly what acts. Only when it would be asked; allowed or safe, nothing is shown.
+        if (HaPolicy.Judge(Effective, Domain, Service) == HaVerdict.Ask && HaText.AssistUnshowable(text) is { } unshowable)
+        {
+            return unshowable;
+        }
+
         if (await GateAsync(Domain, Service, HaText.AssistQuestion(text), cancellationToken).ConfigureAwait(false) is { } refused)
         {
             return refused;

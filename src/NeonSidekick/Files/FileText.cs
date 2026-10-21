@@ -43,6 +43,13 @@ public static class FileText
 
     /// <summary>The bin refused with a code, which is logged and named, never explained (the shell's are partly pre-Win32). Pinned.</summary>
     public static string RecycleRefused(long code) => "the " + RecycleBinName + " refused it (code " + code.ToString(CultureInfo.InvariantCulture) + ")";
+
+    /// <summary>A drive or volume with no bin, as a purge's question and its notices say it (2026-10-20). Pinned.</summary>
+    public static string RecycleNoBinHere => "no " + RecycleBinName + " on that drive";
+
+    /// <summary>A purge's folder whose path is already past what the shell's bin takes (2026-10-20, <see cref="IRecycleBin.Probe"/>). Pinned.</summary>
+    public static string RecycleFolderTooLong => "the " + RecycleBinName + " can't take paths that long";
+
     /// <summary>A word argument outside its choices (<c>mode</c>, <c>output</c>, <c>order</c>; 2026-09-19). Pinned.</summary>
     public static string BadChoice(string argument, string raw, string choices) => $"Error: '{raw.Trim()}' is not one of {choices} for '{argument}'";
     /// <summary>A required path argument left out (2026-09-18: a `write_file` with `content` alone was told `'' is a folder`). Pinned.</summary>

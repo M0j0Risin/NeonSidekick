@@ -20,13 +20,20 @@ internal sealed partial class ChatScreen
         string folder = UI.SplashImages.ProfileFolderName;
         switch (SplashCommand.Parse(args))
         {
+            // The note only after a window opened (2026-10-20, the code review: it followed a refusal too).
             case PictureFolderVerb.View:
-                OpenViewerOn(folder, notice: true);
-                SayIfNoSplashPictures();
+                if (OpenViewerOn(folder, notice: true))
+                {
+                    SayIfNoSplashPictures();
+                }
+
                 return;
             case PictureFolderVerb.Thumbs:
-                OpenThumbsOn(folder);
-                SayIfNoSplashPictures();
+                if (OpenThumbsOn(folder))
+                {
+                    SayIfNoSplashPictures();
+                }
+
                 return;
             case PictureFolderVerb.Purge:
                 await PurgePictureFolderAsync(folder, SplashFolderLabel, cancellationToken).ConfigureAwait(false);

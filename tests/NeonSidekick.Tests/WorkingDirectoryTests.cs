@@ -1476,10 +1476,11 @@ public sealed class WorkingDirectoryTests : IDisposable
 
     /// <summary>
     /// With a bin (2026-10-18, the purges following <c>File deletes to Recycle bin</c>): each of the folder's own entries goes there in name order,
-    /// counted, the folder kept; a drive with no bin deletes them, counted apart; a refusal stops there, the rest left.
+    /// counted, the folder kept. Since 2026-10-20 (the code review) the purge never deletes for good behind the bin: a drive with no bin after
+    /// all stops it with nothing deleted, and an entry the bin refuses is left while the rest go on.
     /// </summary>
     [Fact]
-    public void PurgeFolder_WithABin_SendsEachEntry_KeepsTheFolder_AndStopsAtARefusal()
+    public void PurgeFolder_WithABin_SendsEachEntry_KeepsTheFolder_LeavesARefusal_AndStopsAtNoBin()
     {
         Put(Path.Combine("out", "b.png"), "12");
         Put(Path.Combine("out", "a", "c.png"), "345");
@@ -1488,7 +1489,7 @@ public sealed class WorkingDirectoryTests : IDisposable
         var result = _files.PurgeFolder("out", bin);
 
         Assert.Equal(FileOutcome.Ok, result.Outcome);
-        Assert.Equal((2, 1, 5L, true, 2, 2, 0), (result.Files, result.Folders, result.Bytes, result.ToBin, result.Entries, result.Recycled, result.DeletedNoBin));
+        Assert.Equal((2, 1, 5L, true, 2, 2, 0), (result.Files, result.Folders, result.Bytes, result.ToBin, result.Entries, result.Recycled, result.Deleted));
         Assert.Equal([Full("out" + Path.DirectorySeparatorChar + "a"), Full("out" + Path.DirectorySeparatorChar + "b.png")], bin.Moved);
         Assert.True(Directory.Exists(Full("out")));
         Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
@@ -1496,15 +1497,63 @@ public sealed class WorkingDirectoryTests : IDisposable
         Put(Path.Combine("out", "x.png"), "1");
         Put(Path.Combine("out", "y.png"), "2");
         var noBin = _files.PurgeFolder("out", new NeonSidekick.Tests.Fakes.FakeRecycleBin { Answer = new RecycleResult(RecycleOutcome.NoBin) });
-        Assert.Equal((FileOutcome.Ok, 0, 2), (noBin.Outcome, noBin.Recycled, noBin.DeletedNoBin));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(Full("out")));
+        Assert.Equal((FileOutcome.Failed, PurgeStop.NoBin, 0, 0, 0), (noBin.Outcome, noBin.Stop, noBin.Done, noBin.Recycled, noBin.Removed));
+        Assert.Equal(2, Directory.EnumerateFileSystemEntries(Full("out")).Count());   // nothing deleted for good
+
+        var refusing = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
+        refusing.AnswerFor = path => path.EndsWith("x.png", StringComparison.Ordinal) ? new RecycleResult(RecycleOutcome.Failed, "no") : new RecycleResult(RecycleOutcome.Recycled);
+        var left = _files.PurgeFolder("out", refusing);
+        Assert.Equal((FileOutcome.Failed, "no", 2, 2, 1, 1, PurgeStop.None), (left.Outcome, left.Detail, left.Entries, left.Done, left.Recycled, left.Left, left.Stop));
+        Assert.Equal((1, 1L), (left.Files, left.Bytes));   // only what went
+        Assert.True(File.Exists(Full(Path.Combine("out", "x.png"))));
+        Assert.False(File.Exists(Full(Path.Combine("out", "y.png"))));
+    }
+
+    /// <summary>A bin that doesn't answer stops the purge (2026-10-20): each call waits its 30 s, so going on would wait that per entry.</summary>
+    [Fact]
+    public void PurgeFolder_ABinThatDoesNotAnswer_Stops()
+    {
+        Put(Path.Combine("out", "x.png"), "1");
+        Put(Path.Combine("out", "y.png"), "2");
+        var bin = new NeonSidekick.Tests.Fakes.FakeRecycleBin { Answer = new RecycleResult(RecycleOutcome.Failed, FileText.RecycleNoAnswer) };
+
+        var result = _files.PurgeFolder("out", bin);
+
+        Assert.Equal((PurgeStop.NoAnswer, FileText.RecycleNoAnswer, 0), (result.Stop, result.Detail, result.Removed));
+        Assert.Single(bin.Moved);
+    }
+
+    /// <summary>
+    /// One listing (2026-10-20, the code review): the count, the label and the work are the listing's, an entry gone since it was made is
+    /// skipped and counted (the fake bin would answer Recycled for it), and the token stops the purge between entries with how far it got.
+    /// </summary>
+    [Fact]
+    public void PurgeFolder_OverOneListing_SkipsAVanishedEntry_AndStopsAtTheToken()
+    {
+        Put(Path.Combine("out", "a.png"), "1");
+        Put(Path.Combine("out", "b.png"), "22");
+        Put(Path.Combine("out", "c.png"), "333");
+        var listing = _files.ListPurge("out");
+        Assert.Equal((FileOutcome.Ok, 3, 0, 6L, 0), (listing.Outcome, listing.Files, listing.Folders, listing.Bytes, listing.Links));
+        File.Delete(Full(Path.Combine("out", "a.png")));
+        var bin = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
+
+        var result = _files.PurgeFolder(listing, bin);
+
+        Assert.Equal((FileOutcome.Ok, 1, 2, 2, 5L), (result.Outcome, result.Vanished, result.Recycled, result.Files, result.Bytes));
+        Assert.Equal(2, bin.Moved.Count);
 
         Put(Path.Combine("out", "x.png"), "1");
         Put(Path.Combine("out", "y.png"), "2");
-        var refusing = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
-        refusing.AnswerFor = _ => refusing.Moved.Count == 1 ? new RecycleResult(RecycleOutcome.Recycled) : new RecycleResult(RecycleOutcome.Failed, "no");
-        var stopped = _files.PurgeFolder("out", refusing);
-        Assert.Equal((FileOutcome.Failed, "no", 2, 1), (stopped.Outcome, stopped.Detail, stopped.Entries, stopped.Recycled));
+        using var stop = new CancellationTokenSource();
+        var stopping = new NeonSidekick.Tests.Fakes.FakeRecycleBin();
+        stopping.AnswerFor = _ =>
+        {
+            stop.Cancel();
+            return new RecycleResult(RecycleOutcome.Recycled);
+        };
+        var stopped = _files.PurgeFolder(_files.ListPurge("out"), stopping, stop.Token);
+        Assert.Equal((FileOutcome.Failed, PurgeStop.Cancelled, 1, 2, 1), (stopped.Outcome, stopped.Stop, stopped.Removed, stopped.Entries, stopped.Done));
         Assert.True(File.Exists(Full(Path.Combine("out", "y.png"))));
     }
 

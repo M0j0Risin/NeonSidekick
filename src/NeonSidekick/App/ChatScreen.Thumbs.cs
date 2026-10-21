@@ -81,14 +81,15 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The browser on <paramref name="folderSetting"/>'s folder under the profile's images folder (<c>/comfy thumbs</c>; <c>/camera thumbs</c> and
-    /// <c>/screen thumbs</c> since 2026-10-09), made when it is not there yet. Any thread.
+    /// <c>/screen thumbs</c> since 2026-10-09), made when it is not there yet. Any thread. True when the browser opened (2026-10-20, the code
+    /// review: <c>/splash thumbs</c>' note on the built-in pictures followed a refusal too).
     /// </summary>
-    private void OpenThumbsOn(string? folderSetting)
+    private bool OpenThumbsOn(string? folderSetting)
     {
         if (_openThumbs is null)
         {
             _flow.Error(ThumbsText.UnavailableHere);
-            return;
+            return false;
         }
 
         string folder = ComfyStudio.OutputFolder(folderSetting);
@@ -96,7 +97,7 @@ internal sealed partial class ChatScreen
         if (outcome != FileOutcome.Ok)
         {
             _flow.Error(FileText.Error(outcome, folder, "watch"));
-            return;
+            return false;
         }
 
         try
@@ -106,18 +107,19 @@ internal sealed partial class ChatScreen
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _flow.Error(ThumbsText.Failed(full, ex.Message));
-            return;
+            return false;
         }
 
-        OpenThumbs(full, null);
+        return OpenThumbs(full, null);
     }
 
-    private void OpenThumbs(string folder, string? select)
+    /// <summary>The browser on <paramref name="folder"/>, <paramref name="select"/> picked; true when it opened, else the error said.</summary>
+    private bool OpenThumbs(string folder, string? select)
     {
         if (_openThumbs is null)
         {
             _flow.Error(ThumbsText.UnavailableHere);
-            return;
+            return false;
         }
 
         try
@@ -125,10 +127,12 @@ internal sealed partial class ChatScreen
             _openThumbs(folder, select);
             _flow.Notice(ThumbsText.Opened(folder));
             _flow.Notice(ThumbsText.KeysHere);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException or ArgumentException)
         {
             _flow.Error(ThumbsText.Failed(folder, ex.Message));
+            return false;
         }
     }
 
