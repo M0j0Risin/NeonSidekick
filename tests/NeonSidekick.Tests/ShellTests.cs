@@ -69,7 +69,9 @@ public sealed class ShellTests
     [InlineData("npm -g install x", "npm install")]   // a known flag
     [InlineData("git --git-dir .git --no-pager log", "git log")]
     [InlineData("kubectl -n prod delete pod x", "kubectl delete")]
-    [InlineData("docker --context remote rm -f x", "docker rm")]
+    [InlineData("docker --context remote rm -f x", CommandPrefix.Unreadable)]   // another daemon, as -H is (2026-10-20, the code review)
+    [InlineData("docker -c remote ps", CommandPrefix.Unreadable)]
+    [InlineData("docker --context=remote ps", CommandPrefix.Unreadable)]
     [InlineData("npm --prefix web run build", "npm run")]
     [InlineData("GIT STATUS", "git status")]
     [InlineData("dotnet build -c Release", "dotnet build")]
@@ -118,6 +120,101 @@ public sealed class ShellTests
     {
         Assert.True(ShellKinds.TryParse(shell, out var kind));
         Assert.Equal(prefix, CommandPrefix.Of(command, shell: kind));
+    }
+
+    /// <summary>
+    /// The programs that run another command, a string as code, or a script (2026-10-20, the code review): read through to the command they
+    /// run, or the line asks; never the bare runner, which an allowed <c>env</c>, <c>xargs</c>, <c>eval</c>, <c>iex</c> or <c>source</c> once covered
+    /// whatever came after it.
+    /// </summary>
+    [Theory]
+    [InlineData("bash", "env FOO=1 git push", "git push")]
+    [InlineData("bash", "env PATH=/tmp/x git status", CommandPrefix.Unreadable)]   // env's assignments judged as a leading one is
+    [InlineData("bash", "env -u PATH git status", CommandPrefix.Unreadable)]
+    [InlineData("bash", "env \"PATH=/tmp/x\" git status", CommandPrefix.Unreadable)]   // a quoted one asks
+    [InlineData("bash", "env -i git status", "git status")]
+    [InlineData("bash", "env -S 'rm -rf x'", CommandPrefix.Unreadable)]   // splits a string into the command
+    [InlineData("bash", "env -C /tmp ./git status", CommandPrefix.Unreadable)]   // an option the grammar doesn't know
+    [InlineData("bash", "env", "env")]   // alone, or with only assignments: lists the environment
+    [InlineData("bash", "env FOO=1", "env")]
+    [InlineData("zsh", "/usr/bin/env git status", "git status")]
+    [InlineData("bash", "./env git status", "./env")]   // a model's own env is a program of its own
+    [InlineData("bash", "./script.sh x", "./script")]   // so is its own script, whatever its name
+    [InlineData("zsh", "/opt/homebrew/bin/gtimeout 30 rm -rf x", CommandPrefix.Unreadable)]   // read through only from the system's folders
+    [InlineData("zsh", "/usr/local/bin/xargs rm", CommandPrefix.Unreadable)]
+    [InlineData("zsh", "/usr/bin/xargs", "/usr/bin/xargs")]
+    [InlineData("powershell", "C:\\Windows\\System32\\sudo.exe del x", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Microsoft.PowerShell.Management\\Start-Process notepad", CommandPrefix.Unreadable)]
+    [InlineData("bash", "nohup git push", "git push")]
+    [InlineData("bash", "nohup env PATH=/tmp/x git push", CommandPrefix.Unreadable)]
+    [InlineData("bash", "nice -n 5 make test", "make test")]
+    [InlineData("bash", "nice -10 make test", "make test")]
+    [InlineData("bash", "nice -n 5", "nice")]
+    [InlineData("bash", "timeout 30 git fetch", "git fetch")]
+    [InlineData("bash", "timeout -s KILL --kill-after=5 30 rm -rf x", "rm")]
+    [InlineData("bash", "timeout -x 30 rm x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "stdbuf -oL tail -f x", "tail")]
+    [InlineData("bash", "setsid -f sleep 10", "sleep")]
+    [InlineData("zsh", "caffeinate -dims make test", "make test")]
+    [InlineData("zsh", "/usr/bin/time -l git log", "git log")]
+    [InlineData("zsh", "time -p git log", "git log")]   // bash's keyword, as before
+    [InlineData("bash", "sudo rm -rf x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "sudo", "sudo")]
+    [InlineData("bash", "xargs rm", CommandPrefix.Unreadable)]
+    [InlineData("bash", "env sudo rm x", CommandPrefix.Unreadable)]
+    [InlineData("zsh", "doas rm x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "eval \"rm -rf x\"", CommandPrefix.Unreadable)]
+    [InlineData("zsh", "builtin eval $cmd", CommandPrefix.Unreadable)]
+    [InlineData("bash", "eval", "eval")]
+    [InlineData("bash", "trap 'rm -rf x' EXIT", CommandPrefix.Unreadable)]
+    [InlineData("bash", "trap -p", "trap")]
+    [InlineData("zsh", "alias git='rm -rf'", CommandPrefix.Unreadable)]
+    [InlineData("zsh", "alias", "alias")]
+    [InlineData("bash", "find . -name '*.cs'", "find")]
+    [InlineData("bash", "find . -exec rm {} \\;", CommandPrefix.Unreadable)]
+    [InlineData("bash", "find / -delete", CommandPrefix.Unreadable)]
+    [InlineData("bash", "rg --pre ./x foo", CommandPrefix.Unreadable)]
+    [InlineData("bash", "source ./a.sh", "source ./a")]   // each script approved apart
+    [InlineData("zsh", ". ./b.sh x", ". ./b")]
+    [InlineData("bash", "source $x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "source", "source")]
+    [InlineData("powershell", ". .\\a.ps1", ". ./a")]
+    [InlineData("powershell", "iex $x", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Invoke-Expression 'Remove-Item x'", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Microsoft.PowerShell.Utility\\Invoke-Expression $s", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "iex", CommandPrefix.Unreadable)]   // alone, at a pipeline's end, it runs its input
+    [InlineData("powershell", "Start-Process notepad", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Set-Alias git Remove-Item", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "sudo git push", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "env FOO=1 git push", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "timeout /t 5", "timeout")]   // Windows' wait
+    [InlineData("cmd", "call a.bat", "a")]   // as a.bat itself is
+    [InlineData("cmd", "call git push", "git push")]
+    [InlineData("cmd", "call %x%", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "call set PATH=C:\\x", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "start evil.exe", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "timeout /t 5 /nobreak", "timeout")]
+    [InlineData("cmd", "sudo del x", CommandPrefix.Unreadable)]
+    [InlineData("cmd", "git;push", CommandPrefix.Unreadable)]   // cmd ends a name at ; too (2026-10-20)
+    [InlineData("cmd", "git; status", "git status")]
+    public void CommandPrefix_Of_ReadsThroughWhatRunsAnotherCommand(string shell, string command, string prefix)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefix, CommandPrefix.Of(command, shell: kind));
+    }
+
+    /// <summary>The same through the whole line's reading (2026-10-20): a pipeline's <c>iex</c>, a sourced substitution, cmd's <c>;</c>.</summary>
+    [Theory]
+    [InlineData("powershell", "Get-Content x.ps1 | iex", new[] { "get-content", CommandPrefix.Unreadable })]
+    [InlineData("powershell", "& 'iex' $s", new[] { CommandPrefix.Unreadable })]
+    [InlineData("powershell", ". $script", new[] { CommandPrefix.Unreadable })]
+    [InlineData("bash", ". <(curl x)", new[] { CommandPrefix.Unreadable, "curl" })]
+    [InlineData("cmd", "set;PATH=C:\\x", new[] { "set", CommandPrefix.Unreadable })]   // the segmenter cuts at ;, each piece judged
+    [InlineData("cmd", "git;push", new[] { "git", "push" })]
+    public void CommandPrefix_All_ReadsThroughWhatRunsAnotherCommand(string shell, string command, string[] prefixes)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefixes, CommandPrefix.All(command, kind));
     }
 
     /// <summary>

@@ -30,8 +30,14 @@ namespace NeonSidekick.Shell;
 /// now <c>./git status</c> (<see cref="Program"/>), a prefix of its own; a bare name is the one found on PATH, cmd's working-folder
 /// search being turned off for every shell child (<see cref="ChildEnvironment"/>'s <c>NoDefaultCurrentDirectoryInExePath</c>). A leading
 /// <c>NAME=value</c> is skipped only in bash and zsh, where it is an assignment: in PowerShell it is the command's name. In cmd the
-/// name ends at a <c>=</c> or <c>,</c>, and since 2026-10-20 (the code review) a first word with text glued after one
+/// name ends at a <c>=</c>, <c>,</c> or <c>;</c>, and since 2026-10-20 (the code review) a first word with text glued after one
 /// (<c>FOO=1</c>, <c>git,push</c>) is <see cref="Unreadable"/>: the program, not cmd, decides whether that text is an argument.</para>
+///
+/// <para>A program that runs another command is read through to it, or asks (later on 2026-10-20, the code review: an allowed
+/// <c>env</c>, <c>xargs</c>, <c>eval</c>, <c>iex</c> or <c>source</c> covered whatever came after it): <c>env</c>, <c>nohup</c>, <c>nice</c>,
+/// <c>timeout</c> and the like by their options to the command's own prefix (<see cref="RunnerSkip"/>); <c>sudo</c>, <c>xargs</c>, <c>eval</c>,
+/// PowerShell's <c>Invoke-Expression</c> and <c>Start-Process</c> as <see cref="Unreadable"/>; a sourced script (<c>. ./a.sh</c>, <c>source
+/// a.sh</c>, PowerShell's <c>. .\a.ps1</c>) with its path in the prefix, cmd's <c>call</c> as the command it calls.</para>
 /// </summary>
 public static partial class CommandPrefix
 {
@@ -96,7 +102,7 @@ public static partial class CommandPrefix
     public static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> DangerousOptions = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
     {
         ["git"] = Set("-c", "--config-env", "--exec-path"),
-        ["docker"] = Set("-H", "--host", "--config"),
+        ["docker"] = Set("-H", "--host", "-c", "--context", "--config"),   // a context names another daemon, as -H does (2026-10-20, the code review)
         ["podman"] = Set("-c", "--connection", "--url", "--identity"),
         ["kubectl"] = Set("--kubeconfig", "-s", "--server", "--token"),
         ["make"] = Set("-C", "--directory", "-f", "--file", "--makefile"),
@@ -586,6 +592,25 @@ public static partial class CommandPrefix
                 continue;
             }
 
+            // A program that runs the command after it (env, nohup, sudo, xargs…) or a string as code (eval, iex): read through, or the line
+            // asks (2026-10-20, the code review: env was the prefix, so an allowed env ran any program with any variable).
+            int runs = RunnerSkip(tokens, first, shell);
+            if (runs == AskSkip)
+            {
+                return Unreadable;
+            }
+
+            if (runs > 0)
+            {
+                if (first + runs >= tokens.Count)
+                {
+                    return Program(word);   // the runner with only its options (nice -n 5, env FOO=1): it runs nothing else
+                }
+
+                first += runs;
+                continue;
+            }
+
             int skip = LeadingSkip(tokens, first, shell);
             if (skip == 0)
             {
@@ -645,6 +670,16 @@ public static partial class CommandPrefix
         if (slash >= 0 && program.Contains(Hole))
         {
             return Unreadable;
+        }
+
+        // A script sourced into the shell is the script (2026-10-20, the code review: . ./a.sh, source a.sh and PowerShell's . .\a.ps1 read as
+        // the bare word, so one approval covered every script): the word and the script's own reading (. ./a), one approval per script. A
+        // script that is a value (. $x, source "$(…)", . <(curl …), a glob) asks.
+        if ((shell is ShellKind.Bash or ShellKind.Zsh && slash < 0 && baseName is "." or "source") || (shell == ShellKind.PowerShell && program == "."))
+        {
+            return first + 1 >= tokens.Count ? program
+                : IsValueWord(tokens[first + 1], shell) ? Unreadable
+                : program + " " + Program(tokens[first + 1]);
         }
 
         if ((SettingPrograms.Contains(baseName) && SetsDangerous(tokens, first + 1))
@@ -780,6 +815,228 @@ public static partial class CommandPrefix
 
         return skip;
     }
+
+    /// <summary>
+    /// How a program that runs the command after it is read on the way to that command: its options with no value, those that take one (the
+    /// next word, glued to a short one, or after <c>=</c>), how many words then stand before the command (<c>timeout</c>'s duration), and
+    /// whether a bare <c>-N</c> is an option (<c>nice -10</c>).
+    /// </summary>
+    private sealed record RunnerGrammar(IReadOnlySet<string> Flags, IReadOnlySet<string> Values, int Positionals = 0, bool NumericOption = false);
+
+    /// <summary>
+    /// The programs bash and zsh read through to the command they run (2026-10-20, the code review: <c>env FOO=1 prog</c> was the prefix
+    /// <c>env</c>, so an allowed <c>env</c>, approved once to list the environment, ran any program and set any variable past
+    /// <see cref="DangerousEnvVars"/>; <c>nohup</c>, <c>nice</c>, <c>timeout</c> and the rest the same). Their options are read by these
+    /// grammars, an option they don't list asks (its value may be the command: <c>env -S</c>, <c>env -C</c>, <c>env -P</c>), and env's
+    /// <c>NAME=value</c> words are judged as a leading assignment is. The prefix is then the command's own. Named bare or from
+    /// <c>/usr/bin</c>, <c>/bin</c>, <c>/usr/sbin</c> or <c>/sbin</c>; a runner by another path is a program of its own (a model's
+    /// <c>./env</c>). <c>time</c> by its path only: the bare word is bash's keyword (<see cref="LeadingWords"/>).
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, RunnerGrammar> ReadThroughRunners = new Dictionary<string, RunnerGrammar>(StringComparer.Ordinal)
+    {
+        ["env"] = new(Set("-0", "--null", "-v", "--debug", "-i", "-", "--ignore-environment", "--default-signal", "--ignore-signal", "--block-signal", "--list-signal-handling"), Set("-u", "--unset")),
+        ["nohup"] = new(Set(), Set()),
+        ["nice"] = new(Set(), Set("-n", "--adjustment"), NumericOption: true),
+        ["timeout"] = new(Set("--preserve-status", "--foreground", "-f", "-p", "-v", "--verbose"), Set("-s", "--signal", "-k", "--kill-after"), Positionals: 1),
+        ["gtimeout"] = new(Set("--preserve-status", "--foreground", "-f", "-p", "-v", "--verbose"), Set("-s", "--signal", "-k", "--kill-after"), Positionals: 1),
+        ["setsid"] = new(Set("-c", "--ctty", "-f", "--fork", "-w", "--wait"), Set()),
+        ["stdbuf"] = new(Set(), Set("-i", "-o", "-e", "--input", "--output", "--error")),
+        ["caffeinate"] = new(Set("-d", "-i", "-m", "-s", "-u"), Set("-t", "-w")),
+        ["time"] = new(Set("-p", "-l", "-h", "-a", "--append", "-v", "--verbose", "-q", "--quiet", "--portability"), Set("-o", "--output", "-f", "--format")),
+    };
+
+    /// <summary>
+    /// The programs whose command cannot be read from the words, in every shell (2026-10-20, the code review): the ones that run it as another
+    /// user or under another root (<c>sudo</c>, Windows' too; <c>doas</c>, <c>su</c>, <c>chroot</c>…), build it from their input
+    /// (<c>xargs</c>, <c>parallel</c>), run it through a shell or a string (<c>watch</c>, <c>flock</c>, <c>script</c>), or under a tracer or a
+    /// sandbox of their own. With a word after them the line asks; alone each is its own prefix. Bare or from a system folder, as
+    /// <see cref="ReadThroughRunners"/>. Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> UnreadableRunners = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "sudo", "doas", "su", "pkexec", "runuser", "xargs", "parallel", "watch", "flock", "script", "unbuffer", "chrt", "taskset", "ionice",
+        "numactl", "chroot", "arch", "sandbox-exec", "systemd-run", "nsenter", "unshare", "firejail", "strace", "ltrace", "dtruss", "busybox",
+    };
+
+    /// <summary>
+    /// PowerShell's cmdlets and aliases that run what they are given (2026-10-20, the code review): <c>Start-Process</c> a program,
+    /// <c>Invoke-Item</c> a file by what opens it, <c>Set-Alias</c> a name under another one (<c>Set-Alias git Remove-Item; git status</c>). With
+    /// a word after them the line asks. <c>Invoke-Expression</c> runs a string and asks always, alone at a pipeline's end too (<c>… | iex</c>).
+    /// </summary>
+    private static readonly IReadOnlySet<string> PowerShellRunners = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "start-process", "saps", "start", "invoke-item", "ii", "set-alias", "new-alias", "sal", "nal",
+    };
+
+    /// <summary>
+    /// The options with which a program runs another command or deletes (2026-10-20, the code review: an allowed <c>find</c> ran
+    /// <c>find . -exec rm {} \;</c> and <c>find / -delete</c>). A line carrying one asks. A tripwire over the common ones, not every program's
+    /// every hook.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> CommandOptions = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+    {
+        ["find"] = Set("-exec", "-execdir", "-ok", "-okdir", "-delete"),
+        ["gfind"] = Set("-exec", "-execdir", "-ok", "-okdir", "-delete"),
+        ["fd"] = Set("-x", "--exec", "-X", "--exec-batch"),
+        ["fdfind"] = Set("-x", "--exec", "-X", "--exec-batch"),
+        ["rg"] = Set("--pre"),
+    };
+
+    /// <summary>
+    /// How many words at <paramref name="at"/> a program that runs another command takes before that command (2026-10-20, the code review): 0
+    /// when the word is no such program (or stands alone), <see cref="AskSkip"/> when the command cannot be read. bash and zsh read
+    /// <see cref="ReadThroughRunners"/> through and ask for <c>eval</c> (code from a string), a <c>trap</c> that sets an action (the same) and
+    /// an <c>alias</c> that defines one (zsh expands aliases in a script: <c>alias git=rm</c> then <c>git status</c>, as a function's
+    /// definition asks); PowerShell asks for <c>Invoke-Expression</c> and its <see cref="PowerShellRunners"/>, cmd for <c>start</c>, and
+    /// cmd's <c>call</c> is read through (<c>call a.bat</c> is <c>a</c>, as <c>a.bat</c> is), a value after it asking (<c>call %x%</c>).
+    /// <see cref="UnreadableRunners"/> ask in every shell; in PowerShell and cmd the read-through runners ask too, but Windows' own
+    /// <c>timeout /t 5</c>. Any program with one of its <see cref="CommandOptions"/> asks.
+    /// </summary>
+    private static int RunnerSkip(List<string> tokens, int at, ShellKind shell)
+    {
+        string word = tokens[at];
+        string program = Program(word);
+        int slash = program.LastIndexOf('/');
+        string name = program[(slash + 1)..];
+        if (CommandOptions.TryGetValue(name, out var runsCommand) && tokens.Skip(at + 1).Any(t => runsCommand.Contains(OptionName(t))))
+        {
+            return AskSkip;
+        }
+
+        if (shell == ShellKind.PowerShell && name is "invoke-expression" or "iex")
+        {
+            return AskSkip;   // any qualifier too (Microsoft.PowerShell.Utility\Invoke-Expression)
+        }
+
+        // A program by a relative path (./env, sub/script.sh) is the working folder's own, never the system's runner; alone, a runner is its own
+        // prefix (env lists the environment, nohup and eval do nothing).
+        string folder = program[..(slash + 1)];
+        bool absolute = folder.StartsWith('/') || folder.StartsWith('~') || (folder.Length > 2 && char.IsAsciiLetter(folder[0]) && folder[1] == ':');
+        bool moduleQualified = shell == ShellKind.PowerShell && slash >= 0 && !absolute && !folder.StartsWith('.');   // Microsoft.PowerShell.Management\Start-Process
+        if ((slash >= 0 && !absolute && !moduleQualified) || at + 1 >= tokens.Count)
+        {
+            return 0;
+        }
+
+        string next = tokens[at + 1];
+        bool readThrough = ReadThroughRunners.TryGetValue(name, out var grammar);
+        // Read through only from the system's folders: a runner anywhere else by its full path (Homebrew's gtimeout, C:\Windows\System32\sudo.exe,
+        // a script of that name the model wrote) asks rather than being read as the system's.
+        if (UnreadableRunners.Contains(name) || (readThrough && slash >= 0 && folder is not ("/usr/bin/" or "/bin/" or "/usr/sbin/" or "/sbin/")))
+        {
+            return AskSkip;
+        }
+        switch (shell)
+        {
+            case ShellKind.PowerShell:
+                return PowerShellRunners.Contains(name) || (readThrough && name != "time" && !(name == "timeout" && WindowsTimeout(tokens, at))) ? AskSkip : 0;
+            case ShellKind.Cmd when name == "call":
+                return IsValueWord(next, shell) ? AskSkip : 1;
+            case ShellKind.Cmd:
+                return name == "start" || (readThrough && name != "time" && !(name == "timeout" && WindowsTimeout(tokens, at))) ? AskSkip : 0;
+        }
+
+        if (name == "eval" || (name == "trap" && next is not ("-l" or "-p" or "-")) || (name == "alias" && tokens.Skip(at + 1).Any(t => t.Contains('=', StringComparison.Ordinal))))
+        {
+            return AskSkip;
+        }
+
+        return !readThrough || (name == "time" && slash < 0) ? 0 : ReadThrough(tokens, at, grammar!, env: name == "env");
+    }
+
+    /// <summary>Whether a <c>timeout</c> line is Windows' wait (<c>timeout /t 5 /nobreak</c>, <c>timeout 5</c>), which runs nothing.</summary>
+    private static bool WindowsTimeout(List<string> tokens, int at) =>
+        tokens.Skip(at + 1).All(t => t.ToLowerInvariant() is "/t" or "-t" or "/nobreak" or "-nobreak" || (t.TrimStart('-').Length > 0 && t.TrimStart('-').All(char.IsAsciiDigit)));
+
+    /// <summary>
+    /// The words a <see cref="ReadThroughRunners"/> runner at <paramref name="at"/> takes before its command, by <paramref name="grammar"/>: its
+    /// options, its positionals, and for <c>env</c> its <c>NAME=value</c> words (a dangerous one, a quoted one or an <c>-u</c> of a dangerous
+    /// name asks). <see cref="AskSkip"/> for an option the grammar doesn't know.
+    /// </summary>
+    private static int ReadThrough(List<string> tokens, int at, RunnerGrammar grammar, bool env)
+    {
+        int i = at + 1;
+        while (i < tokens.Count)
+        {
+            string word = tokens[i];
+            if (word == "--")
+            {
+                i++;
+                break;
+            }
+
+            if (word.Length == 0 || word[0] != '-' || (word == "-" && !grammar.Flags.Contains(word)))
+            {
+                break;
+            }
+
+            string name = OptionName(word);
+            if (grammar.Flags.Contains(name))
+            {
+                i++;
+                continue;
+            }
+
+            if (grammar.Values.Contains(name))
+            {
+                bool glued = word.Length > name.Length;
+                string? value = glued ? word[(name.Length + 1)..] : i + 1 < tokens.Count ? tokens[i + 1] : null;
+                if (env && value is not null && IsDangerousName(value.Trim('"', '\'')))
+                {
+                    return AskSkip;   // env -u PATH: what the command's name resolves by
+                }
+
+                i += glued ? 1 : 2;
+                continue;
+            }
+
+            if (word.Length > 2 && word[1] != '-')
+            {
+                // A short option glued to its value (-n5, -oL, -sKILL), short flags together (-dims), nice's -10.
+                if (grammar.Values.Contains(word[..2]))
+                {
+                    if (env && IsDangerousName(word[2..].Trim('"', '\'')))
+                    {
+                        return AskSkip;
+                    }
+
+                    i++;
+                    continue;
+                }
+
+                if (word.Skip(1).All(c => grammar.Flags.Contains("-" + c)) || (grammar.NumericOption && word.Skip(1).All(char.IsAsciiDigit)))
+                {
+                    i++;
+                    continue;
+                }
+            }
+            else if (word.Length == 2 && grammar.NumericOption && char.IsAsciiDigit(word[1]))
+            {
+                i++;
+                continue;
+            }
+
+            return AskSkip;
+        }
+
+        i = Math.Min(tokens.Count, i + grammar.Positionals);
+        while (env && i < tokens.Count && tokens[i].Contains('=', StringComparison.Ordinal))
+        {
+            // env sets every NAME=value before its command, whatever the shell: judged as a leading assignment is; a quoted one asks.
+            if (QuoteKind(tokens[i][0], ShellKind.Bash) != '\0' || IsDangerousAssignment(tokens[i]))
+            {
+                return AskSkip;
+            }
+
+            i++;
+        }
+
+        return i - at;
+    }
+
+    /// <summary>Whether a word is a value rather than a name written out: a variable, a substitution, a glob, or cmd's <c>%x%</c>/<c>!x!</c>.</summary>
+    private static bool IsValueWord(string word, ShellKind shell) =>
+        word.IndexOfAny(shell == ShellKind.Cmd ? ['%', '!'] : ['$', '`', Hole, '*', '?', '[']) >= 0;
 
     /// <summary>
     /// Every distinct prefix of <paramref name="command"/> as <paramref name="shell"/> runs it: its segments' in the order they come,
@@ -1320,8 +1577,10 @@ public static partial class CommandPrefix
         return i < 0 || text[i] is ';' or '|' or '&' or '(' or '{' or '=' or ',' or '\n' or '\r';
     }
 
-    // The characters that end a command's name in cmd besides a blank.
-    private static readonly char[] CmdNameEnds = ['=', ','];
+    // The characters that end a command's name in cmd besides a blank (a space, a tab, and the VT, FF and no-break space Tokens splits at as
+    // white space): cmd's documented delimiters , ; = (2026-10-20, the code review: ; was missing, so a word with text glued after a ; in a
+    // segment of its own read as one program name; the segmenter cuts at a bare ; first, so only Of's own callers met it).
+    private static readonly char[] CmdNameEnds = ['=', ',', ';'];
 
     /// <summary>
     /// A token as a program name: the quotes off, one of <see cref="ExecutableExtensions"/> off, lower case, and its folder kept with

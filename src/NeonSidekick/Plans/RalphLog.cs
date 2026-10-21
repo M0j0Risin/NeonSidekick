@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
 
@@ -56,7 +58,7 @@ public sealed record RalphLogDocument(RalphLogHead? Head, IReadOnlyList<string> 
 /// output is scrubbed, redacted (<see cref="ToolRedaction.Text"/>) and fenced, at most <see cref="TailLines"/> lines. <c>ralph.lock</c> beside it holds
 /// the process that runs the loop (its pid and start time): another live one refuses a start, a stale one is taken over.
 /// </summary>
-public static class RalphLog
+public static partial class RalphLog
 {
     public const string FileName = "ralph.md";
     public const string LockName = "ralph.lock";
@@ -759,9 +761,10 @@ public static class RalphLog
     /// <summary>
     /// The lock of <paramref name="planPath"/> taken for <paramref name="me"/>: true when it was free, stale (<paramref name="alive"/> says its owner is
     /// gone) or already this process's; false while another live process holds it. Taken by creating the file whole, never over one that is there
-    /// (2026-10-19, the review: read-then-write let two instances starting together both take it): created only where none is
-    /// (<see cref="TryCreate"/>), so of two racing for it one fails, and one being written reads as held. A stale lock is removed only while it
-    /// still says what was read, then the take tried again.
+    /// (2026-10-19, the review: read-then-write let two instances starting together both take it): published whole, only where none is
+    /// (<see cref="TryCreate"/>), so of two racing for it one fails, and a reader finds it whole or not at all. A stale lock is removed only
+    /// while it still says what was read (under the take-over guard, <see cref="RemoveIfStill"/>), then the take tried again: of several
+    /// takers, the one that removes it and publishes first holds it, and the rest read that one's.
     /// </summary>
     public static bool TryLock(WorkingDirectory files, string planPath, LockOwner me, Func<LockOwner, bool> alive)
     {
@@ -813,44 +816,69 @@ public static class RalphLog
     public static bool StillHeld(WorkingDirectory files, string planPath, Func<LockOwner, bool> alive) => TryLock(files, planPath, Me, alive);
 
     /// <summary>
-    /// <paramref name="text"/> as a new file at <paramref name="full"/>: false when one is there (or it could not be written). Created with
-    /// <see cref="FileMode.CreateNew"/>, the one create that fails on a file already there on every system (2026-10-20, the Mac's gate: a temp file
-    /// moved in with <c>File.Move(overwrite: false)</c> is a look then a rename on macOS, and of eight racers all eight took the lock). Held unshared
-    /// while written, so a reader meanwhile finds it unreadable; one that slips in first reads it short, which <see cref="ReadLockAt"/> takes for a
-    /// lock being written while it is younger than <see cref="WritingGrace"/>.
+    /// <paramref name="text"/> as a new file at <paramref name="full"/>: false when one is there (or it could not be written). Written whole to a
+    /// temp file of its own beside it, then published under the lock's name without ever replacing one (2026-10-20, the code review): off Windows
+    /// by <c>link(2)</c>, which fails with <c>EEXIST</c> on a name already there, in one step; on Windows by <c>File.Move(overwrite: false)</c>,
+    /// MoveFileEx without a replace, the same there. The temp file is removed after, published or not. A reader so finds the lock whole or not
+    /// at all, and of any number of racers exactly one publishes. Until then it was created in place with <see cref="FileMode.CreateNew"/>:
+    /// a reader could find it empty or half written (read as held for a few seconds, then as garbage a second taker removed, so a stalled
+    /// writer and that taker both ran), and off Windows <see cref="FileShare.None"/> is no share mode but an <c>flock</c> taken after the
+    /// <c>O_EXCL</c> create, so a reader's shared <c>flock</c> in between failed the creator's and nobody held it. The move alone had been tried
+    /// before that, and on macOS .NET's move without overwrite is a look then a rename: of eight racers all eight took it (the Mac's gate). A
+    /// volume with no hard links (exFAT, FAT, some network shares) answers the link with
+    /// <c>EPERM</c>/<c>ENOTSUP</c>; it then falls back to that move, whose race is the volume's (logged).
     /// </summary>
     private static bool TryCreate(string full, string text)
     {
-        FileStream stream;
+        string temp = full + "." + N(Environment.ProcessId) + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            stream = new FileStream(full, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            File.WriteAllText(temp, text);
+            return Publish(temp, full);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
         }
-
-        try
+        finally
         {
-            using (stream)
-            {
-                stream.Write(Encoding.UTF8.GetBytes(text));
-            }
-
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Ours, half written: gone again rather than left to read as held until it is old.
-            DeleteQuietly(full);
-            return false;
+            DeleteQuietly(temp);
         }
     }
 
-    /// <summary>How long a lock that is not whole (no owner, no start, no last line end) counts as one being written, so held, before it is garbage.</summary>
-    private static readonly TimeSpan WritingGrace = TimeSpan.FromSeconds(5);
+    /// <summary><paramref name="temp"/> made <paramref name="full"/>, never over a file there: true when it was published, false when one is there.</summary>
+    private static bool Publish(string temp, string full)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            if (Link(temp, full) == 0)
+            {
+                return true;
+            }
+
+            int errno = Marshal.GetLastPInvokeError();
+            if (errno is not (Eperm or EnotsupMac or EopnotsuppMac or EopnotsuppLinux))
+            {
+                // EEXIST: held. Anything else (the folder gone, no write access) is no lock either.
+                return false;
+            }
+
+            DiagnosticLog.Debug("Plan", "ralph lock: no hard links on the volume of " + full + " (errno " + N(errno) + "); moving it in instead");
+        }
+
+        File.Move(temp, full, overwrite: false);
+        return true;
+    }
+
+    // The errno values that say a volume takes no hard links: macOS's and Linux's EPERM, macOS's ENOTSUP and EOPNOTSUPP, Linux's EOPNOTSUPP.
+    private const int Eperm = 1;
+    private const int EnotsupMac = 45;
+    private const int EopnotsuppMac = 102;
+    private const int EopnotsuppLinux = 95;
+
+    [LibraryImport("libc", EntryPoint = "link", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial int Link(string existing, string created);
 
     /// <summary>How old a take-over guard is before it counts as left by a process that died holding it.</summary>
     private static readonly TimeSpan GuardStale = TimeSpan.FromSeconds(30);
@@ -930,8 +958,8 @@ public static class RalphLog
     }
 
     /// <summary>
-    /// The lock file at a full path read, sharing every access so a taker's read never stops another's delete. One that is not whole and younger
-    /// than <see cref="WritingGrace"/> is being written (<see cref="TryCreate"/>): unreadable, so held, never taken for garbage and removed.
+    /// The lock file at a full path read, sharing every access so a taker's read never stops another's delete. Always whole, being published
+    /// whole (<see cref="TryCreate"/>), so what it says is what its writer wrote: one that names no owner is not a lock.
     /// </summary>
     private static (LockRead State, LockOwner? Owner) ReadLockAt(string full)
     {
@@ -939,10 +967,7 @@ public static class RalphLog
         {
             using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
-            string text = reader.ReadToEnd();
-            var owner = ParseLock(text);
-            bool whole = owner is not null && owner.Started != DateTimeOffset.MinValue && text.EndsWith('\n');
-            return !whole && DateTime.UtcNow - File.GetLastWriteTimeUtc(stream.SafeFileHandle) < WritingGrace ? (LockRead.Unreadable, null) : (LockRead.Read, owner);
+            return (LockRead.Read, ParseLock(reader.ReadToEnd()));
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {

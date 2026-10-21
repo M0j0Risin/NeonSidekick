@@ -522,15 +522,44 @@ public static class ShellText
     ];
 
     /// <summary>
-    /// A Mac's own directory writers (2026-10-18, the Mac AD plan: the directory tools now run there): <c>dscl</c> changing a record on an
-    /// Active Directory node (or <c>/Search</c>, which can resolve to one), and <c>dsconfigad</c> changing the Mac's binding. Read on a Mac
-    /// alone, beside <see cref="AdminDirectoryWords"/>, so Windows' list is unchanged.
+    /// A Mac's own directory writers (2026-10-18, the Mac AD plan: the directory tools now run there), judged in <see cref="AdminPolice"/> by
+    /// these words on a Mac alone, beside <see cref="AdminDirectoryWords"/>, so Windows' list is unchanged. <c>dscl</c> refused when it writes
+    /// (one of these verbs, with or without its dash) to any node but the local one, or on a line that names an Active Directory node or
+    /// <c>/Search</c> (which can resolve to one) anywhere. Since 2026-10-20 (the code review: the node had to come before the verb, a
+    /// <c>/Active\ Directory</c> escaped by zsh and <c>-createpl</c>, <c>-mcxset</c> and the rest got past the old pattern), the whole list from
+    /// <c>dscl</c>'s help. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> AdminDirectoryWordsMac =
-    [
-        @"\bdscl\b[^\r\n;&|]*?(?:/Active Directory|/Search)\b[^\r\n;&|]*?\s-(?:create|delete|append|merge|change|passwd)\b",
-        @"\bdsconfigad\b[^\r\n;&|]*?\s-(?:add|remove|force|leave)\b",
-    ];
+    public static readonly IReadOnlySet<string> DsclWriteVerbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "create", "createpl", "createpli", "delete", "deletepl", "deletepli", "append", "appendpl", "appendpli", "merge", "mergepl", "mergepli",
+        "change", "changei", "passwd", "mcxset", "mcxedit", "mcxdelete", "mcxdeleteall", "mcximport",
+    };
+
+    /// <summary>
+    /// The <c>dscl</c> verbs that only read. A <c>dscl</c> whose command is neither these nor <see cref="DsclWriteVerbs"/> (none, a redirection,
+    /// <c>| dscl</c>) runs the commands it reads from its input, interactively: refused while the directory tools are on, since a later
+    /// <c>process</c> write of <c>create …</c> names neither <c>dscl</c> nor the node (2026-10-20, the code review). Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> DsclReadVerbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "read", "readall", "readpl", "readpli", "list", "search", "diff", "auth", "authonly", "mcxread", "mcxexport", "mcxhelp",
+    };
+
+    /// <summary>
+    /// What names Active Directory or the search node to the Mac's directory tools, case-blind: <c>/Active Directory</c> however its space is
+    /// written (quoted apart, escaped as zsh's <c>/Active\ Directory</c>) and <c>/Search</c>. Pinned.
+    /// </summary>
+    public const string MacDirectoryNodePattern = @"Active[\s\\""']*Directory|/Search\b";
+
+    /// <summary>
+    /// The <c>dsconfigad</c> options that only read (2026-10-20, the code review: <c>-add</c>, <c>-remove</c>, <c>-force</c> and <c>-leave</c>
+    /// were refused, while every advanced option, <c>-groups</c>, <c>-alldomains</c>, <c>-passinterval</c>…, changes the binding too). Any
+    /// other option is refused. Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> DsconfigadReadOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "-show", "-xml", "-help", "-h" };
+
+    /// <summary>The <c>dseditgroup</c> operations that change a group, refused on a directory node (<c>-n</c> not the local one) or a line naming one. Pinned.</summary>
+    public static readonly IReadOnlySet<string> DseditgroupWriteOperations = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "edit", "create", "delete" };
 
     /// <summary>What a result the admin police refused opens with.</summary>
     public const string AdminHead = "Error: refused by the shell police — admin";

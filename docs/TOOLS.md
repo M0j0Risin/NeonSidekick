@@ -638,7 +638,11 @@ The same tools, `/ad` and `--ad-check`, read-only as on Windows.
 
 While *Service tools*, *Task tools* or *Directory tools* is on, with *Shell police*, a `run_command` line, a script file it runs, an `execute_code` script or a `process` write that would change one of them is refused before any approval, whatever *Shell command policy* says.
 
-* **Refused:** changing a service (`sc stop`, `net stop`, `Restart-Service`, a `ServiceController`'s `.Stop()`, WMI's `StopService`, its registry key…), a task (`schtasks /run`, `Disable-ScheduledTask`, the `Schedule.Service` object…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, a changing `net user … /domain`…). On a Mac also `dscl` writing to `/Active Directory` or `/Search`, and `dsconfigad -add`, `-remove`, `-force` or `-leave`.
+* **Refused:** changing a service (`sc stop`, `net stop`, `Restart-Service`, a `ServiceController`'s `.Stop()`, WMI's `StopService`, its registry key…), a task (`schtasks /run`, `Disable-ScheduledTask`, the `Schedule.Service` object…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, a changing `net user … /domain`…). On a Mac also:
+  * `dscl` writing (`-create`, `-createpl`, `-delete`, `-passwd`, `-mcxset`…, with or without the dash) anywhere but the local node (`.`, `/Local/…`), or on a line naming `/Active Directory` or `/Search`.
+  * `dscl` reading its commands from its input (no command, `< file`, `| dscl`).
+  * `dsconfigad` with any option but `-show` and `-xml`.
+  * `dseditgroup -o edit|create|delete` on a directory node.
 * **Reading passes** (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`); changes go through the tools and your yes. Like the forbidden strings, it's a tripwire, not a sandbox.
 
 ## Databases

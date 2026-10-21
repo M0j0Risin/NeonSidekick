@@ -143,6 +143,10 @@ public sealed class ShellGuardTests : IDisposable
         Assert.True(Files.RecordFiles.SameStart(TimeSpan.TicksPerSecond, 0));
         Assert.False(Files.RecordFiles.SameStart(TimeSpan.TicksPerSecond + 1, 0));
         Assert.False(Files.RecordFiles.SameStart(null, 0));
+
+        // The one writer of those lines (2026-10-20, the code review): what Pairs reads back.
+        Assert.Equal("owner 12 638000000000000000\n", Files.RecordFiles.Line("owner", 12, 638_000_000_000_000_000));
+        Assert.Equal((12, 34L), Files.RecordFiles.Pairs(Files.RecordFiles.Line("owner", 12, 34))["owner"]);
     }
 
     [Fact]

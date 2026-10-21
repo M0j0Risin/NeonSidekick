@@ -45,7 +45,8 @@ public static class LlamaRecords
     public static string Format(LlamaRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
-        return string.Create(CultureInfo.InvariantCulture, $"owner {record.OwnerPid} {record.OwnerStartTicks}\nserver {record.ServerPid} {record.ServerStartTicks}\nexecutable {record.Executable}\n");
+        return Files.RecordFiles.Line("owner", record.OwnerPid, record.OwnerStartTicks) + Files.RecordFiles.Line("server", record.ServerPid, record.ServerStartTicks)
+            + "executable " + record.Executable + "\n";
     }
 
     /// <summary>A record read back from <paramref name="text"/>; null for anything that is not one whole record.</summary>

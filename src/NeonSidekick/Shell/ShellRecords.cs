@@ -37,7 +37,7 @@ public static class ShellRecords
     public static string Format(ShellRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
-        return string.Create(CultureInfo.InvariantCulture, $"owner {record.OwnerPid} {record.OwnerStartTicks}\nleader {record.LeaderPid} {record.LeaderStartTicks}\n");
+        return RecordFiles.Line("owner", record.OwnerPid, record.OwnerStartTicks) + RecordFiles.Line("leader", record.LeaderPid, record.LeaderStartTicks);
     }
 
     /// <summary>A record read back from <paramref name="text"/>; null for anything that is not one whole record.</summary>

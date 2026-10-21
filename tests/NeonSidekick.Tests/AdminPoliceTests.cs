@@ -100,6 +100,46 @@ public sealed class AdminPoliceTests
     [InlineData("dsconfigad -show")]
     public void AMacDirectoryRead_Passes(string line) => Assert.Null(AdminPolice.Find(line, All));
 
+    /// <summary>
+    /// The Mac's directory writers read as commands (2026-10-20, the code review): the node after the verb, an escaped space, the longer
+    /// verbs, a verb without its dash, a <c>dscl</c> reading its commands from its input, every changing <c>dsconfigad</c> option and
+    /// <c>dseditgroup</c> on a directory node. Pure, so every machine checks it.
+    /// </summary>
+    [Theory]
+    [InlineData("dscl localhost -create \"/Active Directory/LAB/All Domains/Users/bob\"")]
+    [InlineData("dscl /Active\\ Directory/LAB/All\\ Domains -create /Users/bob")]
+    [InlineData("dscl \"/Active Directory/LAB/All Domains\" -createpl /Users/bob k p v")]
+    [InlineData("dscl /Search -mcxset /Computers/x com.apple.x k always 1")]
+    [InlineData("dscl /Search -changei /Users/bob RealName 1 Bob")]
+    [InlineData("dscl \"/Active Directory/LAB\" create /Users/bob")]                 // no dash
+    [InlineData("dscl -u admin -P secret /Search -deletepl /Users/bob k p")]
+    [InlineData("dscl /LDAPv3/ldap.lab.example -create /Users/bob")]                // a write off the local node
+    [InlineData("dscl . -create /Search/Users/bob")]                                 // names /Search: refused, erring safe
+    [InlineData("n=\"/Active Directory/LAB\"; dscl \"$n\" -delete /Users/bob")]
+    [InlineData("echo 'create /Users/bob' | dscl \"/Active Directory/LAB\"")]       // interactive, from its input
+    [InlineData("dscl localhost < commands.txt")]
+    [InlineData("sudo /usr/bin/dscl localhost")]
+    [InlineData("dsconfigad -groups \"LAB\\Domain Admins\"")]
+    [InlineData("dsconfigad -alldomains disable")]
+    [InlineData("dseditgroup -o edit -n \"/Active Directory/LAB/All Domains\" -a bob -t user Ops")]
+    [InlineData("dseditgroup -o create -n /LDAPv3/ldap.lab.example Ops")]
+    public void AMacDirectoryChange_IsReadAsACommand(string line) => Assert.NotNull(AdminPolice.MacDirectoryChange(line));
+
+    [Theory]
+    [InlineData("dscl . -create /Users/localbob")]
+    [InlineData("dscl . create /Users/localbob")]
+    [InlineData("dscl -f /Volumes/x/var/db/dslocal/nodes/Default localonly -create /Local/Target/Users/bob")]
+    [InlineData("dscl /Local/Default -delete /Users/old")]
+    [InlineData("dscl \"/Active Directory/LAB/All Domains\" -readall /Users")]
+    [InlineData("dscl /Search -search /Users RealName Bob")]
+    [InlineData("dscl /Active\\ Directory/LAB -list /Groups")]
+    [InlineData("which dscl && man dscl")]
+    [InlineData("dsconfigad -show -xml")]
+    [InlineData("dsconfigad")]
+    [InlineData("dseditgroup -o read -n \"/Active Directory/LAB\" Ops")]
+    [InlineData("dseditgroup -o edit -a bob -t user staff")]                         // the local node
+    public void AMacDirectoryRead_OrALocalChange_IsNotRefused(string line) => Assert.Null(AdminPolice.MacDirectoryChange(line));
+
     [Fact]
     public void AFamily_IsGuardedOnlyWhileItsToolsAreOn()
     {

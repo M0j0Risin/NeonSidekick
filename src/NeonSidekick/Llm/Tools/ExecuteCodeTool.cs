@@ -60,12 +60,6 @@ public sealed class ExecuteCodeTool : AIFunction
     /// <summary>How old a run folder left behind must be before <see cref="SweepLeftovers"/> takes it.</summary>
     public static readonly TimeSpan LeftoverAge = TimeSpan.FromDays(1);
 
-    /// <summary>
-    /// The record in each run folder naming the app that owns it (2026-10-20, the code review): <c>owner &lt;pid&gt; &lt;ticks&gt;</c>,
-    /// <see cref="RecordFiles"/>' line. A run past <see cref="LeftoverAge"/> keeps its folder while that process lives.
-    /// </summary>
-    public const string OwnerFileName = ".owner";
-
     /// <param name="tools">The tools the turn offers the model, read at each bridge call (the screen's assistant's list).</param>
     /// <param name="runsFolder">Where run folders are made; the temp directory's <see cref="RunsFolderName"/> by default, a temp folder in tests.</param>
     public ExecuteCodeTool(ShellRunner runner, WorkingDirectory files, CommandGate gate, Interpreters interpreters, Func<AppSettingsData> effective, Func<IReadOnlyList<AIFunction>> tools, Random random, string? runsFolder = null)
@@ -283,11 +277,6 @@ public sealed class ExecuteCodeTool : AIFunction
         try
         {
             Directory.CreateDirectory(runFolder);
-            if (OwnerLine(Environment.ProcessId, RecordFiles.StartTicks) is { } owner)
-            {
-                File.WriteAllText(Path.Combine(runFolder, OwnerFileName), owner);
-            }
-
             // A BOM for PowerShell alone: 5.1 reads a .ps1 without one as ANSI, and an é in the script would come out wrong; python and node take plain UTF-8.
             var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: language == CodeLanguage.PowerShell);
             if (files.ModulePath is { } relative)
@@ -400,16 +389,15 @@ public sealed class ExecuteCodeTool : AIFunction
     /// <summary>
     /// The run folders a crash, or a child still holding a file, left under <paramref name="runsFolder"/> (2026-10-12, the shell
     /// review: each run deletes its own, but nothing ever took one that stayed): every <c>code_…</c> folder last written more than
-    /// <see cref="LeftoverAge"/> before <paramref name="now"/>, once a process, at its first run. A folder's time is its start's, so a
-    /// script running past a day (a watcher, a training loop) lost its folder to another copy's sweep until 2026-10-20 (the code review):
-    /// one whose <see cref="OwnerFileName"/> names a process still running (<see cref="RecordFiles.SameStart"/>, so a reused pid is no
-    /// owner) stays. A folder with no record (written before then, or the owner's start unreadable) goes by its age alone.
-    /// <paramref name="startTicks"/> reads a process's start (<see cref="RecordFiles.StartTicks"/> when null).
+    /// <see cref="LeftoverAge"/> before <paramref name="now"/>, once a process, at its first run. Its age alone is safe (2026-10-20, the code
+    /// review, the user's call: an owner record kept in each folder for a script running past a day was taken out again, since none can):
+    /// a run is stopped at its timeout, which is capped at <see cref="AppSettingsData.MaxShellCodeTimeoutSeconds"/> (an hour), its group
+    /// killed, and its folder removed as it ends; a script writing into its folder only makes it look younger. So a folder a day old is never
+    /// a live run's, whichever copy of the app sweeps it; what a killed run's stray child still holds is the leftover this takes.
     /// </summary>
-    public static void SweepLeftovers(string runsFolder, DateTime now, Func<int, long?>? startTicks = null)
+    public static void SweepLeftovers(string runsFolder, DateTime now)
     {
         ArgumentNullException.ThrowIfNull(runsFolder);
-        startTicks ??= RecordFiles.StartTicks;
         try
         {
             if (!Directory.Exists(runsFolder))
@@ -419,7 +407,7 @@ public sealed class ExecuteCodeTool : AIFunction
 
             foreach (string folder in Directory.EnumerateDirectories(runsFolder, IdPrefix + "*"))
             {
-                if (now - Directory.GetLastWriteTimeUtc(folder) > LeftoverAge && !OwnerRunning(folder, startTicks))
+                if (now - Directory.GetLastWriteTimeUtc(folder) > LeftoverAge)
                 {
                     TryDelete(folder);
                 }
@@ -428,33 +416,6 @@ public sealed class ExecuteCodeTool : AIFunction
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             DiagnosticLog.Debug(ShellKinds.Category, $"could not sweep {runsFolder} ({ex.Message})");
-        }
-    }
-
-    /// <summary>The <see cref="OwnerFileName"/> line for <paramref name="pid"/>; null when its start cannot be read (the folder then goes by age).</summary>
-    public static string? OwnerLine(int pid, Func<int, long?> startTicks)
-    {
-        ArgumentNullException.ThrowIfNull(startTicks);
-        return startTicks(pid) is { } ticks ? string.Create(CultureInfo.InvariantCulture, $"owner {pid} {ticks}\n") : null;
-    }
-
-    /// <summary>Whether a run folder's record names a process still running; a record that cannot be read keeps the folder, one that is not there doesn't.</summary>
-    private static bool OwnerRunning(string folder, Func<int, long?> startTicks)
-    {
-        string path = Path.Combine(folder, OwnerFileName);
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return false;
-            }
-
-            return RecordFiles.Pairs(File.ReadAllText(path)).TryGetValue("owner", out var owner) && RecordFiles.SameStart(startTicks(owner.Pid), owner.Ticks);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Debug(ShellKinds.Category, $"could not read {path} ({ex.Message})");
-            return true;
         }
     }
 

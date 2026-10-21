@@ -525,6 +525,10 @@ The tools most profiles use, and the pane's own options.
 
 * **Approval (`ask`):** the app asks first: Deny, Allow once, Allow for this session, or Allow always; **≡ view** (`v`) shows the whole command. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` set the policy for one launch.
 * **Prefixes:** a command is allowed by its program, plus the verb for programs that take one (`git status`, `npm run`). A program run by its path keeps its folder (`./build`), so a `.\git.cmd` is never `git`.
+* **Programs that run another one:** `env`, `nohup`, `nice`, `timeout`, `stdbuf`, `setsid` and `caffeinate` are read through to the command they run (`nohup git push` is `git push`). These always ask:
+  * `sudo`, `xargs`, `watch` and the like, `eval`, and PowerShell's `Invoke-Expression` (`iex`), `Start-Process` and `Set-Alias`.
+  * `find -exec` or `-delete`, and docker's `--context`.
+* **Scripts run in the shell** are allowed one by one: `source ./a.sh` is `source ./a`, PowerShell's `. .\a.ps1` is `. ./a`, and `call a.bat` in `cmd` is `a`.
 * **The working folder:** `cmd` runs a program there only by its path (`.\build.bat`), as PowerShell does, never by its bare name.
 * **Every command in the line** must be allowed: each part of a pipe or `&&` chain, and each command a substitution runs. A substitution the app can't read always asks.
 * **Path police:** refuses an absolute path (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~` or a folder variable (`%USERPROFILE%`, `$HOME`), in switches and URLs too. The transcript shows 👮.

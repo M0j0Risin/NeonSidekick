@@ -176,25 +176,67 @@ public sealed class RalphLogTests : IDisposable
         string folder = Path.Combine(_dir, ".neon", "plans", "guide");
         Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
 
-        string garbage = Path.Combine(folder, RalphLog.LockName);
-        File.WriteAllText(garbage, "not a lock");                                   // young garbage: maybe a lock being written, so held
-        Assert.False(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
-        File.SetLastWriteTimeUtc(garbage, DateTime.UtcNow.AddMinutes(-1));         // old garbage: no owner, taken over
+        File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "not a lock");   // garbage: no owner, taken over (a lock is never half written)
         Assert.True(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
     }
 
     [Fact]
-    public void ALockHalfWritten_IsHeldWhileYoung_AndTakenOverOnceOld()
+    public async Task TheLock_IsNeverReadHalfWritten_WhileItIsRacedFor()
     {
-        // 2026-10-20, the Mac's gate: created in place, a lock can be read before its text is all there; "pid: 12" alone named a gone process.
+        // 2026-10-20, the code review: created in place, a lock could be read empty or half written, which counted as held for a few seconds
+        // and then as garbage a second taker removed. Published whole now, by a hard link (a move on Windows), so a reader finds it whole or
+        // not at all, and the racers' temp files never outlive their takes.
+        string folder = Path.Combine(_dir, ".neon", "plans", "guide");
+        string lockFile = Path.Combine(folder, RalphLog.LockName);
+        Directory.CreateDirectory(folder);
+        var torn = new List<string>();
+        using var stop = new CancellationTokenSource();
+        var reader = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    using var stream = new FileStream(lockFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                    string text = new StreamReader(stream).ReadToEnd();
+                    if (!text.StartsWith("pid: ", StringComparison.Ordinal) || !text.Contains("\nstarted: ", StringComparison.Ordinal) || !text.EndsWith('\n'))
+                    {
+                        torn.Add(text);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Not there (between a take and an unlock), or held a moment on Windows: never a torn read.
+                }
+            }
+        });
+
+        for (int round = 0; round < 30; round++)
+        {
+            var owners = Enumerable.Range(1, 6).Select(i => new RalphLog.LockOwner(round * 10 + i, T0)).ToList();
+            using var start = new ManualResetEventSlim();
+            var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return (owner, RalphLog.TryLock(_files, Plan, owner, _ => true)); })).ToList();
+            start.Set();
+            var taken = await Task.WhenAll(takes);
+            var holder = Assert.Single(taken, t => t.Item2).owner;
+            RalphLog.Unlock(_files, Plan, holder);
+        }
+
+        await stop.CancelAsync();
+        await reader;
+        Assert.Empty(torn);
+        Assert.Empty(Directory.EnumerateFiles(folder));   // every temp file gone, the last lock let go
+    }
+
+    [Fact]
+    public void ALockWithNoStart_IsTakenOverAtOnce_WhenItsOwnerIsGone()
+    {
+        // Whole as written (no lock is read before its text is there), so a "pid: 12" alone is a lock its writer meant: its owner gone, it goes.
         string folder = Path.Combine(_dir, ".neon", "plans", "guide");
         string lockFile = Path.Combine(folder, RalphLog.LockName);
         Directory.CreateDirectory(folder);
         File.WriteAllText(lockFile, "pid: 12");
-        Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => false));
-        Assert.Equal(RalphText.LockedError(Plan), RalphLog.HeldElsewhere(_files, Plan));
-
-        File.SetLastWriteTimeUtc(lockFile, DateTime.UtcNow.AddMinutes(-1));
+        Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => true));   // alive: held
         Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => false));
         Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
     }

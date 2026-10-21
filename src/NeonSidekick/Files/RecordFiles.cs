@@ -34,6 +34,16 @@ public static class RecordFiles
         }
     }
 
+    /// <summary>
+    /// One <c>&lt;word&gt; &lt;pid&gt; &lt;ticks&gt;</c> line, its line end included: what <see cref="Pairs"/> reads back (2026-10-20, the code review:
+    /// <see cref="Shell.ShellRecords"/> and <see cref="EmbeddedLlm.LlamaRecords"/> each wrote it by hand).
+    /// </summary>
+    public static string Line(string word, int pid, long ticks)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(word);
+        return string.Create(CultureInfo.InvariantCulture, $"{word} {pid} {ticks}\n");
+    }
+
     /// <summary>The <c>&lt;word&gt; &lt;pid&gt; &lt;ticks&gt;</c> lines of <paramref name="text"/> by word, the last of each kept; any other line ignored.</summary>
     public static IReadOnlyDictionary<string, (int Pid, long Ticks)> Pairs(string? text)
     {
