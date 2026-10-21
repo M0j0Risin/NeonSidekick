@@ -906,16 +906,36 @@ public static class PlanText
 
     public static string CouldNotSaveResult(string detail) => $"Error: the plan could not be saved: {detail}";
 
+    /// <summary>
+    /// The plan length the gap definition and <see cref="PlanSizeLine"/> name (2026-10-21): a body past it is a gap, and every gap pass's result
+    /// says the body's count against it (<see cref="SizeSentence"/>). Both strings spell it as <c>20,000</c>; a test holds them to this.
+    /// </summary>
+    public const int PlanSizeLimit = 20_000;
+
     /// <summary>A gap-closing pass's revision saved (2026-10-13): the pane is not shown, the next pass starts by itself; its minor fixes since 2026-10-17. Pinned.</summary>
-    public static string GapPassResult(string path, int revision, int gaps, int minor = 0, IReadOnlyList<string>? measured = null) =>
-        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself." + Measured(measured);
+    public static string GapPassResult(string path, int revision, int gaps, int minor = 0, IReadOnlyList<string>? measured = null, int? bodyChars = null) =>
+        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Measured(measured);
 
     /// <summary>
     /// A clean pass that does not end the review (2026-10-17): no pane, the streak said, the next pass starts by itself. Pinned. Since later on
-    /// 2026-10-18 both results end with what <see cref="PlanFit.Shape"/> measured, when anything (<paramref name="measured"/> null or empty: as before).
+    /// 2026-10-18 both results end with what <see cref="PlanFit.Shape"/> measured, when anything (<paramref name="measured"/> null or empty: as before);
+    /// since 2026-10-21 with the body's count first (<paramref name="bodyChars"/>, <see cref="SizeSentence"/>; null: none).
     /// </summary>
-    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0, IReadOnlyList<string>? measured = null) =>
-        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself." + Measured(measured);
+    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0, IReadOnlyList<string>? measured = null, int? bodyChars = null) =>
+        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Measured(measured);
+
+    /// <summary>
+    /// The body's length as the app counts it, said after every gap pass (2026-10-21, the user's log of a 70-pass review on a hello-world plan:
+    /// the app said nothing between 20,000 and <see cref="RalphText.InlinePlanChars"/>, so the model measured the file's bytes, header and
+    /// multi-byte punctuation in, and spent about 20 presentations trimming a body that was already under the limit). Characters of the body the
+    /// file holds, the header left out: what <see cref="PlanFit"/> and a Ralph pass measure. Pinned.
+    /// </summary>
+    public static string SizeSentence(int bodyChars) =>
+        $"The app counted the plan's body at {Thousands(bodyChars)} characters (its header left out), {(bodyChars > PlanSizeLimit ? "over" : "under")} the {Thousands(PlanSizeLimit)} limit; go by this count, not the file's size in bytes.";
+
+    private static string Size(int? bodyChars) => bodyChars is { } chars ? " " + SizeSentence(chars) : "";
+
+    private static string Thousands(int value) => value.ToString("N0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The facts a gap pass's result carries (later on 2026-10-18): a reviewing model gets the plan's measured fit, not only the rules; "if you can",

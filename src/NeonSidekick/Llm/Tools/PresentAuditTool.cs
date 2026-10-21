@@ -42,7 +42,7 @@ public sealed record AuditCallReport(
 /// was written before the size check, so a call refused as full had still changed it). A secret-looking file's finding takes no evidence
 /// (<see cref="AuditScopes.LooksSecret"/>, <see cref="AuditText.SecretEvidenceResult"/>).</para>
 /// </summary>
-public sealed partial class PresentAuditTool : AIFunction
+public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs
 {
     public const string ToolName = "present_audit";
 

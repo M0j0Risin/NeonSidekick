@@ -2893,6 +2893,31 @@ public class AssistantTests
         var (unknown, _) = await Assistant.InvokeToolAsync([echo], new FunctionCallContent("c2", "nope", null), CancellationToken.None);
         Assert.Equal("Error: unknown tool 'nope'.", unknown);
     }
+
+    /// <summary>
+    /// A pruned stub copied back as an argument (2026-10-21, the user's log: <c>neon_advisor</c> was asked "(a 8,402-character argument,
+    /// pruned by /compact)"): refused before the tool runs, a plain string or a JSON one, a result's stub too; a tool refusing one in its own
+    /// words (<see cref="NeonSidekick.Llm.Tools.IRefusesPrunedStubs"/>) is left to them; text that only mentions a stub runs.
+    /// </summary>
+    [Fact]
+    public async Task InvokeToolAsync_APrunedStubArgument_IsRefused_BeforeTheToolRuns()
+    {
+        var echo = new EchoTool();
+        string stub = ConversationCompactor.PrunedArgumentStub(8_402);
+
+        var (plain, _) = await Assistant.InvokeToolAsync([echo], new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = stub }), CancellationToken.None);
+        var json = System.Text.Json.JsonDocument.Parse("\"" + ConversationCompactor.PrunedStub(4_312) + "\"").RootElement;
+        var (fromJson, _) = await Assistant.InvokeToolAsync([echo], new FunctionCallContent("c2", "echo", new Dictionary<string, object?> { ["text"] = json }), CancellationToken.None);
+        var (mention, _) = await Assistant.InvokeToolAsync([echo], new FunctionCallContent("c3", "echo", new Dictionary<string, object?> { ["text"] = "The log reads " + stub }), CancellationToken.None);
+        var (own, _) = await Assistant.InvokeToolAsync([new OwnStubEchoTool()], new FunctionCallContent("c4", "own_echo", new Dictionary<string, object?> { ["text"] = stub }), CancellationToken.None);
+
+        Assert.Equal(ConversationCompactor.PrunedStubSentResult("text"), plain);
+        Assert.Equal(ConversationCompactor.PrunedStubSentResult("text"), fromJson);
+        Assert.Equal(["The log reads " + stub], echo.Received);   // only the mention ran
+        Assert.Equal("echo: The log reads " + stub, mention);
+        Assert.Equal(OwnStubEchoTool.OwnWords, own);
+        Assert.StartsWith("Error: text is a pruned stub", ConversationCompactor.PrunedStubSentResult("text"), StringComparison.Ordinal);
+    }
     // ---- the --log lines of a turn (2026-09-19) ----
 
     private static (List<NeonSidekick.Diagnostics.DiagnosticEvent> Lines, Action<NeonSidekick.Diagnostics.DiagnosticEvent> Capture) LogCapture(params string[] categories)

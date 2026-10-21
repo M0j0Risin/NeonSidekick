@@ -25,7 +25,7 @@ namespace NeonSidekick.Llm.Tools;
 /// before the unchanged test and the save, so a refused call saves and counts nothing. A convergence moves the loop to
 /// <see cref="PlanSession.Finished"/>, so the pane it opens can start another review or end plan mode without losing it.</para>
 /// </summary>
-public sealed class PresentPlanTool : AIFunction
+public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
 {
     public const string ToolName = "present_plan";
 
@@ -191,7 +191,7 @@ public sealed class PresentPlanTool : AIFunction
             if (gaps.Count > 0)
             {
                 loop.Record(gaps, minor);
-                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, Measured(saved));
+                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, Measured(saved), saved.Markdown.Length);
             }
 
             if (!loop.WouldConverge)
@@ -199,7 +199,7 @@ public sealed class PresentPlanTool : AIFunction
                 // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself.
                 int clean = loop.CleanCount;
                 loop.MarkClean(@checked, minor);
-                return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count, Measured(saved));
+                return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count, Measured(saved), saved.Markdown.Length);
             }
 
             int streak = loop.CleanCount;

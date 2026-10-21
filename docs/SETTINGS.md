@@ -407,7 +407,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 
 | Setting | What it does | Default |
 |---|---|---|
-| Reflection (auto-learn) | After enough tool calls, or a tool error the model recovered from, a background reflection writes or improves a skill. | on |
+| Reflection (auto-learn) | After enough tool calls, or a tool error the model recovered from, a background reflection writes or improves a skill. It waits while a plan gap review or code audit runs. | on |
 | Reflection reasoning | The reflection's reasoning effort: `none`, `low`, `medium`, `high`, `xhigh`, or `profile` for the profile's level. | `none` |
 | Reflection window | How many recent turns a reflection reads (1–5). | 3 |
 | Reflection min tool calls | The model's own tool calls since the last reflection that make a task worth a skill (3–20). | 4 |

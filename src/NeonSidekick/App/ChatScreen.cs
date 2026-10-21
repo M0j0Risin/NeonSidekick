@@ -4036,7 +4036,8 @@ internal sealed partial class ChatScreen
         ResumePausedLearn();
         bool forced = pending.Forced;
         bool running = _session.IsLearning;
-        if (!running && _pendingLearn is null && !LearnWaitsForQueue)
+        bool held = LearnHeld(pending);
+        if (!running && _pendingLearn is null && !LearnWaitsForQueue && !held)
         {
             DiagnosticLog.Info(SkillCatalog.Category, (forced ? "Reflection (/learn): " : "Reflection: ") + log + ".");
             StartLearn(pending);
@@ -4049,7 +4050,7 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        string where = running ? " behind the running one (" : " for the queued messages (";
+        string where = running ? " behind the running one (" : held ? LearnHeldWhere : " for the queued messages (";
         DiagnosticLog.Info(SkillCatalog.Category, (forced ? "Reflection (/learn) queued" : "Reflection queued") + where + log + ")" + (_pendingLearn is null ? "." : "; the earlier waiting turn is displaced."));
         _pendingLearn = pending;
         if (running)
@@ -4145,6 +4146,18 @@ internal sealed partial class ChatScreen
     /// </summary>
     private bool LearnWaitsForQueue =>
         _effective().ReflectionYieldsToTurns && _restoreDraft is null && QueueDrains && _queue.Count > 0;
+
+    /// <summary>
+    /// Whether <paramref name="pending"/> waits in the slot for a review to end (2026-10-21, the user's log of a 70-pass gap review: a
+    /// reflection started after every pass and the next pass's start cancelled it, 67 starts and 65 cancels, each loading every skill; the
+    /// one that finally ran asked about a skill for the review loop itself): an automatic one waits while a gap review
+    /// (<see cref="PlanSession.Closing"/>, its first pass not yet begun included) or a code audit (<see cref="AuditSession.Active"/>) runs,
+    /// and the slot's newest takes it as ever. A <c>/learn</c> the user asked for never waits.
+    /// </summary>
+    private bool LearnHeld(PendingLearn pending) => !pending.Forced && (_plan.Closing is not null || _audit.Active);
+
+    /// <summary>The middle of the queued line for a reflection a review holds (2026-10-21). Pinned.</summary>
+    public const string LearnHeldWhere = " until the review ends (";
 
     /// <summary>A cancel the user asked for (the brain's double-click): the paused reflection, if any, never runs again. Safe from the watcher task.</summary>
     private void ForgetPausedLearn() => Interlocked.Exchange(ref _pausedLearn, null);
@@ -4378,7 +4391,7 @@ internal sealed partial class ChatScreen
 
         ResumePausedLearn();
         _learnAwaitsQueue = LearnWaitsForQueue;
-        if (_pendingLearn is { } next && !_session.IsLearning && !_learnAwaitsQueue)
+        if (_pendingLearn is { } next && !_session.IsLearning && !_learnAwaitsQueue && !LearnHeld(next))
         {
             _pendingLearn = null;
             DiagnosticLog.Info(SkillCatalog.Category, (next.Forced ? "Reflection (/learn)" : "Reflection") + " starts from the slot.");
@@ -4390,7 +4403,7 @@ internal sealed partial class ChatScreen
     private bool LearnPending =>
         !_learnNotices.IsEmpty
         || !_learnAsks.IsEmpty   // a reflection's write waiting for the user (2026-10-12, Reflection confirm mode)
-        || (!_session.IsLearning && !_learnAwaitsQueue && (Volatile.Read(ref _pausedLearn) is not null || _pendingLearn is not null));
+        || (!_session.IsLearning && !_learnAwaitsQueue && (Volatile.Read(ref _pausedLearn) is not null || _pendingLearn is { } waiting && !LearnHeld(waiting)));
 
     /// <summary>
     /// <see cref="LearnWaitsForQueue"/> as the last <see cref="DrainLearn"/> found it (2026-09-24): the loop

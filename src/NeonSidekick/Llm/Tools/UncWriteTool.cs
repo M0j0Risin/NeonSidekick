@@ -11,7 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// create (the default), overwrite or append. A replaced file is replaced in place (its permissions kept) and nothing is kept of
 /// what it held: a share has no trash (the user's call).
 /// </summary>
-public sealed class UncWriteTool : UncTool
+public sealed class UncWriteTool : UncTool, IRefusesPrunedStubs
 {
     public const string ToolName = "unc_write";
     public const string ContentArgument = WriteFileTool.ContentArgument;

@@ -31,7 +31,7 @@ namespace NeonSidekick.Llm.Tools;
 /// never by <c>write_file</c>, which would bypass the frontmatter. Offered only with a <see cref="SkillFileAccess"/>: the main chat always,
 /// a reflection when <c>Reflection edit supporting files</c> is on; without it the schema names create and update alone.</para>
 /// </summary>
-public sealed class SkillEditorTool : AIFunction
+public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs
 {
     public const string ToolName = "skill_editor";
     public const string ActionArgument = "action";

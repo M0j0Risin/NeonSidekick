@@ -285,7 +285,7 @@ public class PlanGapLoopTests : IDisposable
 
         object? result = await _tool.InvokeAsync(Args("Guide", Revised, new[] { "Add a test step", "  " }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: BodyChars(Revised)), result);
         Assert.Empty(_presented);
         Assert.Equal(["Add a test step"], loop.PassGaps);
         Assert.Equal(1, loop.Presented);
@@ -314,8 +314,34 @@ public class PlanGapLoopTests : IDisposable
 
         object? result = await _tool.InvokeAsync(Args("Guide", good, new[] { "Add done when lines" }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1), result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, bodyChars: BodyChars(good)), result);
     }
+
+    /// <summary>
+    /// The body's count after every pass (2026-10-21, the user's 70-pass log: the app said nothing between 20,000 and 24,000, and the model
+    /// trimmed by the file's bytes, header in): characters of the body, under or over <see cref="PlanText.PlanSizeLimit"/>, its header left out.
+    /// </summary>
+    [Fact]
+    public async Task Tool_EveryPass_SaysTheBodysCount_AgainstTheLimit_HeaderLeftOut()
+    {
+        await PassOneAsync();
+        // Multi-byte punctuation: more bytes on disk than characters in the body.
+        string over = "# Guide\n\n## Context\n\n" + new string('—', PlanText.PlanSizeLimit) + "\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the link check passes\n";
+
+        string text = Assert.IsType<string>(await _tool.InvokeAsync(Args("Guide", over, new[] { "Add context" })));
+
+        int body = BodyChars(over);
+        Assert.Contains(PlanText.SizeSentence(body), text);
+        Assert.Contains("over the 20,000 limit", text);
+        Assert.Equal(PlanDocument.Body(System.IO.File.ReadAllText(System.IO.Path.Combine(_files.Root, _session.Path!))).Length, body);
+        Assert.Equal("The app counted the plan's body at 19,999 characters (its header left out), under the 20,000 limit; go by this count, not the file's size in bytes.", PlanText.SizeSentence(19_999));
+        Assert.Equal("The app counted the plan's body at 20,001 characters (its header left out), over the 20,000 limit; go by this count, not the file's size in bytes.", PlanText.SizeSentence(20_001));
+        Assert.Contains("under 20,000 characters", PlanText.PlanSizeLine);   // the limit the rules name is the one the result counts against
+        Assert.Contains(PlanText.PlanSizeLimit.ToString("N0", System.Globalization.CultureInfo.InvariantCulture), PlanText.GapReviewLines(new PlanGapState(1, 5, PlanReviewer.Model), advisorsOffered: false));
+    }
+
+    /// <summary>The body's length a pass's result says (2026-10-21, <see cref="PlanText.SizeSentence"/>): what <see cref="PlanDocument.SavedBody"/> writes.</summary>
+    internal static int BodyChars(string markdown, string title = "Guide") => PlanDocument.SavedBody(title, markdown).Length;
 
     [Fact]
     public async Task Tool_APassUnderASmallWindow_MeasuresTheLengthAgainstIt()

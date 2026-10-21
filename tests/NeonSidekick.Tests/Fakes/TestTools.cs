@@ -59,6 +59,30 @@ public sealed class EchoTool : AIFunction
 }
 
 /// <summary>
+/// An echo that refuses a pruned stub in its own words (2026-10-21, <see cref="NeonSidekick.Llm.Tools.IRefusesPrunedStubs"/>): the turn's
+/// generic refusal leaves it to its own check.
+/// </summary>
+public sealed class OwnStubEchoTool : AIFunction, NeonSidekick.Llm.Tools.IRefusesPrunedStubs
+{
+    public const string OwnWords = "Error: text is a stub; read it again";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        """{"type":"object","properties":{"text":{"type":"string","description":"What to echo."}},"required":["text"]}""");
+
+    public override string Name => "own_echo";
+
+    public override string Description => "Echoes the text back, refusing a stub itself.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        string text = ToolSchema.ReadString(arguments, "text");
+        return new ValueTask<object?>(NeonSidekick.Llm.ConversationCompactor.IsPrunedStub(text) ? OwnWords : "echo: " + text);
+    }
+}
+
+/// <summary>
 /// A <c>generate_image</c>-shaped tool with written-call aliases (2026-10-11, <see cref="IWrittenCallAliases"/>): each workflow name
 /// a call may be written under; records the workflow and prompt of every call.
 /// </summary>

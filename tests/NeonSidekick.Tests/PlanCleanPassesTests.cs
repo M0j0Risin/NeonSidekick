@@ -28,6 +28,9 @@ public class PlanCleanPassesTests : IDisposable
 
     private const string Plan = "# Guide\n\n## Steps\n- [ ] Write it\n";
     private const string Revised = "# Guide\n\n## Steps\n- [ ] Write it\n- [ ] Test it\n";
+
+    /// <summary>The body's length a pass's result says (2026-10-21, <see cref="PlanText.SizeSentence"/>).</summary>
+    private static int BodyChars(string markdown) => PlanGapLoopTests.BodyChars(markdown);
     private static readonly string[] Checked = PlanGapLoopTests.Checked;
 
     public PlanCleanPassesTests()
@@ -368,9 +371,9 @@ public class PlanCleanPassesTests : IDisposable
 
         object? first = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), first);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: BodyChars(Plan)), first);
         Assert.Equal("No gaps found in this pass of .neon/plans/guide.md (revision 1), 1 of 2 clean passes in a row. Reply with one short line and call no more tools; the next review pass starts by itself."
-            + " The app measured: 1 step has no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", first);
+            + " " + PlanText.SizeSentence(BodyChars(Plan)) + " The app measured: 1 step has no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", first);
         Assert.Empty(_presented);
         Assert.True(loop.PassClean);
         Assert.Equal(Checked, loop.PassChecked);
@@ -394,7 +397,7 @@ public class PlanCleanPassesTests : IDisposable
         await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
         object? again = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), again);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: BodyChars(Plan)), again);
         Assert.False(loop.Converged);
         Assert.Empty(_presented);
     }
@@ -425,9 +428,9 @@ public class PlanCleanPassesTests : IDisposable
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "Add a test step" }, new[] { "ignored" }, new[] { "fix a typo", "reword the title" }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)]), result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: BodyChars(Revised)), result);
         Assert.Equal("Revision 2 of .neon/plans/guide.md is saved with 1 gap closed and 2 minor fixes. Reply with one short line and call no more tools; the next review pass starts by itself."
-            + " The app measured: 2 steps have no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", result);
+            + " " + PlanText.SizeSentence(BodyChars(Revised)) + " The app measured: 2 steps have no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", result);
         Assert.Equal(1, loop.Closed);
         Assert.Equal(2, loop.MinorFixed);
         Assert.Empty(loop.PassChecked);
@@ -441,7 +444,7 @@ public class PlanCleanPassesTests : IDisposable
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, Array.Empty<string>(), Checked, new[] { "reword" }));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), result);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: BodyChars(Revised)), result);
         Assert.Contains("(revision 2) with 1 minor fix, 1 of 2", (string)result!);
         Assert.Equal(2, _session.Revision);
         Assert.True(loop.PassClean);

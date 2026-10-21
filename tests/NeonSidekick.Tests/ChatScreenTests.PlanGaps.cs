@@ -83,13 +83,13 @@ public partial class ChatScreenTests
         Assert.Contains("A gap review is running (pass 1 of 5)", _chat.Requests[2][0].Text);
         Assert.Contains(PresentPlanTool.ToolName, OfferedNames(_chat.Options[2]));
         Assert.DoesNotContain(WriteFileTool.ToolName, OfferedNames(_chat.Options[2]));
-        Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), PlanResultOf(_chat.Requests[3], "p2"));
+        Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[3], "p2"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model), LastUserText(_chat.Requests[4]));
         Assert.Contains("A gap review is running (pass 2 of 5)", _chat.Requests[4][0].Text);
         Assert.Contains("only 2 passes in a row with no gaps return the plan to the user", _chat.Requests[4][0].Text);
         Assert.DoesNotContain("this pass checks again", _chat.Requests[4][0].Text);
         // Pass 2 clean: no pane, the streak said; pass 3 is told to look again, with the first focus.
-        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)]), PlanResultOf(_chat.Requests[5], "p3"));
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[5], "p3"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 3, 5, PlanReviewer.Model, cleanSoFar: 1), LastUserText(_chat.Requests[6]));
         Assert.Contains("this pass checks again (clean pass 2 of 2)", _chat.Requests[6][0].Text);
         Assert.Contains(PlanText.ConfirmFocuses[0], _chat.Requests[6][0].Text);
@@ -118,6 +118,62 @@ public partial class ChatScreenTests
         Assert.Contains("Done.", output);
     }
 
+    /// <summary>
+    /// A reflection running when a review starts waits for the review's end (2026-10-21, the user's 70-pass log: the one a 5-pass review's end
+    /// started was paused by every next pass and put back in the slot after it, so it started again between passes, 67 starts and 65
+    /// cancels): paused once by the first pass, held in the slot after it, and run once the review is over.
+    /// </summary>
+    [Fact]
+    public async Task PlanGaps_AReflectionPausedByAPass_WaitsInTheSlot_UntilTheReviewEnds()
+    {
+        _settings.Update(d => { d.ReflectionAutoLearn = true; d.ReflectionYieldsToTurns = true; });
+        var events = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == NeonSidekick.Skills.SkillCatalog.Category) { lock (events) { events.Add(e.Message); } } };
+        PlanGapsFixture([[Keys.Escape]],
+            Line("/plan Add a guide"),
+            input => { WaitForRequests(3); PushLine(input, "/plan gaps 2"); },   // the reflection's request open first
+            Key(Keys.Escape),
+            input => { WaitForRequests(8); PushLine(input, "/exit"); });
+        _chat.Enqueue([.. Enumerable.Range(1, 5).Select(i => FakeChatClient.Call("c" + i, GetCurrentTimeTool.ToolName)), PresentPlanCall()]);   // 0: six calls, presented; Esc
+        _chat.EnqueueText("Noted.");                                                                           // 1: the turn ends: a reflection starts
+        _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("clock-check")));   // 2: the reflection, held until pass 1 pauses it
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));                         // 3: pass 1 of 2
+        _chat.EnqueueText("Pass 1 done.");                                                                     // 4: the paused one back in the slot, held
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n", "Add a ship step"));    // 5: pass 2 of 2, the limit
+        _chat.EnqueueText("Pass 2 done.");                                                                     // 6: the review over
+        _chat.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, CreateSkillArgs("clock-check")));   // 7: the reflection, run again
+        _chat.BeforeUpdateOf = async (r, i, token) =>
+        {
+            if (r == 2 && i == 0)
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+        };
+
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(8, _chat.Requests.Count);
+        Assert.Equal(NeonSidekick.Skills.SkillLearner.Request(null), _chat.Requests[2][^1].Text);
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 2, PlanReviewer.Model), LastUserText(_chat.Requests[3]));
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 2, PlanReviewer.Model), LastUserText(_chat.Requests[5]));   // not the reflection
+        Assert.Equal(NeonSidekick.Skills.SkillLearner.Request(null), _chat.Requests[7][^1].Text);
+        List<string> lines;
+        lock (events)
+        {
+            lines = [.. events];
+        }
+
+        Assert.Single(lines, l => l == ChatScreen.LearnPausedLogLine);   // paused by pass 1 only: never started again under the review
+        Assert.Single(lines, l => l == "Reflection starts from the slot.");
+    }
     [Fact]
     public async Task PlanGaps_ChosenOnThePane_AMessageQueuedUnderTheReply_GoesFirst()
     {

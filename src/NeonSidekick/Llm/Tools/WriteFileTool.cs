@@ -11,7 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// (<c>overwrite</c>) or adds to its end (<c>append</c>, on a new line, creating a missing file —
 /// <c>append_file</c>'s job until 2026-09-19).
 /// </summary>
-public sealed class WriteFileTool : FileTool
+public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
 {
     public const string ToolName = "write_file";
 

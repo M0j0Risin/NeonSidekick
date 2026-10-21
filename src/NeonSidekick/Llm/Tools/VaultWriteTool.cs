@@ -6,7 +6,7 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary><c>vault_write(note, content, mode?, heading?)</c>: create a note, replace it, or add to its end, its top or one heading's section (2026-09-22).</summary>
-public sealed class VaultWriteTool : VaultTool
+public sealed class VaultWriteTool : VaultTool, IRefusesPrunedStubs
 {
     public const string ToolName = "vault_write";
     public const string ContentArgument = "content";

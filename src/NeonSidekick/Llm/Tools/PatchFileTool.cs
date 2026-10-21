@@ -13,7 +13,7 @@ namespace NeonSidekick.Llm.Tools;
 /// runs over LF-normalised text, so what a read shows matches a CRLF file; the file keeps its line
 /// ending and its BOM. The result names the edited lines and shows them numbered.
 /// </summary>
-public sealed class PatchFileTool : FileTool
+public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
 {
     public const string ToolName = "patch_file";
     public const string OldTextArgument = "old_text";

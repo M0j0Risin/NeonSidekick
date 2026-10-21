@@ -54,9 +54,9 @@ public partial class SidekickAppTests
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 5, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[2]));
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 2, 5, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[4]));
         Assert.Contains("A gap review is running (pass 2 of 5)", _chat.Requests[4][0].Text);
-        Assert.Equal(PlanText.GapPassResult(HeadlessPlanPath, 2, 1, measured: [RalphText.FitNoDoneWhen(2)]), _chat.Requests[3].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p2").Result);
+        Assert.Equal(PlanText.GapPassResult(HeadlessPlanPath, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: PlanGapLoopTests.BodyChars("# Guide\n\n- [ ] Write it\n- [ ] Test it\n")), _chat.Requests[3].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p2").Result);
         // Pass 2's markdown drops the test step, so it is a revision with no gaps: clean 1 of 2, and pass 3 confirms (2026-10-17).
-        Assert.Equal(PlanText.CleanPassResult(HeadlessPlanPath, 3, 1, 2, measured: [RalphText.FitNoDoneWhen(1)]), _chat.Requests[5].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p3").Result);
+        Assert.Equal(PlanText.CleanPassResult(HeadlessPlanPath, 3, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: PlanGapLoopTests.BodyChars("# Guide\n\n- [ ] Write it\n")), _chat.Requests[5].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p3").Result);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 3, 5, PlanReviewer.Model, cleanSoFar: 1), HeadlessLastUser(_chat.Requests[6]));
         Assert.Equal(PlanText.SavedResult(HeadlessPlanPath), _chat.Requests[7].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p4").Result);
         Assert.Contains("You: " + PlanText.GapPassMessage(HeadlessPlanPath, 2, 5, PlanReviewer.Model), output);
