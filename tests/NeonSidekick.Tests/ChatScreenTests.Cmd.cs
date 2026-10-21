@@ -243,7 +243,7 @@ public partial class ChatScreenTests
         string spill = Assert.Single(Directory.GetFiles(Path.Combine(SandboxRoot, ShellText.SpillFolderName), ChatScreen.CmdIdPrefix + "*.log"));
         Assert.Contains("line number 400", File.ReadAllText(spill), StringComparison.Ordinal);
         var reply = Assert.Single(_chat.Requests[0], m => m.Role == ChatRole.Assistant && m.Text.StartsWith("[shell output] ", StringComparison.Ordinal));
-        Assert.Contains("the whole output is in .shell\\" + ChatScreen.CmdIdPrefix, reply.Text, StringComparison.Ordinal);
+        Assert.Contains("the whole output is in .neon\\shell\\" + ChatScreen.CmdIdPrefix, reply.Text, StringComparison.Ordinal);
     }
 
     /// <summary>

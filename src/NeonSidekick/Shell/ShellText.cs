@@ -17,8 +17,13 @@ public static class ShellText
     public const string StderrSeparator = "--- stderr ---";
     public const string CutSuffix = " — output cut";
 
-    /// <summary>The folder under the working directory a cut result's whole output is written to.</summary>
-    public const string SpillFolderName = ".shell";
+    /// <summary>
+    /// The folder under the working directory a cut result's whole output is written to: <c>.neon\shell</c> (<c>.neon/shell</c> off Windows) since
+    /// 2026-10-21, the user's ask — <c>.shell</c> until then, an app folder of its own beside <c>.neon</c>, which already held the plans and audits.
+    /// Inside the app's folder it is also out of the Ralph loop's evidence and the code audit's walk, which skip <c>.neon</c>. An old <c>.shell</c>
+    /// folder is left as it is. A field, not a constant: the separator is the platform's, as in every result's path.
+    /// </summary>
+    public static readonly string SpillFolderName = Path.Combine(Plans.PlanSlug.AppFolder, "shell");
 
     /// <summary>The share of the cap the head of a cut result keeps; the tail gets the rest.</summary>
     public const double HeadShare = 0.6;
@@ -121,7 +126,7 @@ public static class ShellText
     }
 
     /// <summary>
-    /// <c>… (412,345 chars cut; the whole output is in .shell\run_9c04e1.log) …</c>, or without the file when none could be written;
+    /// <c>… (412,345 chars cut; the whole output is in .neon\shell\run_9c04e1.log) …</c>, or without the file when none could be written;
     /// <c>the output kept is in</c> when the buffer had dropped lines (<paramref name="whole"/> false, 2026-10-11). Pinned.
     /// </summary>
     public static string CutLine(int chars, string? spill, bool whole = true) =>
@@ -824,7 +829,7 @@ public static class ShellText
     /// <summary>
     /// Before a <c>/cmd --bg</c> report's output when only its end fits <c>Shell output max chars</c> (2026-10-11, the review: the report
     /// drew the start and cut the ending, the errors and the summary): <c>(the first 14,880 lines are not shown here; the whole output is
-    /// in .shell\proc_3f2a1b.log)</c>, <c>the output kept</c> when the buffer had dropped lines, no file when none could be written. Pinned.
+    /// in .neon\shell\proc_3f2a1b.log)</c>, <c>the output kept</c> when the buffer had dropped lines, no file when none could be written. Pinned.
     /// </summary>
     public static string CmdEarlierHidden(long lines, string? spill, bool whole) =>
         $"(the first {Count(lines)} {(lines == 1 ? "line is" : "lines are")} not shown here"

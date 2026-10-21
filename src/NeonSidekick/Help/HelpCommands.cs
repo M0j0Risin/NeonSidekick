@@ -97,9 +97,9 @@ public static class HelpCommands
         ]),
         new("/cmd",
         [
-            new("/cmd <command>", "Run a shell line yourself in the working directory, in the *Shell default shell*, its output drawn as it prints; Esc kills it. It passes the model's checks: *Shell command policy* `off` refuses it, the shell police refuse what they refuse under any policy, and under `ask` a line not on *Shell allowed commands* goes to the approval pane. The line and its output go into the conversation, so the model sees them, cut at *Shell output max chars* (the whole in `.shell\\cmd_….log`)."),
+            new("/cmd <command>", "Run a shell line yourself in the working directory, in the *Shell default shell*, its output drawn as it prints; Esc kills it. It passes the model's checks: *Shell command policy* `off` refuses it, the shell police refuse what they refuse under any policy, and under `ask` a line not on *Shell allowed commands* goes to the approval pane. The line and its output go into the conversation, so the model sees them, cut at *Shell output max chars* (the whole in `.neon\\shell\\cmd_….log`)."),
             new("/cmd --shell <shell> <command>", "Run the line in another shell: `powershell`, `cmd` or `bash` on Windows; `zsh`, `bash` or `powershell` on a Mac."),
-            new("/cmd --bg <command>", "Run the line in the background while you chat, after the same checks (with `--shell` too, in either order). `/process` lists it and its window shows the output live; Ctrl+K twice there stops it. When it ends or is stopped, its output is shown (cut at *Shell output max chars*, the whole in `.shell\\proc_….log`) and goes into the conversation before your next message; the model's process tool never sees it."),
+            new("/cmd --bg <command>", "Run the line in the background while you chat, after the same checks (with `--shell` too, in either order). `/process` lists it and its window shows the output live; Ctrl+K twice there stops it. When it ends or is stopped, its output is shown (cut at *Shell output max chars*, the whole in `.neon\\shell\\proc_….log`) and goes into the conversation before your next message; the model's process tool never sees it."),
         ]),
         new("/code-audit",
         [

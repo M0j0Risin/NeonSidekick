@@ -462,7 +462,7 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **The same checks:** *Shell command policy* `off` refuses it, the shell police refuse what they always refuse, and under `ask` a line not on *Shell allowed commands* asks.
 * **Time:** *Shell default timeout (s)*, at most *Shell max timeout (s)*. Esc stops the line and everything it started.
-* **Output** past *Shell output max chars* isn't drawn; the whole goes to a log in the working directory's `.shell` folder.
+* **Output** past *Shell output max chars* isn't drawn; the whole goes to a log in the working directory's `.neon\shell` folder.
 * **The model sees it**, tagged `[I ran in the shell (<shell>)]` and `[shell output]`. Plan mode doesn't stop `/cmd`.
 * **In the background:** `/cmd --bg` gives the chat back at once, with no timeout, up to 16 at a time. Ctrl+K twice in its process window stops it.
 * Closing the app stops a background line and all it started, even after a crash (on a Mac, see [Shell](TOOLS.md#shell)).

@@ -92,7 +92,8 @@ public static partial class ShellPoliceChecks
     public const int SpillKept = 50;
 
     /// <summary>
-    /// The whole output into <c>.shell\&lt;id&gt;.log</c> under <paramref name="root"/> (<c>run_command</c>'s, <c>execute_code</c>'s and
+    /// The whole output into <c>.neon\shell\&lt;id&gt;.log</c> under <paramref name="root"/> (<see cref="ShellText.SpillFolderName"/>; <c>.shell</c> until
+    /// 2026-10-21, the user's ask: one app folder in the working directory) (<c>run_command</c>'s, <c>execute_code</c>'s and
     /// <c>/cmd</c>'s cut output); the relative path, or null when it could not be written (logged). Since 2026-10-12 (the shell
     /// review: the folder grew a file a long run, for good, in what is often the user's repository) it keeps the newest
     /// <see cref="SpillKept"/> and holds a <c>.gitignore</c> of <c>*</c>, so <c>git status</c> never lists it. Since 2026-10-19 (the second

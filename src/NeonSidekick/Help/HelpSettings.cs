@@ -153,7 +153,7 @@ public static class HelpSettings
         SettingsField.ShellDefault => "The shell `run_command` uses when the call gives no `shell`: `powershell` (pwsh when installed, else Windows PowerShell 5.1), `cmd`, or `bash` (Git Bash, when found). On macOS: `zsh` (the default there), `bash` or `powershell` (pwsh, when installed).",
         SettingsField.ShellTimeoutSeconds => "How long a foreground command without its own `timeout` may run before it is killed (1–3600).",
         SettingsField.ShellForegroundCapSeconds => "The longest a foreground command may run, whatever its `timeout` says (10–3600).",
-        SettingsField.ShellOutputMaxChars => "The most output one result carries back (2000–500000). Past that, the start and end are kept, and the whole text goes to `.shell\\<id>.log` under the working directory, where `read_file` can reach it.",
+        SettingsField.ShellOutputMaxChars => "The most output one result carries back (2000–500000). Past that, the start and end are kept, and the whole text goes to `.neon\\shell\\<id>.log` under the working directory, where `read_file` can reach it.",
         SettingsField.ShellCodeLanguages => "The languages `execute_code` may run: `powershell`, `python`, `node`. One or more; a language is offered only while its interpreter is found. Enter or Space turns one on or off, and `a` turns all on. The last one on stays on, so `n` is refused.",
         SettingsField.ShellCodeTimeoutSeconds => "How long an `execute_code` script without its own `timeout` may run before it is killed (1–3600).",
         SettingsField.ShellCodeMaxToolCalls => "How many tool calls one script may make through the bridge (1–500).",

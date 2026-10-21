@@ -524,7 +524,7 @@ The tools most profiles use, and the pane's own options.
 | Shell default shell | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd` or `bash` (Git Bash). On a Mac: `zsh`, `bash` or `powershell`. | `powershell` (`zsh` on a Mac) |
 | Shell default timeout (s) | How long a foreground command without its own `timeout` may run (1–3600). | 180 |
 | Shell max timeout (s) | The longest any foreground command may run (10–3600). | 600 |
-| Shell output max chars | The output one result carries (2000–500000). Past that, the start and end are kept and the whole text goes to `.shell\<id>.log` in the working directory. | 30000 |
+| Shell output max chars | The output one result carries (2000–500000). Past that, the start and end are kept and the whole text goes to `.neon\shell\<id>.log` in the working directory. | 30000 |
 | Shell code languages | What `execute_code` may run: `powershell`, `python` and `node`, each when its interpreter is found. | all three |
 | Shell code default timeout (s) | How long a script without its own `timeout` may run (1–3600). | 300 |
 | Shell tool bridge | Lets an `execute_code` script call the app's other tools through its `neon_tools` module. | off |

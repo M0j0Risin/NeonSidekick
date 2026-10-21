@@ -2895,7 +2895,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The most chars of a command's output one result carries back (2026-09-21):
     /// <see cref="MinShellOutputMaxChars"/> to <see cref="MaxShellOutputMaxChars"/>. Over it the result keeps
-    /// its head and tail and the whole text goes to <c>.shell\&lt;id&gt;.log</c> under the working directory,
+    /// its head and tail and the whole text goes to <c>.neon\shell\&lt;id&gt;.log</c> under the working directory,
     /// where <c>read_file</c> reaches it. No variable.
     /// </summary>
     public int ShellOutputMaxChars { get; set; } = DefaultShellOutputMaxChars;

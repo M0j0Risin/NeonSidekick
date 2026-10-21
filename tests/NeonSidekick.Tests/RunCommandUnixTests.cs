@@ -193,8 +193,8 @@ public sealed class RunCommandUnixTests : IDisposable
 
         Assert.StartsWith("exit 0 in 0.0 s (zsh): " + Lines + " — output cut\nline 1\nline 2\n", result);
         Assert.EndsWith("\nline 399\nline 400", result);
-        Assert.Contains(" characters cut; the whole output is in .shell/run_", result);
-        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log")));
+        Assert.Contains(" characters cut; the whole output is in .neon/shell/run_", result);
+        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ShellText.SpillFolderName), "run_*.log")));
         Assert.Equal(400, whole.Split('\n').Length);
     }
 
@@ -208,8 +208,8 @@ public sealed class RunCommandUnixTests : IDisposable
         Assert.Contains("\n" + ShellText.DroppedLine(100) + "\n", result);
         Assert.EndsWith("\nline 5100", result);
         Assert.DoesNotContain("the whole output is in", result);
-        Assert.Contains("the output kept is in .shell/run_", result);
-        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log")));
+        Assert.Contains("the output kept is in .neon/shell/run_", result);
+        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ShellText.SpillFolderName), "run_*.log")));
         Assert.StartsWith(ShellText.DroppedLine(100) + "\nline 101\n", whole);
     }
 

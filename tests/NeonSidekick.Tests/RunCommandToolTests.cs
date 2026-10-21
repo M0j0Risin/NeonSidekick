@@ -358,9 +358,9 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.StartsWith("exit 0 in 0.0 s (cmd): for /l %i in (1,1,400) do @echo line %i — output cut\nline 1\nline 2\n", result);
         Assert.EndsWith("\nline 399\nline 400", result);
         Assert.Contains("\n… (", result);
-        Assert.Contains(@" characters cut; the whole output is in .shell\run_", result);
+        Assert.Contains(@" characters cut; the whole output is in .neon\shell\run_", result);
         Assert.True(result.Length < 2400);
-        string spill = Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log"));
+        string spill = Assert.Single(Directory.GetFiles(Path.Combine(_root, ShellText.SpillFolderName), "run_*.log"));
         string whole = File.ReadAllText(spill);
         Assert.StartsWith("line 1\nline 2\n", whole);
         Assert.EndsWith("line 400", whole);
@@ -380,8 +380,8 @@ public sealed class RunCommandToolTests : IDisposable
         Assert.Contains("\n" + ShellText.DroppedLine(100) + "\n", result);
         Assert.EndsWith("\nline 5100", result);
         Assert.DoesNotContain("the whole output is in", result);
-        Assert.Contains(@"the output kept is in .shell\run_", result);
-        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ".shell"), "run_*.log")));
+        Assert.Contains(@"the output kept is in .neon\shell\run_", result);
+        string whole = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(_root, ShellText.SpillFolderName), "run_*.log")));
         Assert.StartsWith(ShellText.DroppedLine(100) + "\nline 101\n", whole);
     }
 

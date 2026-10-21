@@ -32,7 +32,7 @@ namespace NeonSidekick.Llm.Tools;
 /// (the setting <c>Shell timeout (s)</c> by default, the foreground cap at most); on the timeout
 /// the child and everything it started are killed and what it wrote so far comes back under a
 /// timed-out header. Output over <c>Shell output max chars</c> keeps its head and tail, the whole
-/// text written to <c>.shell\&lt;id&gt;.log</c> under the working directory, where <c>read_file</c>
+/// text written to <c>.neon\shell\&lt;id&gt;.log</c> under the working directory, where <c>read_file</c>
 /// can reach it. Stdin is closed at once: a command that reads it sees end of input, never a hang.
 /// </summary>
 public sealed class RunCommandTool : AIFunction

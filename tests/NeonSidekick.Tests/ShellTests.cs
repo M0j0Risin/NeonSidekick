@@ -883,7 +883,7 @@ public sealed class ShellTests
         Assert.Equal("0.0 s", ShellText.Elapsed(TimeSpan.FromSeconds(-1)));
         Assert.Equal("12,345", ShellText.Count(12345));
         Assert.Equal("exit 0 in 0.0 s (cmd): x", ShellText.Note("exit 0 in 0.0 s (cmd): x\nline"));
-        Assert.Equal(".shell", ShellText.SpillFolderName);
+        Assert.Equal(Path.Combine(".neon", "shell"), ShellText.SpillFolderName);   // the app's own folder since 2026-10-21 (.shell until then)
 
         OutputLine[] none = [];
         Assert.Equal("h\n(no output)", ShellText.Result("h", none, 100, null));
@@ -894,11 +894,11 @@ public sealed class ShellTests
         Assert.Equal("a\nb", ShellText.Body([new("a", false), new("b", false)]));
 
         string text = string.Join("\n", Enumerable.Range(1, 40).Select(i => "line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));   // 40 lines, 8 chars each less the last
-        string cut = ShellText.Cut(text, 100, @".shell\run_1.log");
+        string cut = ShellText.Cut(text, 100, @".neon\shell\run_1.log");
         Assert.StartsWith("line 1\nline 2\n", cut);
         Assert.EndsWith("\nline 39\nline 40", cut);
         Assert.Contains("\n… (", cut);
-        Assert.Contains(" characters cut; the whole output is in .shell\\run_1.log) …\n", cut);
+        Assert.Contains(" characters cut; the whole output is in .neon\\shell\\run_1.log) …\n", cut);
         Assert.Equal("… (5 characters cut) …", ShellText.CutLine(5, null));
         Assert.Equal("… (412,345 characters cut; the whole output is in x.log) …", ShellText.CutLine(412345, "x.log"));
         string result = ShellText.Result("h", Enumerable.Range(1, 40).Select(i => new OutputLine("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), false)).ToList(), 100, null);
@@ -926,7 +926,7 @@ public sealed class ShellTests
             for (int i = 0; i < ShellPoliceChecks.SpillKept + 3; i++)
             {
                 string id = "run_" + i.ToString("x6", System.Globalization.CultureInfo.InvariantCulture);
-                Assert.Equal(Path.Combine(".shell", id + ".log"), ShellPoliceChecks.Spill(root, id, "body " + i));
+                Assert.Equal(Path.Combine(".neon", "shell", id + ".log"), ShellPoliceChecks.Spill(root, id, "body " + i));
                 File.SetLastWriteTimeUtc(Path.Combine(folder, id + ".log"), new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(i));
             }
 
@@ -940,6 +940,7 @@ public sealed class ShellTests
             Assert.DoesNotContain("run_000003.log", logs);
             Assert.Contains("run_ffffff.log", logs);
             Assert.Equal("*\n", File.ReadAllText(Path.Combine(folder, ".gitignore")));
+            Assert.False(File.Exists(Path.Combine(root, ".neon", ".gitignore")));   // only the logs are hidden: the rest of .neon may be committed
         }
         finally
         {
@@ -947,7 +948,10 @@ public sealed class ShellTests
         }
     }
 
-    /// <summary>A repository's own .shell folder (2026-10-19, the second shell review): its files are never counted or deleted, and it gets no .gitignore.</summary>
+    /// <summary>
+    /// A spill folder the app didn't make (2026-10-19, the second shell review, a repository's own .shell then): its files are never counted or
+    /// deleted, and it gets no .gitignore. An old .shell folder, from before the logs moved into .neon (2026-10-21), is left as it is.
+    /// </summary>
     [Fact]
     public void Spill_LeavesAFolderOfTheUsersAlone()
     {
@@ -962,7 +966,12 @@ public sealed class ShellTests
             }
 
             File.WriteAllText(Path.Combine(folder, "run_00000.log"), "five digits: not ours");
+            string old = Path.Combine(root, ".shell");
+            Directory.CreateDirectory(old);
+            File.WriteAllText(Path.Combine(old, "run_abcdef.log"), "an old log");
             ShellPoliceChecks.Spill(root, "run_abcdef", "body");
+            Assert.Equal(["run_abcdef.log"], Directory.GetFiles(old).Select(Path.GetFileName));   // the old folder: untouched, no .gitignore
+            Assert.Equal("an old log", File.ReadAllText(Path.Combine(old, "run_abcdef.log")));
             Assert.Equal(ShellPoliceChecks.SpillKept + 5, Directory.GetFiles(folder, "*.log").Length);
             Assert.False(File.Exists(Path.Combine(folder, ".gitignore")));
             Assert.True(ShellPoliceChecks.IsSpillName(ShellRunner.NewId(new Random(1), NeonSidekick.Llm.Tools.RunCommandTool.IdPrefix) + ".log"));
@@ -986,7 +995,7 @@ public sealed class ShellTests
         Assert.Equal(2, NeonSidekick.App.ChatScreen.CmdTailStart(lines, 5));
         Assert.Equal(2, NeonSidekick.App.ChatScreen.CmdTailStart(lines, 1));   // the last line always shown
         Assert.Equal(0, NeonSidekick.App.ChatScreen.CmdTailStart([], 10));
-        Assert.Equal(@"(the first 14,880 lines are not shown here; the whole output is in .shell\proc_1.log)", ShellText.CmdEarlierHidden(14880, @".shell\proc_1.log", whole: true));
+        Assert.Equal(@"(the first 14,880 lines are not shown here; the whole output is in .neon\shell\proc_1.log)", ShellText.CmdEarlierHidden(14880, @".neon\shell\proc_1.log", whole: true));
         Assert.Equal("(the first 1 line is not shown here; the output kept is in x.log)", ShellText.CmdEarlierHidden(1, "x.log", whole: false));
         Assert.Equal("(the first 2 lines are not shown here)", ShellText.CmdEarlierHidden(2, null, whole: true));
         Assert.Equal("(started in an earlier conversation: shown here, not added to this one)", ShellText.CmdOtherConversation);

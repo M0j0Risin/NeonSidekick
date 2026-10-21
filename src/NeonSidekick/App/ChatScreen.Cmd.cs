@@ -24,7 +24,7 @@ internal sealed partial class ChatScreen
     /// foreground cap); ESC kills the line and everything it started. Then the pair goes into the history, tagged
     /// (<see cref="ShellText.CmdHistoryUser"/>, <see cref="ShellText.CmdHistoryReply"/>: the user's pick, the <c>/claude</c> shape),
     /// the reply the text <c>run_command</c> would have handed the model, cut at <c>Shell output max chars</c> with the whole in
-    /// <c>.shell\cmd_….log</c>. Plan mode does not stop it: the user's own hand. Interactive only; headless sends the line to the model.
+    /// <c>.neon\shell\cmd_….log</c>. Plan mode does not stop it: the user's own hand. Interactive only; headless sends the line to the model.
     /// <c>--bg</c> (2026-10-11, the user's ask) passes the same checks, then starts the line in the background
     /// (<see cref="StartCmdInBackground"/>) and its end is reported, the pair kept, at the next idle loop top (<see cref="ReportCmdRuns"/>).
     /// </summary>
@@ -430,7 +430,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The held ends of <c>/cmd --bg</c> runs, at the idle loop top (2026-10-11): each one's header (a notice for exit 0, else a warning;
     /// <see cref="ShellText.CmdStoppedHeader"/> for a stop from <c>/process</c>'s window), the end of its output that fits <c>Shell output
-    /// max chars</c>, the rest in <c>.shell\proc_….log</c> when over, then the tagged pair into the history (the model reads it on the next
+    /// max chars</c>, the rest in <c>.neon\shell\proc_….log</c> when over, then the tagged pair into the history (the model reads it on the next
     /// turn), <c>/copy</c>'s log and the store — <see cref="KeepCmdRun"/>, as a foreground run — unless it was started in another
     /// conversation (<see cref="_conversation"/>), which is shown and not kept. A session gone meanwhile (closed or evicted) leaves only its alert line.
     /// </summary>

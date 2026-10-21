@@ -291,6 +291,8 @@ public sealed class RalphChangesTests : IDisposable
 
         Write(root, "node_modules/dep/x.js", "x changed");
         Write(root, "src/a.txt", "one more");
+        // A long run's spill during the pass is the app's own, never evidence (2026-10-21: in .neon\shell, where .shell was walked).
+        Assert.NotNull(NeonSidekick.Shell.ShellPoliceChecks.Spill(root, "run_abcdef", "a long output"));
         Assert.Equal(["src/a.txt"], RalphChanges.Delta(before, RalphChanges.Snapshot(files, null), files, null, []).Changed);
     }
 

@@ -164,7 +164,7 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Contains("\n… (", poll);
         Assert.Contains(" characters cut) …\n", poll);
         Assert.EndsWith("\nline 400", poll);
-        Assert.False(Directory.Exists(Path.Combine(_dir, ".shell")));
+        Assert.False(Directory.Exists(Path.Combine(_dir, ShellText.SpillFolderName)));
     }
 
     /// <summary>
