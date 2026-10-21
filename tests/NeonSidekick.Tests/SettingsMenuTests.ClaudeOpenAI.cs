@@ -13,7 +13,7 @@ public partial class SettingsMenuTests
         // Advisors before TTS and STT (the Voice group) later still on 2026-10-10 (the user's order).
         // Chat (General until then), Sessions and Botchat first, the Client group, since later on 2026-10-10 (the user's call); Common and Http in its place since 2026-10-10
         // (the user's call: the LLM tab split); LLM second since 2026-10-04 (the user's order); after OpenAI from 2026-10-03 until then.
-        Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "TTS", "STT"], SettingsMenu.TabTitles);
+        Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "Automation", "TTS", "STT"], SettingsMenu.TabTitles);   // Automation between Advisors and Voice since 2026-10-21 (the user's ask)
         Assert.Equal(SettingsMenu.AnthropicTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Anthropic]);
         Assert.Equal(SettingsMenu.OpenAITabTitle, SettingsMenu.TabTitles[(int)SettingsTab.OpenAI]);
         Assert.Equal(33, SettingsMenu.LabelWidthOf(SettingsMenu.TabFields[(int)SettingsTab.Anthropic]));   // "Claude Code command permissions" since later on 2026-10-10 ("slash command", 39, from 2026-10-10, /claude's rows here); "Anthropic API prompt caching" (30) from 2026-10-04, "Claude API prompt caching" (27) before

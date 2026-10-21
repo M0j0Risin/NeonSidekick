@@ -149,11 +149,11 @@ On a Mac:
 Each download's `.sha256` file lets you check it arrived intact (`Get-FileHash` on Windows, `shasum -a 256` on a Mac).
 
 ### First launch
-If no model server answers when the app starts, it opens **Connect a model**:
+If the app has no model to connect to when it starts, or when you switch to such a profile, it opens **Connect a model**:
 
 | Choice | When to pick it |
 |---|---|
-| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on this machine or your network. |
+| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on this machine or your network. It asks where to look (*LLM server scan mode*). |
 | Enter a server's URL | You know the address of an OpenAI-compatible server. |
 | Download an embedded model | You have no server: the app runs a model itself, best on a suitable graphics card or a Mac. |
 | Connect Docker container | You run vLLM or SGLang in Docker Desktop (Windows only). |
@@ -165,7 +165,7 @@ Pick one and the app walks you through it, switching that server on for you; Esc
 **Good to know:**
 * **Permissions:** the model can't touch your files, the web or the shell until you allow it; see [What the model may do](#what-the-model-may-do).
 * **Your data:** settings, memories and conversations are saved in `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac).
-* **Switching servers:** `/server` lists embedded models and the servers it finds; the APIs, Claude Code and Docker appear once switched on in `/settings` › Servers.
+* **Switching servers:** `/server` lists the servers it finds; embedded models, the APIs, Claude Code and Docker appear once switched on in `/settings` › Servers, and Connect a model switches on the one you pick.
 * **Voice:** off at first. `/tts` turns on spoken replies and `/stt` voice input; each first downloads what it needs (about 330 MB and 150 MB).
 * **Desktop shortcut:** each profile offers one once (it can also write a log); `/shortcut` makes one later.
 
@@ -232,7 +232,7 @@ Everything is set from panes, and each explains itself: the highlighted row's de
 
 | Pane | Opens with | What's in it |
 |---|---|---|
-| `/settings` | Ctrl+/ or `//` | The app: chat, sessions and botchat (Client), the model servers (Servers), advisors, and voice. |
+| `/settings` | Ctrl+/ or `//` | The app: chat, sessions and botchat (Client), the model servers (Servers), advisors, the plan reviews, Ralph loop and code audits (Automation), and voice. |
 | `/tools` | Ctrl+T | Which tools the model may use, and their options. |
 | `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
 | `/mcp` | Ctrl+Alt+D | External MCP servers. |

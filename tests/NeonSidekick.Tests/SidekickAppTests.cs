@@ -75,7 +75,8 @@ public partial class SidekickAppTests : IDisposable
         Func<int>? microphones = null,
         Func<string, string, IWakeWordDetector>? wake = null,
         Func<NeonSidekick.Docker.IDockerServers>? dockerServers = null,
-        bool headlessNarrow = false)
+        bool headlessNarrow = false,
+        Func<NeonSidekick.EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null)
         => new(
             _console,
             _settings,
@@ -118,7 +119,9 @@ public partial class SidekickAppTests : IDisposable
             unifiedLog: _unifiedLog,
             headlessNarrow: headlessNarrow,
             // The Ralph loop's checks (2026-10-18): a script, never a real shell.
-            ralphVerifier: _ralphVerifier);
+            ralphVerifier: _ralphVerifier,
+            // The embedded model (2026-10-21, the --url embedded test): none unless a test hands in the fake.
+            embeddedLlm: embeddedLlm);
 
     private readonly Fakes.FakeRalphVerifier _ralphVerifier = new();
 
@@ -154,10 +157,10 @@ public partial class SidekickAppTests : IDisposable
         _settings.Update(d => d.LlmUrl = "http://127.0.0.1:1234/v1");
     }
 
-    private async Task<string> Headless(string input, EnvironmentOverrides? env = null, Func<LlmEndpoint, LlmTimeouts, IChatClient>? chat = null, SidekickOptions? options = null, int exitCode = 0, bool headlessNarrow = false)
+    private async Task<string> Headless(string input, EnvironmentOverrides? env = null, Func<LlmEndpoint, LlmTimeouts, IChatClient>? chat = null, SidekickOptions? options = null, int exitCode = 0, bool headlessNarrow = false, Func<NeonSidekick.EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null)
     {
         var stdout = new StringWriter();
-        var app = App(env, new StringReader(input), stdout, chat: chat, headlessNarrow: headlessNarrow);
+        var app = App(env, new StringReader(input), stdout, chat: chat, headlessNarrow: headlessNarrow, embeddedLlm: embeddedLlm);
         int code = await app.RunAsync((options ?? SidekickOptions.None) with { Headless = true }, CancellationToken.None);
         Assert.Equal(exitCode, code);
         Assert.Empty(_console.Output); // headless never touches the TUI console

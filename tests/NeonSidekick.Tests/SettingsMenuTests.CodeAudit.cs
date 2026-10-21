@@ -11,9 +11,9 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheCodeAuditRows_AreASectionAfterPlanMode_LabeledLLM()
     {
-        var common = SettingsMenu.TabFields[(int)SettingsTab.Common].ToList();
-        Assert.Equal(common.IndexOf(SettingsField.RalphLoopStopTone) + 1, common.IndexOf(SettingsField.CodeAuditPasses));   // the Ralph loop's seven rows between since later on 2026-10-18
-        var section = SettingsMenu.TabSections[SettingsTab.Common].Single(s => s.Title == "Code audit");
+        var automation = SettingsMenu.TabFields[(int)SettingsTab.Automation].ToList();   // Servers › Common until 2026-10-21
+        Assert.Equal(automation.IndexOf(SettingsField.RalphLoopStopTone) + 1, automation.IndexOf(SettingsField.CodeAuditPasses));   // the Ralph loop's seven rows between since later on 2026-10-18
+        var section = SettingsMenu.TabSections[SettingsTab.Automation].Single(s => s.Title == "Code audit");
         Assert.Equal(SettingsField.CodeAuditPasses, section.First);
         Assert.Equal(
             ["LLM code audit max passes", "LLM code audit clean passes", "LLM code audit ask user", "LLM code audit focus", "LLM code audit web research", "LLM code audit pass tool calls", "LLM code audit stop tone"],

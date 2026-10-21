@@ -321,7 +321,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 ### Plan mode
 
-`/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply; `/new`, `/clear` and a profile switch leave plan mode.
+`/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply; `/new`, `/clear` and a profile switch leave plan mode. Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **Tools:** only read-only ones (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Anything that writes, runs or starts something, and every MCP tool, waits for approval.
   * With `neon_advisor` offered, the model consults the relevant [advisors](#advisor) first.
@@ -351,6 +351,8 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 ### Ralph loop
 
 `/plan ralph <name>` carries out a plan one step at a time, each step a pass in a fresh conversation, held together by the plan file and a log. **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once, its checks named (the typed `/plan approve --ralph` too).
+
+Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
 * **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*LLM Ralph loop reviewer*).
@@ -386,7 +388,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 ### Code audit
 
-`/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply.
+`/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply. Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **Scope:** the working directory, or a path (quote one with a blank); `diff` the working changes (unstaged, staged, untracked), `staged` the staged ones, `branch [<base>]` the commits since its base (`main`, else `master`). Past 5,000 files the list is cut, and the start says so.
 * **Left out:** git's ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` folders unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.

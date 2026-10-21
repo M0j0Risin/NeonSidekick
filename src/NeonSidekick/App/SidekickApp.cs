@@ -438,9 +438,28 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// The settings actually in force: flag > variable > saved setting > compiled default, as one
-    /// expression so no code path can consult the file "first".
+    /// expression so no code path can consult the file "first". An embedded URL from the flag or the variable switches the
+    /// embedded model on for the run (<see cref="EmbeddedByUrl"/>, 2026-10-21).
     /// </summary>
-    public AppSettingsData EffectiveSettings => _options.ApplyTo(_environment.ApplyTo(_settings.Current));
+    public AppSettingsData EffectiveSettings => EmbeddedByUrl(_options.ApplyTo(_environment.ApplyTo(_settings.Current)), _options.Url ?? _environment.LlmUrl);
+
+    /// <summary>
+    /// <paramref name="effective"/> with <c>Embedded servers enabled</c> on when <paramref name="overrideUrl"/> — the winning URL
+    /// override, <c>--url</c> over <c>NEONSIDEKICK_LLM_URL</c>, null when neither is set — names the embedded model (2026-10-21, the
+    /// user's call: with the switch off by default, <c>--url embedded</c> alone still runs it; <c>--url claude-code</c> needs its
+    /// variable, as before). A saved embedded URL alone changes nothing, and nothing here is saved. Mutates and returns
+    /// <paramref name="effective"/>, the fresh copy <c>ApplyTo</c> made. Pure.
+    /// </summary>
+    public static AppSettingsData EmbeddedByUrl(AppSettingsData effective, string? overrideUrl)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(overrideUrl))
+        {
+            effective.EmbeddedLlmServer = true;
+        }
+
+        return effective;
+    }
 
     /// <summary>Runs the mode selected by <paramref name="options"/> and returns the process exit code.</summary>
     public async Task<int> RunAsync(SidekickOptions options, CancellationToken cancellationToken)
@@ -3160,6 +3179,8 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
     {
         SettingsField.LlmUrl => _options.Url is not null ? SidekickOptions.UrlFlag : _environment.LlmUrl is not null ? EnvironmentOverrides.LlmUrlVariable : null,
         SettingsField.LlmModel => _options.Model is not null ? SidekickOptions.ModelFlag : _environment.LlmModel is not null ? EnvironmentOverrides.LlmModelVariable : null,
+        // An embedded URL override holds the switch on (2026-10-21, EmbeddedByUrl): the raw overrides, never EffectiveSettings, so no cycle.
+        SettingsField.EmbeddedLlmServer => EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_options.Url ?? _environment.LlmUrl) ? OverriddenBy(SettingsField.LlmUrl) : null,
         SettingsField.LlmApiKey => _environment.LlmApiKey is not null ? EnvironmentOverrides.LlmApiKeyVariable : null,
         SettingsField.LlmRequestTimeoutSeconds => _environment.LlmRequestTimeoutSeconds is not null ? EnvironmentOverrides.RequestTimeoutVariable : null,
         SettingsField.LlmTurnTimeoutSeconds => _environment.LlmTurnTimeoutSeconds is not null ? EnvironmentOverrides.TurnTimeoutVariable : null,

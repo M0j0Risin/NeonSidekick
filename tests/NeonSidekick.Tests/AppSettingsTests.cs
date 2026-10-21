@@ -36,7 +36,7 @@ public class AppSettingsTests : IDisposable
         EmbeddedVramBudget = 92,
         EmbeddedHfDownloadType = "single",
         EmbeddedVision = false,
-        EmbeddedLlmServer = false,
+        EmbeddedLlmServer = true,
         EmbeddedDrafter = false,
         CommandTypoIntercept = false,
         KeepMessageHistory = false,
@@ -1594,7 +1594,10 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("compact", s.LlmToolCompactType);
         Assert.False(s.FileTools);   // on until 2026-09-29, with the web tools
         Assert.False(s.ObsidianTools || s.SqlTools || s.ComfyTools || s.HomeAssistantTools);   // the four integrations too, the same day
-        Assert.True(s.EmbeddedLlmServer && s.EmbeddedDrafter);   // the embedded model's switch and MTP (2026-09-29): on
+        Assert.False(s.EmbeddedLlmServer);   // the embedded model's switch: off since 2026-10-21 (the user's call: no server on by default; on from 2026-09-29)
+        Assert.True(s.EmbeddedDrafter);   // MTP (2026-09-29): on
+        Assert.Equal(50, s.PlanGapPasses);   // 2026-10-21, the user's ask (5 until then)
+        Assert.Equal(5, s.CodeAuditPasses);   // the audit keeps its own
         Assert.Equal("duckduckgo", s.WebSearchMethod);
         // The Ask tab (2026-09-15): the tool on, ten questions of ten choices; a choice needs two, so the choices floor is 2.
         Assert.True(s.AskUser);

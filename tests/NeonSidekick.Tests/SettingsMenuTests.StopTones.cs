@@ -25,10 +25,10 @@ public partial class SettingsMenuTests
         Assert.Equal("silent", SettingsMenu.FieldValue(SettingsField.CodeAuditStopTone, new AppSettingsData { CodeAuditStopTone = "gong" }, _settings.ProfileDirectory));   // unknown reads as silent
         Assert.False(SettingsMenu.IsLlmField(SettingsField.PlanGapStopTone));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.CodeAuditStopTone));
-        var common = SettingsMenu.TabFields[(int)SettingsTab.Common].ToList();
-        Assert.Equal(common.IndexOf(SettingsField.PlanGapAskUser) + 1, common.IndexOf(SettingsField.PlanGapStopTone));
-        Assert.Equal(common.IndexOf(SettingsField.PlanGapStopTone) + 1, common.IndexOf(SettingsField.RalphLoopReviewer));
-        Assert.Equal(common.IndexOf(SettingsField.CodeAuditPassToolCalls) + 1, common.IndexOf(SettingsField.CodeAuditStopTone));
+        var automation = SettingsMenu.TabFields[(int)SettingsTab.Automation].ToList();   // Servers › Common until 2026-10-21
+        Assert.Equal(automation.IndexOf(SettingsField.PlanGapAskUser) + 1, automation.IndexOf(SettingsField.PlanGapStopTone));
+        Assert.Equal(automation.IndexOf(SettingsField.PlanGapStopTone) + 1, automation.IndexOf(SettingsField.RalphLoopReviewer));
+        Assert.Equal(automation.IndexOf(SettingsField.CodeAuditPassToolCalls) + 1, automation.IndexOf(SettingsField.CodeAuditStopTone));
         // The pass rows read as caps.
         Assert.Equal(
             ["LLM plan gap max passes", "LLM code audit max passes", "LLM Ralph loop max passes", "LLM Ralph loop max step passes"],
@@ -82,7 +82,7 @@ public partial class SettingsMenuTests
         await _menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains("LLM plan gap max passes " + SettingsMenu.PlanGapPassesRangeError, Output);
-        Assert.Equal(AppSettingsData.DefaultPlanGapPasses, _settings.Current.PlanGapPasses);
+        Assert.Equal(PreFlipDefaults.Data().PlanGapPasses, _settings.Current.PlanGapPasses);   // unchanged: the fixture's 5 (PreFlipDefaults; the default is 50 since 2026-10-21)
         Assert.Equal("must be 0 to 100 passes (0 for no limit)", SettingsMenu.PlanGapPassesRangeError);
     }
 

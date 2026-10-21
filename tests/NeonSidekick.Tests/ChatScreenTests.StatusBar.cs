@@ -257,7 +257,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("\n" + ChatScreen.ExitHint + "\n" + Row(""), output);
-        Assert.Contains("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice ") + "\n", output);
+        Assert.Contains("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ") + "\n", output);
         Assert.DoesNotContain("› /settings", output);
     }
 

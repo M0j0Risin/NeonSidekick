@@ -219,7 +219,7 @@ public sealed class LlmSessionDockerTests
         using var session = Session(embedded);
         await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
 
-        var gemma = new AppSettingsData { LlmUrl = "embedded", LlmModel = "gemma-4-e2b", LlmContextLength = 8192, LlmScanMode = "disabled" };
+        var gemma = new AppSettingsData { LlmUrl = "embedded", LlmModel = "gemma-4-e2b", LlmContextLength = 8192, LlmScanMode = "disabled", EmbeddedLlmServer = true };   // off by default since 2026-10-21
         Assert.True(await session.ConnectAsync(gemma, NoPhase, CancellationToken.None));
 
         Assert.Equal(["switch sglang_a", "stop-all settle", "embedded start"], _docker.Calls);

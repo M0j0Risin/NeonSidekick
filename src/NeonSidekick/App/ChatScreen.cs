@@ -10881,7 +10881,7 @@ internal sealed partial class ChatScreen
             // The chat line's options ahead of the first idle read (2026-10-14, the user's report): the startup's embedded load
             // runs its live row before it, and that row had no completion lists.
             _input.Chat.SetLineOptions(MentionFolderMode.Resolve(_effective()), PastePreviewRows());
-            await ConnectLlmAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
+            await ConnectLlmAsync(cancellationToken, quiet: true, startup: true, offerPage: true).ConfigureAwait(false);
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
@@ -12257,7 +12257,12 @@ internal sealed partial class ChatScreen
     /// </remarks>
     /// <param name="quiet">The banner was just drawn above, or the settings pane just closed: report only what the settings cannot say.</param>
     /// <param name="startup">The app's first connect (<see cref="RunAsync"/>): the server picker opens for a single answer too.</param>
-    private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false)
+    /// <param name="offerPage">
+    /// Open the Connect a model page when this connect leaves no endpoint (<see cref="ConnectPageAsync"/>): the app's first connect and a
+    /// profile switch's (2026-10-21, the user's ask; the first alone until then, through <paramref name="startup"/>), with nothing saved to
+    /// connect to — no server answered, or nothing was offered to look through at all, which with every server off by default is a fresh profile.
+    /// </param>
+    private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false, bool offerPage = false)
     {
         _llmGeneration++;
         // The hint row's tally is the old model's (2026-10-03, the user's ask): gone through the load and after it, back
@@ -12284,6 +12289,12 @@ internal sealed partial class ChatScreen
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
             ReportLlm(quiet);
+            if (offerPage && _session.Endpoint is null)
+            {
+                // Nothing switched on at all (2026-10-21, every server off by default): the line, then the page that switches one on.
+                await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             return;
         }
 
@@ -12359,7 +12370,7 @@ internal sealed partial class ChatScreen
         }
 
         ReportLlm(quiet);
-        if (startup && _session.Endpoint is null)
+        if (offerPage && _session.Endpoint is null)
         {
             // Nothing to connect to (2026-10-04, the UI review; Settings › Embedded models alone from 2026-09-30, when no model was
             // downloaded): the Connect a model page, every way to one, where the startup picker would have stood.
@@ -12772,8 +12783,10 @@ internal sealed partial class ChatScreen
             var scope = Llm.LlmScanMode.Resolve(effective);
             if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
             {
-                // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was.
+                // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was. Then the Connect a
+                // model page while nothing is connected (2026-10-21: with every server off by default, the way to switch one on).
                 _transcript.Error(LlmSession.NoServerLine(scope));
+                await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -14490,7 +14503,8 @@ internal sealed partial class ChatScreen
         // The profile's own desktop shortcut offer (2026-10-16, per profile since the home's settings.json went): asked here as at the
         // start, before the connects, the first time a run lands on a profile not yet asked (an add, a switch, a reset all, a pull).
         await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
-        await ConnectLlmAsync(cancellationToken, quiet: true).ConfigureAwait(false);
+        // Connect a model when the new profile has nothing to connect to (2026-10-21, the user's ask: as the start offers it).
+        await ConnectLlmAsync(cancellationToken, quiet: true, offerPage: true).ConfigureAwait(false);
         await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);

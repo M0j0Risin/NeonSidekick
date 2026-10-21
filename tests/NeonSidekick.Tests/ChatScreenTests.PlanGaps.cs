@@ -318,7 +318,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(AppSettingsData.DefaultPlanGapPasses, _settings.Current.PlanGapPasses);
+        Assert.Equal(PreFlipDefaults.Data().PlanGapPasses, _settings.Current.PlanGapPasses);   // the setting untouched: the fixture's 5 (the default is 50 since 2026-10-21)
         Assert.Equal(6, _chat.Requests.Count);
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 2, PlanReviewer.Model), LastUserText(_chat.Requests[2]));
         Assert.Contains("A gap review is running (pass 1 of 2)", _chat.Requests[2][0].Text);

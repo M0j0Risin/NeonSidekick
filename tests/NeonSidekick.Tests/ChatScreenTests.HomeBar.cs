@@ -179,7 +179,7 @@ public partial class ChatScreenTests
             input.PushClick(20, 103);
             input.OnWait = () =>
             {
-                opened = Output[mark..].Contains(SettingsMenu.Title + " │ Client · Servers · Advisors · Voice", StringComparison.Ordinal);
+                opened = Output[mark..].Contains(SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice", StringComparison.Ordinal);
                 input.OnWait = null;
                 input.Push(Keys.Escape);
                 PushLine(input, "/exit");

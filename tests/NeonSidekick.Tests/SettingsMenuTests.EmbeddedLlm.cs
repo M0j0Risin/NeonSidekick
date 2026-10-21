@@ -47,8 +47,8 @@ public partial class SettingsMenuTests
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
         Assert.Equal(["Embedded servers enabled", "Embedded models", "Embedded download mode", "Embedded backend", "Embedded context length", "Embedded GPU layers", "Embedded VRAM budget (%)", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
-        Assert.True(data.EmbeddedLlmServer && data.EmbeddedDrafter);   // both on by default
-        Assert.Equal(("on", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
+        Assert.True(!data.EmbeddedLlmServer && data.EmbeddedDrafter);   // the switch off by default since 2026-10-21 (the user's call), the drafter on
+        Assert.Equal(("off", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
         var copy = AppSettings.Copy(new AppSettingsData { EmbeddedLlmServer = false, EmbeddedDrafter = false, EmbeddedVramOnly = false });
         Assert.False(copy.EmbeddedLlmServer || copy.EmbeddedDrafter || copy.EmbeddedVramOnly);
         Assert.True(data.EmbeddedVramOnly);   // on by default since later on 2026-10-01 (the user's call; off until then)

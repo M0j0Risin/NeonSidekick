@@ -557,18 +557,26 @@ public partial class ChatScreenTests
         Assert.Empty(embedded.Starts);
     }
 
+    /// <summary>
+    /// Nothing switched on at all (2026-10-21, every server off by default, the user's call): the no-server line, then the Connect a model
+    /// page that switches one on (the line alone until then); Esc leaves the line. No embedded line: the embedded model is not offered.
+    /// </summary>
     [Fact]
-    public async Task Startup_EmbeddedSwitchedOff_KeepsTheOldLines()
+    public async Task Startup_NothingOffered_TheLine_ThenTheConnectPage()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; d.EmbeddedLlmServer = false; });
         UsePane();
         UseEmbedded(new FakeEmbeddedLlm());
+        _console.Input.PushKey(Keys.Escape);              // the page: not now
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Contains("✗ " + LlmSession.NoServerLine(ScanScope.Disabled), output);
+        Assert.True(output.IndexOf(LlmSession.NoServerLine(ScanScope.Disabled), StringComparison.Ordinal) < output.IndexOf(ChatScreen.ConnectTitle, StringComparison.Ordinal));
+        Assert.Equal(1, Count(output, ChatScreen.ConnectTitle));
         Assert.DoesNotContain(LlmSession.NoEmbeddedLine, output);
         Assert.DoesNotContain(EmbeddedModelCatalog.Models[0].Display, output);
+        Assert.Null(_session.Endpoint);
     }
 }

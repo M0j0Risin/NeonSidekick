@@ -27,7 +27,8 @@ public class LlmSessionEmbeddedTests
         },
         embedded: embedded ?? _embedded);
 
-    private static AppSettingsData Embedded(string model = "") => new() { LlmUrl = "embedded", LlmModel = model };
+    // Embedded servers enabled is off by default since 2026-10-21 (the user's call); these tests mean it on.
+    private static AppSettingsData Embedded(string model = "") => new() { LlmUrl = "embedded", LlmModel = model, EmbeddedLlmServer = true };
 
     private void ServeProps() => _http.Map("http://127.0.0.1:59999/props", HttpStatusCode.OK, LlamaProps);
 
@@ -209,7 +210,7 @@ public class LlmSessionEmbeddedTests
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
         using var session = Session();
 
-        var servers = await session.ProbeServersAsync(new AppSettingsData { LlmScanMode = "local" }, EmbeddedEndpoint.BaseUrl, CancellationToken.None);
+        var servers = await session.ProbeServersAsync(new AppSettingsData { LlmScanMode = "local", EmbeddedLlmServer = true }, EmbeddedEndpoint.BaseUrl, CancellationToken.None);   // the switch off by default since 2026-10-21
 
         Assert.Equal(["LM Studio", "Embedded", "Embedded"], servers.Select(s => s.Name));
         Assert.All(servers.Skip(1), s => Assert.Equal(EmbeddedEndpoint.BaseUrl, s.BaseUrl));
@@ -236,7 +237,7 @@ public class LlmSessionEmbeddedTests
         _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
         using var session = Session();
 
-        var servers = await session.DiscoverAsync(new AppSettingsData { LlmScanMode = "disabled" }, CancellationToken.None);
+        var servers = await session.DiscoverAsync(new AppSettingsData { LlmScanMode = "disabled", EmbeddedLlmServer = true }, CancellationToken.None);   // the switch off by default since 2026-10-21
 
         Assert.Equal(2, servers.Count);
         Assert.All(servers, s => Assert.True(EmbeddedEndpoint.IsEmbedded(s.BaseUrl)));
@@ -252,9 +253,12 @@ public class LlmSessionEmbeddedTests
 
         Assert.Empty(await session.DiscoverAsync(off, CancellationToken.None));
         Assert.Empty(session.EmbeddedRows(off));
-        Assert.Empty(session.EmbeddedRows(new AppSettingsData()));   // on by default, but nothing installed: the installed models alone (2026-09-29)
+        Assert.Empty(session.EmbeddedRows(new AppSettingsData()));   // off by default since 2026-10-21 (the user's call)
+        var on = new AppSettingsData { EmbeddedLlmServer = true };
+        Assert.Empty(session.EmbeddedRows(on));   // on, but nothing installed: the installed models alone (2026-09-29)
         _embedded.Installed("gemma-4-e2b");
-        Assert.Single(session.EmbeddedRows(new AppSettingsData()));
+        Assert.Single(session.EmbeddedRows(on));
+        Assert.Empty(session.EmbeddedRows(new AppSettingsData()));   // the default still lists none
     }
 
     [Fact]

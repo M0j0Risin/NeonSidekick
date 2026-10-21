@@ -9,7 +9,7 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | Option | What it does |
 |---|---|
 | (none) | Opens the interactive app (the TUI). |
-| `--url <url>` | Uses this LLM server: a URL, or `embedded`, `claude-code` or `docker:<container>` (Windows only). |
+| `--url <url>` | Uses this LLM server: a URL, or `embedded`, `claude-code` or `docker:<container>` (Windows only). `embedded` also turns *Embedded servers enabled* on for the run. |
 | `--model <id>` | Uses this model. |
 | `--cwd <path>` | Uses this working directory; a relative path starts from where you launch. |
 | `--profile <name>` | Opens this profile for this launch; a launch without it opens `neon`. An unknown name lists the profiles and exits with code 2. |

@@ -24,12 +24,13 @@ internal sealed partial class SettingsMenu
     /// The strip <c>/settings</c> shows (2026-10-10, the user's pick, <c>/tools</c>' Database and Media shape: the strip had grown to ten):
     /// General, Servers, Voice, Sessions, Botchat, and Advisors after it (later that day, the profile advisors); Client, Servers, Voice, Advisors
     /// since later still (the user's call: General renamed Chat and grouped with Sessions and Botchat under <see cref="ClientTabTitle"/>);
-    /// Client, Servers, Advisors, Voice later still (the user's order: Advisors before Voice).
+    /// Client, Servers, Advisors, Voice later still (the user's order: Advisors before Voice); Client, Servers, Advisors, Automation, Voice since
+    /// 2026-10-21 (the user's ask: plan mode's gap review, the Ralph loop and code audits off Servers › Common, a plain tab of their own).
     /// <see cref="TabTitles"/> and <see cref="TabFields"/> stay the leaf tabs (twelve since the LLM tab's split, later that day), in the order the
     /// arrows walk them (<see cref="StripTabs"/>), each a sub-tab of its group on the second strip. Pinned.
     /// </summary>
     /// <remarks>Spelled out, never read off <see cref="TabTitles"/>: a static of another part of the class may not be set yet.</remarks>
-    public static readonly IReadOnlyList<string> StripTitles = [ClientTabTitle, ServersTabTitle, AdvisorsTabTitle, VoiceTabTitle];
+    public static readonly IReadOnlyList<string> StripTitles = [ClientTabTitle, ServersTabTitle, AdvisorsTabTitle, AutomationTabTitle, VoiceTabTitle];
 
     /// <summary>The tabs each of <see cref="StripTitles"/> holds, in <see cref="SettingsTab"/> order (the enum follows the walk): one for a plain tab, more for a group. Pinned.</summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsTab>> StripTabs =
@@ -37,6 +38,7 @@ internal sealed partial class SettingsMenu
         [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat, SettingsTab.WebUi],
         [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
         [SettingsTab.Advisors],
+        [SettingsTab.Automation],
         [SettingsTab.Tts, SettingsTab.Stt],
     ];
 
@@ -71,7 +73,7 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The picker's root under a group's tab (2026-10-10, <c>/tools</c>' <c>GroupCrumb</c>): <c>⚙️ Settings › Client</c> for a row of Chat,
     /// Sessions, Botchat or Web UI (2026-10-14), <c>⚙️ Settings › Servers</c> for a row of Common, Http, Embedded, Docker, Anthropic or OpenAI,
-    /// <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere (Advisors). Pinned.
+    /// <c>⚙️ Settings › Voice</c> for TTS and STT; the title alone elsewhere (Advisors, Automation). Pinned.
     /// </summary>
     public static string GroupCrumb(SettingsTab tab) => PlaceOf(tab) is var (strip, _) && IsGroup(strip) ? Title + " › " + StripTitles[strip] : Title;
 

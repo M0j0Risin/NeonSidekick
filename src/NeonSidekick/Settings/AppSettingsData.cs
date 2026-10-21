@@ -795,15 +795,17 @@ public sealed class AppSettingsData
     /// the plan's approval pane, and <c>/plan gaps</c>, review the plan pass after pass until one finds no gaps). With gaps still
     /// reported after the last pass, the loop stops and the plan goes back to the pane. <see cref="MinPlanGapPasses"/> to
     /// <see cref="MaxPlanGapPasses"/>; 0 is no limit on the screen (ESC stops it) and <see cref="MaxPlanGapPasses"/> headless, which
-    /// has no ESC. Read when a loop starts. The Common tab of <c>/settings</c>, under <see cref="LlmMaxToolIterations"/>. No variable.
+    /// has no ESC. Read when a loop starts. The first row of <c>/settings</c> › Automation, heading its Plan mode section (on Servers › Common,
+    /// under <see cref="LlmMaxToolIterations"/>, until 2026-10-21, the user's ask). No variable.
     /// The most went 20 → 50 on 2026-10-18 (the user's ask: long reviews lean on 43e4cfae's compaction) and 50 → 100 on 2026-10-21 (the user's
-    /// ask; the row reads <c>LLM plan gap max passes</c> since); <see cref="MaxCodeAuditPasses"/> follows.
+    /// ask; the row reads <c>LLM plan gap max passes</c> since); <see cref="MaxCodeAuditPasses"/> follows. The default went 5 → 50 on 2026-10-21
+    /// (the user's ask); a profile that saved 5 keeps it.
     /// </summary>
     public int PlanGapPasses { get; set; } = DefaultPlanGapPasses;
 
     public const int MinPlanGapPasses = 0;
     public const int MaxPlanGapPasses = 100;
-    public const int DefaultPlanGapPasses = 5;
+    public const int DefaultPlanGapPasses = 50;
 
     /// <summary>
     /// How many passes in a row must find no gaps before plan mode's gap-closing loop ends (2026-10-17, the user's report: a pass
@@ -812,7 +814,7 @@ public sealed class AppSettingsData
     /// none and pointed at an area no earlier pass covered. Every pass counts toward <see cref="PlanGapPasses"/>; a clean pass at
     /// that limit stops the loop unconfirmed, and a limit below this count lowers it to the limit for that review. <c>/plan gaps
     /// confirm</c> raises it to at least 2. <see cref="MinPlanGapCleanPasses"/> to <see cref="MaxPlanGapCleanPasses"/>. Read when a
-    /// loop starts. The Plan mode section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapPasses"/>. No variable.
+    /// loop starts. The Plan mode section of <c>/settings</c> › Automation (Servers › Common until 2026-10-21), under <see cref="PlanGapPasses"/>. No variable.
     /// </summary>
     public int PlanGapCleanPasses { get; set; } = DefaultPlanGapCleanPasses;
 
@@ -826,7 +828,7 @@ public sealed class AppSettingsData
     /// as any plan-mode turn is; off, it is offered none of the three (whatever <see cref="AskUser"/> and the camera and screen
     /// settings say, during a pass only), and a decision only the user can make goes into the plan's <c>## Risks</c> as an open
     /// question, which is not a gap. Read every turn, so turning it off mid-review applies from the next pass. The Plan mode
-    /// section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapCleanPasses"/>. No variable.
+    /// section of <c>/settings</c> › Automation, under <see cref="PlanGapCleanPasses"/>. No variable.
     /// </summary>
     public bool PlanGapAskUser { get; set; } = true;
 
@@ -835,7 +837,7 @@ public sealed class AppSettingsData
     /// <see cref="Timers.TimerTones.Names"/>, <c>silent</c> by default (opt in). A converged review rings as its approval pane opens; every other
     /// stop the user didn't cause (at the limit, stalled, no revision, a failed pass; <see cref="Plans.PlanGapLoop.Rings"/>) rings at the stop,
     /// never Esc, the page's Stop or a message, and only where audio exists. An unknown value reads as <c>silent</c>. The Plan mode section of
-    /// <c>/settings</c> › Servers › Common, under <see cref="PlanGapAskUser"/>. No variable.
+    /// <c>/settings</c> › Automation, under <see cref="PlanGapAskUser"/>. No variable.
     /// </summary>
     public string PlanGapStopTone { get; set; } = Timers.TimerTones.Silent;
 
@@ -844,7 +846,7 @@ public sealed class AppSettingsData
     /// one step per fresh conversation, the app deciding whether a step stands): <c>off</c>, <c>model</c> (a one-shot request to the chat's
     /// model), <c>advisor</c> (the first advisor offered) or <c>any</c> (the default: an advisor when one is offered, else the model);
     /// <see cref="Plans.RalphReviewerMode"/>. A failed review unticks the step; an unclear one leaves it standing, unchecked. Snapshotted when a
-    /// loop starts. The Ralph loop section of <c>/settings</c> › Servers › Common, after Plan mode. No variable.
+    /// loop starts. The Ralph loop section of <c>/settings</c> › Automation, after Plan mode. No variable.
     /// </summary>
     public string RalphLoopReviewer { get; set; } = Plans.RalphReviewerMode.Default;
 
@@ -912,7 +914,7 @@ public sealed class AppSettingsData
     /// done pane comes back. The plan gap passes' range (<see cref="MinCodeAuditPasses"/> to <see cref="MaxCodeAuditPasses"/>, defined as theirs
     /// so the loop never clamps what this row offers); 0 is no limit on the screen (Esc stops it) and <see cref="MaxCodeAuditPasses"/> headless.
     /// A count on <c>/code-audit</c> overrides it for that run. Read when an audit starts. The Code audit section of <c>/settings</c> ›
-    /// Servers › Common, after Plan mode. No variable.
+    /// Automation, after Ralph loop. No variable.
     /// </summary>
     public int CodeAuditPasses { get; set; } = DefaultCodeAuditPasses;
 
@@ -3270,15 +3272,18 @@ public sealed class AppSettingsData
     // server restarts only when what it was started with changed (EmbeddedLlm.LlamaLaunch).
 
     /// <summary>
-    /// Whether the embedded model is offered at all (2026-09-29, the user's ask; on by default): off takes its models out of
+    /// Whether the embedded model is offered at all (2026-09-29, the user's ask): off takes its models out of
     /// <c>/server</c> (and <c>/server embedded</c>), a saved embedded URL then reads as none, and a running
     /// <c>llama-server</c> stops at the reconnect the change brings — its memory is free again. Installed models stay on
-    /// disk; the <c>Embedded models</c> row still installs and removes them. The Embedded tab's first row. <c>EmbeddedLlmEnabled</c>
+    /// disk; the <c>Embedded models</c> row still removes them, but installs and uses only with this on. The Embedded tab's first row. <c>EmbeddedLlmEnabled</c>
     /// / <c>Embedded LLM enabled</c> until later that day, when the user named it <c>Embedded LLM server enabled</c>; the key
     /// follows the label without the <c>Enabled</c> suffix, so a saved off went back to on once. <c>Embedded servers enabled</c>
     /// since 2026-10-02 (the user's ask), the label alone: the key stayed. No variable.
+    /// Off by default since 2026-10-21 (the user's call: no server is on by default; on until then): the Connect a model page's embedded
+    /// row turns it on (<c>ChatScreen.ConnectPageAsync</c>), and so does an embedded URL from <c>--url</c> or <c>NEONSIDEKICK_LLM_URL</c>,
+    /// for that run only (<c>SidekickApp.EmbeddedByUrl</c>). A profile that saved it on keeps it.
     /// </summary>
-    public bool EmbeddedLlmServer { get; set; } = true;
+    public bool EmbeddedLlmServer { get; set; }
 
     /// <summary>
     /// Which llama.cpp build runs the embedded model (2026-09-29): one of <see cref="EmbeddedLlm.EmbeddedBackends.Names"/> —

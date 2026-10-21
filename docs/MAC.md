@@ -60,7 +60,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 * **Secrets go in the Keychain.** API keys and passwords are encrypted with a key in your login Keychain (the *NeonSidekick* item). A `passwordStore: credman` password is a Keychain item: `security add-generic-password -s <target> -a <user> -w`.
 * **Shell and scripts.** `run_command` runs in zsh unless *Shell default shell* says `bash` or `powershell` (pwsh, when installed). Scripts run with `python3`, `node` or `pwsh`.
 * **Editors.** `/sys persona` and the like open the file in its default app. For `/draft`, set *Draft editor* to a command that waits (`code --wait`, `open -W -t`); vim can't share the terminal with the app.
-* **The embedded model.** Pick one in `/settings` › Servers › Embedded › *Embedded models*; the app downloads llama.cpp's Mac build with it. Its server stops when the app ends, even on a crash.
+* **The embedded model.** Pick *Download an embedded model* on Connect a model, or turn on *Embedded servers enabled* and pick one in `/settings` › Servers › Embedded › *Embedded models*; the app downloads llama.cpp's Mac build with it. Its server stops when the app ends, even on a crash.
 * **GPU memory.** The GPU may use about two thirds of the Mac's memory (10.7 GB of 16 GB), so a 16 GB Mac suits the Gemma 4 E2B and E4B models best. GMEM on the performance bar shows its share in use.
 
 ### Keys & mouse

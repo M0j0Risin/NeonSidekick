@@ -16,12 +16,13 @@ public partial class SettingsMenuTests
     [Fact]
     public void TheStrip_AndItsGroups_ArePinned()
     {
-        Assert.Equal(["Client", "Servers", "Advisors", "Voice"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick); Advisors before Voice later still (the user's order)
+        Assert.Equal(["Client", "Servers", "Advisors", "Automation", "Voice"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick); Advisors before Voice later still (the user's order); Automation between them since 2026-10-21 (the user's ask)
         Assert.Equal(
             [
                 [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat, SettingsTab.WebUi],   // Web UI since 2026-10-14
                 [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
                 [SettingsTab.Advisors],
+                [SettingsTab.Automation],   // 2026-10-21: plan mode's gap review, the Ralph loop and code audits, off Common
                 [SettingsTab.Tts, SettingsTab.Stt],
             ],
             SettingsMenu.StripTabs);
@@ -29,7 +30,10 @@ public partial class SettingsMenuTests
 
         Assert.Equal((1, 1), SettingsMenu.PlaceOf(SettingsTab.Http));   // right after Common (2026-10-10, the user's place)
         Assert.Equal((1, 5), SettingsMenu.PlaceOf(SettingsTab.OpenAI));
-        Assert.Equal((3, 1), SettingsMenu.PlaceOf(SettingsTab.Stt));
+        Assert.Equal((4, 1), SettingsMenu.PlaceOf(SettingsTab.Stt));   // Voice fifth since 2026-10-21 (Automation before it)
+        Assert.Equal((3, 0), SettingsMenu.PlaceOf(SettingsTab.Automation));
+        Assert.False(SettingsMenu.IsGroup(3));   // a plain tab, as Advisors
+        Assert.Equal(SettingsMenu.Title, SettingsMenu.GroupCrumb(SettingsTab.Automation));
         Assert.Equal((0, 1), SettingsMenu.PlaceOf(SettingsTab.Sessions));   // Chat, Sessions, Botchat: the user's order
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
         Assert.Equal((2, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
@@ -38,7 +42,8 @@ public partial class SettingsMenuTests
         Assert.True(SettingsMenu.IsGroup(0));
         Assert.True(SettingsMenu.IsGroup(1));
         Assert.False(SettingsMenu.IsGroup(2));
-        Assert.True(SettingsMenu.IsGroup(3));
+        Assert.False(SettingsMenu.IsGroup(3));   // Automation, a plain tab (2026-10-21)
+        Assert.True(SettingsMenu.IsGroup(4));   // Voice
 
         Assert.Equal(SettingsMenu.Title + " › Servers", SettingsMenu.GroupCrumb(SettingsTab.Anthropic));
         Assert.Equal(SettingsMenu.Title + " › Servers", SettingsMenu.GroupCrumb(SettingsTab.Http));
@@ -54,6 +59,7 @@ public partial class SettingsMenuTests
         var (menu, pane) = PaneMenu();
         Push(Keys.Tab);                       // Servers, on Common
         Push(Keys.Tab);                       // Advisors (before Voice since later on 2026-10-10, the user's order)
+        Push(Keys.Tab);                       // Automation (2026-10-21, the user's ask: between Advisors and Voice)
         Push(Keys.Tab);                       // Voice, on TTS
         Push(Keys.Escape);
 
@@ -61,7 +67,7 @@ public partial class SettingsMenuTests
 
         Assert.Contains("\n" + Head(SettingsTab.Common) + "\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL ", Output);   // whole names: no row starts "Common " (2026-10-10)
         Assert.EndsWith(" │ ↳ Common · Http · Embedded · Docker · Anthropic · OpenAI ", Head(SettingsTab.Common));
-        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n \n" + MenuLayout.Heading("Read aloud", 120) + "\n▸ Output ", Output);   // headed since later on 2026-10-10
+        Assert.Contains("\n" + Head(SettingsTab.Tts) + "\n \n" + MenuLayout.Heading("Text-to-speech", 120) + "\n▸ Output ", Output);   // headed since later on 2026-10-10
         Assert.EndsWith(" │ ↳ TTS · STT ", Head(SettingsTab.Tts));
         Assert.DoesNotContain("\n▸ Servers enabled", Output);   // Tab went past Embedded
         pane.Dispose();

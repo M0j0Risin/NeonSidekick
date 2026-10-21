@@ -33,7 +33,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 
 | Variable | Overrides | Accepts |
 |---|---|---|
-| `NEONSIDEKICK_LLM_URL` | *LLM URL* (`--url` wins) | A base URL (`http://127.0.0.1:1234/v1`), or `embedded`, `claude-code` or `docker:<container>` (Windows only). |
+| `NEONSIDEKICK_LLM_URL` | *LLM URL* (`--url` wins) | A base URL (`http://127.0.0.1:1234/v1`), or `embedded`, `claude-code` or `docker:<container>` (Windows only). `embedded` also turns *Embedded servers enabled* on for the run. |
 | `NEONSIDEKICK_LLM_MODEL` | *LLM model* (`--model` wins) | A model id, or an embedded model's id (`gemma-4-e2b`). |
 | `NEONSIDEKICK_LLM_API_KEY` | *LLM API key* | The key as issued. Never logged. |
 | `NEONSIDEKICK_LLM_REASONING` | *LLM reasoning* | `none`, `low`, `medium`, `high`, `xhigh`. |
