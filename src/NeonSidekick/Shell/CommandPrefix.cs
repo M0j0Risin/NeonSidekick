@@ -37,7 +37,10 @@ namespace NeonSidekick.Shell;
 /// <c>env</c>, <c>xargs</c>, <c>eval</c>, <c>iex</c> or <c>source</c> covered whatever came after it): <c>env</c>, <c>nohup</c>, <c>nice</c>,
 /// <c>timeout</c> and the like by their options to the command's own prefix (<see cref="RunnerSkip"/>); <c>sudo</c>, <c>xargs</c>, <c>eval</c>,
 /// PowerShell's <c>Invoke-Expression</c> and <c>Start-Process</c> as <see cref="Unreadable"/>; a sourced script (<c>. ./a.sh</c>, <c>source
-/// a.sh</c>, PowerShell's <c>. .\a.ps1</c>) with its path in the prefix, cmd's <c>call</c> as the command it calls.</para>
+/// a.sh</c>, PowerShell's <c>. .\a.ps1</c>) with its path in the prefix, cmd's <c>call</c> as the command it calls. Since later that day (the
+/// next review) the options with which an allowed program runs a command ask too (<see cref="CommandOptions"/>, <see cref="VerbCommandOptions"/>:
+/// <c>tar --to-command</c>, <c>rsync -e</c>, <c>ssh -o ProxyCommand</c>, <c>git rebase -x</c>), and a PowerShell job's script is part of its
+/// prefix (<see cref="ScriptCmdletPrefix"/>: <c>Start-Job -FilePath .\a.ps1</c> is <c>start-job ./a</c>).</para>
 /// </summary>
 public static partial class CommandPrefix
 {
@@ -105,7 +108,7 @@ public static partial class CommandPrefix
         ["docker"] = Set("-H", "--host", "-c", "--context", "--config"),   // a context names another daemon, as -H does (2026-10-20, the code review)
         ["podman"] = Set("-c", "--connection", "--url", "--identity"),
         ["kubectl"] = Set("--kubeconfig", "-s", "--server", "--token"),
-        ["make"] = Set("-C", "--directory", "-f", "--file", "--makefile"),
+        ["make"] = Set("-C", "--directory", "-f", "--file", "--makefile", "--eval", "-E"),   // --eval's rule, the last word, became the default goal
     };
 
     /// <summary>
@@ -132,19 +135,23 @@ public static partial class CommandPrefix
         "RUSTFLAGS", "RUSTDOCFLAGS", "GOFLAGS", "GOROOT", "GOPATH", "GOTOOLCHAIN", "GOENV", "GOPROXY", "NODE_PATH", "RUBYOPT", "RUBYLIB",
         "PERLLIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE",
         "AZURE_CONFIG_DIR", "TF_PLUGIN_CACHE_DIR", "TF_DATA_DIR",
+        // The environment twins of CommandOptions' (later on 2026-10-20, the code review): tar's, zip's and man's default options, vim's and
+        // ex's start-up commands, less's options and key files. rsync's are the RSYNC_ family.
+        "TAR_OPTIONS", "ZIPOPT", "ZIP", "MANOPT", "VIMINIT", "GVIMINIT", "EXINIT", "MYVIMRC", "LESS", "LESSKEY", "LESSKEYIN",
     };
 
     /// <summary>
     /// The variable families <see cref="DangerousEnvVars"/> takes by the start of the name (the fourth shell review, 2026-10-19), any
     /// case: git's, npm's <c>npm_config_*</c> (its <c>script_shell</c>), yarn's (<c>YARN_YARN_PATH</c> runs a file), docker's and
     /// podman's, kubectl's, cargo's linkers and wrappers, .NET's hosts and profilers, MSBuild's and NuGet's paths, Python's and pip's,
-    /// the dynamic loaders', gcloud's (<c>CLOUDSDK_PYTHON</c>), gh's (its aliases may be shell commands), terraform's CLI config. Pinned.
+    /// the dynamic loaders', gcloud's (<c>CLOUDSDK_PYTHON</c>), gh's (its aliases may be shell commands), terraform's CLI config, rsync's
+    /// (<c>RSYNC_RSH</c>, <c>RSYNC_CONNECT_PROG</c>; later on 2026-10-20). Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> DangerousEnvPrefixes =
     [
         "GIT_", "NPM_CONFIG_", "YARN_", "PNPM_", "COREPACK_", "DOCKER_", "CONTAINER_", "CONTAINERS_", "KUBE", "CARGO_", "CGO_",
         "DOTNET_", "COREHOST_", "CORECLR_", "COMPLUS_", "MSBUILD", "NUGET_", "PYTHON", "PIP_", "UV_", "POETRY_", "LD_", "DYLD_",
-        "PERL5", "CLOUDSDK_", "GH_", "TF_CLI_",
+        "PERL5", "CLOUDSDK_", "GH_", "TF_CLI_", "RSYNC_",
     ];
 
     /// <summary>
@@ -682,6 +689,13 @@ public static partial class CommandPrefix
                 : program + " " + Program(tokens[first + 1]);
         }
 
+        // A job or a remote call that runs a script (later on 2026-10-20, the code review: Start-Job -FilePath .\a.ps1 read as start-job, so one
+        // approval covered every script, and a -ScriptBlock any code): the script is part of the prefix as a sourced one is, a block asks.
+        if (shell == ShellKind.PowerShell && ScriptCmdlets.Contains(baseName) && (slash < 0 || ModuleQualified(program[..(slash + 1)])))
+        {
+            return ScriptCmdletPrefix(tokens, first, program);
+        }
+
         if ((SettingPrograms.Contains(baseName) && SetsDangerous(tokens, first + 1))
             || (shell == ShellKind.PowerShell && EnvDrivePrograms.Contains(baseName) && TouchesDangerousEnv(tokens, first + 1)))
         {
@@ -726,13 +740,13 @@ public static partial class CommandPrefix
                     // review; it used to stop the scan and leave the prefix the bare program). A quoted option-looking word asks.
                     string unquoted = string.Concat(verb.Where(ch => QuoteKind(ch, shell) == '\0'));
                     return unquoted.Length > 0 && unquoted[0] != '-' && unquoted[0] != '/'
-                        ? program + " " + unquoted.ToLowerInvariant()
+                        ? VerbPrefix(program, baseName, unquoted.ToLowerInvariant(), tokens, i + 1, shell)
                         : Unreadable;
                 }
 
                 if (verb.Length > 0 && verb[0] != '-' && verb[0] != '/')
                 {
-                    return program + " " + verb.ToLowerInvariant();
+                    return VerbPrefix(program, baseName, verb.ToLowerInvariant(), tokens, i + 1, shell);
                 }
 
                 break;
@@ -741,6 +755,98 @@ public static partial class CommandPrefix
 
         return program;
     }
+
+    /// <summary>
+    /// PowerShell's cmdlets that run a script file or a script block (later on 2026-10-20, the code review): <c>Start-Job</c> (<c>sajb</c>),
+    /// <c>Start-ThreadJob</c>, <c>Invoke-Command</c> (<c>icm</c>), <c>Register-ScheduledJob</c>. Read by <see cref="ScriptCmdletPrefix"/>.
+    /// </summary>
+    private static readonly IReadOnlySet<string> ScriptCmdlets = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "start-job", "sajb", "start-threadjob", "invoke-command", "icm", "register-scheduledjob",
+    };
+
+    // Their parameters that name the script file, and those whose value is code (a script block, a job definition run by name).
+    private static readonly string[] ScriptFileParameters = ["filepath", "literalpath", "pspath", "lp"];
+    private static readonly string[] ScriptCodeParameters = ["scriptblock", "command", "initializationscript", "definitionname", "definitionpath", "type"];
+
+    /// <summary>Whether a folder before a PowerShell command's name is a module's (<c>Microsoft.PowerShell.Core\</c>), not a path's.</summary>
+    private static bool ModuleQualified(string folder) =>
+        folder.Length > 0 && !folder.StartsWith('/') && !folder.StartsWith('.') && !folder.StartsWith('~') && !(folder.Length > 1 && folder[1] == ':');
+
+    /// <summary>
+    /// A <see cref="ScriptCmdlets"/> line's prefix (later on 2026-10-20, the code review): the cmdlet and its script as <see cref="Program"/> reads
+    /// it (<c>Start-Job -FilePath .\a.ps1</c> is <c>start-job ./a</c>, as F4's <c>. .\a.ps1</c> is <c>. ./a</c>), one approval per script; alone or
+    /// with only switches, the cmdlet. <see cref="Unreadable"/> for a script block anywhere (<c>-ScriptBlock</c>, <c>-InitializationScript</c>, a
+    /// positional <c>{ … }</c>, a value that may be one), a script path that is a value (<c>-FilePath $p</c>), two scripts, or words whose binding
+    /// can't be told without the cmdlet's parameter sets (<c>Start-Job -Name n .\a.ps1</c>: <c>n</c> or <c>.\a.ps1</c> may be the script). PowerShell
+    /// takes any start of a parameter's name (<c>-File</c>, <c>-fi</c>) and a value after a colon (<c>-FilePath:.\a.ps1</c>); a start that two of
+    /// these share asks.
+    /// </summary>
+    private static string ScriptCmdletPrefix(List<string> tokens, int at, string program)
+    {
+        string? script = null;
+        var loose = new List<string>();
+        for (int i = at + 1; i < tokens.Count; i++)
+        {
+            string word = tokens[i];
+            if (word.StartsWith('{') || word.Contains(Hole))
+            {
+                return Unreadable;
+            }
+
+            if (word.Length > 1 && word[0] == '-' && char.IsAsciiLetter(word[1]))
+            {
+                int colon = word.IndexOf(':', StringComparison.Ordinal);
+                string name = (colon < 0 ? word[1..] : word[1..colon]).ToLowerInvariant();
+                if (ScriptCodeParameters.Any(p => p.StartsWith(name, StringComparison.Ordinal)))
+                {
+                    return Unreadable;
+                }
+
+                if (!ScriptFileParameters.Any(p => p.StartsWith(name, StringComparison.Ordinal)))
+                {
+                    continue;   // another parameter: its value, if it takes one, is a loose word below
+                }
+
+                string? value = colon >= 0 ? word[(colon + 1)..] : ++i < tokens.Count ? tokens[i] : null;
+                if (script is not null || value is not { Length: > 0 } || value[0] is '-' or '{' or '(' or '@' || IsValueWord(value, ShellKind.PowerShell))
+                {
+                    return Unreadable;
+                }
+
+                script = value;
+                continue;
+            }
+
+            loose.Add(word);
+        }
+
+        // A loose value or splat may bind to a script block (Start-Job -FilePath .\a.ps1 @p, its -InitializationScript inside): asks, whatever binds.
+        if (loose.Any(w => IsValueWord(w, ShellKind.PowerShell) || ExpandsToWords(w, ShellKind.PowerShell)))
+        {
+            return Unreadable;
+        }
+
+        if (script is null && loose.Count > 0)
+        {
+            // A script by its position only when it is the one word after the cmdlet (Start-Job .\a.ps1 binds it to -FilePath).
+            if (loose.Count > 1 || tokens.Count != at + 2 || IsValueWord(loose[0], ShellKind.PowerShell) || loose[0][0] is '(' or '@')
+            {
+                return Unreadable;
+            }
+
+            script = loose[0];
+        }
+
+        return script is null ? program : program + " " + Program(script);
+    }
+
+    /// <summary>
+    /// A verb program's prefix, <c>program verb</c>, or <see cref="Unreadable"/> when the words after the verb carry one of its
+    /// <see cref="VerbCommandOptions"/> (later on 2026-10-20, the code review: <c>git rebase -x</c>, <c>git fetch --upload-pack</c>).
+    /// </summary>
+    private static string VerbPrefix(string program, string baseName, string verb, List<string> tokens, int after, ShellKind shell) =>
+        VerbCommandOptions.TryGetValue(baseName + " " + verb, out var rule) && RunsCommand(tokens, after, rule, shell) ? Unreadable : program + " " + verb;
 
     // LeadingSkip's answers besides a count: the line asks; the word is the prefix (command -v, a word with nothing after it).
     private const int AskSkip = -1;
@@ -869,18 +975,281 @@ public static partial class CommandPrefix
     };
 
     /// <summary>
-    /// The options with which a program runs another command or deletes (2026-10-20, the code review: an allowed <c>find</c> ran
-    /// <c>find . -exec rm {} \;</c> and <c>find / -delete</c>). A line carrying one asks. A tripwire over the common ones, not every program's
-    /// every hook.
+    /// How a program in <see cref="CommandOptions"/> writes its options (later on 2026-10-20, the code review: the exact match of 2026-10-20's
+    /// <c>find</c> row missed a quoted <c>"-exec"</c>, a short option glued to its value, getopt's bundles and GNU's abbreviated long options):
+    /// <paramref name="Names"/> are the options that run a command (a long one also by any shorter start of it, <c>--to-comm=</c>, as GNU's and
+    /// git's parsers take one); <paramref name="Bundled"/> non-null when short options bundle (<c>-avze</c>), its letters those that take a value
+    /// (the rest of the word is that value, so the scan stops), empty when every letter is scanned; <paramref name="OldStyle"/> when the first
+    /// argument may be tar's dashless bundle (<c>tar xIf zstd a.tar</c>), every letter scanned; <paramref name="Plus"/> when a <c>+word</c> is a
+    /// command (less's <c>+!cmd</c>, vim's <c>+cmd</c>); <paramref name="SshKeys"/> when <c>-o</c> sets an ssh option, only
+    /// <see cref="SshSafeKeys"/>' passing.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> CommandOptions = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+    private sealed record RunOptions(IReadOnlySet<string> Names, string? Bundled = null, bool OldStyle = false, bool Plus = false, bool SshKeys = false);
+
+    /// <summary>
+    /// The options with which a program runs another command or deletes (2026-10-20, the code review: an allowed <c>find</c> ran
+    /// <c>find . -exec rm {} \;</c> and <c>find / -delete</c>; later that day, the next review, an allowed <c>tar</c>, <c>rsync</c>, <c>ssh</c> or
+    /// <c>zip</c> ran any command through <c>--to-command</c>, <c>-e</c>, <c>-o ProxyCommand=</c> or <c>-TT</c>), anywhere in the segment, in every
+    /// shell: a line carrying one asks, as does one where a value or an unquoted glob stands among such a program's words (<c>tar cf a.tar *</c>
+    /// and a file named <c>--checkpoint-action=exec=sh x.sh</c>). <c>make</c>'s makefile options and <c>kubectl</c>'s config (its exec
+    /// credential plugins) are here too, since both read them after the verb as well as before (<see cref="DangerousOptions"/> only before). A
+    /// tripwire over the common ones, not every program's every hook: an interpreter (<c>python</c>, <c>awk</c>, <c>sed</c>) runs code by design
+    /// and is allowed as itself.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, RunOptions> CommandOptions = BuildCommandOptions();
+
+    private static Dictionary<string, RunOptions> BuildCommandOptions()
     {
-        ["find"] = Set("-exec", "-execdir", "-ok", "-okdir", "-delete"),
-        ["gfind"] = Set("-exec", "-execdir", "-ok", "-okdir", "-delete"),
-        ["fd"] = Set("-x", "--exec", "-X", "--exec-batch"),
-        ["fdfind"] = Set("-x", "--exec", "-X", "--exec-batch"),
-        ["rg"] = Set("--pre"),
+        var find = new RunOptions(Set("-exec", "-execdir", "-ok", "-okdir", "-delete"));
+        var fd = new RunOptions(Set("-x", "--exec", "-X", "--exec-batch"), Bundled: "");
+        var tar = new RunOptions(Set("-I", "-F", "--use-compress-program", "--to-command", "--checkpoint-action", "--info-script", "--new-volume-script",
+            "--rmt-command", "--rsh-command"), Bundled: "bCfFgHIKLNTVX", OldStyle: true);
+        var vim = new RunOptions(Set("-c", "--cmd", "-S", "-u", "-U", "-s", "-e", "-E", "--remote-send", "--remote-expr"), Bundled: "", Plus: true);
+        var less = new RunOptions(Set(), Plus: true);
+        var options = new Dictionary<string, RunOptions>(StringComparer.Ordinal)
+        {
+            ["find"] = find,
+            ["gfind"] = find,
+            ["fd"] = fd,
+            ["fdfind"] = fd,
+            ["rg"] = new(Set("--pre")),
+            ["tar"] = tar,
+            ["gtar"] = tar,
+            ["bsdtar"] = tar,
+            ["rsync"] = new(Set("-e", "--rsh", "--rsync-path"), Bundled: "BTfM@e"),
+            ["ssh"] = new(Set("-F", "-I"), Bundled: "BbcDEeFIiJLlmOoPpQRSWw", SshKeys: true),
+            ["scp"] = new(Set("-F", "-S", "-D"), Bundled: "cDFiJloPSX", SshKeys: true),
+            ["sftp"] = new(Set("-F", "-S", "-D", "-b"), Bundled: "BbcDFiJloPRSs", SshKeys: true),
+            ["zip"] = new(Set("-T", "-TT", "--unzip-command"), Bundled: ""),
+            ["less"] = less,
+            ["more"] = less,
+            ["man"] = new(Set("-P", "--pager", "-H", "--html"), Bundled: ""),
+            ["go"] = new(Set("-exec", "--exec", "-toolexec", "--toolexec", "-vettool", "--vettool")),
+            ["npm"] = new(Set("--script-shell", "--node-options", "--userconfig", "--globalconfig", "--shell", "--call")),
+            ["make"] = new(Set("-f", "--file", "--makefile", "-C", "--directory", "--eval", "-E"), Bundled: "CfIjlOoWE"),
+            ["kubectl"] = new(Set("--kubeconfig", "-s", "--server", "--token"), Bundled: "noflcpLks"),
+        };
+        foreach (string name in new[] { "vim", "vi", "nvim", "view", "vimdiff", "ex", "gvim", "mvim", "evim" })
+        {
+            options[name] = vim;
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// The verbs whose own options run a command (later on 2026-10-20, the code review): keyed <c>program verb</c>, read in the words after the
+    /// verb, so an allowed <c>git rebase</c> never covers <c>git rebase -x 'rm -rf x'</c> nor an allowed <c>git fetch</c> a <c>--upload-pack</c>.
+    /// A bare word is a subcommand that runs one (<c>git submodule foreach</c>, <c>git bisect run</c>). git's own options before the verb
+    /// (<c>-c</c>, <c>--config-env</c>, <c>--exec-path</c>) are <see cref="DangerousOptions"/>, its <c>GIT_*</c> variables
+    /// <see cref="DangerousEnvPrefixes"/>.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, RunOptions> VerbCommandOptions = new Dictionary<string, RunOptions>(StringComparer.Ordinal)
+    {
+        ["git rebase"] = new(Set("-x", "--exec"), Bundled: ""),
+        ["git fetch"] = new(Set("--upload-pack")),
+        ["git pull"] = new(Set("--upload-pack")),
+        ["git clone"] = new(Set("-u", "--upload-pack", "-c", "--config", "--template"), Bundled: ""),
+        ["git init"] = new(Set("--template")),
+        ["git ls-remote"] = new(Set("-u", "--upload-pack"), Bundled: ""),
+        ["git archive"] = new(Set("--exec")),
+        ["git push"] = new(Set("--receive-pack", "--exec")),
+        ["git send-pack"] = new(Set("--receive-pack", "--exec")),
+        ["git fetch-pack"] = new(Set("--upload-pack", "--exec")),
+        ["git difftool"] = new(Set("-x", "--extcmd"), Bundled: ""),
+        ["git grep"] = new(Set("-O", "--open-files-in-pager"), Bundled: ""),
+        ["git submodule"] = new(Set("foreach")),
+        ["git bisect"] = new(Set("run")),
+        ["git filter-branch"] = new(Set("--tree-filter", "--index-filter", "--env-filter", "--msg-filter", "--commit-filter", "--parent-filter",
+            "--tag-name-filter", "--setup")),
+        ["git send-email"] = new(Set("--sendmail-cmd", "--smtp-server", "--to-cmd", "--cc-cmd", "--header-cmd")),
+        ["git instaweb"] = new(Set("-d", "--httpd", "-b", "--browser"), Bundled: ""),
     };
+
+    /// <summary>
+    /// The ssh options a <c>-o</c> may set under an allowed <c>ssh</c>, <c>scp</c> or <c>sftp</c> (later on 2026-10-20, the code review): connection,
+    /// authentication and known-hosts settings, any case. Any other asks: <c>ProxyCommand</c>, <c>LocalCommand</c>, <c>KnownHostsCommand</c>,
+    /// <c>Match exec</c> and <c>XAuthLocation</c> run a program, <c>PKCS11Provider</c> and <c>SecurityKeyProvider</c> load a library, and an
+    /// allow-list misses no new one.
+    /// </summary>
+    private static readonly IReadOnlySet<string> SshSafeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "AddressFamily", "BatchMode", "BindAddress", "CheckHostIP", "Ciphers", "Compression", "ConnectionAttempts", "ConnectTimeout",
+        "GlobalKnownHostsFile", "HashKnownHosts", "HostKeyAlgorithms", "HostKeyAlias", "HostName", "IdentitiesOnly", "IdentityFile",
+        "IPQoS", "KbdInteractiveAuthentication", "KexAlgorithms", "LogLevel", "MACs", "NumberOfPasswordPrompts", "PasswordAuthentication",
+        "Port", "PreferredAuthentications", "PubkeyAcceptedAlgorithms", "PubkeyAcceptedKeyTypes", "PubkeyAuthentication", "RequestTTY",
+        "ServerAliveCountMax", "ServerAliveInterval", "StrictHostKeyChecking", "TCPKeepAlive", "UpdateHostKeys", "User", "UserKnownHostsFile",
+        "VisualHostKey",
+    };
+
+    /// <summary>
+    /// Whether the words from <paramref name="from"/> carry one of <paramref name="rule"/>'s options in any spelling it takes: quoted or
+    /// escaped, glued to its value (<c>-Izstd</c>, <c>-essh</c>), in a bundle (<c>-avze</c>), a long one abbreviated, tar's dashless first
+    /// word, a <c>+word</c>, an ssh <c>-o</c> past <see cref="SshSafeKeys"/>; or a word that is a value or an unquoted glob, whose words the
+    /// shell, not the line, decides (<see cref="ExpandsToWords"/>).
+    /// </summary>
+    private static bool RunsCommand(List<string> tokens, int from, RunOptions rule, ShellKind shell)
+    {
+        for (int i = from; i < tokens.Count; i++)
+        {
+            if (ExpandsToWords(tokens[i], shell))
+            {
+                return true;
+            }
+
+            string word = Bare(tokens[i], shell);
+            string? next = i + 1 < tokens.Count ? Bare(tokens[i + 1], shell) : null;
+            if (rule.Names.Contains(word) || (rule.Plus && word.StartsWith('+')))
+            {
+                return true;
+            }
+
+            if (word.StartsWith("--", StringComparison.Ordinal))
+            {
+                string name = OptionName(word);
+                if (name.Length > 2 && rule.Names.Any(n => n.StartsWith("--", StringComparison.Ordinal) && n.StartsWith(name, StringComparison.Ordinal)))
+                {
+                    return true;   // --to-command, --to-comm=…, --use-compress (an exact name is a start of itself)
+                }
+            }
+            else if (word.Length > 1 && word[0] == '-')
+            {
+                if (rule.Names.Contains(OptionName(word)) || (rule.Bundled is { } valued && BundleRuns(word, valued, rule, next, everyLetter: false)))
+                {
+                    return true;
+                }
+            }
+            else if (i == from && rule.OldStyle && word.Length > 0 && BundleRuns("-" + word, "", rule, next, everyLetter: true))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a short-option bundle (<c>-avze</c>) holds one of <paramref name="rule"/>'s letters: read left to right, the scan ending at a
+    /// letter of <paramref name="valued"/> (the rest of the word, or the next one, is its value), an ssh <c>-o</c>'s value judged by its key.
+    /// </summary>
+    private static bool BundleRuns(string word, string valued, RunOptions rule, string? next, bool everyLetter)
+    {
+        for (int k = 1; k < word.Length; k++)
+        {
+            char letter = word[k];
+            if (rule.Names.Contains("-" + letter))
+            {
+                return true;
+            }
+
+            if (!everyLetter && valued.Contains(letter, StringComparison.Ordinal))
+            {
+                string? value = k + 1 < word.Length ? word[(k + 1)..] : next;
+                return rule.SshKeys && letter == 'o' && !SshSafe(value);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether an ssh <c>-o</c> value (<c>Key=value</c> or <c>Key value</c>) sets one of <see cref="SshSafeKeys"/>; a missing one is not.</summary>
+    private static bool SshSafe(string? value)
+    {
+        string text = (value ?? "").Trim();
+        int end = text.IndexOfAny(['=', ' ', '\t']);
+        return SshSafeKeys.Contains(end < 0 ? text : text[..end]);
+    }
+
+    /// <summary>A word with its quotes and escapes off, as the program gets it (<c>"-exec"</c> and <c>\-exec</c> are <c>-exec</c>).</summary>
+    private static string Bare(string token, ShellKind shell)
+    {
+        char escape = EscapeChar(shell);
+        var bare = new StringBuilder(token.Length);
+        for (int i = 0; i < token.Length; i++)
+        {
+            char c = token[i];
+            if (c == escape && i + 1 < token.Length)
+            {
+                bare.Append(token[++i]);
+            }
+            else if (QuoteKind(c, shell) == '\0')
+            {
+                bare.Append(c);
+            }
+        }
+
+        return bare.ToString();
+    }
+
+    /// <summary>
+    /// Whether a word's words are the shell's to decide, not the line's: a variable or a substitution outside single quotes (one word, or many,
+    /// whatever their text: <c>"$x"</c> may be <c>--to-command=sh</c>), cmd's <c>%x%</c>/<c>!x!</c>, or an unquoted glob (a file's name becomes the
+    /// word: tar's classic <c>*</c> over a file named <c>--checkpoint-action=…</c>). A quoted glob is text (<c>find . -name '*.cs'</c>). In bash and
+    /// zsh an unquoted brace expansion too (<c>{--to-command=sh,}</c> is the option; <c>{}</c> and <c>@{u}</c> are text), in PowerShell a splat
+    /// (<c>@a</c> hands a native program the array's items as its words).
+    /// </summary>
+    private static bool ExpandsToWords(string token, ShellKind shell)
+    {
+        if (shell == ShellKind.Cmd)
+        {
+            return token.IndexOfAny(['%', '!']) >= 0;
+        }
+
+        if (shell == ShellKind.PowerShell && token.Length > 1 && token[0] == '@' && (char.IsAsciiLetterOrDigit(token[1]) || token[1] == '_'))
+        {
+            return true;
+        }
+
+        char escape = EscapeChar(shell);
+        bool braces = shell is ShellKind.Bash or ShellKind.Zsh;
+        bool brace = false;
+        char quote = '\0';
+        for (int i = 0; i < token.Length; i++)
+        {
+            char c = token[i];
+            if (c == escape && quote != '\'' && i + 1 < token.Length)
+            {
+                i++;
+                continue;
+            }
+
+            char kind = QuoteKind(c, shell);
+            if (kind != '\0' && (quote == '\0' || quote == kind))
+            {
+                quote = quote == '\0' ? kind : '\0';
+                continue;
+            }
+
+            if (quote != '\'' && (c is '$' or Hole || (c == '`' && shell != ShellKind.PowerShell)))
+            {
+                return true;
+            }
+
+            if (quote == '\0' && c is '*' or '?' or '[')
+            {
+                return true;
+            }
+
+            if (quote == '\0' && braces)
+            {
+                // {a,b} and {1..3} are words of their own; a { with no , or .. before its } (find's {}, git's @{u}) is text.
+                if (c == '{')
+                {
+                    brace = true;
+                }
+                else if (c == '}')
+                {
+                    brace = false;
+                }
+                else if (brace && (c == ',' || (c == '.' && i + 1 < token.Length && token[i + 1] == '.')))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// How many words at <paramref name="at"/> a program that runs another command takes before that command (2026-10-20, the code review): 0
@@ -898,7 +1267,7 @@ public static partial class CommandPrefix
         string program = Program(word);
         int slash = program.LastIndexOf('/');
         string name = program[(slash + 1)..];
-        if (CommandOptions.TryGetValue(name, out var runsCommand) && tokens.Skip(at + 1).Any(t => runsCommand.Contains(OptionName(t))))
+        if (CommandOptions.TryGetValue(name, out var runsCommand) && RunsCommand(tokens, at + 1, runsCommand, shell))
         {
             return AskSkip;
         }

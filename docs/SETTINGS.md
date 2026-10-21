@@ -528,7 +528,15 @@ The tools most profiles use, and the pane's own options.
 * **Programs that run another one:** `env`, `nohup`, `nice`, `timeout`, `stdbuf`, `setsid` and `caffeinate` are read through to the command they run (`nohup git push` is `git push`). These always ask:
   * `sudo`, `xargs`, `watch` and the like, `eval`, and PowerShell's `Invoke-Expression` (`iex`), `Start-Process` and `Set-Alias`.
   * `find -exec` or `-delete`, and docker's `--context`.
+* **Options that run a command** always ask, however they're written (quoted, glued, bundled as `-avze`, or shortened as `--to-comm=`):
+  * `tar -I`, `--to-command` or `--checkpoint-action`; `rsync -e` or `--rsync-path`; `zip -TT`; `man -P`; `less +…`; `vim -c` or `+…`.
+  * `ssh`, `scp` and `sftp` with `-F`, or a `-o` past the plain connection settings (`ProxyCommand`, `LocalCommand`…); `scp -S`, `sftp -b`.
+  * `git rebase -x`, `git fetch --upload-pack`, `git clone -c` or `--template`, `git submodule foreach`, `git bisect run`; `git -c` as before.
+  * `go test -exec`, `npm --script-shell`, `make -f` or `--eval`, `kubectl --kubeconfig`, after the verb too.
+  * Any of these programs with a variable, an unquoted glob or brace expansion, or a PowerShell splat (`@a`) among its words (`tar cf a.tar *`): a file's name can become an option.
+  * Their variables (`TAR_OPTIONS`, `RSYNC_RSH`, `VIMINIT`, `LESS`…) ask as `PATH` does.
 * **Scripts run in the shell** are allowed one by one: `source ./a.sh` is `source ./a`, PowerShell's `. .\a.ps1` is `. ./a`, and `call a.bat` in `cmd` is `a`.
+* **PowerShell jobs** too: `Start-Job -FilePath .\a.ps1` is `start-job ./a` (`Invoke-Command`, `Start-ThreadJob`, `sajb`, `icm` alike). A `-ScriptBlock`, a `{ … }`, a variable or a splat always asks.
 * **The working folder:** `cmd` runs a program there only by its path (`.\build.bat`), as PowerShell does, never by its bare name.
 * **Every command in the line** must be allowed: each part of a pipe or `&&` chain, and each command a substitution runs. A substitution the app can't read always asks.
 * **Path police:** refuses an absolute path (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~` or a folder variable (`%USERPROFILE%`, `$HOME`), in switches and URLs too. The transcript shows 👮.

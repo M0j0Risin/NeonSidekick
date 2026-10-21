@@ -371,6 +371,12 @@ public static class RalphText
     /// </summary>
     public static string LockedOnHostError(string path, string host, string lockPath) =>
         $"NeonSidekick on {host} is running {path} as a Ralph loop; wait for it to end, or delete {lockPath} if that run is gone";
+    /// <summary>
+    /// The plan's volume has no atomic way to publish the lock (later on 2026-10-20, the code review: exFAT, some shares): taken by a plain move, two
+    /// instances could both hold it, so no loop runs there. Pinned.
+    /// </summary>
+    public static string LockUnsupportedError(string path, string lockPath) =>
+        $"A Ralph loop can't run {path} here: its folder's drive can't create {lockPath} safely (no hard links or exclusive renames, as on exFAT); move the project to the Mac's own disk";
     public static string NotRunnableError(string path, PlanStatus status) => $"{path} is {PlanDocument.Word(status)}: a Ralph loop runs a plan that is not done or canceled";
     public static string BadPassesError(string word) =>
         $"'{word}' passes: a Ralph loop takes {N(Settings.AppSettingsData.MinRalphLoopPasses)} to {N(Settings.AppSettingsData.MaxRalphLoopPasses)}, 0 for three a step";

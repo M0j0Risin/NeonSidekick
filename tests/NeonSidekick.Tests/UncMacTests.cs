@@ -171,6 +171,11 @@ public sealed class UncMacTests : IDisposable
         Assert.Equal("owner 4242 638000000000000000\nfsid -5\nfrom //svc@fs01/Name%E2%80%99s%20Folder\non /Volumes/Name’s Folder-1\n", text);
         Assert.Equal(record, MacMountRules.Parse(text));
         Assert.Null(MacMountRules.Parse("owner 4242 1\nfsid 5\n"));
+
+        // The owner line is RecordFiles.Line's and is read by RecordFiles.Pairs (2026-10-20, the code review): in any order, CRLF too, the last kept.
+        Assert.StartsWith(NeonSidekick.Files.RecordFiles.Line("owner", Owner, OwnerStart), text, StringComparison.Ordinal);
+        Assert.Equal(record, MacMountRules.Parse("owner 1 2\r\nfsid -5\r\nfrom //svc@fs01/Name%E2%80%99s%20Folder\r\non /Volumes/Name’s Folder-1\r\nowner 4242 638000000000000000\r\n"));
+        Assert.Null(MacMountRules.Parse("owner 4242 x\nfsid -5\nfrom //a@b/c\non /Volumes/c\n"));
         Assert.Null(MacMountRules.Parse(""));
     }
 

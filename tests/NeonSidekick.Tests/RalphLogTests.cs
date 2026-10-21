@@ -228,6 +228,81 @@ public sealed class RalphLogTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(folder));   // every temp file gone, the last lock let go
     }
 
+    /// <summary>
+    /// What a publishing call's errno means (later on 2026-10-20, the code review: a volume with no hard links fell back to a racy move): EEXIST and
+    /// the rest are not taken, the volume's "no such call" answers are unsupported.
+    /// </summary>
+    [Theory]
+    [InlineData(0, (int)RalphLog.PublishOutcome.Published)]
+    [InlineData(17, (int)RalphLog.PublishOutcome.NotTaken)]      // EEXIST: held
+    [InlineData(13, (int)RalphLog.PublishOutcome.NotTaken)]      // EACCES
+    [InlineData(2, (int)RalphLog.PublishOutcome.NotTaken)]       // ENOENT
+    [InlineData(1, (int)RalphLog.PublishOutcome.Unsupported)]    // EPERM (Linux's link on FAT)
+    [InlineData(45, (int)RalphLog.PublishOutcome.Unsupported)]   // macOS's ENOTSUP (exFAT, FAT32's link)
+    [InlineData(102, (int)RalphLog.PublishOutcome.Unsupported)]  // macOS's EOPNOTSUPP
+    [InlineData(95, (int)RalphLog.PublishOutcome.Unsupported)]   // Linux's EOPNOTSUPP
+    public void ThePublishsErrno_IsRead(int errno, int outcome) => Assert.Equal((RalphLog.PublishOutcome)outcome, RalphLog.PublishOutcomeOf(errno));
+
+    /// <summary>
+    /// A volume with no hard links (later on 2026-10-20, the code review): on a Mac the exclusive rename takes the lock (FAT32 measured so), and one
+    /// that takes neither refuses the start with its own sentence, never a move two instances could both win and never "another is running".
+    /// </summary>
+    [UnixFact]
+    public void TheLock_OnAVolumeWithoutHardLinks_TakesTheExclusiveRename_OrIsRefused()
+    {
+        var link = RalphLog.LinkCall;
+        var rename = RalphLog.RenameExclusiveCall;
+        string lockFile = Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName);
+        try
+        {
+            RalphLog.LinkCall = (_, _) => 45;   // ENOTSUP, as FAT32 and exFAT answer
+            if (OperatingSystem.IsMacOS())
+            {
+                Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), _ => true, out string? none));   // the real renamex_np
+                Assert.Null(none);
+                Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(200, T0), _ => true, out none));          // held: EEXIST
+                Assert.Null(none);
+                Assert.Equal(RalphText.LockedError(Plan), RalphLog.LockError(_files, Plan));
+                RalphLog.Unlock(_files, Plan, new RalphLog.LockOwner(100, T0));
+            }
+
+            RalphLog.RenameExclusiveCall = (_, _) => 45;   // exFAT: neither
+            Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), _ => true, out string? refusal));
+            Assert.Equal(RalphText.LockUnsupportedError(Plan, RalphLog.LockPathFor(Plan)), refusal);
+            Assert.False(File.Exists(lockFile));
+            Assert.Empty(Directory.EnumerateFiles(Path.GetDirectoryName(lockFile)!));   // the temp file gone too
+            Assert.Equal(
+                "A Ralph loop can't run .neon/plans/guide.md here: its folder's drive can't create .neon/plans/guide/ralph.lock safely (no hard links or exclusive renames, as on exFAT); move the project to the Mac's own disk",
+                refusal);
+
+            // A stale lock there already (an older build moved it in): its take-over guard can't be published either, the same refusal.
+            File.WriteAllText(lockFile, "pid: 12\n");
+            Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), _ => false, out refusal));
+            Assert.Equal(RalphText.LockUnsupportedError(Plan, RalphLog.LockPathFor(Plan)), refusal);
+        }
+        finally
+        {
+            RalphLog.LinkCall = link;
+            RalphLog.RenameExclusiveCall = rename;
+        }
+    }
+
+    /// <summary>The Mac's exclusive rename itself, on the temp volume: a free name taken (the temp file moved), a taken one left as it was (EEXIST).</summary>
+    [MacFact]
+    public void TheExclusiveRename_TakesAFreeName_AndNeverReplacesOne()
+    {
+        Directory.CreateDirectory(_dir);
+        string a = Path.Combine(_dir, "a.tmp"), b = Path.Combine(_dir, "b.tmp"), target = Path.Combine(_dir, "x.lock");
+        File.WriteAllText(a, "first");
+        File.WriteAllText(b, "second");
+
+        Assert.Equal(0, RalphLog.RenameExclusive(a, target));
+        Assert.False(File.Exists(a));
+        Assert.Equal(17, RalphLog.RenameExclusive(b, target));   // EEXIST
+        Assert.Equal("first", File.ReadAllText(target));
+        Assert.True(File.Exists(b));
+    }
+
     [Fact]
     public void ALockWithNoStart_IsTakenOverAtOnce_WhenItsOwnerIsGone()
     {

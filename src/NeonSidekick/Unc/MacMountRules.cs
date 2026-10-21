@@ -92,17 +92,22 @@ public static class MacMountRules
     /// <summary>A record's file name: the file system's id, so a mount has one record however often it is seen.</summary>
     public static string RecordName(long fsid) => fsid.ToString("x16", CultureInfo.InvariantCulture) + ".txt";
 
-    /// <summary>The record's text: lines, as <c>LlamaRecords</c>' are. Pure, so the tests pin the format.</summary>
+    /// <summary>
+    /// The record's text: lines, as <c>LlamaRecords</c>' are, its owner line <see cref="Files.RecordFiles.Line"/>'s (2026-10-20, the code review:
+    /// the third hand-written copy of that line, with its own reader; the bytes are the same, so a record already on disk reads as before). Pure,
+    /// so the tests pin the format.
+    /// </summary>
     public static string Format(MountRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
-        return string.Create(CultureInfo.InvariantCulture, $"owner {record.OwnerPid} {record.OwnerStartTicks}\nfsid {record.Fsid}\nfrom {record.From}\non {record.MountPoint}\n");
+        return Files.RecordFiles.Line("owner", record.OwnerPid, record.OwnerStartTicks)
+            + string.Create(CultureInfo.InvariantCulture, $"fsid {record.Fsid}\nfrom {record.From}\non {record.MountPoint}\n");
     }
 
     /// <summary>A record read back from <paramref name="text"/>; null for anything that is not one whole record.</summary>
     public static MountRecord? Parse(string text)
     {
-        (int Pid, long Ticks)? owner = null;
+        (int Pid, long Ticks)? owner = Files.RecordFiles.Pairs(text).TryGetValue("owner", out var pair) ? pair : null;
         long? fsid = null;
         string? from = null, on = null;
         foreach (var raw in (text ?? "").Split('\n'))
@@ -119,12 +124,6 @@ public static class MacMountRules
             else if (line.StartsWith("fsid ", StringComparison.Ordinal) && long.TryParse(line["fsid ".Length..], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long id))
             {
                 fsid = id;
-            }
-            else if (line.Split(' ') is ["owner", var pid, var ticks]
-                && int.TryParse(pid, NumberStyles.None, CultureInfo.InvariantCulture, out int p)
-                && long.TryParse(ticks, NumberStyles.None, CultureInfo.InvariantCulture, out long t))
-            {
-                owner = (p, t);
             }
         }
 

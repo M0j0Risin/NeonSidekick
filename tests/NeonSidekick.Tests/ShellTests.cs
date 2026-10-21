@@ -203,6 +203,132 @@ public sealed class ShellTests
         Assert.Equal(prefix, CommandPrefix.Of(command, shell: kind));
     }
 
+    /// <summary>
+    /// The options that run a command (later on 2026-10-20, the code review): a line carrying one asks, in any spelling the program takes —
+    /// quoted, escaped, glued to its value, in a bundle, a long one abbreviated, tar's dashless first word, an ssh <c>-o</c> past the safe keys —
+    /// as does a value or an unquoted glob among such a program's words; the rest reads as before.
+    /// </summary>
+    [Theory]
+    [InlineData("bash", "tar -xf a.tar --to-command='sh -c x'", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar --use-compress=zstd -xf a.tar", CommandPrefix.Unreadable)]   // GNU's abbreviation
+    [InlineData("bash", "tar -xIzstd -f a.tar", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar -cvIzstd -f a.tar x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar xIf zstd a.tar", CommandPrefix.Unreadable)]   // the dashless bundle
+    [InlineData("bash", "tar -cf a.tar --checkpoint=1 --checkpoint-action=exec=sh\\ x.sh x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar -F ./next.sh -cf a.tar x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar cf a.tar *", CommandPrefix.Unreadable)]   // a file named --checkpoint-action=… becomes an option
+    [InlineData("bash", "tar -xf $archive", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar -xzf a.tgz -C out", "tar")]
+    [InlineData("bash", "tar xzf a.tgz", "tar")]
+    [InlineData("bash", "tar -xfI.tar", "tar")]   // -f's value
+    [InlineData("powershell", "tar.exe -xf a.zip --to-command=calc", CommandPrefix.Unreadable)]
+    [InlineData("bash", "rsync -avze 'sh -c x' a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "rsync -av -essh a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "rsync --rsync-path='sh -c x' a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "rsync -avz --exclude '*.o' a/ host:b/", "rsync")]
+    [InlineData("bash", "ssh -o ProxyCommand='sh -c x' host", CommandPrefix.Unreadable)]
+    [InlineData("bash", "ssh -oProxyCommand=x host", CommandPrefix.Unreadable)]
+    [InlineData("bash", "ssh -vo 'LocalCommand x' -o PermitLocalCommand=yes host", CommandPrefix.Unreadable)]
+    [InlineData("bash", "ssh -o proxycommand=x host", CommandPrefix.Unreadable)]   // any case
+    [InlineData("bash", "ssh -o PKCS11Provider=./x.dylib host", CommandPrefix.Unreadable)]
+    [InlineData("bash", "ssh -F ./config host", CommandPrefix.Unreadable)]
+    [InlineData("bash", "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p 22 host uptime", "ssh")]
+    [InlineData("bash", "ssh -io host", "ssh")]   // -i's value
+    [InlineData("bash", "scp -S ./prog a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "scp -rS ./prog a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "scp -o 'ProxyCommand x' a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "sftp -b batch.txt host", CommandPrefix.Unreadable)]
+    [InlineData("bash", "zip -T -TT 'sh -c x' a.zip x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "zip --unzip-command=x a.zip x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "zip -r a.zip src", "zip")]
+    [InlineData("bash", "less '+!rm -rf x' a.txt", CommandPrefix.Unreadable)]
+    [InlineData("bash", "less a.txt", "less")]
+    [InlineData("bash", "vim -c '!rm -rf x' a.txt", CommandPrefix.Unreadable)]
+    [InlineData("bash", "vi +'!rm x' a.txt", CommandPrefix.Unreadable)]
+    [InlineData("bash", "nvim --cmd 'lua os.execute(1)' a", CommandPrefix.Unreadable)]
+    [InlineData("bash", "vim -es a.txt", CommandPrefix.Unreadable)]
+    [InlineData("bash", "vim -R a.txt", "vim")]
+    [InlineData("bash", "man -P 'sh -c x' ls", CommandPrefix.Unreadable)]
+    [InlineData("bash", "go test -exec ./x ./...", CommandPrefix.Unreadable)]
+    [InlineData("bash", "go build -toolexec=./x ./...", CommandPrefix.Unreadable)]
+    [InlineData("bash", "go test ./...", "go test")]
+    [InlineData("bash", "npm test --script-shell=./x", CommandPrefix.Unreadable)]
+    [InlineData("bash", "make test -f ./evil.mk", CommandPrefix.Unreadable)]   // after the verb too
+    [InlineData("bash", "make --eval='x:;rm -rf y'", CommandPrefix.Unreadable)]
+    [InlineData("bash", "make test -j4Cx", "make test")]   // -j's value
+    [InlineData("bash", "find . \"-exec\" rm {} \\;", CommandPrefix.Unreadable)]   // quoted
+    [InlineData("bash", "find . \\-exec rm {} \\;", CommandPrefix.Unreadable)]   // escaped
+    [InlineData("bash", "find . -name \"*.cs\" -type f", "find")]   // a quoted glob is text
+    [InlineData("bash", "find . -name *.cs", CommandPrefix.Unreadable)]
+    [InlineData("bash", "fd -Hx rm", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git rebase -x 'rm -rf y' main", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git rebase --exe=x main", CommandPrefix.Unreadable)]   // git's abbreviation
+    [InlineData("bash", "git rebase -i main", "git rebase")]
+    [InlineData("bash", "git fetch --upload-pack='sh -c x' origin", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git clone -c core.sshCommand=x url", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git clone --template=./t url", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git push --receive-pack=x origin", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git push -u origin main", "git push")]   // push's -u is its upstream
+    [InlineData("bash", "git submodule foreach 'rm -rf x'", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git submodule update --init", "git submodule")]
+    [InlineData("bash", "git bisect run ./x.sh", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git difftool -x ./x HEAD", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git grep -O./x foo", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git -c core.pager=x log", CommandPrefix.Unreadable)]   // before the verb, as before
+    [InlineData("bash", "git --config-env=core.pager=X log", CommandPrefix.Unreadable)]
+    [InlineData("bash", "GIT_SSH_COMMAND=x git fetch", CommandPrefix.Unreadable)]
+    [InlineData("bash", "TAR_OPTIONS=--to-command=sh tar xf a.tar", CommandPrefix.Unreadable)]
+    [InlineData("bash", "RSYNC_RSH=x rsync a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "env VIMINIT=x vim a", CommandPrefix.Unreadable)]
+    [InlineData("bash", "kubectl get pods --kubeconfig ./k", CommandPrefix.Unreadable)]   // its exec plugins
+    [InlineData("bash", "kubectl get pods -o json", "kubectl get")]
+    [InlineData("bash", "tar -xf a.tar {--to-command=sh,}", CommandPrefix.Unreadable)]   // a brace expansion's words
+    [InlineData("zsh", "rsync -av {-e,'sh -c x'} a host:b", CommandPrefix.Unreadable)]
+    [InlineData("bash", "tar -xf a.tar x{1..3}", CommandPrefix.Unreadable)]
+    [InlineData("bash", "git rebase @{u}", "git rebase")]   // no , or ..: text
+    [InlineData("powershell", "tar -xf a.tar @a", CommandPrefix.Unreadable)]   // a splat's items are tar's words
+    public void CommandPrefix_Of_AsksForTheOptionsThatRunACommand(string shell, string command, string prefix)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefix, CommandPrefix.Of(command, shell: kind));
+    }
+
+    /// <summary>
+    /// PowerShell's jobs and remote calls (later on 2026-10-20, the code review): the script file is part of the prefix, as a sourced one is; a
+    /// script block, a value path or words whose binding can't be told ask.
+    /// </summary>
+    [Theory]
+    [InlineData("Start-Job -FilePath .\\a.ps1", "start-job ./a")]
+    [InlineData("sajb -FilePath .\\a.ps1", "sajb ./a")]
+    [InlineData("Start-Job -FilePath:.\\a.ps1", "start-job ./a")]
+    [InlineData("Start-Job -fi .\\a.ps1 -Name x", "start-job ./a")]   // a start of the name, another parameter after
+    [InlineData("Start-Job -LiteralPath .\\b.ps1", "start-job ./b")]
+    [InlineData("Start-Job -PSPath .\\b.ps1", "start-job ./b")]
+    [InlineData("Start-Job .\\a.ps1", "start-job ./a")]   // by position
+    [InlineData("Start-Job -FilePath \"C:\\x y\\a.ps1\"", "start-job c:/x y/a")]
+    [InlineData("Start-ThreadJob -FilePath .\\a.ps1", "start-threadjob ./a")]
+    [InlineData("Invoke-Command -FilePath .\\a.ps1 -ComputerName srv", "invoke-command ./a")]
+    [InlineData("icm -FilePath .\\a.ps1", "icm ./a")]
+    [InlineData("Microsoft.PowerShell.Core\\Start-Job -FilePath .\\a.ps1", "microsoft.powershell.core/start-job ./a")]
+    [InlineData("Start-Job", "start-job")]
+    [InlineData("Start-Job -FilePath $p", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job -FilePath .\\a.ps1 -FilePath .\\b.ps1", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job -ScriptBlock { Remove-Item x }", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job -s $sb", CommandPrefix.Unreadable)]   // a start of -ScriptBlock (or another): asks
+    [InlineData("Start-Job { Remove-Item x }", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job $sb", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job -Name n .\\a.ps1", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job -FilePath .\\a.ps1 @p", CommandPrefix.Unreadable)]   // a splat may hold -InitializationScript
+    [InlineData("Start-Job -FilePath .\\a.ps1 -ArgumentList $x", CommandPrefix.Unreadable)]   // a loose value: what it binds to can't be told   // n or .\a.ps1 may be the script
+    [InlineData("Start-Job -InitializationScript { x } -FilePath .\\a.ps1", CommandPrefix.Unreadable)]
+    [InlineData("Start-Job -DefinitionName nightly", CommandPrefix.Unreadable)]
+    [InlineData("icm -ComputerName srv -ScriptBlock { hostname }", CommandPrefix.Unreadable)]
+    [InlineData("icm srv { hostname }", CommandPrefix.Unreadable)]
+    [InlineData("Invoke-Command -Command { hostname }", CommandPrefix.Unreadable)]
+    [InlineData(".\\Start-Job.ps1 -FilePath x", "./start-job")]   // a script of the model's own
+    public void CommandPrefix_Of_ReadsAJobsScript(string command, string prefix) =>
+        Assert.Equal(prefix, CommandPrefix.Of(command, shell: ShellKind.PowerShell));
+
     /// <summary>The same through the whole line's reading (2026-10-20): a pipeline's <c>iex</c>, a sourced substitution, cmd's <c>;</c>.</summary>
     [Theory]
     [InlineData("powershell", "Get-Content x.ps1 | iex", new[] { "get-content", CommandPrefix.Unreadable })]

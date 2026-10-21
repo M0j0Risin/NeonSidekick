@@ -350,10 +350,10 @@ internal sealed partial class ChatScreen
 
         // The folder from the lock on (2026-10-19, the second review): everything the loop writes and checks is this one's, whatever the settings say later.
         var files = _files.PinnedAt(_files.Root);
-        if (!RalphLog.TryLock(files, path, RalphLog.Me, RalphLockAlive))
+        if (!RalphLog.TryLock(files, path, RalphLog.Me, RalphLockAlive, out string? lockRefusal))
         {
             _plan.ClearApproval();
-            _transcript.Error(RalphLog.LockError(files, path));
+            _transcript.Error(lockRefusal ?? RalphLog.LockError(files, path));
             return false;
         }
 
