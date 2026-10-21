@@ -71,7 +71,8 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 * **No key for these.** Shift+F3 goes back in a find. Click the ☺ for the emoji picker (Ctrl+J arrives as a line break).
 * **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V, or a right-click where the terminal passes it on) takes a picture first, such as a ⌃⇧⌘4 screenshot.
 * **Pasting files.** A file copied in Finder pastes as its path, which attaches a picture or a PDF. A right-click in a filter or find box pastes the first copied file's path (on Windows, nothing).
-* **Right-clicks in iTerm2.** iTerm2's *Settings › Pointer* gives the right button to its own menu by default, so the app sees none. Use Ctrl+V to paste, and double-click a bar's open space for `/settings`.
+* **Right-clicks in iTerm2.** Two settings give the right button to the app: *Enable mouse reporting* on (Settings › Profiles › Terminal), and the *Right Button* › *Open Context Menu* row deleted (Settings › Pointer › Bindings).
+* **Without them** iTerm2 opens its own menu and the app sees no right-click. Use Ctrl+V to paste, and double-click a bar's open space for `/settings`.
 * **Selecting text with the mouse:** hold Fn (Terminal.app) or Option (iTerm2), or press Cmd+R in Terminal.app to turn the app's mouse off and on.
 
 ### Windows
