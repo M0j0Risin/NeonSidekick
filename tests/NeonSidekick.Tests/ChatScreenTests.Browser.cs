@@ -283,15 +283,17 @@ public sealed partial class ChatScreenTests
     {
         _browserWindow = new FakeBrowserWindow { HoldVisit = true };
         var window = _browserWindow;
+        // /exit only once the close's notice is in (2026-10-20, a CI-like run on 2 cores, 1 in 30 alone on 1: a quiet line was the only
+        // wait, and the visit's continuation, on the pool, wrote its notice after /exit; CtrlB_OpensTheHomePage's fix of 2026-10-19).
         StepsWhenIdle(
             Line("/browser a.example"),
             Line("/browser b.example"),
             input =>
             {
                 window.EndVisit();
-                PushLine(input, "/browser list --clear");   // a quiet line while the close's notice lands
-            },
-            Line("/exit"));
+                SpinWait.SpinUntil(() => Output.Contains("The Browser window closed;", StringComparison.Ordinal), TimeSpan.FromSeconds(10));
+                PushLine(input, "/exit");
+            });
 
         string output = await RunAsync();
 
