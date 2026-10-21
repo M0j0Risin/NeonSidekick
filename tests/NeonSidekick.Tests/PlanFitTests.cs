@@ -101,9 +101,45 @@ public sealed class PlanFitTests
     }
 
     [Fact]
-    public void NoSteps_IsNotAProblemHere()
+    public void TheOrder_IsPinned_WithNoSteps()
     {
-        // The loop refuses it already (RalphText.NoStepsError).
-        Assert.Empty(PlanFit.Shape("# Hello\n\n## Goal\n\nSay hello.", Limit));
+        // Zero steps leads, then the length, then the check (2026-10-21).
+        string plan = "# Hello\n\n## Goal\n\n" + new string('c', 3000);
+        Assert.Equal([RalphText.FitNoSteps, RalphText.FitTooLong(plan.Length, 2000), RalphText.FitNoCheck], PlanFit.Problems(plan, null, reviewed: false, 2000));
+    }
+
+    [Fact]
+    public void NoSteps_IsAProblem()
+    {
+        Assert.Equal([RalphText.FitNoSteps], PlanFit.Shape("# Hello\n\n## Goal\n\nSay hello.", Limit));
+        Assert.Equal(RalphText.FitNoSteps, PlanFit.StepsProblem("# Hello\n\n## Goal\n\nSay hello."));
+        Assert.Equal(RalphText.NoStepsError, PlanFit.StepsRefusal("# Hello\n\n## Goal\n\nSay hello."));
+    }
+
+    /// <summary>The matrix-rain plan's shape (2026-10-21): steps as boxed headings, their Done when lines at column 0, a fence between.</summary>
+    internal const string HeadingSteps =
+        "### [ ] Step 1 — Rewrite `hello_world.py`\n\nReplace the script.\n\n```python\n- [ ] not a step\n```\n\n" +
+        "Done when: running `python hello_world.py` shows the rain\n\n" +
+        "### [ ] Step 2 — Check it\n\nDone when: `python hello_world.py --test` exits 0";
+
+    [Fact]
+    public void UnreadSteps_AreNamed()
+    {
+        Assert.Equal([RalphText.FitUnreadSteps(2)], PlanFit.Shape(Plan(HeadingSteps), Limit));
+        Assert.Equal(RalphText.NoStepsUnreadError(2), PlanFit.StepsRefusal(Plan(HeadingSteps)));
+    }
+
+    [Fact]
+    public void MixedSteps_NameTheUnread()
+    {
+        string mixed = "### [ ] Step 1 — Build it\n\n- [ ] Write hello.py\n  Done when: it runs";
+        Assert.Equal([RalphText.FitUnreadSteps(1)], PlanFit.Shape(Plan(mixed), Limit));
+        Assert.Null(PlanFit.StepsRefusal(Plan(mixed)));   // a step runs: only zero steps is refused
+    }
+
+    [Fact]
+    public void AnUnindentedDoneWhen_IsMissing()
+    {
+        Assert.Equal([RalphText.FitNoDoneWhen(1)], PlanFit.Shape(Plan("- [ ] Write hello.py\nDone when: it runs"), Limit));
     }
 }

@@ -309,8 +309,24 @@ public static class RalphText
     /// <summary>A plan whose one step is long: a single pass gets the whole job. Pinned.</summary>
     public const string FitOneStep = "1 step: one pass does the whole plan";
 
-    /// <summary>Unticked steps with no <c>Done when:</c> line. Pinned, both forms.</summary>
-    public static string FitNoDoneWhen(int count) => count == 1 ? "1 step has no Done when line" : $"{Count(count)} steps have no Done when line";
+    /// <summary>
+    /// No step at all (2026-10-21, the plan at <c>~/.claude/plans/pasted-content-id-319b-i-thought-delegated-stardust.md</c>: a plan whose steps were
+    /// <c>### [ ] Step 1</c> headings read as none, and nothing said so). Short: it lands last on the approval pane's caption, which is cut at three
+    /// rows; the refusal and the measured sentence carry the why. Pinned.
+    /// </summary>
+    public const string FitNoSteps = "no - [ ] steps under ## Steps";
+
+    /// <summary>
+    /// Box lines the steps' reader passes over (<see cref="PlanSteps.UnreadBoxes"/>: a heading, a bare <c>[ ]</c>, a bold box), 2026-10-21 as
+    /// <see cref="FitNoSteps"/>. Short for the caption too. Pinned, both forms.
+    /// </summary>
+    public static string FitUnreadSteps(int count) => count == 1 ? "1 step isn't a - [ ] list line" : $"{Count(count)} steps aren't - [ ] list lines";
+
+    /// <summary>
+    /// Unticked steps with no <c>Done when:</c> line. "indented" since 2026-10-21: a model that turned <c>### [ ]</c> into <c>- [ ]</c> but left its
+    /// <c>Done when:</c> at column 0 learns why it is still missing. Pinned, both forms.
+    /// </summary>
+    public static string FitNoDoneWhen(int count) => count == 1 ? "1 step has no indented Done when line" : $"{Count(count)} steps have no indented Done when line";
 
     /// <summary>A plan longer than a pass sends whole (<see cref="InlineLimit"/>). Pinned.</summary>
     public static string FitTooLong(int chars, int limit) => $"the plan is {Count(chars)} characters; a pass sends it whole only up to {Count(limit)}";
@@ -358,6 +374,15 @@ public static class RalphText
     // ── Refusals ───────────────────────────────────────────────────────────
 
     public const string NoStepsError = "The plan has no steps to run one at a time: a Ralph loop needs - [ ] checkboxes under ## Steps";
+
+    /// <summary>
+    /// <see cref="NoStepsError"/>'s sibling for a plan whose only boxes are ones the steps' reader passes over (2026-10-21,
+    /// <see cref="PlanSteps.UnreadBoxes"/>): names them and their forms. Each refusal site picks one of the two
+    /// (<see cref="PlanFit.StepsRefusal"/>). Pinned, both forms.
+    /// </summary>
+    public static string NoStepsUnreadError(int count) =>
+        $"The plan has no steps to run one at a time: {(count == 1 ? "its 1 box isn't" : $"its {Count(count)} boxes aren't")} a - [ ] list line " +
+        "(a heading, a bare [ ] or a bold box isn't a step). A Ralph loop needs - [ ] checkboxes under ## Steps";
     public const string NeedsToolsError = "A Ralph loop needs the model's tools: switch LLM offer tools on (/settings) and try again";
     public const string UnderAuditError = "A code audit is running: a Ralph loop waits until it ends";
     public const string UnderBotChatError = "A /botchat is running: a Ralph loop waits until it ends";

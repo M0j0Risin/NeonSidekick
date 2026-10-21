@@ -328,7 +328,8 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
   * With the web tools, it checks the APIs and versions the plan depends on, and names its sources.
 * **The file:** `.neon/plans/<name>.md` in the working directory; 📝 shows while planning. Pictures in the conversation are saved beside it (`<name>/ref-1.png`…, under `## References`). `plan-template.md` there is `/plan template`'s example, never opened or run as a plan.
   * A run sends them with its first message when the model can see pictures (a Ralph pass, the ones its step names).
-* **Steps:** each is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check, with a `Done when:` line (a command where one can tell). The plan stays under 20,000 characters.
+* **Steps:** each is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check, with an indented `Done when:` line (a command where one can tell). The plan stays under 20,000 characters.
+  * A heading, a bare `[ ]` or a bold box isn't a step; a `###` heading may group steps, without a box.
   * Its header may carry a `verify:` command (run after each Ralph step) and a `final:` one (run once at the end).
 * **Approving:** **Approve & run**, **Approve, clear context & run**, **Approve & Ralph loop**, **Keep refining…**, **Close gaps…** or **Cancel plan** ([keys](INTERFACE.md#pane-keys)).
   * The run ticks the steps; the file ends `done` ("📝 I ❤️ it when a plan comes together.") or `incomplete`.
@@ -366,7 +367,8 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * The shell police judge it again before every run, so a script a pass rewrote can't slip past them; a refusal, or the policy turned `off`, stops the loop.
   * A failed check unticks the step, and the next pass gets its output.
 * **Before it starts:** the app asks "Start anyway?" on the PC and the Web UI when a plan doesn't suit a loop; a no leaves it presented, to revise.
-  * That's one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
+  * That's steps that aren't `- [ ]` lines, one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
+  * A plan with no `- [ ]` steps is refused. The approval pane and each gap pass name either problem first, and a gap review doesn't end on one.
 * **The baseline:** the checks run once on the project as it is. If `verify:` fails you may start anyway; the steps then go unchecked and verify runs once at the end.
   * If only `final:` fails (say, a test of the work still to do), starting anyway keeps the steps checked.
 * **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan: while the loop runs, the other can't run, open, revise or approve it. Mind that folder before you commit `.neon/`.

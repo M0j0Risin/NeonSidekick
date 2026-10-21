@@ -149,9 +149,14 @@ public sealed class RalphTextTests
     public void TheFitWords_ArePinned()
     {
         Assert.Equal("1 step: one pass does the whole plan", RalphText.FitOneStep);
-        Assert.Equal("1 step has no Done when line", RalphText.FitNoDoneWhen(1));
-        Assert.Equal("3 steps have no Done when line", RalphText.FitNoDoneWhen(3));
-        Assert.Equal("1,200 steps have no Done when line", RalphText.FitNoDoneWhen(1200));
+        Assert.Equal("1 step has no indented Done when line", RalphText.FitNoDoneWhen(1));
+        Assert.Equal("3 steps have no indented Done when line", RalphText.FitNoDoneWhen(3));
+        Assert.Equal("1,200 steps have no indented Done when line", RalphText.FitNoDoneWhen(1200));
+        Assert.Equal("no - [ ] steps under ## Steps", RalphText.FitNoSteps);
+        Assert.Equal("1 step isn't a - [ ] list line", RalphText.FitUnreadSteps(1));
+        Assert.Equal("2 steps aren't - [ ] list lines", RalphText.FitUnreadSteps(2));
+        Assert.Equal("The plan has no steps to run one at a time: its 1 box isn't a - [ ] list line (a heading, a bare [ ] or a bold box isn't a step). A Ralph loop needs - [ ] checkboxes under ## Steps", RalphText.NoStepsUnreadError(1));
+        Assert.Equal("The plan has no steps to run one at a time: its 2 boxes aren't a - [ ] list line (a heading, a bare [ ] or a bold box isn't a step). A Ralph loop needs - [ ] checkboxes under ## Steps", RalphText.NoStepsUnreadError(2));
         Assert.Equal("the plan is 170,298 characters; a pass sends it whole only up to 24,000", RalphText.FitTooLong(170_298, 24_000));
         Assert.Equal("no check: steps stand unchecked", RalphText.FitNoCheck);
 
@@ -165,7 +170,7 @@ public sealed class RalphTextTests
         Assert.Equal("Run p.md as a Ralph loop? unchecked · reviewer any", RalphText.ConfirmQuestion("p.md", "unchecked · reviewer any"));
         Assert.Equal("Run p.md as a Ralph loop? unchecked · reviewer any", RalphText.ConfirmQuestion("p.md", "unchecked · reviewer any", []));
         Assert.Equal("Run p.md as a Ralph loop? unchecked · reviewer any. It may not suit a Ralph loop: 1 step: one pass does the whole plan.", RalphText.ConfirmQuestion("p.md", "unchecked · reviewer any", [RalphText.FitOneStep]));
-        Assert.Equal("Approve p.md and run it as a Ralph loop? reviewer any. It may not suit a Ralph loop: 1 step has no Done when line.", RalphText.ConfirmDraftQuestion("p.md", "reviewer any", [RalphText.FitNoDoneWhen(1)]));
+        Assert.Equal("Approve p.md and run it as a Ralph loop? reviewer any. It may not suit a Ralph loop: 1 step has no indented Done when line.", RalphText.ConfirmDraftQuestion("p.md", "reviewer any", [RalphText.FitNoDoneWhen(1)]));
     }
 
     [Fact]

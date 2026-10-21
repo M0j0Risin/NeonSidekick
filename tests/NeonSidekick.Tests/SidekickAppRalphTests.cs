@@ -72,6 +72,23 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanRalph_APlanOfHeadingSteps_IsRefused_NamingThem()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+        File.WriteAllText(HeadlessPlanFile, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide", Verify: "dotnet build"), "Guide",
+            "# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n"));
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Empty(_chat.Requests);
+        Assert.Empty(_ralphVerifier.Commands);
+        Assert.Contains("[error] " + RalphText.NoStepsUnreadError(2), output);
+        Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
+    }
+
+    [Fact]
     public async Task Headless_PlanRalph_AFailingBaseline_IsRefusedWithItsTail()
     {
         ServerOn1234("llama");

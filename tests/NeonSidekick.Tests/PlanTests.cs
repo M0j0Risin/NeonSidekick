@@ -438,7 +438,7 @@ public class PlanTests : IDisposable
     public void TheDirective_AsksForDoneWhenLines_TheChecks_AndThePictures()
     {
         // 2026-10-18, the Ralph loop's groundwork: each step's check, verify/final only from the project, plain bullets outside Steps.
-        Assert.Equal("a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: "
+        Assert.Equal("a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkbox list lines, never headings, which a Ralph loop runs one per pass; in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: "
             + "split a big job into several steps, never one step with a plain list of its parts under it (indented - [ ] sub-steps, one level, are fine); "
             + "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool), "
             + "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.", PlanText.PlanShape);

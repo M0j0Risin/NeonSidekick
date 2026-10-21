@@ -217,4 +217,49 @@ public sealed class PlanStepsTests
         Assert.Equal(text, same);
         Assert.Empty(none);
     }
+
+    [Theory]
+    [InlineData("# [ ] Step 1")]
+    [InlineData("## [x] Step 1")]
+    [InlineData("### [X] Step 1")]
+    [InlineData("###### [ ] Step 1")]
+    [InlineData("### [ ]")]
+    [InlineData("### **[ ] Step 1**")]
+    [InlineData("### _[x] Step 1_")]
+    [InlineData("[ ] Step 1")]
+    [InlineData("  [x] Step 1")]
+    [InlineData("- **[ ] Step 1**")]
+    [InlineData("1. __[x] Step 1__")]
+    public void UnreadBoxes_CountsEveryFormTheParserSkips(string line)
+    {
+        Assert.Equal(1, PlanSteps.UnreadBoxes("# Plan\n\n## Steps\n\n" + line + "\n"));
+        Assert.Empty(PlanSteps.Parse("## Steps\n" + line));
+    }
+
+    [Theory]
+    [InlineData("- [ ] **Step 1**")]
+    [InlineData("[x]: https://example.com/a")]
+    [InlineData("[ ]Step 1")]
+    [InlineData("### Step 1 [ ]")]
+    [InlineData("☐ Step 1")]
+    [InlineData("| [ ] | a cell |")]
+    public void UnreadBoxes_CountsNoTaskLine_NorAnythingThatIsNoBox(string line)
+    {
+        Assert.Equal(0, PlanSteps.UnreadBoxes("## Steps\n" + line + "\n"));
+    }
+
+    [Fact]
+    public void UnreadBoxes_PassesOverFences_AndTaskLinesElsewhere()
+    {
+        Assert.Equal(0, PlanSteps.UnreadBoxes("## Steps\n```\n### [ ] in a fence\n[ ] bare\n```\n- [ ] Real\n\n## Verification\n- [ ] a list task, not an unread step\n"));
+        Assert.Equal(2, PlanSteps.UnreadBoxes(PlanFitTests.HeadingSteps));
+    }
+
+    [Fact]
+    public void UnreadBoxes_ReadsACrlfText_AsItsLfTwin()
+    {
+        string lf = "## Steps\n### [ ]\n### [x] Step 2\n[ ] Step 3\n- [ ] Real\n";
+        Assert.Equal(3, PlanSteps.UnreadBoxes(lf));
+        Assert.Equal(3, PlanSteps.UnreadBoxes(lf.Replace("\n", "\r\n", StringComparison.Ordinal)));
+    }
 }

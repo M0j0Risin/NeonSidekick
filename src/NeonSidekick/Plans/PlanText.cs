@@ -733,9 +733,11 @@ public static class PlanText
     /// user's pick, since small steps help a plain execute too): each step one change a fresh conversation can make and check, a big job split into
     /// steps rather than listed under one (<see cref="PlanSteps.Parse"/> reads only the checkbox line as a step's text, so a plain list under it is
     /// invisible to a pass), and a <c>Done when:</c> that names a command where one can tell, never a guessed tool (<see cref="VerifyLine"/>'s rule).
+    /// "list lines, never headings" and the loop by name since 2026-10-21 (a model wrote <c>### [ ] Step 1</c> headings, which
+    /// <see cref="PlanSteps.Parse"/> passes over, and a later turn searched the files for what "Ralph" meant).
     /// </summary>
     public const string PlanShape =
-        "a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkboxes, in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: " +
+        "a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkbox list lines, never headings, which a Ralph loop runs one per pass; in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: " +
         "split a big job into several steps, never one step with a plain list of its parts under it (indented - [ ] sub-steps, one level, are fine); " +
         "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool), " +
         "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.";
@@ -944,7 +946,7 @@ public static class PlanText
     public static string MeasuredSentence(IReadOnlyList<string> measured)
     {
         ArgumentNullException.ThrowIfNull(measured);
-        return "The app measured: " + string.Join("; ", measured) + ". A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.";
+        return "The app measured: " + string.Join("; ", measured) + ". Each is a gap; close it in the next pass if you can.";
     }
 
     private static string Measured(IReadOnlyList<string>? measured) => measured is { Count: > 0 } m ? " " + MeasuredSentence(m) : "";
@@ -954,6 +956,14 @@ public static class PlanText
 
     /// <summary><c> with 2 minor fixes</c>, nothing at 0.</summary>
     private static string MinorWith(int minor) => minor <= 0 ? "" : minor == 1 ? " with 1 minor fix" : $" with {N(minor)} minor fixes";
+
+    /// <summary>
+    /// A clean pass on a plan with no step a Ralph loop can read, or with boxes it passes over (2026-10-21, <see cref="PlanFit.StepsProblem"/>'s
+    /// <paramref name="problem"/>): nothing saved, no pass counted, as <see cref="CheckedRequiredResult"/>. Pinned.
+    /// </summary>
+    public static string NoStepsCleanResult(string problem) =>
+        $"Error: {problem}. Only a - [ ] list line is a step: never a heading (a ### heading may group steps, without a box), a bare [ ] or a bold box. " +
+        "Write each step as a - [ ] line under ## Steps with an indented Done when: line, list that in gaps, and call present_plan again.";
 
     /// <summary>An empty gaps list during a review with no checked list (2026-10-17): nothing saved, no pass counted. Pinned.</summary>
     public const string CheckedRequiredResult = "Error: with gaps empty, checked is required: one short line for each part of the plan you checked this pass. Call present_plan again with it.";

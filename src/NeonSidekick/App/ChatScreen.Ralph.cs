@@ -186,6 +186,11 @@ internal sealed partial class ChatScreen
 
         var effective = _effective();
         string body = PlanDocument.Body(text);
+        if (RefusedForNoSteps(path, body))
+        {
+            return false;
+        }
+
         string checks = RalphText.PaneCheckLine(header is null ? null : new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask);
         var problems = PlanFit.Shape(body, RalphInlineLimit());
         string question = header is null or { Status: PlanStatus.Draft } ? RalphText.ConfirmDraftQuestion(path, checks, problems) : RalphText.ConfirmQuestion(path, checks, problems);
@@ -251,6 +256,23 @@ internal sealed partial class ChatScreen
         return await BeginRalphAsync(path, body, stored.Verify, stored.Final, stored.Requirement, passes, resume: true, fromPlanning: false, cancellationToken, stored).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// A plan with no step refused, said and logged (2026-10-21, the plan at <c>~/.claude/plans/pasted-content-id-319b-i-thought-delegated-stardust.md</c>:
+    /// a plan of <c>### [ ] Step 1</c> headings was refused after its confirm, and only on the transcript): <see cref="PlanFit.StepsRefusal"/>'s error.
+    /// Read before any confirm (<c>/plan ralph &lt;name&gt;</c>, the typed approve) and again at the start; true when refused.
+    /// </summary>
+    private bool RefusedForNoSteps(string path, string body)
+    {
+        if (PlanFit.StepsRefusal(body) is not { } error)
+        {
+            return false;
+        }
+
+        DiagnosticLog.Info(AppCategory, "ralph: not started " + path + ": " + error);
+        _transcript.Error(error);
+        return true;
+    }
+
     /// <summary>What refuses a loop's start: no assistant, tools off, an audit running.</summary>
     private string? RalphRefusal() =>
         _session.Assistant is null ? NoAssistantError
@@ -304,6 +326,12 @@ internal sealed partial class ChatScreen
 
         var header = PlanDocument.TryParse(text);
         string body = PlanDocument.Body(text);
+        if (RefusedForNoSteps(path, body))
+        {
+            _plan.ClearApproval();
+            return false;
+        }
+
         bool fitAsked = false;
         if (!checksShown && (header?.Verify is { Length: > 0 } || header?.Final is { Length: > 0 }))
         {
@@ -331,10 +359,9 @@ internal sealed partial class ChatScreen
     private async Task<bool> BeginRalphAsync(string path, string body, string? verify, string? final, string requirement, int? passes, bool resume, bool fromPlanning, CancellationToken cancellationToken, StoredPlan? stored = null, bool fitAsked = false)
     {
         var steps = PlanSteps.Parse(body);
-        if (!PlanSteps.Leaves(steps).Any())
+        if (RefusedForNoSteps(path, body))
         {
             _plan.ClearApproval();
-            _transcript.Error(RalphText.NoStepsError);
             return false;
         }
 

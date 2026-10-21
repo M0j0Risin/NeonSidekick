@@ -302,7 +302,7 @@ public class PlanGapLoopTests : IDisposable
         object? result = await _tool.InvokeAsync(Args("Guide", big, new[] { "Add context" }));
 
         string text = Assert.IsType<string>(result);
-        Assert.EndsWith(" The app measured: 1 step: one pass does the whole plan; 1 step has no Done when line. A step too big for one pass, or a plan too long to send whole, is a gap; close it in the next pass if you can.", text);
+        Assert.EndsWith(" The app measured: 1 step: one pass does the whole plan; 1 step has no indented Done when line. Each is a gap; close it in the next pass if you can.", text);
         Assert.DoesNotContain(RalphText.FitNoCheck, text);
     }
 

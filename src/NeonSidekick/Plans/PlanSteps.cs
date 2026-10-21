@@ -60,6 +60,40 @@ public static class PlanSteps
         return PlanDocument.Walk(text).Any(l => IsStepsHeading(l.Text));
     }
 
+    /// <summary>
+    /// How many lines of <paramref name="text"/> carry a box <see cref="Parse(string)"/> never reads (2026-10-21, the plan at
+    /// <c>~/.claude/plans/pasted-content-id-319b-i-thought-delegated-stardust.md</c>: a model wrote its steps as <c>### [ ] Step 1</c> headings, the plan
+    /// read as zero steps, and the reviewers converged on it anyway): a line outside fenced code that, past leading <c>#</c>s and a space, an
+    /// optional list marker and leading <c>*</c>/<c>_</c> emphasis, starts with a box, yet is no task line — a heading (<c>### [ ] Step 1</c>), a
+    /// bare box (<c>[ ] Step 1</c>) or a bold one (<c>- **[ ] Step 1**</c>). Anywhere in the text: a real <c>- [ ]</c> outside <c>## Steps</c> is a
+    /// task line, never counted. Glyph boxes and boxes in table cells are not counted. Pure.
+    /// </summary>
+    public static int UnreadBoxes(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int count = 0;
+        foreach (var (_, raw) in PlanDocument.Walk(text))
+        {
+            // A whole file's lines keep their \r (Walk splits on \n alone), and an empty box at a line's end must still read as one.
+            string trimmed = raw.TrimEnd('\r').TrimStart();
+            if (TaskBox(trimmed) is not null)
+            {
+                continue;
+            }
+
+            string rest = trimmed;
+            if (HeadingLevel(rest) is int level and > 0)
+            {
+                rest = rest[level..].TrimStart();
+            }
+
+            rest = rest[PlanDocument.ListMarker(rest)..].TrimStart('*', '_');
+            count += Box(rest) is null ? 0 : 1;
+        }
+
+        return count;
+    }
+
     /// <summary><see cref="Parse(string, bool?)"/>, each task line's <c>Done when:</c> lines noted in <paramref name="doneWhenAt"/> by its line when given.</summary>
     private static List<PlanStep> ParseCore(string text, bool? scope, Dictionary<int, List<int>>? doneWhenAt)
     {
@@ -721,7 +755,15 @@ public static class PlanSteps
             return null;
         }
 
-        string rest = trimmed[marker..];
+        return Box(trimmed[marker..]);
+    }
+
+    /// <summary>
+    /// The words and box at the start of <paramref name="rest"/> (<c>[</c>, a space or <c>x</c>/<c>X</c>, <c>]</c>, then whitespace or the end), or
+    /// null: <see cref="TaskBox"/>'s test past its list marker, and <see cref="UnreadBoxes"/>' (2026-10-21).
+    /// </summary>
+    private static (string Text, bool Ticked)? Box(string rest)
+    {
         if (rest.Length >= 3 && rest[0] == '[' && rest[2] == ']' && (rest.Length == 3 || char.IsWhiteSpace(rest[3])) && rest[1] is ' ' or 'x' or 'X')
         {
             return (rest[3..].Trim(), rest[1] != ' ');

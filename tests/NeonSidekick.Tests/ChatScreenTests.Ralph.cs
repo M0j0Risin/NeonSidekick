@@ -813,12 +813,44 @@ public partial class ChatScreenTests
     public async Task Ralph_APlanWithNoSteps_IsRefused()
     {
         RalphPlan("# Guide\n\nJust prose.\n");
-        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphFixture(Line("/plan ralph add-guide"), Line("/exit"));
 
         string output = await RunAsync();
 
+        // Refused before its confirm (2026-10-21): nobody says yes and is then refused.
         Assert.Empty(_chat.Requests);
         Assert.Contains(RalphText.NoStepsError, output);
+        Assert.DoesNotContain("as a Ralph loop?", output);
+        Assert.False(File.Exists(RalphLockFile));
+    }
+
+    [Fact]
+    public async Task Ralph_APlanOfHeadingSteps_IsRefusedByName_NamingThem_AndLogged()
+    {
+        RalphPlan("# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n");
+        RalphFixture(Line("/plan ralph add-guide"), Line("/exit"));
+        var events = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == ChatScreen.AppCategory) { lock (events) { events.Add(e.Message); } } };
+
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Empty(_chat.Requests);
+        Assert.Contains(RalphText.NoStepsUnreadError(2), output);
+        Assert.DoesNotContain(RalphText.NoStepsError, output);
+        Assert.DoesNotContain("as a Ralph loop?", output);
+        lock (events)
+        {
+            Assert.Contains("ralph: not started " + PlanPath + ": " + RalphText.NoStepsUnreadError(2), events);
+        }
     }
 
     [Fact]

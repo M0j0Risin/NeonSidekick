@@ -298,9 +298,11 @@ public sealed partial class SidekickApp
         }
 
         var steps = PlanSteps.Parse(body);
-        if (!PlanSteps.Leaves(steps).Any())
+        if (PlanFit.StepsRefusal(body) is { } noSteps)
         {
-            await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + RalphText.NoStepsError).ConfigureAwait(false);
+            // Named (2026-10-21): boxes no step is read from get their own error, and the log says why nothing started.
+            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: not started " + path + ": " + noSteps);
+            await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + noSteps).ConfigureAwait(false);
             return;
         }
 

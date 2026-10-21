@@ -174,6 +174,13 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 // "0 gaps" shows its work (2026-10-17, the user's pick): a clean report says what it checked.
                 return PlanText.CheckedRequiredResult;
             }
+
+            // A clean pass on a plan whose steps no loop can read (2026-10-21, the user's call: a plan of ### [ ] headings read as zero steps, and
+            // the reviewers converged on it): refused as above, nothing saved, no pass counted. A pass that never presents again ends NoRevision.
+            if (gaps.Count == 0 && PlanFit.StepsProblem(PlanDocument.Body(markdown)) is { } steps)
+            {
+                return PlanText.NoStepsCleanResult(steps);
+            }
         }
 
         PlanPresentation? saved;

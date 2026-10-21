@@ -139,4 +139,20 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("This plan " + FitLead, output);
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
+
+    [Fact]
+    public async Task RalphFit_AMixedPlan_FromThePane_AsksNamingTheUnreadStep_AndYesStartsTheLoop()
+    {
+        // A ### [ ] heading over a - [ ] step (2026-10-21): the step runs, the heading is skipped, and the start says so.
+        _settings.Update(d => { d.RalphLoopReviewer = "off"; d.RalphLoopStopTone = "silent"; });
+        _console.Profile.Width = 400;
+        PlanFixture([[Keys.Char('l'), Keys.Enter]], "/plan Add a guide", "y", "/exit");
+        PresentRalphPlan("# Guide\n\n## Steps\n### [ ] Build it\n- [ ] One\n  Done when: one.md exists\n", RalphVerify);
+        RalphPass("1");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.FitQuestion([RalphText.FitUnreadSteps(1)]), output);
+        Assert.Contains(RalphText.StartedNotice(PlanPath, 1, 3, finalOnly: false), output);
+    }
 }
