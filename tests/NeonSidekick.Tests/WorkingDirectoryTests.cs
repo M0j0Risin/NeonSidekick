@@ -1527,6 +1527,23 @@ public sealed class WorkingDirectoryTests : IDisposable
     /// One listing (2026-10-20, the code review): the count, the label and the work are the listing's, an entry gone since it was made is
     /// skipped and counted (the fake bin would answer Recycled for it), and the token stops the purge between entries with how far it got.
     /// </summary>
+    /// <summary>
+    /// The listing reads its token between entries, the walk under a top folder too (later on 2026-10-20, the code review: it ran on the
+    /// screen's thread with no Esc): a stopped listing throws, for the screen's watch to say so, and nothing is touched.
+    /// </summary>
+    [Fact]
+    public void ListPurge_AStoppedToken_Throws_AndTouchesNothing()
+    {
+        Put(Path.Combine("out", "a.png"), "1");
+        Put(Path.Combine("out", "deep", "b.png"), "22");
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => _files.ListPurge("out", stop.Token));
+        Assert.True(File.Exists(Full(Path.Combine("out", "deep", "b.png"))));
+        Assert.Equal((FileOutcome.Ok, 2, 1), (_files.ListPurge("out").Outcome, _files.ListPurge("out").Files, _files.ListPurge("out").Folders));
+    }
+
     [Fact]
     public void PurgeFolder_OverOneListing_SkipsAVanishedEntry_AndStopsAtTheToken()
     {

@@ -33,8 +33,20 @@ public abstract class HaTool : AIFunction
     /// Whether <paramref name="domain"/>.<paramref name="service"/> on <paramref name="targets"/> may run: null when it may,
     /// else the refusal (policy off, the user's no, nobody to ask).
     /// </summary>
-    protected Task<string?> GateAsync(string domain, string service, IReadOnlyList<HaEntity> targets, string? data, CancellationToken cancellationToken) =>
-        GateAsync(domain, service, HaText.ConfirmQuestion(domain, service, targets.Count == 0 ? "" : HaText.Names(targets), data), cancellationToken);
+    /// <remarks>
+    /// An asked call names every target and shows its data whole (2026-10-20, the code review: the data was cut at 120 characters and the
+    /// names after six were a count): data the question can't show whole is refused before it is asked, so the yes is to exactly what runs.
+    /// </remarks>
+    protected Task<string?> GateAsync(string domain, string service, IReadOnlyList<HaEntity> targets, string? data, CancellationToken cancellationToken)
+    {
+        string? shown = string.IsNullOrWhiteSpace(data) ? null : HaJson.Shown(data);
+        if (shown is not null && HaPolicy.Judge(Effective, domain, service) == HaVerdict.Ask && HaText.DataUnshowable(shown) is { } unshowable)
+        {
+            return Task.FromResult<string?>(unshowable);
+        }
+
+        return GateAsync(domain, service, HaText.ConfirmQuestion(domain, service, HaText.AllNames(targets), shown), cancellationToken);
+    }
 
     /// <summary>
     /// The gate with the pane's question given: <see cref="HaPolicy.Judge"/> on <paramref name="domain"/>.<paramref name="service"/>,

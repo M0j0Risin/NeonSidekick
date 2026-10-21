@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace NeonSidekick.HomeAssistant;
@@ -24,6 +25,31 @@ public static class HaJson
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>
+    /// A call's data as the confirm question shows it (2026-10-20, the code review): its JSON written compact, so a pretty-printed object reads on
+    /// one line with nothing cut and nothing joined that the JSON didn't already join; a line break inside a string stays its visible <c>\n</c>.
+    /// Text that isn't JSON (the tools check theirs first) comes back as it is, for <see cref="HaText.DataUnshowable"/> to judge.
+    /// </summary>
+    public static string Shown(string data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        try
+        {
+            using var document = JsonDocument.Parse(data);
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+            {
+                document.RootElement.WriteTo(writer);
+            }
+
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+        catch (JsonException)
+        {
+            return data.Trim();
+        }
     }
 
     /// <summary><c>entity_id</c>: one id as a string, several as an array — the two shapes every service takes.</summary>

@@ -93,12 +93,48 @@ public static class HaText
 
     // ─── the confirm pane ───────────────────────────────────────────────────────
 
-    /// <summary>The question on the pane before an asked call: the service and what it acts on. Pinned.</summary>
+    /// <summary>
+    /// The question on the pane before an asked call: the service, then on its second line (the pane's caption, which grows with the room)
+    /// every entity it acts on and its data, as <see cref="HaJson.Shown"/> writes it (2026-10-20, the code review: the data was cut at 120
+    /// characters with its lines joined, and the names after six were a count, so a yes could pass a call the user never saw; E3's flaw in
+    /// <c>ha_call_service</c>). <paramref name="target"/> is <see cref="AllNames"/>; <see cref="DataUnshowable"/> refuses data that can't be
+    /// shown whole first. Pinned.
+    /// </summary>
     public static string ConfirmQuestion(string domain, string service, string target, string? data)
     {
-        string on = target.Length > 0 ? " on " + target : "";
-        string with = string.IsNullOrWhiteSpace(data) ? "" : " with " + Clip(Single(data), 120);
-        return $"Let the model run {domain}.{service}{on}{with} in Home Assistant?";
+        ArgumentNullException.ThrowIfNull(target);
+        string on = target.Length > 0 ? "on " + target : "";
+        string with = string.IsNullOrWhiteSpace(data) ? "" : "with " + data;
+        string detail = string.Join(' ', new[] { on, with }.Where(part => part.Length > 0));
+        string question = $"Let the model run {domain}.{service} in Home Assistant?";
+        return detail.Length == 0 ? question : question + "\n" + detail;
+    }
+
+    /// <summary>The longest data an asked service call shows (2026-10-20): past it the call is refused before the question, never cut.</summary>
+    public const int ConfirmDataMaxChars = 400;
+
+    /// <summary>
+    /// Why an asked call's data (<see cref="HaJson.Shown"/>'s text) can't be shown whole, or null (2026-10-20, the code review): past
+    /// <see cref="ConfirmDataMaxChars"/>, or holding a character that can hide or reorder words on the pane (<see cref="HidesText"/>). Pinned.
+    /// </summary>
+    public static string? DataUnshowable(string shown)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        if (shown.Length > ConfirmDataMaxChars)
+        {
+            return $"Error: that call's data is {shown.Length.ToString(CultureInfo.InvariantCulture)} characters; the user is asked about data of at most {ConfirmDataMaxChars.ToString(CultureInfo.InvariantCulture)}, shown whole. Send less data, or split the call.";
+        }
+
+        return HidesText(shown)
+            ? "Error: that call's data holds a line break, a tab or an invisible character, which the user's question can't show as it is. Send plain data."
+            : null;
+    }
+
+    /// <summary>Every entity's name, joined, for the confirm question (2026-10-20): <see cref="Names"/> cuts a long list to a count, which a yes must never pass.</summary>
+    public static string AllNames(IReadOnlyList<HaEntity> entities)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+        return string.Join(", ", entities.Select(e => e.Name));
     }
 
     /// <summary>
@@ -126,6 +162,18 @@ public static class HaText
             return $"Error: that sentence is {text.Length.ToString(CultureInfo.InvariantCulture)} characters; the user is asked about one of at most {AssistMaxChars.ToString(CultureInfo.InvariantCulture)}, shown whole. Send one short plain sentence.";
         }
 
+        return HidesText(text)
+            ? "Error: that sentence holds a line break, a tab or an invisible character, which the user's question can't show as it is. Send one short plain sentence on one line."
+            : null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="text"/> holds a character that can hide or reorder words on a question's pane (2026-10-20, shared by
+    /// <see cref="AssistUnshowable"/> and <see cref="DataUnshowable"/>): a line break, a tab or another control, a format character (a
+    /// bidirectional override, a zero-width space), a line or paragraph separator, or a lone surrogate.
+    /// </summary>
+    private static bool HidesText(string text)
+    {
         // By rune, not by char: a tag character (U+E0020–E007F, invisible, spelling ASCII to a model) is a surrogate pair, each half of
         // which reads as Surrogate; an unpaired half comes back as U+FFFD and is refused too. U+2028/U+2029 break the line as \n does.
         foreach (var rune in text.EnumerateRunes())
@@ -134,11 +182,11 @@ public static class HaText
             if (category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator
                 || rune == Rune.ReplacementChar)
             {
-                return "Error: that sentence holds a line break, a tab or an invisible character, which the user's question can't show as it is. Send one short plain sentence on one line.";
+                return true;
             }
         }
 
-        return null;
+        return false;
     }
 
     // ─── results ────────────────────────────────────────────────────────────────

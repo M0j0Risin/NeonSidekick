@@ -150,7 +150,9 @@ function Enter-CiLike($state) {
         $self = [System.Diagnostics.Process]::GetCurrentProcess()
         $state.Affinity = $self.ProcessorAffinity
         # 64 cores is every bit of the mask (2026-10-20, the code review: 1L -shl 64 wraps to 1, so the mask came out 0 and the set threw).
-        $mask = if ($cores -ge 64) { [long]-1 } else { (1L -shl $cores) - 1 }
+        # The low bits as the complement of -1 shifted, never (1L -shl n) - 1: at 63 that subtraction overflows long and PowerShell
+        # quietly makes it a double, which [IntPtr] can't take whole.
+        $mask = if ($cores -ge 64) { [long]-1 } else { -bnot ([long]-1 -shl $cores) }
         $self.ProcessorAffinity = [IntPtr]$mask
     }
     if ($IsMacOS) {
@@ -170,14 +172,18 @@ function Enter-CiLike($state) {
 }
 
 function Exit-CiLike($state) {
+    # A variable that wasn't set is removed, never set to "" (2026-10-20, a check of the fix: PowerShell hands $null to a .NET string as "",
+    # so NEONSIDEKICK_HOME and the dead LLM URL outlived the run, set empty, and the next -Repeat run cleared them as the caller's).
     foreach ($name in $state.Saved.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $state.Saved[$name])
+        $value = $state.Saved[$name]
+        if ($null -eq $value) { Remove-Item "env:$name" -ErrorAction SilentlyContinue } else { Set-Item "env:$name" $value }
     }
     if ($null -ne $state.Affinity) {
         [System.Diagnostics.Process]::GetCurrentProcess().ProcessorAffinity = $state.Affinity
     }
+    # Waited for after the kill (2026-10-20, a check of the fix: a loop killed and disposed at once was still running a moment later).
     foreach ($loop in $state.Loops) {
-        if (-not $loop.HasExited) { $loop.Kill() }
+        if (-not $loop.HasExited) { $loop.Kill(); [void]$loop.WaitForExit(2000) }
         $loop.Dispose()
     }
     # A headless browser a test started can outlive the test host by a moment, holding its profile in the temp folder: a few tries.

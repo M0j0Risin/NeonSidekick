@@ -536,7 +536,45 @@ public sealed class HomeAssistantTests : IDisposable
 
         Assert.Equal("remote.send_command → BRAVIA XR-55A80L", await Invoke(new HaCallServiceTool(_ha, Answer(true)), ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", data)));
         Assert.Equal("""{"entity_id":"remote.bravia_xr_55a80l","command":"Home"}""", ServiceCalls().Single().Body);
-        Assert.Equal("Let the model run remote.send_command on BRAVIA XR-55A80L with {\"command\":\"Home\"} in Home Assistant?", _asked[^1]);
+        Assert.Equal("Let the model run remote.send_command in Home Assistant?\non BRAVIA XR-55A80L with {\"command\":\"Home\"}", _asked[^1]);
+    }
+
+    /// <summary>
+    /// An asked call shows its data and every target whole (2026-10-20, the code review: the data was cut at 120 characters with its lines
+    /// joined, and the names after six were a count): pretty-printed data reads compact, data too long or holding an invisible character is
+    /// refused before the question, and nothing is sent.
+    /// </summary>
+    [Fact]
+    public async Task CallService_UnderAsk_ShowsTheDataWhole_OrRefusesItUnasked()
+    {
+        int Sent() => ServiceCalls().Count();
+        var pretty = JsonDocument.Parse("{\n  \"command\": \"Home\",\n  \"num_repeats\": 2\n}").RootElement.Clone();
+        Assert.StartsWith("remote.send_command", await Invoke(new HaCallServiceTool(_ha, Answer(true)), ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", pretty)));
+        Assert.EndsWith("\non BRAVIA XR-55A80L with {\"command\":\"Home\",\"num_repeats\":2}", _asked[^1]);
+        int asked = _asked.Count;
+
+        string padding = new('x', HaText.ConfirmDataMaxChars);
+        var tooLong = JsonDocument.Parse("{\"command\":\"Home\",\"note\":\"" + padding + "\",\"then\":\"PowerOff\"}").RootElement.Clone();
+        Assert.StartsWith("Error: that call's data is", await Invoke(new HaCallServiceTool(_ha, Answer(true)), ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", tooLong)));
+        // The compact writer lets a format character through as itself (it escapes U+2028, not U+202E), so the check refuses it.
+        var hidden = JsonDocument.Parse("{\"command\":\"Home" + (char)0x202E + "ffo rewop\"}").RootElement.Clone();
+        Assert.StartsWith("Error: that call's data holds", await Invoke(new HaCallServiceTool(_ha, Answer(true)), ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", hidden)));
+        Assert.Equal(asked, _asked.Count);
+        Assert.Equal(1, Sent());
+
+        _settings.HomeAssistantActionPolicy = HaPolicy.Allow;
+        Assert.StartsWith("remote.send_command", await Invoke(new HaCallServiceTool(_ha, null), ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", tooLong)));
+        Assert.Equal(2, Sent());
+    }
+
+    /// <summary>The question names every target (2026-10-20, the code review): <see cref="HaText.Names"/>' count after six is for notes, never for a yes.</summary>
+    [Fact]
+    public void ConfirmQuestion_NamesEveryTarget()
+    {
+        var entities = Enumerable.Range(1, 8).Select(i => new HaEntity("light.l" + i.ToString(System.Globalization.CultureInfo.InvariantCulture), "Lamp " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), "on", null, default, null)).ToList();
+        string question = HaText.ConfirmQuestion("light", "turn_off", HaText.AllNames(entities), null);
+        Assert.Equal("Let the model run light.turn_off in Home Assistant?\non Lamp 1, Lamp 2, Lamp 3, Lamp 4, Lamp 5, Lamp 6, Lamp 7, Lamp 8", question);
+        Assert.Equal("Let the model run light.turn_off in Home Assistant?", HaText.ConfirmQuestion("light", "turn_off", "", null));
     }
 
     [Fact]

@@ -10114,6 +10114,12 @@ internal sealed partial class ChatScreen
     /// <summary>The spinner's label while a purge sends its items to the bin one by one (2026-10-18). Pinned.</summary>
     public static string PurgeMovingLabel(int entries) => $"Moving {Plural(entries, "item")} to the {FileText.RecycleBinName}";
 
+    /// <summary>The spinner's label while a purge lists its folder, before its question (later on 2026-10-20, off the screen's thread). Pinned.</summary>
+    public const string PurgeListingLabel = "Counting the folder's items";
+
+    /// <summary>What a purge says when Esc stopped its listing: nothing was asked, nothing went. Pinned.</summary>
+    public const string PurgeListingStoppedNotice = "The count was stopped; nothing was purged.";
+
     /// <summary>The spinner's label while a purge deletes its items for good (2026-10-20: off the screen's thread, Esc stops it). Pinned.</summary>
     public static string PurgeDeletingLabel(int entries) => $"Deleting {Plural(entries, "item")}";
 
@@ -10156,7 +10162,19 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var listing = _images.ListPurge(folder);
+        // Listed on a pool thread under the spinner, Esc watched (later on 2026-10-20, the code review: on the screen's thread, a huge folder froze it).
+        PurgeListing? listed = null;
+        bool stopped = await WaitUnderWatchAsync(token => _transcript.WithSpinnerAsync(PurgeListingLabel, async () =>
+        {
+            listed = await Task.Run(() => _images.ListPurge(folder, token), token).ConfigureAwait(false);
+            return true;
+        }), KeySource.IsTurnCancel, cancellationToken).ConfigureAwait(false);
+        if (stopped || listed is not { } listing)
+        {
+            _flow.Notice(PurgeListingStoppedNotice);
+            return;
+        }
+
         if (listing.Outcome == FileOutcome.Missing || (listing.Outcome == FileOutcome.Ok && listing.Entries.Count == 0))
         {
             _flow.Notice(PurgeEmptyNotice(full));

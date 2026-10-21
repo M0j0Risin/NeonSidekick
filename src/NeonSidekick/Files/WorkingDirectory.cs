@@ -2826,9 +2826,11 @@ public sealed class WorkingDirectory
     /// and the purge takes them). A top entry that is a link is listed as one, never walked. A folder under a top entry that can't be read is
     /// left out of the count rather than failing the listing (the bin takes the top entry whole; a delete for good that fails on it is that
     /// entry's, reported, and the rest go on). Refused as <see cref="PurgeFolder(string, IRecycleBin?)"/> refuses; a missing folder is
-    /// <see cref="FileOutcome.Missing"/>.
+    /// <see cref="FileOutcome.Missing"/>. <paramref name="cancellationToken"/> (later on 2026-10-20, the code review: the listing ran on the
+    /// screen's thread before the question, with no cap and no Esc) is read between entries, the walk under a top folder too, and throws
+    /// <see cref="OperationCanceledException"/>: the caller lists on a pool thread under the spinner, Esc watched.
     /// </summary>
-    public PurgeListing ListPurge(string relative)
+    public PurgeListing ListPurge(string relative, CancellationToken cancellationToken = default)
     {
         var outcome = Resolve(relative, forWrite: true, out string full);
         if (outcome != FileOutcome.Ok)
@@ -2867,13 +2869,14 @@ public sealed class WorkingDirectory
             var entries = new List<PurgeEntry>();
             foreach (var entry in top)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (entry.IsLink)
                 {
                     entries.Add(entry with { Files = 0, Folders = 0, Bytes = 0 });
                 }
                 else if (entry.IsDirectory)
                 {
-                    var (files, folders, bytes) = CountUnder(entry.FullPath);
+                    var (files, folders, bytes) = CountUnder(entry.FullPath, cancellationToken);
                     entries.Add(entry with { Files = files, Folders = folders + 1, Bytes = bytes });
                 }
                 else
@@ -2893,7 +2896,7 @@ public sealed class WorkingDirectory
 
     // A top folder's own count: everything under it, hidden included, never through a link, a folder it can't read left out — the top
     // folder itself too (unreadable, or gone mid-walk): what was counted stands, and the purge meets that entry on its own.
-    private static (int Files, int Folders, long Bytes) CountUnder(string folder)
+    private static (int Files, int Folders, long Bytes) CountUnder(string folder, CancellationToken cancellationToken)
     {
         int files = 0, folders = 0;
         long bytes = 0;
@@ -2904,6 +2907,7 @@ public sealed class WorkingDirectory
                 (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, default, entry.IsDirectory),
                 new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, ReturnSpecialDirectories = false }))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (entry.IsDirectory)
                 {
                     folders++;
