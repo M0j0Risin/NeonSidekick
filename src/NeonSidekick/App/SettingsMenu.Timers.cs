@@ -21,13 +21,21 @@ internal sealed partial class SettingsMenu
     /// observed). Opening the picker, Enter and Esc play nothing (<c>MenuPane.PickAsync</c> fires the highlight only on a move);
     /// <c>silent</c> plays nothing. True when a pick changed it.
     /// </summary>
-    /// <remarks><paramref name="field"/> (2026-10-18): the Ralph loop's stop tone over the same picker, its preview the same.</remarks>
+    /// <remarks><paramref name="field"/> (2026-10-18): the Ralph loop's stop tone over the same picker, its preview the same; the gap review's
+    /// and the code audit's stop tones since 2026-10-21.</remarks>
     private async Task<bool> PickTimerToneAsync(AppSettingsData saved, CancellationToken cancellationToken, SettingsField field = SettingsField.TimerTone)
     {
         IReadOnlyList<string> values = TimerTones.Names;
         var rows = values.Select(n => CameraModeLabel(n, TimerTones.Describe(n))).ToList();
         var page = new MenuPage(Crumb(FieldName(field)), rows, PickKeys);
-        int at = Math.Max(0, values.ToList().IndexOf(TimerTones.Normalize(field == SettingsField.RalphLoopStopTone ? saved.RalphLoopStopTone : saved.TimerTone)));
+        string current = field switch
+        {
+            SettingsField.RalphLoopStopTone => saved.RalphLoopStopTone,
+            SettingsField.PlanGapStopTone => saved.PlanGapStopTone,
+            SettingsField.CodeAuditStopTone => saved.CodeAuditStopTone,
+            _ => saved.TimerTone,
+        };
+        int at = Math.Max(0, values.ToList().IndexOf(TimerTones.Normalize(current)));
         Action<int>? highlighted = PreviewTone is { } preview
             ? row => _ = preview(values[row], cancellationToken).ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default)
             : null;
@@ -38,13 +46,14 @@ internal sealed partial class SettingsMenu
         }
 
         string value = values[index];
-        if (field == SettingsField.RalphLoopStopTone)
+        Action<AppSettingsData> set = field switch
         {
-            Apply(field, d => d.RalphLoopStopTone = value);
-            return true;
-        }
-
-        Apply(SettingsField.TimerTone, d => d.TimerTone = value);
+            SettingsField.RalphLoopStopTone => d => d.RalphLoopStopTone = value,
+            SettingsField.PlanGapStopTone => d => d.PlanGapStopTone = value,
+            SettingsField.CodeAuditStopTone => d => d.CodeAuditStopTone = value,
+            _ => d => d.TimerTone = value,
+        };
+        Apply(field, set);
         return true;
     }
 }

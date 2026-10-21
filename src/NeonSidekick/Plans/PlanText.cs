@@ -122,7 +122,7 @@ public static class PlanText
 
     /// <summary>
     /// The words after <c>/plan gaps</c> (2026-10-17): none, a reviewer, a pass count, or one of each in either order is
-    /// <see cref="GapsArgs.Ok"/>; one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–50 (a sign, an overflow)
+    /// <see cref="GapsArgs.Ok"/>; one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–100 (a sign, an overflow)
     /// <see cref="GapsArgs.OutOfRange"/>; anything else <see cref="GapsArgs.NotGaps"/>, plan detail. <paramref name="word"/> is the
     /// word at fault, else empty. Pure.
     /// </summary>
@@ -420,7 +420,7 @@ public static class PlanText
     /// <summary>Headless (2026-10-13): no Esc to stop a loop with no limit; <paramref name="fromCommand"/> (2026-10-17) when the 0 was typed as <c>/plan gaps 0</c>.</summary>
     public static string GapsHeadlessCapNotice(int cap, bool fromCommand = false) => fromCommand
         ? $"{Glyph} /plan gaps 0 means no limit, but headless has no Esc: at most {N(cap)} passes."
-        : $"{Glyph} LLM plan gap passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
+        : $"{Glyph} LLM plan gap max passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
     /// <summary>The --log line of a pass: its gaps whole, whether it asked an advisor, and since 2026-10-17 its minor fixes and its cost.</summary>
     public static string PassLogLine(int pass, int revision, IReadOnlyList<string> gaps, bool advisorAsked, IReadOnlyList<string>? minor = null, PlanPassRecord? cost = null)

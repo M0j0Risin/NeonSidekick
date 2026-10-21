@@ -103,6 +103,19 @@ public sealed class PlanGapLoop
     private bool _passRecorded = true;
     private readonly int _focusCount;
 
+    /// <summary>
+    /// Whether a review or an audit that stopped with <paramref name="reason"/> rings its stop tone (2026-10-21, the user's ask:
+    /// <see cref="Settings.AppSettingsData.PlanGapStopTone"/>, <see cref="Settings.AppSettingsData.CodeAuditStopTone"/>): every stop the user
+    /// didn't cause, as the Ralph loop's. A message (<see cref="PlanGapStop.UserSpoke"/>) never; <see cref="PlanGapStop.Stopped"/> only when
+    /// <paramref name="failed"/> (a failed turn, the working directory moved, a pass never sent; Esc, the page's Stop and a withdrawal are not).
+    /// </summary>
+    public static bool Rings(PlanGapStop reason, bool failed) => reason switch
+    {
+        PlanGapStop.UserSpoke => false,
+        PlanGapStop.Stopped => failed,
+        _ => true,
+    };
+
     public PlanGapLoop(PlanReviewer reviewer, int limit) : this(reviewer, limit, 1)
     {
     }

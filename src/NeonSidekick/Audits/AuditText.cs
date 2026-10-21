@@ -205,7 +205,7 @@ public static class AuditText
     /// <summary>Headless: no Esc to stop an audit with no limit; <paramref name="fromCommand"/> when the 0 was typed on the line.</summary>
     public static string HeadlessCapNotice(int cap, bool fromCommand) => fromCommand
         ? $"{Glyph} /code-audit 0 means no limit, but headless has no Esc: at most {N(cap)} passes."
-        : $"{Glyph} LLM code audit passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
+        : $"{Glyph} LLM code audit max passes is 0 (no limit), but headless has no Esc: at most {N(cap)} passes.";
 
     public static string ResumedNotice(string name, bool newest) => newest ? $"{Glyph} Resuming {name} (the newest report)." : $"{Glyph} Resuming {name}.";
 

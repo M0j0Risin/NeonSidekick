@@ -51,7 +51,7 @@ internal sealed partial class ChatScreen
 
         /// <summary>
         /// <c>/plan gaps [model|advisor|any] [passes]</c> while planning (2026-10-13): the gap-closing loop; the words are the rest
-        /// (<see cref="PlanText.ParseGapsArgs"/>), a pass count capping this run instead of <c>LLM plan gap passes</c> (2026-10-17).
+        /// (<see cref="PlanText.ParseGapsArgs"/>), a pass count capping this run instead of <c>LLM plan gap max passes</c> (2026-10-17).
         /// </summary>
         CloseGaps,
 
@@ -1216,7 +1216,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A fresh loop for <paramref name="reviewer"/> over the presented plan, its first pass sent: <c>/plan gaps</c> and an idle-line verdict.
-    /// <paramref name="passes"/> is <c>/plan gaps</c>' count (2026-10-17), else <c>LLM plan gap passes</c>.
+    /// <paramref name="passes"/> is <c>/plan gaps</c>' count (2026-10-17), else <c>LLM plan gap max passes</c>.
     /// </summary>
     private async Task<bool> StartGapsAsync(PlanReviewer reviewer, int? passes, CancellationToken cancellationToken)
     {
@@ -1248,6 +1248,12 @@ internal sealed partial class ChatScreen
         return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer, loop.CleanStreak), null);
     }
 
+    /// <summary>
+    /// A stop tone rung, not awaited (2026-10-21, the Ralph loop's ring shared with the gap review and the code audit): the timer tones' player,
+    /// its own device; <c>silent</c> and no audio play nothing, and a tone still sounding keeps the device (this one is dropped).
+    /// </summary>
+    private void RingStopTone(string tone) => _ = _tones.PlayAsync(tone, CancellationToken.None);
+
     /// <summary>The usage now, for a gap pass's cost (2026-10-17): the main model's tokens less the reflections', the advisors', the screen's clock.</summary>
     private PlanPassMeter PlanMeter()
     {
@@ -1278,7 +1284,7 @@ internal sealed partial class ChatScreen
             // moved aside; said and recorded here, once, plan mode on or off, before the review its pane started (still pending) goes on.
             string? finishedBody = finishedPath is null ? null : ReadPlanBody(finishedPath);
             finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, PlanMeter());
-            EndGapReview(finished, PlanGapStop.Converged, finishedPath, finishedBody);
+            EndGapReview(finished, PlanGapStop.Converged, finishedPath, finishedBody, failed: false);   // rung as its pane opened (PresentPlanTool's converged hook)
         }
 
         if (_plan.Closing is not { } loop)
@@ -1338,16 +1344,23 @@ internal sealed partial class ChatScreen
         }
 
         _plan.StopClosing();
-        return EndGapReview(loop, reason, path, body);
+        return EndGapReview(loop, reason, path, body, failed: _lastTurnFailed && !_lastTurnCancelled);
     }
 
     /// <summary>
     /// A review over (2026-10-17): the summary of its passes, the <c>review:</c> line for a review that ended on its own (converged, cut short,
     /// at its limit, stalled) written from the file as it now stands, then the stop's own notice — and for a limit, a cut-short or a stall the
-    /// plan back on the pane at the idle line (or where it stands, with no pane).
+    /// plan back on the pane at the idle line (or where it stands, with no pane). <paramref name="failed"/> (2026-10-21): the pass's turn failed, so a
+    /// <see cref="PlanGapStop.Stopped"/> rings <see cref="AppSettingsData.PlanGapStopTone"/> (<see cref="PlanGapLoop.Rings"/>); a converged review
+    /// rang as its pane opened, so it never rings here.
     /// </summary>
-    private GapAfterTurn? EndGapReview(PlanGapLoop loop, PlanGapStop reason, string? path, string? body)
+    private GapAfterTurn? EndGapReview(PlanGapLoop loop, PlanGapStop reason, string? path, string? body, bool failed)
     {
+        if (reason != PlanGapStop.Converged && PlanGapLoop.Rings(reason, failed))
+        {
+            RingStopTone(_effective().PlanGapStopTone);
+        }
+
         foreach (string line in PlanText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses))
         {
             _transcript.Notice(line);

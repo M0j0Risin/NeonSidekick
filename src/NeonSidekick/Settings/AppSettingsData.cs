@@ -796,12 +796,13 @@ public sealed class AppSettingsData
     /// reported after the last pass, the loop stops and the plan goes back to the pane. <see cref="MinPlanGapPasses"/> to
     /// <see cref="MaxPlanGapPasses"/>; 0 is no limit on the screen (ESC stops it) and <see cref="MaxPlanGapPasses"/> headless, which
     /// has no ESC. Read when a loop starts. The Common tab of <c>/settings</c>, under <see cref="LlmMaxToolIterations"/>. No variable.
-    /// The most went 20 → 50 on 2026-10-18 (the user's ask: long reviews lean on 43e4cfae's compaction); <see cref="MaxCodeAuditPasses"/> follows.
+    /// The most went 20 → 50 on 2026-10-18 (the user's ask: long reviews lean on 43e4cfae's compaction) and 50 → 100 on 2026-10-21 (the user's
+    /// ask; the row reads <c>LLM plan gap max passes</c> since); <see cref="MaxCodeAuditPasses"/> follows.
     /// </summary>
     public int PlanGapPasses { get; set; } = DefaultPlanGapPasses;
 
     public const int MinPlanGapPasses = 0;
-    public const int MaxPlanGapPasses = 50;
+    public const int MaxPlanGapPasses = 100;
     public const int DefaultPlanGapPasses = 5;
 
     /// <summary>
@@ -828,6 +829,15 @@ public sealed class AppSettingsData
     /// section of <c>/settings</c> › Servers › Common, under <see cref="PlanGapCleanPasses"/>. No variable.
     /// </summary>
     public bool PlanGapAskUser { get; set; } = true;
+
+    /// <summary>
+    /// The tone plan mode's gap review ends with (2026-10-21, the user's ask: the Ralph loop's stop tone for a review left to run): one of
+    /// <see cref="Timers.TimerTones.Names"/>, <c>silent</c> by default (opt in). A converged review rings as its approval pane opens; every other
+    /// stop the user didn't cause (at the limit, stalled, no revision, a failed pass; <see cref="Plans.PlanGapLoop.Rings"/>) rings at the stop,
+    /// never Esc, the page's Stop or a message, and only where audio exists. An unknown value reads as <c>silent</c>. The Plan mode section of
+    /// <c>/settings</c> › Servers › Common, under <see cref="PlanGapAskUser"/>. No variable.
+    /// </summary>
+    public string PlanGapStopTone { get; set; } = Timers.TimerTones.Silent;
 
     /// <summary>
     /// Who checks a Ralph loop's step once its own checks stand (2026-10-18, the user's ask: <c>Approve &amp; Ralph loop</c>, a plan carried out
@@ -891,10 +901,11 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// The tone a Ralph loop ends with (2026-10-18, so an unattended run is heard to stop): one of <see cref="Timers.TimerTones.Names"/>,
-    /// <c>chime</c> by default; never for a stop the user caused (Esc, the page's Stop, a typed line) and only where audio exists. An unknown
+    /// <c>silent</c> by default (<c>chime</c> until 2026-10-21, the user's call: the three stop tones are opt in; a profile already holding
+    /// <c>chime</c> keeps it); never for a stop the user caused (Esc, the page's Stop, a typed line) and only where audio exists. An unknown
     /// value reads as <c>silent</c>. Snapshotted when a loop starts.
     /// </summary>
-    public string RalphLoopStopTone { get; set; } = Timers.TimerTones.Chime;
+    public string RalphLoopStopTone { get; set; } = Timers.TimerTones.Silent;
 
     /// <summary>
     /// The most passes a code audit may run (2026-10-18, <c>/code-audit</c>, the user's idea: the gap review's engine for code) before its
@@ -952,6 +963,14 @@ public sealed class AppSettingsData
     public const int MinCodeAuditPassToolCalls = 0;
     public const int MaxCodeAuditPassToolCalls = 500;
     public const int DefaultCodeAuditPassToolCalls = 40;
+
+    /// <summary>
+    /// The tone a code audit ends with (2026-10-21, the user's ask: the Ralph loop's stop tone for an audit left to run): one of
+    /// <see cref="Timers.TimerTones.Names"/>, <c>silent</c> by default (opt in). It rings for every stop the user didn't cause (done, at the limit,
+    /// stalled, a failed pass, the working directory moved; <see cref="Plans.PlanGapLoop.Rings"/>), never for Esc, the page's Stop or a message,
+    /// and only where audio exists. An unknown value reads as <c>silent</c>. Read when the audit stops. The Code audit section, last. No variable.
+    /// </summary>
+    public string CodeAuditStopTone { get; set; } = Timers.TimerTones.Silent;
 
     /// <summary>
     /// Model id sent with every request. Empty means "the first chat model the server lists".

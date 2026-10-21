@@ -884,7 +884,7 @@ internal sealed partial class ChatScreen
         DiagnosticLog.Info(AppCategory, $"ralph: stopped {path}: {RalphStart.StopWord(stop)} after {loop.PassesThisRun} passes");
         if (!RalphStart.UserCaused(stop))
         {
-            _ = _tones.PlayAsync(_effective().RalphLoopStopTone, CancellationToken.None);
+            RingStopTone(_effective().RalphLoopStopTone);
         }
     }
 

@@ -152,22 +152,24 @@ Settings every server reads, whatever its kind.
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM plan gap passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs (0–50; 0 is no cap, or 50 headless). Esc stops it; a count on `/plan gaps` overrides it for that run. | 5 |
+| LLM plan gap max passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs (0–100; 0 is no cap, or 100 headless). Esc stops it; a count on `/plan gaps` overrides it for that run. | 5 |
 | LLM plan gap clean passes | Passes in a row with no gaps that end the review (1–5). A lower pass limit lowers it for that review; `/plan gaps confirm` needs at least 2. | 2 |
 | LLM plan gap ask user | Whether a gap pass may use `ask_user`, `camera_capture` and `screen_capture`. Off, it gets none whatever their own settings say, and a decision only you can make goes into `## Risks` as an open question. | on |
+| LLM plan gap stop tone | What a review rings when it stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
 | LLM Ralph loop reviewer | Who reviews a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request), `advisor` (the first advisor, its thread untouched) or `any` (an advisor if offered, else the model). A fail unticks the step. | `any` |
 | LLM Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you; with no pane or Web UI, a run has none. | 0 (off) |
-| LLM Ralph loop passes | The most passes a loop runs (0–200; 0 is three a step, plus one for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
-| LLM Ralph loop passes per step | The most passes one step may take before the loop stops (1–20). | 4 |
+| LLM Ralph loop max passes | The most passes a loop runs (0–200; 0 is three a step, plus one for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
+| LLM Ralph loop max step passes | The most passes one step may take before the loop stops (1–20). | 4 |
 | LLM Ralph loop check timeout | How long a check command may run before it's stopped and the step unticked (30–3600 seconds). | 600 |
 | LLM Ralph loop token budget | The tokens a loop may spend, passes and reviews together (0 is no budget). | 0 (none) |
-| LLM Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…), never on Esc: silent, chime, bell, beep or alarm. | chime |
-| LLM code audit passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane (0–50; 0 is no cap, or 50 headless). Esc stops it; a count on `/code-audit` overrides it for that run. | 5 |
+| LLM Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…), never on Esc: silent, chime, bell, beep or alarm. | silent |
+| LLM code audit max passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane (0–100; 0 is no cap, or 100 headless). Esc stops it; a count on `/code-audit` overrides it for that run. | 5 |
 | LLM code audit clean passes | Passes in a row that find nothing new before an audit ends (1–5). A pass after a clean one reads the files no pass has read first; `/code-audit confirm` needs at least 2. | 2 |
 | LLM code audit ask user | Whether an audit's pass may ask you, take a photo or capture the screen. Off, it gets none of the three and puts a question only you can answer in the report's Open questions. | on |
 | LLM code audit focus | What a `/code-audit` with none named covers: security, correctness, performance, maintainability and tests. At least one stays ticked. | all |
 | LLM code audit web research | Gives an audit's passes `web_search`, `web_fetch` and `web_links`. Off by default, since audited code may carry instructions that would send code out; off, an advisor asked in a pass gets none either. | off |
 | LLM code audit pass tool calls | The tool calls a pass is asked to report within (0–500; 0 is no budget). Guidance, not a cut-off: the next pass reads what one leaves. A lower *LLM max tool iterations* is named instead. | 40 |
+| LLM code audit stop tone | What an audit rings when it stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
 | LLM context length | The context window in tokens, for the usage percentage. 0 takes the server's figure. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps them all while auto compact can run, else 24. | `auto` |

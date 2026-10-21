@@ -343,7 +343,8 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Who reviews** (with advisors offered): the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
 * **Unattended:** with *LLM plan gap ask user* off, a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, which isn't a gap.
 * **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on a typed message or Esc.
-  * At the limit, the count given or *LLM plan gap passes*; a clean pass there returns the pane unconfirmed. A limit below the clean count lowers that count for the run.
+  * At the limit, the count given or *LLM plan gap max passes*; a clean pass there returns the pane unconfirmed. A limit below the clean count lowers that count for the run.
+* **The stop tone:** a stop you didn't cause rings *LLM plan gap stop tone*, a failed pass too; a converged review rings as its pane opens.
 * **The record:** a stop lists every pass (gaps, minor fixes, focus, time, tokens). A review that ends on its own writes a `review:` line into the header.
   * `/plan open` then marks the plan `confirmed` (two clean passes or more), `reviewed` (one) or `edited since review`. Ticking steps is no edit; a new revision drops the line.
 
@@ -376,8 +377,8 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 #### When a loop stops
 
 * **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
-* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop passes per step*, a pass that deleted unfinished steps, a check refused as it was due, or an error.
-* **At a limit or by hand:** the pass cap (*LLM Ralph loop passes*, or the count given), the token budget, Esc, the Web UI's Stop, the wake phrase (its request runs once the loop has stopped), or a working directory change.
+* **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *LLM Ralph loop max step passes*, a pass that deleted unfinished steps, a check refused as it was due, or an error.
+* **At a limit or by hand:** the pass cap (*LLM Ralph loop max passes*, or the count given), the token budget, Esc, the Web UI's Stop, the wake phrase (its request runs once the loop has stopped), or a working directory change.
 * **The stop tone:** a stop you didn't cause rings *LLM Ralph loop stop tone*.
 * **A message typed** during a pass, at the PC or on the Web UI, pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
 * **A paused loop resumes only in its own folder.** After a working directory change, `/plan ralph <name>` starts that folder's plan afresh, its checks confirmed again.
@@ -392,7 +393,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Focus:** security, correctness, performance, maintainability and tests, any mix (`all`; none means *LLM code audit focus*). A pass after a clean one takes one in turn (with one chosen, an angle: edge cases, error paths, concurrency, outside input).
 * **The brief:** the first other word, or all after `--`, starts the brief (`/code-audit src -- tests are flaky`); a path-like word that names nothing is refused.
 * **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies each line it cites), `any` (asking advisors where a role fits) or `confirm` (an advisor on each pass after a clean one; at least 2 clean passes).
-  * A number (0–50, 0 for no cap) replaces *LLM code audit passes* for the run.
+  * A number (0–100, 0 for no cap) replaces *LLM code audit max passes* for the run.
 * **Tools:** the file, picture, PDF and git reads, advisors, the manual, the clock, skills, memory's recall, `ask_user` and `present_audit`. The web's reads only under *LLM code audit web research* (off: audited code may carry instructions, and the web could send code out).
 * **Unattended:** with *LLM code audit ask user* off, a pass asks nothing, takes no photo and captures no screen; a question only you can answer goes into the report's Open questions.
 
@@ -404,6 +405,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Clean passes:** an audit ends after *LLM code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first.
   * *LLM code audit pass tool calls* is guidance, never a cut-off. The pane says how much of the scope was read.
 * **When it stops:** after the clean passes, at the pass limit, when the same findings come back, on a pass that never calls `present_audit`, on a message typed at the PC or sent from the Web UI, on Esc, `/new`, `/clear`, a profile switch or a working directory change (its report stays in its own folder). Each stop says why; `/code-audit resume <name>` runs more passes.
+* **The stop tone:** a stop you didn't cause rings *LLM code audit stop tone*, a failed pass or a working directory change too.
 * **The pane:** the open findings, then its choices ([keys](INTERFACE.md#pane-keys)); the Web UI page gets the same ones.
   * **Fix via plan:** plan mode on the open findings, the report marked `fixing`.
   * **More passes…:** the reviewer page when advisors are offered.

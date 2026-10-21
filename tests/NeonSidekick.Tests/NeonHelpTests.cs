@@ -313,17 +313,17 @@ public class NeonHelpTests
     }
 
     /// <summary>
-    /// The code audit's ten help lines (2026-10-18) hold to the 200-character first sentence: <see cref="HelpText.FirstSentence"/> cuts a
+    /// The code audit's ten help lines (2026-10-18; eleven since 2026-10-21, the stop tone) hold to the 200-character first sentence: <see cref="HelpText.FirstSentence"/> cuts a
     /// longer one with "…" in silence in the model's listings.
     /// </summary>
     [Fact]
     public void TheCodeAuditsHelpLines_HaveAFirstSentenceNeverCut()
     {
-        var settings = new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls }
+        var settings = new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }
             .Select(HelpSettings.Describe);
         var forms = HelpCommands.Commands.Single(c => c.Command == "/code-audit").Forms.Select(f => f.Meaning);
         var lines = settings.Concat(forms).ToList();
-        Assert.Equal(10, lines.Count);
+        Assert.Equal(11, lines.Count);
         Assert.All(lines, line => Assert.False(HelpText.FirstSentence(line).EndsWith('…'), line));
     }
 

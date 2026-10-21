@@ -1073,7 +1073,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     WebOpenLinksIn,
 
-    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 50 (20 until 2026-10-18), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
+    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 100 (50 until 2026-10-21, 20 until 2026-10-18; <c>LLM plan gap max passes</c> since 2026-10-21, <c>LLM plan gap passes</c> before), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). On the Common tab under <see cref="LlmMaxToolIterations"/> (2026-10-13), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
     PlanGapPasses,
 
     /// <summary>A toggle: whether this profile hosts the Web UI (<see cref="Settings.AppSettingsData.WebUi"/>). The Web UI tab under Client (2026-10-14, the user's ask); a flip starts or stops the server (<see cref="SettingsChanges.WebUi"/>), so it is refused mid-turn. Last in the enum, as every newcomer.</summary>
@@ -1284,6 +1284,12 @@ public enum SettingsField
 
     /// <summary>A picker over the timer tones: what a Ralph loop ends with (<see cref="Settings.AppSettingsData.RalphLoopStopTone"/>, 2026-10-18), the Timer tone picker's preview.</summary>
     RalphLoopStopTone,
+
+    /// <summary>A picker over the timer tones: what plan mode's gap review ends with (<see cref="Settings.AppSettingsData.PlanGapStopTone"/>, 2026-10-21), last in the Plan mode section; the Timer tone picker's preview.</summary>
+    PlanGapStopTone,
+
+    /// <summary>A picker over the timer tones: what a code audit ends with (<see cref="Settings.AppSettingsData.CodeAuditStopTone"/>, 2026-10-21), last in the Code audit section; the Timer tone picker's preview.</summary>
+    CodeAuditStopTone,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1764,9 +1770,9 @@ internal sealed partial class SettingsMenu
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
-         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser,
+         SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone,
          SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone,
-         SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls,
+         SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
          SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs],
         [SettingsField.LlmScanMode, SettingsField.LlmApiKey,
@@ -2363,22 +2369,24 @@ internal sealed partial class SettingsMenu
         SettingsField.LlmPictureKeep => "LLM max images",
         SettingsField.LlmPictureMegabytes => "LLM max images (MB)",
         SettingsField.LlmMaxToolIterations => "LLM max tool iterations",
-        SettingsField.PlanGapPasses => "LLM plan gap passes",
+        SettingsField.PlanGapPasses => "LLM plan gap max passes",
         SettingsField.PlanGapCleanPasses => "LLM plan gap clean passes",
         SettingsField.PlanGapAskUser => "LLM plan gap ask user",
+        SettingsField.PlanGapStopTone => "LLM plan gap stop tone",
         SettingsField.RalphLoopReviewer => "LLM Ralph loop reviewer",
         SettingsField.RalphLoopCheckpoint => "LLM Ralph loop checkpoint",
-        SettingsField.RalphLoopPasses => "LLM Ralph loop passes",
-        SettingsField.RalphLoopPassesPerStep => "LLM Ralph loop passes per step",
+        SettingsField.RalphLoopPasses => "LLM Ralph loop max passes",
+        SettingsField.RalphLoopPassesPerStep => "LLM Ralph loop max step passes",
         SettingsField.RalphLoopCheckTimeoutSeconds => "LLM Ralph loop check timeout",
         SettingsField.RalphLoopTokenBudget => "LLM Ralph loop token budget",
         SettingsField.RalphLoopStopTone => "LLM Ralph loop stop tone",
-        SettingsField.CodeAuditPasses => "LLM code audit passes",
+        SettingsField.CodeAuditPasses => "LLM code audit max passes",
         SettingsField.CodeAuditCleanPasses => "LLM code audit clean passes",
         SettingsField.CodeAuditAskUser => "LLM code audit ask user",
         SettingsField.CodeAuditFocus => "LLM code audit focus",
         SettingsField.CodeAuditWebResearch => "LLM code audit web research",
         SettingsField.CodeAuditPassToolCalls => "LLM code audit pass tool calls",
+        SettingsField.CodeAuditStopTone => "LLM code audit stop tone",
         SettingsField.WebUi => "Web UI",
         SettingsField.WebUiPort => "Web UI port",
         SettingsField.WebUiReach => "Web UI reach",
@@ -2784,6 +2792,7 @@ internal sealed partial class SettingsMenu
             SettingsField.PlanGapPasses => GapPasses(data.PlanGapPasses),
             SettingsField.PlanGapCleanPasses => GapPasses(data.PlanGapCleanPasses),
             SettingsField.PlanGapAskUser => OnOff(data.PlanGapAskUser),
+            SettingsField.PlanGapStopTone => Timers.TimerTones.Normalize(data.PlanGapStopTone),
             SettingsField.RalphLoopReviewer => Plans.RalphReviewerMode.TryParse(data.RalphLoopReviewer, out var ralphReviewer) ? Plans.RalphReviewerMode.Name(ralphReviewer) : data.RalphLoopReviewer,
             SettingsField.RalphLoopCheckpoint => RalphCheckpointValue(data.RalphLoopCheckpoint),
             SettingsField.RalphLoopPasses => data.RalphLoopPasses <= 0 ? RalphAutoPassesLabel : GapPasses(data.RalphLoopPasses),
@@ -2797,6 +2806,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CodeAuditFocus => CodeAuditFocusValue(data.CodeAuditFocus),
             SettingsField.CodeAuditWebResearch => OnOff(data.CodeAuditWebResearch),
             SettingsField.CodeAuditPassToolCalls => ToolCallBudget(data.CodeAuditPassToolCalls),
+            SettingsField.CodeAuditStopTone => Timers.TimerTones.Normalize(data.CodeAuditStopTone),
             SettingsField.ImageThumbnailSize => data.ImageThumbnailSize,
             SettingsField.FileTreeMaxLength => Entries(data.FileTreeMaxLength),
             SettingsField.FileTreeShowSizes => OnOff(data.FileTreeShowSizes),
@@ -5565,7 +5575,7 @@ internal sealed partial class SettingsMenu
             return await PickSttDestinationAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field is SettingsField.TimerTone or SettingsField.RalphLoopStopTone)
+        if (field is SettingsField.TimerTone or SettingsField.RalphLoopStopTone or SettingsField.PlanGapStopTone or SettingsField.CodeAuditStopTone)
         {
             return await PickTimerToneAsync(saved, cancellationToken, field).ConfigureAwait(false);
         }

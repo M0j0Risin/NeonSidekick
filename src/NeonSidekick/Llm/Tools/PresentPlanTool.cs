@@ -64,6 +64,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     private readonly Func<int> _cleanPasses;
     private readonly Func<string, string, string>? _references;
     private readonly Func<int> _inlineLimit;
+    private readonly Action? _converged;
 
     /// <param name="review">Shows the saved plan and waits for the user's verdict; the token is the turn's.</param>
     /// <param name="gapLimit">The gap-closing loop's pass limit (0 for none), read when a <c>Close gaps…</c> verdict starts one; null for the default.</param>
@@ -76,8 +77,13 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     /// The most characters of a plan a Ralph pass sends whole (later on 2026-10-18, <see cref="RalphText.InlineLimit"/> over the session's window), read
     /// after each gap pass's save for <see cref="PlanFit.Shape"/>; null for <see cref="RalphText.InlinePlanChars"/>.
     /// </param>
-    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null)
+    /// <param name="converged">
+    /// Called once as a gap review converges, before its approval pane opens (2026-10-21, the screen's <c>LLM plan gap stop tone</c>: the pane waits
+    /// inside the turn, and the review's end is said only once it is answered); null for none (headless, the tests).
+    /// </param>
+    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null, Action? converged = null)
     {
+        _converged = converged;
         _references = references;
         _inlineLimit = inlineLimit ?? (() => RalphText.InlinePlanChars);
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -205,6 +211,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             int streak = loop.CleanCount;
             loop.MarkConverged(@checked, minor);
             _session.FinishClosing();
+            _converged?.Invoke();
             saved = saved with { Note = PlanText.ConvergedNote(loop.Pass, loop.Closed, streak) };
         }
 

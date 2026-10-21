@@ -386,7 +386,7 @@ internal sealed partial class ChatScreen
         {
             _transcript.Notice(AuditText.PassNotSentNotice(_audit.Name));
             loop.Next(false, false, null, PlanMeter());
-            EndAudit(loop, PlanGapStop.Stopped);
+            EndAudit(loop, PlanGapStop.Stopped, passFailed: true);   // nobody stopped it: the stop tone rings (2026-10-21)
         }
 
         return exit;
@@ -470,16 +470,23 @@ internal sealed partial class ChatScreen
             return new AuditAfterTurn(BeginAuditPass(loop, body), null);
         }
 
-        return EndAudit(loop, reason, coverage: coverage);
+        return EndAudit(loop, reason, coverage: coverage, passFailed: _lastTurnFailed && !_lastTurnCancelled);
     }
 
     /// <summary>
     /// An audit over: the summary of its passes, the report's status and passes line, the stop's notice; for a stop that ended on its own
     /// (converged, limit, stalled, unconfirmed) the report back on the done pane at the idle line. The loop is forgotten. <paramref name="moved"/>
     /// (the working directory changed, its own notice said): no stop line and no pane, the report written in the audit's own folder.
+    /// <see cref="AppSettingsData.CodeAuditStopTone"/> rings for every stop the user didn't cause (2026-10-21, <see cref="PlanGapLoop.Rings"/>):
+    /// <paramref name="passFailed"/> (the pass's turn failed, or was never sent) and <paramref name="moved"/> count as such a <see cref="PlanGapStop.Stopped"/>.
     /// </summary>
-    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false, AuditCoverage? coverage = null)
+    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false, AuditCoverage? coverage = null, bool passFailed = false)
     {
+        if (PlanGapLoop.Rings(reason, passFailed || moved))
+        {
+            RingStopTone(_effective().CodeAuditStopTone);
+        }
+
         string path = _audit.Path!;
         string name = _audit.Name;
         var files = _audit.Files;

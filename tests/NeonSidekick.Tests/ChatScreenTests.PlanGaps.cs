@@ -239,7 +239,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_TheWordsThatCannotRun()
     {
-        PlanFixture([], "/plan gaps", "/plan Add a guide", "/plan gaps", "/plan gaps advsior", "/plan gaps 51", "/exit");
+        PlanFixture([], "/plan gaps", "/plan Add a guide", "/plan gaps", "/plan gaps advsior", "/plan gaps 101", "/exit");
         _chat.EnqueueText("What should it cover?");
 
         string output = await RunAsync();
@@ -248,13 +248,13 @@ public partial class ChatScreenTests
         Assert.Contains(PlanText.NotPlanningError, output);
         Assert.Contains(PlanText.NothingPresentedError, output);
         Assert.Contains(PlanText.UnknownReviewerError("advsior"), output);
-        Assert.Contains(PlanText.GapPassesRangeError("51"), output);
+        Assert.Contains(PlanText.GapPassesRangeError("101"), output);
     }
 
     [Fact]
     public async Task PlanGaps_ACount_CapsThisRun_InsteadOfTheSetting()
     {
-        // 2026-10-17, the user's ask: /plan gaps 2 runs two passes while LLM plan gap passes says 5.
+        // 2026-10-17, the user's ask: /plan gaps 2 runs two passes while LLM plan gap max passes says 5.
         PlanGapsFixture([[Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps 2"), Key(Keys.Escape), Line("/exit"));
         _chat.Enqueue(PresentPlanCall());                                                                      // 0: presented; Esc keeps refining
         _chat.EnqueueText("Noted.");                                                                           // 1

@@ -18,7 +18,8 @@ internal sealed partial class SettingsMenu
     /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the bar rows under
     /// Screen. Web UI's three runs (2026-10-16, the user's ask): Server, then Guardrails and Tabs, "The page" split into what the
     /// page may do and which tabs it shows. Common's Plan mode (2026-10-17, the user's ask): the gap review's two rows,
-    /// <c>LLM plan gap passes</c> and <c>LLM plan gap clean passes</c>, between Tools and limits and Context. Pinned.
+    /// <c>LLM plan gap passes</c> and <c>LLM plan gap clean passes</c>, between Tools and limits and Context (four since 2026-10-21, the
+    /// first renamed <c>LLM plan gap max passes</c> and <c>LLM plan gap stop tone</c> last). Pinned.
     /// </summary>
     public static readonly IReadOnlyDictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>> TabSections =
         new Dictionary<SettingsTab, IReadOnlyList<(SettingsField First, string Title)>>
@@ -37,9 +38,9 @@ internal sealed partial class SettingsMenu
                 (SettingsField.LlmUrl, "Connection"),
                 (SettingsField.LlmReasoning, "How it answers"),
                 (SettingsField.LlmOfferTools, "Tools and limits"),
-                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, LLM plan gap ask user)
-                (SettingsField.RalphLoopReviewer, "Ralph loop"),   // later on 2026-10-18: the loop's seven rows, a section of their own (they would swamp Plan mode's three)
-                (SettingsField.CodeAuditPasses, "Code audit"),   // 2026-10-18, /code-audit's six rows after Plan mode
+                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, LLM plan gap ask user; four since 2026-10-21, LLM plan gap stop tone)
+                (SettingsField.RalphLoopReviewer, "Ralph loop"),   // later on 2026-10-18: the loop's seven rows, a section of their own (they would swamp Plan mode's three, four since 2026-10-21)
+                (SettingsField.CodeAuditPasses, "Code audit"),   // 2026-10-18, /code-audit's six rows after Plan mode (seven since 2026-10-21, LLM code audit stop tone)
                 (SettingsField.LlmContextLength, "Context"),
                 (SettingsField.LlmPictureKeep, "Pictures and verbs"),
             ],

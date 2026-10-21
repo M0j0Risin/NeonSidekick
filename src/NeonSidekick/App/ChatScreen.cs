@@ -1555,7 +1555,7 @@ internal sealed partial class ChatScreen
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
         _skillInstallMenu = new SkillInstallMenu(_menuPane);
         _skillInstall = new SkillInstallFlow(new SkillHub(_web.Fetcher));
-        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses, () => _effective().PlanGapCleanPasses, SavePlanReferences, RalphInlineLimit);
+        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses, () => _effective().PlanGapCleanPasses, SavePlanReferences, RalphInlineLimit, converged: () => RingStopTone(_effective().PlanGapStopTone));
         // The Ralph loop (2026-10-18): finish_step over the running loop, its 🔁 line the screen's; the checks through /cmd's launch, or the tests' fake.
         _finishStep = new FinishStepTool(() => _ralph, RalphReported);
         _ralphVerifier = ralphVerifier ?? new Plans.RalphVerifier(_runner, _interpreters.Locate, _random);
