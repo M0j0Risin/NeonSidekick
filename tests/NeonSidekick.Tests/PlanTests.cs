@@ -343,6 +343,9 @@ public class PlanTests : IDisposable
         Assert.True(steps.Count >= 3);
         Assert.All(steps, step => Assert.False(string.IsNullOrWhiteSpace(step.DoneWhen)));
         Assert.Contains(steps, step => step.Children.Count > 0);
+        // The by-hand example (2026-10-21): a leaf, counted, never a problem.
+        Assert.Contains(steps, step => step.ByHand && step.IsLeaf);
+        Assert.Equal(1, PlanFit.ByHandSteps(body));
         Assert.Empty(PlanFit.Problems(body, new PlanChecks(header.Verify, header.Final), reviewed: false, RalphText.InlineLimit(128_000 * 4)));
         Assert.True(text.Length < 20_000);   // PlanSizeLine's ceiling
     }
@@ -440,7 +443,9 @@ public class PlanTests : IDisposable
         // 2026-10-18, the Ralph loop's groundwork: each step's check, verify/final only from the project, plain bullets outside Steps.
         Assert.Equal("a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkbox list lines, never headings, which a Ralph loop runs one per pass; in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: "
             + "split a big job into several steps, never one step with a plain list of its parts under it (indented - [ ] sub-steps, one level, are fine); "
-            + "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool), "
+            + "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool; "
+            // 2026-10-21: a check only a person can make is marked, on a leaf.
+            + "where only a person can tell (something seen or felt in a real window, terminal or device), its words start with By hand: and say what to look for, on a step with no sub-steps), "
             + "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.", PlanText.PlanShape);
         Assert.Equal("- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess.", PlanText.VerifyLine);
         // Later on 2026-10-18 (the user's 170,000-character sample): the plan kept short, after the checks' bullet.
@@ -456,7 +461,7 @@ public class PlanTests : IDisposable
         Assert.Equal("- The pictures in this conversation are saved beside the plan as ref-1, ref-2: list each under ## References as - ref-N: what it shows, and name the ref-N a step relies on in that step, so whoever carries it out is shown the picture.", PlanText.ReferencesLine(["ref-1", "ref-2"]));
 
         var gap = new PlanGapState(1, 5, PlanReviewer.Model);
-        Assert.Contains(", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell), "
+        Assert.Contains(", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell, or one only a person can judge that does not start with By hand:), "
             + "a step too big for one fresh session to do and check, a plan past 20,000 characters or one carrying its review's history. Wording and style are not gaps.", PlanText.GapReviewLines(gap, advisorsOffered: false));
     }
 

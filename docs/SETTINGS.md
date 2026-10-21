@@ -348,12 +348,12 @@ Plan mode's gap review, the Ralph loop and code audits: the jobs the model runs 
 | Plan gap ask user | Whether a gap pass may use `ask_user`, `camera_capture` and `screen_capture`, and only where `ask_user` is offered (never headless). Otherwise a call only you can make goes into `## Risks` as an open question. | on |
 | Plan gap stop tone | What a review rings when it stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
 | Ralph loop reviewer | Who reviews a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request), `advisor` (the first advisor, its thread untouched) or `any` (an advisor if offered, else the model). A fail unticks the step. | `any` |
-| Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you; with no pane or Web UI, a run has none. | 0 (off) |
+| Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you; with no pane or Web UI, a run has none. A `By hand:` step asks either way. | 0 (off) |
 | Ralph loop max passes | The most passes a loop runs (0–200; 0 is three a step, plus one for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
 | Ralph loop max step passes | The most passes one step may take before the loop stops (1–20). | 4 |
 | Ralph loop check timeout | How long a check command may run before it's stopped and the step unticked (30–3600 seconds). | 600 |
 | Ralph loop token budget | The tokens a loop may spend, passes and reviews together (0 is no budget). | 0 (none) |
-| Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…), never on Esc: silent, chime, bell, beep or alarm. | silent |
+| Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…) or a step waits for your check, never on Esc: silent, chime, bell, beep or alarm. | silent |
 | Code audit max passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane (0–100; 0 is no cap, or 100 headless). Esc stops it; a count on `/code-audit` overrides it for that run. | 5 |
 | Code audit clean passes | Passes in a row that find nothing new before an audit ends (1–5). A pass after a clean one reads the files no pass has read first; `/code-audit confirm` needs at least 2. | 2 |
 | Code audit ask user | Whether an audit's pass may ask you, take a photo or capture the screen. Off, it gets none of the three and puts a question only you can answer in the report's Open questions. | on |

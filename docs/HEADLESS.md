@@ -103,6 +103,7 @@ They need no server unless the row says so.
 - **`/plan ralph [<name>] [<passes>]`** runs a [Ralph loop](COMMANDS.md#ralph-loop): typing it is the consent. Each pass is sent without waiting, echoed as its short line, its checks and notices as `[notice]` lines. A plan that may not suit a loop gets a `[notice]`, and the loop goes on; a plan with no `- [ ]` steps is refused with an `[error]`.
 - **A Ralph loop names its checks** in a `[notice]` before running any. Under *Shell command policy* `ask` a check runs only if it's on the allow list, as `run_command`'s would; `NEONSIDEKICK_COMMAND_POLICY=yolo` runs it.
 - **A Ralph loop refuses to start** when its `verify:` check fails on the project first, printing its output. A failing `final:` check alone gets a `[notice]`, and the loop goes on. There's no checkpoint and no `ask_user`. Bare `/plan ralph` resumes a loop stopped earlier in the run, with the checks it started with.
+- **A Ralph loop stops at a `By hand:` step** after its pass, since nobody can be asked: the step stays unticked, named with its check. A resume stops there again, with no pass, until you tick its box.
 
 ### Everything else goes to the model as text
 

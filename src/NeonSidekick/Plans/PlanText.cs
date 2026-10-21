@@ -450,7 +450,7 @@ public static class PlanText
     public static readonly IReadOnlyList<string> ConfirmFocuses =
     [
         "the steps' order and dependencies: what each step needs done before it",
-        "how each step is verified, and what proves the whole plan worked",
+        "how each step is verified (a command where one can tell, By hand: leading a check only a person can make), and what proves the whole plan worked",
         "the risks: what could go wrong, how it would show, and how it is undone",
         "every file, API, specification, version or setting the plan assumes, and whether it was read or looked up",
         "each step's size: whether a fresh session reading only this plan could do it and check it in one sitting, and whether the plan reads short, with no history of its review",
@@ -759,7 +759,8 @@ public static class PlanText
     public const string PlanShape =
         "a # title, then ## Goal, ## Context, ## Steps (as - [ ] checkbox list lines, never headings, which a Ralph loop runs one per pass; in order, each one change that a fresh conversation reading only this plan can make and check in one sitting: " +
         "split a big job into several steps, never one step with a plain list of its parts under it (indented - [ ] sub-steps, one level, are fine); " +
-        "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool), " +
+        "each with an indented Done when: line saying how to tell it is done, a command to run where one can tell, one the step itself makes or one the project already has, never a guessed tool; " +
+        "where only a person can tell (something seen or felt in a real window, terminal or device), its words start with By hand: and say what to look for, on a step with no sub-steps), " +
         "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.";
 
     /// <summary>
@@ -851,7 +852,7 @@ public static class PlanText
             "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? GapAskException : GapOpenQuestionException) + ", " +
             (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
             // The fit (later on 2026-10-18): a step one fresh pass cannot finish, a plan too long to send whole, and a Done when: only a person can judge.
-            ", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell), " +
+            ", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell, or one only a person can judge that does not start with By hand:), " +
             "a step too big for one fresh session to do and check, a plan past 20,000 characters or one carrying its review's history. Wording and style are not gaps.\n" +
             (web
                 ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
@@ -999,9 +1000,17 @@ public static class PlanText
 
     public static string GapsInvalidResult(string raw) => $"Error: gaps must be a list of strings, one short line for each gap closed; got {raw}";
 
-    /// <summary>The message that starts an approved plan in the same conversation. Pinned.</summary>
+    /// <summary>
+    /// The message that starts an approved plan in the same conversation. Pinned. Its last sentence (2026-10-21, the plan at
+    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): a step only a person can check is left unticked for the user, never ticked unchecked.
+    /// </summary>
     public static string ExecuteMessage(string path) =>
-        $"The plan in {path} is approved. Carry out its steps that are not ticked yet, in order, ticking each checkbox in {path} as you finish the step, and tell me when it is done or if something blocks you.";
+        $"The plan in {path} is approved. Carry out its steps that are not ticked yet, in order, ticking each checkbox in {path} as you finish the step, and tell me when it is done or if something blocks you. " +
+        ByHandExecuteSentence;
+
+    /// <summary><see cref="ExecuteMessage"/>'s sentence for a step only a person can check (2026-10-21). Pinned.</summary>
+    public const string ByHandExecuteSentence =
+        "A step whose Done when starts with By hand: is mine to check: do its work, leave its box unticked, and tell me at the end what to check.";
 
     /// <summary>The turn <c>/plan open</c> sends (2026-09-26, the user's call: the model reads the plan and asks). Pinned.</summary>
     public static string OpenMessage(string path, int done, int total) =>

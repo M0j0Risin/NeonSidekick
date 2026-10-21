@@ -30,6 +30,8 @@ One or two sentences: what is true when this plan is done, and for whom.
     Done when: `dotnet build` passes with no new warnings.
   - [ ] The second part of that step.
     Done when: the test written in the first part passes.
+- [ ] A step only a person can check starts its check with By hand:, on a step with no sub-steps.
+  Done when: By hand: the new window opens and its title reads right; nothing a command could show is left to this line.
 - [ ] Update the docs and help that describe what changed.
   Done when: each changed command, setting or behavior is described where its readers look for it.
 

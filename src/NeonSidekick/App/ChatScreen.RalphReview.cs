@@ -96,12 +96,21 @@ internal static class RalphReviewers
         int windowChars = contextTokens * ConversationCompactor.CharsPerToken;
         int room = windowChars > 0 ? Math.Min(RalphChanges.MaxDiffChars, windowChars / 4) : RalphChanges.MaxDiffChars;
         string diff = delta.Diff.Length <= room ? delta.Diff : delta.Diff[..room] + RalphText.ReviewDiffCut;
-        return RalphText.ReviewRequest(step.Text, step.DoneWhen, report?.Summary ?? RalphText.NoReportSummary, report?.Verified ?? [], delta.Flags, delta.Changed, diff);
+        return RalphText.ReviewRequest(step.Text, step.DoneWhen, report?.Summary ?? RalphText.NoReportSummary, report?.Verified ?? [], delta.Flags, delta.Changed, diff, step.ByHand);
     }
 
-    /// <summary>The --log line of a review.</summary>
-    public static string LogLine(int pass, bool byAdvisor, RalphVerdict verdict) =>
-        $"ralph: review of pass {pass} by {(byAdvisor ? "an advisor" : "the model")}: {verdict.Kind.ToString().ToLowerInvariant()}" + (verdict.Reason.Length > 0 ? " — " + verdict.Reason : "");
+    /// <summary>The --log line of a review: the verdict in words (<c>needs user</c> since 2026-10-21, never the enum's name), its reason after.</summary>
+    public static string LogLine(int pass, bool byAdvisor, RalphVerdict verdict)
+    {
+        string kind = verdict.Kind switch
+        {
+            RalphVerdictKind.Pass => "pass",
+            RalphVerdictKind.Fail => "fail",
+            RalphVerdictKind.NeedsUser => "needs user",
+            _ => "unclear",
+        };
+        return $"ralph: review of pass {pass} by {(byAdvisor ? "an advisor" : "the model")}: {kind}" + (verdict.Reason.Length > 0 ? " — " + verdict.Reason : "");
+    }
 
     /// <summary>The one-shot model review: its verdict and the tokens it spent (added to the session's tally too).</summary>
     public static async Task<(RalphVerdict Verdict, long Tokens)> ByModelAsync(LlmSession session, WorkingDirectory files, RalphSnapshot snapshot, PlanStep step, string request, int keep, int megabytes, bool canSee, CancellationToken cancellationToken)

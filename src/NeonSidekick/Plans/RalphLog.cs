@@ -369,8 +369,9 @@ public static partial class RalphLog
             string line = $"- pass {N(entry.Pass)} (step {N(entry.Step)}): {entry.Outcome}; {Shorten(Flat(entry.Summary), NoteChars)}" + (entry.Check is { Length: > 0 } c && c != "none" ? $"; check {c}" : "") +
                 (entry.Review is { Length: > 0 } r && r != "off" ? $"; review {Flat(r)}" : "") +
                 (entry.Notes is { Length: > 0 } notes ? $"; notes for the next pass: {Shorten(Flat(notes), NoteChars)}" : "") +
-                // The checkpoint's answer (2026-10-19, the fourth review: a Redo's note never reached a pass after a pause, a crash or a resume).
-                (entry.Checkpoint is { Length: > 0 } checkpoint ? $"; at the checkpoint the user chose {Shorten(Flat(checkpoint), NoteChars)}" : "");
+                // The checkpoint's answer (2026-10-19, the fourth review: a Redo's note never reached a pass after a pause, a crash or a resume), and the
+                // by-hand question's in words of its own (2026-10-21).
+                (entry.Checkpoint is { Length: > 0 } checkpoint ? CheckpointNote(checkpoint) : "");
             if (text.Length + line.Length + 1 > NotesChars)
             {
                 if (text.Length == 0)
@@ -385,6 +386,51 @@ public static partial class RalphLog
         }
 
         return text.Length == 0 ? null : text.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// An entry's checkpoint field as <see cref="RecentNotes"/> words it: the checkpoint's answer as the user's choice, the by-hand question's
+    /// (2026-10-21, <see cref="RalphText.ByHandLogText"/>) as what the user found, or that it waited for the user's check.
+    /// </summary>
+    private static string CheckpointNote(string checkpoint)
+    {
+        if (string.Equals(checkpoint, RalphText.ByHandWorksLog, StringComparison.Ordinal))
+        {
+            return "; the user checked it by hand: it works";
+        }
+
+        if (checkpoint.StartsWith(RalphText.ByHandRedoLog, StringComparison.Ordinal))
+        {
+            string note = checkpoint[RalphText.ByHandRedoLog.Length..].TrimStart(':', ' ');
+            return "; the user checked it by hand and wants it redone" + (note.Length > 0 ? ": " + Shorten(Flat(note), NoteChars) : "");
+        }
+
+        if (string.Equals(checkpoint, RalphText.ByHandStoppedLog, StringComparison.Ordinal) || string.Equals(checkpoint, RalphText.NeedsYouLog, StringComparison.Ordinal))
+        {
+            return "; it waited for the user's check";
+        }
+
+        return $"; at the checkpoint the user chose {Shorten(Flat(checkpoint), NoteChars)}";
+    }
+
+    /// <summary>
+    /// The log's last entry when it is <paramref name="step"/>'s (its words, and its number among twins) and holds a by-hand question nobody answered
+    /// yes or redo to — <see cref="RalphText.ByHandStoppedLog"/> or <see cref="RalphText.NeedsYouLog"/> (2026-10-21, the plan at
+    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): a resume asks it again before any pass, and <c>/plan show</c> says the loop waits. Null
+    /// otherwise, and for an entry an older build wrote (it keeps no such text). Pure.
+    /// </summary>
+    public static RalphLogEntry? LastEntryAwaitingHand(RalphLogDocument? document, PlanStep? step)
+    {
+        if (document is not { Entries.Count: > 0 } d || step is null)
+        {
+            return null;
+        }
+
+        var last = d.Entries[^1];
+        return IsStep(last, step.Text, step.Twins > 1 ? step.Index : null)
+            && last.Checkpoint is { } checkpoint
+            && (string.Equals(checkpoint, RalphText.ByHandStoppedLog, StringComparison.Ordinal) || string.Equals(checkpoint, RalphText.NeedsYouLog, StringComparison.Ordinal))
+            ? last : null;
     }
 
     /// <summary>Whether <paramref name="entry"/> is a pass on the step of <paramref name="stepText"/> (and of <paramref name="stepIndex"/>, when given).</summary>

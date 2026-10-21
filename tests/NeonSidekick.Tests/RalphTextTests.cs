@@ -254,4 +254,115 @@ public sealed class RalphTextTests
         Assert.Equal("dotnet build", (snapshot with { FinalOnly = true, Final = null }).CheckFor(null));   // the verify command stands in for a missing final one
         Assert.Null((snapshot with { FinalOnly = true }).CheckFor(step));
     }
+
+    // ── Steps only a person can check (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    /// <summary>A name of more than one word (<c>NeedsUser</c>): its raw lowercase (<c>needsuser</c>) is never shown.</summary>
+    private static bool MultiWord(string name) => name.Skip(1).Any(char.IsUpper);
+
+    [Fact]
+    public void EveryStopAndVerdict_HasWordsOfItsOwn_NoCatchAllSaysIt()
+    {
+        // The switches over these enums end in a catch-all, so a new value builds silently into it: StopNotice said "not started" for a NeedsUser stop.
+        foreach (var stop in Enum.GetValues<RalphStop>())
+        {
+            if (stop != RalphStop.BaselineRefused)
+            {
+                Assert.NotEqual(RalphText.NotStartedNotice, RalphText.StopNotice(stop, ".neon/plans/g.md", 1, 3));
+            }
+
+            string name = stop.ToString().ToLowerInvariant();
+            string head = App.RalphStart.StopWord(stop);
+            string summary = RalphText.SummaryLines([new RalphPassRecord(1, 1, "One", "done", true)], stop)[^1];
+            if (MultiWord(stop.ToString()))
+            {
+                Assert.NotEqual(name, head);
+                Assert.DoesNotContain(name, summary, StringComparison.Ordinal);
+            }
+        }
+
+        foreach (var kind in Enum.GetValues<RalphVerdictKind>())
+        {
+            var verdict = new RalphVerdict(kind, "why");
+            string line = App.RalphReviewers.LogLine(1, byAdvisor: false, verdict);
+            string word = App.RalphJudge.ReviewWord(verdict);
+            Assert.DoesNotContain(kind.ToString(), line, StringComparison.Ordinal);
+            if (MultiWord(kind.ToString()))
+            {
+                Assert.DoesNotContain(kind.ToString().ToLowerInvariant(), line, StringComparison.Ordinal);
+                Assert.DoesNotContain(kind.ToString().ToLowerInvariant(), word, StringComparison.Ordinal);
+            }
+        }
+
+        Assert.Equal("ralph: review of pass 1 by the model: needs user — why", App.RalphReviewers.LogLine(1, false, new RalphVerdict(RalphVerdictKind.NeedsUser, "why")));
+        Assert.Equal("needs user: why", App.RalphJudge.ReviewWord(new RalphVerdict(RalphVerdictKind.NeedsUser, "why")));
+        Assert.Equal("needs you", App.RalphStart.StopWord(RalphStop.NeedsUser));
+        Assert.Equal("stopped at your answer", App.RalphStart.StopWord(RalphStop.UserStopped));
+    }
+
+    [Fact]
+    public void TheByHandTexts_ArePinned()
+    {
+        Assert.Equal("1 step is yours to check by hand", RalphText.ByHandLine(1));
+        Assert.Equal("3 steps are yours to check by hand", RalphText.ByHandLine(3));
+        Assert.Equal("🔁 1 step is yours to check by hand. The loop asks you after its pass.", RalphText.ByHandStartNotice(1));
+        Assert.Equal("🔁 2 steps are yours to check by hand. The loop asks you after each one's pass.", RalphText.ByHandStartNotice(2));
+        Assert.Equal("🔁 2 steps are yours to check by hand, and headless cannot ask: the loop stops at the first one.", RalphText.ByHandHeadlessNotice(2));
+        Assert.Equal("verify `make` · reviewer off · 1 step is yours to check by hand", RalphText.PaneCheckLine(new PlanChecks("make", null), RalphReviewer.Off, 0, false, byHand: 1));
+        Assert.Equal("verify `make` · reviewer off", RalphText.PaneCheckLine(new PlanChecks("make", null), RalphReviewer.Off, 0, false, byHand: 0));
+        Assert.Equal("🔁 Step 3 needs you to check it: the window shows it. Nobody could be asked, so it stays unticked.", RalphText.NeedsYouNotice(3, "By hand: the window shows it"));
+        Assert.Equal("🔁 Step 3 of 5 stands, checked by you: Animate it", RalphText.StepCheckedByYouNotice(3, 5, "Animate it"));
+        Assert.Equal("Check: the window shows it — step 3 of 5: Animate it — the reviewer: can't see it — the model: wrote the loop",
+            RalphText.ByHandCaption("the window shows it", 3, 5, "Animate it", "can't see it", "wrote the loop"));
+        Assert.Equal("Check: it shows — step 1 of 2: A", RalphText.ByHandCaption("it shows", 1, 2, "A", null, null));
+        Assert.Equal("by hand: works", RalphText.ByHandLogText(RalphHandCheck.Passed, "ignored"));
+        Assert.Equal("by hand: redo: the frames flicker", RalphText.ByHandLogText(RalphHandCheck.Redo, "the frames flicker"));
+        Assert.Equal("by hand: redo", RalphText.ByHandLogText(RalphHandCheck.Redo, null));
+        Assert.Equal("by hand: stopped", RalphText.ByHandLogText(RalphHandCheck.Stop, null));
+        Assert.Equal("needs you", RalphText.ByHandLogText(RalphHandCheck.NoOneToAsk, null));
+        Assert.Equal("", RalphText.ByHandLogText(RalphHandCheck.None, null));
+        Assert.Equal("w / r / v / s = pick · Enter = choose · Esc = stop", RalphText.ByHandKeys);
+        Assert.Equal(["It works: tick it", "It doesn't: redo with a note…", "View the changes", "Stop the loop"], RalphText.ByHandRows);
+        Assert.Equal("  the last review said: no loop in the code", RalphText.LastReviewLine("no loop in the code"));
+        Assert.Equal("🔁 Ralph loop stopped: a step needs you to check it (1 of 3 steps done). Check it, tick its box, and /plan ralph g goes on.",
+            RalphText.StopNotice(RalphStop.NeedsUser, ".neon/plans/g.md", 1, 3));
+        Assert.Equal("🔁 Ralph loop stopped at your answer (1 of 3 steps done). /plan ralph g goes on.", RalphText.StopNotice(RalphStop.UserStopped, ".neon/plans/g.md", 1, 3));
+        Assert.Equal("🔁 Ralph loop paused, waiting for your check on p.md: 1 of 3 steps done, pass 2",
+            RalphText.ShowLines("p.md", 1, 3, 2, paused: true, "p/ralph.md", waitingOnYou: true)[0]);
+        Assert.EndsWith(" " + PlanText.ByHandExecuteSentence, PlanText.ExecuteMessage("p.md"));
+        Assert.StartsWith(PlanText.ExecuteMessage("p.md"), PlanText.ExecuteFreshMessage("p.md", "# P"));
+        Assert.Equal("A step whose Done when starts with By hand: is mine to check: do its work, leave its box unticked, and tell me at the end what to check.", PlanText.ByHandExecuteSentence);
+    }
+
+    [Fact]
+    public void TheDirective_GivesAByHandStepItsRule_AndTheReviewRequestItsLine()
+    {
+        string plain = RalphText.Directive("p", 2, 3, "Animate it", "By hand: it shows", null, reviewed: true, canAsk: false, null, null);
+        string byHand = RalphText.Directive("p", 2, 3, "Animate it", "By hand: it shows", null, reviewed: true, canAsk: false, null, null, byHand: true);
+
+        Assert.DoesNotContain(RalphText.ByHandRule, plain);
+        Assert.Contains(RalphText.ByHandRule + "\n", byHand);
+        Assert.DoesNotContain(RalphText.ByHandRule, RalphText.Directive("p", 3, 3, "fix", null, "make", reviewed: false, canAsk: false, null, null, finalFix: true, byHand: true));
+        Assert.StartsWith("- This step's Done when is checked by hand: do the work, check with a command whatever one can show, and report done;", RalphText.ByHandRule);
+
+        string request = RalphText.ReviewRequest("Animate it", "By hand: it shows", "did it", [], [], [], "", byHand: true);
+        Assert.Contains("Done when: By hand: it shows\n" + RalphText.ByHandReviewLine + "\n", request);
+        Assert.DoesNotContain(RalphText.ByHandReviewLine, RalphText.ReviewRequest("Animate it", "it shows", "did it", [], [], [], ""));
+        Assert.Contains("verdict: needs_user", RalphText.ReviewerSystem);
+        Assert.Contains("needs_user", RalphText.VerdictToolDescription);
+    }
+
+    [Fact]
+    public void TheDirective_KeepsToItsBudget_WithTheByHandRuleWhole()
+    {
+        string notes = new('n', 9000);
+        string learned = "- " + new string('l', 1500);
+
+        string directive = RalphText.Directive("p", 1, 1, "x", "By hand: it shows", "make", reviewed: false, canAsk: true, notes, learned, byHand: true);
+
+        Assert.True(directive.Length <= RalphText.DirectiveBudget);
+        Assert.Contains(RalphText.ByHandRule, directive);   // in the part never cut
+        Assert.Contains(learned, directive);
+        Assert.Contains("…", directive);                    // the notes shrank to make room
+    }
 }

@@ -101,6 +101,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(PresentPlanTool.ToolName, doing);
         Assert.DoesNotContain("PLAN MODE", _chat.Requests[2][0].Text);
         Assert.Equal(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[2]));
+        Assert.EndsWith(PlanText.ByHandExecuteSentence, LastUserText(_chat.Requests[2]));   // a By hand: step left for the user (2026-10-21)
         // Carried out without ticking its one step (the fake never writes the file): tracked, and marked incomplete after the turn.
         Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
         Assert.Contains(PlanText.IncompleteNotice(PlanPath, 0, 1), Output);

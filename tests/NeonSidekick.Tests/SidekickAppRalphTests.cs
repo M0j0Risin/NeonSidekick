@@ -16,11 +16,11 @@ public partial class SidekickAppTests
 {
     private const string HeadlessRalphSteps = "# Guide\n\n## Steps\n- [ ] One\n- [ ] Two\n";
 
-    private void HeadlessRalphPlan(string? verify = "dotnet build")
+    private void HeadlessRalphPlan(string? verify = "dotnet build", string body = HeadlessRalphSteps)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(HeadlessPlanFile)!);
         var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
-        File.WriteAllText(HeadlessPlanFile, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide", Verify: verify), "Guide", HeadlessRalphSteps));
+        File.WriteAllText(HeadlessPlanFile, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide", Verify: verify), "Guide", body));
         _settings.Update(d => d.RalphLoopReviewer = "off");
         AllowHeadlessCheck("dotnet build");
     }
@@ -305,5 +305,36 @@ public partial class SidekickAppTests
         Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 7, finalOnly: false), output);
         Assert.Equal(["dotnet build", "dotnet test", "dotnet build", "dotnet build", "dotnet test"], _ralphVerifier.Commands);
         Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
+    // ── Steps only a person can check (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    private const string HeadlessByHandSteps =
+        "# Guide\n\n## Steps\n- [ ] One\n  Done when: By hand: one.md reads well in the viewer\n- [ ] Two\n  Done when: two.md exists\n";
+
+    [Fact]
+    public async Task Headless_PlanRalph_StopsAtAByHandStep_NamingItAndItsFiles_AndAResumeStopsAgainWithNoPass()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan(body: HeadlessByHandSteps);
+        _chat.Enqueue(FakeChatClient.Call("w1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "one.md", [WriteFileTool.ContentArgument] = "# One\n" }));
+        HeadlessRalphPass("1");
+
+        string output = await Headless("/plan ralph add-guide\n/plan ralph\n");
+
+        Assert.Equal(3, _chat.Requests.Count);   // the one pass: its write, its finish_step, its line; the resume sends nothing
+        Assert.Single(output.Split('\n'), l => l.Contains(RalphText.ByHandHeadlessNotice(1), StringComparison.Ordinal));   // on the start only
+        string started = "[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 6, finalOnly: false);
+        Assert.True(output.IndexOf(started, StringComparison.Ordinal) < output.IndexOf(RalphText.ByHandHeadlessNotice(1), StringComparison.Ordinal));
+        string needsYou = "[notice] " + RalphText.NeedsYouNotice(1, "By hand: one.md reads well in the viewer");
+        Assert.Equal(2, output.Split('\n').Count(l => l.Contains(needsYou, StringComparison.Ordinal)));   // the pass's, then the resume's
+        Assert.Equal(2, output.Split('\n').Count(l => l.Contains(RalphText.StopNotice(RalphStop.NeedsUser, HeadlessPlanPath, 0, 2), StringComparison.Ordinal)));
+        Assert.Contains("[notice] " + RalphText.LeftChangedLine(["one.md"]).Trim(), output);
+        Assert.Contains("[notice] " + RalphText.ResumedNotice(HeadlessPlanPath, 2, 6), output);
+        Assert.Contains("- [ ] One", File.ReadAllText(HeadlessPlanFile));
+        Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
+        var log = RalphLog.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(HeadlessPlanFile)!, "add-guide", RalphLog.FileName)));
+        Assert.Equal(RalphText.NeedsYouLog, Assert.Single(log.Entries).Checkpoint);
+        Assert.Equal("needs you", log.Entries[0].Outcome);
     }
 }

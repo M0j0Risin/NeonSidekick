@@ -101,6 +101,10 @@ public sealed partial class SidekickApp
             Log(RalphReviewers.LogLine(loop.Pass, byAdvisor, verdict));
             return cancellationToken.IsCancellationRequested ? null : verdict;
         }
+
+        /// <summary>Nobody can be asked headless (2026-10-21): the step stays unticked and the loop stops with <see cref="RalphStop.NeedsUser"/>.</summary>
+        public Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken) =>
+            Task.FromResult<RalphCheckpointAnswer?>(null);
     }
 
     /// <summary>
@@ -392,6 +396,22 @@ public sealed partial class SidekickApp
         }
 
         await HeadlessNoticeLineAsync("[notice] " + (stored is not null ? RalphText.ResumedNotice(path, remaining, loop.Cap) : RalphText.StartedNotice(path, remaining, loop.Cap, snapshot.FinalOnly))).ConfigureAwait(false);
+        if (stored is null && PlanFit.ByHandSteps(body) is int byHand and > 0)
+        {
+            // Steps only a person can check (2026-10-21): nobody can be asked headless, so the loop stops at the first one; said on a start only.
+            await HeadlessNoticeLineAsync("[notice] " + RalphText.ByHandHeadlessNotice(byHand)).ConfigureAwait(false);
+        }
+
+        // A by-hand question the last pass left unanswered (2026-10-21, the screen's resume question): headless cannot ask it, so the loop stops at once
+        // with no pass, rather than spending one to stop at the same step.
+        if (PlanFiles.ReadWhole(files, path) is { } now && PlanSteps.FirstUnticked(PlanSteps.Parse(now)) is { } waiting
+            && RalphLog.LastEntryAwaitingHand(RalphLog.Read(files, path), waiting) is not null)
+        {
+            await HeadlessNoticeLineAsync("[notice] " + RalphText.NeedsYouNotice(waiting.Index, waiting.DoneWhen ?? waiting.Text)).ConfigureAwait(false);
+            await HeadlessRalphEndAsync(state, files, RalphStop.NeedsUser).ConfigureAwait(false);
+            return;
+        }
+
         await HeadlessRalphQueueAsync(state, files, cancellationToken).ConfigureAwait(false);
     }
 
@@ -502,7 +522,7 @@ public sealed partial class SidekickApp
 
             string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text, step.Twins > 1 ? step.Index : null));
             string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step),
-                snapshot.Reviewer != RalphReviewer.Off && step is not null, canAsk: false, notes, RalphLog.LearnedText(log), finalFix: step is null);
+                snapshot.Reviewer != RalphReviewer.Off && step is not null, canAsk: false, notes, RalphLog.LearnedText(log), finalFix: step is null, byHand: step?.ByHand ?? false);
             ralph.Turn = new PlanTurn(directive, ralph.Tool);
             ralph.Step = step;
             ralph.Total = total;

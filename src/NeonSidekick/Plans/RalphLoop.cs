@@ -53,6 +53,34 @@ public enum RalphStop
     /// so the stop tone rings.
     /// </summary>
     CheckRefused,
+
+    /// <summary>
+    /// A step only a person can check, and nobody to ask (2026-10-21, the plan at <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>: headless, or no
+    /// pane and no page answered): the step waits unticked for the user.
+    /// </summary>
+    NeedsUser,
+}
+
+/// <summary>
+/// What the user made of a step only a person can check, asked after its pass (2026-10-21, <see cref="PlanStep.ByHand"/> or the reviewer's
+/// <see cref="RalphVerdictKind.NeedsUser"/>): <see cref="None"/> when nobody was asked.
+/// </summary>
+public enum RalphHandCheck
+{
+    /// <summary>Not asked: the step was no by-hand one, or its pass never reached the question.</summary>
+    None,
+
+    /// <summary>It works: the step stands.</summary>
+    Passed,
+
+    /// <summary>It doesn't: unticked, the user's note the next pass's.</summary>
+    Redo,
+
+    /// <summary>Stop the loop (Esc on the pane, too): unticked.</summary>
+    Stop,
+
+    /// <summary>Nobody could answer (headless, no pane or page): unticked, and the loop stops with <see cref="RalphStop.NeedsUser"/>.</summary>
+    NoOneToAsk,
 }
 
 /// <summary>What a pass said it did: <c>finish_step</c>'s outcome.</summary>
@@ -145,8 +173,10 @@ public readonly record struct RalphNext(RalphNextKind Kind, PlanStep? Step = nul
 /// (2026-10-19, the third review) holds the unfinished steps the pass deleted from the plan: with any, the loop stops (the judge cannot write
 /// them back, and a plan left with none unticked read as done). <paramref name="CheckRefused"/> (2026-10-19, the fourth review): the step's check
 /// was refused as it was due (<see cref="RalphCheckKind.Refused"/>), and the loop stops with <see cref="RalphStop.CheckRefused"/>.
+/// <paramref name="HandCheck"/> (2026-10-21) is the user's answer to a step only a person can check, and <paramref name="Waited"/> how long the
+/// question stood open: left out of the pass's time, so the summary and the log time the pass, not the user's think time.
 /// </summary>
-public sealed record RalphPassFacts(bool Stands, bool CheckFailed, bool FilesChanged, bool Split, bool TurnFailed, bool Cancelled, IReadOnlyList<string> Changed, IReadOnlyList<string>? Removed = null, bool CheckRefused = false)
+public sealed record RalphPassFacts(bool Stands, bool CheckFailed, bool FilesChanged, bool Split, bool TurnFailed, bool Cancelled, IReadOnlyList<string> Changed, IReadOnlyList<string>? Removed = null, bool CheckRefused = false, RalphHandCheck HandCheck = RalphHandCheck.None, TimeSpan Waited = default)
 {
     /// <summary>A pass with nothing to say: no progress, no failure.</summary>
     public static RalphPassFacts None { get; } = new(false, false, false, false, false, false, []);
@@ -240,6 +270,12 @@ public sealed class RalphLoop
     public bool CheckpointDue { get; private set; }
 
     /// <summary>
+    /// The reason of the review that failed this pass's step (2026-10-21, the plan at <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>: a stall said
+    /// nothing of why), set by the judge and cleared by <see cref="BeginPass"/>; null when its review did not fail.
+    /// </summary>
+    public string? LastReviewFail { get; set; }
+
+    /// <summary>
     /// The pass cap for a run: <paramref name="setting"/> when above 0, else three a remaining step (at least 1), and one more for the final fix
     /// pass when there is a final check (<paramref name="final"/>), fixed or automatic alike. Pure.
     /// </summary>
@@ -285,6 +321,7 @@ public sealed class RalphLoop
         Report = null;
         InPass = true;
         CheckpointDue = false;
+        LastReviewFail = null;
         _passStart = meter;
     }
 
@@ -323,6 +360,12 @@ public sealed class RalphLoop
             if (Current is not { } step || step.Index == 0 || !step.IsLeaf || _split.Contains(Key(step)) || IsChild(step))
             {
                 return RalphText.SplitRefusedResult;
+            }
+
+            // A step only a person can check keeps its check through a split (2026-10-21): else its parent would be ticked with nobody checking it.
+            if (step.ByHand && !report.Substeps.Any(s => PlanSteps.IsByHand(s.DoneWhen)))
+            {
+                return RalphText.SplitByHandResult;
             }
         }
 
@@ -380,7 +423,13 @@ public sealed class RalphLoop
         long? tokens = null;
         if (_passStart is { } start && meter is { } end)
         {
-            elapsed = end.At - start.At;
+            // The time the by-hand question stood open is the user's, not the pass's (2026-10-21).
+            elapsed = end.At - start.At - facts.Waited;
+            if (elapsed < TimeSpan.Zero)
+            {
+                elapsed = TimeSpan.Zero;
+            }
+
             long spent = Math.Max(0, end.Tokens - start.Tokens) + Math.Max(0, end.AdvisorTokens - start.AdvisorTokens);
             RunTokens += spent;
             // The record keeps the pass's own share and the review's apart: the summary adds them back together.
@@ -391,7 +440,15 @@ public sealed class RalphLoop
             RunTokens += _reviewTokens;
         }
 
-        string outcome = facts.CheckRefused ? "check refused" : facts.Cancelled ? "stopped" : Report?.Outcome switch
+        // A by-hand pass reads as its answer, never a plain done or not done (2026-10-21); the plain "stopped" stays the cancel's.
+        string outcome = facts.CheckRefused ? "check refused" : facts.Cancelled ? "stopped" : facts.HandCheck switch
+        {
+            RalphHandCheck.Passed => "done by hand",
+            RalphHandCheck.Redo => "redo by hand",
+            RalphHandCheck.Stop => "stopped at the check",
+            RalphHandCheck.NoOneToAsk => "needs you",
+            _ => null,
+        } ?? Report?.Outcome switch
         {
             RalphOutcome.Done => facts.Stands ? "done" : facts.CheckFailed ? "check failed" : "not done",
             RalphOutcome.Blocked => "blocked",
@@ -426,6 +483,18 @@ public sealed class RalphLoop
         {
             FixingFinal = false;
             return RalphStop.StepsRemoved;
+        }
+
+        // The user's answer to a step only a person can check (2026-10-21): nobody to ask and Stop end the loop; a Redo is the user's call, never a failed
+        // check or a pass without progress (the screen calls Redo next); a pass is a step that stands, but no checkpoint grows from it (the user just looked).
+        switch (facts.HandCheck)
+        {
+            case RalphHandCheck.NoOneToAsk:
+                return RalphStop.NeedsUser;
+            case RalphHandCheck.Stop:
+                return RalphStop.UserStopped;
+            case RalphHandCheck.Redo:
+                return null;
         }
 
         if (FixingFinal)
@@ -468,7 +537,7 @@ public sealed class RalphLoop
             return RalphStop.Stalled;
         }
 
-        if (facts.Stands && Snapshot.Checkpoint > 0 && ++_passedSinceCheckpoint >= Snapshot.Checkpoint)
+        if (facts.Stands && facts.HandCheck != RalphHandCheck.Passed && Snapshot.Checkpoint > 0 && ++_passedSinceCheckpoint >= Snapshot.Checkpoint)
         {
             _passedSinceCheckpoint = 0;
             CheckpointDue = true;
@@ -477,7 +546,10 @@ public sealed class RalphLoop
         return null;
     }
 
-    /// <summary>A checkpoint's Redo on <paramref name="step"/> (2026-10-18): its counters start again (the user's call is no failed check), the note going to the next pass.</summary>
+    /// <summary>
+    /// A checkpoint's Redo on <paramref name="step"/> (2026-10-18), or the by-hand question's (2026-10-21): its counters start again (the user's call is
+    /// no failed check), the note going to the next pass.
+    /// </summary>
     public void Redo(PlanStep step, string? note)
     {
         ArgumentNullException.ThrowIfNull(step);

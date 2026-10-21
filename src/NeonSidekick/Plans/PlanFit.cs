@@ -22,6 +22,7 @@ public static class PlanFit
     /// The problems of <paramref name="body"/> for a loop, in order: box lines no step is read from (<see cref="PlanSteps.UnreadBoxes"/>, a mixed
     /// plan's too: its <c>- [ ]</c> steps run and the rest are skipped silently), else no step at all; one step over <see cref="OneStepChars"/> (every leaf counted, ticked or not:
     /// it is the plan's shape), unticked steps with no <c>Done when:</c> (a step already done never runs again, so its missing line costs nothing),
+    /// a step with sub-steps whose check is by hand (<see cref="ByHandParents"/>, 2026-10-21),
     /// a body over <paramref name="inlineLimit"/> (<see cref="RalphText.InlineLimit"/>), and no check at all with <paramref name="reviewed"/> false
     /// (with a reviewer each step is still judged, and many projects have no command to name, so a plan without one is not a problem there).
     /// </summary>
@@ -46,6 +47,11 @@ public static class PlanFit
             problems.Add(RalphText.FitNoDoneWhen(missing));
         }
 
+        if (ByHandParents(body) is int parents and > 0)
+        {
+            problems.Add(RalphText.FitByHandParent(parents));
+        }
+
         if (body.Length > inlineLimit)
         {
             problems.Add(RalphText.FitTooLong(body.Length, inlineLimit));
@@ -57,6 +63,27 @@ public static class PlanFit
         }
 
         return problems;
+    }
+
+    /// <summary>
+    /// The unticked leaves of <paramref name="body"/> only a person can check (<see cref="PlanStep.ByHand"/>, 2026-10-21, the plan at
+    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): said on the approval pane and at a loop's start, never one of the <see cref="Problems"/> —
+    /// a by-hand step is legitimate, so a gap pass must not try to fix it, nor may it raise the fit question alone.
+    /// </summary>
+    public static int ByHandSteps(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return PlanSteps.Leaves(PlanSteps.Parse(body)).Count(s => !s.Ticked && s.ByHand);
+    }
+
+    /// <summary>
+    /// The unticked steps with sub-steps whose own <c>Done when:</c> is by hand (2026-10-21): a parent is never worked, the app ticks it once its
+    /// children stand, so its check would be ticked with nobody checking it. A problem (<see cref="RalphText.FitByHandParent"/>).
+    /// </summary>
+    public static int ByHandParents(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return PlanSteps.Parse(body).Count(s => !s.IsLeaf && !s.Ticked && s.ByHand);
     }
 
     /// <summary>

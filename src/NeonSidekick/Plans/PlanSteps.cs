@@ -16,6 +16,9 @@ public sealed record PlanStep(int Index, int Line, int Indent, string Text, bool
 {
     /// <summary>A step with no children: the kind the loop works.</summary>
     public bool IsLeaf => Children.Count == 0;
+
+    /// <summary>Its <c>Done when:</c> is one only a person can check (<see cref="PlanSteps.IsByHand"/>, 2026-10-21).</summary>
+    public bool ByHand => PlanSteps.IsByHand(DoneWhen);
 }
 
 /// <summary>A sub-step a split writes (<see cref="PlanSteps.WithChildren"/>): its words and its <c>Done when:</c>.</summary>
@@ -38,6 +41,39 @@ public static class PlanSteps
 
     /// <summary>The label of a step's check line, case aside.</summary>
     public const string DoneWhenLabel = "Done when:";
+
+    /// <summary>
+    /// What leads a <c>Done when:</c>'s words when only a person can check it (2026-10-21, the plan at <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>:
+    /// a step whose check was "running it in a real terminal shows the animation" failed every review, and the loop stalled on it). The label stays
+    /// <see cref="DoneWhenLabel"/>, so every reader and rewriter of the line keeps working.
+    /// </summary>
+    public const string ByHandLabel = "By hand:";
+
+    // A hyphen only with a space after it ("by hand-made" is no lead); an italic underscore around the words allowed.
+    private static readonly Regex s_byHand = new(@"^_?(?:by\s+hand_?\s*(?:[:—–]|-(?=\s))|[(\[]\s*by\s+hand\s*[)\]]_?\s*(?:[:—–]|-(?=\s))?)_?\s*", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Whether <paramref name="doneWhen"/> (a step's <c>Done when:</c> words) is one only a person can check: it starts, case aside and bold or italic
+    /// marks stripped, with <c>by hand</c> and a <c>:</c>, <c>—</c>, <c>–</c> or <c>-</c> (a hyphen with a space after it), or with <c>(by hand)</c> or <c>[by hand]</c> (the shapes a
+    /// model drifts into), a colon after or not. "by hand" later in the sentence doesn't count. Pure.
+    /// </summary>
+    public static bool IsByHand(string? doneWhen) => doneWhen is not null && s_byHand.IsMatch(Unmarked(doneWhen));
+
+    /// <summary>
+    /// <paramref name="doneWhen"/>'s words after whichever lead <see cref="IsByHand"/> matched, bold or italic marks stripped: the check alone, as the
+    /// question and the notices show it; the words as they are when no lead matched. Pure.
+    /// </summary>
+    public static string WithoutByHand(string doneWhen)
+    {
+        ArgumentNullException.ThrowIfNull(doneWhen);
+        string bare = Unmarked(doneWhen);
+        var match = s_byHand.Match(bare);
+        return match.Success ? bare[match.Length..].Trim() : doneWhen.Trim();
+    }
+
+    /// <summary>Words with their bold and italic marks taken out, leading space trimmed (as <see cref="DoneWhenOf"/> reads a label).</summary>
+    private static string Unmarked(string text) =>
+        text.Replace("**", "", StringComparison.Ordinal).Replace("__", "", StringComparison.Ordinal).Replace("*", "", StringComparison.Ordinal).TrimStart();
 
     private static readonly Regex s_refs = new(@"\bref-(\d+)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex s_backticks = new("`([^`\\s]+)`", RegexOptions.CultureInvariant);

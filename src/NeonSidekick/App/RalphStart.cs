@@ -235,7 +235,8 @@ internal static class RalphStart
         string path = loop.Snapshot.Path;
         var lines = RalphText.SummaryLines(loop.History, stop).Select(l => (l, false)).ToList();
         var counts = PlanFiles.ReadWhole(files, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
-        if (stop == RalphStop.StepFailing && loop.Current is { } failing && loop.ChangedBy(failing) is { Count: > 0 } changed)
+        // A step that keeps failing, or one waiting for the user's check (2026-10-21: the files to look at when checking it), lists what its passes changed.
+        if (stop is RalphStop.StepFailing or RalphStop.NeedsUser && loop.Current is { } failing && loop.ChangedBy(failing) is { Count: > 0 } changed)
         {
             lines.Add((RalphText.LeftChangedLine(changed), false));
         }
@@ -273,6 +274,11 @@ internal static class RalphStart
             }
 
             lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2), false));
+            // A stall or a failing step after a failed review says why, after its notice (2026-10-21, RalphLoop.LastReviewFail).
+            if (stop is RalphStop.Stalled or RalphStop.StepFailing && loop.LastReviewFail is { Length: > 0 } reason)
+            {
+                lines.Add((RalphText.LastReviewLine(reason), false));
+            }
         }
 
         if (RalphLog.Read(files, path)?.Head is { } head)
@@ -284,7 +290,10 @@ internal static class RalphStart
         return new RalphEnded(lines, forget);
     }
 
-    /// <summary>Whether the user caused <paramref name="stop"/> (Esc, a message, the checkpoint's Stop): the stop tone rings for every other.</summary>
+    /// <summary>
+    /// Whether the user caused <paramref name="stop"/> (Esc, a message, the checkpoint's or the by-hand question's Stop): the stop tone rings for every
+    /// other, <see cref="RalphStop.NeedsUser"/> among them.
+    /// </summary>
     public static bool UserCaused(RalphStop stop) => stop is RalphStop.Stopped or RalphStop.Paused or RalphStop.UserStopped;
 
     /// <summary>The word the log's head and the picker say a stop with.</summary>
@@ -294,9 +303,11 @@ internal static class RalphStart
         RalphStop.FinalFailed => "final failed",
         RalphStop.PlanGone => "plan gone",
         RalphStop.WorkdirMoved => "workdir moved",
-        RalphStop.UserStopped => "stopped at the checkpoint",
+        RalphStop.UserStopped => "stopped at your answer",
         RalphStop.StepsRemoved => "steps removed",
         RalphStop.CheckRefused => "check refused",
+        RalphStop.NeedsUser => "needs you",
+        RalphStop.BaselineRefused => "baseline refused",
         _ => stop.ToString().ToLowerInvariant(),
     };
 }

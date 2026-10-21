@@ -330,9 +330,11 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
   * A run sends them with its first message when the model can see pictures (a Ralph pass, the ones its step names).
 * **Steps:** each is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check, with an indented `Done when:` line (a command where one can tell). The plan stays under 20,000 characters.
   * A heading, a bare `[ ]` or a bold box isn't a step; a `###` heading may group steps, without a box.
+  * A check only a person can make (something seen in a real window or terminal) starts `Done when: By hand:`, on a step with no sub-steps.
   * Its header may carry a `verify:` command (run after each Ralph step) and a `final:` one (run once at the end).
 * **Approving:** **Approve & run**, **Approve, clear context & run**, **Approve & Ralph loop**, **Keep refining…**, **Close gaps…** or **Cancel plan** ([keys](INTERFACE.md#pane-keys)).
   * The run ticks the steps; the file ends `done` ("📝 I ❤️ it when a plan comes together.") or `incomplete`.
+  * Under a plain approve, the model leaves a `By hand:` step unticked and tells you at the end what to check.
 * **Talking it through:** `/plan chat`, or `/plan open <name> --chat`, opens plan mode with nothing sent. The model discusses, asks and researches, and presents a plan only when you ask (in your words or with `/plan ready`); its title then becomes the requirement.
 
 #### Closing gaps
@@ -356,6 +358,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 * **A pass:** the model gets the plan, its step and `Done when:` line, what earlier passes learned, every tool, and `finish_step` to report `done`, `partial`, `blocked` or `split` (2 to 6 sub-steps, once per top-level step). Each pass is its own session; 🔁 on the Status bar shows the step and pass.
+  * A `By hand:` step's pass does the work and leaves that check to you.
 * **Whether a step stands** is the app's call: the `verify:` command runs after each step, then the evidence (files changed or committed) and a review (*Ralph loop reviewer*).
   * The diff the reviewer reads is redacted, and a secrets file (`.env`, a key) is named, never shown.
   * Only the app ticks boxes. A box, a step's words or its `Done when:` line a pass changed are put back, as are the `## Steps` heading and the header's `verify:` and `final:` lines, and a step it added is taken out; a stopped pass decides nothing.
@@ -376,14 +379,20 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 * **Checkpoint:** with *Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).
   * Only then may a pass ask you anything (`ask_user`, the camera, the screen). With neither the pane nor the Web UI to ask on, a run has no checkpoint.
   * Each answer goes in the log, so a Redo's note reaches the next pass after a pause or a restart too.
+* **Steps you check by hand:** after a `By hand:` step's pass (and its review), the loop asks **It works: tick it**, **It doesn't: redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the Web UI, even with no checkpoint.
+  * It waits until you answer; Esc stops, the step unticked. *Ralph loop stop tone* rings as it asks.
+  * The reviewer may answer `needs_user` for a step it can't judge (something only seen or felt), and the loop asks you the same.
+  * After a stop at that question, the next `/plan ralph` asks it again before any pass.
 * **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
 
 #### When a loop stops
 
 * **When the work is done:** every step standing, and the `final:` command passing (with one pass to fix it).
 * **When it can't go on:** a blocked step, two passes with no progress, a step failing its checks twice or using *Ralph loop max step passes*, a pass that deleted unfinished steps, a check refused as it was due, or an error.
+  * A stall after a failed review says what the review found.
+* **When it needs you:** a `By hand:` step with nobody to ask (no pane, no Web UI) stops the loop, naming the step, its check and the files its passes changed.
 * **At a limit or by hand:** the pass cap (*Ralph loop max passes*, or the count given), the token budget, Esc, the Web UI's Stop, the wake phrase (its request runs once the loop has stopped), or a working directory change.
-* **The stop tone:** a stop you didn't cause rings *Ralph loop stop tone*.
+* **The stop tone:** a stop you didn't cause rings *Ralph loop stop tone*, as does a step waiting for your check.
 * **A message typed** during a pass, at the PC or on the Web UI, pauses the loop after it. `/plan ralph` resumes (the checks first), `/plan show` says where it stands, and a summary lists every pass. A step that kept failing leaves its edits in place, named.
 * **A paused loop resumes only in its own folder.** After a working directory change, `/plan ralph <name>` starts that folder's plan afresh, its checks confirmed again.
 * **A plan done or canceled while paused** is never resumed; `/plan ralph` says so and forgets the loop.

@@ -142,4 +142,29 @@ public sealed class PlanFitTests
     {
         Assert.Equal([RalphText.FitNoDoneWhen(1)], PlanFit.Shape(Plan("- [ ] Write hello.py\nDone when: it runs"), Limit));
     }
+
+    // ── Steps only a person can check (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    [Fact]
+    public void ByHandSteps_CountsUntickedLeaves_AndIsNoProblem()
+    {
+        string steps = Good + "\n- [ ] Animate it\n  Done when: By hand: the terminal shows it\n- [x] Show it\n  Done when: By hand: it shows\n" +
+            "- [ ] Parent\n  Done when: every part stands\n  - [ ] Part\n    Done when: **By hand:** the part shows\n";
+
+        Assert.Equal(2, PlanFit.ByHandSteps(Plan(steps)));
+        Assert.Empty(PlanFit.Shape(Plan(steps), Limit));   // a by-hand leaf is legitimate: no gap pass "fixes" it, no fit question
+    }
+
+    [Fact]
+    public void AByHandParent_IsAProblem_AfterTheNoDoneWhenItem()
+    {
+        string steps = "- [ ] Parent\n  Done when: By hand: the whole thing works\n  - [ ] Part one\n    Done when: `a` exists\n  - [ ] Part two\n" +
+            "- [ ] Other\n  Done when: `b` exists";
+
+        Assert.Equal([RalphText.FitNoDoneWhen(1), RalphText.FitByHandParent(1)], PlanFit.Shape(Plan(steps), Limit));
+        Assert.Equal(0, PlanFit.ByHandSteps(Plan(steps)));
+        Assert.Equal(1, PlanFit.ByHandParents(Plan(steps)));
+        Assert.Equal("1 step with sub-steps has a By hand: check", RalphText.FitByHandParent(1));
+        Assert.Equal("2 steps with sub-steps have a By hand: check", RalphText.FitByHandParent(2));
+    }
 }

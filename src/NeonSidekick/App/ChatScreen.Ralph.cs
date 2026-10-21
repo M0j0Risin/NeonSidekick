@@ -191,7 +191,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        string checks = RalphText.PaneCheckLine(header is null ? null : new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask);
+        string checks = RalphText.PaneCheckLine(header is null ? null : new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask,
+            byHand: PlanFit.ByHandSteps(body));
         var problems = PlanFit.Shape(body, RalphInlineLimit());
         string question = header is null or { Status: PlanStatus.Draft } ? RalphText.ConfirmDraftQuestion(path, checks, problems) : RalphText.ConfirmQuestion(path, checks, problems);
         if (!await RalphConfirmAsync(question, cancellationToken).ConfigureAwait(false))
@@ -336,7 +337,8 @@ internal sealed partial class ChatScreen
         if (!checksShown && (header?.Verify is { Length: > 0 } || header?.Final is { Length: > 0 }))
         {
             var effective = _effective();
-            string checks = RalphText.PaneCheckLine(new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask);
+            string checks = RalphText.PaneCheckLine(new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask,
+                byHand: PlanFit.ByHandSteps(body));
             if (!await RalphConfirmAsync(RalphText.ConfirmQuestion(path, checks, PlanFit.Shape(body, RalphInlineLimit())), cancellationToken).ConfigureAwait(false))
             {
                 _plan.ClearApproval();
@@ -472,8 +474,21 @@ internal sealed partial class ChatScreen
         RalphLog.SetHead(files, path, RalphStart.Head(snapshot, _time.GetLocalNow()));
         SavePlanState();
         _transcript.Notice(resume ? RalphText.ResumedNotice(path, remaining, loop.Cap) : RalphText.StartedNotice(path, remaining, loop.Cap, snapshot.FinalOnly));
+        if (!resume && PlanFit.ByHandSteps(body) is int byHand and > 0)
+        {
+            // The steps only a person can check (2026-10-21): said once at the start, never on a resume (the resume's question covers one waiting).
+            _transcript.Notice(RalphText.ByHandStartNotice(byHand));
+        }
+
         DiagnosticLog.Info(AppCategory, $"ralph: {(resume ? "resumed" : "started")} {path}, {remaining} steps, cap {loop.Cap}, reviewer {RalphReviewerMode.Name(snapshot.Reviewer)}, checkpoint {snapshot.Checkpoint}");
         begun();
+        // A by-hand question the last pass left unanswered is asked again before any pass (2026-10-21); its Stop or no answer ends the loop with none.
+        if (await RalphResumeAskAsync(loop, cancellationToken).ConfigureAwait(false) is { } stopped)
+        {
+            EndRalph(stopped);
+            return false;
+        }
+
         return await RunRalphAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -628,7 +643,7 @@ internal sealed partial class ChatScreen
 
         string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text, step.Twins > 1 ? step.Index : null));
         bool reviewed = snapshot.Reviewer != RalphReviewer.Off;
-        string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null);
+        string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null, byHand: step?.ByHand ?? false);
         _ralphTurn = new PlanTurn(directive, _finishStep);
         int windowChars = RalphWindowChars();
         string message = step is null
@@ -688,6 +703,12 @@ internal sealed partial class ChatScreen
         var stop = loop.EndPass(judged.Facts, PlanMeter());
         RalphLogPass(loop, step, judged);
         _ralphTurn = null;
+        if (stop is null && step is not null && judged.ByHand is { Choice: RalphCheckpointChoice.Redo } redo)
+        {
+            // The by-hand question's Redo (2026-10-21): the entry holds the answer already (LogPass), so the note reaches the next pass through it.
+            ApplyRalphRedo(loop, step, judged, redo.Note, null, loop.Pass);
+        }
+
         if (exit)
         {
             return (true, stop ?? RalphStop.Stopped);
@@ -719,6 +740,9 @@ internal sealed partial class ChatScreen
 
         public Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken) =>
             screen.ReviewRalphStepAsync(loop, step, report, delta, cancellationToken);
+
+        public Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken) =>
+            screen.AskRalphByHandAsync(step, summary, reviewerReason, detail, ring: true, cancellationToken);
     }
 
     /// <summary>The screen as a loop's start's host (<see cref="IRalphStartHost"/>): the transcript, the check under the watch, the confirm on both sides.</summary>
@@ -961,15 +985,20 @@ internal sealed partial class ChatScreen
         // The folder the loop ran in (2026-10-20, a review: a paused loop read the plan and log of the folder /cwd moved to, a plan of the same name
         // there or none); elsewhere its plan is not read at all.
         var files = _ralphFiles ?? (RalphSnapshot.SameRoot(stored.Root, _files.Root) || stored.Root is null ? _files : null);
-        var counts = files is not null && PlanFiles.ReadWhole(files, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
-        int pass = _ralph?.Pass ?? (files is null ? 0 : RalphLog.PassCount(RalphLog.Read(files, path)));
+        string? text = files is null ? null : PlanFiles.ReadWhole(files, path);
+        var counts = text is not null ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
+        var log = _ralph is null && files is not null ? RalphLog.Read(files, path) : null;
+        int pass = _ralph?.Pass ?? RalphLog.PassCount(log);
         if (files is null)
         {
             _transcript.Notice(RalphText.PausedElsewhereNotice(path, stored.Root!));
             return true;
         }
 
-        foreach (string line in RalphText.ShowLines(path, counts.Item1, counts.Item2, pass, _ralph is null || stored.Paused, RalphLog.PathFor(path)))
+        bool paused = _ralph is null || stored.Paused;
+        // Waiting on the user exactly when a resume would ask first (2026-10-21, RalphResumeAskAsync's own match): worked out only while paused.
+        bool waiting = paused && text is not null && RalphLog.LastEntryAwaitingHand(log ?? RalphLog.Read(files, path), PlanSteps.FirstUnticked(PlanSteps.Parse(PlanDocument.Body(text)))) is not null;
+        foreach (string line in RalphText.ShowLines(path, counts.Item1, counts.Item2, pass, paused, RalphLog.PathFor(path), waiting))
         {
             _transcript.Notice(line);
         }
@@ -999,32 +1028,135 @@ internal sealed partial class ChatScreen
         }, RalphText.CheckpointPaneFailed, cancellationToken, bothSides: true).ConfigureAwait(false);
         var answer = outcome.Value ?? new RalphCheckpointAnswer(RalphCheckpointChoice.Keep, null);
         DiagnosticLog.Info(AppCategory, $"ralph: checkpoint after pass {loop.Pass}: {answer.Choice.ToString().ToLowerInvariant()}");
-        // Into the pass's log entry (2026-10-19, the fourth review: never written, a Redo's note was lost at a pause, a crash or a resume, and the
-        // next pass read the entry as done); RecentNotes hands it on.
-        if (RalphLog.SetCheckpoint(RalphFiles, loop.Snapshot.Path, loop.Pass, RalphText.CheckpointLogText(answer.Choice, answer.Note), out bool logged) is { } unlogged)
+        string logText = RalphText.CheckpointLogText(answer.Choice, answer.Note);
+        switch (answer.Choice)
+        {
+            case RalphCheckpointChoice.Redo:
+                ApplyRalphRedo(loop, step, judged, answer.Note, logText, loop.Pass);
+                return null;
+            default:
+                // Into the pass's log entry (2026-10-19, the fourth review: never written, a Redo's note was lost at a pause, a crash or a resume, and
+                // the next pass read the entry as done); RecentNotes hands it on.
+                if (RalphLog.SetCheckpoint(RalphFiles, loop.Snapshot.Path, loop.Pass, logText) is { } unlogged)
+                {
+                    _transcript.Warning(unlogged);
+                }
+
+                return answer.Choice == RalphCheckpointChoice.Stop ? RalphStop.UserStopped : null;
+        }
+    }
+
+    /// <summary>
+    /// A Redo on <paramref name="step"/> (the checkpoint's, 2026-10-18; the by-hand question's after a pass or at a resume, 2026-10-21): the answer written
+    /// into pass <paramref name="pass"/>'s log entry when <paramref name="logText"/> is given (else the entry holds it already, the judge's
+    /// <see cref="RalphJudge.LogPass"/>), the step's line as the judge left it and the parent it ticked unticked (none with no <paramref name="judged"/>:
+    /// a resume's step is unticked already), the loop's counters started again, the header's progress written. The note goes to the next pass once
+    /// (2026-10-20, a review: from the loop and from the log entry, through RecentNotes, in two wordings): through the log when the entry holds it,
+    /// else from the loop.
+    /// </summary>
+    private void ApplyRalphRedo(RalphLoop loop, PlanStep step, RalphJudged? judged, string? note, string? logText, int pass)
+    {
+        string path = loop.Snapshot.Path;
+        bool logged = true;
+        if (logText is not null && RalphLog.SetCheckpoint(RalphFiles, path, pass, logText, out logged) is { } unlogged)
         {
             _transcript.Warning(unlogged);
         }
 
-        switch (answer.Choice)
+        if (judged is not null)
         {
-            case RalphCheckpointChoice.Redo:
-                // The step's line as the judge left it, and the parent it ticked (2026-10-19, the third review).
-                SetBox(loop.Snapshot.Path, judged.Target ?? step, false);
-                if (judged.Parent is { } parent)
+            // The step's line as the judge left it, and the parent it ticked (2026-10-19, the third review).
+            SetBox(path, judged.Target ?? step, false);
+            if (judged.Parent is { } parent)
+            {
+                SetBox(path, parent, false);
+            }
+        }
+
+        loop.Redo(step, logged ? null : note);
+        MarkRalphProgress(path);
+    }
+
+    // ── The by-hand question (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    /// <summary>
+    /// The by-hand question on <paramref name="step"/>, a step only a person can check: does it work? On the PC and the page at once, the
+    /// <c>ralphhand</c> ask, with <see cref="RalphText.ByHandCaption"/> (the check first, so a cut drops the model's summary, never the check) and
+    /// <paramref name="detail"/> to view; <paramref name="ring"/> rings <c>Ralph loop stop tone</c> as it opens (never at a resume: the user just typed
+    /// the command). It waits until answered, even under checkpoint 0 — a deliberate exception to the rule that an unattended loop never waits
+    /// (2026-10-20, <see cref="ReviewRalphStepAsync"/>'s fallback): the step cannot stand without it. No default reads as "it works": an unknown or empty
+    /// page choice, Esc and a cancelled pane are Stop, and a null outcome (no pane, no page, the pane failed) is null, nobody to ask.
+    /// </summary>
+    private async Task<RalphCheckpointAnswer?> AskRalphByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, bool ring, CancellationToken cancellationToken)
+    {
+        if (ring)
+        {
+            RingStopTone(_effective().RalphLoopStopTone);
+        }
+
+        int total = _ralph is { } loop ? PlanStepsCount(loop) : 0;
+        string check = step.DoneWhen is { } doneWhen ? PlanSteps.WithoutByHand(doneWhen) : step.Text;
+        string caption = RalphText.ByHandCaption(check, step.Index, total, step.Text, reviewerReason, summary);
+        string shown = detail.Length == 0 ? RalphText.NoChangesLine : detail;
+        var spec = new WebAskSpec("ralphhand", RalphText.ByHandTitle,
+            [new WebChoice("keep", RalphText.ByHandRows[0]), new WebChoice("redo", RalphText.ByHandRows[1]), new WebChoice("stop", RalphText.ByHandRows[3])],
+            Body: caption, Detail: shown, DetailLabel: RalphText.ByHandRows[2], TextChoice: "redo");
+        var menu = new RalphCheckpointMenu(_menuPane, _input, RalphAskKind.ByHand);
+        var outcome = await RaceAsync<RalphCheckpointAnswer?>(spec, token => menu.AskAsync(caption, detail, token), a => a.Choice switch
+        {
+            "keep" => new RalphCheckpointAnswer(RalphCheckpointChoice.Keep, null),
+            "redo" => new RalphCheckpointAnswer(RalphCheckpointChoice.Redo, (a.Text ?? "").Trim() is { Length: > 0 } note ? note : null),
+            _ => new RalphCheckpointAnswer(RalphCheckpointChoice.Stop, null),
+        }, RalphText.ByHandPaneFailed, cancellationToken, bothSides: true).ConfigureAwait(false);
+        DiagnosticLog.Info(AppCategory, $"ralph: by-hand check on step {step.Index}: {outcome.Value?.Choice.ToString().ToLowerInvariant() ?? "nobody to ask"}");
+        return outcome.Value;
+    }
+
+    /// <summary>
+    /// A start or resume on a plan whose last pass left a by-hand question unanswered (2026-10-21, <see cref="RalphLog.LastEntryAwaitingHand"/> on the
+    /// first unticked step: a Stop at the question, or nobody to ask): the question again before any pass, with no tone. It works ticks the step, its
+    /// parent when every child stands and the header's progress, the entry saying so; Redo writes the note into that entry and the pass runs; Stop and
+    /// nobody to ask end the loop with no pass (null to go on).
+    /// </summary>
+    private async Task<RalphStop?> RalphResumeAskAsync(RalphLoop loop, CancellationToken cancellationToken)
+    {
+        var files = RalphFiles;
+        string path = loop.Snapshot.Path;
+        if (PlanFiles.ReadWhole(files, path) is not { } text || PlanSteps.FirstUnticked(PlanSteps.Parse(text)) is not { } step
+            || RalphLog.LastEntryAwaitingHand(RalphLog.Read(files, path), step) is not { } entry)
+        {
+            return null;
+        }
+
+        string detail = entry.Changed.Count == 0 ? "" : string.Join('\n', entry.Changed);
+        var answer = await AskRalphByHandAsync(step, entry.Summary, null, detail, ring: false, cancellationToken).ConfigureAwait(false);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return RalphStop.Stopped;
+        }
+
+        switch (answer?.Choice)
+        {
+            case null:
+                _transcript.Notice(RalphText.NeedsYouNotice(step.Index, step.DoneWhen ?? step.Text));
+                return RalphStop.NeedsUser;
+            case RalphCheckpointChoice.Keep:
+                SetBox(path, step, true);
+                RalphJudge.TickParent(new ScreenRalphHost(this), path, step);
+                MarkRalphProgress(path);
+                if (RalphLog.SetCheckpoint(files, path, entry.Pass, RalphText.ByHandWorksLog) is { } unlogged)
                 {
-                    SetBox(loop.Snapshot.Path, parent, false);
+                    _transcript.Warning(unlogged);
                 }
 
-                // The note goes to the next pass once (2026-10-20, a review: from the loop and from the log entry, through RecentNotes, in two
-                // wordings): through the log when the entry holds it, else from the loop.
-                loop.Redo(step, logged ? null : answer.Note);
-                MarkRalphProgress(loop.Snapshot.Path);
+                _transcript.Notice(RalphText.StepCheckedByYouNotice(step.Index, PlanStepsCount(loop), step.Text));
                 return null;
-            case RalphCheckpointChoice.Stop:
-                return RalphStop.UserStopped;
+            case RalphCheckpointChoice.Redo:
+                ApplyRalphRedo(loop, step, null, answer.Note, RalphText.ByHandLogText(RalphHandCheck.Redo, answer.Note), entry.Pass);
+                _transcript.Notice(RalphText.ByHandRedoNotice);
+                return null;
             default:
-                return null;
+                return RalphStop.UserStopped;
         }
     }
 

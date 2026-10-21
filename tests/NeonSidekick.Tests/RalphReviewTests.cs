@@ -32,4 +32,25 @@ public sealed class RalphReviewTests
         Assert.Equal(kind, verdict.Kind.ToString());
         Assert.Equal(reason, verdict.Reason);
     }
+
+    [Theory]
+    [InlineData("needs_user")]
+    [InlineData("needs user")]
+    [InlineData("Needs-User")]
+    public void NeedsUser_ComesFromACall(string word) =>
+        Assert.Equal(new RalphVerdict(RalphVerdictKind.NeedsUser, "only a person can see it"),
+            RalphReview.FromCall(new Dictionary<string, object?> { ["verdict"] = word, ["reason"] = "only a person can see it" }));
+
+    [Theory]
+    [InlineData("The code is right.\nverdict: needs user — only a person can see the animation", "only a person can see the animation")]
+    [InlineData("The code is right.\n**Verdict:** needs_user", "The code is right.")]
+    [InlineData("Only a person can see the window.\n\nNEEDS_USER", "Only a person can see the window.")]
+    public void NeedsUser_ComesFromAVerdictLine_OrALoneWord(string text, string reason)
+    {
+        // 2026-10-21: an advisor answers in text, so the no-tool fallback reads the third verdict too.
+        var verdict = RalphReview.FromText(text);
+
+        Assert.Equal(RalphVerdictKind.NeedsUser, verdict.Kind);
+        Assert.Equal(reason, verdict.Reason);
+    }
 }

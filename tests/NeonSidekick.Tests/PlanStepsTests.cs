@@ -262,4 +262,42 @@ public sealed class PlanStepsTests
         Assert.Equal(3, PlanSteps.UnreadBoxes(lf));
         Assert.Equal(3, PlanSteps.UnreadBoxes(lf.Replace("\n", "\r\n", StringComparison.Ordinal)));
     }
+
+    // ── The By hand: marker (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    [Theory]
+    [InlineData("By hand: the window shows the animation", true)]
+    [InlineData("by hand — the window shows it", true)]
+    [InlineData("BY HAND – it shows", true)]
+    [InlineData("By hand - it shows", true)]
+    [InlineData("**By hand:** the window shows it", true)]
+    [InlineData("_By hand_: the window shows it", true)]
+    [InlineData("(by hand) the window shows it", true)]
+    [InlineData("[By hand]: the window shows it", true)]
+    [InlineData("(By hand): the window shows it", true)]
+    [InlineData("python hello.py shows the window, checked by hand", false)]
+    [InlineData("By hand-made assets load", false)]
+    [InlineData("Byhand: it shows", false)]
+    [InlineData("`dotnet test` passes", false)]
+    [InlineData(null, false)]
+    public void IsByHand_ReadsTheLead_AndTheShapesAModelDriftsInto_NeverMidSentence(string? doneWhen, bool expected) =>
+        Assert.Equal(expected, PlanSteps.IsByHand(doneWhen));
+
+    [Theory]
+    [InlineData("By hand: the window shows the animation", "the window shows the animation")]
+    [InlineData("**By hand:** the window shows it", "the window shows it")]
+    [InlineData("by hand — it shows", "it shows")]
+    [InlineData("(by hand) it shows", "it shows")]
+    [InlineData("[By hand]: it shows", "it shows")]
+    [InlineData("`dotnet test` passes", "`dotnet test` passes")]
+    public void WithoutByHand_StripsWhicheverLeadMatched(string doneWhen, string expected) =>
+        Assert.Equal(expected, PlanSteps.WithoutByHand(doneWhen));
+
+    [Fact]
+    public void AStep_IsByHand_ByItsDoneWhen()
+    {
+        var steps = PlanSteps.Parse("## Steps\n- [ ] Animate it\n  Done when: By hand: the terminal shows it\n- [ ] Write it\n  Done when: `hello.py` exists\n- [ ] Nothing said\n");
+
+        Assert.Equal([true, false, false], steps.Select(s => s.ByHand));
+    }
 }

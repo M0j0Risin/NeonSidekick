@@ -291,4 +291,77 @@ public sealed class RalphLoopTests
         loop.Record(Done);
         Assert.Null(loop.EndPass(Failed, null));   // the first failure again, not the second
     }
+
+    // ── The by-hand question's answers (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    private const string ByHand = "## Steps\n- [ ] One\n  Done when: By hand: it shows\n- [ ] Two\n";
+
+    [Theory]
+    [InlineData(RalphHandCheck.NoOneToAsk, RalphStop.NeedsUser, "needs you")]
+    [InlineData(RalphHandCheck.Stop, RalphStop.UserStopped, "stopped at the check")]
+    public void NobodyToAsk_AndStop_EndTheLoop(RalphHandCheck check, RalphStop stop, string outcome)
+    {
+        var loop = new RalphLoop(Snapshot(), 2);
+        loop.BeginPass(Steps(ByHand)[0], null);
+        loop.Record(Done);
+
+        Assert.Equal(stop, loop.EndPass(Nothing with { FilesChanged = true, HandCheck = check }, null));
+        Assert.Equal(outcome, loop.History[^1].Outcome);
+    }
+
+    [Fact]
+    public void ARedo_NeverStalls_NorFailsTheStep()
+    {
+        var loop = new RalphLoop(Snapshot(perStep: 2), 2);
+        var step = Steps(ByHand)[0];
+        for (int i = 0; i < 4; i++)
+        {
+            loop.BeginPass(step, null);
+            loop.Record(Done);
+            Assert.Null(loop.EndPass(Nothing with { HandCheck = RalphHandCheck.Redo }, null));
+            Assert.Equal("redo by hand", loop.History[^1].Outcome);
+            loop.Redo(step, null);
+        }
+    }
+
+    [Fact]
+    public void APassedCheck_StandsWithoutMakingACheckpointDue()
+    {
+        var loop = new RalphLoop(Snapshot(checkpoint: 1), 2);
+        loop.BeginPass(Steps(ByHand)[0], null);
+        loop.Record(Done);
+
+        Assert.Null(loop.EndPass(Stood with { HandCheck = RalphHandCheck.Passed }, null));
+        Assert.False(loop.CheckpointDue);   // the user just looked
+        Assert.Equal("done by hand", loop.History[^1].Outcome);
+
+        loop.BeginPass(Steps(ByHand)[1], null);
+        loop.Record(Done);
+        Assert.Null(loop.EndPass(Stood, null));
+        Assert.True(loop.CheckpointDue);
+    }
+
+    [Fact]
+    public void AByHandStepsSplit_KeepsTheCheckOnASubstep()
+    {
+        var loop = new RalphLoop(Snapshot(), 2);
+        loop.BeginPass(Steps(ByHand)[0], null);
+        var plain = new FinishReport(RalphOutcome.Split, "too big", [], null, [], [new PlanSubstep("a", "a.cs exists"), new PlanSubstep("b", "b.cs exists")]);
+
+        Assert.Equal(RalphText.SplitByHandResult, loop.Record(plain));
+        Assert.Null(loop.Record(plain with { Substeps = [new PlanSubstep("a", "a.cs exists"), new PlanSubstep("b", "By hand: b shows")] }));
+    }
+
+    [Fact]
+    public void ThePassesTime_LeavesTheWaitOut()
+    {
+        var start = DateTimeOffset.UnixEpoch;
+        var loop = new RalphLoop(Snapshot(), 2);
+        loop.BeginPass(Steps(ByHand)[0], new PlanPassMeter(start, 0, 0));
+        loop.Record(Done);
+
+        loop.EndPass(Stood with { HandCheck = RalphHandCheck.Passed, Waited = TimeSpan.FromMinutes(10) }, new PlanPassMeter(start.AddMinutes(12), 0, 0));
+
+        Assert.Equal(TimeSpan.FromMinutes(2), loop.History[^1].Elapsed);
+    }
 }

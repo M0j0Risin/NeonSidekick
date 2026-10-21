@@ -10,7 +10,8 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>partial</c>, <c>blocked</c> or <c>split</c> — on the running loop, and the app decides after the turn whether the step stands (its own check
 /// command, the evidence, a review). Refused, in this order: no pass running, an outcome it does not know, an empty summary, <c>verified</c> empty on
 /// <c>done</c>, <c>substeps</c> missing, out of 2–6 or without <c>done_when</c> on a split (or given with another outcome), a split the loop will not
-/// take (a child step, one with children, one split before, the final fix), a pass that reported already. Offered only in a pass (the turn's own
+/// take (a child step, one with children, one split before, the final fix, a by-hand step's split with no by-hand substep since 2026-10-21), a pass
+/// that reported already. Offered only in a pass (the turn's own
 /// slot, <c>TurnToolInputs.Pass</c>), quiet on the transcript (its <c>reported</c> seam writes the 🔁 line), in no <see cref="PlanTools"/> list, and
 /// never to a script (<see cref="ExecuteCodeTool.Excluded"/>).
 /// </summary>
@@ -35,7 +36,7 @@ public sealed class FinishStepTool : AIFunction
             "verified": { "type": "array", "items": { "type": "string" }, "description": "One short line for each check you ran and what it showed. Required with done." },
             "notes": { "type": "string", "description": "Optional: what the next pass on this step should know." },
             "learned": { "type": "array", "items": { "type": "string" }, "description": "Optional: facts every later pass needs, one short line each (a command that works, what a file is for, a trap)." },
-            "substeps": { "type": "array", "items": { "type": "object", "properties": { "text": { "type": "string" }, "done_when": { "type": "string" } }, "required": ["text", "done_when"] }, "description": "Only with split: 2 to 6 sub-steps in order, each with its done_when line." }
+            "substeps": { "type": "array", "items": { "type": "object", "properties": { "text": { "type": "string" }, "done_when": { "type": "string" } }, "required": ["text", "done_when"] }, "description": "Only with split: 2 to 6 sub-steps in order, each with its done_when line. A step whose Done when starts with By hand: keeps By hand: at the start of at least one substep's done_when." }
           },
           "required": ["outcome", "summary"]
         }

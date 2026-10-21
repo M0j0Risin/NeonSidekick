@@ -11,6 +11,12 @@ public enum RalphVerdictKind
 
     /// <summary>No verdict read (no tool call, no verdict line, a request error): logged, the step stands unchecked — never unticked.</summary>
     Unclear,
+
+    /// <summary>
+    /// The work the reviewer can see is right, but only a person can tell whether the step's <c>Done when:</c> holds (2026-10-21, the plan at
+    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): the judge asks the user.
+    /// </summary>
+    NeedsUser,
 }
 
 /// <summary>A verdict and its reason (the reviewer's one sentence, empty with none).</summary>
@@ -20,8 +26,8 @@ public sealed record RalphVerdict(RalphVerdictKind Kind, string Reason)
 }
 
 /// <summary>
-/// Reading a Ralph review (2026-10-18): a <c>step_verdict</c> tool call's arguments first, else the answer's text — a <c>verdict: pass|fail</c> line,
-/// or a lone PASS or FAIL near its end — else <see cref="RalphVerdictKind.Unclear"/>. Pure.
+/// Reading a Ralph review (2026-10-18): a <c>step_verdict</c> tool call's arguments first, else the answer's text — a <c>verdict: pass|fail|needs_user</c>
+/// line, or a lone PASS, FAIL or NEEDS_USER near its end — else <see cref="RalphVerdictKind.Unclear"/>. Pure.
 /// </summary>
 public static partial class RalphReview
 {
@@ -76,9 +82,15 @@ public static partial class RalphReview
         foreach (int i in Enumerable.Range(Math.Max(0, lines.Count - 3), Math.Min(3, lines.Count)).Reverse())
         {
             string bare = lines[i].Trim('*', '_', '.', '!', ' ', '`');
-            if (bare is "PASS" or "FAIL")
+            if (bare is "PASS" or "FAIL" or "NEEDS_USER")
             {
-                return new RalphVerdict(bare == "PASS" ? RalphVerdictKind.Pass : RalphVerdictKind.Fail, Reason(lines, i));
+                var kind = bare switch
+                {
+                    "PASS" => RalphVerdictKind.Pass,
+                    "FAIL" => RalphVerdictKind.Fail,
+                    _ => RalphVerdictKind.NeedsUser,
+                };
+                return new RalphVerdict(kind, Reason(lines, i));
             }
         }
 
@@ -91,9 +103,10 @@ public static partial class RalphReview
     {
         "pass" or "passed" => RalphVerdictKind.Pass,
         "fail" or "failed" => RalphVerdictKind.Fail,
+        "needs_user" or "needs user" or "needs-user" => RalphVerdictKind.NeedsUser,
         _ => null,
     };
 
-    [GeneratedRegex(@"^\**\s*verdict\s*\**\s*:\s*\**\s*(pass(?:ed)?|fail(?:ed)?)\b\**(.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\**\s*verdict\s*\**\s*:\s*\**\s*(pass(?:ed)?|fail(?:ed)?|needs[ _-]user)\b\**(.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex VerdictLine();
 }

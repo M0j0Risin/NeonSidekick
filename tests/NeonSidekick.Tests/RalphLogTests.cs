@@ -524,4 +524,34 @@ public sealed class RalphLogTests : IDisposable
         Assert.Null(RalphLog.SetCheckpoint(_files, Plan, 9, "keep", out written));
         Assert.False(written);
     }
+
+    [Theory]
+    [InlineData("by hand: works", "; the user checked it by hand: it works")]
+    [InlineData("by hand: redo: the frames flicker", "; the user checked it by hand and wants it redone: the frames flicker")]
+    [InlineData("by hand: stopped", "; it waited for the user's check")]
+    [InlineData("needs you", "; it waited for the user's check")]
+    [InlineData("keep", "; at the checkpoint the user chose keep")]
+    public void RecentNotes_WordTheByHandAnswer_InItsOwnWords(string checkpoint, string said)
+    {
+        // 2026-10-21: a by-hand answer read as "at the checkpoint the user chose …", and nobody's answer as a choice.
+        var log = new RalphLogDocument(Head, [], [Entry(1, 1, "Animate it") with { Checkpoint = checkpoint }]);
+
+        Assert.EndsWith(said, RalphLog.RecentNotes(log, "Animate it"));
+    }
+
+    [Fact]
+    public void LastEntryAwaitingHand_IsTheLastEntry_OnThatStep_WaitingForTheUser()
+    {
+        var step = PlanSteps.Parse("## Steps\n- [ ] Animate it\n  Done when: By hand: it shows\n- [ ] Docs\n")[0];
+        RalphLogDocument With(params RalphLogEntry[] entries) => new(Head, [], entries);
+
+        Assert.NotNull(RalphLog.LastEntryAwaitingHand(With(Entry(1, 1, "Animate it") with { Checkpoint = RalphText.ByHandStoppedLog }), step));
+        Assert.NotNull(RalphLog.LastEntryAwaitingHand(With(Entry(1, 1, "Animate it") with { Checkpoint = RalphText.NeedsYouLog }), step));
+        Assert.Null(RalphLog.LastEntryAwaitingHand(With(Entry(1, 1, "Animate it") with { Checkpoint = RalphText.ByHandWorksLog }), step));
+        Assert.Null(RalphLog.LastEntryAwaitingHand(With(Entry(1, 1, "Animate it")), step));   // an older build's entry asks nothing
+        Assert.Null(RalphLog.LastEntryAwaitingHand(With(Entry(1, 1, "Animate it") with { Checkpoint = RalphText.NeedsYouLog }, Entry(2, 2, "Docs")), step));
+        Assert.Null(RalphLog.LastEntryAwaitingHand(With(Entry(1, 2, "Docs") with { Checkpoint = RalphText.NeedsYouLog }), step));
+        Assert.Null(RalphLog.LastEntryAwaitingHand(RalphLogDocument.Empty, step));
+        Assert.Null(RalphLog.LastEntryAwaitingHand(With(Entry(1, 1, "Animate it") with { Checkpoint = RalphText.NeedsYouLog }), null));
+    }
 }

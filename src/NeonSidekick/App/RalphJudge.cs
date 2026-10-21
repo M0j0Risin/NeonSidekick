@@ -26,6 +26,14 @@ internal interface IRalphHost
 
     /// <summary>The review's verdict; null when it was stopped.</summary>
     Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The by-hand question on <paramref name="step"/> (2026-10-21, the plan at <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): does it work?
+    /// <paramref name="summary"/> is the model's report, <paramref name="reviewerReason"/> the reviewer's when it said <c>needs_user</c>,
+    /// <paramref name="detail"/> what changed (a pass's diff, or a log entry's files). Keep is "it works", Redo carries a note, Stop stops; null when
+    /// nobody can answer (headless, no pane and no page, the pane failed). It waits until answered, even under checkpoint 0.
+    /// </summary>
+    Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -33,9 +41,10 @@ internal interface IRalphHost
 /// <paramref name="Parent"/> the parent it ticked (2026-10-19, the third review: the checkpoint's Redo unticked the step's line as it was before the
 /// pass, and left a parent the judge had ticked standing). <paramref name="PlanUnread"/> (2026-10-20, a review) says the plan could not be read whole
 /// after the pass, so nothing was put back: the log keeps the in-pass mark, whose lines are the only copy of the plan's from before the pass, for a later
-/// start to put back.
+/// start to put back. <paramref name="ByHand"/> (2026-10-21) is the user's answer to the by-hand question when one was given (a Redo's note for the
+/// screen to apply); <see cref="RalphPassFacts.HandCheck"/> says what it came to.
 /// </summary>
-internal sealed record RalphJudged(RalphPassFacts Facts, string Check, string? Tail, string Review, IReadOnlyList<string> Flags, string Diff, PlanStep? Target = null, PlanStep? Parent = null, bool PlanUnread = false);
+internal sealed record RalphJudged(RalphPassFacts Facts, string Check, string? Tail, string Review, IReadOnlyList<string> Flags, string Diff, PlanStep? Target = null, PlanStep? Parent = null, bool PlanUnread = false, RalphCheckpointAnswer? ByHand = null);
 
 /// <summary>
 /// The Ralph loop's judgment of a pass (2026-10-18), shared by the screen and headless (<see cref="IRalphHost"/>): the plan read again, the boxes put
@@ -47,7 +56,9 @@ internal static class RalphJudge
     /// After a pass's turn: the plan read again, another step's box changed during the pass put back; then the report's outcome — <c>blocked</c>
     /// unticks and stops, <c>split</c> writes the children (no checks), <c>done</c> ticks and checks, <c>partial</c> or none with the model's own tick
     /// still checked. The checks: the verify command (a failure, a timeout or Esc unticks, its tail the next pass's note), the evidence, the review
-    /// (a fail unticks). A parent whose children all stand is ticked. The header's progress follows. <paramref name="step"/> was parsed from the
+    /// (a fail unticks), then the by-hand question for a step only a person can check, or one the reviewer said needs the user (2026-10-21: it works
+    /// stands, anything else unticks; the time it stood open is <see cref="RalphPassFacts.Waited"/>, read off <paramref name="time"/>). A parent whose
+    /// children all stand is ticked. The header's progress follows. <paramref name="step"/> was parsed from the
     /// plan file whole (<see cref="PlanSteps.Parse"/>), so its line is the file's; <paramref name="lines"/> are the file's task lines before the pass
     /// (<see cref="PlanSteps.Flat"/> of that same parse). A stopped pass decides nothing: its own box goes back as well (2026-10-19, the second review:
     /// a tick the model wrote before Esc stood with no check, and a resume passed the step by).
@@ -147,6 +158,9 @@ internal static class RalphJudge
         string check = "none";
         string? tail = null;
         string review = "off";
+        var handCheck = RalphHandCheck.None;
+        RalphCheckpointAnswer? byHandAnswer = null;
+        var handWaited = TimeSpan.Zero;
         // The step's line as the pass left it, its words put back: every box below is set there.
         var target = own ?? step;
         bool modelTicked = own?.Ticked ?? false;
@@ -227,6 +241,10 @@ internal static class RalphJudge
                     }
                 }
 
+                // A step only a person can check is asked of the user after its review (2026-10-21, the plan at
+                // ~/.claude/plans/i-put-you-in-snoopy-perlis.md): a marked one always, an unmarked one when the reviewer said needs_user.
+                bool askByHand = step.ByHand;
+                string? needsUserReason = null;
                 if (snapshot.Reviewer != RalphReviewer.Off)
                 {
                     var reviewed = await host.ReviewAsync(loop, step, report, delta, cancellationToken).ConfigureAwait(false);
@@ -238,49 +256,121 @@ internal static class RalphJudge
                         return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed, removed), check, tail, "stopped", delta.Flags, delta.Diff);
                     }
 
-                    review = verdict.Kind switch
-                    {
-                        RalphVerdictKind.Pass => "pass" + (verdict.Reason.Length > 0 ? ": " + verdict.Reason : ""),
-                        RalphVerdictKind.Fail => "fail" + (verdict.Reason.Length > 0 ? ": " + verdict.Reason : ""),
-                        _ => "unclear",
-                    };
-
+                    review = ReviewWord(verdict);
                     if (verdict.Kind == RalphVerdictKind.Fail)
                     {
+                        // Wrong work is caught first: a fail unticks without asking, a marked step too.
                         SetBox(host, path, target, false);
                         host.Notice(RalphText.ReviewFailedNotice(verdict.Reason));
                         loop.PendingNotes = RalphText.ReviewFailedNote(verdict.Reason);
+                        loop.LastReviewFail = verdict.Reason;
                         break;
                     }
 
-                    if (verdict.Kind == RalphVerdictKind.Unclear)
+                    if (verdict.Kind == RalphVerdictKind.NeedsUser)
+                    {
+                        askByHand = true;
+                        needsUserReason = verdict.Reason;
+                        host.Notice(RalphText.ReviewNeedsUserNotice(verdict.Reason));
+                    }
+                    else if (verdict.Kind == RalphVerdictKind.Unclear && !askByHand)
                     {
                         host.Notice(RalphText.ReviewUnclearNotice);
                     }
                 }
 
+                if (askByHand)
+                {
+                    var asked = time.GetUtcNow();
+                    var answer = await host.AskByHandAsync(step, report?.Summary, needsUserReason, delta.Diff, cancellationToken).ConfigureAwait(false);
+                    var waited = time.GetUtcNow() - asked;
+                    if (waited < TimeSpan.Zero)
+                    {
+                        waited = TimeSpan.Zero;
+                    }
+
+                    // The token before the answer: a cancel is a stop whatever came back, never a tick.
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        SetBox(host, path, target, false);
+                        host.Notice(RalphText.CheckStoppedNotice);
+                        return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed, removed, Waited: waited), check, tail, review, delta.Flags, delta.Diff);
+                    }
+
+                    handCheck = answer?.Choice switch
+                    {
+                        null => RalphHandCheck.NoOneToAsk,
+                        RalphCheckpointChoice.Keep => RalphHandCheck.Passed,
+                        RalphCheckpointChoice.Redo => RalphHandCheck.Redo,
+                        _ => RalphHandCheck.Stop,
+                    };
+                    byHandAnswer = answer;
+                    handWaited = waited;
+                    host.Log($"ralph: by-hand check after pass {loop.Pass}: {RalphText.ByHandLogText(handCheck, null)}");
+                    if (handCheck != RalphHandCheck.Passed)
+                    {
+                        SetBox(host, path, target, false);
+                        host.Notice(handCheck switch
+                        {
+                            RalphHandCheck.NoOneToAsk => RalphText.NeedsYouNotice(step.Index, step.DoneWhen ?? step.Text),
+                            RalphHandCheck.Redo => RalphText.ByHandRedoNotice,
+                            _ => RalphText.ByHandStoppedNotice,
+                        });
+                        break;
+                    }
+                }
+
                 stands = true;
-                host.Notice(snapshot.StepCheck is null && snapshot.Reviewer == RalphReviewer.Off
-                    ? RalphText.StepUncheckedNotice(step.Index, total, step.Text)
+                host.Notice(handCheck == RalphHandCheck.Passed ? RalphText.StepCheckedByYouNotice(step.Index, total, step.Text)
+                    : snapshot.StepCheck is null && snapshot.Reviewer == RalphReviewer.Off ? RalphText.StepUncheckedNotice(step.Index, total, step.Text)
                     : RalphText.StepDoneNotice(step.Index, total, step.Text));
                 break;
         }
 
-        // A parent whose children all stand is ticked by the app (found by the step's own line, the file's: never another parent's child of the same words).
-        PlanStep? parentTicked = null;
-        if (stands && PlanFiles.ReadWhole(host.Files, path) is { } latest)
+        PlanStep? parentTicked = stands ? TickParent(host, path, target) : null;
+        MarkProgress(host.Files, path, requirement, time);
+        return new RalphJudged(new RalphPassFacts(stands, checkFailed, delta.Changed.Count > 0, split, failed, false, delta.Changed, removed, HandCheck: handCheck, Waited: handWaited),
+            check, tail, review, delta.Flags, delta.Diff, target, parentTicked, ByHand: byHandAnswer);
+    }
+
+    /// <summary>
+    /// A parent whose children all stand ticked by the app (found by the step's own line, the file's: never another parent's child of the same words),
+    /// said; the parent, or null. Shared by the judge and the resume's by-hand question (2026-10-21).
+    /// </summary>
+    public static PlanStep? TickParent(IRalphHost host, string path, PlanStep target)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        if (PlanFiles.ReadWhole(host.Files, path) is not { } latest)
         {
-            var parsed = PlanSteps.Parse(latest);
-            if (PlanSteps.Find(latest, target) is { } standing && PlanSteps.ParentOf(parsed, standing) is { Ticked: false } parent && parent.Children.All(c => c.Ticked))
-            {
-                SetBox(host, path, parent, true);
-                parentTicked = parent;
-                host.Notice(RalphText.ParentTickedNotice(parent.Text));
-            }
+            return null;
         }
 
-        MarkProgress(host.Files, path, requirement, time);
-        return new RalphJudged(new RalphPassFacts(stands, checkFailed, delta.Changed.Count > 0, split, failed, false, delta.Changed, removed), check, tail, review, delta.Flags, delta.Diff, target, parentTicked);
+        var parsed = PlanSteps.Parse(latest);
+        if (PlanSteps.Find(latest, target) is { } standing && PlanSteps.ParentOf(parsed, standing) is { Ticked: false } parent && parent.Children.All(c => c.Ticked))
+        {
+            SetBox(host, path, parent, true);
+            host.Notice(RalphText.ParentTickedNotice(parent.Text));
+            return parent;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A verdict as the log's review field keeps it: <c>pass: why</c>, <c>fail: why</c>, <c>needs user: why</c> (2026-10-21), <c>unclear</c>. Every
+    /// kind in words, never the enum's name.
+    /// </summary>
+    public static string ReviewWord(RalphVerdict verdict)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+        string reason = verdict.Reason.Length > 0 ? ": " + verdict.Reason : "";
+        return verdict.Kind switch
+        {
+            RalphVerdictKind.Pass => "pass" + reason,
+            RalphVerdictKind.Fail => "fail" + reason,
+            RalphVerdictKind.NeedsUser => "needs user" + reason,
+            _ => "unclear",
+        };
     }
 
     /// <summary>A step's box set in the file (the loop's own tick), quietly; a step no longer where it was is left (a log line).</summary>
@@ -622,7 +712,10 @@ internal static class RalphJudge
         var report = loop.Report;
         var entry = new RalphLogEntry(
             loop.Pass, step?.Index ?? 0, step?.Text ?? RalphText.FinalFixStep, record?.Outcome ?? "none", report?.Summary ?? "(no finish_step)", report?.Verified ?? [],
-            judged.Check, judged.Tail, judged.Flags, judged.Facts.Changed, judged.Review, null, time.GetLocalNow(), record?.Elapsed, record?.Tokens,
+            // The by-hand question's answer in the checkpoint field (2026-10-21), the review field keeping the reviewer's own verdict.
+            judged.Check, judged.Tail, judged.Flags, judged.Facts.Changed, judged.Review,
+            judged.Facts.HandCheck == RalphHandCheck.None ? null : RalphText.ByHandLogText(judged.Facts.HandCheck, judged.ByHand?.Note),
+            time.GetLocalNow(), record?.Elapsed, record?.Tokens,
             // finish_step's notes for the next pass on the step (2026-10-19, the third review: read and dropped), carried by RecentNotes from here.
             report?.Notes);
         var head = new RalphLogHead(snapshot.Path, snapshot.Verify, snapshot.Final, snapshot.FinalOnly, snapshot.Shell, time.GetLocalNow());

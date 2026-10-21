@@ -105,6 +105,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The plan approval pane | `a` approve & run · `f` clear context & run · `l` Ralph loop · `r` keep refining · `g` close gaps · `c` cancel plan · Esc keeps refining |
 | Close gaps: who reviews? (after `g`, while advisors are offered) | `m` the model · `a` an advisor finds the gaps · `y` any (the model, asking an advisor where one fits) · `c` the model, an advisor confirms · Esc back |
 | A Ralph loop's checkpoint | `k` keep · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc keeps |
+| A Ralph loop's by-hand check | `w` it works · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc stops |
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
 | `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
@@ -651,7 +652,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |
 
-* **A Ralph loop:** its confirm and its checkpoint ask on both sides; the status row shows 🔁, and Stop ends the loop.
+* **A Ralph loop:** its confirm, its checkpoint and its by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`:** runs as at the PC (a looped `/read` is refused). Bare `/shopping` points at the Shopping tab, and bare `/youtube` and `/youtube list` at the YouTube tab's saved videos (or at the tab's setting while it's off).
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.

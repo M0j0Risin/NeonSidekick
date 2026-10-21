@@ -1085,4 +1085,156 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(_chat.Requests[2], m => m.Text.Contains("anything at all", StringComparison.Ordinal));
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
+
+    // ── Steps only a person can check (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
+
+    private const string RalphByHandSteps =
+        "# Guide\n\n## Steps\n- [ ] One\n  Done when: By hand: one.md reads well in the viewer\n- [ ] Two\n  Done when: two.md exists\n";
+
+    /// <summary>The page answers the open by-hand question with <paramref name="choice"/> (and a redo's <paramref name="text"/>), the PC's pane up beside it.</summary>
+    private Action<ScriptedInput> PageAnswers(string choice, string? text = null) => _ =>
+    {
+        var ask = Web.Asks.OpenAsks().Single(a => a.Spec.Kind == "ralphhand");
+        // A choice the ask doesn't offer never reaches the loop: the page's broker refuses it, and the question stands.
+        Assert.Equal(WebOutcome.Refused, Web.Answer(new WebAnswerRequest { AskId = ask.Id, Choice = "bogus" }, System.Net.IPAddress.Loopback).Outcome);
+        Assert.NotEqual(WebOutcome.Refused, Web.Answer(new WebAnswerRequest { AskId = ask.Id, Choice = choice, Text = text }, System.Net.IPAddress.Loopback).Outcome);
+    };
+
+    private static int Occurrences(string text, string of) => (text.Length - text.Replace(of, "", StringComparison.Ordinal).Length) / of.Length;
+
+    [Fact]
+    public async Task Ralph_AByHandStep_IsAskedAfterItsPass_UnderNoCheckpoint_AndItWorksRunsTheNextStep()
+    {
+        RalphPlan(RalphByHandSteps);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Char('w'), Keys.Enter), Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Contains(RalphText.ByHandStartNotice(1), output);
+        Assert.Contains(RalphText.ByHandTitle, output);
+        Assert.Contains(RalphText.ByHandRule, _chat.Requests[0][0].Text);          // the pass leaves the check to the user
+        Assert.DoesNotContain(RalphText.ByHandRule, _chat.Requests[2][0].Text);
+        Assert.Contains(RalphText.StepCheckedByYouNotice(1, 2, "One"), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal([RalphText.ByHandWorksLog, null], log.Entries.Select(e => e.Checkpoint));
+        Assert.Equal(["done by hand", "done"], log.Entries.Select(e => e.Outcome));
+    }
+
+    [Fact]
+    public async Task Ralph_AByHandStep_Redo_UnticksIt_AndTheNextPassGetsTheNote()
+    {
+        RalphPlan(RalphByHandSteps);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Char('r'), Keys.Enter), Line("the headings are too long"), Answer(Keys.Char('w'), Keys.Enter), Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+        RalphPass("3");
+
+        string output = await RunAsync();
+
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Contains(RalphText.ByHandRedoNotice, output);
+        Assert.Contains("One", LastUserText(_chat.Requests[2]));
+        Assert.Contains("the user checked it by hand and wants it redone: the headings are too long", _chat.Requests[2][0].Text);
+        Assert.Equal(1, Occurrences(_chat.Requests[2][0].Text, "the headings are too long"));   // once, through the log
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal(["by hand: redo: the headings are too long", RalphText.ByHandWorksLog, null], log.Entries.Select(e => e.Checkpoint));
+    }
+
+    [Fact]
+    public async Task Ralph_AByHandStep_Esc_StopsUnticked_PlanShowSaysItWaits_AndTheResumeAsksBeforeAnyPass()
+    {
+        RalphPlan(RalphByHandSteps);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Escape), Line("/plan show"), Line("/plan ralph"), Answer(Keys.Char('w'), Keys.Enter), Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.StopNotice(RalphStop.UserStopped, PlanPath, 0, 2), output);
+        Assert.Contains(RalphText.ShowLines(PlanPath, 0, 2, 1, paused: true, RalphLog.PathFor(PlanPath), waitingOnYou: true)[0], output);
+        // The resume: the question first, with no pass; it works ticks step one, then step two's pass.
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Contains("Two", LastUserText(_chat.Requests[2]));
+        Assert.Equal(1, Occurrences(output, RalphText.ByHandStartNotice(1)));   // never again on the resume
+        Assert.Contains(RalphText.ResumedNotice(PlanPath, 2, 6), output);
+        Assert.Contains(RalphText.StepCheckedByYouNotice(1, 2, "One"), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal([RalphText.ByHandWorksLog, null], log.Entries.Select(e => e.Checkpoint));   // the Stop's entry now says it works
+    }
+
+    [Fact]
+    public async Task Ralph_TheReviewerSaysNeedsUser_OnAnUnmarkedStep_AndTheUserIsAsked()
+    {
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Char('w'), Keys.Enter), Line("/exit"));
+        _settings.Update(d => d.RalphLoopReviewer = "model");
+        RalphPass("1");
+        _chat.Enqueue(VerdictCall("v1", "needs_user", "only a person can see the animation"));
+        RalphPass("2");
+        _chat.Enqueue(VerdictCall("v2", "pass", "two.md is there"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.ReviewNeedsUserNotice("only a person can see the animation"), output);
+        Assert.Contains(RalphText.ByHandTitle, output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal("needs user: only a person can see the animation", log.Entries[0].Review);
+        Assert.Equal(RalphText.ByHandWorksLog, log.Entries[0].Checkpoint);
+    }
+
+    [Fact]
+    public async Task Ralph_AByHandStep_AFailedReview_UnticksWithoutAsking()
+    {
+        RalphPlan(RalphByHandSteps);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Char('w'), Keys.Enter), Line("/exit"));
+        _settings.Update(d => d.RalphLoopReviewer = "model");
+        RalphPass("1");
+        _chat.Enqueue(VerdictCall("v1", "fail", "one.md is empty"));
+        RalphPass("2");
+        _chat.Enqueue(VerdictCall("v2", "pass", "one.md has text"));
+        RalphPass("3");
+        _chat.Enqueue(VerdictCall("v3", "pass", "two.md is there"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.ReviewFailedNotice("one.md is empty"), output);
+        Assert.Contains(RalphText.ByHandRule, _chat.Requests[3][0].Text);   // the second pass, after the first's review
+        Assert.Contains(RalphText.ByHandReviewLine, LastUserText(_chat.Requests[2]));   // the reviewer is told the user checks the rest
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal([null, RalphText.ByHandWorksLog, null], log.Entries.Select(e => e.Checkpoint));   // the fail asked nothing
+    }
+
+    [Fact]
+    public async Task Ralph_TheByHandQuestion_AnsweredOnThePage_KeepTicks_RedoHandsOnTheNote_AndStopStops()
+    {
+        // The first proof of the loop's questions on the page (the checkpoint's web side has no test); each answer first tries a choice the ask
+        // doesn't offer, which the broker refuses (PageAnswers).
+        RalphPlan(RalphByHandSteps + "- [ ] Three\n  Done when: By hand: three.md reads well\n");
+        _settings.Update(d => d.WebUi = true);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, PageAnswers("redo", "shorter lines"), PageAnswers("keep"), PageAnswers("stop"), Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+        RalphPass("3");
+        RalphPass("4");
+
+        string output = await RunAsync();
+
+        Assert.Equal(8, _chat.Requests.Count);
+        Assert.Contains("shorter lines", _chat.Requests[2][0].Text);
+        Assert.Contains(RalphText.StopNotice(RalphStop.UserStopped, PlanPath, 2, 3), output);
+        Assert.Contains("- [x] One", RalphPlanText);
+        Assert.Contains("- [x] Two", RalphPlanText);
+        Assert.Contains("- [ ] Three", RalphPlanText);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal(["by hand: redo: shorter lines", RalphText.ByHandWorksLog, null, RalphText.ByHandStoppedLog], log.Entries.Select(e => e.Checkpoint));
+        Assert.Empty(Web.Asks.OpenAsks());
+    }
 }
