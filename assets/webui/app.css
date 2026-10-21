@@ -22,8 +22,13 @@
 
 html, body { margin: 0; height: 100%; }
 
+/* The gradient (2026-10-20, the user's screenshot of Chrome on a Mac): a tile Chrome finds a single color is filled as one, unconverted, and a
+   tile with text in it is drawn and converted to the display's profile, so an empty stretch of transcript showed as a darker band (#04050a
+   among #06070a). Ends one step apart, so no tile is a single color (a gradient whose ends match folds back into one, and the band stayed);
+   Windows draws both alike. body.yt-windowed's shorthand resets it. */
 body {
   background: var(--bg);
+  background-image: linear-gradient(var(--bg), color-mix(in srgb, var(--bg) 99.6%, #fff));
   color: var(--text);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: flex;
