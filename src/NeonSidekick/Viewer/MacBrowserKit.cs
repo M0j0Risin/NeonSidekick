@@ -93,9 +93,8 @@ internal static unsafe partial class MacBrowserKit
     /// <summary>The view's properties the window observes.</summary>
     public static readonly string[] Observed = ["URL", "title", "canGoBack", "canGoForward", "loading", "estimatedProgress", "fullscreenState"];
 
-    // WKUserScriptInjectionTimeAtDocumentEnd; NSViewWidthSizable | NSViewHeightSizable; NSKeyValueObservingOptionNew.
+    // WKUserScriptInjectionTimeAtDocumentEnd; NSKeyValueObservingOptionNew.
     private const long AtDocumentEnd = 1;
-    private const ulong ViewSizable = 2 | 16;
     private const nint ObserveNew = 1;
 
     /// <summary>NSURLSessionAuthChallengeDisposition: use the credential, the system's default handling, cancel.</summary>
@@ -111,17 +110,12 @@ internal static unsafe partial class MacBrowserKit
 
     private static readonly Dictionary<nint, IBrowserViewSink> s_sinks = [];
     private static readonly Dictionary<nint, nint> s_downloads = [];   // a download → its window's delegate
+    private static readonly Dictionary<nint, nint> s_printing = [];    // a print operation under way → the web view it prints (C1)
     private static nint s_delegateClass;
     private static nint s_world;
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
-    private static partial nint SendInitWebView(nint receiver, nint selector, CGRect frame, nint configuration);
-
-    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     private static partial nint SendInitScript(nint receiver, nint selector, nint source, long injectionTime, byte mainFrameOnly, nint world);
-
-    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
-    private static partial byte SendBoolWith(nint receiver, nint selector, nint argument);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     internal static partial nint SendMouse(nint receiver, nint selector, ulong type, CGPoint location, ulong flags, double time, long windowNumber, nint context, long eventNumber, long clickCount, float pressure);
@@ -183,16 +177,13 @@ internal static unsafe partial class MacBrowserKit
             SendVoid(script, Sel("release"));
             SendVoid(content, Sel("addScriptMessageHandler:contentWorld:name:"), webDelegate, World, NSString(StatusHandler));   // the controller retains the delegate
 
-            nint web = SendInitWebView(Send(Class("WKWebView"), Sel("alloc")), Sel("initWithFrame:configuration:"), new CGRect(0, 0, width, height), configuration);
+            nint web = MacWebKit.MakeView(width, height, configuration, webDelegate);
             if (web == 0)
             {
                 SendVoid(content, Sel("removeScriptMessageHandlerForName:contentWorld:"), NSString(StatusHandler), World);
                 throw new InvalidOperationException(BrowserText.MacFailed);
             }
 
-            SendVoidULong(web, Sel("setAutoresizingMask:"), ViewSizable);
-            SendVoid(web, Sel("setNavigationDelegate:"), webDelegate);
-            SendVoid(web, Sel("setUIDelegate:"), webDelegate);
             SendVoidBool(web, Sel("setAllowsMagnification:"), 1);
             SendVoidBool(web, Sel("setAllowsBackForwardNavigationGestures:"), 1);
             SendVoid(web, Sel("setCustomUserAgent:"), NSString(userAgent));
@@ -210,8 +201,10 @@ internal static unsafe partial class MacBrowserKit
     }
 
     /// <summary>
-    /// The view stopped and let go, with its delegate: the observers off first, full screen and media closed, the loading stopped, the
-    /// delegates and the handler taken off, the view out of its window and released. The window answers its held handlers before this.
+    /// The view stopped and let go, with its delegate: the observers off first, then the video window's teardown
+    /// (<see cref="MacWebKit.ReleaseView"/>, shared since 2026-10-20): full screen and media closed, the loading stopped, the delegates and the
+    /// handler taken off, the view out of its window and released; then the delegate, any download still naming it taken off it first. The
+    /// window answers its held handlers, and cancels and forgets its downloads (<see cref="ForgetDownload"/>), before this.
     /// </summary>
     public static void Release(nint web, nint webDelegate)
     {
@@ -222,16 +215,7 @@ internal static unsafe partial class MacBrowserKit
                 SendVoid(web, Sel("removeObserver:forKeyPath:"), webDelegate, NSString(key));
             }
 
-            SendVoid(web, Sel("closeAllMediaPresentationsWithCompletionHandler:"), 0);
-            SendVoid(web, Sel("pauseAllMediaPlaybackWithCompletionHandler:"), 0);
-            SendVoid(web, Sel("stopLoading"));
-            SendVoid(web, Sel("setNavigationDelegate:"), 0);
-            SendVoid(web, Sel("setUIDelegate:"), 0);
-            nint content = Send(Send(web, Sel("configuration")), Sel("userContentController"));
-            SendVoid(content, Sel("removeScriptMessageHandlerForName:contentWorld:"), NSString(StatusHandler), World);
-            SendVoid(content, Sel("removeAllUserScripts"));
-            SendVoid(web, Sel("removeFromSuperview"));
-            SendVoid(web, Sel("release"));
+            MacWebKit.ReleaseView(web, StatusHandler, World);
         }
 
         if (webDelegate != 0)
@@ -239,11 +223,22 @@ internal static unsafe partial class MacBrowserKit
             s_sinks.Remove(webDelegate);
             foreach (var entry in s_downloads.Where(e => e.Value == webDelegate).ToList())
             {
-                SendVoid(entry.Key, Sel("setDelegate:"), 0);
-                s_downloads.Remove(entry.Key);
+                ForgetDownload(entry.Key);
             }
 
-            SendVoid(webDelegate, Sel("release"));
+            SendVoid(webDelegate, Sel("release"));   // a print under way keeps its own hold (Print, C1)
+        }
+    }
+
+    /// <summary>
+    /// A download no longer the window's to hear: its delegate taken off and the kit's record of it gone (2026-10-20, the code review's C4: the
+    /// window let its hold on a cancelled download go first, and <see cref="Release"/> then messaged the freed object). Main thread.
+    /// </summary>
+    public static void ForgetDownload(nint download)
+    {
+        if (download != 0 && s_downloads.Remove(download))
+        {
+            SendVoid(download, Sel("setDelegate:"), 0);
         }
     }
 
@@ -321,7 +316,7 @@ internal static unsafe partial class MacBrowserKit
     {
         nint block = MacBlocks.Once((result, error, _) =>
         {
-            string? json = error == 0 && result != 0 && SendBoolWith(result, Sel("isKindOfClass:"), Class("NSString")) != 0 ? FromNSString(result) : null;
+            string? json = error == 0 && result != 0 && MacWebKit.SendBoolWith(result, Sel("isKindOfClass:"), Class("NSString")) != 0 ? FromNSString(result) : null;
             done(json);
         });
         SendVoid(web, Sel("evaluateJavaScript:inFrame:inContentWorld:completionHandler:"), NSString("JSON.stringify(" + expression + ")"), 0, World, block);
@@ -491,6 +486,11 @@ internal static unsafe partial class MacBrowserKit
                 SendVoidRect(Send(operation, Sel("view")), Sel("setFrame:"), new CGRect(0, 0, 612, 792));   // Phase 0: a print view needs a frame
             }
 
+            // The delegate and the view held for the print (2026-10-20, the code review's C1: AppKit keeps neither, and a window closed mid-print
+            // — ⌘W, a profile switch, the app's end after convert_to_pdf's silent print — freed the delegate printOperationDidRun: then went to).
+            // Let go in PrintDidRun, after the window has heard.
+            Send(webDelegate, Sel("retain"));
+            s_printing[operation] = Send(web, Sel("retain"));
             SendVoid(operation, Sel("runOperationModalForWindow:delegate:didRunSelector:contextInfo:"), window, webDelegate, Sel("printOperationDidRun:success:contextInfo:"), (nint)token);
             return true;
         }
@@ -527,7 +527,7 @@ internal static unsafe partial class MacBrowserKit
     public static bool OpenFile(string path)
     {
         nint url = Send(Class("NSURL"), Sel("fileURLWithPath:"), NSString(path));
-        return url != 0 && SendBoolWith(Send(Class("NSWorkspace"), Sel("sharedWorkspace")), Sel("openURL:"), url) != 0;
+        return url != 0 && MacWebKit.SendBoolWith(Send(Class("NSWorkspace"), Sel("sharedWorkspace")), Sel("openURL:"), url) != 0;
     }
 
     private static string? UrlString(nint url) => url == 0 ? null : FromNSString(Send(url, Sel("absoluteString")));
@@ -593,12 +593,6 @@ internal static unsafe partial class MacBrowserKit
 
     private static IBrowserViewSink? SinkOf(nint self) => s_sinks.GetValueOrDefault(self);
 
-    private static string? UrlOfAction(nint action)
-    {
-        nint request = action == 0 ? 0 : Send(action, Sel("request"));
-        return request == 0 ? null : UrlString(Send(request, Sel("URL")));
-    }
-
     private static string? OriginOf(nint frame)
     {
         nint origin = frame == 0 ? 0 : Send(frame, Sel("securityOrigin"));
@@ -623,7 +617,7 @@ internal static unsafe partial class MacBrowserKit
             bool main = target != 0 && SendBool(target, Sel("isMainFrame")) != 0;
             bool download = SendBool(action, Sel("shouldPerformDownload")) != 0;
             // A new window's navigation (no target frame) goes ahead here; createWebView… then navigates the address in place.
-            policy = target == 0 ? MacNavigationPolicy.Allow : SinkOf(self)?.DecideAction(UrlOfAction(action), main, download) ?? MacNavigationPolicy.Cancel;
+            policy = target == 0 ? MacNavigationPolicy.Allow : SinkOf(self)?.DecideAction(MacWebKit.UrlOf(action), main, download) ?? MacNavigationPolicy.Cancel;
         }
         catch (Exception ex)
         {
@@ -649,7 +643,7 @@ internal static unsafe partial class MacBrowserKit
             string? url = UrlString(Send(response, Sel("URL")));
             int status = 0;
             bool attachment = false;
-            if (SendBoolWith(response, Sel("isKindOfClass:"), Class("NSHTTPURLResponse")) != 0)
+            if (MacWebKit.SendBoolWith(response, Sel("isKindOfClass:"), Class("NSHTTPURLResponse")) != 0)
             {
                 status = (int)SendLong(response, Sel("statusCode"));
                 string? disposition = FromNSString(Send(response, Sel("valueForHTTPHeaderField:"), NSString("Content-Disposition")));
@@ -798,7 +792,7 @@ internal static unsafe partial class MacBrowserKit
     {
         try
         {
-            SinkOf(self)?.NewWindow(UrlOfAction(action));
+            SinkOf(self)?.NewWindow(MacWebKit.UrlOf(action));
         }
         catch (Exception ex)
         {
@@ -879,7 +873,7 @@ internal static unsafe partial class MacBrowserKit
         try
         {
             nint body = Send(message, Sel("body"));
-            if (body != 0 && SendBoolWith(body, Sel("isKindOfClass:"), Class("NSString")) != 0 && SinkOf(self) is { } sink)
+            if (body != 0 && MacWebKit.SendBoolWith(body, Sel("isKindOfClass:"), Class("NSString")) != 0 && SinkOf(self) is { } sink)
             {
                 sink.Hovered(FromNSString(body) ?? "");
             }
@@ -890,9 +884,35 @@ internal static unsafe partial class MacBrowserKit
         }
     }
 
+    // The print's end: the window told (when it is still open), then the holds Print took let go, on the next turn of the loop, not inside
+    // AppKit's own call to this delegate.
     [UnmanagedCallersOnly]
-    private static void PrintDidRun(nint self, nint selector, nint operation, byte success, nint context) =>
+    private static void PrintDidRun(nint self, nint selector, nint operation, byte success, nint context)
+    {
         Sink(self, s => s.PrintEnded(context, success != 0), "print's end");
+        try
+        {
+            nint web = s_printing.Remove(operation, out var held) ? held : 0;
+            void LetGo()
+            {
+                if (web != 0)
+                {
+                    SendVoid(web, Sel("release"));
+                }
+
+                SendVoid(self, Sel("release"));
+            }
+
+            if (!AppKitHost.Post(LetGo))
+            {
+                LetGo();
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error("Browser", "A print's end failed.", ex);
+        }
+    }
 }
 
 /// <summary>A size in AppKit's coordinates (<c>CGSize</c>: two doubles, an HFA in d0–d1).</summary>

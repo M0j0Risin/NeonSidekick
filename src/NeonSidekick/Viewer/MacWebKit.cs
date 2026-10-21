@@ -58,11 +58,14 @@ internal static unsafe partial class MacWebKit
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     private static partial nint SendInitScript(nint receiver, nint selector, nint source, long injectionTime, byte mainFrameOnly);
 
+    // Shared with the Browser window's kit (MacBrowserKit) and its bar since 2026-10-20 (the code review's C8 and G7: each had its own copy,
+    // the bar's reading an nint's low byte for a BOOL).
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
-    private static partial nint SendInitWebView(nint receiver, nint selector, CGRect frame, nint configuration);
+    internal static partial nint SendInitWebView(nint receiver, nint selector, CGRect frame, nint configuration);
 
+    /// <summary>A BOOL-returning message with one object argument (<c>isKindOfClass:</c>, <c>openURL:</c>).</summary>
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
-    private static partial byte SendBoolWith(nint receiver, nint selector, nint argument);
+    internal static partial byte SendBoolWith(nint receiver, nint selector, nint argument);
 
     /// <summary>WebKit loaded once; its classes are found by name from then on.</summary>
     public static void Load()
@@ -102,16 +105,13 @@ internal static unsafe partial class MacWebKit
             SendVoid(script, Sel("release"));
             SendVoid(content, Sel("addScriptMessageHandler:name:"), webDelegate, NSString(WebKitPage.HandlerName));   // the controller retains the delegate
 
-            nint web = SendInitWebView(Send(Class("WKWebView"), Sel("alloc")), Sel("initWithFrame:configuration:"), new CGRect(0, 0, width, height), configuration);
+            nint web = MakeView(width, height, configuration, webDelegate);
             if (web == 0)
             {
                 SendVoid(content, Sel("removeScriptMessageHandlerForName:"), NSString(WebKitPage.HandlerName));
                 throw new InvalidOperationException("WKWebView could not be made");
             }
 
-            SendVoidULong(web, Sel("setAutoresizingMask:"), ViewSizable);
-            SendVoid(web, Sel("setNavigationDelegate:"), webDelegate);
-            SendVoid(web, Sel("setUIDelegate:"), webDelegate);
             return web;
         }
         finally
@@ -137,25 +137,63 @@ internal static unsafe partial class MacWebKit
     /// </summary>
     public static void Release(nint web, nint webDelegate)
     {
-        if (web != 0)
-        {
-            SendVoid(web, Sel("closeAllMediaPresentationsWithCompletionHandler:"), 0);   // macOS 12
-            SendVoid(web, Sel("pauseAllMediaPlaybackWithCompletionHandler:"), 0);
-            SendVoid(web, Sel("stopLoading"));
-            SendVoid(web, Sel("setNavigationDelegate:"), 0);
-            SendVoid(web, Sel("setUIDelegate:"), 0);
-            nint content = Send(Send(web, Sel("configuration")), Sel("userContentController"));
-            SendVoid(content, Sel("removeScriptMessageHandlerForName:"), NSString(WebKitPage.HandlerName));
-            SendVoid(content, Sel("removeAllUserScripts"));
-            SendVoid(web, Sel("removeFromSuperview"));
-            SendVoid(web, Sel("release"));
-        }
-
+        ReleaseView(web, WebKitPage.HandlerName, world: 0);
         if (webDelegate != 0)
         {
             s_sinks.Remove(webDelegate);
             SendVoid(webDelegate, Sel("release"));
         }
+    }
+
+    /// <summary>
+    /// A web view made over <paramref name="configuration"/> (which it copies), growing with its parent, <paramref name="webDelegate"/> its
+    /// navigation and UI delegate; 0 when WebKit made none. Retained. Both windows' (2026-10-20, the code review's G7; their configurations
+    /// differ — the video page's bridge, autoplay and one store against the Browser's world, user agent and observers — so only this is shared).
+    /// </summary>
+    internal static nint MakeView(double width, double height, nint configuration, nint webDelegate)
+    {
+        nint web = SendInitWebView(Send(Class("WKWebView"), Sel("alloc")), Sel("initWithFrame:configuration:"), new CGRect(0, 0, width, height), configuration);
+        if (web == 0)
+        {
+            return 0;
+        }
+
+        SendVoidULong(web, Sel("setAutoresizingMask:"), ViewSizable);
+        SendVoid(web, Sel("setNavigationDelegate:"), webDelegate);
+        SendVoid(web, Sel("setUIDelegate:"), webDelegate);
+        return web;
+    }
+
+    /// <summary>
+    /// A web view's end, both windows' (2026-10-20, the code review's G7): full screen and media closed, the loading stopped, the delegates
+    /// off, the message handler <paramref name="handler"/> removed (in <paramref name="world"/>, the page's own for 0) with the user scripts,
+    /// the view out of its window and released. Its delegate is the caller's to let go after. Nothing for 0.
+    /// </summary>
+    internal static void ReleaseView(nint web, string handler, nint world)
+    {
+        if (web == 0)
+        {
+            return;
+        }
+
+        SendVoid(web, Sel("closeAllMediaPresentationsWithCompletionHandler:"), 0);   // macOS 12
+        SendVoid(web, Sel("pauseAllMediaPlaybackWithCompletionHandler:"), 0);
+        SendVoid(web, Sel("stopLoading"));
+        SendVoid(web, Sel("setNavigationDelegate:"), 0);
+        SendVoid(web, Sel("setUIDelegate:"), 0);
+        nint content = Send(Send(web, Sel("configuration")), Sel("userContentController"));
+        if (world == 0)
+        {
+            SendVoid(content, Sel("removeScriptMessageHandlerForName:"), NSString(handler));
+        }
+        else
+        {
+            SendVoid(content, Sel("removeScriptMessageHandlerForName:contentWorld:"), NSString(handler), world);
+        }
+
+        SendVoid(content, Sel("removeAllUserScripts"));
+        SendVoid(web, Sel("removeFromSuperview"));
+        SendVoid(web, Sel("release"));
     }
 
     /// <summary>An http or https address opened in the user's default browser (NSWorkspace; no process of the app's own). True when macOS took it.</summary>
@@ -279,7 +317,7 @@ internal static unsafe partial class MacWebKit
         }
         finally
         {
-            CallDecision(decisionHandler, policy);
+            MacBlocks.CallLong(decisionHandler, policy);
         }
     }
 
@@ -318,22 +356,11 @@ internal static unsafe partial class MacWebKit
         }
     }
 
-    private static string? UrlOf(nint action)
+    /// <summary>A navigation action's address (its request's URL), or null; the Browser window's too.</summary>
+    internal static string? UrlOf(nint action)
     {
         nint request = action == 0 ? 0 : Send(action, Sel("request"));
         nint url = request == 0 ? 0 : Send(request, Sel("URL"));
         return url == 0 ? null : FromNSString(Send(url, Sel("absoluteString")));
-    }
-
-    // A block's layout: isa, flags and reserved (two ints), then its function; the function takes the block first.
-    private static void CallDecision(nint block, long policy)
-    {
-        if (block == 0)
-        {
-            return;
-        }
-
-        var invoke = (delegate* unmanaged<nint, long, void>)*(nint*)(block + 16);
-        invoke(block, policy);
     }
 }

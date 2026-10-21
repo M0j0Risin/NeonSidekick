@@ -101,7 +101,10 @@ The [Browser window](INTERFACE.md#the-browser-window) does what it does on Windo
 * **WebKit, as Safari.** It sends Safari's user agent, so the web tools replay a check's cookies as Safari, with Safari's headers.
 * **Safari's keys:** listed in [The Browser window](INTERFACE.md#the-browser-window).
 * **No Dock icon.** Bring a window lost behind the terminal back by clicking it, with Mission Control, or with any `/browser` command. Over a full-screen terminal it opens on that Space.
-* **Its data** is a WebKit store per profile, named in the profile's `webkit-browser.id` (kept on a rename, removed by `/profile delete`); `/browser clear all` empties it.
+* **Its data** is a WebKit store per profile, named in the profile's `webkit-browser.id` (kept on a rename, removed by `/profile delete`); `/browser clear all` empties it, except while a bot check runs.
+* **`/profile delete` keeps the profile** when its store can't be removed: in a session with no desktop (over SSH), or when WebKit is busy or doesn't answer. It says why; delete it again from a desktop session, after restarting the app if WebKit still holds the store.
+* **A page that keeps crashing** is reloaded once, then shows the window's error page; Reload tries again.
+* **Ctrl+B closes a minimized window** too, as it does one on screen.
 * **One copy at a time:** a second copy of the app on the same profile can't open the window.
 * **Its own extras:** an error page that Reload retries, a status line with a hovered link's address, and page dialogs, HTTP sign-in and upload pickers as sheets.
 * **Downloads** go to ~/Downloads under a free name, with a bar button for them; macOS quarantines each, as Safari's. The first download or upload may make macOS ask whether your terminal may use Downloads, Documents or Desktop.

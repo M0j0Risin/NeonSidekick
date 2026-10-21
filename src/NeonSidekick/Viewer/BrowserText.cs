@@ -102,6 +102,19 @@ public static class BrowserText
     /// <summary>A clear WebKit did not answer in time.</summary>
     public const string MacClearTimedOut = "the Browser window's data was not cleared: WebKit did not answer in time";
 
+    /// <summary>A store's removal WebKit did not answer in time (<c>/profile delete</c>).</summary>
+    public const string MacRemoveTimedOut = "WebKit did not answer in time";
+
+    /// <summary>The profile's store id file is there but could not be read (2026-10-20, the code review's G6).</summary>
+    public static string MacStoreIdUnreadable(string why) => $"the Browser window's store id could not be read: {why}";
+
+    /// <summary>
+    /// Why <c>/profile delete</c> keeps a Mac profile (2026-10-20, the code review's C5): its WebKit store, which lives outside the folder and
+    /// is found only by the id in it, could not be removed. After <c>Could not delete the profile: </c>. Pinned.
+    /// </summary>
+    public static string MacStoreNotRemoved(string why) =>
+        $"its Browser window data (a WebKit store kept outside the profile folder) could not be removed: {why.TrimEnd('.')}. The profile is kept; try again in a desktop session, after restarting the app if WebKit still holds it";
+
     /// <summary>The page's web content process ended twice: the page is gone.</summary>
     public const string ContentEnded = "the page's web content process ended";
 

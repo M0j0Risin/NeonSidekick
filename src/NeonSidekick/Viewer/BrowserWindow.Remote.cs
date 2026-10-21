@@ -183,7 +183,7 @@ internal sealed unsafe partial class BrowserWindowThread
     }
 
     // The visible part read now (the page scrolls between looks), kept on the job; the last one read when this one can't be had.
-    private static void ReadViewport(SolveJob job, WebViewHost host, Action<BrowserViewport?> then)
+    private static void ReadViewport(BrowserCheck job, WebViewHost host, Action<BrowserViewport?> then)
     {
         bool sent = host.CallDevTools("Page.getLayoutMetrics", "{}", (hr, json) =>
         {
@@ -226,7 +226,7 @@ internal sealed unsafe partial class BrowserWindowThread
     }
 
     // A press kept until its release, or HoldLimit, or the check's end, whichever comes first.
-    private void Hold(SolveJob job, BrowserInput input, BrowserViewport viewport)
+    private void Hold(BrowserCheck job, BrowserInput input, BrowserViewport viewport)
     {
         switch (input.Kind)
         {
@@ -242,7 +242,7 @@ internal sealed unsafe partial class BrowserWindowThread
     }
 
     // A held button let go: the page went away holding it, the hold ran past HoldLimit, or the check is ending.
-    private void ReleaseHeld(SolveJob? job)
+    private void ReleaseHeld(BrowserCheck? job)
     {
         KillTimer(_hwnd, ReleaseTimer);
         if (job?.Held is not { } held)

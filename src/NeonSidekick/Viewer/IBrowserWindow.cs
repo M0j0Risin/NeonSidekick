@@ -95,7 +95,9 @@ public interface IBrowserWindow
     /// <summary>
     /// The browser data a profile about to be deleted keeps outside its folder let go (2026-10-18, the Mac Browser plan: <c>/profile delete</c>):
     /// nothing on Windows, whose WebView2 profile is a folder inside the profile's; on a Mac the WebKit data store the profile's
-    /// <c>webkit-browser.id</c> names, removed. Never the loaded profile's (that one cannot be deleted). Never throws.
+    /// <c>webkit-browser.id</c> names, removed. Never the loaded profile's (that one cannot be deleted). Never throws. Null when nothing of the
+    /// profile's is left outside its folder; else why the profile must be kept (2026-10-20, the code review's C5: a store that could not be
+    /// removed — no desktop session, WebKit busy or slow — was orphaned once the folder holding its id went).
     /// </summary>
-    Task ForgetProfileAsync(string profileDirectory) => Task.CompletedTask;
+    Task<string?> ForgetProfileAsync(string profileDirectory) => Task.FromResult<string?>(null);
 }

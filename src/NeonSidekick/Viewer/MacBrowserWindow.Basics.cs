@@ -192,10 +192,10 @@ internal sealed partial class MacBrowserWindow
         SendVoid(panel, Sel("beginSheetModalForWindow:completionHandler:"), Window, block);
     }
 
-    // Whatever sheet is up goes as the window closes; its handler then answers with its default.
+    // Whatever sheet is up goes as the window closes (OnClosed, where Alive is already false); its handler then answers with its default.
     private void CloseMenusAndSheets()
     {
-        if (!Alive && Window == 0)
+        if (Window == 0)
         {
             return;
         }
@@ -420,6 +420,9 @@ internal sealed partial class MacBrowserWindow
             entry.State = MacDownloadState.Cancelled;
             if (entry.Download != 0)
             {
+                // Its delegate taken off and the kit's record of it gone before the window's hold on it goes (2026-10-20, the code review's
+                // C4: the release could be the last, and MacBrowserKit.Release then sent setDelegate: to a freed download).
+                MacBrowserKit.ForgetDownload(entry.Download);
                 MacBrowserKit.CancelDownload(entry.Download);
                 SendVoid(entry.Download, Sel("release"));
                 entry.Download = 0;

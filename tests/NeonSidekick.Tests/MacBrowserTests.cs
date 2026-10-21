@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.Viewer;
 using NeonSidekick.Web;
 
@@ -131,19 +132,211 @@ public class MacBrowserTests
         Assert.Equal(BrowserCloseStep.Close, visit.Closing(handOver: true, viewAlive: true));   // once
     }
 
-    [Fact]
-    public void Jobs_AFileDuringACheck_EndsItAsAFile_OnceAndOnlyThen()
-    {
-        var jobs = new BrowserJobs();
-        Assert.False(jobs.FileDuringCheck());   // a /browser download is the window's own
+    // ── BrowserCheckWatch (2026-10-20, the code review's G8 and G1: both windows' watch, shared) ──
 
-        var (check, _) = jobs.BeginCheck(Request(), Done());
-        Assert.True(jobs.FileDuringCheck());
+    private const string APrint = "{\"s\":\"complete\",\"n\":42,\"x\":7}";
+    private const string APage = "{\"h\":\"<html><body><p>Through.</p></body></html>\"}";
+
+    private static BrowserCheck LoadedCheck(BotCheckRequest? request = null, bool keepOpen = false)
+    {
+        var check = new BrowserCheck(request ?? Request(), Done(), keepOpen);
+        check.Watch.Navigated(true, 200);
+        return check;
+    }
+
+    [Fact]
+    public void Watch_AFileDuringACheck_EndsItAsAFile_OnceAndOnlyThen()
+    {
+        var check = LoadedCheck();
+        var page = new FakeCheckPage();
+
+        Assert.True(BrowserCheckWatch.EndAsFile(page, check));
         Assert.True(check.WasFile);
         Assert.True(check.Busy);
+        Assert.True(check.Finishing);
+        Assert.False(BrowserCheckWatch.EndAsFile(page, check));   // a second download, or the answer that is no page after it
+        var read = Assert.Single(page.CookieReads);
+        Assert.Empty(page.Prints);   // a file is no page to print
 
-        check.Finishing = true;
-        Assert.False(jobs.FileDuringCheck());
+        read.Answer([new BrowserCookie("cf_clearance", "v", ".example.com", "/", -1, true, true)]);
+        var (result, close) = Assert.Single(page.Finishes);
+        Assert.Equal(BotCheckEnd.Cleared, result.End);
+        Assert.True(result.WasFile);
+        Assert.Null(result.Html);
+        Assert.Single(result.Cookies);
+        Assert.True(close);
+    }
+
+    [Fact]
+    public void Watch_ALookInFlight_AsTheCheckEndsAsAFile_IsDropped()
+    {
+        // G1: the look's answer came back after a download had ended the check as a file, and concluded it again (refused, or through twice).
+        var check = LoadedCheck();
+        var page = new FakeCheckPage();
+        BrowserCheckWatch.Tick(page, check);
+        var look = Assert.Single(page.Evaluations);
+        Assert.Equal(HeadlessBrowser.PrintExpression, look.Expression);
+
+        BrowserCheckWatch.EndAsFile(page, check);
+        look.Answer(APrint);
+
+        Assert.Single(page.Evaluations);   // no DOM read after it
+        Assert.Single(page.CookieReads);
+        page.CookieReads[0].Answer([]);
+        Assert.True(Assert.Single(page.Finishes).Result.WasFile);
+    }
+
+    [Fact]
+    public void Watch_ADomReadInFlight_AsTheCheckEnds_IsNotTaken()
+    {
+        var check = LoadedCheck();
+        var page = new FakeCheckPage();
+        BrowserCheckWatch.Tick(page, check);
+        page.Evaluations[0].Answer(APrint);   // the first look wants the DOM
+        var read = page.Evaluations[1];
+        Assert.Equal(HeadlessBrowser.PageExpression, read.Expression);
+
+        BrowserCheckWatch.EndAsFile(page, check);
+        read.Answer(APage);
+
+        Assert.Null(check.Watch.Html);   // the late read was never judged
+        Assert.Equal(2, page.Evaluations.Count);
+        Assert.Empty(page.Finishes);
+        page.CookieReads[0].Answer([]);
+        Assert.Single(page.Finishes);
+    }
+
+    [Fact]
+    public void Watch_ALookForACheckNoLongerTheWindows_IsDropped()
+    {
+        var check = LoadedCheck();
+        var page = new FakeCheckPage(check);
+        BrowserCheckWatch.Tick(page, check);
+        page.Holding = LoadedCheck();   // a newer check took the window
+
+        page.Evaluations[0].Answer(APrint);
+        Assert.Single(page.Evaluations);
+        Assert.True(check.Busy);   // never looked at again: the window gave it up
+    }
+
+    [Fact]
+    public void Watch_NoLook_BeforeAPageLoaded_WhileOneIsOnItsWay_OrWithNothingToSendItTo()
+    {
+        var page = new FakeCheckPage();
+        var unloaded = new BrowserCheck(Request(), Done(), keepOpen: false);
+        BrowserCheckWatch.Tick(page, unloaded);
+        Assert.Empty(page.Evaluations);   // the blank page before the address is no answer
+
+        var check = LoadedCheck();
+        BrowserCheckWatch.Tick(page, check);
+        BrowserCheckWatch.Tick(page, check);
+        Assert.Single(page.Evaluations);   // one look at a time
+
+        page.Evaluations[0].Answer(null);   // mid-navigation
+        Assert.False(check.Busy);
+
+        var blind = new FakeCheckPage { CanEvaluate = false };
+        var other = LoadedCheck();
+        BrowserCheckWatch.Tick(blind, other);
+        Assert.False(other.Busy);   // nothing sent: the next tick tries again
+    }
+
+    [Fact]
+    public void Watch_AnErrorPage_IsRefusedWhereItEnded()
+    {
+        var check = LoadedCheck();
+        check.Watch.Navigated(true, 404);
+        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Not here.</p></body></html>", new Uri("https://example.com/"));
+        var page = new FakeCheckPage { Source = "https://example.com/gone" };
+
+        BrowserCheckWatch.Conclude(page, check);
+
+        var (result, close) = Assert.Single(page.Finishes);
+        Assert.Equal(BotCheckEnd.Refused, result.End);
+        Assert.Equal("https://example.com/gone", result.FinalUrl);
+        Assert.Equal(404, result.Status);
+        Assert.True(close);
+        Assert.Empty(page.CookieReads);
+    }
+
+    [Fact]
+    public void Watch_Through_PrintsThenReadsTheCookies_ThenEndsOnce()
+    {
+        var check = LoadedCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"), keepOpen: true);
+        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        var page = new FakeCheckPage { Source = "https://www.example.com/landed" };
+
+        BrowserCheckWatch.Conclude(page, check);
+        BrowserCheckWatch.Conclude(page, check);   // a second say while the first is on its way: nothing more
+
+        var print = Assert.Single(page.Prints);
+        Assert.Equal("/tmp/x.pdf", print.Path);
+        Assert.Empty(page.CookieReads);
+        print.Written(true);
+
+        var read = Assert.Single(page.CookieReads);
+        Assert.Equal(["example.com", "www.example.com"], read.Hosts);
+        read.Answer([]);
+        read.Answer([]);   // a store that answers twice
+
+        var (result, close) = Assert.Single(page.Finishes);
+        Assert.Equal(BotCheckEnd.Cleared, result.End);
+        Assert.True(result.PdfWritten);
+        Assert.Equal("https://www.example.com/landed", result.FinalUrl);
+        Assert.Contains("Through.", result.Html);
+        Assert.False(close);   // a visit holds the window
+    }
+
+    [Fact]
+    public void Watch_APrintOrCookiesAfterTheCheckEnded_DoNothing()
+    {
+        var check = LoadedCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"));
+        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        var page = new FakeCheckPage();
+        BrowserCheckWatch.Conclude(page, check);
+
+        page.Finish(check, BotCheckResult.Ended(BotCheckEnd.GaveUp, "https://example.com/"), close: false);   // the user gave it up
+        page.Prints[0].Written(true);
+
+        Assert.Empty(page.CookieReads);
+        Assert.Equal(BotCheckEnd.GaveUp, Assert.Single(page.Finishes).Result.End);
+        Assert.False(check.PdfWritten);
+    }
+
+    [Fact]
+    public void Watch_NoPrint_GoesStraightToTheCookies()
+    {
+        var check = LoadedCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"));
+        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        var page = new FakeCheckPage { CanPrint = false };   // a sheet up on the Mac, no view on Windows
+
+        BrowserCheckWatch.Conclude(page, check);
+        Assert.Single(page.CookieReads).Answer([]);
+
+        Assert.False(Assert.Single(page.Finishes).Result.PdfWritten);
+    }
+
+    [Fact]
+    public void Check_EndsOnce()
+    {
+        var check = new BrowserCheck(Request(), Done(), keepOpen: false);
+        Assert.True(check.TryEnd());
+        Assert.True(check.Ended);
+        Assert.True(check.Finishing);
+        Assert.False(check.TryEnd());
+    }
+
+    [Fact]
+    public void CloseClaim_GoesToWhoeverTakesItFirst()
+    {
+        // E4: a close the caller stopped waiting for is called off; one the window's thread took counts.
+        var late = new BrowserCloseClaim();
+        Assert.True(late.TakeForCaller());
+        Assert.False(late.TakeForWork());
+
+        var prompt = new BrowserCloseClaim();
+        Assert.True(prompt.TakeForWork());
+        Assert.False(prompt.TakeForCaller());
     }
 
     [Fact]
@@ -371,6 +564,92 @@ public class MacBrowserTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void Rules_AProfileIsKept_WhileItsStoreIsStillThere()
+    {
+        // C5 (2026-10-20, the code review): /profile delete took the store's id with the folder even when the store stayed behind.
+        string root = Path.Combine(Path.GetTempPath(), "ns-storekept-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string stores = Path.Combine(root, "WebsiteDataStore");
+            string profile = Path.Combine(root, "work");
+            Assert.Null(MacBrowserRules.KeptWithoutWindow(profile, stores));   // never opened: nothing to keep it for
+
+            string id = MacBrowserRules.StoreId(profile)!;
+            Assert.Null(MacBrowserRules.KeptWithoutWindow(profile, stores));   // an id whose store was never written
+            Assert.Null(MacBrowserRules.StoreKept(id, "busy", stores));
+
+            Directory.CreateDirectory(Path.Combine(stores, id.ToLowerInvariant()));   // WebKit names the folder in lower case
+            Assert.Equal(BrowserText.MacStoreNotRemoved(BrowserText.MacUnavailable), MacBrowserRules.KeptWithoutWindow(profile, stores));
+            Assert.Equal(BrowserText.MacStoreNotRemoved("Data store is in use"), MacBrowserRules.StoreKept(id, "Data store is in use", stores));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [UnixFact]
+    public void Rules_AStoreIdThatCannotBeRead_IsAReason_NotAThrow()
+    {
+        // G6: the window-less /browser clear all read the file with no catch.
+        if (OperatingSystem.IsWindows())
+        {
+            return;   // [UnixFact] skips it; the guard is for the platform analyzer (File.SetUnixFileMode)
+        }
+
+        string root = Path.Combine(Path.GetTempPath(), "ns-storeid-unread-" + Guid.NewGuid().ToString("N"));
+        string profile = Path.Combine(root, "work");
+        string file = Path.Combine(profile, MacBrowserRules.StoreIdFileName);
+        try
+        {
+            MacBrowserRules.StoreId(profile);
+            File.SetUnixFileMode(file, UnixFileMode.None);
+
+            Assert.Null(MacBrowserRules.TryReadStoreId(profile, out string? unreadable));
+            Assert.StartsWith("the Browser window's store id could not be read: ", unreadable);
+            Assert.StartsWith(BrowserText.MacStoreNotRemoved("").Split(':')[0], MacBrowserRules.KeptWithoutWindow(profile, Path.Combine(root, "stores")));
+        }
+        finally
+        {
+            if (File.Exists(file))
+            {
+                File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Rules_ADeadPage_IsReloadedOnce_ThenShownAsAnError()
+    {
+        // G5: the count went back to 0 at every load's end, so a page whose process died after each load reloaded for ever.
+        var none = default(MacContentEnds);
+        var (first, reload) = MacBrowserRules.ContentEnded(none, "https://example.com/", TimeSpan.FromSeconds(10));
+        Assert.True(reload);
+        var (second, again) = MacBrowserRules.ContentEnded(first, "https://example.com/", TimeSpan.FromSeconds(15));   // right after its reload
+        Assert.False(again);
+        Assert.False(MacBrowserRules.ContentEnded(second, "https://example.com/", TimeSpan.FromSeconds(20)).Reload);
+
+        Assert.True(MacBrowserRules.ContentEnded(second, "https://example.org/", TimeSpan.FromSeconds(20)).Reload);   // another page
+        Assert.True(MacBrowserRules.ContentEnded(second, "https://example.com/", TimeSpan.FromSeconds(15) + MacBrowserRules.ContentEndQuiet).Reload);   // up a while since
+    }
+
+    [Fact]
+    public void Text_AKeptProfile_SaysWhyAndWhatToDo()
+    {
+        Assert.Equal(
+            "its Browser window data (a WebKit store kept outside the profile folder) could not be removed: WebKit did not answer in time. The profile is kept; try again in a desktop session, after restarting the app if WebKit still holds it",
+            BrowserText.MacStoreNotRemoved(BrowserText.MacRemoveTimedOut + "."));
     }
 
     [Fact]

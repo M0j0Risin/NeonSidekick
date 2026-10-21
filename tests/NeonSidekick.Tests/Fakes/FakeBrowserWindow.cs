@@ -184,10 +184,13 @@ public sealed class FakeBrowserWindow : IBrowserWindow
     /// <summary>The profile folders <see cref="ForgetProfileAsync"/> was asked to forget (2026-10-18, <c>/profile delete</c>), and whether each folder was still there then.</summary>
     public List<(string Directory, bool Existed)> Forgotten { get; } = new();
 
-    public Task ForgetProfileAsync(string profileDirectory)
+    /// <summary>What <see cref="ForgetProfileAsync"/> answers (2026-10-20, the code review's C5): null (nothing kept) by default, else why the profile is kept.</summary>
+    public string? ForgetAnswer { get; set; }
+
+    public Task<string?> ForgetProfileAsync(string profileDirectory)
     {
         Forgotten.Add((profileDirectory, Directory.Exists(profileDirectory)));
-        return Task.CompletedTask;
+        return Task.FromResult(ForgetAnswer);
     }
 
     /// <summary>What a clear answers: null (done) by default, else why it failed.</summary>

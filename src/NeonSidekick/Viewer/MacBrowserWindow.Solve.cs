@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Web;
@@ -9,34 +10,36 @@ namespace NeonSidekick.Viewer;
 
 /// <summary>
 /// A web tool's bot check in the Mac's window, as Windows' step for step: the window titled, shown and activated on the address; a look every
-/// <see cref="DomSettle.PollInterval"/> at the page's fingerprint, and its DOM when <see cref="BrowserWatch.WantsRead"/> says, both read in the
-/// app's own content world; once <see cref="BrowserWatch.Decide"/> says through, the address it ended on, the DOM (cut at
+/// <see cref="DomSettle.PollInterval"/> by the shared watch (<see cref="BrowserCheckWatch"/>, since 2026-10-20: the code review's G8, Windows'
+/// too), its reads in the app's own content world; once through, the address it ended on, the DOM (cut at
 /// <see cref="WebFetcher.MaxDownloadBytes"/>), the status, the PDF for <c>convert_to_pdf</c> (paged by WebKit's print operation, Phase 0) and the
 /// store's cookies for the two hosts go back; the window hides, gives the keyboard back, and closes after <see cref="BrowserJobs.Linger"/>
 /// unless a visit holds it or another check comes. Downloads and answers that are no page end it as a file. A user-initiated activity is
 /// held while it runs (pass 28).
 /// </summary>
-internal sealed partial class MacBrowserWindow
+internal sealed partial class MacBrowserWindow : IBrowserCheckPage
 {
     private long _printToken;
     private readonly Dictionary<long, Action<bool>> _printsWaiting = [];
 
+    // Whether the linger runs (a check's end hid the window): Open hands such a window out only with its linger started afresh (C3).
+    private bool _lingering;
+
     private void BeginSolve(BotCheckRequest request, TaskCompletionSource<BotCheckResult> done)
     {
-        var (check, older) = _jobs.BeginCheck(request, done);
+        var (_, older) = _jobs.BeginCheck(request, done);
         if (older is not null)
         {
             Finish(older, BotCheckResult.Ended(BotCheckEnd.GaveUp, older.Request.Url.AbsoluteUri), close: false);
         }
 
-        _linger.Stop();
+        StopLinger();
         DiagnosticLog.Info("Browser", $"A bot check on {request.Url.Host} for the user to solve ({request.Why}).");
         ShowTitle();
         BeginActivity();
         Go(request.Url.AbsoluteUri);
         Show();
         _poll.Start(DomSettle.PollInterval);
-        _ = check;
     }
 
     private void CancelSolve(TaskCompletionSource<BotCheckResult> done)
@@ -51,8 +54,15 @@ internal sealed partial class MacBrowserWindow
         }
     }
 
+    // Once per check (2026-10-20, the code review: a late cookie answer or a stale look could end one twice, hiding the window under the
+    // next check and ending its activity early).
     private void Finish(BrowserCheck check, BotCheckResult result, bool close)
     {
+        if (!check.TryEnd())
+        {
+            return;
+        }
+
         if (_jobs.Check == check)
         {
             _poll.Stop();
@@ -73,19 +83,40 @@ internal sealed partial class MacBrowserWindow
         {
             // Hidden at once, the keyboard given back; closed for good after Linger unless another check comes.
             Hide();
+            _lingering = true;
+            _linger.Start(BrowserJobs.Linger);
+        }
+    }
+
+    private void StopLinger()
+    {
+        _lingering = false;
+        _linger.Stop();
+    }
+
+    /// <summary>
+    /// The window handed out by <see cref="MacBrowserWindows.Open"/> for a check or a visit about to be posted to it (2026-10-20, the code
+    /// review's C3): a window hidden in a check's linger gets its linger afresh, so the close it was counting to cannot come before the posted
+    /// begin, which stops it. Afresh rather than stopped: a caller cancelled before it posted leaves no hidden window behind. Main thread.
+    /// </summary>
+    internal void HandOut()
+    {
+        if (_lingering)
+        {
             _linger.Start(BrowserJobs.Linger);
         }
     }
 
     private void LingerOut()
     {
+        _lingering = false;
         if (_jobs.LingerCloses())
         {
             CloseQuietly();
         }
     }
 
-    // One look at the page while a check waits: its fingerprint, the DOM when that is due, then the watch's say.
+    // One look at the page while a check waits (BrowserCheckWatch); MainTimer fires once, so the next look is set first.
     private void Tick()
     {
         if (_jobs.Check is not { } check)
@@ -93,119 +124,100 @@ internal sealed partial class MacBrowserWindow
             return;
         }
 
-        _poll.Start(DomSettle.PollInterval);   // MainTimer fires once: the next look is set first
-        if (check.Busy || check.Finishing || !check.Watch.Loaded || _web == 0)
-        {
-            return;
-        }
-
-        check.Busy = true;
-        MacBrowserKit.Evaluate(_web, HeadlessBrowser.PrintExpression, json => OnPrint(check, json));
+        _poll.Start(DomSettle.PollInterval);
+        BrowserCheckWatch.Tick(this, check);
     }
 
-    private void OnPrint(BrowserCheck check, string? json)
+    // A file instead of a page during a check: it ends as a file, its cookies what the caller wants.
+    private void EndAsFile()
     {
-        if (_jobs.Check != check || !Alive)
+        if (_jobs.Check is { } check)
         {
-            return;
-        }
-
-        if (!BrowserAnswers.TryReadPrint(json, out string state, out var print))
-        {
-            check.Busy = false;   // mid-navigation: the next look tries again
-            return;
-        }
-
-        if (check.Watch.WantsRead(check.Clock.Elapsed, print))
-        {
-            ReadDom(check, () => AfterRead(check, state, print));
-        }
-        else
-        {
-            AfterRead(check, state, print);
+            BrowserCheckWatch.EndAsFile(this, check);
         }
     }
 
-    private void AfterRead(BrowserCheck check, string state, (int, uint) print)
+    bool IBrowserCheckPage.Holds(BrowserCheck check) => _jobs.Check == check && Alive;
+
+    string? IBrowserCheckPage.Source => Source;
+
+    BrowserIdentity IBrowserCheckPage.Identity => _identity;
+
+    void IBrowserCheckPage.Finish(BrowserCheck check, BotCheckResult result, bool close) => Finish(check, result, close);
+
+    bool IBrowserCheckPage.Evaluate(string expression, Action<string?> answer)
     {
-        bool ready = check.Watch.Observe(check.Clock.Elapsed, state, print);
-        if (ready && check.Watch.Stale(print))
+        if (_web == 0)
         {
-            ReadDom(check, () => Conclude(check));
+            return false;
         }
-        else if (ready)
-        {
-            Conclude(check);
-        }
-        else
-        {
-            check.Busy = false;
-        }
+
+        MacBrowserKit.Evaluate(_web, expression, answer);
+        return true;
     }
 
-    private void ReadDom(BrowserCheck check, Action then)
+    // The check's PDF: WebKit's print operation run modal for the window, so it counts as the window's sheet (2026-10-20, the code review's G2:
+    // without _sheetUp a page's window.print(), ⌘P or a dialog started a second modal on the window — an Objective-C exception, which ends a
+    // NativeAOT process — or the PDF was never written). A sheet already up means no print: the answer goes without a PDF.
+    bool IBrowserCheckPage.PrintToPdf(string path, Action<bool> written)
     {
-        MacBrowserKit.Evaluate(_web, HeadlessBrowser.PageExpression, json =>
+        if (_web == 0 || _sheetUp)
         {
-            if (_jobs.Check != check || !Alive)
-            {
-                return;
-            }
+            return false;
+        }
 
-            if (BrowserAnswers.TryReadPage(json, out string html))
-            {
-                if (html.Length > WebFetcher.MaxDownloadBytes)
-                {
-                    html = html[..WebFetcher.MaxDownloadBytes];
-                    check.Truncated = true;
-                }
+        long token = ++_printToken;
+        _sheetUp = true;
+        _printsWaiting[token] = ok =>
+        {
+            _sheetUp = false;
+            written(ok && HasPdfHeader(path));
+        };
+        if (MacBrowserKit.Print(_web, Window, _delegate, path, token))
+        {
+            return true;
+        }
 
-                var url = Uri.TryCreate(Source, UriKind.Absolute, out var at) && WebFetcher.IsHttp(at) ? at : check.Request.Url;
-                check.Watch.Read(check.Clock.Elapsed, html, url);
-            }
+        _printsWaiting.Remove(token);
+        _sheetUp = false;
+        return false;
+    }
 
-            then();
+    // The check's cookies within BrowserJobs.HarvestTimeout (2026-10-20, the code review's G4: a stalled network process held the pane for the
+    // whole solve, the visit's close already being capped so).
+    bool IBrowserCheckPage.ReadCookies(IReadOnlyList<string> hosts, Action<IReadOnlyList<BrowserCookie>> answer)
+    {
+        if (_store == 0)
+        {
+            return false;
+        }
+
+        CookiesWithin(_store, hosts, BrowserJobs.HarvestTimeout, answer);
+        return true;
+    }
+
+    /// <summary>
+    /// <paramref name="store"/>'s cookies for <paramref name="hosts"/> to <paramref name="answer"/> once: what the store says, or none when it
+    /// says nothing within <paramref name="timeout"/>. The block WebKit holds reaches the answer only through a box the timeout empties, so a
+    /// store that never answers keeps a box alive, not the window (G4). Main thread.
+    /// </summary>
+    private static void CookiesWithin(nint store, IReadOnlyList<string> hosts, TimeSpan timeout, Action<IReadOnlyList<BrowserCookie>> answer)
+    {
+        var box = new StrongBox<Action<IReadOnlyList<BrowserCookie>>?>(answer);
+        var timer = new MainTimer(() => Take(box)?.Invoke([]));
+        timer.Start(timeout);
+        MacBrowserKit.StoreCookies(store, all =>
+        {
+            timer.Stop();
+            Take(box)?.Invoke(all.Where(c => hosts.Any(c.AppliesTo)).ToList());
         });
-    }
 
-    private void Conclude(BrowserCheck check)
-    {
-        switch (BrowserJobs.Outcome(check.Watch.Decide()))
+        static Action<IReadOnlyList<BrowserCookie>>? Take(StrongBox<Action<IReadOnlyList<BrowserCookie>>?> box)
         {
-            case BotCheckEnd.Cleared:
-                Complete(check);
-                break;
-            case BotCheckEnd.Refused:
-                Finish(check, BrowserJobs.Refused(check, Source ?? check.Request.Url.AbsoluteUri), close: BrowserJobs.EndCloses(check));
-                break;
-            default:
-                check.Busy = false;
-                break;
+            var taken = box.Value;
+            box.Value = null;
+            return taken;
         }
-    }
-
-    // Through: the PDF when one was asked for, then the cookies, then the answer.
-    private void Complete(BrowserCheck check)
-    {
-        check.Finishing = true;
-        string final = BrowserJobs.FinalUrl(Source, check.Request.Url);
-        if (check.Request.PdfPath is { } path && !check.WasFile && _web != 0)
-        {
-            long token = ++_printToken;
-            _printsWaiting[token] = ok =>
-            {
-                check.PdfWritten = ok && HasPdfHeader(path);
-                Harvest(check, final);
-            };
-            if (MacBrowserKit.Print(_web, Window, _delegate, path, token))
-            {
-                return;
-            }
-
-            _printsWaiting.Remove(token);
-        }
-
-        Harvest(check, final);
     }
 
     private static bool HasPdfHeader(string path)
@@ -220,26 +232,6 @@ internal sealed partial class MacBrowserWindow
         {
             return false;
         }
-    }
-
-    private void Harvest(BrowserCheck check, string final)
-    {
-        var hosts = BrowserJobs.CheckHosts(check.Request.Url, final);
-        void Done(IReadOnlyList<BrowserCookie> cookies)
-        {
-            if (!check.Done.Task.IsCompleted)
-            {
-                Finish(check, BrowserJobs.Cleared(check, final, cookies, _identity), close: BrowserJobs.EndCloses(check));
-            }
-        }
-
-        if (_store == 0)
-        {
-            Done([]);
-            return;
-        }
-
-        MacBrowserKit.StoreCookies(_store, all => Done(all.Where(c => hosts.Any(c.AppliesTo)).ToList()));
     }
 
     /// <summary>A print run by the window ended (a check's PDF, ⌘P's sheet).</summary>

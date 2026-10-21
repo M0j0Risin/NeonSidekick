@@ -2207,7 +2207,8 @@ internal sealed partial class ChatScreen
                 RunOrPost(() => { if (!CloseByChord(command, args)) StartLive(); });
                 return true;
             case SlashCommand.Browser when args.Trim().Length == 0:
-                RunOrPost(() => { if (!CloseByChord(command, args)) OpenInBrowser(BrowserAddress.Home(_effective().WebBrowserHomePage), _flow); });
+                // Under ByChord as Ctrl+G's and Ctrl+Alt+U's (2026-10-20, the code review's E7), as the idle line's Ctrl+B already runs.
+                RunOrPost(() => { if (!CloseByChord(command, args)) ByChord(true, () => OpenInBrowser(BrowserAddress.Home(_effective().WebBrowserHomePage), _flow)); });
                 return true;
             case SlashCommand.WebUi when WebUiBrowserArgs(args) == false:
                 RunOrPost(() =>
@@ -14179,10 +14180,17 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // The browser data a profile keeps outside its folder goes first (2026-10-18, the Mac Browser plan: a Mac's WebKit store; nothing on Windows).
-        if (_browserWindow is not null)
+        // The browser data a profile keeps outside its folder goes first (2026-10-18, the Mac Browser plan: a Mac's WebKit store; nothing on Windows);
+        // one that could not go keeps the profile, whose folder holds the only way back to it (2026-10-20, the code review's C5), with no window
+        // here too (an SSH session on a Mac).
+        string directory = Profiles.Directory(home, target);
+        string? kept = _browserWindow is { } browser
+            ? await browser.ForgetProfileAsync(directory).ConfigureAwait(false)
+            : MacBrowserRules.KeptWithoutWindow(directory);
+        if (kept is not null)
         {
-            await _browserWindow.ForgetProfileAsync(Profiles.Directory(home, target)).ConfigureAwait(false);
+            _transcript.Error(ProfileDeleteFailedError(kept));
+            return;
         }
 
         try

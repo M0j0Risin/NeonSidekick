@@ -127,6 +127,7 @@ internal static class MacBrowserWindows
         {
             if (string.Equals(open.Profile, profile, StringComparison.Ordinal))
             {
+                open.HandOut();   // a window in a check's linger counts its close afresh: the begin posted next stops it (C3)
                 return open;
             }
 
@@ -228,21 +229,40 @@ internal static class MacBrowserWindows
             Interlocked.Increment(ref s_solving);
             try
             {
-                MacBrowserWindow window;
-                try
+                // Twice at most (2026-10-20, the code review's C3, Windows' rule since c6f0e19e): a window that closed before the check
+                // began in it hands it back (MacBrowserWindow.IsRetry) for a new one.
+                for (int attempt = 0; ; attempt++)
                 {
-                    window = await OpenAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, ex.Message);
-                }
-                catch (OperationCanceledException)
-                {
-                    return BotCheckResult.Ended(BotCheckEnd.GaveUp, request.Url.AbsoluteUri);
-                }
+                    MacBrowserWindow window;
+                    try
+                    {
+                        window = await OpenAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, ex.Message);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.GaveUp, request.Url.AbsoluteUri);
+                    }
 
-                return await window.SolveAsync(request, cancellationToken).ConfigureAwait(false);
+                    var result = await window.SolveAsync(request, cancellationToken).ConfigureAwait(false);
+                    if (!MacBrowserWindow.IsRetry(result))
+                    {
+                        return result;
+                    }
+
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.GaveUp, request.Url.AbsoluteUri);
+                    }
+
+                    if (attempt > 0)
+                    {
+                        return BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, BrowserText.Closed);
+                    }
+                }
             }
             finally
             {
@@ -264,6 +284,8 @@ internal static class MacBrowserWindows
         public bool Close() => MacBrowserWindows.Close();
 
         // Ctrl+B (2026-10-18): asked on the AppKit thread, which owns the window's check; a check under way counts before it reaches the window.
+        // A main thread that does not answer within Invoke's wait has its close called off (BrowserCloseClaim, 2026-10-20, the code review's
+        // E4 on Windows, the same shape here): none is then reported only when none will happen; one already running counts as closing.
         public BrowserCloseOutcome CloseAsUser()
         {
             if (Volatile.Read(ref s_solving) > 0)
@@ -271,7 +293,18 @@ internal static class MacBrowserWindows
                 return BrowserCloseOutcome.BotCheck;
             }
 
-            return OpenNow() is { } open && AppKitHost.Invoke(open.CloseAsUser, out var outcome) ? outcome : BrowserCloseOutcome.None;
+            if (OpenNow() is not { } open)
+            {
+                return BrowserCloseOutcome.None;
+            }
+
+            var claim = new BrowserCloseClaim();
+            if (AppKitHost.Invoke(() => claim.TakeForWork() ? open.CloseAsUser() : BrowserCloseOutcome.None, out var outcome))
+            {
+                return outcome;
+            }
+
+            return claim.TakeForCaller() ? BrowserCloseOutcome.None : BrowserCloseOutcome.Closing;
         }
 
         public Task<(string Url, string? Title)?> CurrentPageAsync() =>
@@ -315,12 +348,20 @@ internal static class MacBrowserWindows
 
         // With the window open on the loaded profile, it clears (it knows whether a check waits); with none, the profile's store and its
         // list of visits are cleared here with no window at all (WebKit's store answers without a view; Windows starts a hidden window).
+        // 2026-10-20, the code review (C2, G3, G6): a check opening a window on the store refuses it, as the window's own clear does; WebKit
+        // is loaded before its store class is asked for (it was nil, nothing cleared, the clear timed out); the store is kept across its
+        // asynchronous removal; an id file that cannot be read is a reason, not a throw.
         public async Task<string?> ClearAsync(BrowserClear kind)
         {
             string profile = ProfileNow();
             if (OpenNow() is { } window && string.Equals(window.Profile, profile, StringComparison.Ordinal))
             {
                 return await window.ClearAsync(kind).ConfigureAwait(false);
+            }
+
+            if (Volatile.Read(ref s_solving) > 0)
+            {
+                return BrowserText.ClearDuringCheck;
             }
 
             string file = BrowserHistory.PathFor(profile);
@@ -334,16 +375,27 @@ internal static class MacBrowserWindows
                 return null;
             }
 
-            string? storeId = MacBrowserRules.ReadStoreId(Path.Combine(profile, MacBrowserRules.StoreIdFileName));
-            if (storeId is null)
+            if (ReadStoreIdOf(profile, out string? unreadable) is not { } storeId)
             {
-                return null;   // never opened on this profile: nothing kept
+                return unreadable;   // null: never opened on this profile, nothing kept
             }
 
             var cleared = OnMain<string?>(done =>
             {
-                nint store = MacWebKit.Store(storeId);
-                MacBrowserKit.RemoveAll(store, () => done.TrySetResult(null));
+                // Asked again on the main thread, where Open runs: a check that began meanwhile is opening a window on this store.
+                if (Volatile.Read(ref s_solving) > 0)
+                {
+                    done.TrySetResult(BrowserText.ClearDuringCheck);
+                    return;
+                }
+
+                MacWebKit.Load();
+                nint store = Send(MacWebKit.Store(storeId), Sel("retain"));
+                MacBrowserKit.RemoveAll(store, () =>
+                {
+                    SendVoid(store, Sel("release"));
+                    done.TrySetResult(null);
+                });
             }, BrowserText.MacUnavailable);
             try
             {
@@ -356,18 +408,25 @@ internal static class MacBrowserWindows
         }
 
         // /profile delete (pass 6): the profile's WebKit store, which lives outside its folder, removed by the id its folder names; a window
-        // open on it (a race: only another profile than the loaded one is deleted) closed first.
-        public async Task ForgetProfileAsync(string profileDirectory)
+        // open on it (a race: only another profile than the loaded one is deleted) closed first. 2026-10-20, the code review's C5: a store
+        // that could not be removed keeps the profile (the reason returned), since the id in its folder is the only way back to it; a store
+        // whose folder is gone (removed by an earlier try that answered late) is no reason to keep it.
+        public async Task<string?> ForgetProfileAsync(string profileDirectory)
         {
             ArgumentNullException.ThrowIfNull(profileDirectory);
+            if (ReadStoreIdOf(profileDirectory, out string? unreadable) is not { } storeId)
+            {
+                return unreadable is null ? null : BrowserText.MacStoreNotRemoved(unreadable);
+            }
+
+            if (!IsAvailable)
+            {
+                return MacBrowserRules.StoreKept(storeId, BrowserText.MacUnavailable);   // no main loop to hear WebKit's answer
+            }
+
+            string? failure;
             try
             {
-                string? storeId = MacBrowserRules.ReadStoreId(Path.Combine(profileDirectory, MacBrowserRules.StoreIdFileName));
-                if (storeId is null || !IsAvailable)
-                {
-                    return;
-                }
-
                 var removed = OnMain<string?>(done =>
                 {
                     if (OpenNow() is { } open && string.Equals(open.Profile, profileDirectory, StringComparison.Ordinal))
@@ -377,16 +436,24 @@ internal static class MacBrowserWindows
 
                     MacBrowserKit.RemoveStore(storeId, why => done.TrySetResult(why));
                 }, BrowserText.MacUnavailable);
-                string? failure = await removed.WaitAsync(MacBrowserWindows.RemoteTimeout).ConfigureAwait(false);
-                DiagnosticLog.Info("Browser", failure is null
-                    ? $"The deleted profile's WebKit data store {storeId} removed."
-                    : $"The deleted profile's WebKit data store {storeId} was not removed: {failure}");
+                failure = await removed.WaitAsync(MacBrowserWindows.RemoteTimeout).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+            catch (TimeoutException)
             {
-                DiagnosticLog.Warn("Browser", "The deleted profile's WebKit data store was not removed: " + ex.Message);
+                failure = BrowserText.MacRemoveTimedOut;
             }
+
+            if (failure is null)
+            {
+                DiagnosticLog.Info("Browser", $"The deleted profile's WebKit data store {storeId} removed.");
+                return null;
+            }
+
+            DiagnosticLog.Warn("Browser", $"The profile's WebKit data store {storeId} was not removed: {failure}");
+            return MacBrowserRules.StoreKept(storeId, failure);
         }
+
+        private static string? ReadStoreIdOf(string profileDirectory, out string? unreadable) => MacBrowserRules.TryReadStoreId(profileDirectory, out unreadable);
     }
 }
 
@@ -424,7 +491,7 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
     private string? _shownTitle;
     private int _mainStatus;
     private string? _errorShownFor;
-    private int _contentEnds;
+    private MacContentEnds _contentEnds;
     private bool _handOver = true;
     private bool _closedHere;
     // The staged PDFs this window showed, each file's URL as WebKit spells it → its https address (2026-10-18: the box, the history and
@@ -507,6 +574,13 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
             DiagnosticLog.Error("Browser", "The Browser window could not be made.", ex);
             window._handOver = false;
             window.Close();
+            if (window.Live && window.Window != 0)
+            {
+                // 2026-10-20, the code review's C7: whether AppKit tells a window never shown that it closes is not this code's to bet on;
+                // the close's own end is run here when it did not (WillClose runs once), so the view, its delegate and the bar go.
+                window.WillClose();
+            }
+
             window._lock?.Dispose();
             throw new InvalidOperationException(ex is InvalidOperationException ? ex.Message : BrowserText.MacFailed);
         }
@@ -549,7 +623,7 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
 
         if (!Post(() => BeginSolve(request, done)))
         {
-            Settle(done, BotCheckResult.Ended(BotCheckEnd.Unavailable, request.Url.AbsoluteUri, BrowserText.Closed));
+            Settle(done, RetrySolve);   // the window went before the check could begin in it: a new one takes it
         }
 
         var cancel = cancellationToken.Register(() =>
@@ -580,6 +654,15 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         return done.Task;
     }
 
+    /// <summary>
+    /// The answer a closing window gives a check that reached it too late (2026-10-20, the code review's C3, Windows' <c>RetrySolve</c>): the
+    /// facade asks a new window instead (<see cref="IsRetry"/>).
+    /// </summary>
+    private static readonly BotCheckResult RetrySolve = BotCheckResult.Ended(BotCheckEnd.Unavailable, "", BrowserText.Closed);
+
+    /// <summary>Whether a check's answer is a closing window's hand-back.</summary>
+    public static bool IsRetry(BotCheckResult result) => ReferenceEquals(result, RetrySolve);
+
     /// <summary>Work for the main thread while the window lives; false when it is gone.</summary>
     private bool Post(Action work) => Live && AppKitHost.Post(() =>
     {
@@ -591,7 +674,9 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
 
     /// <summary>
     /// See <see cref="IBrowserWindow.CloseAsUser"/> (2026-10-18, Ctrl+B): the window's own close (<see cref="MacBrowserAction.Close"/>'s, so the
-    /// visit's cookies are handed over), unless a check waits in it; a window hidden in a check's linger (<c>orderOut:</c>) is none. Main thread.
+    /// visit's cookies are handed over), unless a check waits in it; a window hidden in a check's linger (<c>orderOut:</c>) is none. One in the
+    /// Dock counts as open (2026-10-20, the code review's J4: <c>isVisible</c> is NO for it, so Ctrl+B took it home instead of closing it and
+    /// the visit never handed its cookies over; Windows' <c>IsWindowVisible</c> is true for a minimized window). Main thread.
     /// </summary>
     internal BrowserCloseOutcome CloseAsUser()
     {
@@ -605,7 +690,7 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
             return BrowserCloseOutcome.BotCheck;
         }
 
-        if (SendBool(Window, Sel("isVisible")) == 0)
+        if (SendBool(Window, Sel("isVisible")) == 0 && SendBool(Window, Sel("isMiniaturized")) == 0)
         {
             return BrowserCloseOutcome.None;
         }
@@ -723,7 +808,7 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
             Finish(check, BotCheckResult.Ended(BotCheckEnd.GaveUp, check.Request.Url.AbsoluteUri), close: false);
         }
 
-        _linger.Stop();
+        StopLinger();
         string address = url?.AbsoluteUri ?? MacBrowserWindows.HomeAddress();
         DiagnosticLog.Info("Browser", $"The Browser window on {WebUi.WebUiAuth.Redacted(address)} for the user (/browser).");
         Go(address);
@@ -799,14 +884,6 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         return MacNavigationPolicy.Download;
     }
 
-    private void EndAsFile()
-    {
-        if (_jobs.FileDuringCheck() && _jobs.Check is { } check)
-        {
-            Complete(check);
-        }
-    }
-
     public void Started()
     {
         _mainStatus = 0;
@@ -815,7 +892,6 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
 
     public void Finished()
     {
-        _contentEnds = 0;
         RefreshBar();
         string? source = Source;
         if (_errorShownFor is not null)
@@ -887,8 +963,12 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
                 }
 
                 break;
+            case "estimatedProgress":
+                // Many a load (2026-10-20, the code review's G9): the progress line alone, not the whole bar's thirty-odd sends.
+                PlaceProgress();
+                break;
             default:
-                RefreshBar();
+                RefreshBar();   // loading, canGoBack, canGoForward
                 break;
         }
     }
@@ -901,22 +981,24 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         }
     }
 
-    // The page's process ended: once, the page is loaded again; twice in a row, the window says so.
+    // The page's process ended: once, the page is loaded again; again for the same address soon after, the window says so
+    // (MacBrowserRules.ContentEnded, 2026-10-20, the code review's G5: the count went back to 0 at every load's end, so a page whose process
+    // died after each load reloaded for ever). The error page names the address as Failed's does, a Web UI sign-in link's token cut.
     public void ContentEnded()
     {
-        _contentEnds++;
+        string at = Source ?? BrowserPage.Blank;
+        (_contentEnds, bool reload) = MacBrowserRules.ContentEnded(_contentEnds, at, TimeSpan.FromMilliseconds(Environment.TickCount64));
         DiagnosticLog.Warn("Browser", "The Browser window's web content process ended.");
-        if (_contentEnds == 1 && _web != 0)
+        if (reload && _web != 0)
         {
             SendVoid(_web, Sel("reload"));
             return;
         }
 
-        string at = Source ?? BrowserPage.Blank;
         _errorShownFor = at;
         if (_web != 0 && BrowserPage.Allows(at))
         {
-            MacBrowserKit.LoadHtml(_web, BrowserText.ErrorPage(at, BrowserText.ContentEnded), at);
+            MacBrowserKit.LoadHtml(_web, BrowserText.ErrorPage(WebUi.WebUiAuth.Redacted(at), BrowserText.ContentEnded), at);
         }
     }
 
@@ -980,14 +1062,10 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
                 OpenLinksMenu();
                 return true;
             case MacBrowserAction.ToggleFullScreen:
-                _full = _full.Window ? _full with { Window = false } : _full with { Window = true };
-                SetFullScreen(_full.Window);
-                LayOut();
+                ApplyFullScreen(!_full.Window);
                 return true;
             case MacBrowserAction.LeaveFullScreen:
-                _full = _full with { Window = false };
-                SetFullScreen(false);
-                LayOut();
+                ApplyFullScreen(false);
                 return true;
             case MacBrowserAction.Find:
                 OpenFind();
@@ -1050,6 +1128,17 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         SendVoid(_web, Sel("reload"));
     }
 
+    // Ctrl-Cmd-F and Esc out of it (2026-10-20, the code review's C6): the state follows what SetFullScreen did (it does nothing with no
+    // screen or a closed window, and Esc was then read as leaving a full screen never entered), and the page takes the keyboard back after,
+    // which AppKitWindow gives its content view.
+    private void ApplyFullScreen(bool on)
+    {
+        SetFullScreen(on);
+        _full = _full with { Window = FullScreen };
+        LayOut();
+        FocusPage();
+    }
+
     private void LeavePageFullScreen()
     {
         _full = _full with { Page = false };
@@ -1066,7 +1155,7 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         _closedHere = true;
         MacBrowserWindows.Closed(this);
         _poll.Stop();
-        _linger.Stop();
+        StopLinger();
         CloseMenusAndSheets();
 
         // A check still on is given up; a visit's cookies are read from the store after the view goes (it answers without one).
@@ -1084,7 +1173,7 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
 
         foreach (var done in solves)
         {
-            done.TrySetResult(BotCheckResult.Ended(BotCheckEnd.GaveUp, ""));   // asked for, never begun: the window went first
+            done.TrySetResult(RetrySolve);   // asked for, never begun: the window went first, and a new one takes it (C3)
         }
 
         var step = _jobs.Closing(_handOver, viewAlive: _web != 0);
@@ -1128,30 +1217,11 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
     }
 
     // A visit's close (the user's): the store's cookies for the hosts it went to, within HarvestTimeout, then the visit settled.
-    private void Harvest(nint store)
+    private void Harvest(nint store) => CookiesWithin(store, _jobs.HarvestHosts, BrowserJobs.HarvestTimeout, cookies =>
     {
-        var hosts = _jobs.HarvestHosts;
-        bool settled = false;
-        void Done(IReadOnlyList<BrowserCookie> cookies)
-        {
-            if (settled)
-            {
-                return;
-            }
-
-            settled = true;
-            SendVoid(store, Sel("release"));
-            SettleVisits(_jobs.Visit(cookies, _identity));
-        }
-
-        var timeout = new MainTimer(() => Done([]));
-        timeout.Start(BrowserJobs.HarvestTimeout);
-        MacBrowserKit.StoreCookies(store, all =>
-        {
-            timeout.Stop();
-            Done(all.Where(c => hosts.Any(c.AppliesTo)).ToList());
-        });
-    }
+        SendVoid(store, Sel("release"));
+        SettleVisits(_jobs.Visit(cookies, _identity));
+    });
 
     private void ShowTitle()
     {

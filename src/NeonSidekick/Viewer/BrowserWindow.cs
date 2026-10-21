@@ -374,7 +374,7 @@ public static class BrowserWindow
 
 /// <summary>The Browser window and the thread that pumps its messages and owns its WebView2 (<see cref="BrowserWindow"/>).</summary>
 [SupportedOSPlatform("windows")]
-internal sealed unsafe partial class BrowserWindowThread
+internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
 {
     private const uint RunMessage = WmApp + 1;
     private static readonly IntPtr PollTimer = 1;
@@ -416,7 +416,7 @@ internal sealed unsafe partial class BrowserWindowThread
     private WebViewHost? _host;
     private bool _created;
     private string? _waitingUrl;
-    private SolveJob? _job;
+    private BrowserCheck? _job;
     private HashSet<string>? _visited;
     private bool _harvested;
     private string? _pageTitle;
@@ -552,13 +552,21 @@ internal sealed unsafe partial class BrowserWindowThread
     /// See <see cref="IBrowserWindow.CloseAsUser"/> (2026-10-18, Ctrl+B): asked on the window's thread, which owns the job and the
     /// window's state — a check in it leaves it be, a hidden window (one started for a clear, one in a check's linger) is none, else
     /// <see cref="WmClose"/> posted without <see cref="_noHarvest"/>, as the window's own Ctrl+W and × do, so the visit's cookies are
-    /// handed over. A thread that does not answer within <see cref="CloseAsUserWait"/> counts as none.
+    /// handed over. A thread that does not answer within <see cref="CloseAsUserWait"/> has the close called off (<see cref="BrowserCloseClaim"/>,
+    /// 2026-10-20, the code review's E4: the posted close stayed queued and fired later, closing the window the chord had just sent home), and
+    /// counts as none only then; one that took it just as the wait ran out counts as closing, so nothing is opened over it.
     /// </summary>
     public BrowserCloseOutcome CloseAsUser()
     {
         var done = new TaskCompletionSource<BrowserCloseOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var claim = new BrowserCloseClaim();
         bool posted = Post(() =>
         {
+            if (!claim.TakeForWork())
+            {
+                return;   // the caller stopped waiting: it reported no close, so none happens
+            }
+
             if (_job is not null)
             {
                 done.TrySetResult(BrowserCloseOutcome.BotCheck);
@@ -572,7 +580,23 @@ internal sealed unsafe partial class BrowserWindowThread
                 done.TrySetResult(PostMessageW(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero) ? BrowserCloseOutcome.Closing : BrowserCloseOutcome.None);
             }
         });
-        return posted && done.Task.Wait(CloseAsUserWait) ? done.Task.Result : BrowserCloseOutcome.None;
+        if (!posted)
+        {
+            return BrowserCloseOutcome.None;
+        }
+
+        if (done.Task.Wait(CloseAsUserWait))
+        {
+            return done.Task.Result;
+        }
+
+        if (claim.TakeForCaller())
+        {
+            return BrowserCloseOutcome.None;   // it never ran, and now never will
+        }
+
+        // The thread took it as the wait ran out: its answer is a few calls away (none of them waits).
+        return done.Task.Wait(CloseAsUserWait) ? done.Task.Result : BrowserCloseOutcome.Closing;
     }
 
     // Work for the window's thread. Before the window is up there is no handle to post to: the queue waits for the first flush.
@@ -1007,33 +1031,6 @@ internal sealed unsafe partial class BrowserWindowThread
 
     // ── A bot check ──────────────────────────────────────────────────────────
 
-    /// <summary>One bot check the window is on: the request, its answer to come, the watch and its clock, and what it found.</summary>
-    private sealed class SolveJob(BotCheckRequest request, TaskCompletionSource<BotCheckResult> done, bool keepOpen)
-    {
-        public BotCheckRequest Request { get; } = request;
-        public TaskCompletionSource<BotCheckResult> Done { get; } = done;
-        public bool KeepOpen { get; } = keepOpen;
-        public BrowserWatch Watch { get; } = new();
-        public Stopwatch Clock { get; } = Stopwatch.StartNew();
-        public bool Busy;
-        public bool Finishing;
-
-        /// <summary>Its answer given (<see cref="Finish"/>): a callback still to come for it (the print, the cookies) does nothing (2026-10-20, the code review).</summary>
-        public bool Ended;
-        public bool PdfWritten;
-
-        /// <summary>The visible part as the last look read it (the Web UI's live view, 2026-10-17); null before any.</summary>
-        public BrowserViewport? Viewport;
-
-        /// <summary>How many pixels a device-independent one came to in the last picture: the PC's display scale.</summary>
-        public double PixelsPerDip = 1;
-
-        /// <summary>Where the page's held button is down, in CSS pixels; null with none held.</summary>
-        public (double X, double Y)? Held;
-        public bool WasFile;
-        public bool Truncated;
-    }
-
     private void BeginSolve(BotCheckRequest request, TaskCompletionSource<BotCheckResult> done)
     {
         if (_closing)
@@ -1048,7 +1045,7 @@ internal sealed unsafe partial class BrowserWindowThread
         }
 
         KillTimer(_hwnd, LingerTimer);
-        _job = new SolveJob(request, done, keepOpen: _visited is not null);
+        _job = new BrowserCheck(request, done, keepOpen: _visited is not null);
         DiagnosticLog.Info("Browser", $"A bot check on {request.Url.Host} for the user to solve ({request.Why}).");
         ShowTitle();
         Go(request.Url.AbsoluteUri);
@@ -1070,14 +1067,13 @@ internal sealed unsafe partial class BrowserWindowThread
 
     // Once per job (2026-10-20, the code review): a print or cookie answer arriving after the job was given up hid the window and started
     // the linger under the next check or a /browser visit, and logged the old job Cleared.
-    private void Finish(SolveJob job, BotCheckResult result, bool close)
+    private void Finish(BrowserCheck job, BotCheckResult result, bool close)
     {
-        if (job.Ended)
+        if (!job.TryEnd())
         {
             return;
         }
 
-        job.Ended = true;
         if (_job == job)
         {
             _job = null;
@@ -1085,7 +1081,6 @@ internal sealed unsafe partial class BrowserWindowThread
         }
 
         ReleaseHeld(job);
-        job.Finishing = true;
         Settle(job.Done, result);
         DiagnosticLog.Info("Browser", $"The bot check on {job.Request.Url.Host} ended: {result.End}{(result.Detail.Length > 0 ? " (" + result.Detail + ")" : "")}.");
         ShowTitle();
@@ -1098,155 +1093,33 @@ internal sealed unsafe partial class BrowserWindowThread
         }
     }
 
-    // One look at the page while a check waits: its fingerprint, the DOM when that is due, then the watch's say.
+    // One look at the page while a check waits: the shared watch (BrowserCheckWatch, 2026-10-20, the code review's G8 and G1 — the Mac's
+    // window had a near copy of this window's; a look in flight as the check began to finish could conclude it again).
     private void Tick()
     {
-        if (_job is not { Busy: false, Finishing: false } job || _host is null || !job.Watch.Loaded)
+        if (_job is { } job && _host is not null)
         {
-            return;
-        }
-
-        job.Busy = true;
-        if (!_host.RunScript(HeadlessBrowser.PrintExpression, (hr, json) => OnPrint(job, hr, json)))
-        {
-            job.Busy = false;
+            BrowserCheckWatch.Tick(this, job);
         }
     }
 
-    private void OnPrint(SolveJob job, int hr, string? json)
-    {
-        if (_job != job)
-        {
-            return;
-        }
+    bool IBrowserCheckPage.Holds(BrowserCheck check) => _job == check;
 
-        if (hr < 0 || !BrowserAnswers.TryReadPrint(json, out string state, out var print))
-        {
-            job.Busy = false;   // mid-navigation: the next look tries again
-            return;
-        }
+    string? IBrowserCheckPage.Source => _host?.Source;
 
-        if (job.Watch.WantsRead(job.Clock.Elapsed, print))
-        {
-            ReadDom(job, () => AfterRead(job, state, print));
-        }
-        else
-        {
-            AfterRead(job, state, print);
-        }
-    }
+    BrowserIdentity IBrowserCheckPage.Identity => _identity;
 
-    private void AfterRead(SolveJob job, string state, (int, uint) print)
-    {
-        bool ready = job.Watch.Observe(job.Clock.Elapsed, state, print);
-        if (ready && job.Watch.Stale(print))
-        {
-            ReadDom(job, () => Conclude(job));   // ready: the DOM as it is now, when the last read is older than the last change
-        }
-        else if (ready)
-        {
-            Conclude(job);
-        }
-        else
-        {
-            job.Busy = false;
-        }
-    }
+    void IBrowserCheckPage.Finish(BrowserCheck check, BotCheckResult result, bool close) => Finish(check, result, close);
 
-    private void ReadDom(SolveJob job, Action then)
-    {
-        bool sent = _host!.RunScript(HeadlessBrowser.PageExpression, (hr, json) =>
-        {
-            if (_job != job)
-            {
-                return;
-            }
+    // WebView2's ExecuteScript: a failed call (hr < 0) is no answer, as before.
+    bool IBrowserCheckPage.Evaluate(string expression, Action<string?> answer) =>
+        _host is { } host && host.RunScript(expression, (hr, json) => answer(hr >= 0 ? json : null));
 
-            if (hr >= 0 && BrowserAnswers.TryReadPage(json, out string html))
-            {
-                if (html.Length > WebFetcher.MaxDownloadBytes)
-                {
-                    html = html[..WebFetcher.MaxDownloadBytes];
-                    job.Truncated = true;
-                }
+    bool IBrowserCheckPage.PrintToPdf(string path, Action<bool> written) =>
+        _host is { } host && host.PrintToPdf(path, (hr, ok) => written(hr >= 0 && ok && File.Exists(path)));
 
-                var url = Uri.TryCreate(_host.Source, UriKind.Absolute, out var at) && WebFetcher.IsHttp(at) ? at : job.Request.Url;
-                job.Watch.Read(job.Clock.Elapsed, html, url);
-            }
-
-            then();
-        });
-        if (!sent)
-        {
-            job.Busy = false;
-        }
-    }
-
-    private void Conclude(SolveJob job)
-    {
-        switch (job.Watch.Decide())
-        {
-            case BrowserWatchStep.Read:
-                Complete(job);
-                break;
-            case BrowserWatchStep.Refused:
-                string where = _host?.Source ?? job.Request.Url.AbsoluteUri;
-                Finish(job, BotCheckResult.Ended(BotCheckEnd.Refused, where, job.Watch.LoadFailed ? BrowserText.DidNotLoad : "", job.Watch.Status), close: !job.KeepOpen);
-                break;
-            default:
-                job.Busy = false;
-                break;
-        }
-    }
-
-    // Through: the PDF when one was asked for, then the cookies, then the answer.
-    private void Complete(SolveJob job)
-    {
-        job.Finishing = true;
-        string final = _host!.Source is { } source && Uri.TryCreate(source, UriKind.Absolute, out var at) && WebFetcher.IsHttp(at) ? at.AbsoluteUri : job.Request.Url.AbsoluteUri;
-        if (job.Request.PdfPath is { } path && !job.WasFile)
-        {
-            bool started = _host.PrintToPdf(path, (hr, ok) =>
-            {
-                if (job.Ended)
-                {
-                    return;
-                }
-
-                job.PdfWritten = hr >= 0 && ok && File.Exists(path);
-                Harvest(job, final);
-            });
-            if (started)
-            {
-                return;
-            }
-        }
-
-        Harvest(job, final);
-    }
-
-    // The cookies for the host asked for and, on the same site, the one it ended on (BrowserJobs.CheckHosts): never another site's.
-    private void Harvest(SolveJob job, string final)
-    {
-        if (job.Ended)
-        {
-            return;
-        }
-
-        var hosts = BrowserJobs.CheckHosts(job.Request.Url, final);
-        void Done(IReadOnlyList<BrowserCookie> cookies) =>
-            Finish(job, new BotCheckResult(BotCheckEnd.Cleared, job.WasFile ? null : job.Watch.Html, final, job.Watch.Status, cookies, _identity, "")
-            {
-                PdfWritten = job.PdfWritten,
-                WasFile = job.WasFile,
-                Truncated = job.Truncated,
-            }, close: !job.KeepOpen);
-
-        if (!_host!.CallDevTools("Network.getAllCookies", "{}", (hr, json) => Done(hr >= 0 ? BrowserAnswers.CookiesFor(json, hosts) : [])))
-        {
-            Done([]);
-        }
-    }
+    bool IBrowserCheckPage.ReadCookies(IReadOnlyList<string> hosts, Action<IReadOnlyList<BrowserCookie>> answer) =>
+        _host is { } host && host.CallDevTools("Network.getAllCookies", "{}", (hr, json) => answer(hr >= 0 ? BrowserAnswers.CookiesFor(json, hosts) : []));
 
     // ── /browser ─────────────────────────────────────────────────────────────
 
@@ -1367,13 +1240,7 @@ internal sealed unsafe partial class BrowserWindowThread
             return false;
         }
 
-        if (!job.Finishing)
-        {
-            job.WasFile = true;
-            job.Busy = true;
-            Complete(job);
-        }
-
+        BrowserCheckWatch.EndAsFile(this, job);
         return true;
     }
 

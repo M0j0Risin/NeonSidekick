@@ -16,6 +16,27 @@ public sealed partial class ChatScreenTests
 {
     private BrowserLinks SavedLinks() => new(_settings.ProfileDirectory);
 
+    /// <summary>
+    /// <c>/profile delete</c> with browser data the window could not remove (2026-10-20, the code review's C5: a Mac's WebKit store, found only
+    /// by the id in the profile's folder): the profile is kept, and the transcript says why.
+    /// </summary>
+    [Fact]
+    public async Task Profile_Delete_KeepsTheProfile_WhenItsBrowserDataCouldNotGo()
+    {
+        _browserWindow = new FakeBrowserWindow { ForgetAnswer = BrowserText.MacStoreNotRemoved(BrowserText.MacRemoveTimedOut) };
+        WorkProfile();
+        PushLine("/profile delete work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Single(_browserWindow.Forgotten);
+        Assert.True(Directory.Exists(ProfileDir("work")));
+        Assert.Contains(ChatScreen.ProfileDeleteFailedError(BrowserText.MacStoreNotRemoved(BrowserText.MacRemoveTimedOut))[..60], output);
+        Assert.DoesNotContain(ChatScreen.ProfileDeletedNotice("work"), output);
+    }
+
     /// <summary>Save by address (a name after it) and from the window's page (its title the name), open by number, a number past the list, unsave.</summary>
     [Fact]
     public async Task BrowserLinks_SaveOpenAndUnsave_FromTheCommandLine()

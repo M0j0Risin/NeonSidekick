@@ -7,6 +7,9 @@ namespace NeonSidekick.Viewer;
 /// <summary>A download the Mac's Browser window holds (<see cref="MacBrowserRules"/>, the bar's download menu): where it goes, how far, how it ended.</summary>
 public sealed record MacDownloadRow(int Id, string Path, double Fraction, MacDownloadState State);
 
+/// <summary>The Mac Browser window's last ends of its page's web process (<see cref="MacBrowserRules.ContentEnded"/>): where, when, how many in a row.</summary>
+public readonly record struct MacContentEnds(string? At, TimeSpan When, int Count);
+
 /// <summary>Where a download of the Mac's Browser window is.</summary>
 public enum MacDownloadState
 {
@@ -158,6 +161,95 @@ public static class MacBrowserRules
 
         string text = File.ReadAllText(file).Trim();
         return Guid.TryParseExact(text, "D", out var id) ? id.ToString("D").ToUpperInvariant() : null;
+    }
+
+    /// <summary>
+    /// <see cref="ReadStoreId"/> for <paramref name="profileDirectory"/>'s file without a throw (2026-10-20, the code review's G6): null with
+    /// no id, and then <paramref name="unreadable"/> the reason when the file is there but could not be read.
+    /// </summary>
+    public static string? TryReadStoreId(string profileDirectory, out string? unreadable)
+    {
+        ArgumentNullException.ThrowIfNull(profileDirectory);
+        unreadable = null;
+        try
+        {
+            return ReadStoreId(Path.Combine(profileDirectory, StoreIdFileName));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn("Browser", $"The Browser window's store id in {profileDirectory} could not be read: {ex.Message}");
+            unreadable = BrowserText.MacStoreIdUnreadable(ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Where WebKit keeps the identified data stores of this process (<c>dataStoreForIdentifier:</c>, macOS 14): for an app with no bundle,
+    /// <c>~/Library/WebKit/&lt;process name&gt;/WebsiteDataStore</c>, one folder per store named by its id in lower case (seen on this Mac,
+    /// 2026-10-20). Null when the process has no name to go by.
+    /// </summary>
+    public static string? StoresRoot()
+    {
+        string? name = Environment.ProcessPath is { } path ? Path.GetFileNameWithoutExtension(path) : null;
+        return string.IsNullOrEmpty(name)
+            ? null
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "WebKit", name, "WebsiteDataStore");
+    }
+
+    /// <summary>
+    /// Why a profile about to be deleted is kept (2026-10-20, the code review's C5: <c>/profile delete</c> removed the store id with the folder
+    /// even when the store itself stayed, orphaning its cookies and cache): <see cref="BrowserText.MacStoreNotRemoved"/> with
+    /// <paramref name="why"/>, unless the store's folder under <paramref name="storesRoot"/> (<see cref="StoresRoot"/> when null) is gone — an
+    /// earlier try that answered late, or a store never written — when there is nothing to keep it for.
+    /// </summary>
+    public static string? StoreKept(string storeId, string why, string? storesRoot = null)
+    {
+        ArgumentNullException.ThrowIfNull(storeId);
+        ArgumentNullException.ThrowIfNull(why);
+        string? root = storesRoot ?? StoresRoot();
+        if (root is not null && !Directory.Exists(Path.Combine(root, storeId.ToLowerInvariant())))
+        {
+            return null;
+        }
+
+        return BrowserText.MacStoreNotRemoved(why);
+    }
+
+    /// <summary>
+    /// <c>/profile delete</c> with no Browser window here (before macOS 14, no desktop session: <c>Program</c> passes none): on a Mac, the
+    /// profile is kept while its folder names a store that is still there (<see cref="StoreKept"/>), since nothing here can remove it; null
+    /// elsewhere and with no store. <paramref name="storesRoot"/> for the tests.
+    /// </summary>
+    public static string? KeptWithoutWindow(string profileDirectory, string? storesRoot = null)
+    {
+        ArgumentNullException.ThrowIfNull(profileDirectory);
+        if (!OperatingSystem.IsMacOS() && storesRoot is null)
+        {
+            return null;
+        }
+
+        if (TryReadStoreId(profileDirectory, out string? unreadable) is { } storeId)
+        {
+            return StoreKept(storeId, BrowserText.MacUnavailable, storesRoot);
+        }
+
+        return unreadable is null ? null : BrowserText.MacStoreNotRemoved(unreadable);
+    }
+
+    /// <summary>How long a page must have stayed up after its web process last ended for the next end to be reloaded again (<see cref="ContentEnded"/>).</summary>
+    public static readonly TimeSpan ContentEndQuiet = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The page's web content process ended at <paramref name="at"/> (<paramref name="now"/> on a monotonic clock), after <paramref name="last"/>:
+    /// the record kept, and whether the window reloads the page (true) or shows its error page (2026-10-20, the code review's G5: the count went
+    /// back to 0 at every load's end, so a page whose process died after each load reloaded for ever). One reload per address, counted again
+    /// only on another address or once the page stayed up <see cref="ContentEndQuiet"/>.
+    /// </summary>
+    public static (MacContentEnds Next, bool Reload) ContentEnded(MacContentEnds last, string? at, TimeSpan now)
+    {
+        bool fresh = last.Count == 0 || !string.Equals(last.At, at, StringComparison.Ordinal) || now - last.When >= ContentEndQuiet;
+        var next = new MacContentEnds(at, now, fresh ? 1 : last.Count + 1);
+        return (next, next.Count == 1);
     }
 
     /// <summary>The next zoom from <paramref name="current"/>: one of Safari's steps up (<paramref name="direction"/> 1) or down (-1); 0 is back to 1.</summary>

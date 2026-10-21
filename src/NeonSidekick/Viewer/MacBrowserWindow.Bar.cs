@@ -314,10 +314,8 @@ internal sealed partial class MacBrowserWindow
         }
 
         nint responder = Send(Window, Sel("firstResponder"));
-        return responder != 0 && (responder == field || (SendBoolWith(responder, Sel("isKindOfClass:"), Class("NSTextView")) && Send(responder, Sel("delegate")) == field));
+        return responder != 0 && (responder == field || (MacWebKit.SendBoolWith(responder, Sel("isKindOfClass:"), Class("NSTextView")) != 0 && Send(responder, Sel("delegate")) == field));
     }
-
-    private static bool SendBoolWith(nint receiver, nint selector, nint argument) => (Send(receiver, selector, argument) & 0xFF) != 0;
 
     /// <summary>The box shows the page's address, unless the user is typing in it.</summary>
     private void ShowAddress(string? source, bool force = false)
