@@ -5,11 +5,11 @@ name: Build & Test
 # for a CI check without a release, on any branch.
 #
 # Both platforms since 2026-10-06 (the macOS build): Windows x64 and macOS Apple Silicon, each built on its own runner, since
-# NativeAOT cannot publish across operating systems. Cost: the repo is private, and GitHub bills Windows minutes at 2x and
-# macOS minutes at 10x; a run is about 25 minutes on each.
+# NativeAOT cannot publish across operating systems. Cost: none since the repo went public (2026-10-20: GitHub's standard
+# runners are free for a public repo; while private, Windows minutes billed at 2x and macOS at 10x); a run is about 25 minutes on each.
 #
 # The run asks which platform (later on 2026-10-06, the user's call): both by default, or one alone, so a fix for one platform
-# is checked without paying for the other's runner. release.yml always builds both.
+# is checked without waiting on the other's runner. release.yml always builds both.
 on:
   workflow_dispatch:
     inputs:

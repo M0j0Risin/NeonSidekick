@@ -7,8 +7,9 @@ name: Release
 #
 # Two platforms since 2026-10-06 (the macOS build): a build job per platform, each on its own runner
 # (NativeAOT cannot publish across operating systems), and a release job that waits for both, so a
-# release is never made with one package missing. Cost: the repo is private, and GitHub bills
-# Windows minutes at 2x and macOS minutes at 10x; a build is about 25 minutes on each.
+# release is never made with one package missing. Cost: none since the repo went public (2026-10-20:
+# GitHub's standard runners are free for a public repo; while private, Windows minutes billed at 2x
+# and macOS at 10x); a build is about 25 minutes on each.
 
 on:
   push:
