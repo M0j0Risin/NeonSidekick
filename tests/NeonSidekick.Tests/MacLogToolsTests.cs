@@ -140,7 +140,7 @@ public sealed class MacLogToolsTests : IDisposable
         Assert.Contains("kept", answer, StringComparison.Ordinal);
         Assert.DoesNotContain("left out", answer, StringComparison.Ordinal);
         Assert.DoesNotContain("other subsystem", answer, StringComparison.Ordinal);
-        Assert.Contains("loginwindow[395]  com.apple.loginwindow.logging/TAL", answer, StringComparison.Ordinal);
+        Assert.Contains("⟪loginwindow⟫[395]  ⟪com.apple.loginwindow.logging/TAL⟫", answer, StringComparison.Ordinal);   // fenced as a Windows provider is (2026-10-20)
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public sealed class MacLogToolsTests : IDisposable
 
         Assert.Contains("the one we want", answer, StringComparison.Ordinal);
         Assert.Contains("(stopped after reading 1,000 entries, back to ", answer, StringComparison.Ordinal);
-        Assert.Contains(MacLogText.Loudest("mediaanalysisd", 999, 1_000), answer, StringComparison.Ordinal);
+        Assert.Contains(MacLogText.Loudest("mediaanalysisd", 999, 1_000, fenced: true), answer, StringComparison.Ordinal);
         Assert.Contains("next: ", answer, StringComparison.Ordinal);
         Assert.Contains(" text=\"the one\" ", answer, StringComparison.Ordinal);
     }
@@ -278,7 +278,7 @@ public sealed class MacLogToolsTests : IDisposable
         string logs = await Call(Tool(EventLogLogsTool.ToolName));
         string filtered = await Call(Tool(EventLogLogsTool.ToolName), ("filter", "nothing"));
 
-        Assert.Equal(Path.GetFullPath(folder), _log.Opens.Single().Target.ArchivePath);
+        Assert.All(_log.Opens, o => Assert.Equal(Path.GetFullPath(folder), o.Target.ArchivePath));   // the anchor's read, then the search's (2026-10-20)
         Assert.StartsWith(Path.Combine("saved", "crash.logarchive") + " on this Mac: 1 entry", answer, StringComparison.Ordinal);
         Assert.Contains("from the archive", answer, StringComparison.Ordinal);
         var lines = logs.Split('\n');
@@ -340,9 +340,9 @@ public sealed class MacLogToolsTests : IDisposable
 
         Assert.StartsWith("system on this Mac since ", lines[0], StringComparison.Ordinal);
         Assert.Contains(": 3 entries in 2 groups (read 3 entries)", lines[0], StringComparison.Ordinal);
-        Assert.StartsWith("2×  fault  mediaanalysisd  com.apple.mediaanalysis/common  newest ", lines[2], StringComparison.Ordinal);
+        Assert.StartsWith("2×  fault  ⟪mediaanalysisd⟫  ⟪com.apple.mediaanalysis/common⟫  newest ", lines[2], StringComparison.Ordinal);
         Assert.EndsWith("⟪newest noise⟫", lines[2], StringComparison.Ordinal);
-        Assert.StartsWith("1×  error  loginwindow  com.apple.loginwindow.logging/TAL  newest ", lines[3], StringComparison.Ordinal);
+        Assert.StartsWith("1×  error  ⟪loginwindow⟫  ⟪com.apple.loginwindow.logging/TAL⟫  newest ", lines[3], StringComparison.Ordinal);
     }
 
     [Fact]

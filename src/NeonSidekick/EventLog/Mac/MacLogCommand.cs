@@ -21,57 +21,15 @@ public sealed record MacLogCommandArgs(
     IReadOnlyList<string>? Exclude = null)
 {
     /// <summary>
-    /// The query for <paramref name="source"/>'s kind: the unified log's levels (faults and errors when none was given) and terms, a log
-    /// that is a file's window (a week of reports, a day of install.log) without the terms it lacks; and those terms, for the note.
+    /// The query for <paramref name="source"/>'s kind and the terms its log lacks, for the note: the tools' own builder
+    /// (<see cref="MacLogTerms.QueryFor"/>, 2026-10-20, the code review: this re-made it, and an archive's window drifted from theirs).
     /// </summary>
     public (MacLogQuery Query, IReadOnlyList<string> Ignored) QueryFor(MacLogSource source, DateTimeOffset now, int limit)
     {
         ArgumentNullException.ThrowIfNull(source);
-        bool unified = source.Kind == MacLogKind.Unified;
-        var ignored = new List<string>();
-        if (!unified)
-        {
-            if (Levels is not null)
-            {
-                ignored.Add("level");
-            }
-
-            if (Pid is not null && source.Kind == MacLogKind.Crashes)
-            {
-                ignored.Add("pid");
-            }
-
-            if (Subsystem is not null)
-            {
-                ignored.Add("subsystem");
-            }
-
-            if (Category is not null)
-            {
-                ignored.Add("category");
-            }
-        }
-
-        var levels = unified ? MacLogQuery.ParseLevels(Levels).Levels ?? MacLogQuery.DefaultLevels : [];
-        TimeSpan window = source.Kind switch
-        {
-            MacLogKind.Crashes => MacFileLogs.CrashWindow,
-            MacLogKind.Install => MacFileLogs.InstallWindow,
-            _ => MacLogQuery.DefaultWindow,
-        };
-        var query = new MacLogQuery(
-            source.Log,
-            levels,
-            Since ?? now - window,
-            Until,
-            Process,
-            source.Kind == MacLogKind.Crashes ? null : Pid,
-            unified ? Subsystem : null,
-            unified ? Category : null,
-            Text,
-            Exclude ?? [],
-            Limit: limit);
-        return (query, ignored);
+        var terms = new MacLogTerms(Levels, Since, Until, Process, Pid, Subsystem, Category, Text, Exclude);
+        var (query, ignored, error) = terms.QueryFor(source, now, limit);
+        return query is not null ? (query, ignored) : throw new ArgumentException(error, nameof(source));   // Parse refuses a bad level first
     }
 }
 
@@ -92,9 +50,6 @@ public static class MacLogCommand
 
     /// <summary>The three logs the pane's tabs show, in order. Pinned.</summary>
     public static readonly IReadOnlyList<string> TabLogs = ["system", "crashes", "install"];
-
-    /// <summary>A pid that is not a number.</summary>
-    public static string BadPid(string text) => $"Error: pid '{text}' is not a process id.";
 
     /// <summary><paramref name="args"/> read into terms (times from <paramref name="now"/> in <paramref name="zone"/>), or the first refusal.</summary>
     public static (MacLogCommandArgs? Args, string? Error) Parse(string args, DateTimeOffset now, TimeZoneInfo zone)
@@ -146,7 +101,7 @@ public static class MacLogCommand
                 case "pid:":
                     if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int pid))
                     {
-                        return (null, BadPid(value));
+                        return (null, MacLogText.BadPid(value));
                     }
 
                     parsed = parsed with { Pid = pid };
@@ -190,7 +145,7 @@ public static class MacLogCommand
         IEnumerable<CompletionItem> pool;
         if (last.StartsWith("level:", StringComparison.OrdinalIgnoreCase))
         {
-            pool = new[] { "fault", "error", "default", "info", "debug", "all" }.Select(l => new CompletionItem("level:" + l, "the level (system and archives)"));
+            pool = new[] { "fault", "error", "default", "info", "debug", "all" }.Select(l => new CompletionItem("level:" + l, MacLogText.LevelNote));
         }
         else
         {
@@ -198,29 +153,17 @@ public static class MacLogCommand
             if (head.Trim().Length == 0)
             {
                 items.Add(new CompletionItem("system", MacLogText.SystemReadable));
-                items.Add(new CompletionItem("crashes", "crash and diagnostic reports"));
-                items.Add(new CompletionItem("install", "install.log: software installs and updates"));
+                items.Add(new CompletionItem("crashes", MacLogText.CrashesNote));
+                items.Add(new CompletionItem("install", MacLogText.InstallNote));
                 items.AddRange(archives.Select(a => new CompletionItem(a.Contains(' ', StringComparison.Ordinal) ? "\"" + a + "\"" : a, MacLogText.ArchiveLine)));
             }
 
-            items.AddRange(Keys.Select(k => new CompletionItem(k, KeyNote(k))));
+            items.AddRange(Keys.Select(k => new CompletionItem(k, MacLogText.KeyNote(k))));
             pool = items;
         }
 
         return MentionCompleter.Matches(pool.Select(i => i with { Text = head + i.Text }).ToList(), argText);
     }
-
-    private static string KeyNote(string key) => key switch
-    {
-        "level:" => "fault, error, default, info, debug, all",
-        "process:" => "the process by name",
-        "subsystem:" => "subsystems starting with this",
-        "category:" => "the category",
-        "pid:" => "the process id",
-        "exclude:" => "processes to leave out",
-        "since:" => "an age (2h, 1d) or a moment",
-        _ => "an age or a moment",
-    };
 
     /// <summary>
     /// Runs one <c>/eventlog</c> line as lines (headless, the Web UI, the screen without a pane): the header, any notes, then a row per entry.
@@ -258,7 +201,7 @@ public static class MacLogCommand
         }
 
         var page = result.Value!;
-        var lines = new List<string> { Header(source, query, page, now, zone) };
+        var lines = new List<string> { Header(source, page.Query ?? query, page, now, zone) };
         if (ignored.Count > 0)
         {
             lines.Add(MacLogText.NotApplied(source.Log, ignored));

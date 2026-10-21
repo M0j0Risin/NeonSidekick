@@ -15,7 +15,9 @@ namespace NeonSidekick.App;
 /// padded, the message's first line (a report's summary) cut to the width; a dim date line where the day changes. Type to filter the
 /// loaded rows. Enter or a double-click opens the entry's page on the info pane — full text: it is the user's own pane — with <c>copy</c>
 /// and <c>ask</c> (a draft asking the model about it); Esc there comes back to the row. Every drawn string is scrubbed and escaped. The
-/// reads are the tools' (<see cref="MacLogReads"/> over <see cref="MacLogAccess"/>), bounded by its timeouts.
+/// reads are the tools' (<see cref="MacLogReads"/> over <see cref="MacLogAccess"/>), bounded by its timeouts. Only the tab on show is read
+/// before the first draw (2026-10-20, the code review: every tab was, each up to 30 s); another is read when it is first opened
+/// (<see cref="MenuPage.TabShown"/>) in the background, and the page drawn again when it is in.
 /// </summary>
 internal sealed class MacLogMenu
 {
@@ -143,7 +145,9 @@ internal sealed class MacLogMenu
                 return null;
             }
 
-            var tabs = MacLogCommand.TabLogs.Select(l => new LogTab(_access.Resolve(l, forceRedacted: false).Source! with { Redacted = false })).ToList();
+            // The three logs' tabs while local is ticked (2026-10-20, the code review: unticked, only an archive the line names is read).
+            var tabs = MacLogCommand.TabLogs.Select(l => _access.Resolve(l, forceRedacted: false).Source).OfType<MacLogSource>()
+                .Select(s => new LogTab(s with { Redacted = false })).ToList();
             int first = tabs.FindIndex(t => t.Source.Log == named.Log && t.Source.Kind == named.Kind);
             if (first < 0)
             {
@@ -162,70 +166,129 @@ internal sealed class MacLogMenu
     private async Task<string?> BrowseAsync(MacLogCommandArgs line, List<LogTab> tabs, int tab, CancellationToken cancellationToken)
     {
         var zone = _access.Time.LocalTimeZone;
-        while (true)
+        using var visit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);   // a tab still reading when the pane closes is let go
+        var reading = new Dictionary<LogTab, Task<TabRead>>();
+        try
         {
-            foreach (var unread in tabs.Where(t => !t.Loaded))
+            while (true)
             {
-                await LoadAsync(line, unread, append: false, cancellationToken).ConfigureAwait(false);
-            }
+                var current = tabs[tab];
+                if (!current.Loaded)
+                {
+                    Sink.Notice(EventLogText.Working);
+                    Apply(line, current, reading.Remove(current, out var started) ? await started.ConfigureAwait(false) : await ReadAsync(line, current, append: false, cancellationToken).ConfigureAwait(false), append: false);
+                }
 
-            var current = tabs[tab];
-            var menuTabs = tabs.Select(t => BuildTab(t, zone)).ToList();
-            var page = MenuPage.Tabbed(Title, menuTabs.Select(m => m.Tab).ToList(), tab, Keys) with
-            {
-                Buttons = [new(EventLogMenu.RefreshButton, EventLogMenu.RefreshKey), new(EventLogMenu.MoreButton, EventLogMenu.MoreKey, current.More)],
-                TabButtons = true,
-            };
-            var picked = await _pane.PickAsync(page, current.Cursor0, cancellationToken).ConfigureAwait(false);
-            if (picked is not { } pick)
-            {
-                return null;
-            }
+                foreach (var (done, read) in reading.Where(r => r.Value.IsCompleted).ToList())
+                {
+                    reading.Remove(done);
+                    Apply(line, done, await read.ConfigureAwait(false), append: false);
+                }
 
-            if (pick.Tab != tab)
-            {
-                tab = Math.Clamp(pick.Tab, 0, tabs.Count - 1);
-                current = tabs[tab];
-            }
-
-            var shown = menuTabs[tab].Rows;
-            if (pick.Filter is { } typed)
-            {
-                current.Filter = typed;
-                current.Cursor0 = 0;
-                continue;
-            }
-
-            if (pick.Row >= 0 && pick.Row < shown.Count)
-            {
-                current.Cursor0 = pick.Row;
-            }
-
-            switch (pick.Button)
-            {
-                case 0:
-                    current.Rows.Clear();
-                    current.Loaded = false;
-                    current.Cursor = null;
-                    current.Cursor0 = 0;
-                    continue;
-                case 1:
-                    if (current.More)
+                using var refresh = new CancellationTokenSource();
+                void Redraw()
+                {
+                    try
                     {
-                        await LoadAsync(line, current, append: true, cancellationToken).ConfigureAwait(false);
+                        refresh.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // the pick it was for is over: the next one applies the read
+                    }
+                }
+
+                foreach (var read in reading.Values)
+                {
+                    _ = read.ContinueWith(_ => Redraw(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                }
+
+                var menuTabs = tabs.Select(t => BuildTab(t, zone)).ToList();
+                var page = MenuPage.Tabbed(Title, menuTabs.Select(m => m.Tab).ToList(), tab, Keys) with
+                {
+                    Buttons = [new(EventLogMenu.RefreshButton, EventLogMenu.RefreshKey), new(EventLogMenu.MoreButton, EventLogMenu.MoreKey, current.More)],
+                    TabButtons = true,
+                    TabShown = shown =>
+                    {
+                        if (shown >= 0 && shown < tabs.Count && tabs[shown] is { Loaded: false } opened && !reading.ContainsKey(opened))
+                        {
+                            var read = ReadAsync(line, opened, append: false, visit.Token);
+                            reading[opened] = read;
+                            _ = read.ContinueWith(_ => Redraw(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                        }
+                    },
+                };
+                var picked = await _pane.PickAsync(page, current.Cursor0, cancellationToken, stale: refresh.Token).ConfigureAwait(false);
+                if (picked is not { } pick)
+                {
+                    return null;
+                }
+
+                if (pick.Refresh)
+                {
+                    tab = Math.Clamp(pick.Tab, 0, tabs.Count - 1);   // a tab's read is in: drawn again where the pane stood
+                    if (pick.Row >= 0)
+                    {
+                        tabs[tab].Cursor0 = pick.Row;
                     }
 
                     continue;
-            }
+                }
 
-            if (pick.Button >= 0 || pick.Row < 0 || pick.Row >= shown.Count || shown[pick.Row] is not { } row)
-            {
-                continue;
-            }
+                if (pick.Tab != tab)
+                {
+                    tab = Math.Clamp(pick.Tab, 0, tabs.Count - 1);
+                    current = tabs[tab];
+                }
 
-            if (await ShowEntryAsync(current.Source, row, cancellationToken).ConfigureAwait(false) is { } draft)
+                var shown = menuTabs[tab].Rows;
+                if (pick.Filter is { } typed)
+                {
+                    current.Filter = typed;
+                    current.Cursor0 = 0;
+                    continue;
+                }
+
+                if (pick.Row >= 0 && pick.Row < shown.Count)
+                {
+                    current.Cursor0 = pick.Row;
+                }
+
+                switch (pick.Button)
+                {
+                    case 0:
+                        current.Rows.Clear();
+                        current.Loaded = false;
+                        current.Cursor = null;
+                        current.Cursor0 = 0;
+                        continue;
+                    case 1:
+                        if (current.More)
+                        {
+                            Sink.Notice(EventLogText.Working);
+                            Apply(line, current, await ReadAsync(line, current, append: true, cancellationToken).ConfigureAwait(false), append: true);
+                        }
+
+                        continue;
+                }
+
+                if (pick.Button >= 0 || pick.Row < 0 || pick.Row >= shown.Count || shown[pick.Row] is not { } row)
+                {
+                    continue;
+                }
+
+                if (await ShowEntryAsync(current.Source, row, cancellationToken).ConfigureAwait(false) is { } draft)
+                {
+                    return draft;
+                }
+            }
+        }
+        finally
+        {
+            await visit.CancelAsync().ConfigureAwait(false);
+            foreach (var read in reading.Values)
             {
-                return draft;
+                _ = read.ContinueWith(static t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
         }
     }
@@ -272,10 +335,15 @@ internal sealed class MacLogMenu
         return (menuTab, behind);
     }
 
-    /// <summary>Reads the tab's first page, or (<paramref name="append"/>) the next one after its cursor; a refusal is the tab's line.</summary>
-    private async Task LoadAsync(MacLogCommandArgs line, LogTab tab, bool append, CancellationToken cancellationToken)
+    /// <summary>One tab's read: the query it used (an archive's anchored), the terms its log lacks, and the page or the refusal.</summary>
+    private sealed record TabRead(MacLogQuery Query, IReadOnlyList<string> Ignored, EventLogResult<MacRowsPage> Result);
+
+    /// <summary>
+    /// Reads the tab's first page, or (<paramref name="append"/>) the next one after its cursor. Touches no tab state (2026-10-20): a tab
+    /// opened from the strip is read in the background, and <see cref="Apply"/> runs on the pane's own loop.
+    /// </summary>
+    private async Task<TabRead> ReadAsync(MacLogCommandArgs line, LogTab tab, bool append, CancellationToken cancellationToken)
     {
-        Sink.Notice(EventLogText.Working);
         var now = _access.Time.GetUtcNow();
         MacLogQuery query;
         IReadOnlyList<string> ignored = [];
@@ -289,6 +357,13 @@ internal sealed class MacLogMenu
         }
 
         var result = await MacLogReads.SearchAsync(_access, tab.Source, query, ScanLimit, append ? tab.Cursor : null, cancellationToken).ConfigureAwait(false);
+        return new TabRead(result.Value?.Query ?? query, ignored, result);
+    }
+
+    /// <summary>A read put on its tab: the rows (added after the others when <paramref name="append"/>), the cursor, the refusal, the notes.</summary>
+    private void Apply(MacLogCommandArgs line, LogTab tab, TabRead read, bool append)
+    {
+        var (query, ignored, result) = read;
         tab.Loaded = true;
         tab.Query = query;
         if (result.Error is { } failed)

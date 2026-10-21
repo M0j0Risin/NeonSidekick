@@ -26,6 +26,15 @@ public sealed class FakeUnifiedLog : IUnifiedLog
 
     public int BatchSize { get; set; } = MacLogLimits.Batch;
 
+    /// <summary>
+    /// How many empty batches each read hands back before its entries (2026-10-20): the real reader's slow read, which returns a short or
+    /// empty batch after <see cref="MacLogLimits.BatchTime"/>.
+    /// </summary>
+    public int EmptyBatches { get; set; }
+
+    /// <summary>Heard before every <see cref="IUnifiedLogReader.Next"/> (2026-10-20): a test moves its clock there.</summary>
+    public Action? OnNext { get; set; }
+
     /// <summary>Every open: the target, the filter, and the predicate the real reader would have sent.</summary>
     public List<(UnifiedLogTarget Target, MacLogFilter Filter, string Format, IReadOnlyList<MacPredicateArgument> Arguments)> Opens { get; } = [];
 
@@ -89,12 +98,20 @@ public sealed class FakeUnifiedLog : IUnifiedLog
     private sealed class Reader(FakeUnifiedLog owner, List<MacLogEntry> entries, CancellationToken token) : IUnifiedLogReader
     {
         private int _at;
+        private int _empty;
         private bool _disposed;
 
         public IReadOnlyList<MacLogEntry>? Next()
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            owner.OnNext?.Invoke();
             token.ThrowIfCancellationRequested();
+            if (_empty < owner.EmptyBatches)
+            {
+                _empty++;
+                return [];
+            }
+
             if (_at >= entries.Count)
             {
                 return null;

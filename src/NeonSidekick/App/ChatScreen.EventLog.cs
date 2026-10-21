@@ -80,7 +80,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <see cref="EventLogOffered(AppSettingsData, EventLogAccess)"/>, or on a Mac with a unified-log reader (2026-10-18, the Mac event-log
-    /// plan): the switch on and a reader for either.
+    /// plan): the switch on and a reader for either. As on Windows, unticking <c>local</c> in <c>Event log computers offered</c> leaves the
+    /// group offered (2026-10-20, the code review): its tools then read the working directory's <c>.logarchive</c> folders alone, as Windows'
+    /// read its <c>.evtx</c> files, the Mac's own logs refused (<see cref="MacLogAccess.LocalTicked"/>).
     /// </summary>
     public static bool EventLogOffered(AppSettingsData effective, EventLogAccess access, MacLogAccess? mac)
     {
@@ -106,7 +108,8 @@ internal sealed partial class ChatScreen
     {
         if (_macLog.Log is not null)
         {
-            return MacLogCommand.Complete(argText, _macLog.Archives());   // a Mac's logs (2026-10-18, the Mac event-log plan's phase 4)
+            // A Mac's logs (2026-10-18, the Mac event-log plan's phase 4); the archives as last listed, never walked on the input thread (2026-10-20, the code review).
+            return MacLogCommand.Complete(argText, _macLog.CachedArchives());
         }
 
         if (!OperatingSystem.IsWindows() || _eventLog.System is null)
@@ -189,8 +192,8 @@ internal sealed partial class ChatScreen
     private async Task HandleMacLogAsync(string args, UI.INoticeSink sink, CancellationToken cancellationToken, bool onWatcher)
     {
         var effective = _effective();
-        int limit = Math.Clamp(effective.EventLogMaxEvents, AppSettingsData.MinEventLogMaxEvents, AppSettingsData.MaxEventLogMaxEvents);
-        int scanLimit = Math.Clamp(effective.EventLogScanLimit, AppSettingsData.MinEventLogScanLimit, AppSettingsData.MaxEventLogScanLimit);
+        int limit = EventLogLimit(effective);
+        int scanLimit = EventLogScanLimit(effective);
         if (_pane.Enabled && !FromWebNow)
         {
             var (line, error) = MacLogCommand.Parse(args, _time.GetUtcNow(), _time.LocalTimeZone);
@@ -231,6 +234,14 @@ internal sealed partial class ChatScreen
 
         await ShowLinesAsync(TreeText.PaneLabel(EventLogCommand.Word, args), result.Lines, sink, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary><c>Event log max events</c> clamped to its range (2026-10-20: headless reads it too, where a -1 threw and a 0 stopped at once).</summary>
+    public static int EventLogLimit(AppSettingsData effective) =>
+        Math.Clamp(effective.EventLogMaxEvents, AppSettingsData.MinEventLogMaxEvents, AppSettingsData.MaxEventLogMaxEvents);
+
+    /// <summary><c>Event log scan limit</c> clamped to its range (2026-10-20).</summary>
+    public static int EventLogScanLimit(AppSettingsData effective) =>
+        Math.Clamp(effective.EventLogScanLimit, AppSettingsData.MinEventLogScanLimit, AppSettingsData.MaxEventLogScanLimit);
 
     /// <summary>After a pane phase under a reply: an event's ask (2026-10-15) goes on the draft now, as <see cref="TakePromptPick"/>'s prompt does.</summary>
     private bool TakeEventLogDraft(bool typed)

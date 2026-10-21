@@ -147,6 +147,13 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public bool TabButtons { get; init; }
 
     /// <summary>
+    /// Heard with the tab's index each time a key or a click switches tabs inside a pick (2026-10-20, the code review of the Mac's
+    /// <c>/eventlog</c>: it read every tab before it drew, each up to 30 s). A host that reads a tab on its first open starts the read here
+    /// and shows the page again through <see cref="MenuPane.PickAsync"/>'s <c>stale</c> once it is in. Null for none.
+    /// </summary>
+    public Action<int>? TabShown { get; init; }
+
+    /// <summary>
     /// Plain text drawn under the title or the strip, above the status line (a question over its
     /// answers): escaped by the pane, word-wrapped to at most <see cref="MenuPane.CaptionMaxRows"/>
     /// rows with the last cut by an ellipsis, or the more <see cref="CaptionGrows"/> allows. Null for none (every page but the question pane).
@@ -1258,6 +1265,7 @@ public sealed class MenuPane : INoticeSink
         _first = 0;
         _status.Clear();
         Show();
+        _page.TabShown?.Invoke(tab);
         return count;
     }
 

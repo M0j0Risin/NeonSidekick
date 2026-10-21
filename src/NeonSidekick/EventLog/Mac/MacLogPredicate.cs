@@ -142,11 +142,16 @@ public static class MacLogPredicate
 /// <summary>
 /// The client-side check of every term (2026-10-18): what <see cref="MacLogPredicate"/> asked of OSLog, asked again of each entry the
 /// reader copied out, so a predicate that matched too much (a store's quirk, a fake) still gives the right rows. Pure. The entry that
-/// ends the read (older than <see cref="MacLogFilter.Since"/>) is never a match.
+/// ends the read (older than <see cref="MacLogFilter.Since"/>) is never a match. The text is checked on <c>wholeMessage</c> when the reader
+/// gives it (2026-10-20, the code review): OSLog's <c>composedMessage CONTAINS[c]</c> matched the whole message, and the copy's is cut at
+/// <see cref="MacLogLimits.MessageChars"/>, so a match past the cut was thrown away.
 /// </summary>
 public static class MacLogMatch
 {
-    public static bool Matches(MacLogEntry entry, MacLogFilter filter)
+    public static bool Matches(MacLogEntry entry, MacLogFilter filter) => Matches(entry, filter, null);
+
+    /// <summary><see cref="Matches(MacLogEntry, MacLogFilter)"/>, the text looked for in <paramref name="wholeMessage"/> (the message before its cut) when given.</summary>
+    public static bool Matches(MacLogEntry entry, MacLogFilter filter, string? wholeMessage)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(filter);
@@ -184,7 +189,7 @@ public static class MacLogMatch
         }
 
         string text = MacLogPredicate.Clean(filter.Text);
-        if (text.Length > 0 && !entry.Message.Contains(text, StringComparison.OrdinalIgnoreCase))
+        if (text.Length > 0 && !(wholeMessage ?? entry.Message).Contains(text, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

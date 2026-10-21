@@ -106,7 +106,7 @@ public sealed class MacLogTests
         var entry = Entry() with { Time = Since.AddTicks(1_234_567) };   // 123,456.7 µs past the hour
         var handle = MacLogHandle.Of(entry, 2);
 
-        Assert.Equal("u" + MacLogHandle.MicrosecondsOf(entry.Time) + ".395.7.2", handle.ToString());
+        Assert.Equal("u" + MacLogHandle.MicrosecondsOf(entry.Time) + ".395.7.2." + MacLogHandle.MarkOf(entry).ToString("x8", System.Globalization.CultureInfo.InvariantCulture), handle.ToString());
         Assert.True(MacLogHandle.TryParse(" " + handle + " ", out var back));
         Assert.Equal(handle, back);
         Assert.True(back.Names(entry));

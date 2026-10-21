@@ -92,6 +92,19 @@ public partial class ChatScreenTests
         Assert.Equal(MacLogMenu.AskDraft("crashes", "Widget-2026-09-11-150000.ips"), UserText(_chat.Requests[0]));
     }
 
+    /// <summary>Only the tab on show is read before the first draw (2026-10-20, the code review: every tab was, each up to 30 s).</summary>
+    [Fact]
+    public async Task MacLog_ThePane_ReadsOnlyTheTabOnShow()
+    {
+        MacLogFixture();
+        StepsWhenIdle(Line("/eventlog crashes"), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("▸ 13:00:00 ● Widget[4242]", output);
+        Assert.Empty(_unifiedLog!.Opens);
+    }
+
     [Fact]
     public async Task MacLog_Copy_CopiesTheInstallEntry()
     {

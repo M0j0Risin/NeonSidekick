@@ -871,7 +871,8 @@ public sealed partial class SidekickApp
         // The event logs (2026-10-15): read-only, so headless has all four; the ticked computers and the working directory's .evtx files.
         var eventLog = new EventLog.EventLogAccess(_eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => EffectiveSettings.EventLogComputersOffered, files, _time);
         // A Mac's unified log (2026-10-18, the Mac event-log plan): the same four tool names over it when a reader was given.
-        var macLog = new EventLog.MacLogAccess(_unifiedLog, () => ChatScreen.LocalFull(_settings.ProfileDirectory, _settings.StorageDirectory), files, _time);
+        var macLog = new EventLog.MacLogAccess(_unifiedLog, () => ChatScreen.LocalFull(_settings.ProfileDirectory, _settings.StorageDirectory), files, _time,
+            localTicked: () => EventLog.MacLogAccess.Ticks(EffectiveSettings.EventLogComputersOffered));   // local unticked: archives only (2026-10-20)
         var eventLogTools = _unifiedLog is not null ? ChatScreen.MacLogTools(macLog, () => EffectiveSettings) : ChatScreen.EventLogTools(eventLog, () => EffectiveSettings);
         // The admin families (2026-10-15, the admin-tools plan): every read headless too, never a change (no pane to ask on); one scan budget, reset each turn.
         var network = new Network.NetworkAccess(() => EffectiveSettings, _pinger, _time);
@@ -1340,8 +1341,8 @@ public sealed partial class SidekickApp
                 if (SlashCommands.Parse(text) is (SlashCommand.EventLog, var eventLogArgs))
                 {
                     var eventLogResult = _unifiedLog is not null   // a Mac's logs (2026-10-18, the Mac event-log plan's phase 4)
-                        ? await EventLog.MacLogCommand.RunAsync(macLog, eventLogArgs, EffectiveSettings.EventLogMaxEvents, EffectiveSettings.EventLogScanLimit, cancellationToken).ConfigureAwait(false)
-                        : await EventLog.EventLogCommand.RunAsync(eventLog, eventLogArgs, EffectiveSettings.EventLogMaxEvents, EffectiveSettings.EventLogScanLimit, cancellationToken).ConfigureAwait(false);
+                        ? await EventLog.MacLogCommand.RunAsync(macLog, eventLogArgs, ChatScreen.EventLogLimit(EffectiveSettings), ChatScreen.EventLogScanLimit(EffectiveSettings), cancellationToken).ConfigureAwait(false)
+                        : await EventLog.EventLogCommand.RunAsync(eventLog, eventLogArgs, ChatScreen.EventLogLimit(EffectiveSettings), ChatScreen.EventLogScanLimit(EffectiveSettings), cancellationToken).ConfigureAwait(false);   // clamped as the screen's (2026-10-20, the code review)
                     foreach (string eventLogLine in eventLogResult.Lines)
                     {
                         await HeadlessLineAsync((eventLogResult.Failed ? "[error] " : "") + eventLogLine).ConfigureAwait(false);

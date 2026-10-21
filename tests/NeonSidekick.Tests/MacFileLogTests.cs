@@ -261,9 +261,9 @@ public sealed class MacFileLogTests : IDisposable
         Assert.Contains(EventLogText.RedactedNote, lines[0], StringComparison.Ordinal);
         Assert.Equal(EventLogText.QuoteNote, lines[1]);
         Assert.StartsWith("JetsamEvent-2026-09-11-160500.ips  ", lines[2], StringComparison.Ordinal);
-        Assert.Contains("  jetsam  JetsamEvent  ⟪low memory: 1 process ended", lines[2], StringComparison.Ordinal);
+        Assert.Contains("  jetsam  ⟪JetsamEvent⟫  ⟪low memory: 1 process ended", lines[2], StringComparison.Ordinal);
         Assert.StartsWith("Widget-2026-09-11-150000.ips  ", lines[3], StringComparison.Ordinal);
-        Assert.EndsWith("  crash  Widget[4242]  ⟪EXC_CRASH (SIGABRT) — Abort trap: 6 — libsystem_c.dylib: abort() called⟫", lines[3], StringComparison.Ordinal);
+        Assert.EndsWith("  crash  ⟪Widget⟫[4242]  ⟪EXC_CRASH (SIGABRT) — Abort trap: 6 — libsystem_c.dylib: abort() called⟫", lines[3], StringComparison.Ordinal);
         Assert.StartsWith("logd_2026-09-11-140000_host.cpu_resource.diag  ", lines[4], StringComparison.Ordinal);
         Assert.StartsWith("ExcUserFault_lsd-2026-09-11-120000.ips  ", lines[5], StringComparison.Ordinal);   // from Retired
         Assert.DoesNotContain(".hidden", answer, StringComparison.Ordinal);
@@ -333,11 +333,11 @@ public sealed class MacFileLogTests : IDisposable
 
         Assert.StartsWith("install on this Mac: 2 entries, newest first (read 2 entries since ", one, StringComparison.Ordinal);
         Assert.Contains(MacLogText.NotApplied("install", ["level"]), one, StringComparison.Ordinal);
-        Assert.Contains("  softwareupdated[534]  ⟪SUOSUServiceDaemon: idle⟫", one, StringComparison.Ordinal);
-        Assert.Contains("  package_script_service[812]  ⟪./postinstall: done⟫", one, StringComparison.Ordinal);
-        Assert.Contains("  package_script_service[812]  ⟪./postinstall: password=<redacted> written to ~/.config/widget⟫", two, StringComparison.Ordinal);
-        Assert.Contains("  Installer Progress  ⟪Install succeeded⟫", two, StringComparison.Ordinal);
-        Assert.Contains("  softwareupdated[534]  ⟪Products found:⟫", three, StringComparison.Ordinal);
+        Assert.Contains("  ⟪softwareupdated⟫[534]  ⟪SUOSUServiceDaemon: idle⟫", one, StringComparison.Ordinal);
+        Assert.Contains("  ⟪package_script_service⟫[812]  ⟪./postinstall: done⟫", one, StringComparison.Ordinal);
+        Assert.Contains("  ⟪package_script_service⟫[812]  ⟪./postinstall: password=<redacted> written to ~/.config/widget⟫", two, StringComparison.Ordinal);
+        Assert.Contains("  ⟪Installer Progress⟫  ⟪Install succeeded⟫", two, StringComparison.Ordinal);
+        Assert.Contains("  ⟪softwareupdated⟫[534]  ⟪Products found:⟫", three, StringComparison.Ordinal);
         Assert.DoesNotContain("Old Thing", one + two + three, StringComparison.Ordinal);   // more than a day back
         Assert.Null(NextBefore(three));
     }
@@ -355,9 +355,9 @@ public sealed class MacFileLogTests : IDisposable
 
         Assert.Contains("\nprocess: ⟪softwareupdated⟫ (pid 534)\nmessage:\n⟪Products found:\n\t122-15866\t | Safari 26.5\n\t122-15867\t | Xcode Tools⟫", answer, StringComparison.Ordinal);
         Assert.Contains(": 5 entries in 3 groups (read 5 entries)", summary, StringComparison.Ordinal);
-        Assert.Contains("\n2×  package_script_service  newest ", summary, StringComparison.Ordinal);
+        Assert.Contains("\n2×  ⟪package_script_service⟫  newest ", summary, StringComparison.Ordinal);
         Assert.Contains(": 4 reports in 4 groups (read 4 reports)", crashes, StringComparison.Ordinal);
-        Assert.Contains("1×  crash  Widget  newest ", crashes, StringComparison.Ordinal);
+        Assert.Contains("1×  crash  ⟪Widget⟫  newest ", crashes, StringComparison.Ordinal);
         Assert.Equal(MacLogText.BadFileHandle("u1.2.3.0", "install"), bad);
     }
 

@@ -8,13 +8,15 @@ namespace NeonSidekick.EventLog;
 /// transcript's note), every message fenced (<see cref="EventLogText.Quote"/>, <see cref="EventLogText.QuoteNote"/> once), held to
 /// <see cref="EventLogRender.MaxChars"/> (one entry to <see cref="EventLogRender.EventMaxChars"/>), how far back a stopped read got, the
 /// loudest process when one made most of a read, and the next page as the whole call to make. Pinned by <c>MacLogToolsTests</c>.
+/// The process, the subsystem and the category are fenced too (2026-10-20, the code review): any program names its own with
+/// <c>os_log_create</c>, as a Windows event's provider is fenced (<see cref="EventLogRender.Line"/>).
 /// </summary>
 public static class MacLogRender
 {
     /// <summary>The level as OSLog names it.</summary>
     public static string LevelWord(int level) => level is >= 1 and <= 5 ? MacLogPredicate.LevelWords[level - 1] : "level " + level.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>One entry's line: <c>u…  2026-10-18 01:09:34 -05:00  error  loginwindow[395]  com.apple.x/Cat  ⟪message⟫</c>.</summary>
+    /// <summary>One entry's line: <c>u…  2026-10-18 01:09:34 -05:00  error  ⟪loginwindow⟫[395]  ⟪com.apple.x/Cat⟫  ⟪message⟫</c>.</summary>
     public static string Line(MacLogView view, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(view);
@@ -28,11 +30,11 @@ public static class MacLogRender
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(page);
-        string header = Clean(source.Log) + " " + MacLogText.OnThisMac + ": " + EventLogText.Count(page.Entries.Count, "entry", "entries") + ", newest first (read "
-            + EventLogText.Count(page.Read, "entry", "entries") + " since " + EventLogText.Time(query.Since, zone) + ")" + (source.Redacted ? "; " + EventLogText.RedactedNote : "");
+        string header = Clean(source.Log) + " " + MacLogText.OnThisMac + ": " + EventLogText.Count(page.Entries.Count, "entry", "entries")
+            + MacLogText.NewestFirstRead(EventLogText.Count(page.Read, "entry", "entries"), EventLogText.Time(query.Since, zone)) + (source.Redacted ? "; " + EventLogText.RedactedNote : "");
         if (page.Entries.Count == 0 && !page.BudgetStop)
         {
-            return header + "\n" + MacLogText.NoEntries(Clean(source.Log), query.Levels, query.Since, now, zone) + (query.Text is { Length: > 0 } ? " holding that text" : "") + ".";
+            return header + "\n" + MacLogText.NoEntries(Clean(source.Log), query.Levels, query.Since, now, zone) + (query.Text is { Length: > 0 } ? MacLogText.HoldingThatText : "") + ".";
         }
 
         int budget = EventLogRender.MaxChars - header.Length - EventLogText.QuoteNote.Length - 300;
@@ -119,12 +121,12 @@ public static class MacLogRender
         return answer.ToString();
     }
 
-    /// <summary>A summary's group: <c>412×  error  mediaanalysisd  com.apple.mediaanalysis/common  newest … u…  ⟪sample⟫</c>.</summary>
+    /// <summary>A summary's group: <c>412×  error  ⟪mediaanalysisd⟫  ⟪com.apple.mediaanalysis/common⟫  newest … u…  ⟪sample⟫</c>.</summary>
     public static string SummaryLine(MacSummaryGroup group, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(group);
-        return group.Count.ToString("N0", CultureInfo.InvariantCulture) + "×  " + LevelWord(group.Level) + "  " + Clean(Cut(group.Process, 40))
-            + (group.Subsystem.Length > 0 || group.Category.Length > 0 ? "  " + Clean(Cut(group.Subsystem + (group.Category.Length > 0 ? "/" + group.Category : ""), 80)) : "")
+        return group.Count.ToString("N0", CultureInfo.InvariantCulture) + "×  " + LevelWord(group.Level) + "  " + Fence(group.Process.Length > 0 ? group.Process : "?", 40)
+            + (group.Subsystem.Length > 0 || group.Category.Length > 0 ? "  " + Fence(group.Subsystem + (group.Category.Length > 0 ? "/" + group.Category : ""), 80) : "")
             + "  newest " + EventLogText.Time(group.Newest, zone) + " " + group.NewestHandle
             + "  " + EventLogText.Quote(Clean(Cut(group.Sample.Length > 0 ? group.Sample : MacLogText.NoMessage, 200)));
     }
@@ -155,7 +157,7 @@ public static class MacLogRender
 
         if (e.Sender.Length > 0 && e.Sender != e.Process)
         {
-            answer.Append("\nsender: ").Append(EventLogText.Quote(Clean(e.Sender)));
+            answer.Append("\nsender: ").Append(EventLogText.Quote(Clean(view.ShownSender)));   // redacted with the message (2026-10-20)
         }
 
         string message = view.Message.Length > 0 ? view.Message : MacLogText.NoMessage;
@@ -166,14 +168,16 @@ public static class MacLogRender
 
     /// <summary>
     /// <c>eventlog_logs</c> on a Mac: the unified log (readable, or why not), the crash reports and install.log (each its own line, phase
-    /// 3), and each <c>.logarchive</c> in the working directory; <paramref name="filter"/> narrows the archives by name.
+    /// 3), and each <c>.logarchive</c> in the working directory; <paramref name="filter"/> narrows the archives by name. Not
+    /// <paramref name="offered"/> (<c>local</c> unticked, 2026-10-20), <paramref name="systemError"/> is the system line's whole text.
     /// </summary>
-    public static string Logs(string? systemError, string crashesLine, string installLine, IReadOnlyList<string> archives, string? filter)
+    public static string Logs(string? systemError, string crashesLine, string installLine, IReadOnlyList<string> archives, string? filter, bool offered = true)
     {
         ArgumentNullException.ThrowIfNull(archives);
         var shown = archives.Where(a => filter is not { Length: > 0 } f || a.Contains(f, StringComparison.OrdinalIgnoreCase)).ToList();
         var answer = new StringBuilder(MacLogText.LogsHeader);
-        answer.Append('\n').Append(MacLogAccess.SystemNames[0]).Append("  ").Append(systemError is null ? MacLogText.SystemReadable : MacLogText.SystemRefused(systemError));
+        string systemLine = !offered ? systemError ?? "" : systemError is null ? MacLogText.SystemReadable : MacLogText.SystemRefused(systemError);
+        answer.Append('\n').Append(MacLogAccess.SystemNames[0]).Append("  ").Append(systemLine);
         answer.Append('\n').Append(MacLogAccess.CrashNames[0]).Append("  ").Append(crashesLine);
         answer.Append('\n').Append(MacLogAccess.InstallNames[0]).Append("  ").Append(installLine);
         if (shown.Count == 0)
@@ -229,8 +233,8 @@ public static class MacLogRender
     // ── The logs that are files (phase 3) ───────────────────────────────────
 
     /// <summary>
-    /// One file-log entry's line: a report's <c>dotnet-2026-10-18-011440.ips  2026-10-18 01:14:40 -05:00  crash  dotnet[83930]  ⟪summary⟫</c>,
-    /// an install entry's <c>i23790500.1792…  2026-10-18 02:28:55 -05:00  softwareupdated[534]  ⟪message⟫</c>.
+    /// One file-log entry's line: a report's <c>dotnet-2026-10-18-011440.ips  2026-10-18 01:14:40 -05:00  crash  ⟪dotnet⟫[83930]  ⟪summary⟫</c>,
+    /// an install entry's <c>i23790500.1792…  2026-10-18 02:28:55 -05:00  ⟪softwareupdated⟫[534]  ⟪message⟫</c>.
     /// </summary>
     public static string FileLine(MacFileView view, TimeZoneInfo zone)
     {
@@ -246,7 +250,7 @@ public static class MacLogRender
         ArgumentNullException.ThrowIfNull(page);
         bool crashes = source.Kind == MacLogKind.Crashes;
         string header = source.Log + " " + MacLogText.OnThisMac + ": " + (crashes ? EventLogText.Count(page.Entries.Count, "report") : EventLogText.Count(page.Entries.Count, "entry", "entries"))
-            + ", newest first (read " + (crashes ? EventLogText.Count(page.Read, "report") : EventLogText.Count(page.Read, "entry", "entries")) + " since " + EventLogText.Time(query.Since, zone) + ")"
+            + MacLogText.NewestFirstRead(crashes ? EventLogText.Count(page.Read, "report") : EventLogText.Count(page.Read, "entry", "entries"), EventLogText.Time(query.Since, zone))
             + (source.Redacted ? "; " + EventLogText.RedactedNote : "");
         if (ignored.Count > 0)
         {
@@ -255,7 +259,7 @@ public static class MacLogRender
 
         if (page.Entries.Count == 0 && !page.BudgetStop)
         {
-            return header + "\n" + MacLogText.NoFileEntries(source.Log, query.Since, now, zone) + (query.Text is { Length: > 0 } ? " holding that text" : "") + ".";
+            return header + "\n" + MacLogText.NoFileEntries(source.Log, query.Since, now, zone) + (query.Text is { Length: > 0 } ? MacLogText.HoldingThatText : "") + ".";
         }
 
         int budget = EventLogRender.MaxChars - header.Length - EventLogText.QuoteNote.Length - 300;
@@ -329,7 +333,7 @@ public static class MacLogRender
         int shown = 0;
         foreach (var group in summary.Groups)
         {
-            string line = group.Count.ToString("N0", CultureInfo.InvariantCulture) + "×  " + (group.Kind is { } kind ? kind + "  " : "") + Clean(Cut(group.Process.Length > 0 ? group.Process : "?", 40))
+            string line = group.Count.ToString("N0", CultureInfo.InvariantCulture) + "×  " + (group.Kind is { } kind ? kind + "  " : "") + Fence(group.Process.Length > 0 ? group.Process : "?", 40)
                 + "  newest " + EventLogText.Time(group.Newest, zone) + " " + Clean(group.NewestHandle)
                 + "  " + EventLogText.Quote(Clean(Cut(group.Sample.Length > 0 ? group.Sample : MacLogText.NoMessage, 200)));
             if (budget - line.Length - 1 < 0 && shown > 0)
@@ -423,7 +427,7 @@ public static class MacLogRender
     }
 
     private static string FileWho(string process, int? pid) =>
-        Clean(Cut(process.Length > 0 ? process : "?", 40)) + (pid is { } p ? "[" + p.ToString(CultureInfo.InvariantCulture) + "]" : "");
+        Fence(process.Length > 0 ? process : "?", 40) + (pid is { } p ? "[" + p.ToString(CultureInfo.InvariantCulture) + "]" : "");
 
     private static void AppendNotes(StringBuilder answer, bool stopped, int read, DateTimeOffset? reached, MacLoudest? loudest, TimeZoneInfo zone)
     {
@@ -434,17 +438,20 @@ public static class MacLogRender
 
         if (loudest is { } loud)
         {
-            answer.Append('\n').Append(MacLogText.Loudest(Clean(loud.Process), loud.Count, loud.Of));
+            answer.Append('\n').Append(MacLogText.Loudest(Clean(Cut(loud.Process, 40)), loud.Count, loud.Of, fenced: true));
         }
     }
 
-    private static string Who(MacLogEntry e) => Clean(Cut(e.Process.Length > 0 ? e.Process : "?", 40)) + "[" + e.Pid.ToString(CultureInfo.InvariantCulture) + "]";
+    private static string Who(MacLogEntry e) => Fence(e.Process.Length > 0 ? e.Process : "?", 40) + "[" + e.Pid.ToString(CultureInfo.InvariantCulture) + "]";
 
     private static string Where(MacLogEntry e)
     {
         string where = e.Subsystem + (e.Category.Length > 0 ? "/" + e.Category : "");
-        return where.Length == 0 ? "" : "  " + Clean(Cut(where, 80));
+        return where.Length == 0 ? "" : "  " + Fence(where, 80);
     }
+
+    /// <summary>A name a program chose, cut, scrubbed and fenced as a message is (2026-10-20, the code review).</summary>
+    private static string Fence(string text, int max) => EventLogText.Quote(Clean(Cut(text, max)));
 
     private static void Add(List<string> parts, string name, string? value)
     {

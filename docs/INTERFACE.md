@@ -157,7 +157,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 * **A row:** the time, a level icon, the provider, the id and the message's first line; a dim line marks each new day. Icons: ◆ critical, ● error, ▲ warning, ○ information; ✗ and ✓ Security's audit failures and successes.
 * **Buttons** on the title row: `⟳ refresh`, `more` (lit while there is a next page) and `computer` (with more than one ticked).
 * **An event's page** shows everything recorded, its XML too, as plain text: nothing an event holds is read as markup or a terminal code.
-* **On a Mac** the title is `🪵 Event logs · this Mac`, with tabs `system`, `crashes` and `install` (and a `.logarchive` you named), and no `computer` button. Icons: ◆ fault, ● error or a crash, ▲ a jetsam, ○ default and the other reports, · the rest.
+* **On a Mac** the title is `🪵 Event logs · this Mac`, with tabs `system`, `crashes` and `install` (and a `.logarchive` you named), each read when first opened, and no `computer` button. Icons: ◆ fault, ● error or a crash, ▲ a jetsam, ○ default and the other reports, · the rest.
 
 ### The services and tasks panes
 

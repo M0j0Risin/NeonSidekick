@@ -12,6 +12,9 @@ public static class MacLogText
     /// <summary>A <c>.logarchive</c> that is not there or not an archive.</summary>
     public static string NoArchive(string name) => $"'{name}' is not a log archive this Mac can read.";
 
+    /// <summary>A <c>.logarchive</c> this account may not open (2026-10-20: it said "needs an administrator" before, which an archive never does).</summary>
+    public static string ArchiveRefused(string name) => $"'{name}' cannot be read from this account.";
+
     /// <summary>OSLog refused the filter itself (a value it could not take).</summary>
     public const string FilterRefused = "the unified log refused that filter; try fewer or plainer terms.";
 
@@ -38,6 +41,21 @@ public static class MacLogText
     /// <summary>A handle whose entry is gone.</summary>
     public static string NoEntry(string handle, string log) => $"Error: entry {handle} is no longer in {log}: the log has moved past it.";
 
+    /// <summary>
+    /// The Mac's own logs asked for with <c>local</c> unticked in <c>Event log computers offered</c> (2026-10-20, the code review: Windows'
+    /// <see cref="EventLogText.NoComputerTicked"/>, which keeps its <c>.evtx</c> files as this keeps the archives).
+    /// </summary>
+    public const string LocalNotTicked = "Error: local is not ticked in Event log computers offered (/tools › Admin › EventLog); only the working directory's .logarchive folders can be read.";
+
+    /// <summary><c>eventlog_logs</c>' line for the Mac's own logs while <c>local</c> is unticked.</summary>
+    public const string LocalNotTickedLine = "not offered: local is not ticked in Event log computers offered";
+
+    /// <summary>A report that is a link, a FIFO or a device, never opened (2026-10-20).</summary>
+    public const string NotARegularFile = "not a regular file";
+
+    /// <summary>A pid that is not a number (<c>/eventlog pid:x</c>; moved here from <c>MacLogCommand</c>, 2026-10-20).</summary>
+    public static string BadPid(string text) => $"Error: pid '{text}' is not a process id.";
+
     // ── The answers ─────────────────────────────────────────────────────────
 
     /// <summary>Where every answer says it read.</summary>
@@ -51,6 +69,12 @@ public static class MacLogText
 
     /// <summary>An entry with no message.</summary>
     public const string NoMessage = "(no message)";
+
+    /// <summary>What an empty read with a text term adds to its sentence (moved here from <c>MacLogRender</c>, 2026-10-20).</summary>
+    public const string HoldingThatText = " holding that text";
+
+    /// <summary>A page's header after its count: <c>, newest first (read 20 entries since …)</c> (moved here from <c>MacLogRender</c>, 2026-10-20).</summary>
+    public static string NewestFirstRead(string read, string since) => ", newest first (read " + read + " since " + since + ")";
 
     /// <summary>What an empty read says: <c>no faults or errors in system since an hour ago</c>. Pinned.</summary>
     public static string NoEntries(string log, IReadOnlyList<string> levels, DateTimeOffset since, DateTimeOffset now, TimeZoneInfo zone)
@@ -81,8 +105,12 @@ public static class MacLogText
         "(stopped after reading " + EventLogText.Count(read, "entry", "entries") + (reached is null ? "" : ", back to " + reached) + "; the unified log is vast: narrow it with process, subsystem, level or a shorter since)";
 
     /// <summary>The note when one process made most of a read (Phase 0: mediaanalysisd made 19,997 of 20,000 errors).</summary>
-    public static string Loudest(string process, int count, int of) =>
-        "(" + process + " made " + count.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " of the " + of.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
+    /// <remarks>
+    /// <paramref name="fenced"/> (2026-10-20, the code review): the model's answers fence the first mention, a name any program chose; the
+    /// <c>exclude_process=</c> value stays plain, to be copied into a call. The user's printed lines leave both plain.
+    /// </remarks>
+    public static string Loudest(string process, int count, int of, bool fenced = false) =>
+        "(" + (fenced ? EventLogText.Quote(process) : process) + " made " + count.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " of the " + of.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
         + " entries read; exclude_process=" + process + " leaves it out)";
 
     /// <summary><c>eventlog_logs</c>' header on a Mac.</summary>
@@ -143,6 +171,36 @@ public static class MacLogText
     /// <summary>A page's cursor naming a report that is gone.</summary>
     public static string CursorGone(string name) => $"Error: report {name} is no longer there; search again without before.";
 
+    /// <summary>A page's cursor naming an install.log entry that is gone (2026-10-20: the file rotated or was cut since the page).</summary>
+    public static string InstallCursorGone(string handle) => $"Error: entry {handle} is no longer in install.log; search again without before.";
+
+    /// <summary>A page's cursor gone, in the log's own words.</summary>
+    public static string CursorGoneIn(string log, string cursor) => log == MacLogAccess.CrashNames[0] ? CursorGone(cursor) : InstallCursorGone(cursor);
+
+    // ── /eventlog's completion (moved here from MacLogCommand, 2026-10-20, the code review) ──
+
+    /// <summary>The level choices' note.</summary>
+    public const string LevelNote = "the level (system and archives)";
+
+    /// <summary>The crash reports' note.</summary>
+    public const string CrashesNote = "crash and diagnostic reports";
+
+    /// <summary>install.log's note.</summary>
+    public const string InstallNote = "install.log: software installs and updates";
+
+    /// <summary>Each term key's note.</summary>
+    public static string KeyNote(string key) => key switch
+    {
+        "level:" => "fault, error, default, info, debug, all",
+        "process:" => "the process by name",
+        "subsystem:" => "subsystems starting with this",
+        "category:" => "the category",
+        "pid:" => "the process id",
+        "exclude:" => "processes to leave out",
+        "since:" => "an age (2h, 1d) or a moment",
+        _ => "an age or a moment",
+    };
+
     /// <summary>What an empty file-log read says: <c>no crash reports since 7 days ago</c>.</summary>
     public static string NoFileEntries(string log, DateTimeOffset since, DateTimeOffset now, TimeZoneInfo zone) =>
         "no " + (log == MacLogAccess.CrashNames[0] ? "crash or diagnostic reports" : "install.log entries") + " since " + EventLogText.Since(since, now, zone);
@@ -161,34 +219,63 @@ public static class MacLogText
 }
 
 /// <summary>
-/// An OSLog refusal turned into a sentence (2026-10-18). OSLog's error codes are not documented, so the words of its description
-/// decide, with the code a fallback: rights (an account that is not an administrator), a missing archive, a refused filter, else
-/// OSLog's own description. Pure.
+/// An OSLog refusal turned into a sentence (2026-10-18). By the <c>NSError</c>'s domain and code (2026-10-20, the code review: the words of
+/// its localized description decided before, and they follow the Mac's language), an archive's first: a read of a <c>.logarchive</c> is
+/// never "needs an administrator" — a refused file is <see cref="MacLogText.ArchiveRefused"/>, a missing or unreadable one, or any OSLog
+/// refusal of it, <see cref="MacLogText.NoArchive"/>. For this Mac's store, Cocoa's and POSIX's rights codes and OSLog's code 9 (the
+/// store's "Client lacks entitlement to perform operation", reported for an account that is not an administrator) are
+/// <see cref="MacLogText.NeedsAdmin"/>. First of all, the app's own codes 2 and 3 (a filter value or predicate it could not make) and a
+/// description naming the predicate (OSLog's own, not localized) are <see cref="MacLogText.FilterRefused"/>; anything else keeps OSLog's
+/// description.
+/// Pure.
 /// </summary>
 public static class MacLogErrors
 {
+    public const string OSLogDomain = "OSLogErrorDomain";
+    public const string CocoaDomain = "NSCocoaErrorDomain";
+    public const string PosixDomain = "NSPOSIXErrorDomain";
+    public const string OwnDomain = "NeonSidekick";
+
+    /// <summary>
+    /// OSLog's code for a store the caller may not read: "Client lacks entitlement to perform operation", as reported for a read that is not
+    /// an administrator's (not yet seen here on a standard account: MAC.md's open check).
+    /// </summary>
+    public const long OSLogNotEntitled = 9;
+
     public static string Sentence(UnifiedLogException failure, string? archive = null)
     {
         ArgumentNullException.ThrowIfNull(failure);
-        string words = failure.Description.ToLowerInvariant();
-        if (words.Contains("permission", StringComparison.Ordinal) || words.Contains("not permitted", StringComparison.Ordinal)
-            || words.Contains("not authorized", StringComparison.Ordinal) || words.Contains("denied", StringComparison.Ordinal))
-        {
-            return MacLogText.NeedsAdmin;
-        }
-
-        if (archive is not null && (words.Contains("no such file", StringComparison.Ordinal) || words.Contains("doesn't exist", StringComparison.Ordinal)
-            || words.Contains("couldn't be opened", StringComparison.Ordinal) || words.Contains("not a valid", StringComparison.Ordinal)
-            || words.Contains("valid log archive", StringComparison.Ordinal)))
-        {
-            return MacLogText.NoArchive(Path.GetFileName(archive.TrimEnd('/')));
-        }
-
-        if (words.Contains("predicate", StringComparison.Ordinal) || words.Contains("no such field", StringComparison.Ordinal))
+        if ((failure.Domain == OwnDomain && failure.Code is 2 or 3) || failure.Description.Contains("predicate", StringComparison.OrdinalIgnoreCase))
         {
             return MacLogText.FilterRefused;
         }
 
+        if (archive is not null)
+        {
+            string name = Path.GetFileName(archive.TrimEnd('/'));
+            if (IsRightsRefusal(failure))
+            {
+                return MacLogText.ArchiveRefused(name);
+            }
+
+            if (IsMissingOrUnreadable(failure) || failure.Domain == OSLogDomain)
+            {
+                return MacLogText.NoArchive(name);
+            }
+        }
+        else if (IsRightsRefusal(failure) || (failure.Domain == OSLogDomain && failure.Code == OSLogNotEntitled))
+        {
+            return MacLogText.NeedsAdmin;
+        }
+
         return MacLogText.Refused(failure.Description);
     }
+
+    /// <summary>Cocoa's no-permission codes (257 reading, 513 writing) and POSIX's EPERM and EACCES.</summary>
+    private static bool IsRightsRefusal(UnifiedLogException failure) =>
+        (failure.Domain == CocoaDomain && failure.Code is 257 or 513) || (failure.Domain == PosixDomain && failure.Code is 1 or 13);
+
+    /// <summary>Cocoa's no-such-file and unreadable codes (4, 256, 259, 260) and POSIX's ENOENT and ENOTDIR.</summary>
+    private static bool IsMissingOrUnreadable(UnifiedLogException failure) =>
+        (failure.Domain == CocoaDomain && failure.Code is 4 or 256 or 259 or 260) || (failure.Domain == PosixDomain && failure.Code is 2 or 20);
 }

@@ -55,7 +55,7 @@ public sealed class MacLogSummaryTool : MacLogTool
             return refused;
         }
 
-        var (query, error) = Terms(arguments, source.Log, EventLogQuery.MaxLimit, before: null, source.Kind);
+        var (query, ignored, error) = Terms(arguments, source, EventLogQuery.MaxLimit, before: null);
         if (query is null)
         {
             return error;
@@ -74,15 +74,16 @@ public sealed class MacLogSummaryTool : MacLogTool
                 using var log = Access.OpenInstallLog();
                 return MacFileLogs.SummarizeInstall(log, Access.Places, query, scan, token);
             }, cancellationToken).ConfigureAwait(false);
-            return files.Error ?? MacLogRender.FileSummary(source, query, files.Value!, Ignored(arguments, source.Kind), Zone, Access.Time.GetUtcNow());
+            return files.Error ?? MacLogRender.FileSummary(source, query, files.Value!, ignored, Zone, Access.Time.GetUtcNow());
         }
 
         var result = await Access.RunAsync(source, (unified, token) =>
         {
-            using var reader = unified.Open(source.Target, query.Filter(source.Redacted), token);
-            return MacLogSearch.Summarize(reader, query, scan, token);
+            var anchored = MacLogSearch.Anchor(unified, source, query, token);   // an archive's own last hour (2026-10-20)
+            using var reader = unified.Open(source.Target, anchored.Filter(source.Redacted), token);
+            return (Query: anchored, Summary: MacLogSearch.Summarize(reader, anchored, scan, token, Access.Places));
         }, cancellationToken).ConfigureAwait(false);
-        return result.Error ?? MacLogRender.Summary(source, query, result.Value!, Zone, Access.Time.GetUtcNow());
+        return result.Error ?? MacLogRender.Summary(source, result.Value.Query, result.Value.Summary, Zone, Access.Time.GetUtcNow());
     }
 }
 
@@ -99,7 +100,7 @@ public sealed class MacLogEventTool : MacLogTool
           "type": "object",
           "properties": {
             "log": { "type": "string", "description": "system, crashes, install, or the .logarchive the entry came from." },
-            "record": { "type": "string", "description": "The entry's handle as an answer shows it: a u… (system, an archive: u<microseconds since 1970>.<pid>.<thread>.<n>), a report's file name (crashes) or an i… (install: i<byte offset>.<seconds since 1970>)." }
+            "record": { "type": "string", "description": "The entry's handle as an answer shows it: a u… (system, an archive: u<microseconds since 1970>.<pid>.<thread>.<n>.<mark>), a report's file name (crashes; user: or system: before it when an answer wrote one) or an i… (install: i<byte offset>.<seconds since 1970>)." }
           },
           "required": ["log", "record"]
         }
@@ -148,7 +149,7 @@ public sealed class MacLogEventTool : MacLogTool
         var result = await Access.RunAsync(source, (unified, token) =>
         {
             using var reader = unified.Open(source.Target, MacLogSearch.FindFilter(handle), token);
-            return MacLogSearch.Find(reader, handle, source.Redacted, token);
+            return MacLogSearch.Find(reader, handle, source.Redacted, token, Access.Places);
         }, cancellationToken).ConfigureAwait(false);
         if (result.Error is { } error)
         {
@@ -163,7 +164,7 @@ public sealed class MacLogEventTool : MacLogTool
     {
         if (source.Kind == MacLogKind.Crashes)
         {
-            if (!CrashReports.IsReportName(record))
+            if (!CrashReports.IsReportHandle(record))
             {
                 return MacLogText.BadFileHandle(record, source.Log);
             }
@@ -190,7 +191,8 @@ public sealed class MacLogEventTool : MacLogTool
 /// <c>eventlog_logs</c> on a Mac (2026-10-18, the Mac event-log plan): the logs a call may name — the unified log as <c>system</c>,
 /// readable or why not (its store opened, nothing read), the crash reports as <c>crashes</c> (the week's count, each folder readable or
 /// not) and install.log as <c>install</c> (its newest entry's time; phase 3), and the working directory's <c>.logarchive</c> folders,
-/// <c>filter</c> narrowing them by name.
+/// <c>filter</c> narrowing them by name. The archive walk runs under the read's timeout on a pool thread (2026-10-20, the code review: it ran
+/// on the caller's, unbounded), and the Mac's own logs say they are not offered while <c>local</c> is unticked.
 /// </summary>
 public sealed class MacLogLogsTool : MacLogTool
 {
@@ -219,6 +221,13 @@ public sealed class MacLogLogsTool : MacLogTool
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         string? filter = Optional(arguments, "filter");
+        var archiveSource = new MacLogSource(MacLogAccess.ArchiveExtension, UnifiedLogTarget.Local, Redacted: true);
+        var archives = await Access.RunFilesAsync(archiveSource, token => Access.Archives(token), cancellationToken).ConfigureAwait(false);
+        if (!Access.LocalTicked)
+        {
+            return MacLogRender.Logs(MacLogText.LocalNotTickedLine, MacLogText.LocalNotTickedLine, MacLogText.LocalNotTickedLine, archives.Value ?? [], filter, offered: false);
+        }
+
         var source = new MacLogSource(MacLogAccess.SystemNames[0], UnifiedLogTarget.Local, Redacted: true);
         var probed = await Access.RunAsync(source, (unified, _) =>
         {
@@ -240,7 +249,7 @@ public sealed class MacLogLogsTool : MacLogTool
             return MacLogText.InstallLine(InstallLog.Backward(stream).FirstOrDefault() is { } newest ? EventLogText.Time(newest.Time, Zone) : null);
         }, cancellationToken).ConfigureAwait(false);
         return MacLogRender.Logs(why, crashes.Error is { } crashError ? Bare(crashError)! : crashes.Value!, install.Error is { } installError ? MacLogText.InstallRefused(Bare(installError)!) : install.Value!,
-            Access.Archives(), filter);
+            archives.Value ?? [], filter);
     }
 
     private static string? Bare(string? error) => error is null ? null : error.StartsWith("Error: ", StringComparison.Ordinal) ? error["Error: ".Length..] : error;

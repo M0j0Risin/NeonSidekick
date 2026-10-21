@@ -26,7 +26,11 @@ public sealed record MacFileSummary(IReadOnlyList<MacFileGroup> Groups, int Tota
 /// ignored, as file names are), pid (install.log's), processes left out, window and text apply; its levels, subsystem and category do
 /// not (the tools say so). A report's text search reads the report in full and matches what the answer would show (redacted when the
 /// read is), so a twin learns nothing it may not see; install.log's matches the message the same way. The scan's limit and budget stop a
-/// read as on the unified log.
+/// read as on the unified log, a summary of the reports too (2026-10-20, the code review: it read every report in the window, each up to
+/// 4 MB with a text term, whatever the limit). A page's cursor that names nothing the log still holds is said (a null page: the callers
+/// answer <see cref="MacLogText.CursorGone"/>), never read past silently: a report gone from the listing, an install.log entry whose
+/// offset no longer starts the entry at that second (the file rotated or was cut). A report's handle names its folder when the name is in
+/// two (<see cref="CrashReports.HandleOf"/>).
 /// </summary>
 public static class MacFileLogs
 {
@@ -44,8 +48,11 @@ public static class MacFileLogs
 
     // ── crashes ─────────────────────────────────────────────────────────────
 
-    /// <summary>The query's reports, newest first, the page after <c>before</c> (a report's name) when given.</summary>
-    public static MacFilePage SearchCrashes(MacLogPlaces places, MacLogQuery query, EventScan scan, string? before, CancellationToken cancellationToken)
+    /// <summary>
+    /// The query's reports, newest first, the page after <c>before</c> (a report's handle) when given; null when <c>before</c> names no report
+    /// of the listing (it is gone).
+    /// </summary>
+    public static MacFilePage? SearchCrashes(MacLogPlaces places, MacLogQuery query, EventScan scan, string? before, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(query);
@@ -53,16 +60,23 @@ public static class MacFileLogs
         long started = scan.Time.GetTimestamp();
         var redact = Redactor(places, scan.Redacted);
         var (reports, _) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        if (before is not null && !reports.Any(r => CrashReports.Names(before, r)))
+        {
+            return null;
+        }
+
+        var shared = SharedNames(reports);
         var walk = new Tally();
         var kept = new List<MacFileView>();
         bool passed = before is null;
         string? lastRead = null;
-        foreach (var report in reports)
+        for (int at = 0; at < reports.Count; at++)
         {
+            var report = reports[at];
             cancellationToken.ThrowIfCancellationRequested();
             if (!passed)
             {
-                passed = string.Equals(report.Name, before, StringComparison.Ordinal);
+                passed = CrashReports.Names(before!, report);
                 continue;
             }
 
@@ -77,40 +91,53 @@ public static class MacFileLogs
             }
 
             walk.Step(report.Process, report.Time);
-            lastRead = report.Name;
+            string handle = CrashReports.HandleOf(report, shared.Contains(report.Name));
+            lastRead = handle;
             var detail = Safe(report, redact);
             if (query.Text is { Length: > 0 } && !query.KeepsText(report.Name + "\n" + report.Process + "\n" + detail.Summary + "\n" + detail.Text))
             {
                 continue;
             }
 
-            kept.Add(new MacFileView(report.Name, report.Time, report.Kind, report.Process, detail.Pid, detail.Summary, report.Owner));
+            kept.Add(new MacFileView(handle, report.Time, report.Kind, report.Process, detail.Pid, detail.Summary, report.Owner));
             if (kept.Count >= query.Limit)
             {
-                bool more = reports.IndexOf(report) < reports.Count - 1;
-                return new MacFilePage(kept, walk.Read, more, more ? report.Name : null, false, walk.Reached, walk.Loudest());
+                bool more = at < reports.Count - 1;
+                return new MacFilePage(kept, walk.Read, more, more ? handle : null, false, walk.Reached, walk.Loudest());
             }
         }
 
         return new MacFilePage(kept, walk.Read, false, null, false, walk.Reached, walk.Loudest());
     }
 
-    /// <summary>Whether <paramref name="before"/> names a report the listing still holds (a page's cursor gone stale is said, never guessed past).</summary>
-    public static bool CrashCursorKnown(MacLogPlaces places, string before) => CrashReports.Find(places.CrashFolders, before) is not null;
+    /// <summary>The names more than one folder holds: their handles name the folder too.</summary>
+    private static HashSet<string> SharedNames(List<CrashReportInfo> reports) =>
+        reports.GroupBy(r => r.Name, StringComparer.Ordinal).Where(g => g.Select(r => r.Owner).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The window's reports counted by process and kind, the busiest first.</summary>
+    /// <summary>The window's reports counted by process and kind, the busiest first, under the scan's limit and budget.</summary>
     public static MacFileSummary SummarizeCrashes(MacLogPlaces places, MacLogQuery query, EventScan scan, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(scan);
+        long started = scan.Time.GetTimestamp();
         var redact = Redactor(places, scan.Redacted);
         var (reports, _) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        var shared = SharedNames(reports);
         var groups = new Dictionary<(string, string?), (MacFileGroup Group, CrashReportInfo Newest)>();
         var walk = new Tally();
         int total = 0;
+        bool stopped = false;
         foreach (var report in reports.Where(r => Keeps(query, r.Process, null)))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+            {
+                stopped = true;
+                break;
+            }
+
             walk.Step(report.Process, report.Time);
             if (query.Text is { Length: > 0 })
             {
@@ -125,16 +152,16 @@ public static class MacFileLogs
             var key = (report.Process, (string?)report.Kind);
             groups[key] = groups.TryGetValue(key, out var group)
                 ? (group.Group with { Count = group.Group.Count + 1 }, group.Newest)
-                : (new MacFileGroup(report.Process, report.Kind, 1, report.Time, report.Name, ""), report);
+                : (new MacFileGroup(report.Process, report.Kind, 1, report.Time, CrashReports.HandleOf(report, shared.Contains(report.Name)), ""), report);
         }
 
         var top = groups.Values.OrderByDescending(g => g.Group.Count).ThenByDescending(g => g.Group.Newest).Take(MacLogSearch.SummaryGroups)
             .Select(g => g.Group with { Sample = Safe(g.Newest, redact).Summary })
             .ToList();
-        return new MacFileSummary(top, total, groups.Count, walk.Read, false, walk.Reached, walk.Loudest());
+        return new MacFileSummary(top, total, groups.Count, walk.Read, stopped, walk.Reached, walk.Loudest());
     }
 
-    /// <summary>One report in full by its name; null when no folder holds it.</summary>
+    /// <summary>One report in full by its handle (its name, and its folder when the handle names one); null when no folder holds it.</summary>
     public static (CrashReportInfo Report, CrashDetail Detail)? CrashEvent(MacLogPlaces places, string name, bool redacted)
     {
         ArgumentNullException.ThrowIfNull(places);
@@ -147,26 +174,41 @@ public static class MacFileLogs
         {
             return CrashReports.Describe(report, redact);
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or InvalidOperationException or FormatException or ArgumentException)
         {
-            return new CrashDetail(MacLogText.ReportUnreadable, "", null);
+            return new CrashDetail(MacLogText.ReportUnreadable, "", null);   // one odd report never ends the listing (2026-10-20)
         }
     }
 
     // ── install.log ─────────────────────────────────────────────────────────
 
-    /// <summary>The query's install.log entries, newest first, below <paramref name="before"/> (an entry's offset) when given.</summary>
-    public static MacFilePage SearchInstall(Stream log, MacLogPlaces places, MacLogQuery query, EventScan scan, long? before, CancellationToken cancellationToken)
+    /// <summary>
+    /// The query's install.log entries, newest first, below <paramref name="before"/> (an entry's <c>i…</c> handle) when given; null when the
+    /// handle's entry is no longer at its offset with its second (2026-10-20, the code review: the seconds were dropped and a rotated file
+    /// read from the same offset gave another page, or the same one again).
+    /// </summary>
+    public static MacFilePage? SearchInstall(Stream log, MacLogPlaces places, MacLogQuery query, EventScan scan, string? before, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(scan);
+        long? below = null;
+        if (before is not null)
+        {
+            if (!InstallLog.TryParseHandle(before, out long offset, out long seconds) || InstallLog.At(log, offset) is not { } cursor || cursor.Time.ToUnixTimeSeconds() != seconds)
+            {
+                return null;
+            }
+
+            below = offset;
+        }
+
         long started = scan.Time.GetTimestamp();
         var redact = Redactor(places, scan.Redacted);
         var walk = new Tally();
         var kept = new List<MacFileView>();
         string? last = null;
-        foreach (var entry in InstallLog.Backward(log, before))
+        foreach (var entry in InstallLog.Backward(log, below))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (entry.Time < query.Since)

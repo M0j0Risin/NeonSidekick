@@ -404,6 +404,9 @@ public static class SystemPromptSummary
     /// </summary>
     public const string EventLogFilesOnlyNote = "no computer ticked; .evtx files only";
 
+    /// <summary>The Mac's note when <c>local</c> is unticked (2026-10-20, the code review): the archives are all the tools read then.</summary>
+    public const string MacEventLogArchivesOnlyNote = "local not ticked; .logarchive folders only";
+
     /// <summary>The tail of the ComfyUI group while the image tools cannot be offered (2026-09-24). Pinned.</summary>
     /// <summary>Why the profile advisors' group is not offered (2026-10-10). Pinned.</summary>
     public const string AdvisorsOffSuffix = "Advisors enabled is off";
@@ -852,7 +855,7 @@ public static class SystemPromptSummary
         if (eventLog is not null)
         {
             // The event logs (2026-10-15): after the Docker tools; offered while Event log tools is on, on Windows — with nothing ticked, for .evtx files alone.
-            string eventLogNote = !eventLogEnabled ? NotOffered(OperatingSystem.IsMacOS() ? MacEventLogOffSuffix : EventLogOffSuffix) : !eventLogTicked && toolsEnabled ? EventLogFilesOnlyNote : standing;
+            string eventLogNote = !eventLogEnabled ? NotOffered(OperatingSystem.IsMacOS() ? MacEventLogOffSuffix : EventLogOffSuffix) : !eventLogTicked && toolsEnabled ? (OperatingSystem.IsMacOS() ? MacEventLogArchivesOnlyNote : EventLogFilesOnlyNote) : standing;
             groups.Add(Group(ToolsText.EventLogTabTitle, eventLog, eventLogNote, eventLogEnabled && toolsEnabled, SettingsField.EventLogTools, disabled));
         }
 

@@ -22,6 +22,14 @@ public sealed record CrashDetail(string Summary, string Text, int? Pid);
 /// reads only each file's first 64 KB; a report in full reads at most <see cref="MaxBytes"/>. The faulting thread shows its top
 /// <see cref="Frames"/> frames. Names are refused unless they are a plain file name with a report's extension, so a handle can never reach
 /// outside the two folders. Pure but for the file reads.
+/// <para>
+/// Hardened (2026-10-20, the code review). Only a regular file is read, never through a link: a link named <c>x.diag</c> handed any readable
+/// file to the model, and a FIFO named <c>x.ips</c> blocked the open forever (<see cref="Platform.MacFiles"/> on a Mac, the file's own
+/// <see cref="FileSystemInfo.LinkTarget"/> elsewhere); a folder or its <see cref="Retired"/> folder that is a link is not listed. A report's
+/// JSON is read with every value's kind checked first, so a malformed number or a thread that is not an object is a report with less in
+/// it, never a throw that ends the whole listing. And a handle names its folder when the name is in two of them
+/// (<c>system:x.ips</c>, <see cref="HandleOf"/>): the user's folder was always searched first, so the system's twin was never reached.
+/// </para>
 /// </summary>
 public static partial class CrashReports
 {
@@ -43,10 +51,61 @@ public static partial class CrashReports
     /// <summary>The folder of older reports inside each.</summary>
     public const string Retired = "Retired";
 
-    /// <summary>Whether <paramref name="name"/> is a report's plain file name: no folder, no dot first, a report's extension.</summary>
+    /// <summary>Whether <paramref name="name"/> is a report's plain file name: no folder, no dot first, no colon, a report's extension.</summary>
     public static bool IsReportName(string name) =>
-        !string.IsNullOrWhiteSpace(name) && name.Length <= 255 && name[0] != '.' && name.IndexOfAny(['/', '\\', '\0']) < 0 && name != ".." &&
+        !string.IsNullOrWhiteSpace(name) && name.Length <= 255 && name[0] != '.' && name.IndexOfAny(['/', '\\', '\0', ':']) < 0 && name != ".." &&
         Extensions.Any(e => name.EndsWith(e, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// A report's handle (2026-10-20): its file name, or <c>&lt;owner&gt;:&lt;name&gt;</c> when <paramref name="qualified"/> (the name is in
+    /// more than one folder of the listing).
+    /// </summary>
+    public static string HandleOf(CrashReportInfo report, bool qualified)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        return qualified ? report.Owner + ":" + report.Name : report.Name;
+    }
+
+    /// <summary>A handle read back: its owner when it names one, and the report's file name; false when the name is not a report's.</summary>
+    public static bool TryParseHandle(string? handle, out string? owner, out string name)
+    {
+        owner = null;
+        name = (handle ?? "").Trim();
+        int colon = name.IndexOf(':', StringComparison.Ordinal);
+        if (colon > 0 && name[..colon].All(char.IsAsciiLetterLower))
+        {
+            owner = name[..colon];
+            name = name[(colon + 1)..];
+        }
+
+        return IsReportName(name);
+    }
+
+    /// <summary>Whether <paramref name="handle"/> is a report's handle as an answer writes it (a name, or an owner and a name).</summary>
+    public static bool IsReportHandle(string? handle) => TryParseHandle(handle, out _, out _);
+
+    /// <summary>Whether <paramref name="report"/> is the one <paramref name="handle"/> names (by its name, and its folder when the handle says).</summary>
+    public static bool Names(string handle, CrashReportInfo report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        return TryParseHandle(handle, out string? owner, out string name)
+            && string.Equals(report.Name, name, StringComparison.Ordinal) && (owner is null || string.Equals(report.Owner, owner, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is a folder the reports are read from: a folder, never a link to one (2026-10-20), so a listing never
+    /// leaves the two DiagnosticReports folders.
+    /// </summary>
+    public static bool IsPlainFolder(string path) =>
+        OperatingSystem.IsMacOS()
+            ? Platform.MacFiles.KindOf(path) == Platform.MacFiles.Kind.Directory
+            : Directory.Exists(path) && new DirectoryInfo(path).LinkTarget is null;
+
+    /// <summary>Whether <paramref name="path"/> is a regular file, never a link, a FIFO, a socket or a device (2026-10-20).</summary>
+    public static bool IsPlainFile(string path) =>
+        OperatingSystem.IsMacOS()
+            ? Platform.MacFiles.KindOf(path) == Platform.MacFiles.Kind.Regular
+            : File.Exists(path) && new FileInfo(path).LinkTarget is null;
 
     /// <summary>
     /// The reports in <paramref name="folders"/> (each with its <see cref="Retired"/> folder) written since <paramref name="since"/>, newest
@@ -65,9 +124,9 @@ public static partial class CrashReports
             {
                 try
                 {
-                    if (!Directory.Exists(path))
+                    if (!IsPlainFolder(path))
                     {
-                        continue;
+                        continue;   // missing, or a link: never followed out of the folders
                     }
 
                     foreach (var file in new DirectoryInfo(path).EnumerateFiles())
@@ -76,6 +135,11 @@ public static partial class CrashReports
                         if (!IsReportName(file.Name) || file.LastWriteTimeUtc < since.UtcDateTime)
                         {
                             continue;   // a report is written once, at its time or just after: an older file holds an older report
+                        }
+
+                        if (file.LinkTarget is not null || !IsPlainFile(file.FullName))
+                        {
+                            continue;   // a link, a FIFO, a socket: never read
                         }
 
                         var info = Info(file.FullName, file.Name, new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero), folder.Owner);
@@ -98,31 +162,38 @@ public static partial class CrashReports
         return (reports, states);
     }
 
-    /// <summary>Newest first, then by name, so a page's cursor is stable.</summary>
+    /// <summary>Newest first, then by name and folder, so a page's cursor is stable.</summary>
     public static int Newest(CrashReportInfo a, CrashReportInfo b)
     {
         int byTime = b.Time.CompareTo(a.Time);
-        return byTime != 0 ? byTime : string.CompareOrdinal(a.Name, b.Name);
+        int byName = string.CompareOrdinal(a.Name, b.Name);
+        return byTime != 0 ? byTime : byName != 0 ? byName : string.CompareOrdinal(a.Owner, b.Owner);
     }
 
-    /// <summary>The report named <paramref name="name"/> in one of <paramref name="folders"/> (or its Retired folder), or null.</summary>
-    public static CrashReportInfo? Find(IReadOnlyList<MacCrashFolder> folders, string name)
+    /// <summary>
+    /// The report <paramref name="handle"/> names in one of <paramref name="folders"/> (or its Retired folder) — in its own folder when the
+    /// handle names one — or null. A link, a FIFO or a folder that is a link is never a report.
+    /// </summary>
+    public static CrashReportInfo? Find(IReadOnlyList<MacCrashFolder> folders, string handle)
     {
         ArgumentNullException.ThrowIfNull(folders);
-        if (!IsReportName(name))
+        if (!TryParseHandle(handle, out string? owner, out string name))
         {
             return null;
         }
 
-        foreach (var folder in folders)
+        foreach (var folder in folders.Where(f => owner is null || string.Equals(f.Owner, owner, StringComparison.Ordinal)))
         {
-            foreach (string path in new[] { Path.Combine(folder.Path, name), Path.Combine(folder.Path, Retired, name) })
+            foreach (string place in new[] { folder.Path, Path.Combine(folder.Path, Retired) })
             {
-                var file = new FileInfo(path);
-                if (file.Exists)
+                string path = Path.Combine(place, name);
+                if (!IsPlainFolder(place) || !IsPlainFile(path))
                 {
-                    return Info(file.FullName, file.Name, new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero), folder.Owner);
+                    continue;
                 }
+
+                var file = new FileInfo(path);
+                return Info(file.FullName, file.Name, new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero), folder.Owner);
             }
         }
 
@@ -142,7 +213,16 @@ public static partial class CrashReports
             head = "";
         }
 
-        var header = Header(head, name);
+        (DateTimeOffset? Time, string? Process, string Kind) header;
+        try
+        {
+            header = Header(head, name);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException)
+        {
+            header = (null, null, KindOf(Path.GetExtension(name).ToLowerInvariant(), null, false));   // a header no reader expected: the file's own facts
+        }
+
         return new CrashReportInfo(name, fullPath, header.Time ?? written, header.Kind, header.Process ?? ProcessFromName(name), owner);
     }
 
@@ -158,7 +238,8 @@ public static partial class CrashReports
             {
                 var root = json.RootElement;
                 string? bugType = String(root, "bug_type");
-                bool simulated = root.TryGetProperty("is_simulated", out var sim) && sim.ValueKind == JsonValueKind.Number && sim.GetInt32() == 1;
+                bool simulated = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("is_simulated", out var sim) && sim.ValueKind == JsonValueKind.Number
+                    && sim.TryGetInt32(out int flag) && flag == 1;
                 string? process = String(root, "app_name") ?? String(root, "name") ?? String(root, "process_name");
                 return (ParseTime(String(root, "timestamp")), Blank(process), KindOf(extension, bugType, simulated));
             }
@@ -313,7 +394,7 @@ public static partial class CrashReports
             int index = 0;
             foreach (var thread in threads.EnumerateArray())
             {
-                bool triggered = thread.TryGetProperty("triggered", out var t) && t.ValueKind == JsonValueKind.True;
+                bool triggered = thread.ValueKind == JsonValueKind.Object && thread.TryGetProperty("triggered", out var t) && t.ValueKind == JsonValueKind.True;
                 if (index == faulting || (faulting < 0 && triggered))
                 {
                     lines.Add("faulting thread " + index.ToString(CultureInfo.InvariantCulture)
@@ -360,7 +441,7 @@ public static partial class CrashReports
                     killed.Add(name + (pid is { } p ? "[" + p.ToString(CultureInfo.InvariantCulture) + "]" : "") + " (" + reason + ")");
                 }
 
-                if (process.TryGetProperty("rpages", out var pages) && pages.TryGetInt64(out long n))
+                if (process.TryGetProperty("rpages", out var pages) && pages.ValueKind == JsonValueKind.Number && pages.TryGetInt64(out long n))
                 {
                     biggest.Add((name, n, pid));
                 }
@@ -418,7 +499,7 @@ public static partial class CrashReports
 
     private static void AddFrames(List<string> lines, JsonElement owner, string property, List<string> images)
     {
-        if (!owner.TryGetProperty(property, out var frames) || frames.ValueKind != JsonValueKind.Array)
+        if (owner.ValueKind != JsonValueKind.Object || !owner.TryGetProperty(property, out var frames) || frames.ValueKind != JsonValueKind.Array)
         {
             return;
         }
@@ -436,7 +517,8 @@ public static partial class CrashReports
             string image = Int(frame, "imageIndex") is { } i && i >= 0 && i < images.Count ? images[i] : "???";
             string where = String(frame, "symbol") is { } symbol
                 ? symbol + (Int(frame, "symbolLocation") is { } at && at != 0 ? " + " + at.ToString(CultureInfo.InvariantCulture) : "")
-                : frame.TryGetProperty("imageOffset", out var offset) && offset.TryGetInt64(out long o) ? "0x" + o.ToString("x", CultureInfo.InvariantCulture) : "?";
+                : frame.ValueKind == JsonValueKind.Object && frame.TryGetProperty("imageOffset", out var offset) && offset.ValueKind == JsonValueKind.Number && offset.TryGetInt64(out long o)
+                    ? "0x" + o.ToString("x", CultureInfo.InvariantCulture) : "?";
             lines.Add("  " + index.ToString(CultureInfo.InvariantCulture).PadRight(3) + image + "  " + where);
             index++;
         }
@@ -500,13 +582,13 @@ public static partial class CrashReports
         int hours = int.Parse(m.Groups["h"].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
         int minutes = m.Groups["m"].Success ? int.Parse(m.Groups["m"].Value, CultureInfo.InvariantCulture) : 0;
         var offset = new TimeSpan(Math.Abs(hours), minutes, 0) * (hours < 0 || m.Groups["h"].Value[0] == '-' ? -1 : 1);
-        if (m.Groups["fraction"].Success && double.TryParse("0" + m.Groups["fraction"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double fraction))
-        {
-            local = local.AddTicks((long)(fraction * TimeSpan.TicksPerSecond));
-        }
-
         try
         {
+            if (m.Groups["fraction"].Success && double.TryParse("0" + m.Groups["fraction"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double fraction))
+            {
+                local = local.AddTicks((long)(fraction * TimeSpan.TicksPerSecond));   // inside: the year 9999's last second and a fraction is past the calendar
+            }
+
             return new DateTimeOffset(local, offset);
         }
         catch (ArgumentException)
@@ -515,15 +597,33 @@ public static partial class CrashReports
         }
     }
 
-    /// <summary>The text of a file's first <paramref name="max"/> bytes (UTF-8, any partial character at the cut replaced).</summary>
+    /// <summary>
+    /// The text of a file's first <paramref name="max"/> bytes (UTF-8, any partial character at the cut replaced). Only a regular file
+    /// opens (2026-10-20): a link, a FIFO or a device is an <see cref="IOException"/> saying so, and the open never blocks.
+    /// </summary>
     public static string ReadText(string path, int max, out bool cut)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.SequentialScan);
+        using var stream = OpenReport(path);
         long length = stream.Length;
         var buffer = new byte[(int)Math.Min(max, Math.Max(0, length))];
         int read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
         cut = length > max;
         return Encoding.UTF8.GetString(buffer, 0, read);
+    }
+
+    private static FileStream OpenReport(string path)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return Platform.MacFiles.OpenRegular(path) ?? throw new IOException(MacLogText.NotARegularFile);
+        }
+
+        if (new FileInfo(path).LinkTarget is not null)
+        {
+            throw new IOException(MacLogText.NotARegularFile);
+        }
+
+        return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.SequentialScan);
     }
 
     private static JsonDocument? TryParse(string json)

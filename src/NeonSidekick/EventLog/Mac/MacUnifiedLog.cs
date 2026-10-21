@@ -41,7 +41,9 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
         {
             nint store = OpenStore(target);
             nint predicate = Predicate(format, arguments);
-            nint position = Send(store, Sel("positionWithDate:"), Date(filter.Since));
+            // A forward read starts at Since; a reverse one at its newest moment, never at Since (2026-10-20, the live check: put at a since two
+            // days back the read began at the end of an older stretch of the store, put at 1970 it gave nothing; MacLogFilter's note).
+            nint position = Send(store, Sel("positionWithDate:"), Date(filter.Forward ? filter.Since : filter.Until ?? DateTimeOffset.UtcNow));
             nint error = 0;
             nint enumerator = SendEnumerator(store, Sel("entriesEnumeratorWithOptions:position:predicate:error:"), filter.Forward ? 0 : Reverse, position, predicate, &error);
             if (enumerator == 0)
@@ -143,6 +145,12 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
             ? new UnifiedLogException("NeonSidekick", 0, fallback)
             : new UnifiedLogException(FromNSString(Send(error, Sel("domain"))) ?? "", SendLong(error, Sel("code")), FromNSString(Send(error, Sel("localizedDescription"))) ?? fallback);
 
+    /// <summary>
+    /// An open read. A batch is handed back when it is full or after <see cref="MacLogLimits.BatchTime"/> (2026-10-20, the code review),
+    /// even empty, so the policy above checks its scan budget and the caller's token between OSLog's calls rather than after 64 matches
+    /// that may take minutes to come; one <c>nextObject</c> is the finest grain OSLog allows (it has no cancel, and a reverse read always
+    /// starts at the newest entry, so cutting the window into slices would rescan from the top for each).
+    /// </summary>
     private sealed class Reader(nint store, nint enumerator, MacLogFilter filter, CancellationToken cancellationToken) : IUnifiedLogReader
     {
         private nint _store = store;
@@ -160,7 +168,9 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
             var batch = new List<MacLogEntry>(MacLogLimits.Batch);
             using var quiet = MacStderr.Quiet();
             nint logClass = Class("OSLogEntryLog");
-            while (batch.Count < MacLogLimits.Batch && !cancellationToken.IsCancellationRequested)
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            while (batch.Count < MacLogLimits.Batch && !cancellationToken.IsCancellationRequested
+                && System.Diagnostics.Stopwatch.GetElapsedTime(started) < MacLogLimits.BatchTime)
             {
                 nint pool = objc_autoreleasePoolPush();
                 try
@@ -184,8 +194,8 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
                         continue;   // a signpost or an activity, not a log entry
                     }
 
-                    var copy = Copy(entry, time);
-                    if (MacLogMatch.Matches(copy, filter))
+                    var (copy, whole) = Copy(entry, time);
+                    if (MacLogMatch.Matches(copy, filter, whole))   // the text checked on the whole message, as OSLog's predicate did
                     {
                         batch.Add(copy);
                     }
@@ -205,26 +215,31 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
             nint enumerator = Interlocked.Exchange(ref _enumerator, 0);
             nint store = Interlocked.Exchange(ref _store, 0);
             using var quiet = MacStderr.Quiet();   // the release tears the read down, which OSLog may also report on stderr
-            if (enumerator != 0)
+            nint pool = objc_autoreleasePoolPush();   // a pool thread has none: what the teardown autoreleases is drained here (2026-10-20, the code review)
+            try
             {
-                SendVoid(enumerator, Sel("release"));
-            }
+                if (enumerator != 0)
+                {
+                    SendVoid(enumerator, Sel("release"));
+                }
 
-            if (store != 0)
+                if (store != 0)
+                {
+                    SendVoid(store, Sel("release"));
+                }
+            }
+            finally
             {
-                SendVoid(store, Sel("release"));
+                objc_autoreleasePoolPop(pool);
             }
         }
 
-        private static MacLogEntry Copy(nint entry, DateTimeOffset time)
+        /// <summary>The entry copied out, its message cut at <see cref="MacLogLimits.MessageChars"/>, and the whole message for the text check.</summary>
+        private static (MacLogEntry Entry, string Whole) Copy(nint entry, DateTimeOffset time)
         {
-            string message = FromNSString(Send(entry, Sel("composedMessage"))) ?? "";
-            if (message.Length > MacLogLimits.MessageChars)
-            {
-                message = message[..MacLogLimits.MessageChars];
-            }
-
-            return new MacLogEntry(
+            string whole = FromNSString(Send(entry, Sel("composedMessage"))) ?? "";
+            string message = whole.Length > MacLogLimits.MessageChars ? whole[..MacLogLimits.MessageChars] : whole;
+            return (new MacLogEntry(
                 time,
                 (int)SendLong(entry, Sel("level")),
                 FromNSString(Send(entry, Sel("process"))) ?? "",
@@ -233,7 +248,7 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
                 FromNSString(Send(entry, Sel("subsystem"))) ?? "",
                 FromNSString(Send(entry, Sel("category"))) ?? "",
                 FromNSString(Send(entry, Sel("sender"))) ?? "",
-                message);
+                message), whole);
         }
     }
 

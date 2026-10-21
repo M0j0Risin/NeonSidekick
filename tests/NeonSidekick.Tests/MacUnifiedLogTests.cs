@@ -120,4 +120,43 @@ public sealed class MacUnifiedLogTests
         // direction is pinned by MacLogToolsTests (its filter is Forward).
         Assert.True(took < TimeSpan.FromSeconds(30), $"the find read forward from its own microsecond: took {took.TotalSeconds:F1} s, {page.Entries.Count} rows, the last at {last.Entry.Time:O}");
     }
+
+    /// <summary>
+    /// A reverse read starts at the store's newest entry, at once, whatever its lower bound (2026-10-20, the code review's live check): put
+    /// at its <c>since</c>, a read with no bound (1970: what <see cref="MacLogSearch.Anchor"/> reads an archive's newest entry with) gave
+    /// nothing, and one bounded two days back began at the end of an older stretch of the store, a day and a half back, everything newer
+    /// left out. The reader now puts a reverse read at its newest moment. The local store stands in for an archive (one takes
+    /// <c>log collect</c>).
+    /// </summary>
+    [MacTheory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(60)]
+    [InlineData(48 * 60)]
+    public void AReverseRead_StartsAtTheNewestEntry_WhateverItsLowerBound(int minutesBack)
+    {
+        var log = new MacUnifiedLog();
+        var since = minutesBack == 0 ? DateTimeOffset.UnixEpoch : DateTimeOffset.UtcNow.AddMinutes(-minutesBack);
+        var started = Stopwatch.GetTimestamp();
+        IReadOnlyList<MacLogEntry>? batch;
+        using (var reader = log.Open(UnifiedLogTarget.Local, new MacLogFilter(since, []), CancellationToken.None))
+        {
+            while ((batch = reader.Next()) is { Count: 0 })
+            {
+            }
+        }
+
+        var took = Stopwatch.GetElapsedTime(started);
+        Assert.NotNull(batch);
+        Assert.True(DateTimeOffset.UtcNow - batch![0].Time < TimeSpan.FromMinutes(5), $"the first entry was at {batch[0].Time:O}");
+        Assert.True(took < TimeSpan.FromSeconds(10), $"took {took.TotalSeconds:F1} s");
+        Assert.Equal(0, MacStderr.Depth);
+    }
+
+    [MacFact]
+    public void TheAnchorOfAMissingArchive_IsOSLogsRefusal()
+    {
+        Assert.Throws<UnifiedLogException>(() => MacLogSearch.Anchor(new MacUnifiedLog(), new MacLogSource("x.logarchive", UnifiedLogTarget.Archive("/nonexistent/x.logarchive"), false),
+            new MacLogQuery("x", [], DateTimeOffset.UtcNow, SinceGiven: false), CancellationToken.None));
+    }
 }

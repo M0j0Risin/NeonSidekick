@@ -39,6 +39,11 @@ internal static class MacLogProbes
             var started = Stopwatch.GetTimestamp();
             using var reader = log.Open(UnifiedLogTarget.Local, new MacLogFilter(time.GetUtcNow().AddMinutes(-2), []), CancellationToken.None);
             var batch = reader.Next();
+            while (batch is { Count: 0 })
+            {
+                batch = reader.Next();   // a slow read hands back an empty batch now and then (MacLogLimits.BatchTime, 2026-10-20)
+            }
+
             string took = Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture);
             return batch is { Count: > 0 }
                 ? new SmokeCheck("eventlog:read", true, $"{batch.Count.ToString(CultureInfo.InvariantCulture)} entries in the first batch, the newest at {EventLogText.Time(batch[0].Time, time.LocalTimeZone)} ({took} ms)")

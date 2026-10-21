@@ -498,11 +498,12 @@ The same four tools read the Mac's own logs: the unified log and the report file
 | Log | What it is | Default window |
 |---|---|---|
 | `system` | The unified log. `level` is `fault`, `error`, `default`, `info`, `debug` or `all` (default `fault,error`); `process`, `pid`, `subsystem` (a prefix), `category`, `text` and `exclude_process` narrow it. | the last hour |
-| `crashes` | Crash, jetsam and resource reports in `~/Library/Logs/DiagnosticReports` and `/Library/Logs/DiagnosticReports` (with `Retired`). Handle: the file name; `eventlog_event` shows the exception and the crashed thread's top 30 frames. | the last 7 days |
+| `crashes` | Crash, jetsam and resource reports in `~/Library/Logs/DiagnosticReports` and `/Library/Logs/DiagnosticReports` (with `Retired`). Handle: the file name (`user:` or `system:` before it when both folders hold that name); `eventlog_event` shows the exception and the crashed thread's top 30 frames. A link or a pipe named like a report is never read. | the last 7 days |
 | `install` | `/var/log/install.log`: software installs and updates. | the last day |
-| `<name>.logarchive` | A saved unified log in the working directory (`log collect` makes one), read like `system`. | the last hour |
+| `<name>.logarchive` | A saved unified log in the working directory (`log collect` makes one), read like `system`. | the archive's last hour (before its newest entry) |
 
-* **The unified log is vast,** so a read keeps to its window and *Event log scan limit*, says how far back it got, and names a process that filled most of it (with the `exclude_process` to drop it).
+* **The unified log is vast,** so a read keeps to its window and *Event log scan limit*, says how far back it got, and names a process that filled most of it (with the `exclude_process` to drop it). With `until` and no `since`, the window is the hour (day, week) before `until`.
+* **`local` unticked** in *Event log computers offered*: `system`, `crashes` and `install` are refused, and only `.logarchive` folders are read.
 * **Detail:** only the `local` entry applies; `redacted` (the default) also writes your home folder as `~`. `crashes` and `install` ignore `level`, `subsystem` and `category`, and say so.
 * **Permissions:** the unified log needs an administrator account, the system's report folder the `_analyticsusers` group (administrators are in it). A folder you can't read is named. `--eventlog-check local` tests them.
 

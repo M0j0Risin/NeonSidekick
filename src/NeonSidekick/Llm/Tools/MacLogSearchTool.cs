@@ -96,7 +96,7 @@ public sealed class MacLogSearchTool : MacLogTool
             before = handle;
         }
 
-        var (query, error) = Terms(arguments, source.Log, (int)limit!.Value, before);
+        var (query, _, error) = Terms(arguments, source, (int)limit!.Value, before);
         if (query is null)
         {
             return error;
@@ -105,29 +105,28 @@ public sealed class MacLogSearchTool : MacLogTool
         var scan = Access.Scan(source, ScanLimit);
         var result = await Access.RunAsync(source, (unified, token) =>
         {
-            using var reader = unified.Open(source.Target, query.Filter(source.Redacted), token);
-            return MacLogSearch.Search(reader, query, scan, token);
+            var anchored = MacLogSearch.Anchor(unified, source, query, token);   // an archive's own last hour (2026-10-20)
+            using var reader = unified.Open(source.Target, anchored.Filter(source.Redacted), token);
+            return (Query: anchored, Page: MacLogSearch.Search(reader, anchored, scan, token, Access.Places));
         }, cancellationToken).ConfigureAwait(false);
-        return result.Error ?? MacLogRender.Search(source, query, result.Value!, Zone, Access.Time.GetUtcNow());
+        return result.Error ?? MacLogRender.Search(source, result.Value.Query, result.Value.Page, Zone, Access.Time.GetUtcNow());
     }
 
-    /// <summary>A search of the crash reports or install.log (phase 3): the same arguments, the terms they lack noted, a file name or <c>i…</c> as the cursor.</summary>
+    /// <summary>
+    /// A search of the crash reports or install.log (phase 3): the same arguments, the terms they lack noted, a report's handle or <c>i…</c>
+    /// as the cursor — one naming what the log no longer holds said as gone, for both logs (2026-10-20, the code review: install.log's was
+    /// read from its offset whatever was there now).
+    /// </summary>
     private async Task<string> FileSearchAsync(AIFunctionArguments arguments, MacLogSource source, int limit, CancellationToken cancellationToken)
     {
         string? cursor = Optional(arguments, BeforeArgument);
-        long offset = 0;
         bool crashes = source.Kind == MacLogKind.Crashes;
-        if (cursor is not null && (crashes ? !CrashReports.IsReportName(cursor) : !InstallLog.TryParseHandle(cursor, out offset, out _)))
+        if (cursor is not null && (crashes ? !CrashReports.IsReportHandle(cursor) : !InstallLog.TryParseHandle(cursor, out _, out _)))
         {
             return MacLogText.BadFileHandle(cursor, source.Log);
         }
 
-        if (crashes && cursor is not null && !MacFileLogs.CrashCursorKnown(Access.Places, cursor))
-        {
-            return MacLogText.CursorGone(cursor);
-        }
-
-        var (query, error) = Terms(arguments, source.Log, limit, before: null, source.Kind);
+        var (query, ignored, error) = Terms(arguments, source, limit, before: null);
         if (query is null)
         {
             return error!;
@@ -142,8 +141,13 @@ public sealed class MacLogSearchTool : MacLogTool
             }
 
             using var log = Access.OpenInstallLog();
-            return MacFileLogs.SearchInstall(log, Access.Places, query, scan, cursor is null ? null : offset, token);
+            return MacFileLogs.SearchInstall(log, Access.Places, query, scan, cursor, token);
         }, cancellationToken).ConfigureAwait(false);
-        return result.Error ?? MacLogRender.FileSearch(source, query, result.Value!, Ignored(arguments, source.Kind), Zone, Access.Time.GetUtcNow());
+        if (result.Error is { } failed)
+        {
+            return failed;
+        }
+
+        return result.Value is { } page ? MacLogRender.FileSearch(source, query, page, ignored, Zone, Access.Time.GetUtcNow()) : MacLogText.CursorGoneIn(source.Log, cursor!);
     }
 }

@@ -71,70 +71,41 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
     }
 
     /// <summary>
-    /// A search's or a summary's terms read off the call (the same words both take): the levels (the default faults and errors), the
-    /// window (the last hour unless <c>since</c> says), the filters; null with the refusal when one is wrong.
+    /// A search's or a summary's terms read off the call (the same words both take) into the one query builder <c>/eventlog</c> shares
+    /// (<see cref="MacLogTerms.QueryFor"/>, 2026-10-20, the code review): the levels (the default faults and errors), the window (the last
+    /// hour unless <c>since</c> says; an archive's anchored at its own newest entry), the filters, and the terms a log that is a file lacks
+    /// (for the answer's note); null with the refusal when one is wrong.
     /// </summary>
-    protected (MacLogQuery? Query, string? Error) Terms(AIFunctionArguments arguments, string log, int limit, MacLogHandle? before, MacLogKind kind = MacLogKind.Unified)
+    protected (MacLogQuery? Query, IReadOnlyList<string> Ignored, string? Error) Terms(AIFunctionArguments arguments, MacLogSource source, int limit, MacLogHandle? before)
     {
-        var (levels, levelError) = kind == MacLogKind.Unified ? MacLogQuery.ParseLevels(Optional(arguments, MacLogSearchTool.LevelArgument)) : ([], null);
-        if (levels is null)
-        {
-            return (null, levelError);
-        }
-
         var (since, sinceError) = Moment(arguments, MacLogSearchTool.SinceArgument);
         if (sinceError is not null)
         {
-            return (null, sinceError);
+            return (null, [], sinceError);
         }
 
         var (until, untilError) = Moment(arguments, MacLogSearchTool.UntilArgument);
         if (untilError is not null)
         {
-            return (null, untilError);
+            return (null, [], untilError);
         }
 
         var (pid, pidError) = Number(arguments, MacLogSearchTool.PidArgument, 0, int.MaxValue, null);
         if (pidError is not null)
         {
-            return (null, pidError);
+            return (null, [], pidError);
         }
 
-        var now = Access.Time.GetUtcNow();
-        return (new MacLogQuery(
-            log,
-            levels,
-            since ?? now - WindowFor(kind),
+        var terms = new MacLogTerms(
+            Optional(arguments, MacLogSearchTool.LevelArgument),
+            since,
             until,
             Optional(arguments, MacLogSearchTool.ProcessArgument),
-            pid is { } p && kind != MacLogKind.Crashes ? (int)p : null,
-            kind == MacLogKind.Unified ? Optional(arguments, MacLogSearchTool.SubsystemArgument) : null,
-            kind == MacLogKind.Unified ? Optional(arguments, MacLogSearchTool.CategoryArgument) : null,
+            pid is { } p ? (int)p : null,
+            Optional(arguments, MacLogSearchTool.SubsystemArgument),
+            Optional(arguments, MacLogSearchTool.CategoryArgument),
             Optional(arguments, MacLogSearchTool.TextArgument),
-            MacLogQuery.ParseList(Optional(arguments, MacLogSearchTool.ExcludeArgument)),
-            before,
-            limit), null);
-    }
-
-    /// <summary>The window a call gets when it gives no <c>since</c>: an hour of the unified log, a week of reports, a day of install.log.</summary>
-    public static TimeSpan WindowFor(MacLogKind kind) => kind switch
-    {
-        MacLogKind.Crashes => MacFileLogs.CrashWindow,
-        MacLogKind.Install => MacFileLogs.InstallWindow,
-        _ => MacLogQuery.DefaultWindow,
-    };
-
-    /// <summary>The terms a call gave that a log that is a file does not have (levels, subsystems, categories; a report's pid), for the answer's note.</summary>
-    protected static IReadOnlyList<string> Ignored(AIFunctionArguments arguments, MacLogKind kind)
-    {
-        if (kind == MacLogKind.Unified)
-        {
-            return [];
-        }
-
-        string[] names = kind == MacLogKind.Crashes
-            ? [MacLogSearchTool.LevelArgument, MacLogSearchTool.PidArgument, MacLogSearchTool.SubsystemArgument, MacLogSearchTool.CategoryArgument]
-            : [MacLogSearchTool.LevelArgument, MacLogSearchTool.SubsystemArgument, MacLogSearchTool.CategoryArgument];
-        return names.Where(n => arguments.TryGetValue(n, out object? value) && value?.ToString() is { } text && text.Trim().Length > 0).ToList();
+            MacLogQuery.ParseList(Optional(arguments, MacLogSearchTool.ExcludeArgument)));
+        return terms.QueryFor(source, Access.Time.GetUtcNow(), limit, before);
     }
 }

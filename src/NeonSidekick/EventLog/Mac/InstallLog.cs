@@ -18,6 +18,12 @@ public sealed record InstallEntry(long Offset, DateTimeOffset Time, string Host,
 /// continues the entry above it. Lines are split on bytes and each decoded on its own, so a read's edge never cuts a character. An
 /// entry's handle is <c>i&lt;offset&gt;.&lt;unix seconds&gt;</c>: the time is checked again when it is read back, so a rotated file says
 /// the entry is gone rather than showing another.
+/// <para>
+/// Two fixes (2026-10-20, the code review). An entry's continued lines past the message's cap keep their top, as <see cref="At"/> does:
+/// the backward read meets them bottom first and used to keep the bottom, so a search and <c>eventlog_event</c> showed different text and
+/// a text search missed what was near the top. And a first line whose time cannot be a moment (an offset past ±14:00, the year 1 moved
+/// before the calendar) is no entry, never an <see cref="ArgumentException"/> out of the whole read.
+/// </para>
 /// </summary>
 public static partial class InstallLog
 {
@@ -56,7 +62,7 @@ public static partial class InstallLog
         ArgumentNullException.ThrowIfNull(stream);
         long position = Math.Min(before ?? long.MaxValue, stream.Length);
         byte[] carry = [];
-        var pending = new List<string>();   // continuation lines met so far, the lowest last
+        var pending = new Pending();   // continuation lines met so far, the lowest first
         while (position > 0)
         {
             int size = (int)Math.Min(Chunk, position);
@@ -173,12 +179,22 @@ public static partial class InstallLog
 
         int hours = int.Parse(m.Groups["h"].Value[1..], CultureInfo.InvariantCulture);
         int minutes = m.Groups["m"].Success ? int.Parse(m.Groups["m"].Value, CultureInfo.InvariantCulture) : 0;
-        if (hours > 14 || minutes > 59)
+        var offset = new TimeSpan(hours, minutes, 0) * (m.Groups["h"].Value[0] == '-' ? -1 : 1);
+        if (minutes > 59 || offset.Duration() > TimeSpan.FromHours(14))
         {
-            return null;
+            return null;   // +14:30 passed the old hours check and threw below
         }
 
-        var offset = new TimeSpan(hours, minutes, 0) * (m.Groups["h"].Value[0] == '-' ? -1 : 1);
+        DateTimeOffset time;
+        try
+        {
+            time = new DateTimeOffset(local, offset);
+        }
+        catch (ArgumentException)
+        {
+            return null;   // 0001-01-01 00:00 at +01: before the calendar in UTC
+        }
+
         string rest = m.Groups["rest"].Value;
         string process = "";
         int? pid = null;
@@ -190,15 +206,15 @@ public static partial class InstallLog
             message = who.Groups["message"].Value;
         }
 
-        return new InstallEntry(0, new DateTimeOffset(local, offset), m.Groups["host"].Value, process, pid, Cap(message));
+        return new InstallEntry(0, time, m.Groups["host"].Value, process, pid, Cap(message));
     }
 
-    private static InstallEntry? Line(ReadOnlySpan<byte> bytes, long offset, List<string> pending)
+    private static InstallEntry? Line(ReadOnlySpan<byte> bytes, long offset, Pending pending)
     {
         string line = Decode(bytes);
         if (Head(line) is not { } head)
         {
-            if (line.Length > 0 && pending.Sum(p => p.Length) < MacLogLimits.MessageChars)
+            if (line.Length > 0)
             {
                 pending.Add(line);
             }
@@ -209,12 +225,47 @@ public static partial class InstallLog
         string message = head.Message;
         if (pending.Count > 0)
         {
-            pending.Reverse();
-            message = message + "\n" + string.Join("\n", pending);
-            pending.Clear();
+            message = message + "\n" + pending.TakeTopFirst();
         }
 
         return head with { Offset = offset, Message = Cap(message) };
+    }
+
+    /// <summary>
+    /// The continued lines met below a first line not yet reached, the lowest first (2026-10-20, the code review): each new one is higher
+    /// up, and the lowest are let go once the rest still fill the cap, so what is kept is the top, the part the cap keeps.
+    /// </summary>
+    private sealed class Pending
+    {
+        private readonly Queue<string> _lines = new();
+        private int _chars;
+
+        public int Count => _lines.Count;
+
+        public void Add(string line)
+        {
+            _lines.Enqueue(line);
+            _chars += line.Length;
+            while (_lines.Count > 1 && _chars - _lines.Peek().Length >= MacLogLimits.MessageChars)
+            {
+                _chars -= _lines.Dequeue().Length;
+            }
+        }
+
+        /// <summary>The lines top first, and the list emptied.</summary>
+        public string TakeTopFirst()
+        {
+            string joined = string.Join("\n", _lines.Reverse());
+            _lines.Clear();
+            _chars = 0;
+            return joined;
+        }
+
+        public void Clear()
+        {
+            _lines.Clear();
+            _chars = 0;
+        }
     }
 
     private static string Decode(ReadOnlySpan<byte> bytes) => Encoding.UTF8.GetString(bytes).TrimEnd('\r');

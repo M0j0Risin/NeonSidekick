@@ -25,6 +25,9 @@ public sealed record MacLogEntry(
 /// <see cref="Forward"/> (later on 2026-10-18, the phase 5 check) reads oldest first from <see cref="Since"/> and needs <see cref="Until"/>,
 /// which ends it: a reverse read always starts at the newest entry (Phase 0), so finding one entry an hour back read the whole hour, while
 /// a forward read starts at its position. The predicate's time limit is then <c>date &gt; until</c>.
+/// A reverse read is put at its newest moment, <see cref="Until"/> or now, never at <see cref="Since"/> (2026-10-20, the code review's live
+/// check, <c>MacUnifiedLogTests</c>): put at 1970 it gave nothing at all, and put at a <c>since</c> two days back it began at the end of an
+/// older stretch of the store (a day and a half back on that Mac), every entry newer than that left out.
 /// </summary>
 public sealed record MacLogFilter(
     DateTimeOffset Since,
@@ -53,7 +56,8 @@ public sealed record UnifiedLogTarget(string? ArchivePath)
 /// <summary>
 /// An open read, newest first (oldest first for a <see cref="MacLogFilter.Forward"/> filter), in batches. Not thread-safe: made, read and disposed on one thread (the access layer's work delegate).
 /// <see cref="Next"/> returns null once the read reached <see cref="MacLogFilter.Since"/> or the store's end; it honors the
-/// cancellation the read was opened with between entries.
+/// cancellation the read was opened with between entries. A batch may come back short, even empty, when the read is slow
+/// (<see cref="MacLogLimits.BatchTime"/>, 2026-10-20): the caller checks its budget between batches as well as between entries.
 /// </summary>
 public interface IUnifiedLogReader : IDisposable
 {
@@ -92,4 +96,10 @@ public static class MacLogLimits
 
     /// <summary>Entries per <see cref="IUnifiedLogReader.Next"/> batch.</summary>
     public const int Batch = 64;
+
+    /// <summary>
+    /// The longest a batch is filled before it is handed back, short or empty (2026-10-20, the code review: a sparse filter's 64 matches
+    /// could take minutes, past the scan's budget and the read's timeout, which were checked only between batches).
+    /// </summary>
+    public static readonly TimeSpan BatchTime = TimeSpan.FromMilliseconds(250);
 }
