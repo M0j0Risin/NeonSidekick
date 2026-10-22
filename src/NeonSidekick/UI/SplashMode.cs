@@ -25,8 +25,8 @@ public enum SplashStyle
 /// </summary>
 public static class SplashMode
 {
-    /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "image";
+    /// <summary>The compiled default, pinned by <c>AppSettingsTests</c>: <c>off</c> since 2026-10-21 (the user's call), <c>image</c> before.</summary>
+    public const string Default = "off";
 
     /// <summary>The modes in menu order.</summary>
     public static readonly string[] Names = { "image", "robot", "off" };

@@ -7,12 +7,12 @@ namespace NeonSidekick.Tests;
 public class SplashModeTests
 {
     [Fact]
-    public void Names_ArePinned_InMenuOrder_ImageTheDefault()
+    public void Names_ArePinned_InMenuOrder_OffTheDefault()
     {
         // 2026-09-24: the on/off Welcome splash became three words; on was fullsize (the user's name over "normal").
         // 2026-10-20 (the user's call): tiled retired, fullsize renamed image, robot added.
         Assert.Equal(new[] { "image", "robot", "off" }, SplashMode.Names);
-        Assert.Equal("image", SplashMode.Default);
+        Assert.Equal("off", SplashMode.Default);   // 2026-10-21, the user's call; image before
         Assert.Equal(SplashMode.Default, new AppSettingsData().WelcomeSplashMode);
     }
 
@@ -64,7 +64,7 @@ public class SplashModeTests
     [Fact]
     public void Resolve_MapsTheSavedMode()
     {
-        Assert.Equal(SplashStyle.Image, SplashMode.Resolve(new AppSettingsData()));
+        Assert.Equal(SplashStyle.Disabled, SplashMode.Resolve(new AppSettingsData()));
         Assert.Equal(SplashStyle.Robot, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "ROBOT" }));
         Assert.Equal(SplashStyle.Image, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "tiled" }));
         Assert.Equal(SplashStyle.Disabled, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "off" }));
@@ -78,7 +78,7 @@ public class SplashModeTests
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(SplashStyle.Image, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "normal" }));
+            Assert.Equal(SplashStyle.Disabled, SplashMode.Resolve(new AppSettingsData { WelcomeSplashMode = "normal" }));
         }
         finally
         {
@@ -86,6 +86,6 @@ public class SplashModeTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("WelcomeSplashMode='normal' is not one of image, robot, off. Using image.", warning.Message);
+        Assert.Contains("WelcomeSplashMode='normal' is not one of image, robot, off. Using off.", warning.Message);
     }
 }

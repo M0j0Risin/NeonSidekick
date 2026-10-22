@@ -8,12 +8,13 @@ namespace NeonSidekick.Tests.Fakes;
 /// SQL, ComfyUI and Home Assistant tools, <c>Shell command policy</c> <c>off</c> and <c>LLM server scan mode</c> <c>disabled</c>;
 /// the scripts offer every tool group, <c>ask</c>, the <c>local</c> scan finding the stub on port 1234), then two on 2026-10-21
 /// (the user's calls): <c>Embedded servers enabled</c> off (the embedded scripts were written with it on) and <c>Plan gap max
-/// passes</c> 50 (the gap scripts' messages say "of 5" and run to that limit). The fresh-profile picture is pinned by
+/// passes</c> 50 (the gap scripts' messages say "of 5" and run to that limit), and later that day <c>Welcome splash</c> <c>off</c>
+/// (the splash scripts were written with the picture at startup). The fresh-profile picture is pinned by
 /// <c>AppSettingsTests.Defaults</c> and the tests that start from <c>new AppSettingsData()</c> on purpose.
 /// </summary>
 internal static class PreFlipDefaults
 {
-    /// <summary>Puts the ten back on <paramref name="data"/>.</summary>
+    /// <summary>Puts the eleven back on <paramref name="data"/>.</summary>
     public static void Apply(AppSettingsData data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -27,9 +28,10 @@ internal static class PreFlipDefaults
         data.LlmScanMode = "local";
         data.EmbeddedLlmServer = true;
         data.PlanGapPasses = 5;
+        data.WelcomeSplashMode = "image";
     }
 
-    /// <summary>A fresh profile's settings with the ten put back.</summary>
+    /// <summary>A fresh profile's settings with the eleven put back.</summary>
     public static AppSettingsData Data()
     {
         var data = new AppSettingsData();

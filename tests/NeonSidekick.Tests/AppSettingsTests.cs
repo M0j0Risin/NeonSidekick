@@ -947,7 +947,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(settings.Current.TtsOutput);   // the old key, skipped
         Assert.True(settings.Current.CopyUserPrompt);   // the retired key, skipped
         Assert.Equal("internet", settings.Current.WebBrowserNetworkMode);   // the retired switch, skipped
-        Assert.Equal("image", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24); image since 2026-10-20
+        Assert.Equal("off", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24); image since 2026-10-20, off (the default) since 2026-10-21
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
         Assert.Null(settings.Current.BotChatLimitedSkills);   // the renamed BotChatPreloadedSkills is not carried over (2026-10-04)
@@ -1612,7 +1612,7 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.ProjectFile);   // later on 2026-09-19: the notes read unless the toggle (the Options tab of /skills since 2026-10-01) says not
         Assert.Equal("protected", s.SkillCompactMode);
         Assert.True(s.TranscriptMarkdown);
-        Assert.Equal("image", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize; image since 2026-10-20)
+        Assert.Equal("off", s.WelcomeSplashMode);   // 2026-09-18; a pick since 2026-09-24 (on was fullsize; image since 2026-10-20; off since 2026-10-21, the user's call)
         Assert.Equal("full", s.MenuMaxHeight);   // 2026-10-01; three-quarters until later that day
         Assert.False(s.ShowWorkingDirectory);   // 2026-09-18; off by default since 2026-09-21
         Assert.True(s.ShowHeader);   // 2026-10-01, the user's ask

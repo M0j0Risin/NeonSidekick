@@ -596,8 +596,8 @@ public sealed class AppSettingsData
     /// How the splash pictures (<c>UI.SplashImages</c>, the repo's <c>assets\splash</c> or the profile's
     /// own folder) greet the user under the banner at startup, until the first sent line wipes the
     /// screen back to the banner (2026-09-18): one of <see cref="UI.SplashMode.Names"/> — <c>image</c>
-    /// (one picture filling the transcript region, the default), <c>robot</c> (2026-10-20: the animated robot just above the draft
-    /// line, gone at the first line) or <c>off</c>; <c>fullsize</c> and <c>tiled</c> (retired 2026-10-20) still read as <c>image</c>.
+    /// (one picture filling the transcript region; the default until 2026-10-21), <c>robot</c> (2026-10-20: the animated robot just above the draft
+    /// line, gone at the first line) or <c>off</c> (the default since 2026-10-21, the user's call); <c>fullsize</c> and <c>tiled</c> (retired 2026-10-20) still read as <c>image</c>.
     /// Anything else reads as <see cref="UI.SplashMode.Default"/>. <c>/clear</c> never brings it back.
     /// Read at each show; nothing without the pane. Replaced the on/off <c>WelcomeSplash</c> on
     /// 2026-09-24, no migration (the user's call: the old key is skipped, its default stands). No variable.
