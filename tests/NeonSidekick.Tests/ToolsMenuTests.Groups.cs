@@ -16,7 +16,7 @@ public partial class ToolsMenuTests
 
     /// <summary>A group's second strip as the pane prints it (badges cut as <see cref="Output"/> cuts them): the hook, then its menus' titles.</summary>
     private static string SubStrip(string group) =>
-        Markup.Remove(InfoPane.SubStripRows(ToolsText.Label, ToolsText.TabMenus[TabIndex(group) - 1].Select(m => ToolsText.MenuTitles[m]).ToList(), 0, 240)[0]);
+        Markup.Remove(InfoPane.SubStripRows(ToolsText.Label, ToolsText.ShownMenus(TabIndex(group)).Select(m => ToolsText.MenuTitles[m]).ToList(), 0, 240)[0]);
 
     /// <summary>The strips over a group's menu: the first, the second under it, then the spacer.</summary>
     private string Strips(string group) => "\n" + Titled(Strip) + "\n" + SubStrip(group) + "\n \n";
@@ -28,10 +28,19 @@ public partial class ToolsMenuTests
         Assert.Equal("         │ ↳ Camera · Screen · Print ", SubStrip(ToolsText.DevicesTabTitle));   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day; Obsidian to Apps on 2026-10-17
         Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube · Obsidian ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15 until later that day (Admin); 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
-        Assert.Equal("         │ ↳ Network · EventLog · Services · Tasks · Directory ", SubStrip(ToolsText.AdminTabTitle));   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.Equal("         │ ↳ Web · Shell · Clock · Timers · Ask · Help · Options ", SubStrip(ToolsText.CoreTabTitle));   // Clock and Help since 2026-10-18; the user's order since 2026-10-16
         Assert.Equal("         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // 2026-10-11 (the user's ask)
     }
+
+    /// <summary>Admin's strip on Windows: every admin menu (later still on 2026-10-15, the admin-tools plan; Network first since 2026-10-16, the user's order).</summary>
+    [WindowsFact]
+    public void TheAdminSubStrip_OnWindows_HoldsEveryMenu() =>
+        Assert.Equal("         │ ↳ Network · EventLog · Services · Tasks · Directory ", SubStrip(ToolsText.AdminTabTitle));
+
+    /// <summary>Admin's strip on a Mac (2026-10-22, the user's ask): no Services or Tasks, the families only Windows has.</summary>
+    [MacFact]
+    public void TheAdminSubStrip_OnAMac_LeavesOutServicesAndTasks() =>
+        Assert.Equal("         │ ↳ Network · EventLog · Directory ", SubStrip(ToolsText.AdminTabTitle));
 
     [Fact]
     public async Task OnThePane_TheDatabaseTab_ShowsTheSecondStrip_AndTheFirstMenusRows()

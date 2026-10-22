@@ -293,4 +293,45 @@ public class ItemOrderTests
         Assert.Equal(["home"], copy.BarOrder);
         Assert.NotSame(source.BarOrder, copy.BarOrder);
     }
+
+    /// <summary>The ids a Mac's Tool bar checklist hides in these cases (2026-10-22): the capital ones.</summary>
+    private static bool Shown(string id) => id.ToLowerInvariant() == id;
+
+    /// <summary>
+    /// <see cref="ItemOrder.Reinsert"/> (2026-10-22, the user's ask: a Mac's Tool bar checklist hides 🧩 and 📅): an edit of the shown ids gets the
+    /// hidden ones back on the group they were in, right after the id they followed (first in the group with none), and an unedited view
+    /// is the order it came from, so a default saves as one.
+    /// </summary>
+    [Fact]
+    public void Reinsert_PutsTheHiddenIdsBack_AfterTheIdTheyFollowed_OnTheirSide()
+    {
+        var before = new ItemOrder.Sided(["H", "a", "K", "b", "c"], ["x", "R"]);
+        Assert.Equal(new ItemOrder.Sided(["a", "b", "c"], ["x"]).All, ItemOrder.Only(before, Shown).All);
+
+        Assert.True(ItemOrder.Reinsert(before, ItemOrder.Only(before, Shown), Shown).SameAs(before));   // unedited: as it was
+
+        var moved = ItemOrder.Reinsert(before, new ItemOrder.Sided(["b", "a", "c"], ["x"]), Shown);   // a swapped past b
+        Assert.Equal(["H", "b", "a", "K", "c"], moved.Left);   // K still after a, H still first
+        Assert.Equal(["x", "R"], moved.Right);
+
+        var sided = ItemOrder.Reinsert(before, new ItemOrder.Sided(["a", "b", "c", "x"], []), Shown);   // x pinned left: R stays right
+        Assert.Equal(["H", "a", "K", "b", "c", "x"], sided.Left);
+        Assert.Equal(["R"], sided.Right);
+
+        var centered = new ItemOrder.Sided(["a"], ["b"], ["H", "c"]);
+        Assert.True(ItemOrder.Reinsert(centered, ItemOrder.Only(centered, Shown), Shown).SameAs(centered));   // three groups too
+    }
+
+    /// <summary>The Tool bar's default order through a Mac's checklist and back saves as the default (2026-10-22): null, as before.</summary>
+    [Fact]
+    public void Reinsert_TheToolbarsDefault_WithTheMacsHiddenItems_SavesAsTheDefault()
+    {
+        bool mac(string id) => ItemOrder.IsDivider(id) || ToolbarItems.IsHere(id, windows: false);
+        var sides = ToolbarItems.Sides(null, null);
+        var back = ItemOrder.Reinsert(sides, ItemOrder.Only(sides, mac), mac);
+
+        Assert.DoesNotContain(ToolbarItems.Services, ItemOrder.Only(sides, mac).All);
+        Assert.Null(ToolbarItems.SaveOrder(back.All));
+        Assert.Null(ToolbarItems.SaveRight(back.Right));
+    }
 }

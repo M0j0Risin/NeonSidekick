@@ -546,7 +546,7 @@ internal sealed partial class ChatScreen
                 {
                     await _toolsMenu.ShowShellSubAsync(shellSub, cancellationToken).ConfigureAwait(false);
                 }
-                else if (ToolsText.SwitchField(args) is { } field)
+                else if (ToolsText.SwitchFieldHere(args) is { } field)
                 {
                     await _toolsMenu.ShowSwitchAsync(field, cancellationToken).ConfigureAwait(false);
                 }

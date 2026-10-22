@@ -37,7 +37,7 @@ internal static class HelpLocation
     /// </summary>
     private const string ProfilePlaceholder = @"C:\neon-help\profiles\neon";
 
-    private static readonly Lazy<IReadOnlyList<HelpRow>> s_rows = new(BuildRows);
+    private static readonly Lazy<IReadOnlyList<HelpRow>> s_rows = new(() => RowsFor(OperatingSystem.IsWindows()));
 
     /// <summary>The four panes with settings rows, in the toolbar's order, each with its whole tab strip.</summary>
     public static readonly IReadOnlyList<HelpPane> Panes =
@@ -48,7 +48,11 @@ internal static class HelpLocation
         new("/mcp", HelpText.McpPaneSummary, McpText.TabTitles),
     ];
 
-    /// <summary>Every settings row, pane by pane and tab by tab in strip order.</summary>
+    /// <summary>
+    /// Every settings row this system shows, pane by pane and tab by tab in strip order: <see cref="RowsFor"/> here. On a Mac the
+    /// Windows-only menus' rows are left out (2026-10-22, the user's ask), and with them <c>neon_help</c>'s answers, its search and
+    /// <c>/settings</c>' search and changed page.
+    /// </summary>
     public static IReadOnlyList<HelpRow> Rows => s_rows.Value;
 
     /// <summary>The row <paramref name="field"/> is on.</summary>
@@ -79,7 +83,11 @@ internal static class HelpLocation
         _ => SettingsMenu.FieldValue(field, new AppSettingsData(), ProfilePlaceholder) is { Length: > 0 } value ? value : HelpText.EmptyDefault,
     };
 
-    private static IReadOnlyList<HelpRow> BuildRows()
+    /// <summary>
+    /// The rows a system shows (2026-10-22): on Windows every <see cref="SettingsField"/> once (pinned); elsewhere <c>/tools</c>' group tabs
+    /// hold only <see cref="ToolsText.ShownMenus(int, bool)"/>, so the Services and Tasks menus' rows are not there. Pure.
+    /// </summary>
+    public static IReadOnlyList<HelpRow> RowsFor(bool windows)
     {
         var rows = new List<HelpRow>(256);
         for (int s = 0; s < SettingsMenu.StripTitles.Count; s++)
@@ -96,7 +104,7 @@ internal static class HelpLocation
         for (int t = 1; t < ToolsText.TabTitles.Count; t++)
         {
             // A plain tab is its menu; a group tab's rows name their menu too (2026-10-09).
-            var menus = ToolsText.TabMenus[t - 1];
+            var menus = ToolsText.ShownMenus(t, windows);
             foreach (int m in menus)
             {
                 string? menu = menus.Count > 1 ? ToolsText.MenuTitles[m] : null;

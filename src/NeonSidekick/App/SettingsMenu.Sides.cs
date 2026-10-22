@@ -120,7 +120,15 @@ internal sealed partial class SettingsMenu
         IReadOnlySet<string>? Fixed = null,
         string? FixedNotice = null,
         bool Dividers = false,
-        bool Look = false);
+        bool Look = false,
+        Func<SettingsMenu, string, bool>? Here = null);
+
+    /// <summary>
+    /// Which Tool bar items show here (2026-10-22, the user's ask): <see cref="App.ToolbarItems.IsHere(string)"/> unless the screen hands its
+    /// own (<see cref="ChatScreen.ToolbarItemHere"/>, read at each call). The checklist lists only these; the others keep their checks,
+    /// their places and their sides.
+    /// </summary>
+    public Func<string, bool> ToolbarItemHere { get; set; } = App.ToolbarItems.IsHere;
 
     /// <summary>The Tool bar's checklist (<see cref="EditToolbarItemsAsync"/>).</summary>
     private static readonly SidedChecklist ToolbarChecklist = new(
@@ -137,7 +145,8 @@ internal sealed partial class SettingsMenu
         d => App.ToolbarItems.Resolve(d.ToolbarItems).SetEquals(App.ToolbarItems.Defaults)
             && App.ToolbarItems.SaveOrder(App.ToolbarItems.Sides(d.ToolbarOrder, d.ToolbarRight).All) is null
             && App.ToolbarItems.SaveRight(App.ToolbarItems.ResolveRight(d.ToolbarRight)) is null,
-        Dividers: true);
+        Dividers: true,
+        Here: (menu, id) => menu.ToolbarItemHere(id));   // a Mac lists no 🧩 or 📅 (2026-10-22)
 
     /// <summary>The Status bar's checklist (<see cref="EditStatusBarAsync"/>; the Hint bar's until 2026-10-14).</summary>
     private static readonly SidedChecklist StatusBarChecklist = new(
@@ -190,7 +199,12 @@ internal sealed partial class SettingsMenu
         {
             var saved = _settings.Current;
             var on = list.On(saved);
-            var sides = list.Sides(saved);
+            var whole = list.Sides(saved);
+            // The items this system shows (2026-10-22, the Tool bar's on a Mac): the rows, indexes and moves are theirs; every save of sides
+            // puts the others back where they were (Back), so a hidden item keeps its place and its side. A divider always shows.
+            Func<string, bool>? here = list.Here is { } isHere ? id => ItemOrder.IsDivider(id) || isHere(this, id) : null;
+            var sides = here is null ? whole : ItemOrder.Only(whole, here);
+            ItemOrder.Sided Back(ItemOrder.Sided edited) => here is null ? edited : ItemOrder.Reinsert(whole, edited, here);
             var all = sides.All;
             var (rows, headings) = SidedRows(sides, id => list.Label(id, on.Contains(id)));
             var page = new MenuPage(Crumb(FieldName(list.Field)), rows, list.Hint) { SpaceToggles = true, Headings = headings };
@@ -232,7 +246,7 @@ internal sealed partial class SettingsMenu
             {
                 // + divider (2026-10-13, the user's ask): a new one right after the cursor's item, on its side, the cursor on it.
                 var (added, landed) = ItemOrder.AddDivider(sides, at < 0 ? index : at);
-                Apply(list.Field, d => list.SaveSides(d, added));
+                Apply(list.Field, d => list.SaveSides(d, Back(added)));
                 index = landed;
                 changed = true;
                 continue;
@@ -250,7 +264,7 @@ internal sealed partial class SettingsMenu
                 index = landed;
                 if (!moved.SameAs(sides))
                 {
-                    Apply(list.Field, d => list.SaveSides(d, moved));
+                    Apply(list.Field, d => list.SaveSides(d, Back(moved)));
                     changed = true;
                 }
 
@@ -264,7 +278,7 @@ internal sealed partial class SettingsMenu
                 if (pick.Remove)
                 {
                     var without = new ItemOrder.Sided(sides.Left.Where(id => id != row).ToList(), sides.Right.Where(id => id != row).ToList(), sides.Center?.Where(id => id != row).ToList());
-                    Apply(list.Field, d => list.SaveSides(d, without));
+                    Apply(list.Field, d => list.SaveSides(d, Back(without)));
                     index = Math.Min(index, Math.Max(0, without.All.Count - 1));
                     changed = true;
                 }

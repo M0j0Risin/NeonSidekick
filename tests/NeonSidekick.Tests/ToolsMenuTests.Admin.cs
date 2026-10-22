@@ -17,7 +17,7 @@ public partial class ToolsMenuTests
     private void OpenMenuRow(string menu, SettingsField field) =>
         Push([.. ToTab(menu), .. Enumerable.Repeat(Keys.Down, TabFields(menu).ToList().IndexOf(field)), Keys.Enter]);
 
-    [Fact]
+    [WindowsFact]   // a Mac shows no Services or Tasks menu (2026-10-22)
     public async Task OnThePane_TheServicesWizard_WalksAReadWriteComputer_RefusesAnUnknownAction_TestsTheDraft_AndSavesIt()
     {
         string path = ServiceConfigFile.Family.ProfilePath(_settings.ProfileDirectory);
@@ -113,7 +113,7 @@ public partial class ToolsMenuTests
         Assert.Contains(SettingsMenu.DirectoryWizardCancelledNotice, Output);
     }
 
-    [Fact]
+    [WindowsFact]   // a Mac shows no Services or Tasks menu (2026-10-22)
     public async Task OnThePane_TheTasksWizard_AReadOnlyComputer_SkipsTheChangePages()
     {
         string path = TaskConfigFile.Family.ProfilePath(_settings.ProfileDirectory);

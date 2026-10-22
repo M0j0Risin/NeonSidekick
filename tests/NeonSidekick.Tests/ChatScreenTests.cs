@@ -323,6 +323,7 @@ public partial class ChatScreenTests : IDisposable
         _keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
         var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, macLogPlaces: _macLogPlaces, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null, tonePlayback: _ => _tonePlayback, ralphVerifier: _ralphVerifier);
         screen.UserProfileFolder = _userProfile;
+        screen.ToolbarItemHere = _toolbarHere;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
@@ -334,6 +335,12 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>The folder the toolbar's path shows as ~ (2026-10-04): none by default, so the paths under the temp folder stand whole.</summary>
     private string _userProfile = "";
+
+    /// <summary>
+    /// The toolbar items the screen shows (2026-10-22, <see cref="ChatScreen.ToolbarItemHere"/>): every one by default, so the pinned strips
+    /// and click cells hold on a Mac too; a test sets the Mac's answer (<see cref="ToolbarItems.IsHere(string, bool)"/>) to see 🧩 and 📅 go.
+    /// </summary>
+    private Func<string, bool> _toolbarHere = _ => true;
 
     /// <summary>The clipboard recorder: what /copy wrote, unless the test says the clipboard is busy.</summary>
     private bool CopyToClipboard(string text)
@@ -5177,7 +5184,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Collapse, hasArgs: false));
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: false));
         // /tools <group> since 2026-10-03 (the toolbar's tool switches): the groups complete, each with the setting it opens.
-        Assert.Equal(ToolsText.SwitchWords, ChatScreen.ArgumentItems("/tools", "", Sources()).Select(i => i.Text));
+        Assert.Equal(ToolsText.SwitchWordsHere, ChatScreen.ArgumentItems("/tools", "", Sources()).Select(i => i.Text));   // this system's words since 2026-10-22
         var oracle = Assert.Single(ChatScreen.ArgumentItems("/tools", "or", Sources()));
         Assert.Equal(("oracle", "Oracle tools"), (oracle.Text, oracle.Note));
     }
@@ -9836,7 +9843,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, or nothing for the pane.", ToolsText.SwitchUsageError);
+        // Windows' words pinned on every system, and the message built from this system's (2026-10-22: a Mac leaves out services and tasks).
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, or nothing for the pane.", "/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsFor(windows: true)) + ", or nothing for the pane.");
+        Assert.Equal("/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsHere) + ", or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
         Assert.Null(ToolsText.SwitchField("git"));

@@ -454,8 +454,8 @@ public static class SlashCommands
             new("/echo", "print a line as a reply"),
             new(EventLog.EventLogCommand.Word, OperatingSystem.IsMacOS() ? "read this Mac's logs" : "read Windows' event logs"),   // a Mac's own since 2026-10-18
             new(Network.NetworkCommand.Word, "check hosts, ports, DNS and certificates"),
-            new("/services", "list, start and stop Windows services"),
-            new("/tasks", "list and run scheduled tasks"),
+            new("/services", OperatingSystem.IsMacOS() ? "Windows services (a Mac has none)" : "list, start and stop Windows services"),   // the Mac's words since 2026-10-22
+            new("/tasks", OperatingSystem.IsMacOS() ? "Windows' scheduled tasks (a Mac has none)" : "list and run scheduled tasks"),
             new("/ad", "look up Active Directory accounts"),
             new("/exit", "exit the app"),
             new("/expand", "unfold every item in the transcript"),

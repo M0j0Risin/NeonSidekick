@@ -709,7 +709,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` â
 
 Network checks, event logs, services, scheduled tasks and Active Directory; see [Admin](TOOLS.md#admin).
 
-On a Mac, Network, EventLog (the Mac's own logs) and Directory work. Services and Tasks are Windows only: their rows show, but their tools are never offered.
+On a Mac, Network, EventLog (the Mac's own logs) and Directory work. Services and Tasks are Windows only ([MAC.md](MAC.md#what-works)).
 
 #### Network
 

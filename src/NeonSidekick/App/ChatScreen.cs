@@ -1570,6 +1570,8 @@ internal sealed partial class ChatScreen
             Flow = _flow,
             // The home bar's picker reads the registries through the live feed (2026-10-12).
             HomeCatalog = _homeLive.CatalogAsync,
+            // The Tool bar checklist lists the items this system shows (2026-10-22): the screen's, read at each call, since tests set it after the build.
+            ToolbarItemHere = id => this.ToolbarItemHere(id),
         };
         // The mode buttons (2026-10-13, the user's ask): after the settings menu, whose rows save them; the saved words, read without the turn's warning; set through the rows' own save.
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane, () => SavedQueueMode(_settings.Current), mode => _menu.SetQueueMode(mode), () => SavedQueueCancel(_settings.Current), mode => _menu.SetQueueCancelMode(mode));
@@ -2028,6 +2030,13 @@ internal sealed partial class ChatScreen
     public string UserProfileFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>
+    /// Which toolbar items show here (2026-10-22, the user's ask): <see cref="ToolbarItems.IsHere(string)"/>, so a Mac draws no 🧩 or 📅 and
+    /// its checklist lists neither (the settings menu reads this at each call). Tests set their own: <c>_ => true</c> keeps every pinned
+    /// strip on a Mac, and the Mac's answer lets Windows test the hiding.
+    /// </summary>
+    public Func<string, bool> ToolbarItemHere { get; set; } = ToolbarItems.IsHere;
+
+    /// <summary>
     /// The one walk the strips share, over <paramref name="order"/> (the user's, 2026-10-12; <see cref="ToolbarItems.Names"/> when
     /// null): the glyphs drawn and the places of the ones <paramref name="off"/> names.
     /// </summary>
@@ -2309,7 +2318,9 @@ internal sealed partial class ChatScreen
         // The model's name (2026-10-12, the user's ask: Model name), its reasoning glyph after it since later that day (the user's ask), as on the hint row.
         string model = ModelLabel(_session.Endpoint?.ModelId);
         string mark = model.Length == 0 ? "" : ModelMark(_session.Endpoint?.ModelId, shown.LlmReasoning);
-        var parts = ToolbarPartsFor(ToolbarItems.Resolve(shown.ToolbarItems), shown, path, model, mark, _noToolsOffered, EventLogsHere, DirectoryHere);
+        // The items this system shows (2026-10-22): a Mac's checked 🧩 or 📅 (a profile from Windows) never draws.
+        var items = ToolbarItems.Resolve(shown.ToolbarItems).Where(ToolbarItemHere).ToHashSet(StringComparer.Ordinal);
+        var parts = ToolbarPartsFor(items, shown, path, model, mark, _noToolsOffered, EventLogsHere, DirectoryHere);
         return parts.Left.Count + parts.Right.Count == 0 ? null : parts;
     }
 
@@ -5187,7 +5198,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches(ToolsText.ShellSubWords.Select(word => new CompletionItem(shellHead + word, ToolsText.DescribeShellSub(word))).ToList(), argText);
                 }
 
-                return MentionCompleter.Matches(ToolsText.SwitchWords.Select(word => new CompletionItem(word, ToolsText.DescribeSwitch(word))).ToList(), argText);
+                return MentionCompleter.Matches(ToolsText.SwitchWordsHere.Select(word => new CompletionItem(word, ToolsText.DescribeSwitch(word))).ToList(), argText);
             }
 
             case SlashCommand.Toolbar:
@@ -13896,7 +13907,7 @@ internal sealed partial class ChatScreen
                 {
                     await _toolsMenu.ShowShellSubAsync(shellSub, cancellationToken).ConfigureAwait(false);
                 }
-                else if (ToolsText.SwitchField(args) is { } switchField)
+                else if (ToolsText.SwitchFieldHere(args) is { } switchField)
                 {
                     await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false);
                 }

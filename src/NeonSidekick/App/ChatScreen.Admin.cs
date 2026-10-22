@@ -255,7 +255,7 @@ internal sealed partial class ChatScreen
         }
 
         bool directoryOn = effective.DirectoryTools && DirectoryHere;
-        return
+        AdminGroupSpec[] groups =
         [
             new AdminGroupSpec(ToolsText.NetworkMenuTitle, _networkTools, NetworkOffered(effective), ToolsText.SwitchOffReason(SettingsField.NetworkTools), SettingsField.NetworkTools, networkNotes),
             new AdminGroupSpec(ToolsText.ServicesMenuTitle, _serviceTools, ServicesOffered(effective, _services),
@@ -265,6 +265,10 @@ internal sealed partial class ChatScreen
             new AdminGroupSpec(ToolsText.DirectoryMenuTitle, _directoryTools, DirectoryOffered(effective, _directory),
                 !effective.DirectoryTools ? ToolsText.SwitchOffReason(SettingsField.DirectoryTools) : !directoryOn ? DirectoryText.NoneHereReason : DirectoryText.NoDomainReason, SettingsField.DirectoryTools),
         ];
+
+        // A family only Windows has is left out elsewhere (2026-10-22, the user's ask): no Services or Tasks group on a Mac's Offered tab,
+        // /sys or the botchat checklist, as /tools shows no menu for them (ToolsText.WindowsOnlyMenus).
+        return groups.Where(g => ToolsText.MenuHere(g.Title)).ToList();
     }
 
     /// <summary>The four families' inputs for a turn (the main chat's), each list cut by its rules.</summary>

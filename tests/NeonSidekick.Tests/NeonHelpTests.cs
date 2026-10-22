@@ -36,14 +36,31 @@ public class NeonHelpTests
     [Fact]
     public void EverySetting_HasHelp_OnePlace_AndADefault()
     {
+        var rows = HelpLocation.RowsFor(windows: true);   // Windows' table holds every field (a Mac's leaves out the Windows-only menus, 2026-10-22)
         foreach (var field in Enum.GetValues<SettingsField>())
         {
             Assert.False(string.IsNullOrWhiteSpace(HelpSettings.Describe(field)), $"{field} has no help: add it to HelpSettings.Describe");
-            Assert.Single(HelpLocation.Rows, r => r.Field == field);
+            Assert.Single(rows, r => r.Field == field);
             Assert.NotNull(HelpLocation.Default(field));
         }
 
-        Assert.Equal(Enum.GetValues<SettingsField>().Length, HelpLocation.Rows.Count);
+        Assert.Equal(Enum.GetValues<SettingsField>().Length, rows.Count);
+        Assert.Equal(HelpLocation.RowsFor(OperatingSystem.IsWindows()), HelpLocation.Rows);   // the table in use is this system's
+    }
+
+    /// <summary>
+    /// Off Windows the help leaves out the menus only Windows has (2026-10-22, the user's ask): the Services and Tasks menus' rows, and
+    /// those alone, so <c>neon_help</c>, its search and <c>/settings</c>' search and changed page never name a row a Mac does not show.
+    /// </summary>
+    [Fact]
+    public void OffWindows_TheHelp_LeavesOutTheServicesAndTasksRows()
+    {
+        var windowsOnly = ToolsText.WindowsOnlyMenus.SelectMany(title => SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(title)]).ToHashSet();
+        var mac = HelpLocation.RowsFor(windows: false);
+
+        Assert.Equal(14, windowsOnly.Count);   // seven rows each
+        Assert.Equal(HelpLocation.RowsFor(windows: true).Where(r => !windowsOnly.Contains(r.Field)), mac);
+        Assert.DoesNotContain(mac, r => r.Field == SettingsField.ServiceTools || r.Field == SettingsField.TaskTools);
     }
 
     [Fact]
@@ -197,7 +214,7 @@ public class NeonHelpTests
         Assert.StartsWith("Tab /tools › Home › HomeAssistant:", Invoke("/tools home assistant"), StringComparison.Ordinal);   // on Home since 2026-10-11
         Assert.StartsWith("Tab /tools › Home: " + HelpText.MenusTab(["HomeAssistant", "Shopping"]), Invoke("/tools home"), StringComparison.Ordinal);   // the tab said whole wins over HomeAssistant
         Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "ComfyUI", "YouTube", "Obsidian"]), Invoke("/tools apps"), StringComparison.Ordinal);   // Obsidian last since 2026-10-17 (the user's order)
-        Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(["Network", "EventLog", "Services", "Tasks", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
+        Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(OperatingSystem.IsWindows() ? ["Network", "EventLog", "Services", "Tasks", "Directory"] : ["Network", "EventLog", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // a Mac's three since 2026-10-22   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.StartsWith("Tab /tools › Admin › EventLog:", Invoke("/tools eventlog"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Admin › Network:", Invoke("/tools network"), StringComparison.Ordinal);   // on Core until 2026-10-16
         // The standing groups' menus (2026-10-18): Clock and Help on Core; "time" still the Timers menu it starts.

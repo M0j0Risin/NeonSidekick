@@ -298,6 +298,16 @@ public static class ToolbarItems
         return Markup.Escape((on ? "[x] " : "[ ] ") + (glyph.Length == 0 ? "  " : glyph) + "  " + Title(id).PadRight(TitleWidth)) + Theme.DimMarkup(Describe(id));
     }
 
+    /// <summary>
+    /// Whether item <paramref name="id"/> shows on a system (2026-10-22, the user's ask): every one on Windows; elsewhere all but the switches of
+    /// the families only Windows has, 🧩 <see cref="Services"/> and 📅 <see cref="Tasks"/> (<see cref="ToolsText.WindowsOnlyMenus"/>), which
+    /// a Mac's strip never draws and its checklist never lists. A saved check stays in the profile. Pure.
+    /// </summary>
+    public static bool IsHere(string id, bool windows) => windows || id is not (Services or Tasks);
+
+    /// <summary>Whether item <paramref name="id"/> shows on this system: <see cref="ChatScreen.ToolbarItemHere"/>'s default.</summary>
+    public static bool IsHere(string id) => IsHere(id, OperatingSystem.IsWindows());
+
     /// <summary>The items <paramref name="saved"/> names: <see cref="Defaults"/> when null, the known ids (trimmed, any case) otherwise.</summary>
     public static IReadOnlySet<string> Resolve(IReadOnlyList<string>? saved)
     {

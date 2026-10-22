@@ -41,7 +41,8 @@ namespace NeonSidekick.App;
 /// Core (Standard until later still that day, as Devices was Media; the user's calls) Ask, Web, Shell and Options (later still on 2026-10-10, the user's ask), four tabs of their own until then (Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18). Every menu is headed since then too
 /// (<see cref="SettingsMenu.ToolsMenuSections"/>, the <c>/settings</c> look): a row is found through <see cref="SettingsMenu.SectionedField"/>, never by index.
 /// Since 2026-10-11 (the user's asks) Home, the strip's last, holds HomeAssistant (off Integrations) and Shopping (off Core), and Integrations,
-/// left with Docker, ComfyUI and YouTube, is Apps.
+/// left with Docker, ComfyUI and YouTube, is Apps. Since 2026-10-22 (the user's ask) a group shows this system's menus
+/// (<see cref="ToolsText.ShownMenus(int)"/>): on a Mac, Admin is Network, EventLog and Directory, Services and Tasks left out.
 /// </summary>
 internal sealed class ToolsMenu
 {
@@ -96,7 +97,7 @@ internal sealed class ToolsMenu
         for (int t = 1; t < tabs.Length; t++)
         {
             // A group tab holds its menus as sub-tabs (2026-10-10); a plain tab is its one menu's rows.
-            var menus = ToolsText.TabMenus[t - 1];
+            var menus = ToolsText.ShownMenus(t);
             tabs[t] = menus.Count > 1
                 ? GroupTab(t, saved, menu, subs is not null && t < subs.Count ? subs[t] : 0)
                 : menu.FieldsTab(ToolsText.TabTitles[t], SettingsMenu.ToolsTabFields[menus[0]], saved, sections: SettingsMenu.ToolsMenuSections[menus[0]]) with { Off = ToolsText.MenuSwitchOn(menus[0], saved) == false };
@@ -123,7 +124,7 @@ internal sealed class ToolsMenu
     /// </summary>
     private static MenuTab GroupTab(int tab, AppSettingsData saved, SettingsMenu menu, int sub)
     {
-        var menus = ToolsText.TabMenus[tab - 1];
+        var menus = ToolsText.ShownMenus(tab);
         var switches = menus.Select(m => ToolsText.MenuSwitchOn(m, saved)).ToList();
         var subs = menus.Select((m, i) =>
         {
@@ -151,7 +152,7 @@ internal sealed class ToolsMenu
     /// </summary>
     private static SettingsField? RowField(int tab, int sub, int row)
     {
-        var menus = ToolsText.TabMenus[tab - 1];
+        var menus = ToolsText.ShownMenus(tab);
         int m = menus[menus.Count > 1 ? Math.Clamp(sub, 0, menus.Count - 1) : 0];
         return SettingsMenu.SectionedField(SettingsMenu.ToolsTabFields[m], SettingsMenu.ToolsMenuSections[m], row);
     }
@@ -174,7 +175,7 @@ internal sealed class ToolsMenu
         for (int t = 1; t < ToolsText.TabTitles.Count; t++)
         {
             yield return ToolsText.TabTitles[t];
-            var menus = ToolsText.TabMenus[t - 1];
+            var menus = ToolsText.ShownMenus(t);
             if (menus.Count == 1)
             {
                 foreach (var field in SettingsMenu.ToolsTabFields[menus[0]])

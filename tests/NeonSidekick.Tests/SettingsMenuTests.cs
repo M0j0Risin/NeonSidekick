@@ -45,6 +45,7 @@ public partial class SettingsMenuTests : IDisposable
         _speech = new SpeechSession(_ => _synth, _ => new FakeAudioPlayback(), new ModelStore(Path.Combine(_dir, "models"), new HttpClient(new StubHttpMessageHandler())));
         var input = new InputLine(_console, new KeySource(_console.Input, TimeSpan.FromMilliseconds(1)));
         _menu = new SettingsMenu(_console, _settings, f => _overrides.GetValueOrDefault(f), input, _transcript, _speech, NoPane(_console), _ => FakeBrowserPath);
+        _menu.ToolbarItemHere = _ => true;   // every toolbar item listed, on a Mac too (2026-10-22): the pinned rows hold
     }
 
     /// <summary>What the fixture's browser auto-detection "finds", so the empty <c>Browser path</c> row reads the same on every machine.</summary>
@@ -3315,6 +3316,7 @@ public partial class SettingsMenuTests : IDisposable
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills, botChatTools: botChatTools);
+        menu.ToolbarItemHere = _ => true;   // every toolbar item listed, on a Mac too (2026-10-22): the pinned rows hold
         pane.Show();
         return (menu, pane);
     }
@@ -3382,6 +3384,7 @@ public partial class SettingsMenuTests : IDisposable
         var input = new ScriptedInput();
         var keys = new KeySource(input, TimeSpan.FromMilliseconds(1));
         var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath);
+        menu.ToolbarItemHere = _ => true;   // every toolbar item listed, on a Mac too (2026-10-22): the pinned rows hold
         pane.Show();
         return (menu, pane, input);
     }

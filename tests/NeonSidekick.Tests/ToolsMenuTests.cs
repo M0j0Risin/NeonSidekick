@@ -162,10 +162,10 @@ public partial class ToolsMenuTests : IDisposable
         int leaves = 0;
         for (int t = 1; t < tab; t++)
         {
-            leaves += ToolsText.TabMenus[t - 1].Count;
+            leaves += ToolsText.ShownMenus(t).Count;   // this system's menus (2026-10-22): a Mac's Admin has three
         }
 
-        int within = InGroup(title) ? ToolsText.TabMenus[tab - 1].ToList().IndexOf(ToolsText.MenuIndex(title)) : 0;
+        int within = InGroup(title) ? ToolsText.ShownMenus(tab).ToList().IndexOf(ToolsText.MenuIndex(title)) : 0;
         return tab == 0 ? 0 : leaves + 1 + within;
     }
 
@@ -2414,6 +2414,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·     Web search max results: 20 results\n  ·     Web download max (MB): 50 MB\n  ·   Shell\n  ·     Shell command policy: ask\n", Output);   // Shell after Web again since 2026-10-16 (the user's order; Network between them from later still on 2026-10-15)
         Assert.Contains("  · Admin\n  ·   Network\n  ·     Network tools: off\n", Output);   // Admin first since 2026-10-16 (the user's order; on Core after Web from later still on 2026-10-15)
         Assert.Contains("  ·     Network certificate stores: off\n  ·   EventLog\n  ·     Event log tools: off\n", Output);
+        Assert.DoesNotContain("  ·   Services\n", Output);   // off Windows no Services or Tasks menu (2026-10-22, the user's ask)
+        Assert.DoesNotContain("  ·   Tasks\n", Output);
         Assert.Contains("  ·     File view image max images: 10 pictures\n  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   UNC\n", Output);
         Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", Output);   // Web first since 2026-10-16 (the user's order; Ask first until then)

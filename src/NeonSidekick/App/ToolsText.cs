@@ -58,6 +58,23 @@ public static class ToolsText
     /// <summary><c>/tools help</c>'s word (2026-10-18): the Help tools switch; no toolbar item, as <see cref="TimersSwitchWord"/>. Pinned.</summary>
     public const string HelpSwitchWord = "help";
 
+    /// <summary>
+    /// <see cref="SwitchWords"/> as <c>/tools</c> takes them on a system (2026-10-22, the user's ask): off Windows less the words of the
+    /// <see cref="WindowsOnlyMenus"/>' switches (<c>services</c>, <c>tasks</c>), whose pages a Mac never shows. Pure.
+    /// </summary>
+    public static string[] SwitchWordsFor(bool windows) =>
+        windows ? [.. SwitchWords] : [.. SwitchWords.Where(word => word is not (ToolbarItems.Services or ToolbarItems.Tasks))];
+
+    /// <summary>The words <c>/tools</c> takes here (<see cref="SwitchWordsFor"/>): its completion and <see cref="SwitchUsageError"/>'s list.</summary>
+    public static readonly string[] SwitchWordsHere = SwitchWordsFor(OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// The setting a word of <see cref="SwitchWordsHere"/> opens (2026-10-22): <see cref="SwitchField"/>, null for a word this system leaves
+    /// out, so <c>/tools services</c> on a Mac is the usage error. Both of <c>/tools</c>' dispatch sites read it.
+    /// </summary>
+    public static SettingsField? SwitchFieldHere(string word) =>
+        SwitchWordsHere.Contains(word.Trim().ToLowerInvariant(), StringComparer.Ordinal) ? SwitchField(word) : null;
+
     /// <summary>The setting a <see cref="SwitchWords"/> word opens (any case, trimmed); null for any other word. Pinned.</summary>
     public static SettingsField? SwitchField(string word) => word.Trim().ToLowerInvariant() switch
     {
@@ -106,7 +123,7 @@ public static class ToolsText
     }
 
     /// <summary><c>/tools</c> given a word that is no group. Pinned.</summary>
-    public static readonly string SwitchUsageError = "/tools takes one of " + string.Join(", ", SwitchWords) + ", or nothing for the pane.";
+    public static readonly string SwitchUsageError = "/tools takes one of " + string.Join(", ", SwitchWordsHere) + ", or nothing for the pane.";   // this system's words since 2026-10-22
 
     /// <summary>
     /// <c>/tools shell allowed</c>'s word (2026-10-09, the user's call: <c>/cmdlist</c> folded in): the <c>Shell allowed commands</c>
@@ -296,6 +313,34 @@ public static class ToolsText
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21]];
+
+    /// <summary>
+    /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or
+    /// Task Scheduler, so <c>/tools</c>, the toolbar and the help leave their menus, groups and switches out there (<see cref="MenuHere(int, bool)"/>,
+    /// <see cref="ToolbarItems.IsHere(string, bool)"/>). <see cref="TabMenus"/> keeps the whole layout. Pinned.
+    /// </summary>
+    public static readonly IReadOnlySet<string> WindowsOnlyMenus = new HashSet<string>(StringComparer.Ordinal) { ServicesMenuTitle, TasksMenuTitle };
+
+    /// <summary>Whether the menu titled <paramref name="title"/> shows on a system (<paramref name="windows"/>): every one on Windows, all but <see cref="WindowsOnlyMenus"/> elsewhere. Pure.</summary>
+    public static bool MenuHere(string title, bool windows) => windows || !WindowsOnlyMenus.Contains(title);
+
+    /// <summary>Whether the menu titled <paramref name="title"/> shows on this system.</summary>
+    public static bool MenuHere(string title) => MenuHere(title, OperatingSystem.IsWindows());
+
+    /// <summary>Whether menu <paramref name="menu"/> (a <see cref="MenuTitles"/> index) shows on a system. Pure.</summary>
+    public static bool MenuHere(int menu, bool windows) => MenuHere(MenuTitles[menu], windows);
+
+    /// <summary>Whether menu <paramref name="menu"/> shows on this system.</summary>
+    public static bool MenuHere(int menu) => MenuHere(menu, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// The menus tab <paramref name="tab"/> (after Offered) shows on a system (2026-10-22): <see cref="TabMenus"/>' less those not
+    /// <see cref="MenuHere(int, bool)"/> — Admin's Network, EventLog and Directory on a Mac. Every group keeps two or more. Pure.
+    /// </summary>
+    public static IReadOnlyList<int> ShownMenus(int tab, bool windows) => windows ? TabMenus[tab - 1] : TabMenus[tab - 1].Where(m => MenuHere(m, windows)).ToList();
+
+    /// <summary>The menus tab <paramref name="tab"/> shows on this system: what <see cref="ToolsMenu"/> draws and the help lists.</summary>
+    public static IReadOnlyList<int> ShownMenus(int tab) => ShownMenus(tab, OperatingSystem.IsWindows());
 
     /// <summary>
     /// Whether menu <paramref name="menu"/>'s switch (a <see cref="MenuTitles"/> index) is on in <paramref name="saved"/> (2026-10-16, the user's

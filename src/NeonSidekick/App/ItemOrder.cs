@@ -126,6 +126,48 @@ public static class ItemOrder
             Groups.Count == other.Groups.Count && Groups.Zip(other.Groups).All(pair => pair.First.SequenceEqual(pair.Second, StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// <paramref name="groups"/> with only the ids <paramref name="shown"/> keeps, each group in its order (2026-10-22, the user's ask: a
+    /// Mac's Tool bar checklist leaves out 🧩 and 📅, <see cref="ToolbarItems.IsHere(string, bool)"/>). <see cref="Reinsert"/> puts the rest back. Pure.
+    /// </summary>
+    public static Sided Only(Sided groups, Func<string, bool> shown)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        return new Sided(groups.Left.Where(shown).ToList(), groups.Right.Where(shown).ToList(), groups.Center?.Where(shown).ToList());
+    }
+
+    /// <summary>
+    /// <paramref name="after"/> (an edit of <see cref="Only"/>'s view of <paramref name="before"/>) with every id <paramref name="shown"/> left
+    /// out put back (2026-10-22): on the group it was in, right after the id it followed there (first in the group with none), so a
+    /// hidden item never moves and an order put back as it was saves as it was. Pure.
+    /// </summary>
+    public static Sided Reinsert(Sided before, Sided after, Func<string, bool> shown)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        var groups = before.Groups.Zip(after.Groups, (was, now) =>
+        {
+            var result = now.ToList();
+            int front = 0;            // where a hidden id with nothing before it goes: after the ones already put there
+            string? anchor = null;    // the last id of this group, before the edit, that the result holds
+            foreach (string id in was)
+            {
+                if (!shown(id))
+                {
+                    int at = anchor is null ? front++ : result.IndexOf(anchor) + 1;
+                    result.Insert(at, id);
+                    anchor = id;
+                }
+                else if (result.Contains(id, StringComparer.Ordinal))
+                {
+                    anchor = id;
+                }
+            }
+
+            return (IReadOnlyList<string>)result;
+        }).ToList();
+        return after.HasCenter ? new Sided(groups[0], groups[2], groups[1]) : new Sided(groups[0], groups[1]);
+    }
+
     /// <summary><paramref name="order"/> split by side: the ids in <paramref name="right"/> make the right group, the rest the left, each in <paramref name="order"/>'s order.</summary>
     public static Sided Split(IReadOnlyList<string> order, IReadOnlySet<string> right)
     {

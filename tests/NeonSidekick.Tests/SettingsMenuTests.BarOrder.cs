@@ -54,6 +54,36 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The Tool bar checklist with a Mac's answer (2026-10-22, the user's ask): no 🧩 or 📅 row, so Network a place down lands after Directory;
+    /// the hidden two keep their checks and stay right after Network, where they were.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_WithTheMacsAnswer_ListsNoServicesOrTasks_AndAMoveKeepsThemInPlace()
+    {
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
+        var (menu, pane) = PaneMenu();
+        menu.ToolbarItemHere = id => ToolbarItems.IsHere(id, windows: false);
+        bool mac(string id) => ItemOrder.IsDivider(id) || ToolbarItems.IsHere(id, windows: false);
+        int network = ItemOrder.Only(ToolbarItems.Sides(null, null), mac).Left.ToList().IndexOf(ToolbarItems.Network);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, network)]);
+        Push(ShiftDown);                        // Network a place down: past Directory, the next row here
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var order = _settings.Current.ToolbarOrder!.ToList();
+        Assert.Equal(order.IndexOf(ToolbarItems.Directory) + 1, order.IndexOf(ToolbarItems.Network));
+        Assert.Equal(order.IndexOf(ToolbarItems.Network) + 1, order.IndexOf(ToolbarItems.Services));
+        Assert.Equal(order.IndexOf(ToolbarItems.Services) + 1, order.IndexOf(ToolbarItems.Tasks));
+        Assert.Contains(ToolbarItems.Services, _settings.Current.ToolbarItems!);   // its check kept
+        Assert.DoesNotContain(NeonSidekick.Services.ServiceText.Glyph, Output);
+        Assert.DoesNotContain(NeonSidekick.Tasks.TaskText.Glyph, Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_ShowPerformanceBar_TheMoveKeysOrderIt_DefaultPutsItBack_TheLookStays()
     {
