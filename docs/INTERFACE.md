@@ -105,7 +105,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The plan approval pane | `a` approve & run · `f` clear context & run · `l` Ralph loop · `r` keep refining · `g` close gaps · `c` cancel plan · Esc keeps refining |
 | Close gaps: who reviews? (after `g`, while advisors are offered) | `m` the model · `a` an advisor finds the gaps · `y` any (the model, asking an advisor where one fits) · `c` the model, an advisor confirms · Esc back |
 | A Ralph loop's checkpoint | `k` keep · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc keeps |
-| A Ralph loop's by-hand check | `w` it works · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc stops |
+| A Ralph loop's by-hand check | `w` it works · `r` redo with a note (typed below) · `v` view the changes (where it opens, so Enter alone ticks nothing) · `s` stop the loop · Esc stops |
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
 | `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |

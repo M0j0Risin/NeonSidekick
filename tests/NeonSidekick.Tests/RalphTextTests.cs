@@ -321,6 +321,10 @@ public sealed class RalphTextTests
         Assert.Equal("by hand: stopped", RalphText.ByHandLogText(RalphHandCheck.Stop, null));
         Assert.Equal("needs you", RalphText.ByHandLogText(RalphHandCheck.NoOneToAsk, null));
         Assert.Equal("", RalphText.ByHandLogText(RalphHandCheck.None, null));
+        Assert.Equal("; the user checked it by hand: it works", RalphText.ByHandWorksNote);   // the next pass's notes (prompt text)
+        Assert.Equal("; the user checked it by hand and wants it redone", RalphText.ByHandRedoNote);
+        Assert.Equal("; it waited for the user's check", RalphText.ByHandWaitedNote);
+        Assert.Equal("; at the checkpoint the user chose keep", RalphText.CheckpointChoiceNote("keep"));
         Assert.Equal("w / r / v / s = pick · Enter = choose · Esc = stop", RalphText.ByHandKeys);
         Assert.Equal(["It works: tick it", "It doesn't: redo with a note…", "View the changes", "Stop the loop"], RalphText.ByHandRows);
         Assert.Equal("  the last review said: no loop in the code", RalphText.LastReviewLine("no loop in the code"));

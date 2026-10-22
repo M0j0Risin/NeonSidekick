@@ -177,6 +177,7 @@ public partial class ChatScreenTests
     public async Task ProfileSwitch_InsideTheEmbeddedRowsVisit_EndsThePage()
     {
         NothingOffered();
+        string first = _settings.ProfileName;
         Profiles.Create(_dir, "work", new AppSettingsData { TtsOutput = false });
         var input = new ScriptedInput();
         input.Push(Keys.Down, Keys.Down, Keys.Enter);     // Download an embedded model: the catalog
@@ -192,5 +193,7 @@ public partial class ChatScreenTests
         Assert.Equal("work", _settings.ProfileName);
         Assert.False(_settings.Current.EmbeddedLlmServer);
         Assert.False(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).EmbeddedLlmServer);
+        // The page's own profile too (2026-10-21, a review): the switch saved it with the row's switch on, and the visit picked nothing there.
+        Assert.False(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, first)).EmbeddedLlmServer);
     }
 }

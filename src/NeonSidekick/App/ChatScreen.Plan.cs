@@ -463,12 +463,12 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether a gap pass may and can ask the user (2026-10-21, the review of the user's question why a pass never asked): <see cref="AppSettingsData.PlanGapAskUser"/>
-    /// on, and <c>ask_user</c> really offered (the pane up, <see cref="AppSettingsData.AskUser"/> on, the tool not off on <c>/tools</c>). Without the
+    /// on, and <c>ask_user</c> really offered (tools offered, <see cref="AskOffered"/>, the tool not off on <c>/tools</c>). Without the
     /// tool the "ask" wording would send the pass to a question it cannot put, and it might ask in prose and end without <c>present_plan</c>, so such a
     /// pass gets the open-question wording instead (<see cref="PlanText.GapOpenQuestionSentence"/>).
     /// </summary>
     private bool GapMayAsk(AppSettingsData effective) =>
-        effective.PlanGapAskUser && _pane.Enabled && effective.AskUser && !ToolsText.DisabledSet(effective.ToolsDisabled).Contains(AskUserTool.ToolName);
+        effective.PlanGapAskUser && effective.LlmOfferTools && AskOffered(effective) && !ToolsText.DisabledSet(effective.ToolsDisabled).Contains(AskUserTool.ToolName);
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
@@ -707,8 +707,9 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         var checks = plan.Checks ?? (PlanFiles.ReadWhole(_files, plan.Path) is { } text && PlanDocument.TryParse(text) is { } header ? new PlanChecks(header.Verify, header.Final) : null);
+        var shape = PlanFit.Shape(plan.Markdown, RalphInlineLimit(), out int byHand);
         return RalphText.PaneCheckLine(checks, RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, Shell.CommandPolicy.Resolve(effective) == Shell.CommandPolicyMode.Ask,
-            PlanFit.Shape(plan.Markdown, RalphInlineLimit()), PlanFit.ByHandSteps(plan.Markdown));
+            shape, byHand);
     }
 
     /// <summary><c>present_plan: approve</c> for the --log file. Pinned.</summary>

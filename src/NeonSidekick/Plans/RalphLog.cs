@@ -396,21 +396,21 @@ public static partial class RalphLog
     {
         if (string.Equals(checkpoint, RalphText.ByHandWorksLog, StringComparison.Ordinal))
         {
-            return "; the user checked it by hand: it works";
+            return RalphText.ByHandWorksNote;
         }
 
         if (checkpoint.StartsWith(RalphText.ByHandRedoLog, StringComparison.Ordinal))
         {
             string note = checkpoint[RalphText.ByHandRedoLog.Length..].TrimStart(':', ' ');
-            return "; the user checked it by hand and wants it redone" + (note.Length > 0 ? ": " + Shorten(Flat(note), NoteChars) : "");
+            return RalphText.ByHandRedoNote + (note.Length > 0 ? ": " + Shorten(Flat(note), NoteChars) : "");
         }
 
         if (string.Equals(checkpoint, RalphText.ByHandStoppedLog, StringComparison.Ordinal) || string.Equals(checkpoint, RalphText.NeedsYouLog, StringComparison.Ordinal))
         {
-            return "; it waited for the user's check";
+            return RalphText.ByHandWaitedNote;
         }
 
-        return $"; at the checkpoint the user chose {Shorten(Flat(checkpoint), NoteChars)}";
+        return RalphText.CheckpointChoiceNote(Shorten(Flat(checkpoint), NoteChars));
     }
 
     /// <summary>

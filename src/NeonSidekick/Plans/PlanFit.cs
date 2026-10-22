@@ -29,11 +29,20 @@ public static class PlanFit
     public static IReadOnlyList<string> Problems(string body, PlanChecks? checks, bool reviewed, int inlineLimit)
     {
         ArgumentNullException.ThrowIfNull(body);
-        var leaves = PlanSteps.Leaves(PlanSteps.Parse(body)).ToList();
+        return ProblemsOf(body, PlanSteps.Parse(body), checks, reviewed, inlineLimit);
+    }
+
+    /// <summary>
+    /// <see cref="Problems"/> over <paramref name="steps"/>, <paramref name="body"/>'s already read (2026-10-21, a review: each helper parsed the
+    /// body again, four to six readings of up to ~170,000 characters a check).
+    /// </summary>
+    private static List<string> ProblemsOf(string body, IReadOnlyList<PlanStep> steps, PlanChecks? checks, bool reviewed, int inlineLimit)
+    {
+        var leaves = PlanSteps.Leaves(steps).ToList();
         var problems = new List<string>(5);
-        if (StepsProblem(body) is { } steps)
+        if (StepsProblemOf(body, leaves.Count > 0) is { } stepsProblem)
         {
-            problems.Add(steps);
+            problems.Add(stepsProblem);
         }
 
         if (leaves.Count == 1 && body.Length > OneStepChars)
@@ -47,7 +56,7 @@ public static class PlanFit
             problems.Add(RalphText.FitNoDoneWhen(missing));
         }
 
-        if (ByHandParents(body) is int parents and > 0)
+        if (ByHandParentsOf(steps) is int parents and > 0)
         {
             problems.Add(RalphText.FitByHandParent(parents));
         }
@@ -73,8 +82,10 @@ public static class PlanFit
     public static int ByHandSteps(string body)
     {
         ArgumentNullException.ThrowIfNull(body);
-        return PlanSteps.Leaves(PlanSteps.Parse(body)).Count(s => !s.Ticked && s.ByHand);
+        return ByHandStepsOf(PlanSteps.Parse(body));
     }
+
+    private static int ByHandStepsOf(IReadOnlyList<PlanStep> steps) => PlanSteps.Leaves(steps).Count(s => !s.Ticked && s.ByHand);
 
     /// <summary>
     /// The unticked steps with sub-steps whose own <c>Done when:</c> is by hand (2026-10-21): a parent is never worked, the app ticks it once its
@@ -83,14 +94,25 @@ public static class PlanFit
     public static int ByHandParents(string body)
     {
         ArgumentNullException.ThrowIfNull(body);
-        return PlanSteps.Parse(body).Count(s => !s.IsLeaf && !s.Ticked && s.ByHand);
+        return ByHandParentsOf(PlanSteps.Parse(body));
     }
+
+    private static int ByHandParentsOf(IReadOnlyList<PlanStep> steps) => steps.Count(s => !s.IsLeaf && !s.Ticked && s.ByHand);
 
     /// <summary>
     /// <see cref="Problems"/> without the no-check item: the plan's shape alone, for the gap pass's result (the directive already says to leave a
     /// check out rather than guess) and the approval pane's caption (its check line already says <c>unchecked</c> and the reviewer).
     /// </summary>
     public static IReadOnlyList<string> Shape(string body, int inlineLimit) => Problems(body, null, reviewed: true, inlineLimit);
+
+    /// <summary><see cref="Shape"/> and <see cref="ByHandSteps"/> from one reading of <paramref name="body"/>: the approval pane's check line and a loop's confirm.</summary>
+    public static IReadOnlyList<string> Shape(string body, int inlineLimit, out int byHand)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var steps = PlanSteps.Parse(body);
+        byHand = ByHandStepsOf(steps);
+        return ProblemsOf(body, steps, null, reviewed: true, inlineLimit);
+    }
 
     /// <summary>
     /// Why a loop cannot start on <paramref name="body"/>, or null when it has a step (2026-10-21): <see cref="RalphText.NoStepsUnreadError"/> when
@@ -115,11 +137,16 @@ public static class PlanFit
     public static string? StepsProblem(string body)
     {
         ArgumentNullException.ThrowIfNull(body);
+        return StepsProblemOf(body, PlanSteps.Leaves(PlanSteps.Parse(body)).Any());
+    }
+
+    private static string? StepsProblemOf(string body, bool anyStep)
+    {
         if (PlanSteps.UnreadBoxes(body) is int unread and > 0)
         {
             return RalphText.FitUnreadSteps(unread);
         }
 
-        return PlanSteps.Leaves(PlanSteps.Parse(body)).Any() ? null : RalphText.FitNoSteps;
+        return anyStep ? null : RalphText.FitNoSteps;
     }
 }

@@ -370,26 +370,62 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A pass's message sent as a turn (a gap pass's too), echoed since no line was typed. An audit's pass that never reached a turn (2026-10-20, a
-    /// review: <see cref="RunMessageAsync"/> returns before one when there is no assistant or the model cannot see a picture, and the audit stayed
+    /// A pass's message sent as a turn (a gap pass's too), echoed since no line was typed, and every pass after it: a flat driver (2026-10-21, a
+    /// review, the Ralph loop's shape: with up to 100 passes, each <see cref="RunMessageAsync"/> awaiting the next from inside itself kept every
+    /// pass's frame, message and pictures alive until the whole review unwound). A pass's turn hands the next pass back through
+    /// <see cref="NextPassAsync"/>, and this loop sends it. An audit's pass that never reached a turn (2026-10-20, a review:
+    /// <see cref="RunMessageAsync"/> returns before one when there is no assistant or the model cannot see a picture, and the audit stayed
     /// mid-pass, every later turn narrowed to its tools and judged as its pass) is recorded and the audit stopped.
     /// </summary>
     private async Task<bool> SendPassAsync(string message, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
-        _transcript.User(message);
-        _passMessage = message;
-        var loop = _audit.Running;
-        int pass = loop?.Pass ?? 0;
-        long judged = _auditJudged;
-        bool exit = await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
-        if (loop is not null && ReferenceEquals(_audit.Running, loop) && loop.Pass == pass && _auditJudged == judged)
+        while (true)
         {
-            _transcript.Notice(AuditText.PassNotSentNotice(_audit.Name));
-            loop.Next(false, false, null, PlanMeter());
-            EndAudit(loop, PlanGapStop.Stopped, passFailed: true);   // nobody stopped it: the stop tone rings (2026-10-21)
+            _transcript.User(message);
+            _passMessage = message;
+            _nextPass = null;
+            var loop = _audit.Running;
+            int pass = loop?.Pass ?? 0;
+            long judged = _auditJudged;
+            bool exit = await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
+            if (loop is not null && ReferenceEquals(_audit.Running, loop) && loop.Pass == pass && _auditJudged == judged)
+            {
+                _transcript.Notice(AuditText.PassNotSentNotice(_audit.Name));
+                loop.Next(false, false, null, PlanMeter());
+                EndAudit(loop, PlanGapStop.Stopped, passFailed: true);   // nobody stopped it: the stop tone rings (2026-10-21)
+            }
+
+            if (exit || _nextPass is not { } next)
+            {
+                _nextPass = null;
+                return exit;
+            }
+
+            _nextPass = null;
+            message = next;
+            images = [];
+        }
+    }
+
+    /// <summary>
+    /// The next pass a pass's turn handed back to <see cref="SendPassAsync"/>'s loop (2026-10-21); null when none, cleared as each pass is sent.
+    /// </summary>
+    private string? _nextPass;
+
+    /// <summary>
+    /// The pass after a turn (a gap review's or an audit's): handed back to the driver when <paramref name="driven"/> (the turn was
+    /// <see cref="SendPassAsync"/>'s own, <see cref="RunMessageAsync"/>'s <c>passMessage</c>), else sent here, which starts a driver. False then:
+    /// the driver sends it once the turn has unwound.
+    /// </summary>
+    private async Task<bool> NextPassAsync(string message, bool driven, CancellationToken cancellationToken)
+    {
+        if (driven)
+        {
+            _nextPass = message;
+            return false;
         }
 
-        return exit;
+        return await SendPassAsync(message, [], cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>How many passes <see cref="TakeAuditPass"/> has judged: a pass's send tells by it whether its turn ran.</summary>

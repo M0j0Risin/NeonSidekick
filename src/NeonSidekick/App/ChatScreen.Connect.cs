@@ -1,4 +1,6 @@
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Docker;
+using NeonSidekick.Settings;
 using NeonSidekick.UI;
 using Spectre.Console;
 
@@ -250,14 +252,43 @@ internal sealed partial class ChatScreen
         }
         finally
         {
-            if (!wasOn
-                && !ProfileChanged(profile)
-                && !_jobs.Running(BackgroundJobKind.EmbeddedDownload)
-                && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_settings.Current.LlmUrl)
-                && _settings.Current.EmbeddedLlmServer)
+            if (!wasOn && !_jobs.Running(BackgroundJobKind.EmbeddedDownload))
             {
-                _settings.Update(d => d.EmbeddedLlmServer = false);
+                if (!ProfileChanged(profile))
+                {
+                    if (!EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_settings.Current.LlmUrl) && _settings.Current.EmbeddedLlmServer)
+                    {
+                        _settings.Update(d => d.EmbeddedLlmServer = false);
+                    }
+                }
+                else
+                {
+                    EmbeddedSwitchBackOff(profile);
+                }
             }
+        }
+    }
+
+    /// <summary>
+    /// The embedded switch put back off in <paramref name="profile"/>'s saved file (2026-10-21, a review): a visit that switched profiles left the
+    /// page's profile, saved by the switch with the switch on though the visit picked nothing there. Disk only, as a reset of another profile is;
+    /// left as it is when that profile now names an embedded model, and a file that can't be read or written is only logged.
+    /// </summary>
+    private void EmbeddedSwitchBackOff(string profile)
+    {
+        string path = Profiles.ProfileFile(_settings.StorageDirectory, profile);
+        try
+        {
+            var data = Profiles.ReadProfileFile(path);
+            if (data.EmbeddedLlmServer && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(data.LlmUrl))
+            {
+                data.EmbeddedLlmServer = false;
+                Profiles.WriteProfileFile(path, data);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            DiagnosticLog.Warn(AppCategory, $"Connect a model: the embedded switch stayed on in profile \"{profile}\" ({ex.Message}).");
         }
     }
 }

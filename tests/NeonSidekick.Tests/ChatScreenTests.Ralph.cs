@@ -1125,6 +1125,24 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task Ralph_TheByHandQuestion_OpensOnView_SoAStrayEnterTicksNothing()
+    {
+        // 2026-10-21, a review: the cursor stood on "It works", so an Enter meant for the input row ticked a step nobody checked. Enter now opens
+        // the changes, Esc comes back from them, and only w + Enter ticks; under the old cursor the rest of the keys would have sent "w" as a message.
+        RalphPlan(RalphByHandSteps);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Enter, Keys.Escape, Keys.Char('w'), Keys.Enter), Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Contains(RalphText.StepCheckedByYouNotice(1, 2, "One"), output);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal([RalphText.ByHandWorksLog, null], log.Entries.Select(e => e.Checkpoint));
+    }
+
+    [Fact]
     public async Task Ralph_AByHandStep_Redo_UnticksIt_AndTheNextPassGetsTheNote()
     {
         RalphPlan(RalphByHandSteps);

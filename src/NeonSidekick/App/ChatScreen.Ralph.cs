@@ -191,9 +191,9 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        var problems = PlanFit.Shape(body, RalphInlineLimit(), out int byHand);
         string checks = RalphText.PaneCheckLine(header is null ? null : new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask,
-            byHand: PlanFit.ByHandSteps(body));
-        var problems = PlanFit.Shape(body, RalphInlineLimit());
+            byHand: byHand);
         string question = header is null or { Status: PlanStatus.Draft } ? RalphText.ConfirmDraftQuestion(path, checks, problems) : RalphText.ConfirmQuestion(path, checks, problems);
         if (!await RalphConfirmAsync(question, cancellationToken).ConfigureAwait(false))
         {
@@ -337,9 +337,10 @@ internal sealed partial class ChatScreen
         if (!checksShown && (header?.Verify is { Length: > 0 } || header?.Final is { Length: > 0 }))
         {
             var effective = _effective();
+            var problems = PlanFit.Shape(body, RalphInlineLimit(), out int byHand);
             string checks = RalphText.PaneCheckLine(new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask,
-                byHand: PlanFit.ByHandSteps(body));
-            if (!await RalphConfirmAsync(RalphText.ConfirmQuestion(path, checks, PlanFit.Shape(body, RalphInlineLimit())), cancellationToken).ConfigureAwait(false))
+                byHand: byHand);
+            if (!await RalphConfirmAsync(RalphText.ConfirmQuestion(path, checks, problems), cancellationToken).ConfigureAwait(false))
             {
                 _plan.ClearApproval();
                 _transcript.Notice(KeptNotice);
@@ -701,12 +702,13 @@ internal sealed partial class ChatScreen
 
         var judged = await JudgeRalphPassAsync(loop, step, total, lines, headed, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
         var stop = loop.EndPass(judged.Facts, PlanMeter());
-        RalphLogPass(loop, step, judged);
+        bool logged = RalphLogPass(loop, step, judged);
         _ralphTurn = null;
         if (stop is null && step is not null && judged.ByHand is { Choice: RalphCheckpointChoice.Redo } redo)
         {
-            // The by-hand question's Redo (2026-10-21): the entry holds the answer already (LogPass), so the note reaches the next pass through it.
-            ApplyRalphRedo(loop, step, judged, redo.Note, null, loop.Pass);
+            // The by-hand question's Redo (2026-10-21): the entry holds the answer already (LogPass), so the note reaches the next pass through it;
+            // an entry that could not be written leaves it to the loop (later that day, a review: dropped, the next pass never saw it).
+            ApplyRalphRedo(loop, step, judged, redo.Note, null, loop.Pass, entryLogged: logged);
         }
 
         if (exit)
@@ -794,15 +796,18 @@ internal sealed partial class ChatScreen
     /// <summary>The header's status and progress over the loop's leaves.</summary>
     private void MarkRalphProgress(string path) => RalphJudge.MarkProgress(RalphFiles, path, _executingPlan?.Requirement ?? "", _time);
 
-    /// <summary>The pass's entry in the log, its learned facts merged (<see cref="RalphJudge.LogPass"/>), and a log line.</summary>
-    private void RalphLogPass(RalphLoop loop, PlanStep? step, RalphJudged judged)
+    /// <summary>The pass's entry in the log, its learned facts merged (<see cref="RalphJudge.LogPass"/>), and a log line; false when the entry could not be written.</summary>
+    private bool RalphLogPass(RalphLoop loop, PlanStep? step, RalphJudged judged)
     {
-        if (RalphJudge.LogPass(RalphFiles, loop, step, judged, _time) is { } problem)
+        string? problem = RalphJudge.LogPass(RalphFiles, loop, step, judged, _time);
+        if (problem is not null)
         {
             _transcript.Warning(problem);
         }
 
         DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass} {(loop.History.Count > 0 ? loop.History[^1].Outcome : "none")}, check {judged.Check}, review {judged.Review}, {judged.Facts.Changed.Count} files changed");
+
+        return problem is null;
     }
 
     /// <summary>Every step ticked: the final check (when there is one), its fix owed or the loop done (<see cref="RalphStart.FinalCheckAsync"/>).</summary>
@@ -997,7 +1002,8 @@ internal sealed partial class ChatScreen
 
         bool paused = _ralph is null || stored.Paused;
         // Waiting on the user exactly when a resume would ask first (2026-10-21, RalphResumeAskAsync's own match): worked out only while paused.
-        bool waiting = paused && text is not null && RalphLog.LastEntryAwaitingHand(log ?? RalphLog.Read(files, path), PlanSteps.FirstUnticked(PlanSteps.Parse(PlanDocument.Body(text)))) is not null;
+        // The step read as the loop and its resume read it, from the file whole (2026-10-21, a review: the body here, the file there).
+        bool waiting = paused && text is not null && RalphLog.LastEntryAwaitingHand(log ?? RalphLog.Read(files, path), PlanSteps.FirstUnticked(PlanSteps.Parse(text))) is not null;
         foreach (string line in RalphText.ShowLines(path, counts.Item1, counts.Item2, pass, paused, RalphLog.PathFor(path), waiting))
         {
             _transcript.Notice(line);
@@ -1052,12 +1058,12 @@ internal sealed partial class ChatScreen
     /// <see cref="RalphJudge.LogPass"/>), the step's line as the judge left it and the parent it ticked unticked (none with no <paramref name="judged"/>:
     /// a resume's step is unticked already), the loop's counters started again, the header's progress written. The note goes to the next pass once
     /// (2026-10-20, a review: from the loop and from the log entry, through RecentNotes, in two wordings): through the log when the entry holds it,
-    /// else from the loop.
+    /// else from the loop. With no <paramref name="logText"/>, <paramref name="entryLogged"/> says whether the entry was written at all.
     /// </summary>
-    private void ApplyRalphRedo(RalphLoop loop, PlanStep step, RalphJudged? judged, string? note, string? logText, int pass)
+    private void ApplyRalphRedo(RalphLoop loop, PlanStep step, RalphJudged? judged, string? note, string? logText, int pass, bool entryLogged = true)
     {
         string path = loop.Snapshot.Path;
-        bool logged = true;
+        bool logged = entryLogged;
         if (logText is not null && RalphLog.SetCheckpoint(RalphFiles, path, pass, logText, out logged) is { } unlogged)
         {
             _transcript.Warning(unlogged);

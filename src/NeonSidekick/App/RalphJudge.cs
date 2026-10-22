@@ -363,15 +363,22 @@ internal static class RalphJudge
     public static string ReviewWord(RalphVerdict verdict)
     {
         ArgumentNullException.ThrowIfNull(verdict);
-        string reason = verdict.Reason.Length > 0 ? ": " + verdict.Reason : "";
-        return verdict.Kind switch
-        {
-            RalphVerdictKind.Pass => "pass" + reason,
-            RalphVerdictKind.Fail => "fail" + reason,
-            RalphVerdictKind.NeedsUser => "needs user" + reason,
-            _ => "unclear",
-        };
+        string word = VerdictWord(verdict.Kind);
+        // An unclear verdict is the word alone.
+        return verdict.Kind is (RalphVerdictKind.Pass or RalphVerdictKind.Fail or RalphVerdictKind.NeedsUser) && verdict.Reason.Length > 0 ? word + ": " + verdict.Reason : word;
     }
+
+    /// <summary>
+    /// A verdict's kind in words (2026-10-21, a review: the log's review field and the --log line each had their own switch): <c>pass</c>,
+    /// <c>fail</c>, <c>needs user</c>, <c>unclear</c>.
+    /// </summary>
+    public static string VerdictWord(RalphVerdictKind kind) => kind switch
+    {
+        RalphVerdictKind.Pass => "pass",
+        RalphVerdictKind.Fail => "fail",
+        RalphVerdictKind.NeedsUser => "needs user",
+        _ => "unclear",
+    };
 
     /// <summary>A step's box set in the file (the loop's own tick), quietly; a step no longer where it was is left (a log line).</summary>
     public static void SetBox(IRalphHost host, string path, PlanStep step, bool ticked)

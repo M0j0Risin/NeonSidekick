@@ -767,6 +767,21 @@ public static class RalphText
         _ => "",
     };
 
+    /// <summary>
+    /// An entry's checkpoint field as the next pass's notes word it (<see cref="RalphLog.RecentNotes"/>; 2026-10-21, a review: inline in
+    /// <c>RalphLog</c> until then): the by-hand question's answers, each led by <c>; </c> to follow the pass's outcome. Prompt text, pinned.
+    /// </summary>
+    public const string ByHandWorksNote = "; the user checked it by hand: it works";
+
+    /// <summary>The by-hand Redo in the next pass's notes, the user's note after <c>: </c>.</summary>
+    public const string ByHandRedoNote = "; the user checked it by hand and wants it redone";
+
+    /// <summary>A by-hand Stop, or nobody to ask, in the next pass's notes.</summary>
+    public const string ByHandWaitedNote = "; it waited for the user's check";
+
+    /// <summary>The checkpoint's answer in the next pass's notes.</summary>
+    public static string CheckpointChoiceNote(string choice) => "; at the checkpoint the user chose " + choice;
+
     // ── The reviewer ───────────────────────────────────────────────────────
 
     public const string ReviewerSystem =

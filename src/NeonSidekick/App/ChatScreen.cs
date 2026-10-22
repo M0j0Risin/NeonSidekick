@@ -4431,7 +4431,7 @@ internal sealed partial class ChatScreen
         var mysql = Without(MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), disabled);
         // The web, ask and session sentences (2026-10-04: /sys had left them out of its rules), read as ComposeTurnTools reads them.
         var web = Without(WebToolsFor(_webTools, filesOffered), disabled);
-        IReadOnlyList<AIFunction> ask = _pane.Enabled && effective.AskUser ? Without(_askTools, disabled) : [];
+        IReadOnlyList<AIFunction> ask = AskOffered(effective) ? Without(_askTools, disabled) : [];
         return new SystemPromptFacts(
             _persona.Read(),
             _operata.Read(),
@@ -7201,6 +7201,12 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// Whether a main-chat turn offers the ask group (<c>ask_user</c> and its kin): the pane to answer on, and <see cref="AppSettingsData.AskUser"/>
+    /// on (2026-10-21, a review: one reading for the turn's tools, <c>/sys</c>'s facts and <see cref="GapMayAsk"/>, which had its own copy).
+    /// </summary>
+    private bool AskOffered(AppSettingsData effective) => _pane.Enabled && effective.AskUser;
+
+    /// <summary>
     /// The groups a main-chat turn is made from as the screen stands (2026-10-04, out of the turn's <c>PrepareTurn</c> call so a
     /// <c>/botchat</c> bot's turn reads the very same, <see cref="BotGeneralTools"/>): every group with its switch from
     /// <paramref name="effective"/>, the <c>/tools</c> list, <c>ask_user</c> only with the pane, and plan mode's turn.
@@ -7220,7 +7226,7 @@ internal sealed partial class ChatScreen
         FilesEnabled = effective.FileTools,
         Images = _imageTools,
         ImagesEnabled = effective.ImageTools,
-        Ask = _pane.Enabled && effective.AskUser ? _askTools : null,
+        Ask = AskOffered(effective) ? _askTools : null,
         Sessions = _sessionTools,
         SessionsEnabled = effective.SessionTool,
         Mcp = _mcp.Tools,
@@ -16362,16 +16368,16 @@ internal sealed partial class ChatScreen
 
             if (outcome == TurnOutcome.Continue)
             {
-                if (gapPass is { Message: not null } next)
+                if (gapPass is { Message: { } gapMessage })
                 {
                     // No reflection between passes (2026-10-13): the tally keeps growing and the loop's last turn reflects on it all.
-                    return await SendGapPassAsync(next, cancellationToken).ConfigureAwait(false);
+                    return await NextPassAsync(gapMessage, passMessage, cancellationToken).ConfigureAwait(false);
                 }
 
                 if (auditPass is { Message: { } auditMessage })
                 {
                     // No reflection between an audit's passes either.
-                    return await SendPassAsync(auditMessage, [], cancellationToken).ConfigureAwait(false);
+                    return await NextPassAsync(auditMessage, passMessage, cancellationToken).ConfigureAwait(false);
                 }
 
                 // No reflection in a Ralph pass (2026-10-18): one a pass would cost as much as the pass.

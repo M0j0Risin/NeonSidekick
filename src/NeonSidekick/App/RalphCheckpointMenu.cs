@@ -33,8 +33,8 @@ public enum RalphAskKind
 /// pane's input slot for what the next pass should do differently), View the changes (the pass's diff on an info page, then back), or Stop the
 /// loop, with <c>k</c> / <c>r</c> / <c>v</c> / <c>s</c> as hotkeys and the cursor on Keep. Esc is Keep: the loop goes on. The
 /// <see cref="PlanApprovalMenu"/> shape; the page asks the same at once (<c>ChatScreen</c>'s race), the first answer winning. Since 2026-10-21 it asks
-/// the by-hand question too (<see cref="RalphAskKind.ByHand"/>): its own title, rows and hint, <c>w</c> for "it works", and Esc, a closed pane or a
-/// cancel is Stop, never Keep.
+/// the by-hand question too (<see cref="RalphAskKind.ByHand"/>): its own title, rows and hint, <c>w</c> for "it works", the cursor on View, and Esc,
+/// a closed pane or a cancel is Stop, never Keep.
 /// </summary>
 public sealed class RalphCheckpointMenu
 {
@@ -81,12 +81,15 @@ public sealed class RalphCheckpointMenu
 
         var unanswered = new RalphCheckpointAnswer(_kind == RalphAskKind.ByHand ? RalphCheckpointChoice.Stop : RalphCheckpointChoice.Keep, null);
         var rows = _kind == RalphAskKind.ByHand ? RalphText.ByHandRows : RalphText.CheckpointRows;
+        // The by-hand question opens on View the changes (2026-10-21, a review: on "It works", an Enter typed for the input row as the pane came up
+        // ticked a step nobody checked); the checkpoint keeps its cursor on Keep, Esc's answer there anyway.
+        int start = _kind == RalphAskKind.ByHand ? ViewRow : KeepRow;
         try
         {
             var page = Page(caption, _kind);
             while (true)
             {
-                var pick = await _pane.PickAsync(page, KeepRow, cancellationToken).ConfigureAwait(false);
+                var pick = await _pane.PickAsync(page, start, cancellationToken).ConfigureAwait(false);
                 switch (pick?.Row)
                 {
                     case RedoRow:
