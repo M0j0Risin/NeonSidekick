@@ -533,6 +533,16 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 * Install Tailscale on the app's computer and the phone, sign both in to the same tailnet (your own private Tailscale network), and scan the Tailscale tab's code once. The phone then reaches the Web UI wherever it is.
 * Nothing to open on the router; *Web UI reach* must be `lan`. If Windows calls Tailscale's network Public, the phone can't connect ([the firewall](#safety-and-the-network)).
 
+#### HTTPS through Tailscale Serve
+
+The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real certificate, reachable only on your tailnet.
+
+* **Once, in Tailscale's admin console:** turn on MagicDNS and HTTPS certificates (DNS page).
+* **On the app's computer:** set *Web UI reach* to `local`, then run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`.
+* **Signing in:** `/webui`'s links still say `http://localhost`. Open the https address on the phone and paste the `localhost` tab's link (or its token) into the sign-in box; the camera's preview of the QR code can copy the link.
+* **To stop:** `tailscale serve reset`. Set *Web UI reach* back to `lan` for the links and QR codes to work directly again.
+* The cookie is per address: a phone signed in over http signs in again over https.
+
 ### The tabs
 
 * **The tabs:** Chat, Home, Shopping and YouTube, each shown only while its setting is on: *Web UI chat controls* (on by default), *Web UI home controls*, *Web UI shopping controls* and *Web UI YouTube controls* (off).
@@ -678,7 +688,7 @@ When a web tool meets a bot check (a Cloudflare click, a captcha), the challenge
 
 * **Who may connect:** under `lan`, a browser at a private address (the home network, and Tailscale's 100.64/10) with the cookie.
 * Private here doesn't mean safe (a router's NAT loopback, Docker or Tailscale can present one): the token is the gate.
-* **Plain HTTP:** the links are IPv4 addresses, and the page is plain HTTP, so a browser won't send notifications or reach the clipboard.
+* **Plain HTTP:** the links are IPv4 addresses, and the page is plain HTTP, so a browser won't send notifications or reach the clipboard ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)).
 * **The firewall:** Windows asks to let the app through the first time it serves the network; allow it on private networks. On a network Windows calls Public the phone can't connect. A Mac asks too.
 * **A port that won't open:** another program uses it, or Windows reserves it (`netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges). Pick another in *Web UI port*.
 * **Too fast:** taps, a bot check card's input, Ask the house and pasted sign-ins are limited per address; past that the page says to slow down.
