@@ -37,6 +37,6 @@ public sealed class VaultLinksTool : VaultTool
     {
         ArgumentNullException.ThrowIfNull(arguments);
         string note = ReadNote(arguments);
-        return OffThread(() => Vault.Links(note), cancellationToken);
+        return OffThread(() => Vault.Links(note, cancellationToken), cancellationToken);
     }
 }

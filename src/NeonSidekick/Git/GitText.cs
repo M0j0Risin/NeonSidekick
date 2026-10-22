@@ -86,6 +86,7 @@ public static class GitText
         GitOutcome.TooBig => TooBig(detail),
         GitOutcome.TooManyPaths => TooManyPaths(GitAccess.MaxPathsPerCall),
         GitOutcome.BadArguments => CannotStageRoot(detail),
+        GitOutcome.Guarded => detail,
         _ => Failed(detail),
     };
 

@@ -59,7 +59,7 @@ public static partial class SmokeChecks
         try
         {
             File.WriteAllText(html, PdfHtml.Document("smoke", PdfHtml.Markdown("# Smoke\n\nOne **page**.", _ => null), PdfPaperSize.Letter, landscape: false));
-            var made = browser.PrintToPdfAsync(executable, new Uri(html), pdf, CancellationToken.None).GetAwaiter().GetResult();
+            var made = browser.PrintToPdfAsync(executable, new Uri(html), pdf, PrintReach.Nothing, CancellationToken.None).GetAwaiter().GetResult();
             if (!made.Ok)
             {
                 return new SmokeCheck(name, false, PdfText.BrowserFailed(PdfText.BrowserName(executable), made.Detail));

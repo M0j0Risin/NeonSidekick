@@ -72,7 +72,7 @@ public sealed class UncPutTool : UncTool
         return await WriteAsync(ReadShare(arguments), target, "put", (files, relative, share) =>
         {
             var result = WorkingDirectory.CopyBetween(_sandbox, from, files, relative, overwrite ?? false);
-            return (UncText.Put(result, share), result.Outcome == FileOutcome.Ok);
+            return new UncChange(UncText.Put(result, share), result.Outcome == FileOutcome.Ok, Partial: result.Outcome == FileOutcome.Failed);
         }, cancellationToken).ConfigureAwait(false);
     }
 }

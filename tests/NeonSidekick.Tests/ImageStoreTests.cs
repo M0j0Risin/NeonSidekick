@@ -255,7 +255,7 @@ public sealed class ImageStoreTests : IDisposable
         Assert.DoesNotContain("images folder", ViewImageTool.Describe(4), StringComparison.Ordinal);
         Assert.Equal(
             "The user's images folder, C:\\p\\images, where camera, screen, generate_image and pasted pictures are saved, is outside the working directory: " +
-            "give its full path (or a subfolder's) as path to list or search it, with order modified for the newest; its results are full paths, which view_image, image_info and image_edit take.",
+            "give its full path (or a subfolder's) as path to list or search it, with order modified for the newest; its results are full paths, which the picture tools (view_image, image_info, image_edit, while Image tools is on) take.",
             FileText.ImagesFolderSearchSentence("C:\\p\\images"));
         Assert.Equal("A full path in the user's images folder (C:\\p\\images) works too.", FileText.ImagesFolderInfoSentence("C:\\p\\images"));
     }

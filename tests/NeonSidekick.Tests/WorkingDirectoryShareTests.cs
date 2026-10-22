@@ -104,8 +104,12 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
     }
 
+    /// <summary>
+    /// Every replace keeps the file's attributes since 2026-10-22 (review I4, the fix plan's mechanism 7): the sandbox's moved a new file over
+    /// it until then, and lost its ACL, attributes and streams; a share's alone kept them.
+    /// </summary>
     [WindowsFact]
-    public void AnOverwrite_KeepsTheReplacedFilesAttributes_TheSandboxsDoesNot()
+    public void AnOverwrite_KeepsTheReplacedFilesAttributes_InTheSandboxToo()
     {
         string onShare = Put(_root, "a.txt", "one");
         File.SetAttributes(onShare, FileAttributes.Hidden | FileAttributes.Archive);
@@ -119,8 +123,8 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         string inSandbox = Put(sandboxRoot, "a.txt", "one");
         File.SetAttributes(inSandbox, FileAttributes.Hidden | FileAttributes.Archive);
         Assert.Equal(FileOutcome.Ok, sandbox.WriteText("a.txt", "two", overwrite: true).Outcome);
-        Assert.False(File.GetAttributes(inSandbox).HasFlag(FileAttributes.Hidden));   // a new file moved over it, as ever
-        Assert.Empty(Directory.EnumerateFiles(_root, "*.tmp"));
+        Assert.True(File.GetAttributes(inSandbox).HasFlag(FileAttributes.Hidden));   // kept, as the share's is
+        Assert.Empty(Directory.EnumerateFiles(_root, "*" + WorkingDirectory.TempSuffix));
     }
 
     [Fact]
@@ -196,7 +200,7 @@ public sealed class WorkingDirectoryShareTests : IDisposable
         Assert.Equal("new", File.ReadAllText(onShare));
         Assert.True(File.GetAttributes(onShare).HasFlag(FileAttributes.Hidden));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
-        Assert.Empty(Directory.EnumerateFiles(Path.Combine(_root, "docs"), "*.tmp"));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(_root, "docs"), "*" + WorkingDirectory.TempSuffix));
     }
 
     [WindowsFact]

@@ -61,6 +61,7 @@ From top to bottom:
 
 * **A picture:** a right-click on the input line or Alt+V pastes a copied picture as `[Image #n]`; so does Ctrl+V where the terminal passes it on (Windows Terminal keeps it for text). With no picture, the text is pasted.
 * Once sent, the picture is saved in *Pasted images folder* under the profile's `images` folder, and the model gets its path.
+* **A path on a network share** (`\\server\share\…`) is attached only when its server is a configured UNC share's or a mapped drive's. Any other stays text, unopened, and the line says so: pasting a stranger's path never signs in to it.
 * **A PDF** dropped on the line (or its path pasted) is attached as `[PDF #n report.pdf]`; on a `/command` line it stays a path. Sending waits while its text is read (*Reading the attached PDF*; Esc there keeps the draft).
   * The Anthropic and OpenAI APIs get the PDF itself (Anthropic reads 100 pages at most and warns of a longer one).
   * Other servers get the text of its first 100 pages. A scan or a locked PDF is refused there; text over half the context window is cut, the rest left to `read_pdf`.
@@ -132,6 +133,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
+| The project file's approval | `d` deny · `o` once · `s` session · Esc denies: the model's change to `NEON.md`, `AGENTS.md` or `CLAUDE.md` |
 | **Servers and processes** | |
 | `/server`, `/model` | Enter chooses · type to filter |
 | *Embedded models* | `s` size · `i` installed or not · `d` drafter · `o` sort · `x` uncensored |

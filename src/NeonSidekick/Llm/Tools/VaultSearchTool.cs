@@ -51,6 +51,6 @@ public sealed class VaultSearchTool : VaultTool
         string query = ToolArguments.ReadString(arguments, QueryArgument);
         string tag = ToolArguments.ReadString(arguments, TagArgument);
         string folder = ToolArguments.ReadString(arguments, FolderArgument);
-        return OffThread(() => Vault.Search(query, tag, folder, max), cancellationToken);
+        return OffThread(() => Vault.Search(query, tag, folder, max, cancellationToken), cancellationToken);
     }
 }

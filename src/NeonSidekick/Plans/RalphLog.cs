@@ -119,7 +119,7 @@ public static partial class RalphLog
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(document);
         string path = PathFor(planPath);
-        var written = files.WriteText(path, Render(Bounded(document)), overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(path, Render(Bounded(document)), overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
@@ -328,7 +328,7 @@ public static partial class RalphLog
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(text);
         string path = AsLeftPathFor(planPath);
-        return files.WriteText(path, text, overwrite: true).Outcome == FileOutcome.Ok ? path : null;
+        return WriteGuard.AsApp(() => files.WriteText(path, text, overwrite: true)).Outcome == FileOutcome.Ok ? path : null;
     }
 
     /// <summary>The learned facts with <paramref name="added"/> after them, redacted, once each, the oldest dropped past <see cref="LearnedChars"/>.</summary>
@@ -844,7 +844,8 @@ public static partial class RalphLog
         ArgumentNullException.ThrowIfNull(me);
         ArgumentNullException.ThrowIfNull(alive);
         string path = LockPathFor(planPath);
-        if (files.Resolve(path, forWrite: true, out string full) != FileOutcome.Ok)
+        string full = "";
+        if (WriteGuard.AsApp(() => files.Resolve(path, forWrite: true, out full)) != FileOutcome.Ok)
         {
             return false;
         }
@@ -1107,7 +1108,8 @@ public static partial class RalphLog
     {
         ArgumentNullException.ThrowIfNull(files);
         string path = LockPathFor(planPath);
-        if (ReadLock(files, path) == me && files.Resolve(path, forWrite: true, out string full) == FileOutcome.Ok)
+        string full = "";
+        if (ReadLock(files, path) == me && WriteGuard.AsApp(() => files.Resolve(path, forWrite: true, out full)) == FileOutcome.Ok)
         {
             try
             {

@@ -33,7 +33,8 @@ namespace NeonSidekick.Shell;
 /// unless the app began with SIGCHLD ignored; a child reaped elsewhere answers ECHILD, its code is -1, and no group kill is sent after that.)</item>
 /// <item><b>A background command's leftovers</b> (<c>tiedToApp</c>, the user's call): the dispose kills the group even after the leader
 /// exited, as Windows' kill-on-close job does at its close — the registry's close, its eviction and the app's exit all come here. A
-/// foreground command's leftovers are left alone at its dispose, as there. Every group is tracked (<see cref="ShellGroups"/>) for the exit
+/// foreground command's leftovers are left alone at its dispose, as there, and stay tracked while they run (2026-10-22, review F2: the
+/// reap untracked the group, so the exit kill missed a <c>nohup server &amp;</c> it left). Every group is tracked (<see cref="ShellGroups"/>) for the exit
 /// signals' kill, since a session of its own no longer gets the terminal's hangup; a background one is recorded for the crash watcher too
 /// (<see cref="ShellGuard"/>, the same day), at the start, and unrecorded before the reap.</item>
 /// <item><b>The rest as <c>Process.Start</c> does it:</b> three CLOEXEC pipes (.NET's own anonymous pipes) put on 0/1/2, every other
@@ -382,18 +383,29 @@ internal sealed unsafe class GroupChild : ShellChild
     /// <summary>Reaps the zombie; under the lock, after the exit is known. The group's record goes first, while its id is still ours.</summary>
     private void Reap()
     {
-        _groups?.Untrack(_pid);
-        if (_reaped || _reapedElsewhere)
+        // A background group's record goes before the reap, while its id is certainly ours. A foreground one has no record, and stays
+        // tracked after the reap while anything in its group still runs (2026-10-22, review F2, the fix plan's D9: a nohup server &
+        // it left behind ends with the app, as Windows' kept job's does); a group with a member alive keeps its id, so no other
+        // process takes it while it is tracked. ShellGroups forgets it once it has emptied.
+        if (_tiedToApp)
         {
-            return;
+            _groups?.Untrack(_pid);
         }
 
-        int status;
-        while (PosixSpawnNative.WaitPid(_pid, &status, 0) < 0 && Marshal.GetLastPInvokeError() == PosixSpawnNative.Eintr)
+        if (!_reaped && !_reapedElsewhere)
         {
+            int status;
+            while (PosixSpawnNative.WaitPid(_pid, &status, 0) < 0 && Marshal.GetLastPInvokeError() == PosixSpawnNative.Eintr)
+            {
+            }
+
+            _reaped = true;
         }
 
-        _reaped = true;
+        if (!_tiedToApp && !ShellGuard.GroupAlive(_pid))
+        {
+            _groups?.Untrack(_pid);
+        }
     }
 
     public override void Dispose()

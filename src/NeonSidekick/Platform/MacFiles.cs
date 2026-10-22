@@ -82,6 +82,15 @@ public static unsafe partial class MacFiles
         return new FileStream(new SafeFileHandle(fd, ownsHandle: true), FileAccess.Read, 4096);
     }
 
+    /// <summary>The file's hard-link count (<c>lstat</c>'s <c>st_nlink</c>, at offset 6 in the 64-bit inode layout; 2026-10-22, <see cref="Files.FileLinks"/>); 1 when it can't be read.</summary>
+    public static int LinkCount(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        byte* buffer = stackalloc byte[256];
+        int status = RuntimeInformation.ProcessArchitecture == Architecture.X64 ? LStat64(path, buffer) : LStat(path, buffer);
+        return status != 0 ? 1 : Math.Max(1, (int)*(ushort*)(buffer + 6));
+    }
+
     private static Kind KindOfMode(ushort mode) => (mode & TypeMask) switch
     {
         RegularType => Kind.Regular,

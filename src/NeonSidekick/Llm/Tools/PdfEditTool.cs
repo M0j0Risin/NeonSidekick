@@ -35,7 +35,7 @@ public sealed class PdfEditTool : FileTool
             "path": { "type": "string", "description": "The PDF to edit, relative to the working directory (every action but merge)." },
             "paths": { "type": "array", "items": { "type": "string" }, "description": "merge: the PDFs to join, in order, relative to the working directory." },
             "pages": { "type": "string", "description": "extract, delete, and rotate (default every page): physical page numbers from 1, \"3\", \"2-5\", \"5-\" (to the end) or \"1,3,7-9\"." },
-            "angle": { "type": "integer", "enum": [90, 180, 270, -90], "description": "rotate: degrees clockwise (-90 turns the other way)." },
+            "angle": { "type": "integer", "description": "rotate (required for it): degrees clockwise, a quarter turn: 90, 180, 270, or -90 the other way." },
             "fields": { "type": "object", "description": "fill_form: each field's name and its value: text, true or false for a check box, an option's name for a choice or radio group, a list for a multi-choice list. read_pdf with fields: true lists them." },
             "flatten": { "type": "boolean", "description": "fill_form: true bakes the values into the pages, so they can no longer be changed. Default false." },
             "to": { "type": "string", "description": "The new PDF's path or folder, relative to the working directory. Default: beside the (first) PDF, named after it (report-p2-5.pdf, report-rotated.pdf)." },
@@ -132,8 +132,16 @@ public sealed class PdfEditTool : FileTool
         }
 
         var list = new List<PdfFieldValue>();
+        var named = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in objects[0].EnumerateObject())
         {
+            // One value a field (2026-10-22, review T8: a repeated key sent two values for one field and counted two filled).
+            if (!named.Add(property.Name))
+            {
+                error = PdfText.FieldTwice(property.Name);
+                return false;
+            }
+
             var value = property.Value;
             bool fits = value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null
                 || (value.ValueKind == JsonValueKind.Array && value.EnumerateArray().All(x => x.ValueKind is JsonValueKind.String or JsonValueKind.Number));

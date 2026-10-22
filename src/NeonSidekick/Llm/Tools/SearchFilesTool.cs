@@ -147,13 +147,14 @@ public sealed class SearchFilesTool : FileTool
         ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(request);
         maxLimit = Math.Clamp(maxLimit, 1, WorkingDirectory.MaxResultLimit);
-        string needle = (request.Text ?? "").Trim();
+        // The needle as given (2026-10-22, review O8): only a blank one is no search.
+        string needle = request.Text ?? "";
         string path = request.Path;
         string files = request.Files;
         int? limit = request.Limit is { } asked ? Math.Clamp(asked, 1, maxLimit) : null;
         int? depth = request.Depth;
         int walkDepth = depth is { } d ? Math.Max(1, d) : int.MaxValue;
-        if (needle.Length > 0)
+        if (needle.Trim().Length > 0)
         {
             bool countFiles = string.Equals((request.Output ?? "").Trim(), FilesOutput, StringComparison.OrdinalIgnoreCase);
             var result = sandbox.Search(needle, path, files, request.Regex, cancellationToken, request.Context, limit ?? Math.Min(WorkingDirectory.DefaultSearchLimit, maxLimit), walkDepth, countFiles ? SearchOutput.Files : SearchOutput.Content);
@@ -162,18 +163,18 @@ public sealed class SearchFilesTool : FileTool
 
         if (string.Equals((request.Order ?? "").Trim(), ModifiedOrder, StringComparison.OrdinalIgnoreCase))
         {
-            var recent = sandbox.Recent(path, limit ?? Math.Min(WorkingDirectory.DefaultRecent, maxLimit), walkDepth);
+            var recent = sandbox.Recent(path, limit ?? Math.Min(WorkingDirectory.DefaultRecent, maxLimit), cancellationToken, walkDepth, files);
             return (FileText.Recent(recent), recent.Budgeted);
         }
 
         if (!string.IsNullOrWhiteSpace(files))
         {
-            return (FileText.Found(sandbox.Find(files, path, limit ?? Math.Min(WorkingDirectory.DefaultFindLimit, maxLimit), walkDepth), files.Trim()), false);
+            return (FileText.Found(sandbox.Find(files, path, cancellationToken, limit ?? Math.Min(WorkingDirectory.DefaultFindLimit, maxLimit), walkDepth), files.Trim()), false);
         }
 
         int levels = Math.Clamp(depth ?? 1, 1, WorkingDirectory.MaxTreeDepth);
         return levels == 1
-            ? (FileText.Listing(sandbox.List(path, limit ?? Math.Min(WorkingDirectory.MaxEntries, maxLimit))), false)
+            ? (FileText.Listing(sandbox.List(path, cancellationToken, limit ?? Math.Min(WorkingDirectory.MaxEntries, maxLimit))), false)
             : (FileText.Listing(sandbox.FileTree(path, limit ?? Math.Min(WorkingDirectory.MaxEntries, maxLimit), levels), levels), false);
     }
 

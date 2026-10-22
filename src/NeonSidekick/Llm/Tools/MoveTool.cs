@@ -41,7 +41,7 @@ public sealed class MoveTool : FileTool
     public const string DescriptionText =
         "Renames or moves a file or a folder under the working directory (the user's cwd / current directory): to is the new path " +
         "(a new name in the same place is a rename; a folder moves with everything in it). Refuses to replace something already at the new path unless overwrite is true; " +
-        "a file is replaced in place and a folder in the way is refused.";
+        "a file is replaced in place and a folder in the way is refused." + FileText.GuardedPathsSentence;
 
     public override JsonElement JsonSchema => Schema;
 

@@ -125,6 +125,10 @@ public static class PdfText
     public static string BadPages(string spec) =>
         $"Error: pages takes physical page numbers from 1: \"3\", \"2-5\", \"5-\" (to the end) or a list like \"1,3,7-9\", not \"{spec}\"";
 
+    /// <summary>A <c>pages</c> argument with more parts than <see cref="PdfPageRange.MaxParts"/> (2026-10-22, review K10).</summary>
+    public static string TooManyPageParts(int max) =>
+        $"Error: pages takes at most {max.ToString(CultureInfo.InvariantCulture)} comma-separated parts; join neighbors into ranges like \"7-9\"";
+
     /// <summary>No browser to read with. Pinned.</summary>
     public static string NoBrowserToRead => OperatingSystem.IsMacOS()
         ? "Error: reading a PDF needs Edge, Chrome, Brave or Chromium in /Applications, and none was found; set Web browser path"
@@ -170,11 +174,13 @@ public static class PdfText
         var sb = new System.Text.StringBuilder($"{path}: {fields.Count.ToString(CultureInfo.InvariantCulture)} form field{(fields.Count == 1 ? "" : "s")} (pdf_edit's fill_form sets them by name)");
         foreach (var field in fields.Take(MaxFieldLines))
         {
-            sb.Append("\n- ").Append(field.Name).Append(": ").Append(field.Kind.Length > 0 ? field.Kind : "field").Append(", ")
-              .Append(field.Value.Length > 0 ? "\"" + field.Value + "\"" : "empty");
+            // Every string the PDF gave escaped and cut (2026-10-22, review S3).
+            sb.Append("\n- ").Append(FromPdf(field.Name, MaxLabelChars * 2)).Append(": ").Append(field.Kind.Length > 0 ? FromPdf(field.Kind, MaxLabelChars) : "field").Append(", ")
+              .Append(field.Value.Length > 0 ? "\"" + FromPdf(field.Value, MaxFieldValueChars) + "\"" : "empty");
             if (field.Options.Count > 0)
             {
-                sb.Append(field.Kind == "checkbox" ? "; on value " : "; one of ").Append(string.Join(", ", field.Options.Select(o => "\"" + o + "\"")));
+                sb.Append(field.Kind == "checkbox" ? "; on value " : "; one of ")
+                  .Append(FromPdf(string.Join(", ", field.Options.Select(o => "\"" + o + "\"")), MaxFieldValueChars));
             }
 
             if (field.ReadOnly)
@@ -204,8 +210,60 @@ public static class PdfText
     /// when they do not run, <c>next</c> only when pages are left to read.
     /// </summary>
     public static string Header(string path, IReadOnlyList<int> shown, int pageCount, int? next) =>
+        HeaderNext(path, shown, pageCount, next is { } n ? n.ToString(CultureInfo.InvariantCulture) + "-" : null);
+
+    /// <summary>The first line with <c>next</c> as the pages left to ask for, written as <c>pages</c> takes them (2026-10-22, review T1).</summary>
+    public static string HeaderNext(string path, IReadOnlyList<int> shown, int pageCount, string? next) =>
         path + " (" + (shown.Count == 1 ? "page " : "pages ") + Runs(shown) + " of " + pageCount.ToString(CultureInfo.InvariantCulture)
-        + (next is { } n ? $"; next: pages \"{n.ToString(CultureInfo.InvariantCulture)}-\"" : "") + ")";
+        + (next is { Length: > 0 } n ? $"; next: pages \"{n}\"" : "") + ")";
+
+    /// <summary>A conversion's PDF past what it brings in (2026-10-22, review T4). Prompt text.</summary>
+    public static string MadeTooLarge(string path, long max) =>
+        $"Error: the PDF made of {path} is over {(max / (1024 * 1024)).ToString(CultureInfo.InvariantCulture)} MB, so it was not kept";
+
+    /// <summary>A picture the browser can't draw (2026-10-22, review S4). Prompt text.</summary>
+    public static string PictureNotDrawable(string path) =>
+        $"Error: '{path}' is a picture the PDF page can't show (HEIC, TIFF and AVIF can't be); make a PNG or JPEG copy with image_edit (format png) and convert that";
+
+    /// <summary>A form field given twice in <c>fields</c> (2026-10-22, review T8). Prompt text.</summary>
+    public static string FieldTwice(string name) => $"Error: fields names \"{name}\" more than once; give each field one value";
+
+    /// <summary>A PDF that has no pages (2026-10-22, review K17). Prompt text.</summary>
+    public static string NoPages(string path) => $"'{path}' is a PDF with no pages";
+
+    /// <summary>The most characters a field's value or its options show, and a label (2026-10-22, review S3, the fix plan's Limits).</summary>
+    public const int MaxFieldValueChars = 1_000;
+
+    public const int MaxLabelChars = 80;
+
+    /// <summary>
+    /// A string the PDF gave, as an answer shows it (review S3): its line breaks and other control characters written as escapes, so a label
+    /// or a value can never start a line of its own (a forged <c>--- page N ---</c> or <c>Error:</c>), cut at <paramref name="max"/>.
+    /// </summary>
+    public static string FromPdf(string text, int max)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var sb = new System.Text.StringBuilder(Math.Min(text.Length, max) + 8);
+        foreach (char c in text)
+        {
+            if (sb.Length >= max)
+            {
+                return Files.TextCut.Safe(sb.ToString(), max - 1) + "…";
+            }
+
+            sb.Append(c switch
+            {
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                '\u2028' or '\u2029' or '\u0085' => "\\n",
+                _ when char.IsControl(c) => "\\x" + ((int)c).ToString("X2", CultureInfo.InvariantCulture),
+                _ => c.ToString(),
+            });
+        }
+
+        return sb.Length > max ? Files.TextCut.Safe(sb.ToString(), max - 1) + "…" : sb.ToString();
+    }
 
     /// <summary>A page's heading, its printed label beside the number when they differ (gap 92): <c>--- page 14 (printed "xii") ---</c>.</summary>
     public static string PageHeading(int page, string? label) =>
@@ -216,7 +274,7 @@ public static class PdfText
         "page " + page.ToString(CultureInfo.InvariantCulture) + (Printed(page, label) is { } printed ? " (printed \"" + printed + "\")" : "");
 
     private static string? Printed(int page, string? label) =>
-        string.IsNullOrWhiteSpace(label) || label.Trim() == page.ToString(CultureInfo.InvariantCulture) ? null : label.Trim();
+        string.IsNullOrWhiteSpace(label) || label.Trim() == page.ToString(CultureInfo.InvariantCulture) ? null : FromPdf(label.Trim(), MaxLabelChars);
 
     /// <summary>Pages with no text at all (gap 31's scans). Pinned.</summary>
     public const string NoTextLayer =
@@ -224,7 +282,10 @@ public static class PdfText
 
     /// <summary>A page longer than the read's cap, cut (gap 90). Pinned.</summary>
     public static string PageCut(int page, int shown, int total) =>
-        $"(page {page.ToString(CultureInfo.InvariantCulture)} cut at {shown.ToString("N0", CultureInfo.InvariantCulture)} of {total.ToString("N0", CultureInfo.InvariantCulture)} characters; pictures: true shows it all)";
+        $"(page {page.ToString(CultureInfo.InvariantCulture)} cut at {shown.ToString("N0", CultureInfo.InvariantCulture)} of {total.ToString("N0", CultureInfo.InvariantCulture)} characters; next: pages \"{page.ToString(CultureInfo.InvariantCulture)}\" with from_char {shown.ToString(CultureInfo.InvariantCulture)})";
+
+    /// <summary><c>from_char</c> without exactly one page (2026-10-22, review S8). Prompt text.</summary>
+    public const string FromCharNeedsOnePage = "Error: from_char reads on within one page: give pages a single page number with it";
 
     /// <summary>The outline's heading (gap 91). Pinned.</summary>
     public const string OutlineHeading = "Outline:";

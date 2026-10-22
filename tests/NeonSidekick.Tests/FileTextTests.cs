@@ -24,7 +24,7 @@ public class FileTextTests
         Assert.Equal("Error: 'docs\\' is a folder, not a file", FileText.IsDirectory(@"docs\"));
         Assert.Equal("Error: 'a.txt' is a file, not a folder", FileText.IsAFile("a.txt"));
         Assert.Equal("Error: 'a.bin' is not a text file", FileText.NotText("a.bin"));
-        Assert.Equal("Error: 'a.PNG' is not a text file; use view_image to look at it", FileText.NotText("a.PNG"));
+        Assert.Equal("Error: 'a.PNG' is not a text file; the picture tools (view_image, while Image tools is on) look at it", FileText.NotText("a.PNG"));   // since 2026-10-22, review R5
         Assert.Equal("Error: 'a.png' could not be read as an image", FileText.NotAnImage("a.png"));
         Assert.Equal("Error: 'a.png' is over 20 MB or 40 megapixels; too large to view", FileText.ImageTooBig("a.png"));
         Assert.Equal("Error: 'a.txt' is not a zip archive", FileText.NotAnArchive("a.txt"));

@@ -247,6 +247,13 @@ public sealed class ProcessTool : AIFunction
                     return new ToolShownResult(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, null));
                 }
 
+                // The scripts it runs, and the trusted files (2026-10-22, review L4, the fix plan's D8): read as a command line's are.
+                if (ShellPoliceChecks.ScriptChecks(new CommandRequest(session.Kind, data, []), data, session.Launch.WorkingDirectory, _files, effective) is { } scripted)
+                {
+                    _gate?.NoteRefused(new CommandRequest(session.Kind, data, []));
+                    return scripted.Shown is { } shown ? new ToolShownResult(scripted.ModelText, shown) : scripted.ModelText;
+                }
+
                 // The police (Shell police, 2026-09-22): what goes to a process's stdin is read like a command line, relative paths from where it started.
                 if (effective.ShellPolice && PathPolice.Judge(data, _files, session.Launch.WorkingDirectory, isScript: false, session.Kind) is { } outside)
                 {

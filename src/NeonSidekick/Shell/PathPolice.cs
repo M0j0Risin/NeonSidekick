@@ -65,6 +65,9 @@ public static partial class PathPolice
         "USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR",
         "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE",
         "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "OLDPWD",
+        // 2026-10-22, review L5: PowerShell's own folders and profile script, the XDG folders, the common program files, OneDrive's twins.
+        "PROFILE", "PSHOME", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432", "ONEDRIVECONSUMER", "ONEDRIVECOMMERCIAL",
+        "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR",
     ];
 
     /// <summary>The calls that read a folder variable for a script (<c>Path.home()</c>, <c>os.path.expanduser</c>, <c>[Environment]::GetFolderPath</c>, <c>tempfile.gettempdir()</c>…), matched without case.</summary>
@@ -83,7 +86,7 @@ public static partial class PathPolice
     private const char Joiner = '\u0001';
 
     // %NAME% | $env:NAME | ${env:NAME} | $NAME | ${NAME}, the name not continued by a word character ($HOMEPAGE is not $HOME).
-    [GeneratedRegex(@"(?:%(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD)%)|(?:\$\{?(?:env:)?(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD)(?![A-Za-z0-9_])\}?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?:%(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMFILES\(X86\)|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)%)|(?:\$\{?(?:env:)?(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)(?![A-Za-z0-9_])\}?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FolderVariablePattern();
 
     // \\server\share or //server/share: two separators, a server, a separator — the share is what makes it a path.
@@ -202,6 +205,16 @@ public static partial class PathPolice
         if (!isScript && OperatingSystem.IsWindows() && token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':')
         {
             return !(root.Length >= 2 && root[1] == ':' && char.ToUpperInvariant(root[0]) == char.ToUpperInvariant(token[0]));
+        }
+
+        // 9b. A drive-relative path in a command line (2026-10-22, review L5: D:secret.txt reads D's own current folder, and passed): on the
+        // root's drive it is read from the folder the line runs in, on any other drive it is outside. Windows only.
+        // Only a word that reads as a path after its colon, a dot or a separator in it, so x[a:b]'s a:b is still no path.
+        if (!isScript && OperatingSystem.IsWindows() && token.Length > 2 && char.IsAsciiLetter(token[0]) && token[1] == ':' && token[2] is not ('\\' or '/' or ':')
+            && token.AsSpan(2).IndexOfAny('.', '\\', '/') >= 0)
+        {
+            bool rootsDrive = root.Length >= 2 && root[1] == ':' && char.ToUpperInvariant(root[0]) == char.ToUpperInvariant(token[0]);
+            return !rootsDrive || IsOutside(token[2..], judging, baseFolder, firstArgument, folderArgument);
         }
 
         // 1. A drive-absolute path: under the root or not.

@@ -37,7 +37,7 @@ public sealed class CopyTool : FileTool
     public const string DescriptionText =
         "Copies a file or a folder (with everything in it) under the working directory (the user's cwd / current directory) to a new path. " +
         "Refuses to replace something already at the new path unless overwrite is true; " +
-        "a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it).";
+        "a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it)." + FileText.GuardedPathsSentence;
 
     public override JsonElement JsonSchema => Schema;
 

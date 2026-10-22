@@ -1,3 +1,4 @@
+using NeonSidekick.Files;
 using NeonSidekick.App;
 using NeonSidekick.Images;
 using NeonSidekick.Settings;
@@ -64,7 +65,7 @@ public sealed class PictureActionsTests : IDisposable
         Assert.False(first.Replaced);
         Assert.Null(first.Removed);
         Assert.StartsWith("wrote cat-edited.bmp (BMP, 20×40 from 40×20", first.Line, StringComparison.Ordinal);
-        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(_dir, "*" + WorkingDirectory.TempSuffix));
     }
 
     [Fact]

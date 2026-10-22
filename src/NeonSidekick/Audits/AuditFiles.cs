@@ -85,7 +85,7 @@ public static class AuditFiles
             return AuditText.ReportFullResult;
         }
 
-        var written = files.WriteText(path, text, overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(path, text, overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
@@ -217,7 +217,7 @@ public static class AuditFiles
         }
 
         string text = RenderCoverage(known);
-        var written = files.WriteText(CoveragePath(reportPath), text, overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(CoveragePath(reportPath), text, overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, CoveragePath(reportPath), "write", written.Detail);
     }
 
@@ -284,10 +284,10 @@ public static class AuditFiles
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
-        var result = files.Delete(path);
+        var result = WriteGuard.AsApp(() => files.Delete(path));
         if (result.Outcome == FileOutcome.Ok && Exists(files, CoveragePath(path)))
         {
-            files.Delete(CoveragePath(path));
+            WriteGuard.AsApp(() => files.Delete(CoveragePath(path)));
         }
 
         return result;

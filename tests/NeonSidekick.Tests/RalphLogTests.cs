@@ -4,6 +4,9 @@ using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
+// The fixtures' plan writes go through the app's pass since 2026-10-22 (the write guard refuses a model write into .neon; these stand
+// for the app's own writes and the user's edits, which the judge still puts back).
+
 /// <summary>
 /// The Ralph log beside the plan (2026-10-18, <see cref="RalphLog"/>): written and read back, tolerant of hand edits, the check's output cut,
 /// scrubbed and redacted, the learned facts merged and capped, the notes a pass gets, the pass count, and the lock.
@@ -409,7 +412,7 @@ public sealed class RalphLogTests : IDisposable
     {
         // 2026-10-19, the fourth review: the lock was read only as a loop started, so a second instance's /plan open, revision or approve wrote
         // the plan the first one's loop was running.
-        Assert.Equal(FileOutcome.Ok, _files.WriteText(Plan, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 1, T0, T0, "Guide"), "Guide", "## Steps\n- [ ] One\n"), overwrite: true).Outcome);
+        Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => _files.WriteText(Plan, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 1, T0, T0, "Guide"), "Guide", "## Steps\n- [ ] One\n"), overwrite: true)).Outcome);
         var other = new RalphLog.LockOwner(424242, T0);
         Assert.True(RalphLog.TryLock(_files, Plan, other, _ => false));
         var alive = RalphLog.LiveOwner;

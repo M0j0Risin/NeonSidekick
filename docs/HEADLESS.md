@@ -35,6 +35,8 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 - **Calls that would ask you first are refused:** the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*, and `shopping_clear` with `all`.
   - So are Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`. The service and task changes aren't offered.
 - **No Browser window:** a web tool that meets a bot check reports it.
+- **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md`) is never changed: the model is told you can make the change.
+- **`open` starts only safe types** (documents, pictures, PDFs, audio, video, text, folders), as in the TUI; a program a shell command opened closes when the run exits.
 - **On a Mac** ([On a Mac](MAC.md)) the executable is `NeonSidekick`, and `run_command` uses `zsh` unless the profile names another shell. The examples carry over: `echo "Ping." | NeonSidekick --headless --cwd ~/src/myapp`.
 
 ## What the output looks like
@@ -103,7 +105,7 @@ They need no server unless the row says so.
 - **`/plan ralph [<name>] [<passes>]`** runs a [Ralph loop](COMMANDS.md#ralph-loop): typing it is the consent. Each pass is sent without waiting, echoed as its short line, with `[notice]` lines for its checks.
 - **A plan that may not suit a loop** gets a `[notice]`, and the loop goes on. One with no `- [ ]` steps under `## Steps` is refused with an `[error]`.
 - **A Ralph loop names its checks** in a `[notice]` before running any. Under *Shell command policy* `ask` a check runs only if it's on the allow list, as `run_command`'s would; `NEONSIDEKICK_COMMAND_POLICY=yolo` runs it.
-- **A Ralph loop refuses to start** when its `verify:` check fails on the project first, printing its output. A failing `final:` check alone gets a `[notice]`, and the loop goes on. There's no checkpoint and no `ask_user`. Bare `/plan ralph` resumes a loop stopped earlier in the run, with the checks it started with.
+- **A Ralph loop refuses to start** when its `verify:` check fails on the project first, printing its output. Under `ask` its checks must be on the shell allow list (on the PC the plan's approval, which shows them, is the yes). A failing `final:` check alone gets a `[notice]`, and the loop goes on. There's no checkpoint and no `ask_user`. Bare `/plan ralph` resumes a loop stopped earlier in the run, with the checks it started with.
 - **A Ralph loop stops at a `By hand:` step** before checking it, since nobody can be asked: the step stays unticked, named with its check. A resume stops there again, before any check or pass, until you tick its box.
 
 ### Everything else goes to the model as text

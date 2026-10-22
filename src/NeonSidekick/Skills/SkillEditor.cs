@@ -540,15 +540,16 @@ public static class SkillEditor
         }
 
         var files = new WorkingDirectory(() => directory, time);
-        var resolved = files.Resolve(relative, forWrite: true, out string full);
+        // The skill's own protected files first (2026-10-22): the write guard refuses a .git too, and the skill's sentence is the clearer one.
+        if (files.Resolve(relative, forWrite: false, out string full) == FileOutcome.Ok && IsProtected(files.Root, full))
+        {
+            return new SkillEditResult(SkillEditOutcome.ProtectedFile, name, scope, Path: relative);
+        }
+
+        var resolved = files.Resolve(relative, forWrite: true, out full);
         if (resolved != FileOutcome.Ok)
         {
             return new SkillEditResult(SkillEditOutcome.FileRefused, name, scope, Detail: FileText.Error(resolved, relative, "write"), Path: relative);
-        }
-
-        if (IsProtected(files.Root, full))
-        {
-            return new SkillEditResult(SkillEditOutcome.ProtectedFile, name, scope, Path: relative);
         }
 
         // What the write replaces, read first (2026-10-02, the revisions): a file past the revision cap is not read at all.

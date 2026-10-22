@@ -70,6 +70,6 @@ public sealed class VaultListTool : VaultTool
         string tag = ToolArguments.ReadString(arguments, VaultSearchTool.TagArgument);
         string property = ToolArguments.ReadString(arguments, PropertyArgument);
         string value = ToolArguments.ReadString(arguments, ValueArgument);
-        return OffThread(() => Vault.List(what, folder, tag, property, value, max), cancellationToken);
+        return OffThread(() => Vault.List(what, folder, tag, property, value, max, cancellationToken), cancellationToken);
     }
 }

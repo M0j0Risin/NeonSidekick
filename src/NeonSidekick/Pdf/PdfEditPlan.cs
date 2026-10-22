@@ -16,7 +16,8 @@ public sealed record PdfEditRequest(
     IReadOnlyList<PdfFieldValue>? Fields = null,
     bool Flatten = false,
     string? To = null,
-    bool Overwrite = false);
+    bool Overwrite = false,
+    bool ByUser = false);
 
 /// <summary>
 /// What each edit needs and makes (2026-10-14, the PDF plan's phase 4b), checked before any file is read: the action words <c>pdf_edit</c>
@@ -162,7 +163,8 @@ public static class PdfEditPlan
             return (null, bad);
         }
 
-        var pages = range!.Resolve(pageCount);
+        // An extract keeps the order the pages were named in (review R6); a delete and a turn need only which.
+        var pages = request.Op == PdfEditOp.Extract ? range!.InOrder(pageCount) : range!.Resolve(pageCount);
         if (pages.Count == 0)
         {
             return (null, PdfText.PastTheEnd(display, pageCount, spec));

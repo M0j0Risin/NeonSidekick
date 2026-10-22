@@ -209,7 +209,9 @@ public sealed class SqlConfigFile
             return new SqlCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail), WholeFile: true)]);
         }
 
-        if (file is null || file.Connections.Count == 0)
+        // "connections": null reads as null past the non-nullable type (2026-10-22, review K1: it threw here, and the
+        // startup encryption pass and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
+        if (file?.Connections is not { Count: > 0 })
         {
             return SqlCatalog.Empty;
         }

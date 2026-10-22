@@ -89,13 +89,13 @@ public sealed class ImageEditTool : FileTool
             "crop_y": { "type": "integer", "minimum": 0, "description": "Crop: the top edge." },
             "crop_width": { "type": "integer", "minimum": 1, "description": "Crop: the width." },
             "crop_height": { "type": "integer", "minimum": 1, "description": "Crop: the height." },
-            "rotate": { "type": "integer", "enum": [0, 90, 180, 270], "description": "Turn clockwise by quarter turns only (no other angles)." },
+            "rotate": { "type": "integer", "description": "Turn clockwise by quarter turns: 90, 180 or 270 (-90 is 270, 360 is none); no other angles." },
             "flip": { "type": "string", "enum": ["none", "horizontal", "vertical"], "description": "Mirror, after the turn." },
             "filter": { "type": "string", "enum": ["none", "gray", "sepia", "negative", "polaroid"], "description": "A color preset." },
             "brightness": { "type": "integer", "minimum": -100, "maximum": 100, "description": "Brighter (+) or darker (-)." },
             "contrast": { "type": "integer", "minimum": -100, "maximum": 100, "description": "More (+) or less (-) contrast." },
             "saturation": { "type": "integer", "minimum": -100, "maximum": 100, "description": "More vivid (+) or grayer (-); -100 is grayscale." },
-            "hue": { "type": "integer", "minimum": -180, "maximum": 180, "description": "Rotate every color's hue by these degrees: 120 turns red to green." },
+            "hue": { "type": "integer", "minimum": -360, "maximum": 360, "description": "Rotate every color's hue by these degrees: 120 turns red to green." },
             "tint": { "type": "string", "description": "Color the picture toward this color (#rrggbb or a name), keeping light and dark." },
             "tint_amount": { "type": "integer", "minimum": 0, "maximum": 100, "description": "How strong the tint is, in percent. Default 50." },
             "blur": { "type": "number", "minimum": 0, "maximum": 100, "description": "Gaussian blur radius in pixels." },
@@ -424,7 +424,8 @@ public sealed class ImageEditTool : FileTool
         }
 
         string to = ToolArguments.ReadString(arguments, ToArgument).Trim();
-        return await Task.Run(() => Edit(path, to, overwrite, view, request, reencodes, effective, cancellationToken), cancellationToken).ConfigureAwait(false);
+        // Esc returns the turn (2026-10-22, review I7: the run was awaited bare, so Esc waited out every max_kb try).
+        return await Task.Run(() => Edit(path, to, overwrite, view, request, reencodes, effective, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     // The work, off the turn's thread: read, plan the output, edit, write, and the picture back when asked.
@@ -481,14 +482,17 @@ public sealed class ImageEditTool : FileTool
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var written = Write(target, result.Bytes, replace && sameFormat, named, overwrite);
+        // Overwrite-original with a format change whose new name is the source's own (pic.png holding WebP, written as PNG) writes in place and
+        // deletes nothing (2026-10-22, review G9: the new file went over the source, which was then deleted: both gone).
+        bool samePlace = replace && ImageOutput.SamePath(target, read.Relative);
+        var written = Write(target, result.Bytes, replace && (sameFormat || samePlace), named, overwrite);
         if (written.Outcome != FileOutcome.Ok)
         {
             return FileText.Error(written.Outcome, written.Relative, "write", written.Detail);
         }
 
         string text;
-        if (replace && sameFormat)
+        if (replace && (sameFormat || samePlace))
         {
             text = ImageText.Written(written.Relative, result, request.MaxKb, ImageText.ReplacedVerb);
         }
@@ -543,7 +547,8 @@ public sealed class ImageEditTool : FileTool
     }
 
     // The bytes written: over the source in place, at a named path (over a file only with overwrite), or under the first free
-    // made-up name, -2, -3… (the camera's loop), which never replaces anything.
+    // made-up name, -2, -3… (the camera's loop), which never replaces anything — overwrite or not since 2026-10-22 (review G9, the fix
+    // plan's mechanism 4: overwrite with no to replaced an unrelated photo.jpg or an earlier photo-edited.png; PdfEditing.Write's rule).
     private WriteResult Write(string target, byte[] bytes, bool inPlace, bool named, bool overwrite)
     {
         var files = FilesFor(target);
@@ -552,7 +557,7 @@ public sealed class ImageEditTool : FileTool
             return files.WriteBytes(target, bytes, overwrite: true);
         }
 
-        if (named || overwrite)
+        if (named)
         {
             return files.WriteBytes(target, bytes, overwrite);
         }

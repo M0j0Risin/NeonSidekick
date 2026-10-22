@@ -73,7 +73,7 @@ public static partial class PageCharset
         return encoding.GetString(bytes);
     }
 
-    private static void EnsureCodePages()
+    internal static void EnsureCodePages()
     {
         lock (Gate)
         {

@@ -226,6 +226,14 @@ public sealed class ExecuteCodeTool : AIFunction
             return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
         }
 
+        // The trusted files' tripwire (2026-10-22, the fix plan's D8): a script naming .git, .neon, the project file or the app's home.
+        if (effective.ShellPolice && TrustedFilesPolice.For(_files.Root) is { } trusted && TrustedFilesPolice.Find(code, trusted) is { } named)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, named, null));
+            _gate.NoteRefused(request);
+            return new ToolShownResult(ShellText.TrustedPoliced, ShellText.TrustedShown(named, null));
+        }
+
         // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a script that reaches SQLite is refused whatever the policy.
         if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(code, script: true, databases) is { } sqlite)
         {
@@ -368,14 +376,35 @@ public sealed class ExecuteCodeTool : AIFunction
                 return ShellText.BackgroundNotFromScript;
             }
 
+            // A timeout over the foreground cap would promote the call to the background (2026-10-22, review L3): refused as background is.
+            if (own.TryGetValue(RunCommandTool.TimeoutArgument, out var timeout) && TimeoutSeconds(timeout) is { } seconds && seconds > RunCommandTool.ForegroundCap(_effective()))
+            {
+                return ShellText.BackgroundNotFromScript;
+            }
+
             own.Remove(RunCommandTool.BackgroundArgument);
             own.Remove(RunCommandTool.NotifyArgument);
         }
 
         var call = new FunctionCallContent("bridge", tool, own);
+        // A script's reads never mark a file seen or viewed, nor find one marked (2026-10-22, review J2: a file a script read let a later
+        // write_file without a mode replace it unread, and satisfied present_audit's read check), as an advisor's and a bot's don't.
+        using var seenOff = WorkingDirectory.SeenOff();
         var (text, _) = await Assistant.InvokeToolAsync(offered, call, cancellationToken).ConfigureAwait(false);
         return text;
     }
+
+    /// <summary>A <c>timeout</c> argument as seconds: a number or its text; null for anything else.</summary>
+    private static long? TimeoutSeconds(object? value) => value switch
+    {
+        int i => i,
+        long l => l,
+        double d => (long)Math.Ceiling(d),
+        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Number } e => e.TryGetInt64(out long n) ? n : (long)Math.Ceiling(e.GetDouble()),
+        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } e => long.TryParse(e.GetString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long n) ? n : null,
+        string s => long.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long n) ? n : null,
+        _ => null,
+    };
 
     private static bool IsTrue(object? value) => value switch
     {

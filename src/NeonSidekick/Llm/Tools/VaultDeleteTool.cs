@@ -33,7 +33,7 @@ public sealed class VaultDeleteTool : VaultTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Deletes one note or attachment from " + ObsidianText.VaultWords + " by moving it into the vault's .trash folder, where Obsidian can restore it; " +
+        "Deletes one note or attachment from " + ObsidianText.VaultWords + " by moving it where the vault's own setting sends deleted files (the system's bin, or the vault's .trash folder), where it can be restored; " +
         "links that pointed at it are left as they are and listed in the result. Use it only when the user asks for a deletion; never for a folder.";
 
     public override JsonElement JsonSchema => Schema;
@@ -47,6 +47,6 @@ public sealed class VaultDeleteTool : VaultTool
         }
 
         string note = ReadNote(arguments);
-        return OffThread(() => Vault.Delete(note), cancellationToken);
+        return OffThread(() => Vault.Delete(note, cancellationToken), cancellationToken);
     }
 }

@@ -666,7 +666,7 @@ public sealed class BotCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task Pdf_AnyOtherEnding_PrintsAsBefore_AndNobodyToAsk_OrDisabled_FetchesNothingFirst()
+    public async Task Pdf_AnyOtherEnding_PrintsAsBefore_AndNobodyToAsk_OrDisabled_ProbesOverHttpOnly()
     {
         GatedSite();
         _answer = r => BotCheckResult.Ended(BotCheckEnd.GaveUp, r.Url.AbsoluteUri);
@@ -679,7 +679,9 @@ public sealed class BotCheckTests : IDisposable
         await Pdf(null).ConvertAsync(new PdfRequest(Url: new Uri("https://example.com/"), To: "two.pdf"), CancellationToken.None);
         _settings.WebBrowserBotcheckWindow = "disabled";
         await Pdf(Solve).ConvertAsync(new PdfRequest(Url: new Uri("https://example.com/"), To: "three.pdf"), CancellationToken.None);
-        Assert.Empty(_http.Requests);
+        // One HTTP probe each for its media type (2026-10-22, review T3: with nobody to ask, a PDF served from a path without .pdf went to
+        // the print), never a person asked.
+        Assert.Equal(2, _http.Requests.Count);
         Assert.Empty(_asked);
         Assert.Equal(3, _browser.PdfRuns.Count);
     }

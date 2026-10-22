@@ -71,18 +71,23 @@ public sealed class ImageInfoTool : FileTool
         }
 
         var effective = _effective();
-        return await Task.Run(() => Describe(Files, paths, effective, Images), cancellationToken).ConfigureAwait(false);
+        // Off the turn and Esc returning it (2026-10-22, review G19: each of any number of paths was read whole, up to 200 MB, with no way out).
+        return await Task.Run(() => Describe(Files, paths, effective, Images, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>The most pictures one call describes; the rest are named for the next (review G19).</summary>
+    public const int MaxPaths = 20;
+
     /// <summary>The answer for <paramref name="paths"/>: one line each, success or error, then the formats line. A full path in <paramref name="images"/> is read there.</summary>
-    public static string Describe(WorkingDirectory files, IReadOnlyList<string> paths, AppSettingsData effective, WorkingDirectory? images = null)
+    public static string Describe(WorkingDirectory files, IReadOnlyList<string> paths, AppSettingsData effective, WorkingDirectory? images = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(effective);
-        var lines = new List<string>(paths.Count + 1);
-        foreach (var path in paths)
+        var lines = new List<string>(Math.Min(paths.Count, MaxPaths) + 2);
+        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxPaths))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var read = For(files, images, path).ReadBytes(path, ImageEditor.MaxSourceBytes);
             if (read.Outcome != FileOutcome.Ok || read.Bytes is null)
             {
@@ -91,6 +96,12 @@ public sealed class ImageInfoTool : FileTool
             }
 
             lines.Add(ImageEditor.Info(read.Bytes) is { } info ? ImageText.Info(read.Relative, info, MetadataStripper.Survey(read.Bytes)) : FileText.NotAnImage(read.Relative));
+        }
+
+        var rest = paths.Distinct(StringComparer.OrdinalIgnoreCase).Skip(MaxPaths).ToList();
+        if (rest.Count > 0)
+        {
+            lines.Add(FileText.MorePictures(rest));
         }
 
         lines.Add(ImageText.Formats(ImageFormats.WritableFormats(), ImageEditTool.QualityOf(effective), ImageWords.MetadataName(effective.ImageEditMetadata), ImageEditTool.OutputFolderFor(effective.ImageEditOutputFolder, images?.Root) ?? ""));

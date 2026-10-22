@@ -49,6 +49,6 @@ public sealed class VaultReadTool : VaultTool
 
         string note = ReadNote(arguments);
         string heading = ToolArguments.ReadString(arguments, HeadingArgument);
-        return OffThread(() => Vault.Read(note, heading, start, max), cancellationToken);
+        return OffThread(() => Vault.Read(note, heading, start, max, cancellationToken), cancellationToken);
     }
 }

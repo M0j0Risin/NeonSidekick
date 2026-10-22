@@ -146,6 +146,18 @@ public sealed class UncAccess
         }
 
         relative = within;
+
+        // The most specific share holding the target decides its access and account (2026-10-22, review J13: a read-only share nested in a
+        // read-write one was writable by naming its parent).
+        string joined = found.Config.Root + (windows ? "\\" : "/") + relative.TrimStart('\\', '/');
+        if (relative is not ("" or ".") && catalog.Locate(joined) is { } deepest && !ReferenceEquals(deepest, found)
+            && deepest.Config.Root.Length > found.Config.Root.Length && WorkingDirectory.IsInside(found.Config.Root, deepest.Config.Root)
+            && ForFiles(deepest, joined) is { } under)
+        {
+            found = deepest;
+            relative = under;
+        }
+
         return found;
     }
 
@@ -163,7 +175,10 @@ public sealed class UncAccess
         string spelled = UncPath.Spell(path, windows);
         if (!UncPath.IsAbsolute(spelled, windows))
         {
-            return (path ?? "").Trim();
+            // A network share's relative path in Windows' spelling on a Mac (2026-10-22, review H17: reports\q3.md became one file named
+            // with a backslash at the share's root): the server's names never hold one, so it is a separator there.
+            string relative = (path ?? "").Trim();
+            return !windows && share.Config.IsUnc ? relative.Replace('\\', '/') : relative;
         }
 
         string root = share.Config.Root;
@@ -213,6 +228,17 @@ public sealed class UncAccess
         DiagnosticLog.Info(UncConfigFile.Category, UncText.AuditLogLine(share.Name, Account(share), action, path));
     }
 
+    /// <summary>
+    /// The audit line with where it went (<paramref name="to"/>, a move's or copy's other end) and, under <paramref name="partial"/>, that
+    /// the change failed partway (2026-10-22, review J8: only a finished change was logged, so a recursive delete or a merging copy that
+    /// failed partway left permanent changes unlogged, and a move never named where it went).
+    /// </summary>
+    public static void Audit(UncNamedShare share, string action, string path, string? to, bool partial = false)
+    {
+        ArgumentNullException.ThrowIfNull(share);
+        DiagnosticLog.Info(UncConfigFile.Category, UncText.AuditLogLine(share.Name, Account(share), action, path, to, partial));
+    }
+
     /// <summary>Who a share is reached as: the <c>runas</c> account, else the user running the app.</summary>
     public static string Account(UncNamedShare share)
     {
@@ -246,7 +272,7 @@ public sealed class UncAccess
             }
             else
             {
-                work = Task.Run(() => Mounted(mounts, share, act), CancellationToken.None);
+                work = Task.Run(() => Mounted(mounts, share, act, write), CancellationToken.None);
             }
 
             return write ? await work.ConfigureAwait(false) : await work.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -288,15 +314,26 @@ public sealed class UncAccess
     /// The pool thread's part on a Mac's network share: the mount (made now, or the run's), then the preflight and the work under it.
     /// The <c>runas</c> password is resolved only when a mount is to be made (2026-10-11, code review).
     /// </summary>
-    private UncResult<T> Mounted<T>(IShareMounts mounts, UncNamedShare share, Func<WorkingDirectory, T> act)
+    private UncResult<T> Mounted<T>(IShareMounts mounts, UncNamedShare share, Func<WorkingDirectory, T> act, bool write)
     {
-        var root = mounts.Root(share, () => SignIn(share));
+        // A write call mounts read-write and lets a runas mount go when it ends (2026-10-22, review H4).
+        var root = mounts.Root(share, () => SignIn(share), writable: write);
         if (root.Error is { } refused)
         {
             return UncResult<T>.Failed(refused);
         }
 
-        return Preflight(share, root.Value!) is { } reason ? UncResult<T>.Failed(reason) : UncResult<T>.Ok(act(Files(root.Value!)));
+        try
+        {
+            return Preflight(share, root.Value!) is { } reason ? UncResult<T>.Failed(reason) : UncResult<T>.Ok(act(Files(root.Value!)));
+        }
+        finally
+        {
+            if (write)
+            {
+                mounts.EndWrite(share);
+            }
+        }
     }
 
     /// <summary>A Mac's mount's password: none as you, the stored one under <c>runas</c>, or the refusal.</summary>
@@ -324,7 +361,7 @@ public sealed class UncAccess
             return Impersonated(token, Body);
         }
 
-        UncResult<T> Body() => Preflight(share) is { } reason ? UncResult<T>.Failed(reason) : UncResult<T>.Ok(act(files));
+        UncResult<T> Body() => Preflight(share, share.Config.Root, token) is { } reason ? UncResult<T>.Failed(reason) : UncResult<T>.Ok(act(files));
     }
 
     [SupportedOSPlatform("windows")]
@@ -341,14 +378,31 @@ public sealed class UncAccess
     /// <see cref="Preflight(UncNamedShare)"/> on the folder <paramref name="folder"/> the share's files are under (a Mac's mount
     /// point and the folder under it), the sentences naming the share's own root.
     /// </summary>
-    internal static string? Preflight(UncNamedShare share, string folder)
+    internal static string? Preflight(UncNamedShare share, string folder) => Preflight(share, folder, null);
+
+    /// <summary>
+    /// <see cref="Preflight(UncNamedShare, string)"/> with the probe on a thread of its own, impersonating <paramref name="token"/> itself
+    /// (2026-10-22, review H14: the probe was a pool task inheriting the caller's impersonation, and the token was disposed at the timeout
+    /// while a late-starting probe still meant to use it — the probe now holds a reference to the handle until it ends; review P11: an
+    /// abandoned probe kept a pool thread in SMB about a minute, and retries against a dead server starved the pool). A folder whose last
+    /// probe is still stuck is answered as unreachable at once, no second thread.
+    /// </summary>
+    internal static string? Preflight(UncNamedShare share, string folder, SafeAccessTokenHandle? token)
     {
         string root = share.Config.Root;
-        var probe = Task.Run(() => File.GetAttributes(folder));
+        if (s_stuckProbes.TryGetValue(folder, out var stuck) && !stuck.IsCompleted)
+        {
+            return UncText.Unreachable(share.Name, root, UncText.TimedOut(ReachTimeout));
+        }
+
+        var probe = StartProbe(folder, token);
         try
         {
             if (!probe.Wait(ReachTimeout))
             {
+                s_stuckProbes[folder] = probe;
+                _ = probe.ContinueWith(static (done, key) => s_stuckProbes.TryRemove(new KeyValuePair<string, Task<FileAttributes>>((string)key!, done)), folder,
+                    CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 return UncText.Unreachable(share.Name, root, UncText.TimedOut(ReachTimeout));
             }
 
@@ -359,6 +413,67 @@ public sealed class UncAccess
             return ReachReason(share, root, inner);
         }
     }
+
+    /// <summary>The probes given up at their timeout and not yet ended, by folder (review P11).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<FileAttributes>> s_stuckProbes =
+        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+    /// <summary>
+    /// <c>File.GetAttributes(folder)</c> on a background thread of its own, nothing flowing into it, impersonating <paramref name="token"/>
+    /// when there is one; the handle is held (<see cref="System.Runtime.InteropServices.SafeHandle.DangerousAddRef"/>) until the read ends,
+    /// so the caller's dispose never closes it under the probe (review H14).
+    /// </summary>
+    private static Task<FileAttributes> StartProbe(string folder, SafeAccessTokenHandle? token)
+    {
+        var done = new TaskCompletionSource<FileAttributes>(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool held = false;
+        token?.DangerousAddRef(ref held);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                done.SetResult(held && OperatingSystem.IsWindows() ? ReadImpersonated(token!, folder) : File.GetAttributes(folder));
+            }
+            catch (Exception ex)
+            {
+                done.SetException(ex);
+            }
+            finally
+            {
+                if (held)
+                {
+                    token!.DangerousRelease();
+                }
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "UNC preflight",
+        };
+
+        try
+        {
+            using (ExecutionContext.SuppressFlow())
+            {
+                thread.Start();
+            }
+        }
+        catch
+        {
+            if (held)
+            {
+                token!.DangerousRelease();
+            }
+
+            throw;
+        }
+
+        return done.Task;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static FileAttributes ReadImpersonated(SafeAccessTokenHandle token, string folder) =>
+        WindowsIdentity.RunImpersonated(token, () => File.GetAttributes(folder));
 
     private static bool IsReachFailure(Exception ex) => ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or NotSupportedException;
 

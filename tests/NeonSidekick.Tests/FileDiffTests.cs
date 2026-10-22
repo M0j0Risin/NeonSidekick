@@ -92,7 +92,9 @@ public sealed class FileDiffTests : IDisposable
         Assert.Equal([8, 9], rows.Select(r => r!.Value.Number));
         Assert.All(rows, r => Assert.Equal('+', r!.Value.Sign));
         Assert.False(diff.Created);
-        Assert.True(FileDiff.Appended("log.md", 0, "x")!.Created);
+        Assert.True(FileDiff.Appended("log.md", 0, "x", existed: false)!.Created);
+        // An empty file that was there is not created by an append (2026-10-22, review M11).
+        Assert.False(FileDiff.Appended("log.md", 0, "x")!.Created);
         Assert.Null(FileDiff.Appended("log.md", 3, ""));
     }
 

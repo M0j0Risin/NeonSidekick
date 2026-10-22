@@ -1412,6 +1412,14 @@ public sealed class Assistant
     public ConversationHistory History => _history;
 
     /// <summary>
+    /// Asks the user about a model write to the project file (2026-10-22, review P1, the fix plan's D2): the full path, then true to run the
+    /// call again with the file allowed, false for a no, null when no pane could ask. Asked only while the turn offers <c>ask_user</c>
+    /// (<see cref="NeonSidekick.Llm.Tools.AskUserTool"/>): a pass that may not ask (a Ralph pass with its asks barred, a gap or audit pass without it) never
+    /// stops on it, and the refusal stands. Null (headless, an advisor's, a bot's) leaves every such write refused.
+    /// </summary>
+    public Func<string, CancellationToken, Task<bool?>>? ProjectFileAsk { get; set; }
+
+    /// <summary>
     /// The tools the next turn offers. Settable because the shell decides per turn what a turn may
     /// do (memory on or off), the same way it sets <see cref="ConversationHistory.SystemPrompt"/>;
     /// a turn reads it once, at its start.
@@ -1873,7 +1881,7 @@ public sealed class Assistant
                 // A call the length limit cut off (2026-10-18) is answered by why the reply ended, never run; any other parse failure as before.
                 (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) invoked = cutOff && call.Exception is not null
                     ? (CutOffAnswer(call.Name, usage, cutOffTools), [], null, null)
-                    : await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
+                    : await InvokeGuardedAsync(call, cancellationToken).ConfigureAwait(false);
                 var (result, pictures, diff, shown) = invoked;
                 // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
                 // copy of the result says so, so it never describes a picture it was not shown.
@@ -2498,6 +2506,42 @@ public sealed class Assistant
     /// always attach the <c>CallId</c>. Only cancellation escapes. Static, so a side loop
     /// (<see cref="Skills.SkillLearner"/>) runs its own tools through the same rules.
     /// </summary>
+    /// <summary>
+    /// One of the turn's own calls, watched for a project-file refusal (2026-10-22, <see cref="Files.WriteGuard"/>): with someone to ask
+    /// (<see cref="ProjectFileAsk"/> and <c>ask_user</c> offered), a yes runs the call again with the file allowed for that one call — the
+    /// refused attempt wrote nothing — and a no answers <see cref="Files.FileText.ProjectFileDeclined"/>.
+    /// </summary>
+    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown)> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
+    {
+        var slot = new Files.ProjectFileSlot();
+        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) answer;
+        using (Files.WriteGuard.Watch(slot))
+        {
+            answer = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (slot.Path is not { } refused || ProjectFileAsk is not { } ask || !_tools.Any(t => string.Equals(t.Name, NeonSidekick.Llm.Tools.AskUserTool.ToolName, StringComparison.Ordinal)))
+        {
+            return answer;
+        }
+
+        bool? allowed = await ask(refused, cancellationToken).ConfigureAwait(false);
+        if (allowed is null)
+        {
+            return answer;
+        }
+
+        if (allowed == false)
+        {
+            return (Files.FileText.ProjectFileDeclined(Path.GetFileName(refused)), [], null, null);
+        }
+
+        using (Files.WriteGuard.AllowProjectFile())
+        {
+            return await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>The result for a tool that threw (2026-09-18: <c>Error: boom failed: kaboom</c>, the <c>Error:</c> prefix every other tool sentence carries; <c>Error executing tool '…'</c> before). Pinned.</summary>
     public static string ToolFailed(string name, string message) => $"Error: {name} failed: {message}";
 

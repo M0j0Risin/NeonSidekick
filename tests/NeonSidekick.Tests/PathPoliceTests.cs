@@ -392,7 +392,7 @@ public sealed class PathPoliceTests
     [Fact]
     public void TheLists_ArePinned()
     {
-        Assert.Equal(["USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "OLDPWD"], PathPolice.FolderVariables);
+        Assert.Equal(["USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "OLDPWD", "PROFILE", "PSHOME", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432", "ONEDRIVECONSUMER", "ONEDRIVECOMMERCIAL", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"], PathPolice.FolderVariables);   // the last twelve since 2026-10-22 (review L5)
         Assert.Equal(["expanduser(", "Path.home(", "homedir(", "tmpdir(", "gettempdir(", "GetFolderPath(", "GetTempPath("], PathPolice.FolderCalls);
         foreach (string name in PathPolice.FolderVariables)
         {

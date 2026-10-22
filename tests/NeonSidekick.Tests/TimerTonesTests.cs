@@ -159,6 +159,9 @@ public class TimerTonesTests
         var second = player.PlayAsync(TimerTones.Beep, CancellationToken.None, replace: true);
 
         await first.WaitAsync(TimeSpan.FromSeconds(10));
+        // The replacing play opens its device on its own continuation after the first ends (2026-10-22: a CI-like run on two cores
+        // checked the count before it had, the flake open since 2026-10-21): waited for, as the other steps are.
+        Assert.True(SpinWait.SpinUntil(() => _devices.Count == 2 && _devices[1].Writes.Count == 1, TimeSpan.FromSeconds(10)));
         Assert.NotSame(first, second);
         Assert.Equal(2, _devices.Count);
         Assert.Equal(1, _devices[0].Cleared);

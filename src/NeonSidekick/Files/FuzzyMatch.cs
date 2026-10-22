@@ -77,6 +77,9 @@ public enum MatchOutcome
     /// <summary>Several matches under <c>replace_all</c>, but by an approximate strategy.</summary>
     ApproximateAll,
     EscapeDrift,
+
+    /// <summary>The edited text would pass <see cref="FuzzyMatch.MaxResultChars"/> (2026-10-22, review V2), nothing built.</summary>
+    TooLarge,
 }
 
 /// <summary>
@@ -167,6 +170,13 @@ public static class FuzzyMatch
             return Unchanged(MatchOutcome.Same, content);
         }
 
+        // A retry of an edit whose new text holds the old (2026-10-22, review G10: the old text still matched inside the new one, so a
+        // re-sent "foo" → "foo bar" made "foo bar bar"): done already when every place the old text stands is inside the new text.
+        if (IsAppliedAround(content, oldText, newText))
+        {
+            return Unchanged(MatchOutcome.AlreadyApplied, content);
+        }
+
         foreach (var strategy in Chain)
         {
             var spans = Find(strategy, content, oldText);
@@ -194,7 +204,20 @@ public static class FuzzyMatch
                 }
             }
 
-            var sb = new StringBuilder(content.Length);
+            // The result's size before it is built (2026-10-22, review V2: replace_all of 40,000 matches with a 50,000-character new_text
+            // grew a StringBuilder past 2 GB). The shaped text can differ from new_text by its indentation, so the bound is new_text's length.
+            long projected = content.Length;
+            foreach (var span in spans)
+            {
+                projected += newText.Length - span.Length;
+            }
+
+            if (projected > MaxResultChars)
+            {
+                return new FuzzyResult(MatchOutcome.TooLarge, content, strategy, spans, [], []);
+            }
+
+            var sb = new StringBuilder((int)Math.Max(projected, 0));
             var placed = new List<TextSpan>(spans.Count);
             int copied = 0;
             foreach (var span in spans)
@@ -213,6 +236,9 @@ public static class FuzzyMatch
 
         return Unchanged(IsAlreadyApplied(content, oldText, newText) ? MatchOutcome.AlreadyApplied : MatchOutcome.NotFound, content);
     }
+
+    /// <summary>The most characters an edited text may hold: what <c>read_file</c> can still open (review V2).</summary>
+    public const long MaxResultChars = WorkingDirectory.MaxReadFileBytes;
 
     private static FuzzyResult Unchanged(MatchOutcome outcome, string content) => new(outcome, content, MatchStrategy.Exact, [], [], []);
 
@@ -594,13 +620,21 @@ public static class FuzzyMatch
 
         string first = Anchor(want[0]);
         string last = Anchor(want[n - 1]);
+        // Each line's anchor once, and the candidates capped (2026-10-22, review V7: a 30-line patch on a 40,000-line file scored every
+        // "}" … "}" pair with a full ratio, seconds to minutes).
+        string[] anchors = lines.Select(Anchor).ToArray();
         var candidates = new List<int>();
-        for (int i = 0; i + n <= lines.Length; i++)
+        for (int i = 0; i + n <= lines.Length && candidates.Count <= MaxAnchorCandidates; i++)
         {
-            if (string.Equals(Anchor(lines[i]), first, StringComparison.Ordinal) && string.Equals(Anchor(lines[i + n - 1]), last, StringComparison.Ordinal))
+            if (string.Equals(anchors[i], first, StringComparison.Ordinal) && string.Equals(anchors[i + n - 1], last, StringComparison.Ordinal))
             {
                 candidates.Add(i);
             }
+        }
+
+        if (candidates.Count > MaxAnchorCandidates)
+        {
+            return [];
         }
 
         if (candidates.Count == 0)
@@ -620,7 +654,8 @@ public static class FuzzyMatch
                 continue;
             }
 
-            double score = n > 2 ? SequenceSimilarity.Ratio(string.Join('\n', lines, i + 1, n - 2), middle) : 1.0;
+            string between = n > 2 ? string.Join('\n', lines, i + 1, n - 2) : "";
+            double score = n <= 2 ? 1.0 : CanReach(between, middle, threshold) ? SequenceSimilarity.Ratio(between, middle) : 0;
             if (score >= threshold)
             {
                 spans.Add(WindowSpan(content, starts, lines, i, n, trailing));
@@ -642,7 +677,9 @@ public static class FuzzyMatch
         string[] want = (trailing ? pattern[..^1] : pattern).Split('\n');
         int n = want.Length;
         string[] lines = content.Split('\n');
-        if (n > lines.Length)
+        // One line alone is never matched by its likeness (2026-10-22, review G11: an absent "x = 1" edited "y = 1"): a similarity is only
+        // trusted with lines around it to agree.
+        if (n < 2 || n > lines.Length)
         {
             return [];
         }
@@ -673,8 +710,22 @@ public static class FuzzyMatch
     private static bool LineSimilar(string line, string wantedTrimmed)
     {
         string have = line.Trim();
-        return string.Equals(have, wantedTrimmed, StringComparison.Ordinal) || SequenceSimilarity.Ratio(have, wantedTrimmed) >= LineThreshold;
+        return string.Equals(have, wantedTrimmed, StringComparison.Ordinal)
+            || (CanReach(have, wantedTrimmed, LineThreshold) && SequenceSimilarity.Ratio(have, wantedTrimmed) >= LineThreshold);
     }
+
+    /// <summary>
+    /// Whether two texts' lengths allow a ratio of <paramref name="threshold"/> at all — 2·min ÷ (a + b) is the most a ratio can be — so the
+    /// full ratio is never worked out for a pair that can't reach it (2026-10-22, review V7).
+    /// </summary>
+    private static bool CanReach(string a, string b, double threshold)
+    {
+        int total = a.Length + b.Length;
+        return total == 0 || 2.0 * Math.Min(a.Length, b.Length) / total >= threshold;
+    }
+
+    /// <summary>The most anchor pairs a block match scores; past it the match is too loose to trust (2026-10-22, review V7).</summary>
+    public const int MaxAnchorCandidates = 200;
 
     // ---- the orchestrator's helpers ----
 
@@ -682,6 +733,38 @@ public static class FuzzyMatch
     /// Whether a re-sent edit is done already: <paramref name="newText"/> (at least <see cref="MinAppliedChars"/>
     /// trimmed) is in the text exactly and <paramref name="oldText"/> is not.
     /// </summary>
+    public static bool IsAppliedAround(string content, string oldText, string newText)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(oldText);
+        ArgumentNullException.ThrowIfNull(newText);
+        int inner = newText.IndexOf(oldText, StringComparison.Ordinal);
+        if (inner < 0 || newText.Trim().Length < MinAppliedChars || !content.Contains(newText, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Where the new text stands, and where the old text would sit inside each.
+        var covered = new HashSet<int>();
+        for (int at = content.IndexOf(newText, StringComparison.Ordinal); at >= 0; at = content.IndexOf(newText, at + 1, StringComparison.Ordinal))
+        {
+            for (int o = newText.IndexOf(oldText, StringComparison.Ordinal); o >= 0; o = newText.IndexOf(oldText, o + 1, StringComparison.Ordinal))
+            {
+                covered.Add(at + o);
+            }
+        }
+
+        for (int at = content.IndexOf(oldText, StringComparison.Ordinal); at >= 0; at = content.IndexOf(oldText, at + 1, StringComparison.Ordinal))
+        {
+            if (!covered.Contains(at))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public static bool IsAlreadyApplied(string content, string oldText, string newText)
     {
         ArgumentNullException.ThrowIfNull(content);

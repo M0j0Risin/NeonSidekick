@@ -88,9 +88,13 @@ public static class RecycleBin
         return null;
     }
 
-    /// <summary>The shell's answer read whole: 0 with nothing aborted is the bin; an abort (the docs: 0 can come back on a cancel) or a code refuses.</summary>
-    public static RecycleResult MapWindows(int code, bool aborted) =>
-        aborted ? new RecycleResult(RecycleOutcome.Failed, FileText.RecycleCancelled)
+    /// <summary>
+    /// The shell's answer read whole: an item the bin could not take refuses first (2026-10-22, review J1: it was deleted for good and called
+    /// recycled), then 0 with nothing aborted is the bin; an abort (the docs: 0 can come back on a cancel) or a code refuses.
+    /// </summary>
+    public static RecycleResult MapWindows(int code, bool aborted, bool notRecyclable = false) =>
+        notRecyclable ? new RecycleResult(RecycleOutcome.Failed, FileText.RecycleWouldDeleteForGood)
+        : aborted ? new RecycleResult(RecycleOutcome.Failed, FileText.RecycleCancelled)
         : code == 0 ? new RecycleResult(RecycleOutcome.Recycled)
         : new RecycleResult(RecycleOutcome.Failed, FileText.RecycleRefused(code));
 
@@ -129,6 +133,7 @@ public static class RecycleBin
         }
 
         thread.Start();
+        // Past the cap the move may still finish (2026-10-22, review H18: reported failed, the folder then vanished): said so, never "failed".
         return thread.Join(cap) && result is { } done ? done : new RecycleResult(RecycleOutcome.Failed, FileText.RecycleNoAnswer);
     }
 
@@ -171,13 +176,77 @@ public static class FileDeletes
         }
         else if (isDirectory)
         {
-            Directory.Delete(fullPath, recursive: true);
+            DeleteTreeForGood(fullPath);
         }
         else
         {
-            File.Delete(fullPath);
+            DeleteFileForGood(fullPath);
         }
 
         return noBin ? DeleteWay.DeletedNoBin : DeleteWay.Deleted;
+    }
+
+    /// <summary>
+    /// A file deleted for good, once more with its read-only mark off when the first try is refused (2026-10-22, review O6: the purge's
+    /// delete had that retry, the model's did not).
+    /// </summary>
+    private static void DeleteFileForGood(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (UnauthorizedAccessException) when (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReadOnly) != 0)
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A folder and all in it deleted for good (2026-10-22, review O6): a refusal partway takes the read-only marks off what is left and tries
+    /// once more; what still stands is said honestly — how much went and how much is left — rather than a bare "access denied" over a tree
+    /// already mostly gone. Never through a link inside it.
+    /// </summary>
+    private static void DeleteTreeForGood(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ClearReadOnly(path);
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            int left = Directory.Exists(path)
+                ? new DirectoryInfo(path).EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 }).Take(100_000).Count()
+                : 0;
+            throw new IOException(FileText.PartlyDeleted(left, ex.Message), ex);
+        }
+    }
+
+    private static void ClearReadOnly(string path)
+    {
+        foreach (var info in new DirectoryInfo(path).EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
+        {
+            try
+            {
+                if ((info.Attributes & FileAttributes.ReadOnly) != 0)
+                {
+                    info.Attributes &= ~FileAttributes.ReadOnly;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
     }
 }

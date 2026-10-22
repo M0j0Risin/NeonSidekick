@@ -235,13 +235,21 @@ public sealed class UncShareConfig
             }
         }
 
+        string folded;
         try
         {
-            UncPath.Normalize(text, windows: true);
+            folded = UncPath.Normalize(text, windows: true);
         }
         catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
         {
             return UncText.BadPath(text);
+        }
+
+        // The whole drive judged by the folded path (2026-10-22, review V8: C:\Temp\.. and C:\. passed the spelling's check and rooted the
+        // share at C:\), as a Mac's side folds first.
+        if (UncPath.IsDrivePath(folded) && folded[3..].Trim('\\').Length == 0)
+        {
+            return UncText.WholeDrive(folded[..2]);
         }
 
         return null;

@@ -70,7 +70,7 @@ public sealed class ImageColorTests
     [Theory]
     [InlineData("#fff", 255, 255, 255, 255)]
     [InlineData("#FF8000", 255, 255, 128, 0)]
-    [InlineData("80ff0000", 128, 255, 0, 0)]
+    [InlineData("ff000080", 128, 255, 0, 0)]   // #rrggbbaa, CSS's order (2026-10-22, review R9; #aarrggbb until then)
     [InlineData(" White ", 255, 255, 255, 255)]
     [InlineData("transparent", 0, 0, 0, 0)]
     public void TryParseColor_HexAndNames(string text, int a, int r, int g, int b)

@@ -531,6 +531,13 @@ NeonSidekick.Viewer.PdfView.Clear();
 // A Mac's share mounts (2026-10-11) go with the run: none is left in /Volumes (one NetFS is still making as the process ends aside).
 NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
 
+// What a foreground command left running ends with the app (2026-10-22, review F1/F2, the fix plan's D9): on Windows its kept
+// kill-on-close job closes with the process; a Mac's groups are killed here, as the exit signals kill them.
+if (OperatingSystem.IsMacOS())
+{
+    NeonSidekick.Shell.ShellGroups.Current?.KillTracked();
+}
+
 // A change made in the last quarter-second before quitting must not be lost to the debounce.
 await settings.FlushAsync().ConfigureAwait(false);
 

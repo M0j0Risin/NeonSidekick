@@ -37,18 +37,35 @@ public sealed class ShellRunner
     public static string NewId(Random random, string prefix)
     {
         ArgumentNullException.ThrowIfNull(random);
-        return prefix + random.Next(0, 0x1000000).ToString("x6", CultureInfo.InvariantCulture);
+        // Never one handed out before in this run (2026-10-22, review F5: two parallel runs could share an id and one spill log).
+        lock (s_issued)
+        {
+            while (true)
+            {
+                string id = prefix + random.Next(0, 0x1000000).ToString("x6", CultureInfo.InvariantCulture);
+                if (s_issued.Add(id))
+                {
+                    return id;
+                }
+            }
+        }
     }
+
+    private static readonly HashSet<string> s_issued = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Starts <paramref name="launch"/> as <paramref name="id"/>; the session is the caller's to wait on, kill and dispose. On Windows
     /// the child runs in a job of its own (2026-10-12, the shell review), so a kill ends everything it started; with <paramref name="tiedToApp"/>
     /// (a background command, the user's call) the job is kill-on-close, so the app's end, a crash too, and the session's dispose end
-    /// what is left of it. It is started suspended inside the job (2026-10-19, the third shell review, <see cref="EmbeddedLlm.ChildJob.StartPiped"/>),
+    /// what is left of it. Without it (a foreground command: <c>run_command</c>, <c>execute_code</c>, <c>/cmd</c>, the Ralph check) the job
+    /// is kill-on-close too since 2026-10-22 (review F1/F2, the fix plan's D9: F1 wins, at exit only): the dispose keeps it
+    /// (<see cref="EmbeddedLlm.ChildJob.KeepUntilExit"/>), so a program the command opened outlives the command, as before, and ends with
+    /// the app or its crash; before, it outlived the app too, untracked by <c>/process</c>. It is started suspended inside the job (2026-10-19, the third shell review, <see cref="EmbeddedLlm.ChildJob.StartPiped"/>),
     /// so nothing it starts is born outside; only where that cannot be done (.NET's process-start lock not found, an executable that is
     /// not a full path) is it put in one right after <c>Process.Start</c>, as before (<see cref="EmbeddedLlm.ChildJob.CreateOwn"/>). On a Mac the child
     /// leads a session of its own instead (<see cref="GroupChild"/>): a kill ends its group, and with <paramref name="tiedToApp"/> the
-    /// session's dispose ends what is left of it; a crash does not.
+    /// session's dispose ends what is left of it; a crash does not. A foreground command's group stays tracked after its leader is reaped
+    /// while anything in it runs (2026-10-22, review F2), so the app's exit kill reaches it.
     /// </summary>
     /// <exception cref="ShellStartException">The program could not be started (missing, refused, not a program).</exception>
     public ProcessSession Start(ProcessLaunch launch, string id, bool tiedToApp = false)
@@ -68,10 +85,10 @@ public sealed class ShellRunner
         {
             var environment = new ProcessStartInfo();
             ChildEnvironment.Apply(environment, launch);
-            var piped = EmbeddedLlm.ChildJob.StartPiped(launch.Executable, WindowsCommandLine(launch), launch.WorkingDirectory, environment.Environment, tiedToApp, out string error);
+            var piped = EmbeddedLlm.ChildJob.StartPiped(launch.Executable, WindowsCommandLine(launch), launch.WorkingDirectory, environment.Environment, killOnClose: true, out string error);
             if (piped is not null)
             {
-                return new ProcessChild(piped);
+                return new ProcessChild(piped, keepUntilExit: !tiedToApp);
             }
 
             if (error.Length > 0)
@@ -122,7 +139,7 @@ public sealed class ShellRunner
             throw new ShellStartException(ShellText.CouldNotStart(Path.GetFileName(launch.Executable), "no process"));
         }
 
-        return new ProcessChild(process, killOnClose: tiedToApp);
+        return new ProcessChild(process, keepUntilExit: !tiedToApp);
     }
 
     /// <summary>The command line <c>Process.Start</c> would give <paramref name="launch"/>: the executable quoted, then its argument list or its raw arguments.</summary>

@@ -63,7 +63,7 @@ public sealed class PdfEditing
 
         string? to = string.IsNullOrWhiteSpace(request.To) ? null : request.To.Trim();
         bool named = to is not null && !PdfPlan.IntoFolder(to, IsFolder);
-        if (named && Target(PdfPlan.WithPdf(to!), request.Overwrite) is { } badTarget)
+        if (named && (request.ByUser ? WriteGuard.AsApp(() => Target(PdfPlan.WithPdf(to!), request.Overwrite)) : Target(PdfPlan.WithPdf(to!), request.Overwrite)) is { } badTarget)
         {
             return badTarget;
         }
@@ -82,7 +82,8 @@ public sealed class PdfEditing
         }
 
         string target = PdfPlan.OutputFor(to, first, null, null, _time.GetLocalNow(), IsFolder, PdfEditPlan.Suffix(request.Op, edit.Pages));
-        var written = Write(target, edit.Output!, named, request.Overwrite);
+        // The user's own /pdf writes with the app's pass (2026-10-22, the write guard); the model's pdf_edit is judged.
+        var written = request.ByUser ? WriteGuard.AsApp(() => Write(target, edit.Output!, named, request.Overwrite)) : Write(target, edit.Output!, named, request.Overwrite);
         string result = PdfText.Edited(written, edit.PageCount, PdfEditPlan.WhatWasDone(request, displays, edit.Pages));
         DiagnosticLog.Info(PdfText.Category, result);
         return result;

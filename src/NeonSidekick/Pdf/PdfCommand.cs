@@ -41,6 +41,25 @@ public static class PdfCommand
 
     public const string PathsWord = "paths=";
 
+    /// <summary>Whether <paramref name="word"/> is <c>overwrite</c> or <c>landscape</c>, an option with no <c>=</c>.</summary>
+    private static bool IsBareFlag(string word) =>
+        string.Equals(word, PdfText.OverwriteWord, StringComparison.OrdinalIgnoreCase) || string.Equals(word, PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Where the options at the line's end begin (2026-10-22, review S10: <c>/pdf Q3 overwrite plan.md</c> took "overwrite" from the middle
+    /// of the name, turned it on and made "Q3 plan.md"): a bare option word counts only when every word after it is an option too.
+    /// </summary>
+    private static int FlagsFrom(IReadOnlyList<string> words)
+    {
+        int at = words.Count;
+        while (at > 0 && (IsBareFlag(words[at - 1]) || words[at - 1].Contains('=', StringComparison.Ordinal)))
+        {
+            at--;
+        }
+
+        return at;
+    }
+
     /// <summary>Whether <paramref name="word"/> is an edit verb.</summary>
     public static bool IsEditVerb(string word) => EditVerbs.Any(v => string.Equals(v, word, StringComparison.OrdinalIgnoreCase));
 
@@ -64,8 +83,17 @@ public static class PdfCommand
         bool overwrite = false;
         var paths = new List<string>();
         var target = new List<string>();
-        foreach (string word in words.Skip(1))
+        var rest = words.Skip(1).ToList();
+        int flagsFrom = FlagsFrom(rest);
+        for (int i = 0; i < rest.Count; i++)
         {
+            string word = rest[i];
+            if (i < flagsFrom && IsBareFlag(word))
+            {
+                target.Add(word);   // a word of the path, not an option (review S10)
+                continue;
+            }
+
             if (word.StartsWith(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
             {
                 to = word[PdfText.ToWord.Length..];
@@ -110,7 +138,7 @@ public static class PdfCommand
             paths.Insert(0, string.Join(' ', target));
         }
 
-        return (new PdfEditRequest(op, paths, pages, angle, null, false, to, overwrite), null);
+        return (new PdfEditRequest(op, paths, pages, angle, null, false, to, overwrite, ByUser: true), null);
     }
 
     /// <summary><paramref name="args"/> taken apart. Pure.</summary>
@@ -122,8 +150,17 @@ public static class PdfCommand
         bool landscape = false;
         bool overwrite = false;
         var target = new List<string>();
-        foreach (string word in PrintCommand.Words(args))
+        var all = PrintCommand.Words(args).ToList();
+        int flagsFrom = FlagsFrom(all);
+        for (int i = 0; i < all.Count; i++)
         {
+            string word = all[i];
+            if (i < flagsFrom && IsBareFlag(word))
+            {
+                target.Add(word);   // review S10
+                continue;
+            }
+
             if (word.StartsWith(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
             {
                 to = word[PdfText.ToWord.Length..];
@@ -203,7 +240,7 @@ public static class PdfCommand
                 return PdfText.NoReply;
             }
 
-            request = new PdfRequest(Markdown: reply, Title: PrintText.ReplyTitle);
+            request = new PdfRequest(Markdown: reply, Title: PrintText.ReplyTitle, ByUser: true);
         }
         else if (IsWebAddress(parsed.Target))
         {
@@ -212,11 +249,11 @@ public static class PdfCommand
                 return Web.WebText.NotHttp(parsed.Target);
             }
 
-            request = new PdfRequest(Url: url);
+            request = new PdfRequest(Url: url, ByUser: true);
         }
         else
         {
-            request = new PdfRequest(Path: parsed.Target);
+            request = new PdfRequest(Path: parsed.Target, ByUser: true);
         }
 
         request = request with { To = parsed.To, Overwrite = parsed.Overwrite, Landscape = parsed.Landscape, Paper = parsed.Paper };

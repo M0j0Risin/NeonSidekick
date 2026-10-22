@@ -163,6 +163,7 @@ public static partial class SmokeChecks
         results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());
         results.Add(ProbeRecycleBin());   // later on 2026-10-15: File deletes to Recycle bin
+        results.Add(ProbeQuarantine());   // 2026-10-22: unzip carries a Mac archive's quarantine
         results.Add(ProbeSqlite());
         results.Add(ProbeWebUi());
         results.Add(ProbePostgres());

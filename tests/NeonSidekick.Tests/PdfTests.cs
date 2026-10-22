@@ -225,12 +225,54 @@ public sealed class PdfTests : IDisposable
         string html = PdfHtmlSanitizer.Rewrite(
             "<link rel=\"stylesheet\" href=\"s.css\"><link rel=\"stylesheet\" href=\"gone.css\"><style>p > b { color: red }</style><p>x</p>",
             PdfPaperSize.A4, landscape: true, address => address == "s.css" ? Encoding.UTF8.GetBytes("body{color:blue}</style>") : null);
-        Assert.Contains("<style>body{color:blue}<\\/style></style>", html, StringComparison.Ordinal);
+        // 2026-10-22, review S2: every '<' in a style body is the CSS escape \3c now (it was "</" → "<\/" for an inlined sheet alone).
+        Assert.Contains("<style>body{color:blue}\\3c /style></style>", html, StringComparison.Ordinal);
         Assert.Contains("<style>p > b { color: red }</style>", html, StringComparison.Ordinal);
         Assert.Contains("size: A4 landscape", html, StringComparison.Ordinal);
         Assert.DoesNotContain("gone.css", html, StringComparison.Ordinal);
         Assert.DoesNotContain("<!DOCTYPE", html, StringComparison.Ordinal);   // the page had none
     }
+
+    /// <summary>
+    /// 2026-10-22, review S2: inside SVG a <c>style</c> body is parsed as markup, so a meta refresh written there came back as a live tag.
+    /// No <c>&lt;</c> survives in any style body now, written or inlined.
+    /// </summary>
+    [Fact]
+    public void Sanitizer_AStyleInsideSvg_CarriesNoTag()
+    {
+        const string page = "<svg><style><meta http-equiv=\"refresh\" content=\"0;url=file:///C:/Users/x/.ssh/id_rsa\"></style></svg>"
+            + "<link rel=\"stylesheet\" href=\"s.css\"><p>x</p>";
+        string html = PdfHtmlSanitizer.Rewrite(page, PdfPaperSize.A4, landscape: false,
+            address => address == "s.css" ? Encoding.UTF8.GetBytes("a{content:\"<\"}<svg><style><meta http-equiv=refresh>") : null);
+        Assert.DoesNotContain("<meta http-equiv=\"refresh\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<meta http-equiv=refresh", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<style>\\3c meta http-equiv=\"refresh\"", html, StringComparison.Ordinal);
+        Assert.Contains("a{content:\"\\3c \"}", html, StringComparison.Ordinal);
+    }
+
+    /// <summary>2026-10-22, review S7: a script link survives no spelling a browser still reads as one, in <c>href</c> or <c>xlink:href</c>.</summary>
+    [Theory]
+    [InlineData("<a href=\"java&#9;script:alert(1)\">j</a>")]
+    [InlineData("<a href=\"  JavaScript:alert(1)\">j</a>")]
+    [InlineData("<a href=\"java&#10;script:alert(1)\">j</a>")]
+    [InlineData("<a href=\"&#1;javascript:alert(1)\">j</a>")]
+    [InlineData("<a href=\"vbscript:msgbox(1)\">j</a>")]
+    [InlineData("<a href=\"data:text/html,<script>x()</script>\">j</a>")]
+    [InlineData("<svg><a xlink:href=\"javascript:alert(1)\"><text>j</text></a></svg>")]
+    public void Sanitizer_DropsEveryScriptLinkSpelling(string page)
+    {
+        string html = PdfHtmlSanitizer.Rewrite(page, PdfPaperSize.A4, landscape: false, _ => null);
+        Assert.DoesNotContain("href", html, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/a:b")]
+    [InlineData("notes/a.md")]
+    [InlineData("#top")]
+    [InlineData("mailto:x@example.com")]
+    [InlineData("data:image/png;base64,AAAA")]
+    [InlineData("a/b:c")]
+    public void Sanitizer_KeepsOrdinaryLinks(string link) => Assert.True(PdfHtmlSanitizer.SafeLink(link));
 
     // ── the decisions ───────────────────────────────────────────────────────
 
@@ -367,6 +409,43 @@ public sealed class PdfTests : IDisposable
         Assert.Equal("Made example.com-intro.pdf (21 B) from https://example.com/docs/intro.html with msedge", result);
         Assert.Equal(new Uri("https://example.com/docs/intro.html"), Assert.Single(_browser.PdfRuns).Page);
         Assert.Empty(_browser.PdfPages);
+
+        // 2026-10-22, review R1: the print is held to the address the network mode approved, so a redirect elsewhere fails.
+        Assert.Equal(new PrintReach("example.com", IPAddress.Parse("93.184.216.34")), Assert.Single(_browser.PdfReaches));
+    }
+
+    /// <summary>2026-10-22, review R1: a page the app wrote reaches nothing, and under <c>both</c> a web page is not pinned.</summary>
+    [Fact]
+    public async Task APrint_IsHeldToItsReach()
+    {
+        Write("a.md", "# a");
+        Assert.StartsWith("Made", await Convert(new PdfRequest(Path: "a.md")), StringComparison.Ordinal);
+        Assert.Same(PrintReach.Nothing, Assert.Single(_browser.PdfReaches));
+
+        _settings.WebBrowserNetworkMode = "both";
+        Assert.StartsWith("Made", await Convert(new PdfRequest(Url: new Uri("https://example.com/b.html"))), StringComparison.Ordinal);
+        Assert.Null(_browser.PdfReaches[^1]);
+    }
+
+    [Fact]
+    public void PrintReach_Flags_Pinned()
+    {
+        Assert.Equal(
+            ["--host-resolver-rules=MAP * ~NOTFOUND", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=<-loopback>"],
+            PrintReach.Nothing.Flags());
+        Assert.Equal(
+            ["--host-resolver-rules=MAP example.com 93.184.216.34, MAP * ~NOTFOUND", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=example.com;<-loopback>"],
+            PrintReach.For("example.com", [IPAddress.Parse("93.184.216.34"), IPAddress.Parse("93.184.216.35")]).Flags());
+        Assert.Equal(
+            "--host-resolver-rules=MAP v6.example [2001:db8::1], MAP * ~NOTFOUND",
+            PrintReach.For("v6.example", [IPAddress.Parse("2001:db8::1")]).Flags()[0]);
+        Assert.Equal(
+            ["--host-resolver-rules=MAP * ~NOTFOUND", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=10.0.0.5;<-loopback>"],
+            PrintReach.For("10.0.0.5", []).Flags());
+        Assert.Equal(IPAddress.Loopback, PrintReach.For("localhost", []).Address);
+        Assert.Same(PrintReach.Nothing, PrintReach.For("gone.example", []));
+        var args = HeadlessBrowser.PdfArguments(new Uri("https://example.com/"), "o.pdf", "d", isWeb: true, Chrome154, PrintReach.Nothing);
+        Assert.Contains("--proxy-server=127.0.0.1:9", args);
     }
 
     [Fact]
@@ -396,7 +475,6 @@ public sealed class PdfTests : IDisposable
 
         Assert.Equal(PdfText.OneSource, await Convert(new PdfRequest()));
         Assert.Equal(PdfText.OneSource, await Convert(new PdfRequest(Path: "notes.md", Markdown: "x")));
-        Assert.Equal(FileText.Exists("notes.pdf"), await Convert(new PdfRequest(Path: "notes.md")));
         Assert.Equal(FileText.OutsideRoot("../x.pdf"), await Convert(new PdfRequest(Path: "notes.md", To: "../x.pdf")));
         Assert.Equal(FileText.OutsideRoot("../notes.md"), await Convert(new PdfRequest(Path: "../notes.md")));
         Assert.Equal(FileText.Missing("gone.md"), await Convert(new PdfRequest(Path: "gone.md")));
@@ -405,7 +483,13 @@ public sealed class PdfTests : IDisposable
         Assert.Empty(_browser.PdfRuns);
         Assert.Equal("already", File.ReadAllText(Path.Combine(_root, "notes.pdf")));
 
-        Assert.StartsWith("Replaced notes.pdf", await Convert(new PdfRequest(Path: "notes.md", Overwrite: true)), StringComparison.Ordinal);
+        // An unnamed default never replaces since 2026-10-22 (review R2, the fix plan's mechanism 4): the first free name, overwrite or not;
+        // overwrite is for a named to (it was "already exists; call again with overwrite", which replaced the user's own report.pdf).
+        Assert.StartsWith("Made notes-2.pdf", await Convert(new PdfRequest(Path: "notes.md")), StringComparison.Ordinal);
+        Assert.StartsWith("Made notes-3.pdf", await Convert(new PdfRequest(Path: "notes.md", Overwrite: true)), StringComparison.Ordinal);
+        Assert.Equal("already", File.ReadAllText(Path.Combine(_root, "notes.pdf")));
+        Assert.Equal(FileText.Exists("notes.pdf"), await Convert(new PdfRequest(Path: "notes.md", To: "notes.pdf")));
+        Assert.StartsWith("Replaced notes.pdf", await Convert(new PdfRequest(Path: "notes.md", To: "notes.pdf", Overwrite: true)), StringComparison.Ordinal);
     }
 
     [Fact]

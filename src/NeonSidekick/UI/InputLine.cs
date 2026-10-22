@@ -846,6 +846,12 @@ public sealed partial class InputLine
             return string.Join(' ', pieces);
         }
 
+        // A picture on a host nobody configured stays text, and the line says why (2026-10-22, review K7, the fix plan's D13).
+        if (multiline && ImageFile.UnknownUncHost(block, documents) is { } host)
+        {
+            _notices?.Notice(Unc.UncText.PasteNotOpened(host));
+        }
+
         // A private-use glyph left on the line is a literal token (2026-10-04): the draft never reads it as a paste; a held block keeps it as it is.
         return multiline && PasteBlocks.Collapses(block) ? _pastes.Add(block).ToString() : _pastes.Literals(block);
     }

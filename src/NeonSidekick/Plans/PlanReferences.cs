@@ -202,7 +202,7 @@ public static class PlanReferences
 
             string name = Prefix + N(next);
             string path = folder + "/" + name + ExtensionFor(picture);
-            if (files.WriteBytes(path, picture.Bytes, overwrite: false).Outcome == FileOutcome.Ok)
+            if (WriteGuard.AsApp(() => files.WriteBytes(path, picture.Bytes, overwrite: false)).Outcome == FileOutcome.Ok)
             {
                 saved.Add(new PlanReference(name, path));
                 next++;

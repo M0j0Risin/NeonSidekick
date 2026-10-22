@@ -103,14 +103,22 @@ public sealed class ViewImageTool : FileTool
     /// <see cref="FileText.MorePictures"/> naming them (2026-09-18; a call with 17 was refused whole
     /// before, and the model began again in batches — now the first batch shows and the rest are spelled out).
     /// </summary>
-    public (string Text, IReadOnlyList<ImageAttachment> Images) Load(IReadOnlyList<string> paths)
+    public (string Text, IReadOnlyList<ImageAttachment> Images) Load(IReadOnlyList<string> paths) => Load(paths, CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="Load(IReadOnlyList{string})"/> under the call's token, read between pictures (2026-10-22, review I8), each path once and blank
+    /// ones left out (review K12: the same 19 MB picture went four times; review T9: blanks took the call's slots).
+    /// </summary>
+    public (string Text, IReadOnlyList<ImageAttachment> Images) Load(IReadOnlyList<string> given, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(given);
+        var paths = given.Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).ToList();
         int limit = Limit;
         var lines = new List<string>(paths.Count);
         var images = new List<ImageAttachment>(paths.Count);
         foreach (var path in paths.Take(limit))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var result = FilesFor(path).ReadImage(path);
             lines.Add(FileText.Image(result));
             if (result.Outcome == FileOutcome.Ok && result.Image is { } image)
@@ -127,12 +135,12 @@ public sealed class ViewImageTool : FileTool
         return (string.Join("\n", lines), images);
     }
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadStringList(arguments, PathsArgument, out var several, out string raw))
         {
-            return new ValueTask<object?>(FileText.BadStringList(PathsArgument, raw));
+            return FileText.BadStringList(PathsArgument, raw);
         }
 
         var paths = new List<string>(several.Count + 1);
@@ -142,13 +150,14 @@ public sealed class ViewImageTool : FileTool
             paths.Add(one);
         }
 
-        paths.AddRange(several);
+        paths.AddRange(several.Where(p => !string.IsNullOrWhiteSpace(p)));
         if (paths.Count == 0)
         {
-            return new ValueTask<object?>(NoPathError);
+            return NoPathError;
         }
 
-        var (text, images) = Load(paths);
-        return new ValueTask<object?>(images.Count > 0 ? new ToolImageResult(text, images) : text);
+        // Decoded and scaled off the turn's thread, Esc returning it (review I8).
+        var (text, images) = await Task.Run(() => Load(paths, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
+        return images.Count > 0 ? new ToolImageResult(text, images) : text;
     }
 }

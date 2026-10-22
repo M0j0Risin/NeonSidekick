@@ -55,20 +55,27 @@ internal sealed class ProcessChild : ShellChild
     private readonly StreamReader? _output;
     private readonly StreamReader? _error;
     private nint _job;
+    private readonly bool _keepUntilExit;
 
-    /// <summary>A child <c>Process.Start</c> started with its streams redirected, put in a job of its own now.</summary>
-    public ProcessChild(Process process, bool killOnClose)
+    /// <summary>
+    /// A child <c>Process.Start</c> started with its streams redirected, put in a kill-on-close job of its own now. With
+    /// <paramref name="keepUntilExit"/> (a foreground command, 2026-10-22, the fix plan's D9) the dispose hands the job to
+    /// <see cref="EmbeddedLlm.ChildJob.KeepUntilExit"/> rather than closing it: its leftovers live on until the app ends.
+    /// </summary>
+    public ProcessChild(Process process, bool keepUntilExit)
     {
         _process = process ?? throw new ArgumentNullException(nameof(process));
-        _job = EmbeddedLlm.ChildJob.CreateOwn(process, killOnClose);
+        _job = EmbeddedLlm.ChildJob.CreateOwn(process, killOnClose: true);
+        _keepUntilExit = keepUntilExit;
     }
 
     /// <summary>A child started suspended in its job (<see cref="EmbeddedLlm.ChildJob.StartPiped"/>): the streams over its pipes, UTF-8 and buffered as <c>Process.Start</c> makes them.</summary>
-    public ProcessChild(EmbeddedLlm.PipedChild piped)
+    public ProcessChild(EmbeddedLlm.PipedChild piped, bool keepUntilExit)
     {
         ArgumentNullException.ThrowIfNull(piped);
         _process = piped.Process;
         _job = piped.Job;
+        _keepUntilExit = keepUntilExit;
         var utf8 = new UTF8Encoding(false);
         _input = new StreamWriter(new FileStream(piped.Input, FileAccess.Write, StreamBuffer, isAsync: false), utf8, StreamBuffer) { AutoFlush = true };
         _output = new StreamReader(new FileStream(piped.Output, FileAccess.Read, StreamBuffer, isAsync: false), utf8, detectEncodingFromByteOrderMarks: true, StreamBuffer);
@@ -135,7 +142,15 @@ internal sealed class ProcessChild : ShellChild
         _output?.Dispose();
         _error?.Dispose();
         _process.Dispose();
-        EmbeddedLlm.ChildJob.Close(_job);
+        if (_keepUntilExit)
+        {
+            EmbeddedLlm.ChildJob.KeepUntilExit(_job);
+        }
+        else
+        {
+            EmbeddedLlm.ChildJob.Close(_job);
+        }
+
         _job = 0;
     }
 }

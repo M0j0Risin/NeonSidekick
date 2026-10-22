@@ -52,7 +52,10 @@ public sealed class FileSystemFolders : IFolderSource
         {
             try
             {
-                if (drive.IsReady)
+                // IsReady only where it answers at once (2026-10-22, review M6: on a disconnected mapped drive or an empty optical drive it
+                // waited tens of seconds, the picker frozen): a network, optical or unknown drive is listed by its letter, and a read under
+                // it answers for itself.
+                if (drive.DriveType is DriveType.Network or DriveType.CDRom or DriveType.Unknown || drive.IsReady)
                 {
                     roots.Add(drive.Name);
                 }

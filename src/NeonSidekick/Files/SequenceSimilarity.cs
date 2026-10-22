@@ -50,7 +50,13 @@ public static class SequenceSimilarity
     }
 
     /// <summary>The matching blocks, ascending in both sequences, adjacent ones merged, ending with difflib's <c>(|a|, |b|, 0)</c> sentinel.</summary>
-    public static IReadOnlyList<Block> MatchingBlocks(string a, string b)
+    public static IReadOnlyList<Block> MatchingBlocks(string a, string b) => MatchingBlocks(a, b, long.MaxValue)!;
+
+    /// <summary>
+    /// <see cref="MatchingBlocks(string, string)"/> within <paramref name="budget"/> steps of the index walk, else null (2026-10-22, review
+    /// H13: the walk is quadratic on reordered text — a sorted 40,000-row CSV took minutes of CPU after its write, for a transcript diff).
+    /// </summary>
+    public static IReadOnlyList<Block>? MatchingBlocks(string a, string b, long budget)
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
@@ -58,10 +64,16 @@ public static class SequenceSimilarity
         var queue = new Stack<(int Alo, int Ahi, int Blo, int Bhi)>();
         queue.Push((0, a.Length, 0, b.Length));
         var found = new List<Block>();
+        var walk = new Walk(budget);
         while (queue.Count > 0)
         {
             var (alo, ahi, blo, bhi) = queue.Pop();
-            var match = LongestMatch(a, b, index, alo, ahi, blo, bhi);
+            var match = LongestMatch(a, b, index, alo, ahi, blo, bhi, walk);
+            if (walk.Spent)
+            {
+                return null;
+            }
+
             if (match.Length == 0)
             {
                 continue;
@@ -111,11 +123,19 @@ public static class SequenceSimilarity
     }
 
     /// <summary>difflib's <c>get_opcodes</c>: how to turn <paramref name="a"/> into <paramref name="b"/>, block by block.</summary>
-    public static IReadOnlyList<Opcode> Opcodes(string a, string b)
+    public static IReadOnlyList<Opcode> Opcodes(string a, string b) => Opcodes(a, b, long.MaxValue)!;
+
+    /// <summary><see cref="Opcodes(string, string)"/> within <paramref name="budget"/> steps, else null (review H13).</summary>
+    public static IReadOnlyList<Opcode>? Opcodes(string a, string b, long budget)
     {
+        if (MatchingBlocks(a, b, budget) is not { } blocks)
+        {
+            return null;
+        }
+
         var codes = new List<Opcode>();
         int i = 0, j = 0;
-        foreach (var (ai, bj, size) in MatchingBlocks(a, b))
+        foreach (var (ai, bj, size) in blocks)
         {
             Op? tag = null;
             if (i < ai && j < bj)
@@ -180,17 +200,30 @@ public static class SequenceSimilarity
     /// ones the index left out included (with no junk predicate, difflib's "non-junk" extension takes
     /// them all). Ties go to the earliest in <paramref name="a"/>, then in <paramref name="b"/>.
     /// </summary>
-    private static Block LongestMatch(string a, string b, Dictionary<char, List<int>> index, int alo, int ahi, int blo, int bhi)
+    private static Block LongestMatch(string a, string b, Dictionary<char, List<int>> index, int alo, int ahi, int blo, int bhi, Walk walk)
     {
         int besti = alo, bestj = blo, bestsize = 0;
-        var j2len = new Dictionary<int, int>();
+        // Two maps swapped and cleared rather than one made per position (review H13: a Dictionary per line per recursion).
+        var j2len = walk.Current;
+        var newj2len = walk.Next;
+        j2len.Clear();
         for (int i = alo; i < ahi; i++)
         {
-            var newj2len = new Dictionary<int, int>();
+            newj2len.Clear();
+            if (!walk.Step())
+            {
+                return default;
+            }
+
             if (index.TryGetValue(a[i], out var positions))
             {
                 foreach (int j in positions)
                 {
+                    if (!walk.Step())
+                    {
+                        return default;
+                    }
+
                     if (j < blo)
                     {
                         continue;
@@ -212,7 +245,7 @@ public static class SequenceSimilarity
                 }
             }
 
-            j2len = newj2len;
+            (j2len, newj2len) = (newj2len, j2len);
         }
 
         while (besti > alo && bestj > blo && a[besti - 1] == b[bestj - 1])
@@ -228,5 +261,19 @@ public static class SequenceSimilarity
         }
 
         return new Block(besti, bestj, bestsize);
+    }
+
+    /// <summary>One run's step budget and the two maps <see cref="LongestMatch"/> reuses.</summary>
+    private sealed class Walk(long budget)
+    {
+        private long _left = budget;
+
+        public Dictionary<int, int> Current { get; } = [];
+
+        public Dictionary<int, int> Next { get; } = [];
+
+        public bool Spent => _left < 0;
+
+        public bool Step() => --_left >= 0;
     }
 }

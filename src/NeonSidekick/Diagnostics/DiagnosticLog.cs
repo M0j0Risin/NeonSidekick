@@ -49,6 +49,8 @@ public static class DiagnosticLog
     /// <summary>Emits a line whose console form is <c>[Category] Message</c>.</summary>
     public static void Write(DiagnosticLevel level, string category, string message, Exception? exception = null)
     {
+        // A name in a message never sends the terminal a sequence or disguises itself (2026-10-22, review P5); its line breaks stay.
+        message = Files.NameScrub.Display(message, keepLineBreaks: true);
         if (EchoToConsole)
         {
             Console.WriteLine($"[{category}] {message}");

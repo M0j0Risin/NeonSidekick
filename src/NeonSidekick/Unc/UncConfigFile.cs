@@ -176,15 +176,61 @@ public sealed class UncConfigFile
     public static UncCatalog Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        // The last read of each file kept while its bytes stand (2026-10-22, review P8: open's and read_pdf's description and schema each
+        // parsed both files, four loads a request, each able to rewrite the file). A load that encrypted a password changed the file, so the
+        // next one parses it again, once. Keyed on the content, not the write time, which two quick writes can share.
+        byte[] bytes;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return UncCatalog.Empty;
+            }
+
+            bytes = File.ReadAllBytes(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return LoadUncached(path);
+        }
+
+        string key = Path.GetFullPath(path);
+        string stamp = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+        if (s_loaded.TryGetValue(key, out var last) && last.Stamp == stamp)
+        {
+            return last.Catalog;
+        }
+
+        var catalog = LoadUncached(path);
+        try
+        {
+            s_loaded[key] = (Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))), catalog);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            s_loaded.TryRemove(key, out _);
+        }
+
+        return catalog;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Stamp, UncCatalog Catalog)> s_loaded =
+        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+    private static UncCatalog LoadUncached(string path)
+    {
         if (!File.Exists(path))
         {
             return UncCatalog.Empty;
         }
 
         UncConfigFile? file;
+        IReadOnlySet<string> repeated;
         try
         {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), UncJsonContext.Default.UncConfigFile);
+            string text = File.ReadAllText(path);
+            repeated = ConnectionsFileEdit.RepeatedNames(Encoding.UTF8.GetBytes(text), Section);
+            file = JsonSerializer.Deserialize(text, UncJsonContext.Default.UncConfigFile);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -193,7 +239,9 @@ public sealed class UncConfigFile
             return new UncCatalog([], [new SqlConfigProblem(path, UncText.UnreadableFile(detail), WholeFile: true)]);
         }
 
-        if (file is null || file.Shares.Count == 0)
+        // "shares": null reads as null past the non-nullable type (2026-10-22, review K1: it threw here, and the
+        // startup encryption pass and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
+        if (file?.Shares is not { Count: > 0 })
         {
             return UncCatalog.Empty;
         }
@@ -208,10 +256,15 @@ public sealed class UncConfigFile
                 continue;
             }
 
-            string? reason = config is null ? UncText.NoPath : config.Problem;
+            // A name given twice (ignoring case) loads neither entry: which one is meant can't be told (review K2, K8).
+            string? reason = repeated.Contains(name.Trim()) ? UncText.NamedTwice : config is null ? UncText.NoPath : config.Problem;
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
+                if (reason != UncText.NamedTwice || !problems.Any(p => p.Name is { } n && string.Equals(n, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
+                }
+
                 continue;
             }
 

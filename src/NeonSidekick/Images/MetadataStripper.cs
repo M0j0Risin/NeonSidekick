@@ -170,6 +170,146 @@ public static class MetadataStripper
     }
 
     /// <summary>
+    /// The EXIF orientation (1–8) the file's own EXIF holds — a JPEG's APP1, a PNG's <c>eXIf</c>, a WebP's <c>EXIF</c> — or null with none
+    /// (2026-10-22, review U3: MagicScaler reads a JPEG's alone, so a PNG's orientation 6 read as upright, and a strip dropped it and wrote
+    /// none back). Reads only; never throws for a damaged file.
+    /// </summary>
+    public static int? ExifOrientation(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        try
+        {
+            var tiff = ContainerOf(bytes) switch
+            {
+                StripContainer.Jpeg => JpegExif(bytes),
+                StripContainer.Png => PngExif(bytes),
+                StripContainer.WebP => WebPExif(bytes),
+                _ => default,
+            };
+            return tiff.IsEmpty ? null : TiffOrientation(tiff.Span);
+        }
+        catch (Exception e) when (e is ArgumentOutOfRangeException or IndexOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static ReadOnlyMemory<byte> JpegExif(byte[] s)
+    {
+        int p = 2;
+        while (p + 4 <= s.Length && s[p] == 0xFF)
+        {
+            byte marker = s[p + 1];
+            if (marker is 0xDA or 0xD9)
+            {
+                break;
+            }
+
+            int length = BinaryPrimitives.ReadUInt16BigEndian(s.AsSpan(p + 2));
+            if (length < 2 || p + 2 + length > s.Length)
+            {
+                break;
+            }
+
+            if (marker == 0xE1 && length >= 8 && s.AsSpan(p + 4).StartsWith("Exif\0\0"u8))
+            {
+                return s.AsMemory(p + 10, length - 8);
+            }
+
+            p += 2 + length;
+        }
+
+        return default;
+    }
+
+    private static ReadOnlyMemory<byte> PngExif(byte[] s)
+    {
+        int p = PngSignature.Length;
+        while (p + 12 <= s.Length)
+        {
+            uint length = BinaryPrimitives.ReadUInt32BigEndian(s.AsSpan(p));
+            if (length > int.MaxValue || p + 12L + length > s.Length)
+            {
+                break;
+            }
+
+            if (s.AsSpan(p + 4, 4).SequenceEqual("eXIf"u8))
+            {
+                return s.AsMemory(p + 8, (int)length);
+            }
+
+            p += 12 + (int)length;
+        }
+
+        return default;
+    }
+
+    private static ReadOnlyMemory<byte> WebPExif(byte[] s)
+    {
+        int p = 12;
+        while (p + 8 <= s.Length)
+        {
+            uint size = BinaryPrimitives.ReadUInt32LittleEndian(s.AsSpan(p + 4));
+            if (p + 8L + size > s.Length)
+            {
+                break;
+            }
+
+            if (s.AsSpan(p, 4).SequenceEqual("EXIF"u8))
+            {
+                var data = s.AsMemory(p + 8, (int)size);
+                return data.Span.StartsWith("Exif\0\0"u8) ? data[6..] : data;
+            }
+
+            p += 8 + (int)size + (int)(size & 1);
+        }
+
+        return default;
+    }
+
+    /// <summary>IFD0's orientation tag (0x0112) in a TIFF block, or null.</summary>
+    private static int? TiffOrientation(ReadOnlySpan<byte> tiff)
+    {
+        if (tiff.Length < 8)
+        {
+            return null;
+        }
+
+        bool little = tiff[0] == (byte)'I' && tiff[1] == (byte)'I';
+        if (!little && !(tiff[0] == (byte)'M' && tiff[1] == (byte)'M'))
+        {
+            return null;
+        }
+
+        ushort U16(ReadOnlySpan<byte> b) => little ? BinaryPrimitives.ReadUInt16LittleEndian(b) : BinaryPrimitives.ReadUInt16BigEndian(b);
+        uint U32(ReadOnlySpan<byte> b) => little ? BinaryPrimitives.ReadUInt32LittleEndian(b) : BinaryPrimitives.ReadUInt32BigEndian(b);
+        uint ifd0 = U32(tiff[4..]);
+        if (ifd0 > (uint)tiff.Length - 2)
+        {
+            return null;
+        }
+
+        int count = U16(tiff[(int)ifd0..]);
+        for (int i = 0; i < count; i++)
+        {
+            long at = ifd0 + 2L + (i * 12L);
+            if (at + 12 > tiff.Length)
+            {
+                return null;
+            }
+
+            var entry = tiff[(int)at..];
+            if (U16(entry) == 0x0112)
+            {
+                int value = U16(entry[8..]);
+                return value is >= 1 and <= 8 ? value : null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// A TIFF block holding only the orientation tag (little-endian): the header, IFD0 with one SHORT entry 0x0112, no next IFD.
     /// 26 bytes. JPEG puts <c>Exif\0\0</c> before it; PNG's <c>eXIf</c> and WebP's <c>EXIF</c> take it bare.
     /// </summary>
@@ -220,9 +360,22 @@ public static class MetadataStripper
         int p = 2;
         while (true)
         {
-            if (p >= n || s[p] != 0xFF)
+            if (p < n && s[p] != 0xFF)
             {
-                return new(found, 0, written, p >= n ? "the file ends before its picture" : "a byte where a marker should be");
+                // Stray bytes between segments are skipped to the next marker, as libjpeg and WIC read them (2026-10-22, review U7: the strip
+                // refused such a file, and the survey reported nothing in it).
+                int next = s.AsSpan(p).IndexOf((byte)0xFF);
+                if (next < 0)
+                {
+                    return new(found, 0, written, "a byte where a marker should be");
+                }
+
+                p += next;
+            }
+
+            if (p >= n)
+            {
+                return new(found, 0, written, "the file ends before its picture");
             }
 
             while (p < n && s[p] == 0xFF)
@@ -277,6 +430,23 @@ public static class MetadataStripper
                     if (marker != 0xE0)
                     {
                         Orientation();
+                    }
+
+                    // JFIF's own thumbnail (2026-10-22, review U4: the uncropped scene rode in the APP0 kept whole): the segment written
+                    // without it, its size fields 0.
+                    if (marker == 0xE0 && payload.Length >= 14 && payload[12] * payload[13] > 0)
+                    {
+                        found |= MetadataKinds.Thumbnail;
+                        o?.Write([0xFF, 0xE0, 0x00, 0x10]);
+                        o?.Write(payload[..12]);
+                        o?.Write([0x00, 0x00]);
+                        if (marker == 0xE0)
+                        {
+                            Orientation();
+                        }
+
+                        p = end;
+                        continue;
                     }
 
                     o?.Write([0xFF, marker]);
@@ -372,12 +542,34 @@ public static class MetadataStripper
         0xE0 when payload.StartsWith("JFIF\0"u8) => MetadataKinds.None,
         0xE0 when payload.StartsWith("JFXX\0"u8) => MetadataKinds.Thumbnail,
         0xE1 when payload.StartsWith("Exif\0"u8) && payload.Length >= 6 => MetadataKinds.Exif | TiffKinds(payload[6..]),
-        0xE1 when payload.StartsWith("http://ns.adobe.com/"u8) => MetadataKinds.Xmp,
+        0xE1 when payload.StartsWith("http://ns.adobe.com/"u8) => XmpKinds(payload),
         0xE2 when payload.StartsWith("ICC_PROFILE\0"u8) => MetadataKinds.None,
         0xED when payload.StartsWith("Photoshop 3.0\0"u8) => MetadataKinds.Iptc,
         0xEE when payload.StartsWith("Adobe"u8) => MetadataKinds.None,
         _ => MetadataKinds.Vendor,
     };
+
+    // XMP, and its location when it holds one (2026-10-22, review U8: exif:GPSLatitude in XMP was never reported, and "no location" was said).
+    private static MetadataKinds XmpKinds(ReadOnlySpan<byte> xmp) =>
+        MetadataKinds.Xmp | (xmp.IndexOf("GPSLatitude"u8) >= 0 || xmp.IndexOf("GPSLongitude"u8) >= 0 ? MetadataKinds.Gps : MetadataKinds.None);
+
+    // A PNG text chunk by its keyword: ImageMagick's "Raw profile type exif/APP1/iptc/xmp" are those profiles hex-written (review U8), the rest
+    // comments.
+    private static MetadataKinds PngTextKinds(ReadOnlySpan<byte> data)
+    {
+        int zero = data.IndexOf((byte)0);
+        var keyword = zero < 0 ? data : data[..zero];
+        if (!keyword.StartsWith("Raw profile type "u8))
+        {
+            return MetadataKinds.Comment;
+        }
+
+        var profile = keyword["Raw profile type "u8.Length..];
+        return profile.SequenceEqual("exif"u8) || profile.SequenceEqual("APP1"u8) ? MetadataKinds.Exif
+            : profile.SequenceEqual("iptc"u8) || profile.SequenceEqual("8bim"u8) ? MetadataKinds.Iptc
+            : profile.SequenceEqual("xmp"u8) ? XmpKinds(data)
+            : MetadataKinds.Vendor;
+    }
 
     // What an EXIF TIFF block holds beyond itself: a GPS directory (IFD0's 0x8825) and a thumbnail (a next IFD after IFD0). A bad
     // offset is "not there", never an exception.
@@ -472,8 +664,8 @@ public static class MetadataStripper
                 found |= type switch
                 {
                     "eXIf" => MetadataKinds.Exif | TiffKinds(s.AsSpan(p + 8, (int)length)),
-                    "iTXt" when s.AsSpan(p + 8, (int)length).StartsWith("XML:com.adobe.xmp\0"u8) => MetadataKinds.Xmp,
-                    "tEXt" or "zTXt" or "iTXt" => MetadataKinds.Comment,
+                    "iTXt" when s.AsSpan(p + 8, (int)length).StartsWith("XML:com.adobe.xmp\0"u8) => XmpKinds(s.AsSpan(p + 8, (int)length)),
+                    "tEXt" or "zTXt" or "iTXt" => PngTextKinds(s.AsSpan(p + 8, (int)length)),
                     "tIME" => MetadataKinds.Time,
                     _ => MetadataKinds.Vendor,
                 };
@@ -572,7 +764,7 @@ public static class MetadataStripper
                 found |= type switch
                 {
                     "EXIF" => MetadataKinds.Exif | TiffKinds(data.StartsWith("Exif\0\0"u8) ? data[6..] : data),
-                    "XMP " => MetadataKinds.Xmp,
+                    "XMP " => XmpKinds(data),
                     _ => MetadataKinds.Vendor,
                 };
             }
@@ -599,6 +791,13 @@ public static class MetadataStripper
                 else
                 {
                     body.Write(s.AsSpan(offset, length));
+                }
+
+                // A chunk left unpadded by its writer is padded now (2026-10-22, review I12: the EXIF after it landed at an odd offset, and
+                // readers refused the file).
+                if ((length & 1) != 0)
+                {
+                    body.WriteByte(0);
                 }
             }
 
@@ -673,7 +872,9 @@ public static class MetadataStripper
             }
 
             byte label = s[p + 1];
-            var kind = MetadataKinds.None;
+            // A graphic control (0xF9) and plain text (0x01) are the picture's; any other extension of no known kind is a vendor's
+            // (2026-10-22, review U13: it was kept, and its text survived a "no metadata" strip).
+            var kind = label is 0xF9 or 0x01 ? MetadataKinds.None : MetadataKinds.Vendor;
             if (label == 0xFE)
             {
                 kind = MetadataKinds.Comment;
@@ -683,7 +884,7 @@ public static class MetadataStripper
                 var id = s.AsSpan(p + 3, Math.Min(s[p + 2], n - (p + 3)));
                 kind = id.StartsWith("NETSCAPE2.0"u8) || id.StartsWith("ANIMEXTS1.0"u8) || id.StartsWith("ICCRGBG1"u8)
                     ? MetadataKinds.None
-                    : id.StartsWith("XMP DataXMP"u8) ? MetadataKinds.Xmp : MetadataKinds.Vendor;
+                    : id.StartsWith("XMP DataXMP"u8) ? XmpKinds(s.AsSpan(p, Math.Min(n - p, 1 << 20))) : MetadataKinds.Vendor;
             }
 
             p += 2;

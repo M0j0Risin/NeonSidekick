@@ -69,12 +69,15 @@ public sealed class OpenTool : FileTool
 
     private const string BaseDescription =
         "Opens a file in the user's own editor or viewer, or a folder in Explorer, on their screen; no path opens the working directory (the user's cwd / current directory) itself. " +
-        "Use it when they ask to open, show or see something rather than to have it read out.";
+        "Use it when they ask to open, show or see something rather than to have it read out. " + TypesSentence;
+
+    /// <summary>The kinds <c>open</c> starts (2026-10-22, review G1, <see cref="OpenRules"/>), so the model doesn't spend a call finding out.</summary>
+    private const string TypesSentence = "Only folders, documents, pictures, PDFs, audio, video and plain text open; programs, scripts, shortcuts and installers are refused.";
 
     /// <summary><see cref="BaseDescription"/> on macOS (2026-10-06, the macOS build): a folder opens in Finder there. Pinned.</summary>
     private const string MacBaseDescription =
         "Opens a file in the user's own editor or viewer, or a folder in Finder, on their screen; no path opens the working directory (the user's cwd / current directory) itself. " +
-        "Use it when they ask to open, show or see something rather than to have it read out.";
+        "Use it when they ask to open, show or see something rather than to have it read out. " + TypesSentence;
 
     /// <summary>The sentence a picture opener adds (2026-10-11): where a picture opens, and that <c>open</c>, not <c>view_image</c>, shows the user one. Pinned.</summary>
     public const string PictureDescription =
@@ -131,8 +134,17 @@ public sealed class OpenTool : FileTool
         }
 
         string? where = null;
+        OpenRefusal? refused = null;
         var result = files.Open(path, full =>
         {
+            // Only the types on OpenRules' list start (2026-10-22, review G1/P6, the fix plan's D1): a script or a program the model
+            // wrote would otherwise run past the shell's policy, approval pane and police.
+            if (OpenRules.Refusal(full, Directory.Exists(full)) is { } kind)
+            {
+                refused = kind;
+                return;
+            }
+
             if (_openPicture is not null && ImageFile.IsImagePath(full) && File.Exists(full))
             {
                 where = _openPicture(full);
@@ -142,7 +154,7 @@ public sealed class OpenTool : FileTool
             _opener(full);
         });
 
-        return FileText.Opened(result, where);
+        return refused is { } why ? FileText.OpenRefused(result.Relative, why) : FileText.Opened(result, where);
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -185,7 +197,7 @@ public sealed class OpenTool : FileTool
         }
 
         // As the user (signIn false): a local runas folder needs no token, and the opened program runs as the user anyway.
-        var result = await _unc.RunAsync(target, write: false, files => UncText.Scoped(OpenIn(files, relative), target), cancellationToken, signIn: false).ConfigureAwait(false);
+        var result = await _unc.RunAsync(target, write: false, files => UncText.Scoped(() => OpenIn(files, relative), target), cancellationToken, signIn: false).ConfigureAwait(false);
         return result.Error ?? result.Value!;
     }
 }

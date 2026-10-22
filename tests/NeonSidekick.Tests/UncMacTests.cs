@@ -235,11 +235,19 @@ public sealed class UncMacTests : IDisposable
     {
         var mounts = Mounts();
         Assert.Null(mounts.Root(Share("eng", "smb://fs01/eng"), password: null).Error);
-        var fin = mounts.Root(RunAs("fin", "smb://fs01/eng", "svc@CORP.LOCAL", "readwrite"), "s3cret");
+        // Read-write only for a call that may write (2026-10-22, review H4: the share's access alone decided).
+        var share = RunAs("fin", "smb://fs01/eng", "svc@CORP.LOCAL", "readwrite");
+        var fin = mounts.Root(share, "s3cret", writable: true);
 
         Assert.Null(fin.Error);
         Assert.Equal(("smb://fs01/eng", "svc@CORP.LOCAL", "s3cret", false, true), _system.Mounts[1]);
         Assert.Equal(Path.Combine(_system.Volumes, "eng-1"), fin.Value);
+
+        // The write's end lets the runas read-write mount go; a read gets a read-only one.
+        mounts.EndWrite(share);
+        Assert.Equal([(Path.Combine(_system.Volumes, "eng-1"), false)], _system.Unmounts);
+        Assert.Null(mounts.Root(share, "s3cret").Error);
+        Assert.True(_system.Mounts[2].ReadOnly);
     }
 
     [Fact]
@@ -274,7 +282,8 @@ public sealed class UncMacTests : IDisposable
     [Fact]
     public void AnEexist_FindsTheMountThere_UsedAsYouOnly_AndLeftAtExit()
     {
-        var finder = _system.Existing("eng", "//jdoe@fs01/eng", readOnly: true);
+        // This user's own mount, signed in as them (2026-10-22, review H20: any mount of the share was taken, an admin's Finder mount too).
+        var finder = _system.Existing("eng", "//" + Environment.UserName + "@fs01/eng", readOnly: true);
         _system.ExistsAnyway = true;
         var mounts = Mounts();
 
@@ -287,6 +296,22 @@ public sealed class UncMacTests : IDisposable
         Assert.Empty(_system.Unmounts);
         Assert.NotNull(_system.Info(finder.On));
         Assert.False(Directory.Exists(RecordsFolder) && Directory.GetFiles(RecordsFolder).Length > 0);
+    }
+
+    /// <summary>On EEXIST, a mount signed in as someone else is never taken as you (2026-10-22, review H20).</summary>
+    [Fact]
+    public void AnEexist_NeverTakesAMountSignedInAsSomeoneElse_AsYou()
+    {
+        _system.Existing("eng", "//admin@fs01/eng", readOnly: true);
+        _system.ExistsAnyway = true;
+        var eng = Share("eng", "smb://fs01/eng");
+
+        Assert.Equal(UncText.ReachFailed("eng", eng.Config.Root, UncText.MountStatus(17)), Mounts().Root(eng, password: null).Error);
+        var mine = new MountInfo(1, Uid, MacMountRules.SmbType, "//" + Environment.UserName + "@fs01/eng", "/Volumes/eng");
+        Assert.True(MacMountRules.IsOwnSignIn(mine, Uid, Environment.UserName));
+        Assert.True(MacMountRules.IsOwnSignIn(mine with { From = "//fs01/eng" }, Uid, Environment.UserName));
+        Assert.False(MacMountRules.IsOwnSignIn(mine with { From = "//admin@fs01/eng" }, Uid, Environment.UserName));
+        Assert.False(MacMountRules.IsOwnSignIn(mine with { Owner = Uid + 1 }, Uid, Environment.UserName));
     }
 
     /// <summary>An EEXIST mount is taken only with the share's read-only flag, and never one of the run's own under another account (2026-10-11, code review).</summary>
@@ -396,9 +421,12 @@ public sealed class UncMacTests : IDisposable
         var mounts = Mounts();
 
         var read = mounts.Root(Share("eng", "smb://fs01/eng"), password: null);
-        var write = mounts.Root(Share("engw", "smb://fs01/eng", "readwrite"), password: null);
+        // A readwrite share read is on the read-only mount (2026-10-22, review H4); only a call that may write mounts read-write.
+        var readOfWritable = mounts.Root(Share("engw", "smb://fs01/eng", "readwrite"), password: null);
+        var write = mounts.Root(Share("engw", "smb://fs01/eng", "readwrite"), password: null, writable: true);
 
         Assert.Equal(Path.Combine(_system.Volumes, "eng"), read.Value);
+        Assert.Equal(Path.Combine(_system.Volumes, "eng"), readOfWritable.Value);
         Assert.Equal(Path.Combine(_system.Volumes, "eng-1"), write.Value);
         Assert.Equal([true, false], _system.Mounts.Select(m => m.ReadOnly));
     }
@@ -414,6 +442,12 @@ public sealed class UncMacTests : IDisposable
         Assert.Null(MacMountRules.Find([guest, mine], "fs01", "en"));
         Assert.Null(MacMountRules.Find([guest, mine], "fs01", "eng", readOnly: true));
         Assert.Equal(guest, MacMountRules.Find([guest, mine], "fs01", "eng", readOnly: false));
+        // Decoded before the compare (2026-10-22, review U14): the kernel's record need not escape !'()* as EscapeDataString does.
+        var bob = new MountInfo(3, Uid, MacMountRules.SmbType, "//me@fs01/Bob's%20Files%20(2024)", "/Volumes/b");
+        Assert.Equal(bob, MacMountRules.Find([bob], "fs01", "Bob's Files (2024)"));
+        Assert.NotNull(MacMountRules.Find([bob with { From = "//me@fs01/Bob%27s%20Files%20%282024%29" }], "fs01", "Bob's Files (2024)"));
+        Assert.Equal(("fs01", "eng"), MacMountRules.FromShare("//a@b@fs01/eng/"));
+        Assert.Null(MacMountRules.FromShare("fs01/eng"));
     }
 
     [Fact]

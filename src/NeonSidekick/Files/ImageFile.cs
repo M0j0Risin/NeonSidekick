@@ -75,6 +75,12 @@ public enum ImageLoadFailure
 
     /// <summary>No codecs here at all (2026-10-06, the macOS build: <see cref="ImageCodecs.Available"/>).</summary>
     Unsupported,
+
+    /// <summary>
+    /// The file could not be opened or read — in use, denied, gone offline (2026-10-22, review K11: that read as "not an image", and the
+    /// model took a locked picture for a broken one).
+    /// </summary>
+    Unreadable,
 }
 
 /// <summary>
@@ -196,6 +202,28 @@ public static class ImageFile
         return found.Count > 0;
     }
 
+    /// <summary>
+    /// The host of the first picture (or, with <paramref name="documents"/>, PDF) path in <paramref name="paste"/> that names a UNC host
+    /// nobody configured (2026-10-22, review K7): the line says it wasn't opened. Null when there is none.
+    /// </summary>
+    public static string? UnknownUncHost(string paste, bool documents = false)
+    {
+        ArgumentNullException.ThrowIfNull(paste);
+        foreach (string raw in paste.Split('\n'))
+        {
+            foreach (string token in (string[])[raw.Trim(), .. Tokens(raw.Trim())])
+            {
+                string candidate = token.Trim().Trim('"').Trim();
+                if (candidate.Length > 0 && (IsImagePath(candidate) || (documents && PdfFile.IsPdfPath(candidate))) && Unc.KnownUncHosts.IsUnknown(candidate))
+                {
+                    return Unc.KnownUncHosts.HostOf(candidate);
+                }
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>A line's whitespace-separated tokens, a double-quoted stretch (quotes kept) being one token whatever it holds. Pinned.</summary>
     public static IReadOnlyList<string> Tokens(string line)
     {
@@ -246,6 +274,13 @@ public static class ImageFile
             return false;
         }
 
+        // A UNC path is probed only on a known host (2026-10-22, review K7, the fix plan's D13): File.Exists on \\attacker\s\cat.png
+        // opens SMB there, NTLM sign-in and all, and holds the paste until the host answers. Any other host's path stays text.
+        if (Unc.KnownUncHosts.IsUnknown(candidate))
+        {
+            return false;
+        }
+
         bool exists;
         try
         {
@@ -267,10 +302,14 @@ public static class ImageFile
 
     // ---- the sentences ----
 
-    public static string NotFound(string path) => $"(image not attached: {path} was not found)";
-    public static string TooLarge(string path) => $"(image not attached: {path} is over {MaxFileBytes / 1_000_000} MB or {MaxPixels / 1_000_000} megapixels)";
-    public static string CouldNotRead(string path) => $"(image not attached: {path} could not be read as an image)";
-    public static string Unsupported(string path) => $"(image not attached: {path}; {ImageCodecs.Unavailable})";
+    // The words live in FileText since 2026-10-22 (review N11); these keep their callers.
+    public static string NotFound(string path) => FileText.ImageNotFound(path);
+    public static string TooLarge(string path) => FileText.ImageTooLarge(path);
+    public static string CouldNotRead(string path) => FileText.ImageCouldNotRead(path);
+    public static string Unsupported(string path) => FileText.ImageUnsupported(path);
+
+    /// <summary>A picture file that could not be opened (2026-10-22, review K11). Pinned.</summary>
+    public static string Unreadable(string path) => FileText.ImageUnreadable(path);
 
     /// <summary>The sentence for a <paramref name="failure"/>; <see cref="ImageLoadFailure.None"/> has none (throws).</summary>
     public static string Notice(ImageLoadFailure failure, string path)
@@ -282,6 +321,7 @@ public static class ImageFile
             ImageLoadFailure.TooLarge => TooLarge(path),
             ImageLoadFailure.CouldNotRead => CouldNotRead(path),
             ImageLoadFailure.Unsupported => Unsupported(path),
+            ImageLoadFailure.Unreadable => Unreadable(path),
             _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Not a failure."),
         };
     }
@@ -308,11 +348,15 @@ public static class ImageFile
     /// process may not open reads as <see cref="ImageLoadFailure.CouldNotRead"/> like one the codecs
     /// refuse: the line cannot tell them apart either. Never throws for a bad file.
     /// </summary>
-    public static bool TryLoad(string path, out ImageAttachment? image, out ImageLoadFailure failure)
+    public static bool TryLoad(string path, out ImageAttachment? image, out ImageLoadFailure failure) => TryLoad(path, out image, out failure, out _);
+
+    /// <summary><see cref="TryLoad(string, out ImageAttachment?, out ImageLoadFailure)"/> with the failed read's message (review K11).</summary>
+    public static bool TryLoad(string path, out ImageAttachment? image, out ImageLoadFailure failure, out string detail)
     {
         ArgumentNullException.ThrowIfNull(path);
         image = null;
         failure = ImageLoadFailure.None;
+        detail = "";
         byte[] bytes;
         try
         {
@@ -329,11 +373,12 @@ public static class ImageFile
                 return false;
             }
 
-            bytes = File.ReadAllBytes(path);
+            bytes = RegularFiles.ReadAllBytes(path);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            failure = ImageLoadFailure.CouldNotRead;
+            failure = ImageLoadFailure.Unreadable;
+            detail = e.Message;
             return false;
         }
 
@@ -413,9 +458,13 @@ public static class ImageFile
             bool keepsPng = string.Equals(source, Png, StringComparison.OrdinalIgnoreCase);
             bool keepsJpeg = string.Equals(source, Jpeg, StringComparison.OrdinalIgnoreCase);
             bool toJpeg = photo && !keepsJpeg && !frame.HasAlpha;
-            if (fits && !toJpeg && (keepsPng || keepsJpeg) && frame.ExifOrientation == Orientation.Normal)
+            // Sent without its metadata, losslessly, whatever model takes it (2026-10-22, review I10, the fix plan's D5: a picture that fit
+            // went byte for byte, EXIF and GPS and all); its own orientation written back when it has one MagicScaler doesn't see (U3).
+            if (fits && !toJpeg && (keepsPng || keepsJpeg) && frame.ExifOrientation == Orientation.Normal
+                && Images.MetadataStripper.Strip(bytes, Images.MetadataStripper.ExifOrientation(bytes) ?? 1).Result is { } stripped)
             {
-                image = new ImageAttachment(name, bytes, keepsPng ? Png : Jpeg, frame.Width, frame.Height);
+                // A clean picture still goes as it was, byte for byte.
+                image = new ImageAttachment(name, stripped.Removed == Images.MetadataKinds.None ? bytes : stripped.Bytes, keepsPng ? Png : Jpeg, frame.Width, frame.Height);
                 return true;
             }
 
@@ -465,7 +514,9 @@ public static class ImageFile
     public static string SentAs(string sourceMediaType)
     {
         ArgumentNullException.ThrowIfNull(sourceMediaType);
-        if (OperatingSystem.IsMacOS() && MacPhotoTypes.Contains(sourceMediaType, StringComparer.OrdinalIgnoreCase))
+        // A photo format goes as a photo on every system (2026-10-22, review V6: on Windows HEIC, HEIF, AVIF and JXL went as PNG, 5–7 MB
+        // against 400 KB, riding every request and eating the picture budget about fifteen times faster).
+        if (PhotoTypes.Contains(sourceMediaType, StringComparer.OrdinalIgnoreCase))
         {
             return Jpeg;
         }
@@ -475,4 +526,7 @@ public static class ImageFile
 
     /// <summary>The source types a Mac sends as JPEG besides JPEG and WebP (2026-10-07): an iPhone's HEIC/HEIF, and AVIF.</summary>
     public static readonly IReadOnlyList<string> MacPhotoTypes = ["image/heic", "image/heif", "image/avif"];
+
+    /// <summary>The photo formats sent as JPEG on every system (review V6): <see cref="MacPhotoTypes"/> and JPEG XL.</summary>
+    public static readonly IReadOnlyList<string> PhotoTypes = [.. MacPhotoTypes, "image/jxl"];
 }

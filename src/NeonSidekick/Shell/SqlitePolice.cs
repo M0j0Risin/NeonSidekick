@@ -114,6 +114,99 @@ public static partial class SqlitePolice
     public static string? OversizedScript(string command, string workdir, string root) =>
         ScriptPaths(command, workdir, root).Where(file => file.Length > MaxScriptBytes).Select(file => Path.GetFileName(file.Full)).FirstOrDefault();
 
+    /// <summary>
+    /// The programs that run the file named after them (2026-10-22, review L4: a script was found by its extension alone, so
+    /// <c>bash run</c> or <c>python job</c> ran a file no police read). Matched without case, a <c>.exe</c> off.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Interpreters = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "python", "python3", "py", "pythonw", "node", "deno", "bun", "bash", "sh", "zsh", "dash", "ksh", "ruby", "perl", "php", "lua",
+        "pwsh", "powershell", "Rscript", "dotnet-script", "cscript", "wscript", "call", "source", ".",
+    };
+
+    /// <summary>The words of <paramref name="command"/> that name a script: by extension, or the first non-option word after an interpreter.</summary>
+    private static IEnumerable<string> ScriptWords(string command)
+    {
+        bool afterInterpreter = false;
+        foreach (Match token in Token().Matches(command))
+        {
+            string word = token.Value.Trim('"', '\'', '`', '(', ')', ';', ',', '&', '|');
+            if (word.Length == 0)
+            {
+                continue;
+            }
+
+            if (afterInterpreter && !word.StartsWith('-') && !(word.StartsWith('/') && word.Length == 2))
+            {
+                afterInterpreter = false;
+                yield return word;
+                continue;
+            }
+
+            string program = Path.GetFileNameWithoutExtension(word.Replace('\\', '/').Split('/')[^1]);
+            if (Interpreters.Contains(program) || Interpreters.Contains(word))
+            {
+                afterInterpreter = true;
+                continue;
+            }
+
+            if (word is "&&" or "||" or ";" or "|")
+            {
+                afterInterpreter = false;
+            }
+
+            if (ScriptExtensions.Contains(Path.GetExtension(word)))
+            {
+                yield return word;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The scripts <paramref name="command"/> runs (after an interpreter, or as <c>./x</c>, <c>.\x</c>) that are not there to read (review L4:
+    /// a script the same line writes, <c>echo … &gt; a.sh &amp;&amp; bash a.sh</c>, was judged before it existed). Inside the root only.
+    /// </summary>
+    public static IReadOnlyList<string> MissingScripts(string command, string workdir, string root)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(workdir);
+        ArgumentNullException.ThrowIfNull(root);
+        var missing = new List<string>();
+        bool afterInterpreter = false;
+        foreach (Match token in Token().Matches(command))
+        {
+            string word = token.Value.Trim('"', '\'', '`', '(', ')', ';', ',', '&', '|');
+            if (word.Length == 0)
+            {
+                continue;
+            }
+
+            bool runs = (afterInterpreter && !word.StartsWith('-') && !(word.StartsWith('/') && word.Length == 2))
+                || word.StartsWith("./", StringComparison.Ordinal) || word.StartsWith(".\\", StringComparison.Ordinal);
+            string program = Path.GetFileNameWithoutExtension(word.Replace('\\', '/').Split('/')[^1]);
+            afterInterpreter = !runs && (Interpreters.Contains(program) || Interpreters.Contains(word));
+            if (!runs || word.Contains('$') || word.Contains('%'))
+            {
+                continue;
+            }
+
+            try
+            {
+                string full = Path.GetFullPath(Path.Combine(workdir, word));
+                if (WorkingDirectory.IsInside(Path.GetFullPath(root), full) && !File.Exists(full) && !Directory.Exists(full))
+                {
+                    missing.Add(Path.GetFileName(full));
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // No path: nothing to say.
+            }
+        }
+
+        return missing;
+    }
+
     /// <summary>The script files <paramref name="command"/> names that exist inside <paramref name="root"/>, each once, with their sizes.</summary>
     private static IEnumerable<(string Full, long Length)> ScriptPaths(string command, string workdir, string root)
     {
@@ -121,13 +214,8 @@ public static partial class SqlitePolice
         ArgumentNullException.ThrowIfNull(workdir);
         ArgumentNullException.ThrowIfNull(root);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (Match token in Token().Matches(command))
+        foreach (string word in ScriptWords(command))
         {
-            string word = token.Value.Trim('"', '\'', '`', '(', ')', ';', ',', '&', '|');
-            if (word.Length == 0 || !ScriptExtensions.Contains(Path.GetExtension(word)))
-            {
-                continue;
-            }
 
             (string Full, long Length)? file = null;
             try

@@ -11,7 +11,32 @@ namespace NeonSidekick.Files;
 /// </summary>
 public static class FileText
 {
-    public const string RootName = "the working directory";
+    /// <summary>How the root is named when no other name is in force (<see cref="NamingRoot"/>).</summary>
+    public const string DefaultRootName = "the working directory";
+
+    private static readonly AsyncLocal<string?> s_rootName = new();
+
+    /// <summary>
+    /// How the sentences name the root: <see cref="DefaultRootName"/>, or a UNC share's name while <see cref="NamingRoot"/> holds (2026-10-22,
+    /// review H2: a share's result had every "the working directory" replaced after it was built, the read file's own text included, so
+    /// unc_read showed altered lines and a patch copied from them missed or wrote the change back).
+    /// </summary>
+    public static string RootName => s_rootName.Value ?? DefaultRootName;
+
+    /// <summary>Names the root <paramref name="name"/> for the sentences built until the scope is disposed, on this flow and what it awaits.</summary>
+    public static IDisposable NamingRoot(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string? before = s_rootName.Value;
+        s_rootName.Value = name;
+        return new RootNameScope(before);
+    }
+
+    private sealed class RootNameScope(string? before) : IDisposable
+    {
+        public void Dispose() => s_rootName.Value = before;
+    }
+
     /// <summary>What <see cref="Describe"/> adds after the quoted path when the root is the profile's own folder. Pinned.</summary>
     public const string DefaultNote = " (the profile's default folder)";
     /// <summary>How <see cref="Describe"/> ends: the rule the file tools' <c>path</c> follows. Pinned.</summary>
@@ -21,7 +46,7 @@ public static class FileText
     public const string EditEmpty = "Error: old_text is empty or only whitespace; give the exact text to replace, as read_file shows it, and do not send this call again unchanged";
     /// <summary><c>patch_file</c> with <c>new_text</c> = <c>old_text</c> (2026-09-18; a model probed a file's tail with a no-op edit). Pinned.</summary>
     public const string EditSame = "Error: old_text and new_text are the same; nothing to change";
-    public const string RootItself = "Error: that is the working directory itself";
+    public static string RootItself => "Error: that is " + RootName + " itself";
 
     /// <summary>
     /// The bin's name on this system (later on 2026-10-15, <c>File deletes to Recycle bin</c>): "Recycle bin", or "Trash" on a Mac — the one
@@ -36,7 +61,8 @@ public static class FileText
     public static string RecycleNeedsFullPath => "the " + RecycleBinName + " needs a full path";
 
     /// <summary>The bin did not answer within its time: nothing deleted behind it. Pinned.</summary>
-    public static string RecycleNoAnswer => "the " + RecycleBinName + " didn't answer";
+    /// <remarks>Since 2026-10-22 (review H18) it says the move may still finish: a delete reported failed, then the folder vanished.</remarks>
+    public static string RecycleNoAnswer => "the " + RecycleBinName + " hasn't answered yet and may still finish the move: check before deleting again";
 
     /// <summary>The shell reported the move cancelled. Pinned.</summary>
     public static string RecycleCancelled => "the move to the " + RecycleBinName + " was cancelled";
@@ -47,13 +73,21 @@ public static class FileText
     /// <summary>A drive or volume with no bin, as a purge's question and its notices say it (2026-10-20). Pinned.</summary>
     public static string RecycleNoBinHere => "no " + RecycleBinName + " on that drive";
 
+    /// <summary>An item the bin can't take (2026-10-22, review J1, D11): left where it is, never deleted for good behind the user's back.</summary>
+    public static string RecycleWouldDeleteForGood => "the " + RecycleBinName + " can't take it (too big for it, or set to delete at once), so nothing was deleted";
+
+    /// <summary>A delete for good that stopped partway (2026-10-22, review O6): what is left, then why.</summary>
+    public static string PartlyDeleted(int left, string why) =>
+        "deleted partly: " + Count(left, "item", "items") + " could not be removed and are still there (" + why.Trim() + ")";
+
+
     /// <summary>A purge's folder whose path is already past what the shell's bin takes (2026-10-20, <see cref="IRecycleBin.Probe"/>). Pinned.</summary>
     public static string RecycleFolderTooLong => "the " + RecycleBinName + " can't take paths that long";
 
     /// <summary>A word argument outside its choices (<c>mode</c>, <c>output</c>, <c>order</c>; 2026-09-19). Pinned.</summary>
     public static string BadChoice(string argument, string raw, string choices) => $"Error: '{raw.Trim()}' is not one of {choices} for '{argument}'";
     /// <summary>A required path argument left out (2026-09-18: a `write_file` with `content` alone was told `'' is a folder`). Pinned.</summary>
-    public static string PathRequired(string argument) => $"Error: {argument} is required: the file or folder, relative to the working directory";
+    public static string PathRequired(string argument) => $"Error: {argument} is required: the file or folder, relative to {RootName}";
 
     /// <summary>
     /// A write with no <c>content</c> at all (2026-10-17, the toki-pona session: <c>write_file</c> sent with <c>old_text</c> and <c>new_text</c>
@@ -72,6 +106,11 @@ public static class FileText
 
     /// <summary>An edit with no <c>new_text</c> at all (2026-10-17): read as <c>""</c>, it removed old_text. Pinned.</summary>
     public const string NewTextRequired = "Error: new_text is required: the text to put in place of old_text (\"\" removes it)";
+    /// <summary>A <c>replace_all</c> whose result would be too big to read back (2026-10-22, review V2).</summary>
+    public static string EditResultTooBig(int matches) =>
+        "the edit would make the file over " + FuzzyMatch.MaxResultChars.ToString("N0", CultureInfo.InvariantCulture) + " characters (" +
+        Count(matches, "match", "matches") + "), more than read_file can open; nothing was changed";
+
     public static readonly string TooLong =
         "Error: the content is over " + WorkingDirectory.MaxWriteChars.ToString("N0", CultureInfo.InvariantCulture) + " characters; write it in parts";
 
@@ -88,11 +127,17 @@ public static class FileText
     }
 
     /// <summary>A relative path as a sentence names it; the root has a name of its own.</summary>
-    public static string Name(string relative) => string.IsNullOrEmpty(relative) ? RootName : relative;
+    public static string Name(string relative) => string.IsNullOrEmpty(relative) ? RootName : Shown(relative);
+
+    /// <summary>
+    /// A name as a sentence shows it (2026-10-22, review P5, the fix plan's mechanism 6): bidi controls, zero-width and control characters
+    /// written as escapes (<see cref="NameScrub.Display"/>), so a name never disguises itself, forges a line or reaches the terminal.
+    /// </summary>
+    public static string Shown(string? name) => NameScrub.Display(name);
 
     // ---- errors ----
 
-    public static string OutsideRoot(string path) => $"Error: '{path}' is outside the working directory; every path must stay inside it";
+    public static string OutsideRoot(string path) => $"Error: '{path}' is outside {RootName}; every path must stay inside it";
 
     /// <summary>
     /// A path refused as outside that lies in the profile's images folder (<see cref="FileOutcome.InImagesFolder"/>, 2026-10-09): where the
@@ -110,6 +155,23 @@ public static class FileText
         $"Error: '{path}' is a skill's file, outside the working directory; read it with load_skill (name: the skill's folder name, file: the path inside that folder) and change it with skill_editor";
 
     /// <summary><c>open</c> on a file in the images folder that is no picture (code review, 2026-10-11): the shell would run it. Pinned.</summary>
+    /// <summary>
+    /// <c>open</c> on a file it may not start (2026-10-22, review G1, the fix plan's D1: an allow-list of safe types): the kind, what does
+    /// open, and the user's own way. Prompt text for the model; the kinds are <see cref="OpenRules"/>'.
+    /// </summary>
+    public static string OpenRefused(string path, OpenRefusal kind)
+    {
+        string what = kind switch
+        {
+            OpenRefusal.Program => "a program",
+            OpenRefusal.Script => "a script",
+            OpenRefusal.Shortcut => "a shortcut or link",
+            OpenRefusal.Installer => "an installer",
+            _ => "a kind of file open does not start",
+        };
+        return $"Error: '{path}' is {what}: open shows only folders, documents, pictures, PDFs, audio, video and plain text; the user can open it themselves with /open";
+    }
+
     public static string OpenImagesFolderNotPicture(string path) => $"Error: '{path}' is not a picture: in the user's images folder open shows only pictures and folders";
 
     /// <summary>
@@ -118,7 +180,7 @@ public static class FileText
     /// </summary>
     public static string ImagesFolderSearchSentence(string root) =>
         $"The user's images folder, {root}, where camera, screen, generate_image and pasted pictures are saved, is outside the working directory: " +
-        "give its full path (or a subfolder's) as path to list or search it, with order modified for the newest; its results are full paths, which view_image, image_info and image_edit take.";
+        "give its full path (or a subfolder's) as path to list or search it, with order modified for the newest; its results are full paths, which the picture tools (view_image, image_info, image_edit, while Image tools is on) take.";
 
     /// <summary><c>file_info</c>'s description's addition while the images folder is offered (2026-10-09). Pinned.</summary>
     public static string ImagesFolderInfoSentence(string root) => $"A full path in the user's images folder ({root}) works too.";
@@ -133,7 +195,7 @@ public static class FileText
         $"Error: '{path}' is not a text file" + (ImageFile.IsImagePath(path) ? ViewImageHint : PdfFile.IsPdfPath(path) ? ReadPdfHint : "");
 
     /// <summary>What <see cref="NotText"/> adds for an image path. Pinned.</summary>
-    public const string ViewImageHint = "; use view_image to look at it";
+    public const string ViewImageHint = "; the picture tools (view_image, while Image tools is on) look at it";
 
     /// <summary>What <see cref="NotText"/> adds for a PDF (2026-10-14). Pinned.</summary>
     public const string ReadPdfHint = "; use read_pdf to read its text";
@@ -143,7 +205,20 @@ public static class FileText
 
     /// <summary>What <see cref="NotAnImage"/> adds for a PDF (2026-10-14). Pinned.</summary>
     public const string PdfPicturesHint = "; it is a PDF: use read_pdf (pictures: true for its pages)";
-    public static string ImageTooBig(string path) => $"Error: '{path}' is over {ImageFile.MaxFileBytes / 1_000_000} MB or {ImageFile.MaxPixels / 1_000_000} megapixels; too large to view";
+    public static string ImageTooBig(string path) =>
+        $"Error: '{path}' is over {(ImageFile.MaxFileBytes / 1_000_000).ToString(CultureInfo.InvariantCulture)} MB or {(ImageFile.MaxPixels / 1_000_000).ToString(CultureInfo.InvariantCulture)} megapixels; too large to view";
+
+    /// <summary>The sentences a picture left out of a message gives (2026-10-22, review N11: they lived in ImageFile.cs, outside a *Text.cs).</summary>
+    public static string ImageNotFound(string path) => $"(image not attached: {Shown(path)} was not found)";
+
+    public static string ImageTooLarge(string path) =>
+        $"(image not attached: {Shown(path)} is over {(ImageFile.MaxFileBytes / 1_000_000).ToString(CultureInfo.InvariantCulture)} MB or {(ImageFile.MaxPixels / 1_000_000).ToString(CultureInfo.InvariantCulture)} megapixels)";
+
+    public static string ImageCouldNotRead(string path) => $"(image not attached: {Shown(path)} could not be read as an image)";
+
+    public static string ImageUnsupported(string path) => $"(image not attached: {Shown(path)}; {ImageCodecs.Unavailable})";
+
+    public static string ImageUnreadable(string path) => $"(image not attached: {Shown(path)} could not be opened; it may be in use or not yours to read)";
     public static string NotAnArchive(string path) => $"Error: '{path}' is not a zip archive";
     public static string Exists(string path) => $"Error: '{path}' already exists; call again with overwrite true to replace it";
     /// <summary><c>write_file</c>'s form of <see cref="Exists"/> (2026-09-19): the tool has a <c>mode</c>, not an <c>overwrite</c>. Pinned.</summary>
@@ -232,7 +307,81 @@ public static class FileText
 
     /// <summary>A <c>delete</c> of <c>.git</c>, of anything in it, or of a folder holding one (2026-09-23, the user's call). Pinned.</summary>
     public static string GitProtected(string path) =>
-        $"Error: '{path}' is or holds a {WorkingDirectory.GitFolderName} folder, which delete never removes";
+        $"Error: '{path}' is in, is or holds a {WorkingDirectory.GitFolderName} folder, which the file tools never change, move or delete; git's own tools change a repository";
+
+    // ── the write guard's refusals (2026-10-22, the fix plan's mechanism 1 and D2: each names the kind and the user's own way) ──
+
+    /// <summary>A write into <c>.neon</c> (review P4). Prompt text.</summary>
+    public static string NeonFilesProtected(string path) =>
+        $"Error: '{path}' is in {WriteGuard.NeonFolderName}, where the app keeps plans, audits and loop files it trusts; present_plan and present_audit write them, and the user edits a plan with /plan edit";
+
+    /// <summary>A write into the app's home or a profile (review P2/W1). Prompt text.</summary>
+    public static string AppFilesProtected(string path) =>
+        $"Error: '{path}' is one of the app's own settings, configs or databases, which the file tools never change; the user changes them in /settings, /tools and the other panes";
+
+    /// <summary>A write into a skill root (review P3). Prompt text.</summary>
+    public static string SkillFilesProtected(string path) =>
+        $"Error: '{path}' is in a skill folder; change a skill only with skill_editor";
+
+    /// <summary>The project file with nobody to ask (review P1, D2): headless, a bot, an advisor, a script, a pass that may not ask. Prompt text.</summary>
+    public static string ProjectFileRefused(string path) =>
+        $"Error: '{path}' is the project file the system prompt reads every turn; it changes only when the user allows it on the screen, and nobody can be asked now: tell the user the change, and they can make it";
+
+    /// <summary>The project file the user was asked about and refused (review P1, D2). Prompt text.</summary>
+    public static string ProjectFileDeclined(string path) =>
+        $"Error: the user did not allow the change to '{path}', the project file the system prompt reads every turn; do not try another way";
+
+    /// <summary>
+    /// The clause the writer tools' descriptions end on (2026-10-22, the write guard), so the model doesn't spend calls finding the refusals out.
+    /// Prompt text.
+    /// </summary>
+    public const string GuardedPathsSentence =
+        " .git, .neon and the app's own settings are never written; the project file (NEON.md, AGENTS.md, CLAUDE.md) changes only when the user allows it.";
+
+    /// <summary>The project file's allow pane's title (review P1, D2).</summary>
+    public const string ProjectFileAllowTitle = "Change the project file?";
+
+    /// <summary>The project file's allow pane's caption: the file, and why it asks.</summary>
+    public static string ProjectFileAllowCaption(string name) => $"The model wants to change {name}, which the system prompt reads every turn.";
+
+    /// <summary>
+    /// New text the file's encoding can't hold (2026-10-22, review G4/Q1, <see cref="FileOutcome.NotEncodable"/>): refused rather than written as
+    /// '?'. Prompt text.
+    /// </summary>
+    public static string CannotEncode(string path, string encoding) =>
+        $"Error: '{path}' is in {encoding}, which can't hold every character of the new text (an emoji, a letter outside it); nothing was written: use only characters that file can hold, or rewrite it whole as UTF-8 with mode overwrite after deleting it";
+
+    /// <summary>A search needle holding a line break (2026-10-22, review Q9). Prompt text.</summary>
+    public const string SearchOneLine = "Error: search_files matches within one line, and the text holds a line break; search for one line of it (the most distinctive), then read_file around the hits";
+
+    /// <summary>A patch or append whose file changed between its read and its write (2026-10-22, review J4): nothing written.</summary>
+    public const string ChangedWhileEditing = "the file changed while it was being edited (another write landed), so nothing was written: read it again and redo the change";
+
+    /// <summary>A write refused because its target is read-only (2026-10-22, review O2, mechanism 7).</summary>
+    public const string ReadOnlyDetail = "the file is read-only, and the file tools never write over a read-only file";
+
+    /// <summary>The detail of a write refused because a link on its way now leads outside (review G13, <see cref="WorkingDirectory.RecheckLinks"/>).</summary>
+    public static string LinkMovedDetail => "a folder on the way was swapped for a link that leads outside " + RootName + ", so nothing was written";
+
+    /// <summary>A path naming an NTFS stream (review M2). Prompt text.</summary>
+    public static string StreamName(string path) =>
+        $"Error: '{path}' names a file's hidden stream (the part after ':'), which the file tools never reach; use a plain file name";
+
+    /// <summary>A Windows device name (review O10). Prompt text.</summary>
+    public static string DeviceName(string path) =>
+        $"Error: '{path}' is a name Windows keeps for a device (NUL, CON, PRN, AUX, COM1–9, LPT1–9), not a file; pick another name";
+
+    /// <summary>A FIFO, socket or device file (review N1/N2). Prompt text.</summary>
+    public static string NotARegularFile(string path) =>
+        $"Error: '{path}' is a pipe, socket or device, not a file; the file tools read and write only plain files";
+
+    /// <summary>A <c>~/</c> or <c>file:</c> path (review S5). Prompt text.</summary>
+    public static string NotAPathHere(string path) =>
+        $"Error: '{path}' is a home-folder or file: URL form, which paths here never are; give a path relative to the working directory (get_working_directory names it)";
+
+    /// <summary>The working directory deleted or renamed this session (review S6). Prompt text.</summary>
+    public const string RootGone =
+        "Error: the working directory was deleted or moved during this session, and the file tools don't make it again; ask the user to restore it or pick another with /cwd";
 
     /// <summary>
     /// A file tool's change to a SQLite database file, or a delete or move of a folder holding one, while the SQLite tools are on
@@ -240,7 +389,7 @@ public static class FileText
     /// </summary>
     public static string DatabaseProtected(string path) =>
         $"Error: '{path}' is or holds a SQLite database, which the file tools never change while the SQLite tools are on; " +
-        "change a database only with sqlite_execute (when the user allows it), and do not try another way";
+        "change a database only through the sqlite_ tools (sqlite_execute, in SQLite read-write mode, when the user allows it), and do not try another way";
 
     /// <summary>A line as a refusal quotes it: trimmed, cut at <see cref="WorkingDirectory.MaxQuotedChars"/> with an ellipsis.</summary>
     public static string Quote(string line)
@@ -260,6 +409,9 @@ public static class FileText
     /// <summary>The sentence for a non-<see cref="FileOutcome.Ok"/> outcome; <paramref name="verb"/> names the operation for a failure.</summary>
     public static string Error(FileOutcome outcome, string path, string verb, string detail = "", string other = "")
     {
+        // The names scrubbed as they enter every refusal (review P5).
+        path = Shown(path);
+        other = Shown(other);
         ArgumentNullException.ThrowIfNull(path);
         return outcome switch
         {
@@ -289,6 +441,18 @@ public static class FileText
             FileOutcome.DatabaseProtected => DatabaseProtected(path),
             FileOutcome.InImagesFolder => InImagesFolder(path),
             FileOutcome.InSkillFolder => InSkillFolder(path),
+            FileOutcome.NeonFilesProtected => NeonFilesProtected(path),
+            FileOutcome.AppFilesProtected => AppFilesProtected(path),
+            FileOutcome.SkillFilesProtected => SkillFilesProtected(path),
+            FileOutcome.ProjectFileAsk => ProjectFileRefused(path),
+            FileOutcome.ShoppingList => Shopping.ShoppingText.NotAFile(path),
+            FileOutcome.StreamName => StreamName(path),
+            FileOutcome.DeviceName => DeviceName(path),
+            FileOutcome.NotARegularFile => NotARegularFile(path),
+            FileOutcome.NotAPathHere => NotAPathHere(path),
+            FileOutcome.RootGone => RootGone,
+            FileOutcome.NotEncodable => CannotEncode(path, detail),
+            FileOutcome.OneLineOnly => SearchOneLine,
             _ => CouldNot(verb, path, detail),
         };
 
@@ -305,16 +469,23 @@ public static class FileText
 
     // ---- read side ----
 
+    /// <summary>
+    /// The note a read-side walk ends on when it left hidden entries out (2026-10-22, review Q10, D14): every listing, find, search and recent
+    /// leaves Hidden and System entries (and a Mac's hidden ones) out, and says how many. Empty for none.
+    /// </summary>
+    public static string HiddenNote(int hidden) =>
+        hidden <= 0 ? "" : "\n(" + Count(hidden, "hidden or system entry", "hidden or system entries") + " left out)";
+
     public static string Listing(ListResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "list", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "list", result.Detail);
         }
 
         var sb = new StringBuilder();
-        sb.Append(Name(result.Relative)).Append(" (").Append(Count(result.Entries.Count, "entry", "entries")).Append("):");
+        sb.Append(Name(Shown(result.Relative))).Append(" (").Append(Count(result.Entries.Count, "entry", "entries")).Append("):");
         if (result.Entries.Count == 0)
         {
             sb.Append(" (empty)");
@@ -338,6 +509,7 @@ public static class FileText
             sb.Append('\n').Append(OnlyFirst(result.Entries.Count, "entries"));
         }
 
+        sb.Append(HiddenNote(result.Hidden));
         return sb.ToString();
     }
 
@@ -352,11 +524,11 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "list", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "list", result.Detail);
         }
 
         var sb = new StringBuilder();
-        sb.Append(Name(result.Relative)).Append(" (").Append(Count(result.Entries.Count, "entry", "entries"))
+        sb.Append(Name(Shown(result.Relative))).Append(" (").Append(Count(result.Entries.Count, "entry", "entries"))
           .Append(", ").Append(Count(depth, "level", "levels")).Append("):");
         if (result.Entries.Count == 0)
         {
@@ -390,11 +562,11 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(pattern);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "search", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "search", result.Detail);
         }
 
         var sb = new StringBuilder();
-        sb.Append(Count(result.Paths.Count, "file matches", "files match")).Append(" '").Append(pattern).Append("' under ").Append(Name(result.Relative)).Append(':');
+        sb.Append(Count(result.Paths.Count, "file matches", "files match")).Append(" '").Append(pattern).Append("' under ").Append(Name(Shown(result.Relative))).Append(':');
         if (result.Paths.Count == 0)
         {
             sb.Append(" (none)");
@@ -410,6 +582,7 @@ public static class FileText
             sb.Append('\n').Append(OnlyFirst(result.Paths.Count, "matches"));
         }
 
+        sb.Append(HiddenNote(result.Hidden));
         return sb.ToString();
     }
 
@@ -425,7 +598,7 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(text);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "search", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "search", result.Detail);
         }
 
         var sb = new StringBuilder();
@@ -442,21 +615,21 @@ public static class FileText
         foreach (var hit in result.Hits)
         {
             bool withContext = hit.Before.Count > 0 || hit.After.Count > 0;
-            if (withContext && lastFile is not null && !string.Equals(lastFile, hit.RelativePath, StringComparison.Ordinal))
+            if (withContext && lastFile is not null && !string.Equals(lastFile, Shown(hit.RelativePath), StringComparison.Ordinal))
             {
                 sb.Append('\n').Append(ContextSeparator);
             }
 
-            lastFile = hit.RelativePath;
+            lastFile = Shown(hit.RelativePath);
             for (int i = 0; i < hit.Before.Count; i++)
             {
-                sb.Append('\n').Append(hit.RelativePath).Append('-').Append((hit.Line - hit.Before.Count + i).ToString(CultureInfo.InvariantCulture)).Append("- ").Append(hit.Before[i]);
+                sb.Append('\n').Append(Shown(hit.RelativePath)).Append('-').Append((hit.Line - hit.Before.Count + i).ToString(CultureInfo.InvariantCulture)).Append("- ").Append(hit.Before[i]);
             }
 
-            sb.Append('\n').Append(hit.RelativePath).Append(':').Append(hit.Line.ToString(CultureInfo.InvariantCulture)).Append(": ").Append(hit.Text);
+            sb.Append('\n').Append(Shown(hit.RelativePath)).Append(':').Append(hit.Line.ToString(CultureInfo.InvariantCulture)).Append(": ").Append(hit.Text);
             for (int i = 0; i < hit.After.Count; i++)
             {
-                sb.Append('\n').Append(hit.RelativePath).Append('-').Append((hit.Line + 1 + i).ToString(CultureInfo.InvariantCulture)).Append("- ").Append(hit.After[i]);
+                sb.Append('\n').Append(Shown(hit.RelativePath)).Append('-').Append((hit.Line + 1 + i).ToString(CultureInfo.InvariantCulture)).Append("- ").Append(hit.After[i]);
             }
         }
 
@@ -466,8 +639,35 @@ public static class FileText
         }
 
         SearchTimedOut(sb, result);
-        return sb.ToString();
+        return CutSearch(sb.ToString());
     }
+
+    /// <summary>
+    /// A search's answer held to read_file's cap (2026-10-22, review W2: context 5 over 200 hits made 400–900K characters in one result): cut
+    /// at a line break before <see cref="WorkingDirectory.MaxReadChars"/>, with a note to narrow it.
+    /// </summary>
+    private static string CutSearch(string answer)
+    {
+        if (answer.Length <= WorkingDirectory.MaxReadChars)
+        {
+            return answer;
+        }
+
+        int at = answer.LastIndexOf('\n', WorkingDirectory.MaxReadChars - 200);
+        string kept = at > 0 ? answer[..at] : TextCut.Safe(answer, WorkingDirectory.MaxReadChars - 200);
+        return kept + "\n(cut at " + WorkingDirectory.MaxReadChars.ToString("N0", CultureInfo.InvariantCulture) + " characters: narrow it with path, files, a smaller context or limit)";
+    }
+
+    /// <summary>A one-file search that did not search the file (2026-10-22, review W3, V10): why, rather than "0 matches".</summary>
+    public static string SearchFileTooBig(string path) => $"{path} was not searched: it is over {WorkingDirectory.MaxTextFileBytes / 1_000_000} MB; read_file reads it in parts";
+
+    public static string SearchFileNotText(string path) => $"{path} was not searched: it is not a text file";
+
+    public static string SearchFileUnreadable(string path, string why) => $"{path} was not searched: it could not be read ({why.Trim()})";
+
+    public static string SearchFileCloudOnly(string path) => $"{path} was not searched: it is kept only in the cloud; read_file fetches it";
+
+    public static string SearchFilterMissesFile(string path, string pattern) => $"{path} was not searched: it does not match files '{pattern}'";
 
     /// <summary>
     /// <c>search_files</c> with <c>output</c> files (2026-09-19): <c>3 files hold 'x' (searched 40 files under the working directory in 0.02 s):</c>
@@ -479,7 +679,7 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(text);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "search", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "search", result.Detail);
         }
 
         var sb = new StringBuilder();
@@ -514,7 +714,7 @@ public static class FileText
     {
         if (result.SingleFile)
         {
-            sb.Append(result.Relative);
+            sb.Append(Shown(result.Relative));
         }
         else
         {
@@ -523,7 +723,7 @@ public static class FileText
                 sb.Append(Count(result.FilesMatched, "file", "files")).Append(' ');
             }
 
-            sb.Append("(searched ").Append(Count(result.FilesSearched, "file", "files")).Append(" under ").Append(Name(result.Relative));
+            sb.Append("(searched ").Append(Count(result.FilesSearched, "file", "files")).Append(" under ").Append(Name(Shown(result.Relative)));
         }
 
         sb.Append(result.SingleFile ? " (" : " in ").Append(result.Elapsed.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture)).Append(" s):");
@@ -535,6 +735,19 @@ public static class FileText
         {
             sb.Append('\n').Append(Count(result.TimedOut, "line", "lines")).Append(" skipped: the expression took too long on them");
         }
+
+        // The hidden entries left out, counted (2026-10-22, D14), and why one file named alone was not searched (review W3, V10).
+        sb.Append(HiddenNote(result.Hidden));
+        if (result.Unsearched is { } why)
+        {
+            sb.Append('\n').Append(why);
+        }
+
+        // A cloud-only file is never fetched by a search (2026-10-22, review O1).
+        if (result.CloudOnly > 0)
+        {
+            sb.Append('\n').Append(Count(result.CloudOnly, "file", "files")).Append(" left unread: kept only in the cloud (OneDrive and the like); read_file on one fetches it");
+        }
     }
 
     public static string Recent(RecentResult result)
@@ -542,11 +755,11 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "list", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "list", result.Detail);
         }
 
         var sb = new StringBuilder();
-        sb.Append("most recently changed under ").Append(Name(result.Relative)).Append(", newest first:");
+        sb.Append("most recently changed under ").Append(Name(Shown(result.Relative))).Append(", newest first:");
         if (result.Entries.Count == 0)
         {
             sb.Append(" (no files)");
@@ -557,6 +770,7 @@ public static class FileText
             sb.Append('\n').Append(entry.RelativePath).Append("  ").Append(Moment(entry.Modified)).Append("  ").Append(Size(entry.Length));
         }
 
+        sb.Append(HiddenNote(result.Hidden));
         return sb.ToString();
     }
 
@@ -565,11 +779,11 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "inspect", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "inspect", result.Detail);
         }
 
         var sb = new StringBuilder();
-        sb.Append(Name(result.Relative)).Append(" — ");
+        sb.Append(Name(Shown(result.Relative))).Append(" — ");
         if (result.IsDirectory)
         {
             sb.Append(Count(result.Files, "file", "files")).Append(" in ").Append(Count(result.Folders, "folder", "folders"))
@@ -617,7 +831,7 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "read", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "read", result.Detail);
         }
 
         string header = ReadHeader(result);
@@ -662,8 +876,16 @@ public static class FileText
     public static string MorePictures(IReadOnlyList<string> rest)
     {
         ArgumentNullException.ThrowIfNull(rest);
-        return rest.Count.ToString(CultureInfo.InvariantCulture) + " more not shown; call again with paths: " + string.Join(", ", rest);
+        // At most MaxMoreNamed names, the rest counted (2026-10-22, review T9: every remaining path was echoed).
+        string names = string.Join(", ", rest.Take(MaxMoreNamed)) + (rest.Count > MaxMoreNamed ? ", and " + (rest.Count - MaxMoreNamed).ToString(CultureInfo.InvariantCulture) + " more" : "");
+        return rest.Count.ToString(CultureInfo.InvariantCulture) + " more not shown; call again with paths: " + names;
     }
+
+    /// <summary>A picture read where no picture codecs are (review K11). Prompt text.</summary>
+    public const string NoPictureCodecs = "no picture codecs are available on this system";
+
+    /// <summary>The most remaining paths a "more pictures" line names (review T9, the fix plan's Limits).</summary>
+    public const int MaxMoreNamed = 20;
 
     /// <summary><c>ladybug.png (1024×768 image/png, 213.4 KB): the picture is in the next message</c> — the size the sent bytes, after any downscale.</summary>
     public static string Image(ImageResult result)
@@ -671,11 +893,11 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok || result.Image is null)
         {
-            return Error(result.Outcome, result.Relative, "view", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "view", result.Detail);
         }
 
         var image = result.Image;
-        return result.Relative + " (" + image.Width.ToString(CultureInfo.InvariantCulture) + "×" + image.Height.ToString(CultureInfo.InvariantCulture)
+        return Shown(result.Relative) + " (" + image.Width.ToString(CultureInfo.InvariantCulture) + "×" + image.Height.ToString(CultureInfo.InvariantCulture)
             + " " + image.MediaType + ", " + Size(image.Bytes.Length) + "): " + ImageFollows;
     }
 
@@ -686,20 +908,25 @@ public static class FileText
         string total = result.TotalLines.ToString(CultureInfo.InvariantCulture);
         if (result.TotalLines == 0)
         {
-            return result.Relative + " (empty)";
+            return Shown(result.Relative) + " (empty)";
         }
 
         if (result.ToLine < result.FromLine)
         {
-            return result.Relative + " has only " + Count(result.TotalLines, "line", "lines") + "; nothing from line " + result.FromLine.ToString(CultureInfo.InvariantCulture);
+            return Shown(result.Relative) + " has only " + Count(result.TotalLines, "line", "lines") + "; nothing from line " + result.FromLine.ToString(CultureInfo.InvariantCulture);
         }
 
         string window = result.FromLine == 1 && result.ToLine == result.TotalLines && !result.Truncated
             ? Count(result.TotalLines, "line", "lines")
             : "lines " + result.FromLine.ToString(CultureInfo.InvariantCulture) + "–" + result.ToLine.ToString(CultureInfo.InvariantCulture) + " of " + total;
         string tail = result.Truncated ? "; cut at " + WorkingDirectory.MaxReadChars.ToString("N0", CultureInfo.InvariantCulture) + " characters" : "";
+        // A cut line said (2026-10-22, review Q2: a one-line 50,000-character file read as complete), and the encoding when it is not UTF-8 (Q1).
+        string cut = result.CutLine > 0
+            ? "; line " + result.CutLine.ToString(CultureInfo.InvariantCulture) + " is " + result.CutLength.ToString("N0", CultureInfo.InvariantCulture) + " characters long, cut at " + WorkingDirectory.MaxReadChars.ToString("N0", CultureInfo.InvariantCulture)
+            : "";
+        string encoding = result.Encoding is { } name ? "; read as " + name : "";
         string next = result.ToLine < result.TotalLines ? NextHint(result.ToLine + 1) : "";
-        return result.Relative + " (" + window + tail + next + "):";
+        return Shown(result.Relative) + " (" + window + tail + cut + encoding + next + "):";
     }
 
     /// <summary>
@@ -715,15 +942,15 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome == FileOutcome.Exists)
         {
-            return WriteExists(result.Relative);
+            return WriteExists(Shown(result.Relative));
         }
 
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "write", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "write", result.Detail);
         }
 
-        return (result.Replaced ? "replaced " : "wrote ") + result.Relative + " (" + Bytes(result.Bytes) + Counts(result.Lines, result.Words) + ")";
+        return (result.Replaced ? "replaced " : "wrote ") + Shown(result.Relative) + " (" + Bytes(result.Bytes) + Counts(result.Lines, result.Words) + ")";
     }
 
     /// <summary>
@@ -739,16 +966,16 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "append to", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "append to", result.Detail);
         }
 
         if (!result.Replaced)
         {
-            return "created " + result.Relative + " (" + Bytes(result.Bytes) + Counts(result.Lines, result.Words) + ")";
+            return "created " + Shown(result.Relative) + " (" + Bytes(result.Bytes) + Counts(result.Lines, result.Words) + ")";
         }
 
         string now = result.Lines is { } && result.Words is { } ? " (now" + Counts(result.Lines, result.Words)[1..] + ")" : "";
-        return "appended " + Bytes(result.Bytes) + " to " + result.Relative + now;
+        return "appended " + Bytes(result.Bytes) + " to " + Shown(result.Relative) + now;
     }
 
     /// <summary>
@@ -763,12 +990,12 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome == FileOutcome.AlreadyApplied)
         {
-            return AlreadyApplied(result.Relative);
+            return AlreadyApplied(Shown(result.Relative));
         }
 
         if (result.Outcome == FileOutcome.EditAmbiguous)
         {
-            return EditAmbiguous(result.Relative, result.Count, result.Locations);
+            return EditAmbiguous(Shown(result.Relative), result.Count, result.Locations);
         }
 
         if (result.Outcome != FileOutcome.Ok)
@@ -779,13 +1006,13 @@ public static class FileText
                 FileOutcome.EscapeDrift => result.Drift.ToString(),
                 _ => result.Detail,
             };
-            return Error(result.Outcome, result.Relative, "edit", detail);
+            return Error(result.Outcome, Shown(result.Relative), "edit", detail);
         }
 
         var sb = new StringBuilder();
         if (result.Lines.Count > 1)
         {
-            sb.Append("replaced ").Append(Count(result.Lines.Count, "occurrence", "occurrences")).Append(" of old_text in ").Append(result.Relative)
+            sb.Append("replaced ").Append(Count(result.Lines.Count, "occurrence", "occurrences")).Append(" of old_text in ").Append(Shown(result.Relative))
               .Append(" (lines ").Append(string.Join(", ", result.Lines.Take(MaxListedLines).Select(l => l.ToString(CultureInfo.InvariantCulture))));
             if (result.Lines.Count > MaxListedLines)
             {
@@ -795,7 +1022,7 @@ public static class FileText
             return sb.Append(Now(result)).Append(')').Append(StrategyNote(result.Strategy)).ToString();
         }
 
-        sb.Append("edited ").Append(result.Relative).Append(" (").Append(Range(result)).Append(Now(result)).Append(')')
+        sb.Append("edited ").Append(Shown(result.Relative)).Append(" (").Append(Range(result)).Append(Now(result)).Append(')')
           .Append(StrategyNote(result.Strategy));
         if (result.Region.Count > 0)
         {
@@ -835,9 +1062,9 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         return result.Outcome switch
         {
-            FileOutcome.Ok => "created " + result.Relative,
-            FileOutcome.Exists => result.Relative + " already exists",
-            _ => Error(result.Outcome, result.Relative, "create", result.Detail),
+            FileOutcome.Ok => "created " + Shown(result.Relative),
+            FileOutcome.Exists => Shown(result.Relative) + " already exists",
+            _ => Error(result.Outcome, Shown(result.Relative), "create", result.Detail),
         };
     }
 
@@ -846,10 +1073,10 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Outcome is FileOutcome.Exists or FileOutcome.FolderInTheWay ? result.To : result.From, "move", result.Detail, result.To);
+            return Error(result.Outcome, result.AtDestination || result.Outcome is FileOutcome.Exists or FileOutcome.FolderInTheWay ? Shown(result.To) : Shown(result.From), "move", result.Detail, Shown(result.To));
         }
 
-        return (result.Renamed ? "renamed " : "moved ") + result.From + " to " + result.To;
+        return (result.Renamed ? "renamed " : "moved ") + Shown(result.From) + " to " + Shown(result.To) + Replaced(result) + LeftOut(result.LeftOut);
     }
 
     public static string Copied(MoveResult result)
@@ -857,11 +1084,35 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Outcome is FileOutcome.Exists or FileOutcome.FolderInTheWay ? result.To : result.From, "copy", result.Detail, result.To);
+            return Error(result.Outcome, result.AtDestination || result.Outcome is FileOutcome.Exists or FileOutcome.FolderInTheWay or FileOutcome.IsAFile ? Shown(result.To) : Shown(result.From), "copy", result.Detail, Shown(result.To));
         }
 
-        return "copied " + result.From + " to " + result.To;
+        return "copied " + Shown(result.From) + " to " + Shown(result.To) + Replaced(result) + LeftOut(result.LeftOut);
     }
+
+    /// <summary>What an overwrite replaced, said (2026-10-22, review J11): a file, or a folder merged into.</summary>
+    private static string Replaced(MoveResult result) =>
+        !result.Replaced ? "" : result.IsDirectory ? " (merged into the folder there)" : " (replacing the file that was there)";
+
+    /// <summary>
+    /// What a copy, fetch, put or unzip left out (2026-10-22, the fix plan's D17): every <c>.git</c> (no hooks or config planted in a new copy) and
+    /// the files the write guard keeps, at most five named.
+    /// </summary>
+    public static string LeftOut(IReadOnlyList<string> leftOut)
+    {
+        ArgumentNullException.ThrowIfNull(leftOut);
+        if (leftOut.Count == 0)
+        {
+            return "";
+        }
+
+        string named = string.Join(", ", leftOut.Take(5)) + (leftOut.Count > 5 ? ", … " + (leftOut.Count - 5).ToString(CultureInfo.InvariantCulture) + " more" : "");
+        return "; left out " + named + " (repository data and files the file tools never write)";
+    }
+
+    /// <summary>A local folder copy that would leave less than 1 GB free (2026-10-22, D16).</summary>
+    public static string NoRoomToCopy(long bytes, long free) =>
+        "the copy is " + Size(bytes) + " and the drive has " + Size(Math.Max(0, free)) + " free; a copy always leaves " + Size(WorkingDirectory.FreeSpaceReserve) + " free, so nothing was copied";
 
     /// <summary>
     /// A delete's sentence: what is gone, a folder with everything in it (2026-09-20). It names no setting (2026-09-21, the user's
@@ -879,10 +1130,10 @@ public static class FileText
 
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "delete", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "delete", result.Detail);
         }
 
-        string what = result.IsDirectory ? "the folder " + result.Relative + " and everything in it" : result.Relative;
+        string what = result.IsDirectory ? "the folder " + Shown(result.Relative) + " and everything in it" : Shown(result.Relative);
         return result.Way switch
         {
             DeleteWay.Recycled => "moved " + what + " to the " + RecycleBinName,
@@ -896,31 +1147,41 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome == FileOutcome.IntoItself)
         {
-            return string.IsNullOrEmpty(result.Relative) ? RootItself : IntoItself(result.Relative, result.Archive);
+            return string.IsNullOrEmpty(Shown(result.Relative)) ? RootItself : IntoItself(Shown(result.Relative), Shown(result.Archive));
         }
 
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Outcome is FileOutcome.Exists or FileOutcome.IsDirectory ? result.Archive : result.Relative, "zip", result.Detail);
+            return Error(result.Outcome, result.AtDestination || result.Outcome is FileOutcome.Exists or FileOutcome.IsDirectory ? Shown(result.Archive) : Shown(result.Relative), "zip", result.Detail);
         }
 
-        return "zipped " + result.Relative + " into " + result.Archive + " (" + Count(result.Entries, "entry", "entries") + ", " + Size(result.Bytes) + ")";
+        return "zipped " + Shown(result.Relative) + " into " + Shown(result.Archive) + " (" + Count(result.Entries, "entry", "entries") + ", " + Size(result.Bytes) + ")"
+            + (result.Replaced ? " (replacing the archive that was there)" : "") + LeftOut(result.LeftOut);
     }
+
+    /// <summary>An entry with a zip bomb's ratio (2026-10-22, review G7): the whole archive refused, nothing extracted.</summary>
+    public static string ZipBomb(string entry) =>
+        $"'{entry}' expands over {WorkingDirectory.MaxCompressionRatio.ToString(CultureInfo.InvariantCulture)} times its packed size, a zip bomb's shape; nothing was extracted";
+
+    /// <summary>Two entries on one path, or a file where a folder must go (2026-10-22, review G8): nothing extracted.</summary>
+    public static string ZipConflict(string entry) =>
+        $"the archive holds '{entry}' twice, or as both a file and a folder; nothing was extracted";
 
     public static string Unzipped(ZipResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome == FileOutcome.OutsideRoot && result.Detail.Length > 0)
         {
-            return ZipSlip(result.Relative, result.Detail);
+            return ZipSlip(Shown(result.Relative), result.Detail);
         }
 
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Outcome is FileOutcome.Exists or FileOutcome.IsAFile ? result.Archive : result.Relative, "unzip", result.Detail);
+            return Error(result.Outcome, result.AtDestination || result.Outcome is FileOutcome.Exists or FileOutcome.IsAFile ? Shown(result.Archive) : Shown(result.Relative), "unzip", result.Detail);
         }
 
-        return "unzipped " + result.Relative + " into " + result.Archive + " (" + Count(result.Entries, "entry", "entries") + ")";
+        return "unzipped " + Shown(result.Relative) + " into " + Shown(result.Archive) + " (" + Count(result.Entries, "entry", "entries") + ")"
+            + (result.Replaced ? " (replacing files that were there)" : "") + LeftOut(result.LeftOut);
     }
 
     /// <summary>Where <c>open</c> showed a folder: Explorer, or Finder on macOS (2026-10-06, the macOS build). Pinned.</summary>
@@ -940,10 +1201,10 @@ public static class FileText
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
         {
-            return Error(result.Outcome, result.Relative, "open", result.Detail);
+            return Error(result.Outcome, Shown(result.Relative), "open", result.Detail);
         }
 
-        return "opened " + Name(result.Relative) + (result.IsDirectory ? FolderBrowser : where ?? " in the user's editor");
+        return "opened " + Name(Shown(result.Relative)) + (result.IsDirectory ? FolderBrowser : where ?? " in the user's editor");
     }
 
     // ---- formats ----

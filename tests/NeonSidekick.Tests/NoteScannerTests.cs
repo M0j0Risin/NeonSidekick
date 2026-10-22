@@ -42,7 +42,9 @@ public sealed class NoteScannerTests
             "%% open",
             "[[StillComment]]",
             "closed %% #after");
-        Assert.Equal(["Real"], scan.Links.Select(l => l.Target));
+        // A property's wikilink is a link (2026-10-22, review O4: Obsidian reads and renames it), marked as one; nothing else there is.
+        Assert.Equal(["NotALink", "Real"], scan.Links.Select(l => l.Target));
+        Assert.Equal([true, false], scan.Links.Select(l => l.InProperties));
         Assert.Equal(["after"], scan.Tags.Select(t => t.Name));
         Assert.Equal(5, scan.BodyLine);
     }

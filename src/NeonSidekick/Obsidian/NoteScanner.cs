@@ -25,6 +25,15 @@ public sealed record NoteLink(NoteLinkKind Kind, string Target, string Subpath, 
     public bool IsWiki => Kind is NoteLinkKind.Wiki or NoteLinkKind.Embed;
 
     public bool IsEmbed => Kind is NoteLinkKind.Embed or NoteLinkKind.MarkdownEmbed;
+
+    /// <summary>
+    /// A Markdown link's title as written after its URL, quotes and all (<c>"The plan"</c>), empty for none (2026-10-22, review H19: a move
+    /// rewrote <c>[x](Plan.md "title")</c> without it).
+    /// </summary>
+    public string Title { get; init; } = "";
+
+    /// <summary>Whether the link sits in the note's properties (2026-10-22, review O4: Obsidian reads and renames those too).</summary>
+    public bool InProperties { get; init; }
 }
 
 /// <summary>An ATX heading: its level (1–6), its text without the <c>#</c>s, its 1-based line.</summary>
@@ -62,6 +71,12 @@ public static class NoteScanner
         var headings = new List<NoteHeading>();
         var blocks = new List<string>();
         int body = NoteProperties.BodyStart(lines);
+        // The properties' wikilinks (2026-10-22, review O4: related: "[[Plan]]" is a link to Obsidian, renamed with the note).
+        for (int index = 1; index < body - 1; index++)
+        {
+            PropertyLinks(lines[index], index + 1, links);
+        }
+
         char fence = '\0';
         int fenceLength = 0;
         bool comment = false;
@@ -96,7 +111,8 @@ public static class NoteScanner
             }
 
             comment = ScanLine(line, number, comment, links, tags);
-            if (BlockId(line) is { } id)
+            // A block id inside a %% comment is no block id (2026-10-22, review K16): the line ends outside one for it to count.
+            if (!comment && BlockId(line) is { } id)
             {
                 blocks.Add(id);
             }
@@ -184,9 +200,35 @@ public static class NoteScanner
         return trimmed[(caret + 1)..];
     }
 
-    /// <summary>One body line's links and tags; returns whether a <c>%%</c> comment is still open at its end.</summary>
+    /// <summary>A property line's <c>[[wikilinks]]</c> (review O4); the line is YAML, so nothing else in it is a link.</summary>
+    private static void PropertyLinks(string line, int number, List<NoteLink> links)
+    {
+        int i = 0;
+        while ((i = line.IndexOf("[[", i, StringComparison.Ordinal)) >= 0)
+        {
+            int end = line.IndexOf("]]", i + 2, StringComparison.Ordinal);
+            if (end < 0)
+            {
+                return;
+            }
+
+            if (end > i + 2)
+            {
+                links.Add(Wiki(line.Substring(i + 2, end - i - 2), false, number, i, end + 2 - i) with { Raw = line[i..(end + 2)], InProperties = true });
+            }
+
+            i = end + 2;
+        }
+    }
+
+    /// <summary>
+    /// One body line's links and tags; returns whether a <c>%%</c> comment is still open at its end. Linear in the line (2026-10-22, review M1:
+    /// every unclosed <c>[</c>, <c>[[</c> and backtick run searched to the line's end again, a 2 MB line held the vault's lock for minutes):
+    /// the brackets are paired once, and each search remembers where it found its next match.
+    /// </summary>
     private static bool ScanLine(string line, int number, bool comment, List<NoteLink> links, List<NoteTag> tags)
     {
+        var scan = new LineScan(line);
         int i = 0;
         while (i < line.Length)
         {
@@ -207,7 +249,7 @@ public static class NoteScanner
             if (c == '`')
             {
                 int run = Run(line, i, '`');
-                int close = FindRun(line, i + run, run);
+                int close = scan.FindRun(i + run, run);
                 if (close >= 0)
                 {
                     i = close + run;
@@ -222,7 +264,7 @@ public static class NoteScanner
             int open = bang ? i + 1 : i;
             if (line[open] == '[' && open + 1 < line.Length && line[open + 1] == '[')
             {
-                int end = line.IndexOf("]]", open + 2, StringComparison.Ordinal);
+                int end = scan.NextWikiClose(open + 2);
                 if (end > open + 2)
                 {
                     links.Add(Wiki(line.Substring(open + 2, end - open - 2), bang, number, i, end + 2 - i) with { Raw = line[i..(end + 2)] });
@@ -230,10 +272,10 @@ public static class NoteScanner
                     continue;
                 }
             }
-            else if (line[open] == '[' && MarkdownLink(line, open, out string text, out string url, out int after) && IsNoteUrl(url))
+            else if (line[open] == '[' && MarkdownLink(line, open, scan, out string text, out string url, out string title, out int after) && IsNoteUrl(url))
             {
                 SplitSubpath(Decode(url), out string target, out string subpath);
-                links.Add(new NoteLink(bang ? NoteLinkKind.MarkdownEmbed : NoteLinkKind.Markdown, target, subpath, text, number, i, after - i, line[i..after]));
+                links.Add(new NoteLink(bang ? NoteLinkKind.MarkdownEmbed : NoteLinkKind.Markdown, target, subpath, text, number, i, after - i, line[i..after]) { Title = title });
                 i = after;
                 continue;
             }
@@ -262,28 +304,101 @@ public static class NoteScanner
         return i - at;
     }
 
-    /// <summary>The index of the next run of exactly <paramref name="length"/> backticks from <paramref name="from"/>, or -1.</summary>
-    private static int FindRun(string line, int from, int length)
+    /// <summary>
+    /// One line's searches, each remembering its last answer (review M1): the brackets paired once by a stack, the next <c>]]</c> and the
+    /// next run of each length of backticks found from the last place looked, so a line full of unclosed openers is read a bounded number of times.
+    /// </summary>
+    private sealed class LineScan(string line)
     {
-        int i = from;
-        while (i < line.Length)
-        {
-            if (line[i] == '`')
-            {
-                int run = Run(line, i, '`');
-                if (run == length)
-                {
-                    return i;
-                }
+        private int[]? _closeOf;
+        private int _wikiFrom = int.MaxValue;
+        private int _wikiAt = -1;
+        private Dictionary<int, (int From, int At)>? _runs;
+        private int _parenFrom = int.MaxValue;
+        private int _parenAt = -1;
 
-                i += run;
-                continue;
+        /// <summary>The <c>]</c> pairing the <c>[</c> at <paramref name="open"/>, or -1 (nested brackets counted, as the scan always did).</summary>
+        public int CloseOf(int open)
+        {
+            if (_closeOf is null)
+            {
+                _closeOf = new int[line.Length];
+                Array.Fill(_closeOf, -1);
+                var opens = new Stack<int>();
+                for (int i = 0; i < line.Length; i++)
+                {
+                    if (line[i] == '[')
+                    {
+                        opens.Push(i);
+                    }
+                    else if (line[i] == ']' && opens.Count > 0)
+                    {
+                        _closeOf[opens.Pop()] = i;
+                    }
+                }
             }
 
-            i++;
+            return _closeOf[open];
         }
 
-        return -1;
+        /// <summary>The next <c>]]</c> at or after <paramref name="from"/>, or -1.</summary>
+        public int NextWikiClose(int from)
+        {
+            if (from >= _wikiFrom && (_wikiAt < 0 || _wikiAt >= from))
+            {
+                return _wikiAt;
+            }
+
+            _wikiFrom = from;
+            _wikiAt = line.IndexOf("]]", from, StringComparison.Ordinal);
+            return _wikiAt;
+        }
+
+        /// <summary>The next <c>)</c> at or after <paramref name="from"/>, or -1.</summary>
+        public int NextParen(int from)
+        {
+            if (from >= _parenFrom && (_parenAt < 0 || _parenAt >= from))
+            {
+                return _parenAt;
+            }
+
+            _parenFrom = from;
+            _parenAt = line.IndexOf(')', from);
+            return _parenAt;
+        }
+
+        /// <summary>The index of the next run of exactly <paramref name="length"/> backticks from <paramref name="from"/>, or -1.</summary>
+        public int FindRun(int from, int length)
+        {
+            _runs ??= [];
+            if (_runs.TryGetValue(length, out var last) && from >= last.From && (last.At < 0 || last.At >= from))
+            {
+                return last.At;
+            }
+
+            int found = -1;
+            int i = from;
+            while (i < line.Length)
+            {
+                if (line[i] == '`')
+                {
+                    int run = Run(line, i, '`');
+                    if (run == length)
+                    {
+                        found = i;
+                        break;
+                    }
+
+                    i += run;
+                    continue;
+                }
+
+                i++;
+            }
+
+            _runs[length] = (from, found);
+            return found;
+        }
     }
 
     private static NoteLink Wiki(string inner, bool embed, int line, int column, int length)
@@ -310,64 +425,113 @@ public static class NoteScanner
         subpath = hash >= 0 ? text[hash..].Trim() : "";
     }
 
-    /// <summary><c>[text](url)</c> starting at the <c>[</c> at <paramref name="open"/>: its text, its URL (a <c>&lt;…&gt;</c> one unwrapped, a title after a space dropped) and the index after the <c>)</c>.</summary>
-    private static bool MarkdownLink(string line, int open, out string text, out string url, out int after)
+    /// <summary>
+    /// <c>[text](url "title")</c> starting at the <c>[</c> at <paramref name="open"/>: its text, its URL (a <c>&lt;…&gt;</c> one unwrapped)
+    /// and its title as written, and the index after the <c>)</c>. The URL runs to its first space or to the <c>)</c> that balances its
+    /// parentheses (2026-10-22, review H19: it ended at the first <c>)</c>, so <c>[x](Notes (old).md)</c> was <c>Notes (old</c> and a move
+    /// wrote <c>[x](New.md).md)</c>), a backslash escaping the next character, as CommonMark reads it.
+    /// </summary>
+    private static bool MarkdownLink(string line, int open, LineScan scan, out string text, out string url, out string title, out int after)
     {
-        text = url = "";
+        text = url = title = "";
         after = 0;
-        int depth = 0;
-        int close = -1;
-        for (int i = open; i < line.Length; i++)
-        {
-            if (line[i] == '[')
-            {
-                depth++;
-            }
-            else if (line[i] == ']' && --depth == 0)
-            {
-                close = i;
-                break;
-            }
-        }
-
+        int close = scan.CloseOf(open);
         if (close < 0 || close + 1 >= line.Length || line[close + 1] != '(')
         {
             return false;
         }
 
-        int start = close + 2;
-        int end;
-        if (start < line.Length && line[start] == '<')
+        // No ')' anywhere after: no link, found in one remembered search.
+        if (scan.NextParen(close + 2) < 0)
         {
-            end = line.IndexOf('>', start + 1);
+            return false;
+        }
+
+        int i = close + 2;
+        while (i < line.Length && line[i] is ' ' or '\t')
+        {
+            i++;
+        }
+
+        if (i < line.Length && line[i] == '<')
+        {
+            int end = line.IndexOf('>', i + 1);
             if (end < 0)
             {
                 return false;
             }
 
-            url = line[(start + 1)..end];
-            end = line.IndexOf(')', end);
+            url = line[(i + 1)..end];
+            i = end + 1;
         }
         else
         {
-            end = line.IndexOf(')', start);
+            int start = i;
+            int depth = 0;
+            while (i < line.Length)
+            {
+                char c = line[i];
+                if (c == '\\' && i + 1 < line.Length)
+                {
+                    i += 2;
+                    continue;
+                }
+
+                if (c is ' ' or '\t')
+                {
+                    break;
+                }
+
+                if (c == '(')
+                {
+                    depth++;
+                }
+                else if (c == ')')
+                {
+                    if (depth == 0)
+                    {
+                        break;
+                    }
+
+                    depth--;
+                }
+
+                i++;
+            }
+
+            url = line[start..i];
+        }
+
+        int beforeTitle = i;
+        while (i < line.Length && line[i] is ' ' or '\t')
+        {
+            i++;
+        }
+
+        if (i < line.Length && line[i] is '"' or '\'' or '(' && i > beforeTitle)
+        {
+            char closer = line[i] == '(' ? ')' : line[i];
+            int end = line.IndexOf(closer, i + 1);
             if (end < 0)
             {
                 return false;
             }
 
-            url = line[start..end].Trim();
-            int space = url.IndexOf(' ', StringComparison.Ordinal);
-            url = space >= 0 ? url[..space] : url;
+            title = line[i..(end + 1)];
+            i = end + 1;
+            while (i < line.Length && line[i] is ' ' or '\t')
+            {
+                i++;
+            }
         }
 
-        if (end < 0)
+        if (i >= line.Length || line[i] != ')')
         {
             return false;
         }
 
         text = line[(open + 1)..close];
-        after = end + 1;
+        after = i + 1;
         return url.Length > 0;
     }
 

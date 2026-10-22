@@ -610,6 +610,70 @@ public static partial class ChildJob
         }
     }
 
+    private static readonly object s_keptLock = new();
+    private static readonly List<nint> s_kept = [];
+
+    /// <summary>
+    /// Holds a foreground command's kill-on-close job until the app ends (2026-10-22, review F1/F2, the fix plan's D9): what the command
+    /// left running — <c>code .</c>, a <c>start</c>ed server — outlives the command as before, and ends with the app, a crash too, when the
+    /// kernel closes the handle. A job already empty is closed at once, and each call closes the kept jobs that have emptied since, so the
+    /// handles kept are only those of jobs still holding something.
+    /// </summary>
+    internal static void KeepUntilExit(nint job)
+    {
+        if (!OperatingSystem.IsWindows() || job == 0)
+        {
+            return;
+        }
+
+        lock (s_keptLock)
+        {
+            for (int i = s_kept.Count - 1; i >= 0; i--)
+            {
+                if (!HoldsProcesses(s_kept[i]))
+                {
+                    JobObjectNative.CloseHandle(s_kept[i]);
+                    s_kept.RemoveAt(i);
+                }
+            }
+
+            if (HoldsProcesses(job))
+            {
+                s_kept.Add(job);
+            }
+            else
+            {
+                JobObjectNative.CloseHandle(job);
+            }
+        }
+    }
+
+    /// <summary>The jobs <see cref="KeepUntilExit"/> holds now (the tests').</summary>
+    internal static int KeptCount
+    {
+        get
+        {
+            lock (s_keptLock)
+            {
+                return s_kept.Count;
+            }
+        }
+    }
+
+    /// <summary>Closes every kept job, ending what runs in them, as the app's end does (the tests' stand-in for an exit).</summary>
+    internal static void CloseKept()
+    {
+        lock (s_keptLock)
+        {
+            foreach (nint job in s_kept)
+            {
+                Close(job);
+            }
+
+            s_kept.Clear();
+        }
+    }
+
     private static string LastError(string call) =>
         string.Create(CultureInfo.InvariantCulture, $"{call} failed (error {Marshal.GetLastPInvokeError()})");
 }

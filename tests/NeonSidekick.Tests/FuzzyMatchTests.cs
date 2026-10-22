@@ -170,8 +170,10 @@ public class FuzzyMatchTests
         Assert.Empty(Find(MatchStrategy.ContextAware, content, "alpha one\nzzzz\n\ngamma three"));                  // one line at 0.4 rejects the block
         Assert.Equal([Span(0, 31)], Find(MatchStrategy.ContextAware, content, "alpha one\nbeta two\n \ngamma three"));   // a blank pattern line is skipped
         Assert.Empty(Find(MatchStrategy.ContextAware, "a\nb", "a\nb\nc\nd"));
-        Assert.Equal([Span(0, 9)], Find(MatchStrategy.ContextAware, content, "alpha one"));
-        Assert.Equal([Span(0, 9)], Find(MatchStrategy.ContextAware, content, "alpha ones"));
+        // One line alone is never matched by likeness (2026-10-22, review G11: an absent "x = 1" edited "y = 1").
+        Assert.Empty(Find(MatchStrategy.ContextAware, content, "alpha one"));
+        Assert.Empty(Find(MatchStrategy.ContextAware, content, "alpha ones"));
+        Assert.Equal(MatchOutcome.NotFound, FuzzyMatch.Replace("y = 1\n", "x = 1", "x = 2", false).Outcome);
     }
 
     [Fact]

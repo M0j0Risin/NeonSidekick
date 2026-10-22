@@ -50,8 +50,19 @@ public static class PdfFind
             return false;
         }
 
+        // Also with a line-end hyphen joined away or kept (2026-10-22, review T5: "warran-\nty" was never found as "warranty").
         string folded = Fold(pageText);
-        return words.All(w => folded.Contains(w, StringComparison.Ordinal));
+        string joined = Joined(folded, keepHyphen: false);
+        string hyphened = Joined(folded, keepHyphen: true);
+        return words.All(w => folded.Contains(w, StringComparison.Ordinal) || joined.Contains(w, StringComparison.Ordinal) || hyphened.Contains(w, StringComparison.Ordinal));
+    }
+
+    /// <summary>The text with each hyphen ending a line joined to the next line, the hyphen dropped or kept.</summary>
+    public static string Joined(string text, bool keepHyphen)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string join = keepHyphen ? "-" : "";
+        return text.Replace("-\r\n", join, StringComparison.Ordinal).Replace("-\n", join, StringComparison.Ordinal).Replace("\u00AD\n", "", StringComparison.Ordinal);
     }
 
     /// <summary>The page's first line holding the first word (or any word), cut to <see cref="ContextChars"/> around it; empty when none does.</summary>
@@ -78,8 +89,20 @@ public static class PdfFind
 
                 // The fold may shorten the line (a decomposed accent dropped): place the window by proportion.
                 int center = folded.Length == 0 ? 0 : (int)((long)at * line.Length / folded.Length);
-                int start = Math.Clamp(center - ContextChars / 3, 0, line.Length - ContextChars);
-                return (start > 0 ? "…" : "") + line.Substring(start, ContextChars).Trim() + (start + ContextChars < line.Length ? "…" : "");
+                // The window's edges never split a surrogate pair (2026-10-22, review G20).
+                int start = Files.TextCut.SafeStart(line, Math.Clamp(center - ContextChars / 3, 0, line.Length - ContextChars));
+                int length = Files.TextCut.SafeLength(line.AsSpan(start), Math.Min(ContextChars, line.Length - start));
+                return (start > 0 ? "…" : "") + line.Substring(start, length).Trim() + (start + length < line.Length ? "…" : "");
+            }
+        }
+
+        // A word found only across a line's hyphen: its two lines as one (review T5).
+        var joinedLines = Joined(pageText, keepHyphen: false).Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        foreach (string word in words)
+        {
+            if (joinedLines.FirstOrDefault(l => Fold(l).Contains(word, StringComparison.Ordinal)) is { } line)
+            {
+                return line.Length <= ContextChars ? line : Files.TextCut.Safe(line, ContextChars - 1) + "…";
             }
         }
 

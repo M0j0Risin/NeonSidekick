@@ -166,7 +166,7 @@ public static class ShoppingCommandRunner
 
                 // A file per export, stamped with the local time (2026-10-11); one the same second is written over.
                 string name = ShoppingText.ExportFileName((time ?? TimeProvider.System).GetLocalNow());
-                var written = files.WriteText(name, ShoppingText.Markdown(view, line.Verbose), overwrite: true);
+                var written = WriteGuard.AsApp(() => files.WriteText(name, ShoppingText.Markdown(view, line.Verbose), overwrite: true));
                 return [written.Outcome == FileOutcome.Ok
                     ? ShoppingText.Exported(Path.Combine(files.Root, written.Relative), open)
                     : FileText.Error(written.Outcome, name, "write", written.Detail)];

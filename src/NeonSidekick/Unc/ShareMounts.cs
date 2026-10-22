@@ -17,6 +17,20 @@ public interface IShareMounts
     /// </summary>
     UncResult<string> Root(UncNamedShare share, Func<UncResult<string?>> signIn);
 
+    /// <summary>
+    /// <see cref="Root(UncNamedShare, Func{UncResult{string?}})"/> for a call that may write (2026-10-22, review H4): only then is a
+    /// <c>readwrite</c> share mounted read-write — a read, and every call while <c>UNC writes</c> is off, gets a read-only mount.
+    /// </summary>
+    UncResult<string> Root(UncNamedShare share, Func<UncResult<string?>> signIn, bool writable) => Root(share, signIn);
+
+    /// <summary>
+    /// A write call on <paramref name="share"/> ended: a read-write mount of ours made as another account is let go now, so it doesn't stay
+    /// writable by anything else this user runs (a shell command) for the rest of the run (review H4). Never throws.
+    /// </summary>
+    void EndWrite(UncNamedShare share)
+    {
+    }
+
     /// <summary>Where <paramref name="share"/> is mounted and as whom (<c>--unc-check</c>'s line), or null while it is not.</summary>
     string? Describe(UncNamedShare share);
 
@@ -119,10 +133,13 @@ public sealed class ShareMounts : IShareMounts
     }
 
     /// <summary><see cref="Root(UncNamedShare, Func{UncResult{string?}})"/> with the password at hand (null as you).</summary>
-    public UncResult<string> Root(UncNamedShare share, string? password) => Root(share, () => UncResult<string?>.Ok(password));
+    public UncResult<string> Root(UncNamedShare share, string? password, bool writable = false) => Root(share, () => UncResult<string?>.Ok(password), writable);
 
     /// <inheritdoc />
-    public UncResult<string> Root(UncNamedShare share, Func<UncResult<string?>> signIn)
+    public UncResult<string> Root(UncNamedShare share, Func<UncResult<string?>> signIn) => Root(share, signIn, writable: false);
+
+    /// <inheritdoc />
+    public UncResult<string> Root(UncNamedShare share, Func<UncResult<string?>> signIn, bool writable)
     {
         ArgumentNullException.ThrowIfNull(share);
         ArgumentNullException.ThrowIfNull(signIn);
@@ -132,7 +149,8 @@ public sealed class ShareMounts : IShareMounts
         }
 
         string? account = share.Config.IsRunAs ? share.Config.User!.Trim() : null;
-        bool readOnly = !share.Config.IsReadWrite;
+        // Read-write only for a call that may write on a readwrite share (review H4: the share's access alone decided, whatever UNC writes said).
+        bool readOnly = !(writable && share.Config.IsReadWrite);
         string key = MacMountRules.Key(server, name, account, readOnly);
         Task<int>? mounting;
         lock (_gate)
@@ -215,7 +233,9 @@ public sealed class ShareMounts : IShareMounts
                     others = [.. _mounts.Where(m => m.Key != key && (m.Value.Ours || (account is null && m.Value.Account is not null))).Select(m => m.Value.Fsid)];
                 }
 
-                point = MacMountRules.Find(_system.SmbMounts().Where(m => !others.Contains(m.Fsid)), server, name, readOnly)?.On;
+                // As you, only this user's own mount signed in as them (review H20); under runas, Landed checks the account.
+                string user = Environment.UserName;
+                point = MacMountRules.Find(_system.SmbMounts().Where(m => !others.Contains(m.Fsid) && (account is not null || MacMountRules.IsOwnSignIn(m, _uid, user))), server, name, readOnly)?.On;
                 adopted = point is not null;
             }
 
@@ -314,11 +334,44 @@ public sealed class ShareMounts : IShareMounts
             return null;
         }
 
-        string key = MacMountRules.Key(server, name, share.Config.IsRunAs ? share.Config.User!.Trim() : null, !share.Config.IsReadWrite);
+        string? account = share.Config.IsRunAs ? share.Config.User!.Trim() : null;
         lock (_gate)
         {
-            return Live(key) is { } live ? UncText.MountDescription(live.Point, live.From, live.Ours, !share.Config.IsReadWrite) : null;
+            // Read-only first, the mount a read makes (review H4); a write's read-write one while it stands.
+            foreach (bool readOnly in new[] { true, false })
+            {
+                if (Live(MacMountRules.Key(server, name, account, readOnly)) is { } live)
+                {
+                    return UncText.MountDescription(live.Point, live.From, live.Ours, readOnly);
+                }
+            }
+
+            return null;
         }
+    }
+
+    /// <inheritdoc />
+    public void EndWrite(UncNamedShare share)
+    {
+        ArgumentNullException.ThrowIfNull(share);
+        if (!share.Config.IsRunAs || UncPath.Split(UncPath.Spell(share.Config.Root, windows: false)) is not var (server, name, _))
+        {
+            return;
+        }
+
+        Mounted? mounted;
+        lock (_gate)
+        {
+            string key = MacMountRules.Key(server, name, share.Config.User!.Trim(), readOnly: false);
+            if (!_mounts.TryGetValue(key, out mounted) || !mounted.Ours)
+            {
+                return;
+            }
+
+            _mounts.Remove(key);
+        }
+
+        UnmountOne(mounted);
     }
 
     /// <inheritdoc />

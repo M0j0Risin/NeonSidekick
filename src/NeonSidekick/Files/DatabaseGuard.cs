@@ -10,8 +10,38 @@ namespace NeonSidekick.Files;
 /// </summary>
 public sealed record DatabaseGuard(IReadOnlyList<string> NamedFiles)
 {
-    /// <summary>A SQLite database's usual file extensions, compared case-blind.</summary>
-    public static readonly IReadOnlyList<string> Extensions = [".db", ".db3", ".sqlite", ".sqlite3"];
+    /// <summary>
+    /// A SQLite database's usual file extensions, compared case-blind; <c>.s3db</c>, <c>.sl3</c>, <c>.sl2</c> and <c>.sqlitedb</c> since
+    /// 2026-10-22 (review I9: the SQLite tools open any file, so those were databases left open to the file and shell tools).
+    /// </summary>
+    public static readonly IReadOnlyList<string> Extensions = [".db", ".db3", ".sqlite", ".sqlite3", ".s3db", ".sl3", ".sl2", ".sqlitedb"];
+
+    /// <summary>The 16 bytes every SQLite database file starts with.</summary>
+    private static ReadOnlySpan<byte> Header => "SQLite format 3\0"u8;
+
+    /// <summary>
+    /// Whether the existing file at <paramref name="fullPath"/> starts with SQLite's header (2026-10-22, review I9): a database by its content,
+    /// whatever its name. One 16-byte read; false for a missing, unreadable or short file and for a folder.
+    /// </summary>
+    public static bool HasSqliteHeader(string fullPath)
+    {
+        ArgumentNullException.ThrowIfNull(fullPath);
+        try
+        {
+            if (!File.Exists(fullPath))
+            {
+                return false;
+            }
+
+            Span<byte> start = stackalloc byte[16];
+            using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
+            return stream.ReadAtLeast(start, 16, throwOnEndOfStream: false) == 16 && start.SequenceEqual(Header);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>The suffixes of the files SQLite keeps beside a database: its rollback journal and its write-ahead log and index.</summary>
     public static readonly IReadOnlyList<string> Siblings = ["-journal", "-wal", "-shm"];

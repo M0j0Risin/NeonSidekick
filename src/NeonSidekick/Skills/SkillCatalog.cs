@@ -481,6 +481,7 @@ public sealed class SkillCatalog
     private static ReadResult Cut(string text, int max) =>
         text.Length <= max ? new ReadResult(ReadOutcome.Ok, text, false) : new ReadResult(ReadOutcome.Ok, text[..max], true);
 
+    // A slicing bug is no file failure (2026-10-22, review K18, WorkingDirectory.IsFileFailure's rule).
     private static bool IsFileFailure(Exception ex) =>
-        ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException;
+        ex is IOException or UnauthorizedAccessException or NotSupportedException || (ex is ArgumentException && ex is not (ArgumentOutOfRangeException or ArgumentNullException));
 }

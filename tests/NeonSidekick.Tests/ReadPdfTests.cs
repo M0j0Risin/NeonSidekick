@@ -163,6 +163,31 @@ public sealed class ReadPdfTests : IDisposable
         Assert.Equal(PdfText.BadPages(spec), error);
     }
 
+    /// <summary>
+    /// 2026-10-22, review S1: a first page near the top made the read's last page <see cref="int.MaxValue"/>, whose <c>int</c> walk never
+    /// ended (the process filled a set until it died). The walk now counts in <see cref="long"/> and the sum is held.
+    /// </summary>
+    [Fact]
+    public void PageRange_NearTheTop_ResolvesAndEnds()
+    {
+        Assert.True(PdfPageRange.TryParse("2147481648-", out var range, out _));
+        int last = PdfPageRange.LastOf(range!.First, PdfReading.MaxPagesPerRead);
+        Assert.Equal(int.MaxValue, last);
+        var pages = range.Resolve(last);
+        Assert.Equal(PdfReading.MaxPagesPerRead, pages.Count);
+        Assert.Equal(int.MaxValue, pages[^1]);
+    }
+
+    /// <summary>2026-10-22, review K10: more than <see cref="PdfPageRange.MaxParts"/> parts is refused before anything is resolved.</summary>
+    [Fact]
+    public void PageRange_TooManyParts_IsRefused()
+    {
+        string spec = string.Join(",", Enumerable.Repeat("1-2000", PdfPageRange.MaxParts + 1));
+        Assert.False(PdfPageRange.TryParse(spec, out _, out string error));
+        Assert.Equal(PdfText.TooManyPageParts(PdfPageRange.MaxParts), error);
+        Assert.True(PdfPageRange.TryParse(string.Join(",", Enumerable.Repeat("3", PdfPageRange.MaxParts)), out _, out _));
+    }
+
     [Fact]
     public void Text_RunsHeadersAndHeadings()
     {
@@ -198,8 +223,8 @@ public sealed class ReadPdfTests : IDisposable
     {
         Assert.Equal("The warranty covers the whole machine. An example of it.\n\nPage two.",
             PdfReflow.Reflow(["The warranty covers the\nwhole machine. An exam-\nple of it.", "Page two.", ""]));
-        // A compound split at a line's end reads as one word (no dictionary tells it from a broken word); spoken, it sounds the same.
-        Assert.Equal("a wellknown one", PdfReflow.Join(["a well-", "known one"]));
+        // A compound split at a line's end keeps its hyphen (2026-10-22, review T6: "well-" + "known" read "wellknown").
+        Assert.Equal("a well-known one", PdfReflow.Join(["a well-", "known one"]));
         Assert.Equal("Cost: 12- 15 units", PdfReflow.Join(["Cost: 12-", "15 units"]));   // a hyphen after a digit stays, joined with a space
         Assert.Equal("See Part-", PdfReflow.Join(["See Part-"]));
         Assert.Equal("Part- One", PdfReflow.Join(["Part-", "One"]));   // a capital next: a real dash, kept
@@ -308,9 +333,23 @@ public sealed class ReadPdfTests : IDisposable
         PutPdf("r.pdf");
         Pages(new string('x', 50_000), "two");
         string text = await Text(("path", "r.pdf"), ("pages", "1-2"));
-        Assert.StartsWith("r.pdf (page 1 of 2; next: pages \"2-\")", text, StringComparison.Ordinal);
+        // What is left of the pages asked, not an open range (2026-10-22, review T1).
+        Assert.StartsWith("r.pdf (page 1 of 2; next: pages \"2\")", text, StringComparison.Ordinal);
         Assert.Contains("(page 1 cut at ", text, StringComparison.Ordinal);
-        Assert.Contains(" of 50,000 characters; pictures: true shows it all)", text, StringComparison.Ordinal);
+        // The note names where to read on since 2026-10-22 (review S8: it sent a text-only model to pictures).
+        Assert.Contains(" of 50,000 characters; next: pages \"1\" with from_char ", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>2026-10-22, review S8: from_char reads a long page on from its cut, and needs one page.</summary>
+    [Fact]
+    public async Task ALongPage_ReadsOnFromItsCut()
+    {
+        PutPdf("r.pdf");
+        Pages(new string('x', 40_000) + new string('y', 10_000), "two");
+        string rest = await Text(("path", "r.pdf"), ("pages", "1"), ("from_char", 40000));
+        Assert.Contains(new string('y', 10_000), rest, StringComparison.Ordinal);
+        Assert.DoesNotContain("xxxx", rest, StringComparison.Ordinal);
+        Assert.Equal(PdfText.FromCharNeedsOnePage, await Text(("path", "r.pdf"), ("pages", "1-2"), ("from_char", 5)));
     }
 
     [Fact]

@@ -158,6 +158,12 @@ internal sealed class LlmSession : IDisposable
     /// <summary>Non-null when a chat client exists.</summary>
     public Assistant? Assistant { get; private set; }
 
+    /// <summary>
+    /// The main chat's project-file allow (2026-10-22, review P1, the fix plan's D2), handed to each <see cref="Assistant"/> this session makes;
+    /// null (headless, a test) refuses such a write. Linked clients (advisors, bots) never get it.
+    /// </summary>
+    public Func<string, CancellationToken, Task<bool?>>? ProjectFileAsk { get; set; }
+
     /// <summary>The embedded model's catalog, installs and server (2026-09-29); null when this session offers none.</summary>
     public IEmbeddedLlm? Embedded => _embedded;
 
@@ -755,7 +761,7 @@ internal sealed class LlmSession : IDisposable
         try
         {
             _client = _factory(Endpoint, Timeouts, default);
-            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId) };
+            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId), ProjectFileAsk = ProjectFileAsk };
             return true;
         }
         catch (Exception ex)

@@ -93,11 +93,57 @@ public static class ImageEditor
             // codecs: it swaps the sides itself for a quarter-turn orientation). A second swap here had image_info name a
             // sideways photo's stored size as upright and image_edit plan crops and sizes against the wrong sides.
             var frame = info.Frames[0];
+            // An orientation MagicScaler doesn't see (a PNG's eXIf, a WebP's EXIF; review U3) told, and the sides as it shows.
+            if (frame.ExifOrientation == Orientation.Normal && MetadataStripper.ExifOrientation(bytes) is { } own and > 1)
+            {
+                bool quarter = own >= 5;
+                return new ImageInfo(info.MimeType, quarter ? frame.Height : frame.Width, quarter ? frame.Width : frame.Height, info.Frames.Count, frame.HasAlpha, (Orientation)own, bytes.LongLength);
+            }
+
             return new ImageInfo(info.MimeType, frame.Width, frame.Height, info.Frames.Count, frame.HasAlpha, frame.ExifOrientation, bytes.LongLength);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="source"/> with an EXIF orientation MagicScaler leaves unapplied (a PNG's or WebP's, review U3) applied, as a PNG with
+    /// no metadata; the bytes as they are otherwise. A JPEG's, MagicScaler applies itself.
+    /// </summary>
+    public static byte[] Upright(byte[] source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (MetadataStripper.ContainerOf(source) is not (StripContainer.Png or StripContainer.WebP) || MetadataStripper.ExifOrientation(source) is not { } own || own <= 1)
+        {
+            return source;
+        }
+
+        try
+        {
+            var stored = ImageFileInfo.Load(source);
+            if (stored.Frames.Count == 0 || stored.Frames[0].ExifOrientation != Orientation.Normal)
+            {
+                return source;
+            }
+
+            var settings = new ProcessImageSettings { EncoderOptions = PngEncoderOptions.Default };
+            if (!settings.TrySetEncoderFormat(ImageFormats.Png.MimeType))
+            {
+                return source;
+            }
+
+            using var input = new MemoryStream(source, writable: false);
+            using var pipeline = MagicImageProcessor.BuildPipeline(input, settings);
+            pipeline.AddTransform(new OrientationTransform((Orientation)own));
+            using var output = new MemoryStream();
+            _ = pipeline.WriteOutput(output);
+            return output.ToArray();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return source;
         }
     }
 
@@ -256,6 +302,9 @@ public static class ImageEditor
             return (null, ImageText.SourceTooBig);
         }
 
+        // A PNG's or WebP's own EXIF orientation applied first, so every step works on the picture as it shows (2026-10-22, review U3:
+        // MagicScaler doesn't see it, and an edit baked the stored, sideways pixels).
+        source = Upright(source);
         var info = Info(source);
         if (info is null)
         {
@@ -292,7 +341,8 @@ public static class ImageEditor
                 return (Result(bytes, format, info, format.Lossy ? quality : null, fitTried: false, shrunk: false), null);
             }
 
-            return Fit(source, request, format, geometry, info, quality, maxKb * 1024L, cancellationToken);
+            // A kilobyte is 1,000 bytes, as every size the app shows counts it (2026-10-22, review N7: "101.5 KB; under 100 KB").
+            return Fit(source, request, format, geometry, info, quality, maxKb * 1000L, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -417,7 +467,7 @@ public static class ImageEditor
             }
         }
 
-        return (null, ImageText.CannotFit(limit / 1024, smallest, format));
+        return (null, ImageText.CannotFit(limit / 1000, smallest, format));
     }
 
     private static ImageEditResult Result(byte[] bytes, ImageFormat format, ImageInfo source, int? quality, bool fitTried, bool shrunk)
@@ -439,6 +489,9 @@ public static class ImageEditor
 
         var background = request.Background ?? Color.FromArgb(255, 255, 255, 255);
         bool opaqueFormat = format == ImageFormats.Jpeg || format == ImageFormats.Bmp;
+        // A format with no alpha pads with the matte, never a transparent black (2026-10-22, review I13: a transparent background on a JPEG
+        // matted the picture white but padded it black).
+        var fill = opaqueFormat && background.A == 0 ? Color.FromArgb(255, 255, 255, 255) : background;
         var settings = new ProcessImageSettings
         {
             Crop = geometry.Crop,
@@ -449,7 +502,7 @@ public static class ImageEditor
             Sharpen = request.Sharpen ?? true,
             DpiX = request.Dpi ?? 0,
             DpiY = request.Dpi ?? 0,
-            EncoderOptions = EncoderOptions(request, format, quality),
+            EncoderOptions = EncoderOptions(request, format, quality, source),
         };
         if (request.Sharpen == true)
         {
@@ -459,7 +512,7 @@ public static class ImageEditor
         if (opaqueFormat)
         {
             // MagicScaler's matte is black unless set: a transparent PNG becomes a JPEG on white (or the background asked for).
-            settings.MatteColor = background.A == 0 ? Color.FromArgb(255, 255, 255, 255) : background;
+            settings.MatteColor = fill;
         }
 
         if (InterpolationOf(request.Interpolation) is { } interpolation)
@@ -483,9 +536,22 @@ public static class ImageEditor
             pipeline.AddTransform(new FormatConversionTransform(PixelFormats.Bgra32bpp));
         }
 
+        // The colors and the blur first, then the fill (2026-10-22, review R7: the fill went through them and the border did not, so the bars
+        // and the border came out in different colors).
+        var matrix = ImageColor.Matrix(request.Filter, request.Brightness, request.Contrast, request.Saturation, request.Hue, request.Tint, request.TintAmount);
+        if (!matrix.IsIdentity)
+        {
+            pipeline.AddTransform(new ColorMatrixTransform(matrix));
+        }
+
+        if (request.Blur > 0)
+        {
+            pipeline.AddTransform(new GaussianBlurTransform(request.Blur));
+        }
+
         if (fillTop + fillRight + fillBottom + fillLeft > 0)
         {
-            pipeline.AddTransform(new PadTransform(background, fillTop, fillRight, fillBottom, fillLeft));
+            pipeline.AddTransform(new PadTransform(fill, fillTop, fillRight, fillBottom, fillLeft));
         }
 
         if (request.Rotate is 90 or 180 or 270)
@@ -498,20 +564,9 @@ public static class ImageEditor
             pipeline.AddTransform(new OrientationTransform(request.Flip == ImageFlip.Horizontal ? Orientation.FlipHorizontal : Orientation.FlipVertical));
         }
 
-        var matrix = ImageColor.Matrix(request.Filter, request.Brightness, request.Contrast, request.Saturation, request.Hue, request.Tint, request.TintAmount);
-        if (!matrix.IsIdentity)
-        {
-            pipeline.AddTransform(new ColorMatrixTransform(matrix));
-        }
-
-        if (request.Blur > 0)
-        {
-            pipeline.AddTransform(new GaussianBlurTransform(request.Blur));
-        }
-
         if (request.Pad > 0)
         {
-            pipeline.AddTransform(new PadTransform(background, request.Pad, request.Pad, request.Pad, request.Pad));
+            pipeline.AddTransform(new PadTransform(fill, request.Pad, request.Pad, request.Pad, request.Pad));
         }
 
         using var output = new MemoryStream();
@@ -527,13 +582,15 @@ public static class ImageEditor
         _ => [],
     };
 
-    private static IEncoderOptions? EncoderOptions(ImageEditRequest request, ImageFormat format, int quality)
+    private static IEncoderOptions? EncoderOptions(ImageEditRequest request, ImageFormat format, int quality, byte[] source)
     {
         if (OperatingSystem.IsMacOS())
         {
             // ImageIO's encoders (2026-10-07): MagicScaler hands them no DPI or metadata names of its own off WIC, so the options
-            // carry them; chroma and palettes were refused already (OptionMismatch).
-            return new ImageIOEncoderOptions(format.Lossy ? quality : 0, request.Interlace, request.Dpi ?? 0, MetadataNamesOf(request.Metadata));
+            // carry them; chroma and palettes were refused already (OptionMismatch). The source's DPI when none is asked (2026-10-22,
+            // review O3: ImageIO wrote 72 where the schema promises the source's, which Windows keeps).
+            int dpi = request.Dpi ?? (int)Math.Round(ImageIOCodecs.Dpi(source) ?? 0);
+            return new ImageIOEncoderOptions(format.Lossy ? quality : 0, request.Interlace, dpi, MetadataNamesOf(request.Metadata));
         }
 
         if (format == ImageFormats.Jpeg)

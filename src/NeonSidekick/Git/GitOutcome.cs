@@ -74,6 +74,9 @@ public enum GitOutcome
     /// <summary>An argument combination that names nothing sensible (the tool's own check).</summary>
     BadArguments,
 
+    /// <summary>A path the write guard refuses (2026-10-22, <see cref="Files.WriteGuard"/>); the detail is the file tools' own sentence.</summary>
+    Guarded,
+
     /// <summary>Anything else libgit2 or the file system refused; the detail carries the message.</summary>
     Failed,
 }

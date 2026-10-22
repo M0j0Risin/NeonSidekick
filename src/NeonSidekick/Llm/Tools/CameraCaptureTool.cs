@@ -66,7 +66,7 @@ public sealed class CameraCaptureTool : AIFunction
     public override string Description =>
         "Asks the user for a photo from their camera and shows it to you. Use it only when seeing something would really help " +
         "(an object, a label, a screen, a gesture, the user themselves when they ask). The prompt is shown to the user, who takes the " +
-        "photo; it is saved in the user's images folder (the result gives its full path, which view_image, image_info and image_edit take) and attached to the message after the result. If the user " +
+        "photo; it is saved in the user's images folder (the result gives its full path, which the picture tools take while Image tools is on) and attached to the message after the result. If the user " +
         "declines, carry on without it and do not ask again unless they ask.";
 
     public override JsonElement JsonSchema => Schema;

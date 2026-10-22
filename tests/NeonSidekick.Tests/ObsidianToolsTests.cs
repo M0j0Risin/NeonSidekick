@@ -274,6 +274,16 @@ public sealed class ObsidianToolsTests : IDisposable
 
     // ---- writing ----
 
+    /// <summary>A heading under create or overwrite is refused (2026-10-22, review X1: the whole note was rewritten as "replaced").</summary>
+    [Fact]
+    public async Task Write_AHeadingWithCreateOrOverwrite_IsRefused()
+    {
+        Put("Plan.md", "# Plan\n## Tasks\n- a\n## Notes\nkeep\n");
+        Assert.Equal(ObsidianText.HeadingNeedsInsert, await Invoke<VaultWriteTool>(("note", "Plan"), ("content", "- b"), ("mode", "overwrite"), ("heading", "Tasks")));
+        Assert.Equal(ObsidianText.HeadingNeedsInsert, await Invoke<VaultWriteTool>(("note", "Other"), ("content", "- b"), ("heading", "Tasks")));
+        Assert.Contains("keep", Get("Plan.md"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Write_CreatesANote_AndRefusesAnExistingOne()
     {
@@ -436,7 +446,8 @@ public sealed class ObsidianToolsTests : IDisposable
     {
         Put("Plan.md", "a\n");
         Put("Taken.md", "b\n");
-        Assert.Equal(ObsidianText.Exists("Taken.md"), await Invoke<VaultMoveTool>(("note", "Plan"), ("to", "Taken")));
+        // Its own wording, no "mode" (2026-10-22, review R3).
+        Assert.Equal(ObsidianText.MoveTargetExists("Taken.md"), await Invoke<VaultMoveTool>(("note", "Plan"), ("to", "Taken")));
         Assert.Equal(ObsidianText.NothingToMove, await Invoke<VaultMoveTool>(("note", "Plan"), ("to", "Plan.md")));
         Assert.Equal(ObsidianText.HiddenPath(".trash/Plan.md"), await Invoke<VaultMoveTool>(("note", "Plan"), ("to", ".trash/")));
         Assert.Equal(ObsidianText.Required("to"), await Invoke<VaultMoveTool>(("note", "Plan"), ("to", "")));

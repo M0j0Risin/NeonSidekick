@@ -118,6 +118,53 @@ public static class ImageIOCodecs
         return types;
     }
 
+    /// <summary>
+    /// A picture's DPI as its first frame's properties give it (<c>kCGImagePropertyDPIWidth</c>), or null (2026-10-22, review O3: an edit
+    /// with no dpi wrote 72 where the source's was promised).
+    /// </summary>
+    [SupportedOSPlatform("macos")]
+    public static unsafe double? Dpi(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        nint data;
+        fixed (byte* p = bytes)
+        {
+            data = ImageIONative.CFDataCreate(0, p, bytes.Length);
+        }
+
+        if (data == 0)
+        {
+            return null;
+        }
+
+        nint source = 0, properties = 0;
+        try
+        {
+            source = ImageIONative.CGImageSourceCreateWithData(data, 0);
+            if (source == 0)
+            {
+                return null;
+            }
+
+            properties = ImageIONative.CGImageSourceCopyPropertiesAtIndex(source, 0, 0);
+            return properties == 0 ? null : ImageIONative.Double(ImageIONative.CFDictionaryGetValue(properties, ImageIONative.ImageIOKey("kCGImagePropertyDPIWidth")));
+        }
+        finally
+        {
+            if (properties != 0)
+            {
+                ImageIONative.CFRelease(properties);
+            }
+
+            if (source != 0)
+            {
+                ImageIONative.CFRelease(source);
+            }
+
+            ImageIONative.CFRelease(data);
+        }
+    }
+
     /// <summary>The source frame's ImageIO properties, offered to the encoder through MagicScaler's metadata pass-through.</summary>
     public sealed class SourceProperties(nint dictionary) : IMetadata
     {
@@ -139,13 +186,24 @@ public static class ImageIOCodecs
 
         public Container(Stream stream)
         {
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            byte[] bytes = copy.GetBuffer();
-            nint data;
-            fixed (byte* p = bytes)
+            // The caller's buffer as it is when the stream holds one (2026-10-22, review O7: every decode copied the source twice, once into
+            // a MemoryStream and once into the CFData, with max_kb's retries churning the large-object heap).
+            ArraySegment<byte> bytes;
+            if (stream is MemoryStream memory && memory.TryGetBuffer(out var buffer))
             {
-                data = ImageIONative.CFDataCreate(0, p, (nint)copy.Length);
+                bytes = buffer[(int)memory.Position..];
+            }
+            else
+            {
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                bytes = new ArraySegment<byte>(copy.GetBuffer(), 0, (int)copy.Length);
+            }
+
+            nint data;
+            fixed (byte* p = bytes.AsSpan())
+            {
+                data = ImageIONative.CFDataCreate(0, p, bytes.Count);
             }
 
             try
@@ -199,22 +257,49 @@ public static class ImageIOCodecs
         private nint _image;
         private nint _properties;
 
+        private readonly nint _source;
+        private readonly int _index;
+
         public Frame(nint source, int index)
         {
+            _source = source;
+            _index = index;
             _properties = ImageIONative.CGImageSourceCopyPropertiesAtIndex(source, index, 0);
-            _image = ImageIONative.CGImageSourceCreateImageAtIndex(source, index, 0);
-            if (_image == 0)
-            {
-                Dispose();
-                throw new InvalidDataException("ImageIO could not decode the picture.");
-            }
-
             int orientation = _properties == 0 ? 1 : ImageIONative.Int(ImageIONative.CFDictionaryGetValue(_properties, ImageIONative.ImageIOKey("kCGImagePropertyOrientation"))) ?? 1;
             _exif = ImageIOFormats.OrientationExif(orientation);
-            int width = (int)ImageIONative.CGImageGetWidth(_image);
-            int height = (int)ImageIONative.CGImageGetHeight(_image);
-            bool alpha = ImageIOFormats.HasAlpha(ImageIONative.CGImageGetAlphaInfo(_image));
-            PixelSource = new Pixels(this, width, height, alpha);
+
+            // The sides and the alpha from the properties, the image made only when its pixels are wanted (2026-10-22, review O9: every frame
+            // of a 5,000-frame GIF made its CGImage for a size); from the image when the properties don't say.
+            int? width = Property("kCGImagePropertyPixelWidth");
+            int? height = Property("kCGImagePropertyPixelHeight");
+            bool? alpha = _properties == 0 ? null : ImageIONative.Bool(ImageIONative.CFDictionaryGetValue(_properties, ImageIONative.ImageIOKey("kCGImagePropertyHasAlpha")));
+            if (width is not > 0 || height is not > 0 || alpha is null)
+            {
+                Image();
+                width = (int)ImageIONative.CGImageGetWidth(_image);
+                height = (int)ImageIONative.CGImageGetHeight(_image);
+                alpha = ImageIOFormats.HasAlpha(ImageIONative.CGImageGetAlphaInfo(_image));
+            }
+
+            PixelSource = new Pixels(this, width.Value, height.Value, alpha.Value);
+
+            int? Property(string key) =>
+                _properties == 0 ? null : ImageIONative.Int(ImageIONative.CFDictionaryGetValue(_properties, ImageIONative.ImageIOKey(key)));
+        }
+
+        /// <summary>The frame's CGImage, made at its first use.</summary>
+        private nint Image()
+        {
+            if (_image == 0)
+            {
+                _image = ImageIONative.CGImageSourceCreateImageAtIndex(_source, _index, 0);
+                if (_image == 0)
+                {
+                    throw new InvalidDataException("ImageIO could not decode the picture.");
+                }
+            }
+
+            return _image;
         }
 
         public IPixelSource PixelSource { get; }
@@ -240,7 +325,7 @@ public static class ImageIOCodecs
         // The whole frame as 8-bit sRGB, straight BGRA or BGRX, through vImage.
         public byte[] Decode(int width, int height, bool alpha)
         {
-            ObjectDisposedException.ThrowIf(_image == 0, this);
+            Image();
             byte[] pixels = GC.AllocateUninitializedArray<byte>(checked(width * height * 4));
             nint space = ImageIONative.CGColorSpaceCreateWithName(ImageIONative.SrgbName);
             try

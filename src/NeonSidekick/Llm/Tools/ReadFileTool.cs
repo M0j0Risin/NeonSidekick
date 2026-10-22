@@ -51,13 +51,14 @@ public sealed class ReadFileTool : FileTool
         if (read.Outcome == FileOutcome.Ok)
         {
             // Any read that returned text, a window too (2026-10-18): what present_audit's read check asks of a finding's file.
-            Files.MarkViewed(path);
+            Files.MarkViewed(path, read.Seen);
         }
 
         if (read.Whole)
         {
-            // write_file may replace it without a mode while it stays as read (2026-10-10); a window or a cut read never (2026-10-11).
-            Files.MarkSeen(path);
+            // write_file may replace it without a mode while it stays as read (2026-10-10); a window or a cut read never (2026-10-11). The
+            // stamp is the one the read took before its bytes (2026-10-22, review J12).
+            Files.MarkSeen(path, read.Seen);
         }
 
         return FileText.Read(read);

@@ -827,6 +827,7 @@ internal sealed partial class ChatScreen
         _botCheckAllowed = false;
         _sqliteAllowed.Clear();
         _databaseAllowed.Clear();
+        _projectFileAllowed.Clear();
     }
 
     /// <summary>
@@ -1212,6 +1213,8 @@ internal sealed partial class ChatScreen
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _overriddenBy = overriddenBy ?? throw new ArgumentNullException(nameof(overriddenBy));
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        // A model write to the project file asks on the pane (2026-10-22, review P1, the fix plan's D2).
+        _session.ProjectFileAsk = AllowProjectFileAsync;
         _speech = speech ?? throw new ArgumentNullException(nameof(speech));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _voice = voice ?? throw new ArgumentNullException(nameof(voice));
@@ -1275,7 +1278,8 @@ internal sealed partial class ChatScreen
         _git = new GitAccess(_files, time);
         _gitTools = GitTools(_git, _effective);
         // The vault tools (2026-09-22): their own root, the setting Obsidian vault read at every call.
-        _vault = new ObsidianVault(() => _effective().ObsidianVault, time) { ShoppingListGuard = () => ShoppingListGuarded(_effective()) };
+        // The system's bin for a vault whose trashOption is system (2026-10-22, review U6): the screen's, null in a test without one.
+        _vault = new ObsidianVault(() => _effective().ObsidianVault, time) { ShoppingListGuard = () => ShoppingListGuarded(_effective()), SystemTrash = () => _recycleBin };
         _vaultTools = ObsidianTools(_vault, _effective);
         // The SQL tools (2026-09-23): the loaded profile's sql.json over the home's, read at every call, so a profile switch or an edit needs no rebuild.
         // Narrowed to the connections the profile offers (later that day): every tool, the rules and the %-mention see only those.
@@ -6756,8 +6760,34 @@ internal sealed partial class ChatScreen
     /// The database files the SQLite tools guard (2026-10-05): every one <c>sqlite.json</c> names, the profile's and the global, offered
     /// or not, beside the extensions <see cref="DatabaseGuard"/> knows. Read at each write and each shell call.
     /// </summary>
-    public static DatabaseGuard SqliteDatabaseGuard(string profileDirectory, string storageDirectory) =>
-        new(Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, storageDirectory).Databases.Select(d => d.FullPath).ToList());
+    public static DatabaseGuard SqliteDatabaseGuard(string profileDirectory, string storageDirectory)
+    {
+        // Parsed once per change of the two files (2026-10-22, review P9: every write's Resolve read and parsed both), keyed on their sizes
+        // and write times, re-read only when one changes.
+        string profile = Sqlite.SqliteConfigFile.ProfilePath(profileDirectory);
+        string global = Sqlite.SqliteConfigFile.GlobalPath(storageDirectory);
+        var key = (profile, global, Stamp(profile), Stamp(global));
+        lock (s_sqliteGuardGate)
+        {
+            if (s_sqliteGuard is { } cached && cached.Key == key)
+            {
+                return cached.Guard;
+            }
+
+            var guard = new DatabaseGuard(Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, storageDirectory).Databases.Select(d => d.FullPath).ToList());
+            s_sqliteGuard = (key, guard);
+            return guard;
+        }
+
+        static (long, DateTime) Stamp(string path)
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? (info.Length, info.LastWriteTimeUtc) : (-1, default);
+        }
+    }
+
+    private static readonly object s_sqliteGuardGate = new();
+    private static ((string, string, (long, DateTime), (long, DateTime)) Key, DatabaseGuard Guard)? s_sqliteGuard;
 
     /// <summary>Whether the SQLite group is offered (2026-10-04): the setting <c>SQLite tools</c> on, and a named database offered or the sandbox's files allowed.</summary>
     public static bool SqliteOffered(AppSettingsData effective, Sqlite.SqliteAccess sqlite)

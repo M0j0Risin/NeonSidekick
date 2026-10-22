@@ -113,8 +113,8 @@ public sealed class ObsidianVault
         }
     }
 
-    /// <summary>The root checked and the index current, or the refusal.</summary>
-    private bool Open(out string root, out string error)
+    /// <summary>The root checked and the index current, or the refusal; the walk reads <paramref name="cancellationToken"/> (2026-10-22, review V4).</summary>
+    private bool Open(out string root, out string error, CancellationToken cancellationToken = default)
     {
         root = Root;
         if (root.Length == 0)
@@ -129,10 +129,16 @@ public sealed class ObsidianVault
             return false;
         }
 
-        _index.Refresh(root);
+        _index.Refresh(root, cancellationToken);
         error = "";
         return true;
     }
+
+    /// <summary>
+    /// The system's bin for <see cref="Delete"/> under <c>.obsidian/app.json</c>'s <c>trashOption</c> <c>system</c> (2026-10-22, review U6, the
+    /// fix plan's D3); null, or a bin that has no room on the vault's volume, uses the vault's <c>.trash</c>.
+    /// </summary>
+    public Func<IRecycleBin?>? SystemTrash { get; set; }
 
     // ---- resolution ----
 
@@ -162,7 +168,7 @@ public sealed class ObsidianVault
     }
 
     /// <summary>The existing note <paramref name="note"/> names, or the refusal; <paramref name="also"/> the ambiguity line.</summary>
-    private bool TryNote(string note, out NoteEntry entry, out string also, out string error)
+    private bool TryNote(string note, out NoteEntry entry, out string also, out string error, ResolveFor use = ResolveFor.Read)
     {
         entry = null!;
         also = "";
@@ -173,7 +179,7 @@ public sealed class ObsidianVault
             return false;
         }
 
-        var found = _index.Resolve(target);
+        var found = _index.Resolve(target, use: use);
         if (found.Attachment is { } attachment)
         {
             error = ObsidianText.NotANote(attachment);
@@ -189,11 +195,26 @@ public sealed class ObsidianVault
             return false;
         }
 
+        // A call that changes the note never picks one of several of its name (review J5): the path is asked for.
+        if (use == ResolveFor.Write && found.Others.Count > 0)
+        {
+            error = ObsidianText.AmbiguousChange(target, [found.Note.Relative, .. found.Others]);
+            return false;
+        }
+
         entry = found.Note;
         also = ObsidianText.AlsoNamed(entry.Name, found.Others);
         error = "";
         return true;
     }
+
+    /// <summary>Why a note's lines could not be had, in the vault's words (2026-10-22, review K4: an unreadable note said "not a text file").</summary>
+    private static string NotRead(NoteRead why, string relative, string detail) => why switch
+    {
+        NoteRead.TooLarge => ObsidianText.TooLargeToRead(relative),
+        NoteRead.NotText => ObsidianText.Failed("read", relative, "not a text file"),
+        _ => ObsidianText.Failed("read", relative, detail),
+    };
 
     /// <summary>
     /// Where a new note named <paramref name="note"/> goes: a path as given (<c>.md</c> added); a bare name
@@ -262,8 +283,29 @@ public sealed class ObsidianVault
             return false;
         }
 
+        if (Refusal(root, full, relative, WriteRole.Write) is { } refused)
+        {
+            error = refused;
+            return false;
+        }
+
         error = "";
         return true;
+    }
+
+    /// <summary>
+    /// Why a vault write may not reach <paramref name="full"/>, or null (2026-10-22): a link in the vault that leads outside it (review H5:
+    /// vault_write, vault_move and vault_daily wrote through a symlink or junction to anywhere), and the write guard's refusals on the file it
+    /// lands on — a shopping list's name reached through an alias or a move into a folder (review H16), a database (review J14), the home.
+    /// </summary>
+    private static string? Refusal(string root, string full, string relative, WriteRole role)
+    {
+        if (WorkingDirectory.LinkEscape(root, full, WorkingDirectory.RealLinkTarget) is not null)
+        {
+            return ObsidianText.OutsideVault(relative);
+        }
+
+        return WriteGuard.Judge(root, full, role) is { } guarded ? FileText.Error(guarded, relative, role == WriteRole.Write ? "write" : "delete") : null;
     }
 
     private static string? NewNoteFolder(string root)
@@ -293,49 +335,66 @@ public sealed class ObsidianVault
     /// of the same or a higher level), or a window of lines — <paramref name="startLine"/> always a line of
     /// the whole note, so the header's <c>next: start_line</c> means the same with or without a heading.
     /// </summary>
-    public string Read(string note, string heading, int? startLine, int? maxLines)
+    public string Read(string note, string heading, int? startLine, int? maxLines, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            if (!Open(out _, out string error) || !TryNote(note, out var entry, out string also, out error))
+            if (!Open(out _, out string error, cancellationToken) || !TryNote(note, out var entry, out string also, out error))
             {
                 return error;
             }
 
-            if (NoteIndex.ReadLines(entry.Full) is not { } lines)
+            if (NoteIndex.TryReadLines(entry.Full, out var lines, out string detail) is { } why)
             {
-                return ObsidianText.Failed("read", entry.Relative, "not a text file");
+                return NotRead(why, entry.Relative, detail);
             }
 
             int from = 1;
             int to = lines.Count;
             if (heading.Trim().Length > 0)
             {
-                if (Section(entry, heading, lines.Count) is not { } section)
+                // The headings of the lines just read, not the index's (2026-10-22, review J6: a note changed since the walk had its section
+                // cut at the old lines).
+                var headings = NoteScanner.Scan(lines).Headings;
+                if (Section(headings, heading, lines.Count) is not { } section)
                 {
-                    return ObsidianText.HeadingNotFound(entry.Relative, heading.Trim().TrimStart('#').Trim(), entry.Scan.Headings.Select(h => h.Text).ToList());
+                    return ObsidianText.HeadingNotFound(entry.Relative, heading.Trim().TrimStart('#').Trim(), headings.Select(h => h.Text).ToList());
                 }
 
                 (from, to) = section;
             }
 
+            int sectionStart = from;
             int sectionEnd = to;
-            if (startLine is { } s && s > from)
+            // A negative start_line counts from the end, the note's or the section's, as read_file does (2026-10-22, review M10: it was ignored),
+            // and one past the section's end is refused rather than read as an empty, inverted range.
+            if (startLine is { } s && s != 0)
             {
-                from = s;
+                long wanted = s < 0 ? (long)sectionEnd + s + 1 : s;
+                if (wanted > sectionEnd && heading.Trim().Length > 0)
+                {
+                    return ObsidianText.PastSection(entry.Relative, heading.Trim().TrimStart('#').Trim(), s, sectionStart, sectionEnd);
+                }
+
+                from = (int)Math.Clamp(wanted, sectionStart, Math.Max(sectionStart, (long)lines.Count + 1));
             }
 
-            if (maxLines is { } m && m > 0 && from + m - 1 < to)
+            // In long (2026-10-22, review I16: max_lines int.MaxValue made from + m - 1 wrap, and the window came back empty).
+            if (maxLines is { } m && m > 0 && (long)from + m - 1 < to)
             {
                 to = from + m - 1;
             }
 
             var sb = new StringBuilder();
             bool truncated = false;
+            bool lineCut = false;
+            int cutLine = 0, cutLength = 0;
             int last = from - 1;
             for (int i = from; i <= to && i <= lines.Count; i++)
             {
-                if (sb.Length + lines[i - 1].Length + 1 > WorkingDirectory.MaxReadChars)
+                // A line over the cap is cut rather than skipped (2026-10-22, review K3: a first line past it read as nothing, and "next" pointed at
+                // the same line for ever), never inside a surrogate pair.
+                if (sb.Length + lines[i - 1].Length + 1 > WorkingDirectory.MaxReadChars && sb.Length > 0)
                 {
                     truncated = true;
                     break;
@@ -346,11 +405,18 @@ public sealed class ObsidianVault
                     sb.Append('\n');
                 }
 
-                sb.Append(lines[i - 1]);
+                if (lines[i - 1].Length > WorkingDirectory.MaxReadChars && cutLine == 0)
+                {
+                    cutLine = i;
+                    cutLength = lines[i - 1].Length;
+                }
+
+                lineCut |= lines[i - 1].Length > WorkingDirectory.MaxReadChars;
+                sb.Append(TextCut.Safe(lines[i - 1], WorkingDirectory.MaxReadChars));
                 last = i;
             }
 
-            var result = new ReadResult(FileOutcome.Ok, entry.Relative, sb.ToString(), lines.Count, from, last, truncated);
+            var result = new ReadResult(FileOutcome.Ok, entry.Relative, sb.ToString(), lines.Count, from, last, truncated, LineCut: lineCut) { CutLine = cutLine, CutLength = cutLength };
             string text = FileText.Read(result);
             if (heading.Trim().Length > 0 && last == sectionEnd && !truncated && last < lines.Count)
             {
@@ -364,10 +430,9 @@ public sealed class ObsidianVault
     }
 
     /// <summary>The 1-based line range of <paramref name="heading"/>'s section (<c>## Goals</c> or <c>Goals</c>, any case), or null.</summary>
-    private static (int From, int To)? Section(NoteEntry entry, string heading, int lineCount)
+    private static (int From, int To)? Section(IReadOnlyList<NoteHeading> headings, string heading, int lineCount)
     {
         string wanted = heading.Trim().TrimStart('#').Trim();
-        var headings = entry.Scan.Headings;
         for (int i = 0; i < headings.Count; i++)
         {
             if (!string.Equals(headings[i].Text, wanted, StringComparison.OrdinalIgnoreCase))
@@ -395,7 +460,7 @@ public sealed class ObsidianVault
     /// <c>vault_search</c>: the lines holding <paramref name="query"/> (any case), and the notes whose name or
     /// alias holds it, within <paramref name="folder"/> and <paramref name="tag"/> when given; frontmatter lines count.
     /// </summary>
-    public string Search(string query, string tag, string folder, int? limit)
+    public string Search(string query, string tag, string folder, int? limit, CancellationToken cancellationToken = default)
     {
         string q = query.Trim();
         if (q.Length == 0)
@@ -405,7 +470,7 @@ public sealed class ObsidianVault
 
         lock (_gate)
         {
-            if (!Open(out _, out string error))
+            if (!Open(out _, out string error, cancellationToken))
             {
                 return error;
             }
@@ -414,8 +479,10 @@ public sealed class ObsidianVault
             var hits = new List<string>();
             var notes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int total = 0;
+            int unread = 0;
             foreach (var entry in Filter(folder, tag))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (entry.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || entry.Aliases.Any(a => a.Contains(q, StringComparison.OrdinalIgnoreCase)))
                 {
                     total++;
@@ -426,8 +493,10 @@ public sealed class ObsidianVault
                     }
                 }
 
-                if (NoteIndex.ReadLines(entry.Full) is not { } lines)
+                // No further than 2 MB a note (review H7), and a note left unread is counted, not passed over in silence.
+                if (NoteIndex.TryReadLines(entry.Full, out var lines, out _) is not null)
                 {
+                    unread++;
                     continue;
                 }
 
@@ -448,13 +517,14 @@ public sealed class ObsidianVault
             }
 
             string scope = Scope(folder, tag);
+            string skipped = unread > 0 ? ObsidianText.NotSearched(unread) : "";
             if (total == 0)
             {
-                return $"no matches for \"{q}\"{scope}";
+                return $"no matches for \"{q}\"{scope}" + skipped;
             }
 
             string head = $"{ObsidianText.Count(total, "match", "matches")} in {ObsidianText.Count(notes.Count, "note")} for \"{q}\"{scope}"
-                + (total > hits.Count ? $" (first {hits.Count.ToString(CultureInfo.InvariantCulture)} shown; max_results raises it to {MaxSearchLimit.ToString(CultureInfo.InvariantCulture)})" : "") + ":";
+                + (total > hits.Count ? ObsidianText.FirstShown(hits.Count, cap, MaxSearchLimit) : "") + skipped + ":";
             return head + "\n" + string.Join("\n", hits);
         }
     }
@@ -487,18 +557,24 @@ public sealed class ObsidianVault
     private static string Clip(string line)
     {
         string trimmed = line.Trim();
-        return trimmed.Length <= WorkingDirectory.MaxLineChars ? trimmed : trimmed[..(WorkingDirectory.MaxLineChars - 1)] + "…";
+        return trimmed.Length <= WorkingDirectory.MaxLineChars ? trimmed : TextCut.Safe(trimmed, WorkingDirectory.MaxLineChars - 1) + "…";
     }
 
     /// <summary>
     /// <c>vault_list</c>: the notes (path order; with <paramref name="property"/> its value beside each), or every
     /// tag with how many notes carry it, or every property key with its count — within the filters given.
     /// </summary>
-    public string List(VaultListing what, string folder, string tag, string property, string value, int? limit)
+    public string List(VaultListing what, string folder, string tag, string property, string value, int? limit, CancellationToken cancellationToken = default)
     {
+        // A value with no property to hold it (2026-10-22, review V9: it was dropped, and every note listed as if it matched).
+        if (value.Trim().Length > 0 && property.Trim().Length == 0)
+        {
+            return ObsidianText.ValueNeedsProperty;
+        }
+
         lock (_gate)
         {
-            if (!Open(out _, out string error))
+            if (!Open(out _, out string error, cancellationToken))
             {
                 return error;
             }
@@ -525,7 +601,7 @@ public sealed class ObsidianVault
                         .OrderByDescending(g => g.Count).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase).ToList();
                     return Listed(ObsidianText.Count(keys.Count, "property", "properties") + scope + cut, keys.Select(k => $"{k.Key} ({k.Count.ToString(CultureInfo.InvariantCulture)})").ToList(), cap);
                 default:
-                    var rows = notes.Select(n => key.Length > 0 && n.Frontmatter.Find(key) is { } p ? n.Relative + " · " + NoteProperties.Describe(p).ReplaceLineEndings(" ") : n.Relative).ToList();
+                    var rows = notes.Select(n => key.Length > 0 && n.Frontmatter.Find(key) is { } p ? n.Relative + " · " + ClipValue(NoteProperties.Describe(p).ReplaceLineEndings(" ")) : n.Relative).ToList();
                     return Listed(ObsidianText.Count(notes.Count, "note") + scope + cut, rows, cap);
             }
         }
@@ -538,23 +614,43 @@ public sealed class ObsidianVault
             return head;
         }
 
-        string more = rows.Count > cap ? $"\n… {ObsidianText.Count(rows.Count - cap, "more")} (max_results raises the cap to {MaxListLimit.ToString(CultureInfo.InvariantCulture)})" : "";
-        return head + ":\n" + string.Join("\n", rows.Take(cap)) + more;
+        string more = rows.Count > cap ? "\n… " + ObsidianText.Count(rows.Count - cap, "more") + ObsidianText.MoreHint(cap, MaxListLimit) : "";
+        return Capped(head + ":\n" + string.Join("\n", rows.Take(cap))) + more;
+    }
+
+    /// <summary>The most characters a link or a property value shows in a result (2026-10-22, review M4: raw text went in whole).</summary>
+    public const int MaxValueChars = 200;
+
+    /// <summary>A value or link as a result shows it: <see cref="MaxValueChars"/> at most, cut whole, with an ellipsis.</summary>
+    public static string ClipValue(string text) =>
+        text.Length <= MaxValueChars ? text : TextCut.Safe(text, MaxValueChars - 1) + "…";
+
+    /// <summary>A result held to <see cref="WorkingDirectory.MaxReadChars"/>, cut at a line, with a note (review M4: megabytes into the context).</summary>
+    public static string Capped(string text)
+    {
+        if (text.Length <= WorkingDirectory.MaxReadChars)
+        {
+            return text;
+        }
+
+        int at = text.LastIndexOf('\n', WorkingDirectory.MaxReadChars - 200);
+        return (at > 0 ? text[..at] : TextCut.Safe(text, WorkingDirectory.MaxReadChars - 200)) + "\n" + ObsidianText.ResultCut;
     }
 
     /// <summary><c>vault_links</c>: the note's outgoing links (resolved or not), its embeds, and every link to it.</summary>
-    public string Links(string note)
+    public string Links(string note, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            if (!Open(out _, out string error) || !TryNote(note, out var entry, out string also, out error))
+            if (!Open(out string root, out string error, cancellationToken) || !TryNote(note, out var entry, out string also, out error))
             {
                 return error;
             }
 
             var links = entry.Scan.Links.Where(l => !l.IsEmbed).ToList();
             var embeds = entry.Scan.Links.Where(l => l.IsEmbed).ToList();
-            var back = _index.Backlinks(entry).Where(b => !ReferenceEquals(b.Source, entry)).ToList();
+            var back = _index.Backlinks(entry, cancellationToken).Where(b => !ReferenceEquals(b.Source, entry)).ToList();
+            var canvases = CanvasesLinking(root, entry, cancellationToken);
             int unresolved = links.Count(l => !_index.ResolveLink(entry, l).Found);
             var sb = new StringBuilder();
             sb.Append(entry.Relative).Append(": ").Append(ObsidianText.Count(links.Count, "link")).Append(" out");
@@ -571,7 +667,7 @@ public sealed class ObsidianVault
                 sb.Append("\nBacklinks:");
                 foreach (var (source, link) in back.Take(MaxLinesShown))
                 {
-                    sb.Append("\n  ").Append(source.Relative).Append(':').Append(link.Line.ToString(CultureInfo.InvariantCulture)).Append(": ").Append(link.Raw);
+                    sb.Append("\n  ").Append(source.Relative).Append(':').Append(link.Line.ToString(CultureInfo.InvariantCulture)).Append(": ").Append(ClipValue(link.Raw));
                 }
 
                 if (back.Count > MaxLinesShown)
@@ -580,7 +676,17 @@ public sealed class ObsidianVault
                 }
             }
 
-            return ObsidianText.WithAlso(sb.ToString(), also);
+            // The canvases that place it or link it (review O4).
+            if (canvases.Count > 0)
+            {
+                sb.Append("\nCanvases:");
+                foreach (string canvas in canvases.Take(MaxLinesShown))
+                {
+                    sb.Append("\n  ").Append(canvas);
+                }
+            }
+
+            return ObsidianText.WithAlso(Capped(sb.ToString()), also);
 
             void Section(string title, List<NoteLink> list)
             {
@@ -593,7 +699,7 @@ public sealed class ObsidianVault
                 foreach (var link in list.Take(MaxLinesShown))
                 {
                     var found = _index.ResolveLink(entry, link);
-                    sb.Append("\n  ").Append(link.Raw).Append(" → ").Append(found.Relative ?? "unresolved")
+                    sb.Append("\n  ").Append(ClipValue(link.Raw)).Append(" → ").Append(found.Relative ?? "unresolved")
                         .Append(" (line ").Append(link.Line.ToString(CultureInfo.InvariantCulture)).Append(')');
                 }
 
@@ -608,7 +714,8 @@ public sealed class ObsidianVault
     // ---- writing ----
 
     /// <summary>A note's text as it sits on disk: decoded, with whether it had a byte-order mark and its line ending.</summary>
-    private readonly record struct NoteText(string Text, bool Bom, string NewLine);
+    /// <summary>A note's text with the encoding it is in (2026-10-22, the codec: a UTF-16 or code-page note is written back as it was) and its main line ending.</summary>
+    private readonly record struct NoteText(string Text, TextCodec Codec, string NewLine);
 
     private static bool TryReadText(string full, string relative, out NoteText text, out string error)
     {
@@ -622,15 +729,16 @@ public sealed class ObsidianVault
                 return false;
             }
 
-            byte[] bytes = File.ReadAllBytes(full);
+            byte[] bytes = RegularFiles.ReadAllBytes(full);
             if (WorkingDirectory.LooksBinary(bytes))
             {
                 error = ObsidianText.Failed("edit", relative, "not a text file");
                 return false;
             }
 
-            string decoded = WorkingDirectory.Decode(bytes, out bool bom);
-            text = new NoteText(decoded, bom, decoded.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n");
+            // The note's own encoding and its main line ending (2026-10-22, review H6: "\r\n" if any, else "\n", forced one form on a mixed note).
+            string decoded = TextFile.Decode(bytes, out var codec);
+            text = new NoteText(decoded, codec, WorkingDirectory.DetectLineEnding(decoded));
             error = "";
             return true;
         }
@@ -641,14 +749,14 @@ public sealed class ObsidianVault
         }
     }
 
-    private static void WriteText(string full, string text, bool bom)
-    {
-        byte[] body = Utf8NoBom.GetBytes(text);
-        if (bom)
-        {
-            body = [0xEF, 0xBB, 0xBF, .. body];
-        }
+    /// <summary>Whether <paramref name="text"/> in <paramref name="codec"/> would pass what a note may hold (review K6: every edit after would refuse it).</summary>
+    private static bool TooLargeAfter(string text, TextCodec codec) =>
+        text.Length > WorkingDirectory.MaxTextFileBytes || (codec.Encode(text)?.LongLength ?? 0) > WorkingDirectory.MaxTextFileBytes;
 
+    /// <summary>A note written back in its own encoding and mark; an <see cref="IOException"/> (the callers' failure) when that can't hold the text.</summary>
+    private static void WriteText(string full, string text, TextCodec codec)
+    {
+        byte[] body = codec.Encode(text) ?? throw new IOException(FileText.CannotEncode(Path.GetFileName(full), codec.Label ?? "UTF-8"));
         WorkingDirectory.WriteAtomically(full, body);
     }
 
@@ -663,11 +771,17 @@ public sealed class ObsidianVault
     /// <paramref name="heading"/>'s section; <see cref="VaultWriteMode.Prepend"/> adds right after the frontmatter, or right
     /// under the heading. The last three create a missing note (a heading then is refused). The content takes the note's line endings.
     /// </summary>
-    public string Write(string note, string content, VaultWriteMode mode, string heading)
+    public string Write(string note, string content, VaultWriteMode mode, string heading, CancellationToken cancellationToken = default)
     {
+        // write_file's cap per call (2026-10-22, review K6: an append of any length grew a note past what every later edit can read).
+        if (content.Length > WorkingDirectory.MaxWriteChars)
+        {
+            return ObsidianText.ContentTooLong;
+        }
+
         lock (_gate)
         {
-            if (!Open(out string root, out string error))
+            if (!Open(out string root, out string error, cancellationToken))
             {
                 return error;
             }
@@ -676,12 +790,18 @@ public sealed class ObsidianVault
             string also = "";
             if (mode != VaultWriteMode.Create && Reference(note, out _).Length > 0)
             {
-                var found = _index.Resolve(Reference(note, out _));
+                // A path as written, else a name; never a suffix or an alias, and one of several of a name is asked for by its path
+                // (2026-10-22, review J5: an overwrite of a missing path reached a different note).
+                var found = _index.Resolve(Reference(note, out _), use: ResolveFor.Write);
                 existing = found.Note;
-                also = existing is null ? "" : ObsidianText.AlsoNamed(existing.Name, found.Others);
                 if (found.Attachment is { } attachment)
                 {
                     return ObsidianText.NotANote(attachment);
+                }
+
+                if (existing is not null && found.Others.Count > 0)
+                {
+                    return ObsidianText.AmbiguousChange(Reference(note, out _), [existing.Relative, .. found.Others]);
                 }
             }
 
@@ -701,6 +821,11 @@ public sealed class ObsidianVault
                 return ObsidianText.Exists(relative);
             }
 
+            if (existing is not null && Refusal(root, full, relative, WriteRole.Write) is { } refused)
+            {
+                return refused;
+            }
+
             string h = heading.Trim().TrimStart('#').Trim();
             bool created = !File.Exists(full);
             try
@@ -713,7 +838,7 @@ public sealed class ObsidianVault
                         return ObsidianText.HeadingNotFound(relative, h, []);
                     }
 
-                    bool bom = false;
+                    var codec = TextCodec.Utf8;
                     string newLine = "\n";
                     if (!created)
                     {
@@ -722,11 +847,11 @@ public sealed class ObsidianVault
                             return error;
                         }
 
-                        (bom, newLine) = (old.Bom, old.NewLine);
+                        (codec, newLine) = (old.Codec, old.NewLine);
                     }
 
                     string text = Join(WorkingDirectory.SplitLines(content), newLine);
-                    WriteText(full, text, bom);
+                    WriteText(full, text, codec);
                     result = mode is VaultWriteMode.Append or VaultWriteMode.Prepend
                         ? ObsidianText.Inserted(relative, created: true, mode == VaultWriteMode.Append, "", text)
                         : ObsidianText.Wrote(relative, created, text);
@@ -743,10 +868,11 @@ public sealed class ObsidianVault
                     int at;
                     if (h.Length > 0)
                     {
-                        var entry = existing ?? _index.Get(relative);
-                        if (entry is null || Section(entry, h, lines.Count) is not { } section)
+                        // The headings of the text read now (review J6).
+                        var headings = NoteScanner.Scan(lines).Headings;
+                        if (Section(headings, h, lines.Count) is not { } section)
                         {
-                            return ObsidianText.HeadingNotFound(relative, h, entry?.Scan.Headings.Select(x => x.Text).ToList() ?? []);
+                            return ObsidianText.HeadingNotFound(relative, h, headings.Select(x => x.Text).ToList());
                         }
 
                         if (mode == VaultWriteMode.Prepend)
@@ -769,7 +895,12 @@ public sealed class ObsidianVault
 
                     lines.InsertRange(at, added);
                     string text = Join(lines, old.NewLine);
-                    WriteText(full, text, old.Bom);
+                    if (TooLargeAfter(text, old.Codec))
+                    {
+                        return ObsidianText.WouldBeTooLarge(relative);
+                    }
+
+                    WriteText(full, text, old.Codec);
                     result = ObsidianText.Inserted(relative, created: false, mode == VaultWriteMode.Append, h, text);
                 }
 
@@ -809,11 +940,11 @@ public sealed class ObsidianVault
     /// or a name nothing matches is refused. The links that still point at it are left alone (a deletion is no
     /// rename) and named in the result, so the model can tell the user what now reads as unresolved.
     /// </summary>
-    public string Delete(string target)
+    public string Delete(string target, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            if (!Open(out string root, out string error))
+            if (!Open(out string root, out string error, cancellationToken))
             {
                 return error;
             }
@@ -845,12 +976,19 @@ public sealed class ObsidianVault
                 return ObsidianText.OutsideVault(normalized);
             }
 
-            if (Directory.Exists(asPath))
+            // The note first, the folder after (2026-10-22, review K15: Projects/ beside Projects.md made the note impossible to delete by name);
+            // by its path or its name, never an alias, and one of several of a name asked for by its path (review J5's rule).
+            var found = _index.Resolve(reference, use: ResolveFor.Write);
+            if (found.Note is { } candidate && found.Others.Count > 0)
+            {
+                return ObsidianText.AmbiguousChange(reference, [candidate.Relative, .. found.Others]);
+            }
+
+            if (found.Relative is null && Directory.Exists(asPath))
             {
                 return ObsidianText.IsAFolder(Path.GetRelativePath(root, asPath).Replace('\\', '/'));
             }
 
-            var found = _index.Resolve(reference);
             if (found.Relative is not { } relative)
             {
                 string name = VaultPaths.NameOf(normalized);
@@ -884,9 +1022,33 @@ public sealed class ObsidianVault
                 }
             }
 
+            // The canvases that place it or link it (review O4).
+            linkedFrom.AddRange(found.Note is { } placed ? CanvasesLinking(root, placed, cancellationToken) : CanvasesPlacing(root, relative, cancellationToken));
             linkedFrom.Sort(StringComparer.OrdinalIgnoreCase);
+            if (Refusal(root, full, relative, WriteRole.Remove) is { } refused)
+            {
+                return refused;
+            }
+
             try
             {
+                // Where Obsidian's own setting sends a deleted file (2026-10-22, review U6, the fix plan's D3): the system's bin under
+                // trashOption system (its default), the vault's .trash under local — and under none too, never deleted for good (D15).
+                if (TrashOption(root) == "system" && SystemTrash?.Invoke() is { } bin)
+                {
+                    var recycled = bin.Move(full);
+                    if (recycled.Outcome == RecycleOutcome.Recycled)
+                    {
+                        DiagnosticLog.Info(Category, $"Deleted {relative} into the {FileText.RecycleBinName}");
+                        return ObsidianText.WithAlso(ObsidianText.Deleted(relative, "the " + FileText.RecycleBinName, linkedFrom, MaxLinesShown), also);
+                    }
+
+                    if (recycled.Outcome == RecycleOutcome.Failed)
+                    {
+                        return ObsidianText.Failed("delete", relative, recycled.Message);
+                    }
+                }
+
                 string destination = TrashTarget(root, full, Path.GetExtension(full));
                 File.Move(full, destination);
                 DiagnosticLog.Info(Category, $"Deleted {relative} into {destination}");
@@ -900,16 +1062,102 @@ public sealed class ObsidianVault
     }
 
     /// <summary>
+    /// <c>.obsidian/app.json</c>'s <c>trashOption</c>, lower-cased: <c>system</c>, <c>local</c> or <c>none</c>; <c>system</c> when absent or
+    /// unknown (review U6: no source confirms the strings, so an unknown one lands in a bin, never nowhere). The key matched without case.
+    /// </summary>
+    private static string TrashOption(string root)
+    {
+        using var doc = ReadJson(root, "app.json");
+        if (doc?.RootElement is { ValueKind: JsonValueKind.Object } app)
+        {
+            foreach (var property in app.EnumerateObject())
+            {
+                if (property.Name.Equals("trashOption", StringComparison.OrdinalIgnoreCase) && property.Value.ValueKind == JsonValueKind.String)
+                {
+                    string option = property.Value.GetString()!.Trim().ToLowerInvariant();
+                    return option is "local" or "none" ? option : "system";
+                }
+            }
+        }
+
+        return "system";
+    }
+
+    /// <summary>One of <c>.obsidian</c>'s JSON files as a document (comments and trailing commas tolerated), or null; the caller disposes it.</summary>
+    private static JsonDocument? ReadJson(string root, string file)
+    {
+        string path = Path.Combine(root, ConfigFolderName, file.Replace('/', Path.DirectorySeparatorChar));
+        try
+        {
+            return File.Exists(path)
+                ? JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true })
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            DiagnosticLog.Debug(Category, $"Could not read {path}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>The canvases (vault paths) with a file card for <paramref name="note"/> or a text card's wikilink to it (review O4).</summary>
+    private List<string> CanvasesLinking(string root, NoteEntry note, CancellationToken cancellationToken) =>
+        Canvases(root, cancellationToken, (canvas, nodes) => nodes.Any(n =>
+            (n.Type == "file" && n.File is { } f && _index.PathComparer.Equals(VaultPaths.Normalize(f), note.Relative))
+            || (n.Type == "text" && n.Text is { } t && TextLinks(t, VaultPaths.FolderOf(canvas)).Any(l => ReferenceEquals(l.Found.Note, note)))));
+
+    /// <summary>The canvases with a file card for the attachment at <paramref name="relative"/>.</summary>
+    private List<string> CanvasesPlacing(string root, string relative, CancellationToken cancellationToken) =>
+        Canvases(root, cancellationToken, (_, nodes) => nodes.Any(n => n.Type == "file" && n.File is { } f && _index.PathComparer.Equals(VaultPaths.Normalize(f), relative)));
+
+    private List<string> Canvases(string root, CancellationToken cancellationToken, Func<string, IReadOnlyList<CanvasNode>, bool> keep)
+    {
+        var found = new List<string>();
+        foreach (string canvas in _index.Attachments.Where(CanvasFile.IsCanvas).Take(CanvasFile.MaxCanvases))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ReadCanvas(root, canvas) is { } json && keep(canvas, CanvasFile.Nodes(json)))
+            {
+                found.Add(canvas);
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>A canvas's text, at most 2 MB, or null.</summary>
+    private static string? ReadCanvas(string root, string relative)
+    {
+        try
+        {
+            return RegularFiles.ReadAtMost(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)), WorkingDirectory.MaxTextFileBytes) is { } bytes
+                ? WorkingDirectory.Decode(bytes, out _)
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A text card's wikilinks, each with what it resolves to from <paramref name="folder"/> (the canvas's).</summary>
+    private IEnumerable<(NoteLink Link, Resolution Found)> TextLinks(string text, string folder) =>
+        NoteScanner.Scan(WorkingDirectory.SplitLines(text)).Links.Where(l => l.IsWiki && l.Target.Length > 0)
+            .Select(l => (l, _index.Resolve(l.Target, folder, markdown: false, ResolveFor.Link)));
+
+    /// <summary>
     /// <c>vault_properties</c>: the note's properties; or, with <paramref name="set"/> (an object of keys and
     /// values) and/or <paramref name="remove"/> (keys), the note with those changed in one write — only the
     /// lines of the named keys touched (<see cref="NoteProperties"/>) — and the properties after.
     /// </summary>
-    public string Properties(string note, JsonElement? set, IReadOnlyList<string> remove)
+    public string Properties(string note, JsonElement? set, IReadOnlyList<string> remove, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(remove);
         lock (_gate)
         {
-            if (!Open(out _, out string error) || !TryNote(note, out var entry, out string also, out error))
+            // A change finds its note as a write does (review J5's rule); a read as a read.
+            var use = set is null && remove.Count == 0 ? ResolveFor.Read : ResolveFor.Write;
+            if (!Open(out string root, out string error, cancellationToken) || !TryNote(note, out var entry, out string also, out error, use))
             {
                 return error;
             }
@@ -956,9 +1204,14 @@ public sealed class ObsidianVault
 
             try
             {
+                if ((setKeys.Count > 0 || removed.Count > 0) && Refusal(root, entry.Full, entry.Relative, WriteRole.Write) is { } refused)
+                {
+                    return refused;
+                }
+
                 if (setKeys.Count > 0 || removed.Count > 0)
                 {
-                    WriteText(entry.Full, Join(lines, old.NewLine), old.Bom);
+                    WriteText(entry.Full, Join(lines, old.NewLine), old.Codec);
                     _index.Update(entry.Relative, entry.Full);
                 }
             }
@@ -978,7 +1231,7 @@ public sealed class ObsidianVault
         var sb = new StringBuilder(ObsidianText.PropertiesHeader(entry.Relative, properties.Count));
         foreach (var property in properties)
         {
-            sb.Append('\n').Append(NoteProperties.Describe(property));
+            sb.Append('\n').Append(ClipValue(NoteProperties.Describe(property)));
         }
 
         var inline = entry.Scan.Tags.Select(t => t.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -987,23 +1240,91 @@ public sealed class ObsidianVault
             sb.Append("\n(inline tags: ").Append(string.Join(", ", inline.Select(t => "#" + t))).Append(')');
         }
 
-        return sb.ToString();
+        return Capped(sb.ToString());
     }
 
-    /// <summary>The daily-notes settings in force: <c>.obsidian/daily-notes.json</c>, or the plugin's defaults.</summary>
-    public DailyNoteSettings DailySettings(string root) =>
-        DailyNotes.Settings(ReadConfig(root, "daily-notes.json", ObsidianJsonContext.Default.DailyNotesConfigFile));
+    /// <summary>
+    /// The daily-notes settings in force (2026-10-22, review U10: daily-notes.json was read whatever else said): Periodic Notes' daily settings
+    /// while that community plugin is on and makes the daily notes, else <c>.obsidian/daily-notes.json</c> (or the plugin's defaults), marked
+    /// <see cref="DailyNoteSettings.CoreOff"/> when <c>core-plugins.json</c> has the core Daily notes plugin off.
+    /// </summary>
+    public DailyNoteSettings DailySettings(string root)
+    {
+        if (PeriodicDaily(root) is { } periodic)
+        {
+            return periodic;
+        }
+
+        var core = DailyNotes.Settings(ReadConfig(root, "daily-notes.json", ObsidianJsonContext.Default.DailyNotesConfigFile));
+        return CorePluginOn(root, "daily-notes") is false ? core with { CoreOff = true } : core;
+    }
+
+    /// <summary>
+    /// Whether <c>core-plugins.json</c> has the core plugin <paramref name="id"/> on — an array of the ones on (older vaults) or an object of
+    /// id → true/false (newer) — or null with no file to say.
+    /// </summary>
+    private static bool? CorePluginOn(string root, string id)
+    {
+        using var doc = ReadJson(root, "core-plugins.json");
+        if (doc is null)
+        {
+            return null;
+        }
+
+        var plugins = doc.RootElement;
+        if (plugins.ValueKind == JsonValueKind.Array)
+        {
+            return plugins.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == id);
+        }
+
+        if (plugins.ValueKind == JsonValueKind.Object)
+        {
+            return plugins.TryGetProperty(id, out var on) && on.ValueKind == JsonValueKind.True;
+        }
+
+        return null;
+    }
+
+    /// <summary>Periodic Notes' daily settings (<c>plugins/periodic-notes/data.json</c>'s <c>daily</c>) while it is on and its daily notes are, else null.</summary>
+    private static DailyNoteSettings? PeriodicDaily(string root)
+    {
+        using var community = ReadJson(root, "community-plugins.json");
+        if (community?.RootElement is not { ValueKind: JsonValueKind.Array } enabled
+            || !enabled.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == "periodic-notes"))
+        {
+            return null;
+        }
+
+        using var data = ReadJson(root, "plugins/periodic-notes/data.json");
+        if (data?.RootElement is not { ValueKind: JsonValueKind.Object } settings
+            || !settings.TryGetProperty("daily", out var daily) || daily.ValueKind != JsonValueKind.Object
+            || !daily.TryGetProperty("enabled", out var on) || on.ValueKind != JsonValueKind.True)
+        {
+            return null;
+        }
+
+        string format = Text(daily, "format");
+        return new DailyNoteSettings(DailyNotes.Clean(Text(daily, "folder")), format.Trim().Length == 0 ? DailyNotes.DefaultFormat : format.Trim(),
+            DailyNotes.Clean(Text(daily, "template")), DailyNotes.PeriodicSource);
+
+        static string Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
+    }
 
     /// <summary>
     /// <c>vault_daily</c>: the daily note for <paramref name="date"/> (<see cref="DailyNotes.TryParseDay"/>, today by default),
     /// created from the plugin's template when missing — the way Obsidian's "Open today's daily note" does — with
     /// <paramref name="append"/> added at its end when given; the note's text after.
     /// </summary>
-    public string Daily(string date, string append)
+    public string Daily(string date, string append, CancellationToken cancellationToken = default)
     {
+        if (append.Length > WorkingDirectory.MaxWriteChars)
+        {
+            return ObsidianText.ContentTooLong;
+        }
+
         lock (_gate)
         {
-            if (!Open(out string root, out string error))
+            if (!Open(out string root, out string error, cancellationToken))
             {
                 return error;
             }
@@ -1020,7 +1341,16 @@ public sealed class ObsidianVault
                 return error;
             }
 
-            var status = new List<string>(2);
+            var status = new List<string>(3);
+            if (settings.Source == DailyNotes.PeriodicSource)
+            {
+                status.Add(ObsidianText.DailyFromPeriodic);
+            }
+            else if (settings.CoreOff)
+            {
+                status.Add(ObsidianText.DailyNotesOff);
+            }
+
             try
             {
                 if (!File.Exists(full))
@@ -1030,11 +1360,11 @@ public sealed class ObsidianVault
                     if (settings.Template.Length > 0 && _index.Resolve(settings.Template).Note is { } source)
                     {
                         template = source.Relative;
-                        var moment = day.ToDateTime(TimeOnly.FromDateTime(now.DateTime));
-                        text = DailyNotes.ApplyTemplate(TryReadText(source.Full, source.Relative, out var t, out _) ? t.Text : "", VaultPaths.NameOf(relative), moment);
+                        // The note's name, its day and the daily format as the plugin fills a template (review U5), the zone for X and Z (review I15).
+                        text = DailyNotes.ApplyTemplate(TryReadText(source.Full, source.Relative, out var t, out _) ? t.Text : "", VaultPaths.NameOf(relative), day, now.DateTime, settings.Format, now.Offset);
                     }
 
-                    WriteText(full, text.Length == 0 ? "" : Join(WorkingDirectory.SplitLines(text), "\n"), bom: false);
+                    WriteText(full, text.Length == 0 ? "" : Join(WorkingDirectory.SplitLines(text), "\n"), TextCodec.Utf8);
                     status.Add(ObsidianText.CreatedFrom(template));
                 }
 
@@ -1047,7 +1377,13 @@ public sealed class ObsidianVault
 
                     var lines = WorkingDirectory.SplitLines(old.Text);
                     lines.AddRange(WorkingDirectory.SplitLines(append));
-                    WriteText(full, Join(lines, old.NewLine), old.Bom);
+                    string joined = Join(lines, old.NewLine);
+                    if (TooLargeAfter(joined, old.Codec))
+                    {
+                        return ObsidianText.WouldBeTooLarge(relative);
+                    }
+
+                    WriteText(full, joined, old.Codec);
                     status.Add("appended");
                 }
 
@@ -1067,7 +1403,7 @@ public sealed class ObsidianVault
             string body = string.Join("\n", shown);
             if (body.Length > WorkingDirectory.MaxReadChars)
             {
-                body = body[..WorkingDirectory.MaxReadChars] + "\n… (cut; vault_read reads the rest)";
+                body = TextCut.Safe(body, WorkingDirectory.MaxReadChars) + "\n… (cut; vault_read reads the rest)";
             }
 
             string header = ObsidianText.DailyHeader(relative, string.Join(", ", status), shown.Count);
@@ -1077,8 +1413,8 @@ public sealed class ObsidianVault
 
     // ---- moving ----
 
-    /// <summary>One span of a note's line to replace.</summary>
-    private readonly record struct LinkEdit(int Line, int Column, int Length, string Text);
+    /// <summary>One span of a note's line to replace, and the text the scan saw there (2026-10-22, review J6: checked before it is replaced).</summary>
+    private readonly record struct LinkEdit(int Line, int Column, int Length, string Text, string Expected);
 
     /// <summary>
     /// <c>vault_move</c>: the note renamed or moved to <paramref name="to"/> — a bare name renames it in its folder, a
@@ -1089,11 +1425,11 @@ public sealed class ObsidianVault
     /// note's own relative Markdown links are re-aimed from its new folder. Every new text is computed before anything is
     /// written; the other notes are written first, then the note is moved, then its own rewrite lands.
     /// </summary>
-    public string Move(string note, string to)
+    public string Move(string note, string to, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            if (!Open(out string root, out string error) || !TryNote(note, out var entry, out _, out error))
+            if (!Open(out string root, out string error, cancellationToken) || !TryNote(note, out var entry, out _, out error, ResolveFor.Write))
             {
                 return error;
             }
@@ -1119,6 +1455,11 @@ public sealed class ObsidianVault
                 return error;
             }
 
+            if (Refusal(root, entry.Full, entry.Relative, WriteRole.Remove) is { } taken)
+            {
+                return taken;
+            }
+
             if (string.Equals(newRelative, entry.Relative, StringComparison.Ordinal))
             {
                 return ObsidianText.NothingToMove;
@@ -1126,7 +1467,7 @@ public sealed class ObsidianVault
 
             if (File.Exists(newFull) && !string.Equals(newFull, entry.Full, StringComparison.OrdinalIgnoreCase))
             {
-                return ObsidianText.Exists(newRelative);
+                return ObsidianText.MoveTargetExists(newRelative);
             }
 
             string newName = VaultPaths.NameOf(newRelative);
@@ -1139,6 +1480,7 @@ public sealed class ObsidianVault
             var plans = new List<(NoteEntry Source, List<LinkEdit> Edits)>();
             foreach (var source in _index.Notes)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 bool self = ReferenceEquals(source, entry);
                 var edits = new List<LinkEdit>();
                 foreach (var link in source.Scan.Links)
@@ -1154,14 +1496,14 @@ public sealed class ObsidianVault
                     {
                         if (Rewrite(link, found.By, fromFolder) is { } text && text != link.Raw)
                         {
-                            edits.Add(new LinkEdit(link.Line, link.Column, link.Length, text));
+                            edits.Add(new LinkEdit(link.Line, link.Column, link.Length, text, link.Raw));
                         }
                     }
                     else if (self && !link.IsWiki && found.By == ResolveBy.RelativePath && found.Relative is { } target
                         && !string.Equals(newFolder, entry.Folder, StringComparison.OrdinalIgnoreCase))
                     {
                         string url = NoteScanner.Encode(Markdownish(link, VaultPaths.RelativeFrom(newFolder, target))) + EncodeSubpath(link.Subpath);
-                        edits.Add(new LinkEdit(link.Line, link.Column, link.Length, (link.IsEmbed ? "!" : "") + "[" + link.Alias + "](" + url + ")"));
+                        edits.Add(new LinkEdit(link.Line, link.Column, link.Length, (link.IsEmbed ? "!" : "") + "[" + link.Alias + "](" + url + Title(link) + ")", link.Raw));
                     }
                 }
 
@@ -1171,7 +1513,7 @@ public sealed class ObsidianVault
                 }
             }
 
-            var rewritten = new List<(NoteEntry Source, string Text, bool Bom, int Count)>();
+            var rewritten = new List<(NoteEntry Source, string Old, string Text, TextCodec Codec, int Count)>();
             foreach (var (source, edits) in plans)
             {
                 if (!TryReadText(source.Full, source.Relative, out var old, out error))
@@ -1179,36 +1521,105 @@ public sealed class ObsidianVault
                     return error;
                 }
 
-                rewritten.Add((source, Apply(old.Text, edits), old.Bom, edits.Count));
+                string changed;
+                try
+                {
+                    changed = Apply(old.Text, edits);
+                }
+                catch (IOException ex)
+                {
+                    // A note changed since the walk: nothing written anywhere (review J6).
+                    return ObsidianText.MoveFailedPartway(ex.Message, [], movedNote: false);
+                }
+
+                rewritten.Add((source, old.Text, changed, old.Codec, edits.Count));
             }
 
-            var done = new List<string>();
+            // The canvases' file cards and text cards that reach the note (2026-10-22, review O4), planned with the notes.
+            var canvases = new List<(string Relative, string Full, string Old, string Text)>();
+            foreach (string canvas in _index.Attachments.Where(CanvasFile.IsCanvas).Take(CanvasFile.MaxCanvases))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (ReadCanvas(root, canvas) is not { } json)
+                {
+                    continue;
+                }
+
+                string folder = VaultPaths.FolderOf(canvas);
+                string? next = CanvasFile.Rewrite(json,
+                    file => _index.PathComparer.Equals(VaultPaths.Normalize(file), entry.Relative) ? newRelative : null,
+                    text =>
+                    {
+                        var edits = TextLinks(text, folder).Where(l => ReferenceEquals(l.Found.Note, entry))
+                            .Select(l => Rewrite(l.Link, l.Found.By, folder) is { } t && t != l.Link.Raw ? new LinkEdit(l.Link.Line, l.Link.Column, l.Link.Length, t, l.Link.Raw) : (LinkEdit?)null)
+                            .OfType<LinkEdit>().ToList();
+                        return edits.Count == 0 ? null : Apply(text, edits);
+                    });
+                if (next is not null)
+                {
+                    canvases.Add((canvas, Path.Combine(root, canvas.Replace('/', Path.DirectorySeparatorChar)), json, next));
+                }
+            }
+
+            // Written in order, every earlier write taken back if a later one fails before the note itself has moved (2026-10-22, review N8:
+            // a failed move left links pointing at a path that was never made, and the answer never said whether the note moved).
+            var done = new List<(string Relative, string Full, string Old, TextCodec Codec)>();
+            bool moved = false;
             try
             {
-                foreach (var (source, text, bom, _) in rewritten.Where(r => !ReferenceEquals(r.Source, entry)))
+                foreach (var (source, old, text, codec, _) in rewritten.Where(r => !ReferenceEquals(r.Source, entry)))
                 {
-                    WriteText(source.Full, text, bom);
-                    done.Add(source.Relative);
+                    WriteText(source.Full, text, codec);
+                    done.Add((source.Relative, source.Full, old, codec));
+                }
+
+                foreach (var (relative, full, old, text) in canvases)
+                {
+                    WriteText(full, text, TextCodec.Utf8);
+                    done.Add((relative, full, old, TextCodec.Utf8));
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(newFull)!);
                 File.Move(entry.Full, newFull);
+                moved = true;
                 if (rewritten.FirstOrDefault(r => ReferenceEquals(r.Source, entry)) is { Source: not null } own)
                 {
-                    WriteText(newFull, own.Text, own.Bom);
+                    WriteText(newFull, own.Text, own.Codec);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _index.Refresh(root);
-                return ObsidianText.MoveFailedPartway(ex.Message, done);
+                var notPutBack = new List<string>();
+                if (!moved)
+                {
+                    foreach (var (relative, full, old, codec) in done)
+                    {
+                        try
+                        {
+                            WriteText(full, old, codec);
+                        }
+                        catch (Exception undo) when (undo is IOException or UnauthorizedAccessException)
+                        {
+                            notPutBack.Add(relative);
+                        }
+                    }
+                }
+
+                _index.Refresh(root, CancellationToken.None);
+                return moved
+                    ? ObsidianText.MovedOwnLinksFailed(entry.Relative, newRelative, ex.Message)
+                    : ObsidianText.MoveFailedPartway(ex.Message, notPutBack, movedNote: false);
             }
 
-            _index.Refresh(root);
+            _index.Refresh(root, CancellationToken.None);
             int links = rewritten.Sum(r => r.Count);
-            string result = ObsidianText.Moved(entry.Relative, newRelative, links, rewritten.Count);
-            var list = rewritten.Select(r => (ReferenceEquals(r.Source, entry) ? newRelative : r.Source.Relative) + " (" + r.Count.ToString(CultureInfo.InvariantCulture) + ")").ToList();
-            return list.Count == 0 ? result : result + ":\n" + string.Join("\n", list);
+            string result = ObsidianText.Moved(entry.Relative, newRelative, links, rewritten.Count + canvases.Count);
+            var list = rewritten.Select(r => (ReferenceEquals(r.Source, entry) ? newRelative : r.Source.Relative) + " (" + r.Count.ToString(CultureInfo.InvariantCulture) + ")")
+                .Concat(canvases.Select(c => c.Relative + " (canvas)")).ToList();
+            // The notes the move could not look into (2026-10-22, review H10: past MaxNotes, or too big or unreadable, said nothing).
+            int unread = _index.Notes.Count(n => n.NotRead is not null);
+            string notChecked = ObsidianText.MoveUnchecked(unread, _index.Truncated);
+            return (list.Count == 0 ? result : result + ":\n" + string.Join("\n", list)) + notChecked;
 
             string? Rewrite(NoteLink link, ResolveBy by, string fromFolder)
             {
@@ -1246,10 +1657,13 @@ public sealed class ObsidianVault
 
                 string path = by == ResolveBy.RelativePath ? VaultPaths.RelativeFrom(fromFolder, newRelative) : newRelative;
                 string url = NoteScanner.Encode(Markdownish(link, path)) + EncodeSubpath(link.Subpath);
-                return bang + "[" + link.Alias + "](" + url + ")";
+                return bang + "[" + link.Alias + "](" + url + Title(link) + ")";
             }
         }
     }
+
+    /// <summary>A Markdown link's title kept through a rewrite, after one space (2026-10-22, review H19).</summary>
+    private static string Title(NoteLink link) => link.Title.Length == 0 ? "" : " " + link.Title;
 
     /// <summary>A path the way the link wrote its own: with <c>.md</c> when it had one, without when it did not.</summary>
     private static string Markdownish(NoteLink link, string path) =>
@@ -1258,13 +1672,23 @@ public sealed class ObsidianVault
     private static string EncodeSubpath(string subpath) =>
         subpath.Length == 0 ? "" : "#" + NoteScanner.Encode(subpath[1..]);
 
-    /// <summary>The text with the edits applied, each span of its line replaced — from the last to the first, so the columns hold; the line endings as they were.</summary>
+    /// <summary>
+    /// The text with the edits applied, each span of its line replaced — from the last to the first, so the columns hold; the line endings as
+    /// they were. The lines start where the scanner's do (2026-10-22, review H1: '\n' alone here, '\r\n', '\n' and a lone '\r' there since
+    /// <see cref="WorkingDirectory.SplitLines"/>, so a CR-only note's edits landed at wrong offsets or threw); an edit that no longer fits
+    /// its line is an <see cref="IOException"/>, the move's failure, never a write at the wrong place.
+    /// </summary>
     private static string Apply(string text, List<LinkEdit> edits)
     {
         var starts = new List<int> { 0 };
         for (int i = 0; i < text.Length; i++)
         {
-            if (text[i] == '\n')
+            if (text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+            {
+                i++;
+                starts.Add(i + 1);
+            }
+            else if (text[i] is '\n' or '\r')
             {
                 starts.Add(i + 1);
             }
@@ -1273,6 +1697,12 @@ public sealed class ObsidianVault
         var sb = new StringBuilder(text);
         foreach (var edit in edits.OrderByDescending(e => e.Line).ThenByDescending(e => e.Column))
         {
+            if (edit.Line < 1 || edit.Line > starts.Count || starts[edit.Line - 1] + edit.Column + edit.Length > text.Length
+                || string.CompareOrdinal(text, starts[edit.Line - 1] + edit.Column, edit.Expected, 0, edit.Length) != 0)
+            {
+                throw new IOException(ObsidianText.NoteChangedUnderMove);
+            }
+
             int at = starts[edit.Line - 1] + edit.Column;
             sb.Remove(at, edit.Length).Insert(at, edit.Text);
         }

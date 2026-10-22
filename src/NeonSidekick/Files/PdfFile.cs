@@ -55,7 +55,7 @@ public static class PdfFile
 
         try
         {
-            using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, HeaderWindow + 16);
+            using var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite, HeaderWindow + 16);
             Span<byte> head = stackalloc byte[HeaderWindow + 16];
             int read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
             return HasPdfHeader(head[..read]);

@@ -52,6 +52,6 @@ public sealed class VaultPropertiesTool : VaultTool
 
         JsonElement? set = objects.Count == 1 ? objects[0] : null;
         string note = ReadNote(arguments);
-        return OffThread(() => Vault.Properties(note, set, remove), cancellationToken);
+        return OffThread(() => Vault.Properties(note, set, remove, cancellationToken), cancellationToken);
     }
 }

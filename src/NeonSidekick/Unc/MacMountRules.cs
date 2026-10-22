@@ -83,10 +83,60 @@ public static class MacMountRules
     public static MountInfo? Find(IEnumerable<MountInfo> mounts, string server, string share, bool? readOnly = null)
     {
         ArgumentNullException.ThrowIfNull(mounts);
-        string encoded = server + "/" + Uri.EscapeDataString(share);
         return mounts.FirstOrDefault(m => (readOnly is not { } ro || m.ReadOnly == ro)
-            && (m.From.EndsWith("@" + encoded, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(m.From, "//" + encoded, StringComparison.OrdinalIgnoreCase)));
+            && FromShare(m.From) is var (from, name)
+            && string.Equals(from, server, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(name, share, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The server and share a mount's <c>f_mntfromname</c> names (<c>//user@server/share</c>), the share percent-decoded, or null
+    /// (2026-10-22, review U14: the record was matched against the share escaped by <see cref="Uri.EscapeDataString"/>, which escapes
+    /// <c>!'()*</c> and non-ASCII where the kernel's record may not, so <c>Bob's Files (2024)</c> missed its own mount).
+    /// </summary>
+    public static (string Server, string Share)? FromShare(string from)
+    {
+        string text = (from ?? "").Trim();
+        if (!text.StartsWith("//", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        text = text[2..];
+        int slash = text.IndexOf('/', StringComparison.Ordinal);
+        if (slash <= 0)
+        {
+            return null;
+        }
+
+        string host = text[..slash];
+        int at = host.LastIndexOf('@');
+        if (at >= 0)
+        {
+            host = host[(at + 1)..];
+        }
+
+        string share = text[(slash + 1)..].TrimEnd('/');
+        try
+        {
+            share = Uri.UnescapeDataString(share);
+        }
+        catch (UriFormatException)
+        {
+            // Left as it reads.
+        }
+
+        return host.Length > 0 && share.Length > 0 ? (host, share) : null;
+    }
+
+    /// <summary>
+    /// Whether a mount found already there may serve an as-you share (2026-10-22, review H20: on EEXIST any SMB mount of the share was
+    /// adopted, a Finder mount signed in as an admin included): this user's own mount, signed in as no one named or as this user.
+    /// </summary>
+    public static bool IsOwnSignIn(MountInfo mount, uint uid, string userName)
+    {
+        ArgumentNullException.ThrowIfNull(mount);
+        return mount.Owner == uid && (FromUser(mount.From) is null || IsSignedInAs(mount.From, userName));
     }
 
     /// <summary>A record's file name: the file system's id, so a mount has one record however often it is seen.</summary>

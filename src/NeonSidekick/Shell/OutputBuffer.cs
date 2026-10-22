@@ -85,19 +85,21 @@ public sealed class OutputBuffer
     public void Append(string text, bool isError)
     {
         ArgumentNullException.ThrowIfNull(text);
+        // Never inside a surrogate pair (2026-10-22, review L6).
         if (text.Length > MaxLineChars)
         {
-            text = text[..(MaxLineChars - CutMark.Length)] + CutMark;
+            text = Files.TextCut.Safe(text, MaxLineChars - CutMark.Length) + CutMark;
         }
 
         lock (_lock)
         {
+            // Bytes as held: two a UTF-16 char (2026-10-22, review F4: the cap counted chars, so a buffer held twice what it said).
             _lines.AddLast(new OutputLine(text, isError));
-            _bytes += text.Length;
+            _bytes += text.Length * (long)sizeof(char);
             _totalChars += text.Length + 1;
             while (_lines.Count > _maxLines || (_bytes > _maxBytes && _lines.Count > 1))
             {
-                _bytes -= _lines.First!.Value.Text.Length;
+                _bytes -= _lines.First!.Value.Text.Length * (long)sizeof(char);
                 _lines.RemoveFirst();
                 _dropped++;
             }

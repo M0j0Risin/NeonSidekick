@@ -32,12 +32,24 @@ public static class PathGlob
         ArgumentNullException.ThrowIfNull(pattern);
         var results = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return Expand(pattern, results, seen) ? results : [pattern];
+        int steps = 0;
+        return Expand(pattern, results, seen, ref steps) ? results : [pattern];
     }
 
-    /// <summary>Appends <paramref name="pattern"/>'s expansions; false once the cap is passed.</summary>
-    private static bool Expand(string pattern, List<string> results, HashSet<string> seen)
+    /// <summary>
+    /// The most expansion steps one pattern may take (2026-10-22, review G6: the cap counted distinct results, so <c>{,}</c> forty times
+    /// — one result — walked 2^40 paths before it was reached).
+    /// </summary>
+    public const int MaxBraceSteps = MaxBraceExpansions * 16;
+
+    /// <summary>Appends <paramref name="pattern"/>'s expansions; false once the cap of results or of steps is passed.</summary>
+    private static bool Expand(string pattern, List<string> results, HashSet<string> seen, ref int steps)
     {
+        if (++steps > MaxBraceSteps)
+        {
+            return false;
+        }
+
         if (!TryFindGroup(pattern, out int open, out int close, out List<string> alternatives))
         {
             if (seen.Add(pattern))
@@ -52,7 +64,7 @@ public static class PathGlob
         string suffix = pattern[(close + 1)..];
         foreach (string alternative in alternatives)
         {
-            if (!Expand(prefix + alternative + suffix, results, seen))
+            if (!Expand(prefix + alternative + suffix, results, seen, ref steps))
             {
                 return false;
             }
@@ -110,12 +122,70 @@ public static class PathGlob
     {
         ArgumentNullException.ThrowIfNull(pattern);
         ArgumentNullException.ThrowIfNull(relativePath);
-        string[] parts = pattern.Trim().Trim(Separators).Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+        string[] parts = Parts(pattern);
         string[] segments = relativePath.Trim(Separators).Split(Separators, StringSplitOptions.RemoveEmptyEntries);
-        return MatchSegments(parts, 0, segments, 0);
+        var memo = new sbyte[(parts.Length + 1) * (segments.Length + 1)];
+        return MatchSegments(parts, 0, segments, 0, memo);
     }
 
-    private static bool MatchSegments(string[] parts, int p, string[] segments, int s)
+    /// <summary>
+    /// A pattern's segments as the matcher takes them: a <c>.</c> segment dropped (2026-10-22, review Q7: <c>./**/*.md</c> matched nothing), and
+    /// a <c>**</c> fused into a segment split out of it (review Q8: <c>**.cs</c> and <c>src/**.cs</c> matched one level only) — <c>**.cs</c> is
+    /// <c>**</c> then <c>*.cs</c>, <c>src**</c> is <c>src*</c> then <c>**</c>; any other <c>**</c> inside a segment is a <c>*</c>.
+    /// </summary>
+    private static string[] Parts(string pattern)
+    {
+        var parts = new List<string>();
+        foreach (string raw in pattern.Trim().Trim(Separators).Split(Separators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (raw == ".")
+            {
+                continue;
+            }
+
+            if (raw == "**" || !raw.Contains("**", StringComparison.Ordinal))
+            {
+                parts.Add(raw);
+                continue;
+            }
+
+            if (raw.StartsWith("**", StringComparison.Ordinal))
+            {
+                parts.Add("**");
+                parts.Add("*" + raw[2..].Replace("**", "*", StringComparison.Ordinal));
+            }
+            else if (raw.EndsWith("**", StringComparison.Ordinal))
+            {
+                parts.Add(raw[..^2].Replace("**", "*", StringComparison.Ordinal) + "*");
+                parts.Add("**");
+            }
+            else
+            {
+                parts.Add(raw.Replace("**", "*", StringComparison.Ordinal));
+            }
+        }
+
+        return [.. parts];
+    }
+
+    /// <summary>
+    /// Whether <paramref name="parts"/> from <paramref name="p"/> match <paramref name="segments"/> from <paramref name="s"/>, each (p, s) worked
+    /// out once (2026-10-22, review G6: many <c>**</c> over a deep path retried the same splits exponentially): 0 unknown, 1 yes, -1 no.
+    /// </summary>
+    private static bool MatchSegments(string[] parts, int p, string[] segments, int s, sbyte[] memo)
+    {
+        int key = p * (segments.Length + 1) + s;
+        if (memo[key] != 0)
+        {
+            return memo[key] > 0;
+        }
+
+        bool result = Match(parts, p, segments, s, memo);
+        memo[key] = result ? (sbyte)1 : (sbyte)-1;
+        return result;
+    }
+
+    private static bool Match(string[] parts, int p, string[] segments, int s, sbyte[] memo)
     {
         while (p < parts.Length)
         {
@@ -134,7 +204,7 @@ public static class PathGlob
 
                 for (int i = s; i <= segments.Length; i++)
                 {
-                    if (MatchSegments(parts, p, segments, i))
+                    if (MatchSegments(parts, p, segments, i, memo))
                     {
                         return true;
                     }

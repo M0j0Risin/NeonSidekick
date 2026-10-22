@@ -48,7 +48,7 @@ public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
         "or every occurrence with replace_all. old_text is matched as written first, then with spacing, indentation, \\n escapes and typographic quotes or dashes tolerated, " +
         "and last by the similarity of its lines — so text copied from a read lands even when its indentation was guessed; the result says how it matched. " +
         "old_text must appear exactly once unless replace_all (which never matches by similarity) — include enough surrounding text to make it unique; an empty new_text removes it. " +
-        "The rest of the file is untouched; the result shows the edited lines with their numbers and the file's new line and word counts. An edit already in the file answers as done. To rewrite or append a whole file use write_file.";
+        "The rest of the file is untouched; the result shows the edited lines with their numbers and the file's new line and word counts. An edit already in the file answers as done. To rewrite or append a whole file use write_file." + FileText.GuardedPathsSentence;
 
     public override JsonElement JsonSchema => Schema;
 

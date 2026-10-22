@@ -22,6 +22,12 @@ public static class UnifiedDiff
     /// <summary>The most distinct lines the two texts may hold together: one <c>char</c> each.</summary>
     public const int MaxDistinctLines = 65_536;
 
+    /// <summary>
+    /// The most steps the line matcher takes before a diff is given up, null as for too many distinct lines (2026-10-22, review H13: a
+    /// reordered file — a sorted 40,000-row CSV — kept the turn's thread for minutes after its write, for a diff only the transcript shows).
+    /// </summary>
+    public const long MaxDiffSteps = 50_000_000;
+
     /// <summary>git's marker under the last line of a side that does not end with a newline.</summary>
     public const string NoNewlineMarker = "\\ No newline at end of file";
 
@@ -59,7 +65,7 @@ public static class UnifiedDiff
     /// <summary>
     /// The hunks turning <paramref name="a"/> into <paramref name="b"/> with <paramref name="context"/> lines
     /// around each change (difflib's <c>get_grouped_opcodes</c>); empty when the texts are equal, null when
-    /// they hold more than <see cref="MaxDistinctLines"/> distinct lines together.
+    /// they hold more than <see cref="MaxDistinctLines"/> distinct lines together or the matcher passes <see cref="MaxDiffSteps"/>.
     /// </summary>
     public static IReadOnlyList<Hunk>? Hunks(Text a, Text b, int context = DefaultContext)
     {
@@ -71,7 +77,11 @@ public static class UnifiedDiff
             return null;
         }
 
-        var codes = SequenceSimilarity.Opcodes(sa, sb);
+        if (SequenceSimilarity.Opcodes(sa, sb, MaxDiffSteps) is not { } codes)
+        {
+            return null;
+        }
+
         if (codes.Count == 0 || codes.All(c => c.Tag == SequenceSimilarity.Op.Equal))
         {
             return [];

@@ -51,7 +51,7 @@ public sealed class DeleteTool : FileTool
     /// </summary>
     public static string RecycleDescriptionText =>
         "Moves a file or folder under the working directory (the user's cwd / current directory) to the " + FileText.RecycleBinName + ", where the user can restore it; a folder goes with everything in it. " +
-        "On a drive with no " + FileText.RecycleBinName + " it is deleted for good, and the result says so." + GitNote;
+        "On a drive with no " + FileText.RecycleBinName + " it is deleted for good, and the result says so; an item the " + FileText.RecycleBinName + " can't take is not deleted at all." + GitNote;
 
     /// <summary>The sentence the description ends on: <c>.git</c> is refused, whatever the path (2026-09-23). Pinned.</summary>
     public const string GitNote = " A .git folder, anything in it, or a folder holding one is never deleted.";
@@ -60,9 +60,11 @@ public sealed class DeleteTool : FileTool
 
     public string Describe(string path) => FileText.Deleted(Files.Delete(path));
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return new ValueTask<object?>(Describe(ReadPath(arguments)));
+        string path = ReadPath(arguments);
+        // Off the turn's thread, the folder's walk under Esc (2026-10-22, review P9).
+        return await Task.Run(() => FileText.Deleted(Files.Delete(path, cancellationToken)), cancellationToken).ConfigureAwait(false);
     }
 }

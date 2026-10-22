@@ -16,6 +16,9 @@ public static class UncText
 
     public const string NoPath = "no \"path\" is given";
     public const string BlankName = "a share has a blank name";
+
+    /// <summary>A share name given twice in one file, ignoring case (2026-10-22, review K2, K8). Pinned.</summary>
+    public const string NamedTwice = "this name is given to more than one share in the file (names ignore case), so neither is used; rename or remove one";
     public static string DevicePath(string path) => $"\"path\" is '{path}', a device path; give the share as \\\\server\\share or a folder as X:\\folder";
     public static string NoShareName(string path) => $"\"path\" is '{path}', a server without a share; give it as \\\\server\\share";
     public static string NotAbsolute(string path) => $"\"path\" is '{path}'; it must be a full path, \\\\server\\share or X:\\folder";
@@ -67,6 +70,13 @@ public static class UncText
     /// <c>open</c> on a <c>runas</c> share on the network (2026-10-01, the user's call): the program the shell starts runs as the
     /// user, never with the share's sign-in, so the model is pointed to a copy instead. Pinned.
     /// </summary>
+    /// <summary>
+    /// The line's note for a pasted picture path on a host the app doesn't know (2026-10-22, review K7, the fix plan's D13): it stays text,
+    /// unopened, so pasting a stranger's path never signs in to it.
+    /// </summary>
+    public static string PasteNotOpened(string host) =>
+        $"(not attached: {host} is not a UNC share's server or a mapped drive's, so the app left the path as text)";
+
     public static string OpenRunAsRefused(string name) =>
         $"Error: share '{name}' signs in as another account, which a program the shell starts cannot use; unc_fetch the file into the working directory, then open the copy there";
 
@@ -84,6 +94,13 @@ public static class UncText
     public const string WritesOff = "Error: UNC writes is off, so every share is read-only; the user turns it on (the UNC tab of /tools)";
     public static string ReadOnlyShare(string name) => $"Error: share '{name}' is read-only (\"access\": \"read\" in unc.json); the user makes it readwrite to allow changes";
     public static string AuditLogLine(string share, string account, string action, string path) => $"{share} ({account}): {action} {path}";
+
+    /// <summary>The audit line naming a move's or copy's other end, and a change that failed partway (review J8).</summary>
+    public static string AuditLogLine(string share, string account, string action, string path, string? to, bool partial) =>
+        AuditLogLine(share, account, action, path) + (string.IsNullOrEmpty(to) ? "" : " to " + to) + (partial ? PartialAuditNote : "");
+
+    /// <summary>What an audit line adds for a change that failed after it began. Pinned.</summary>
+    public const string PartialAuditNote = " (failed partway: part of it may have changed)";
 
     // ─── the reach ──────────────────────────────────────────────────────────────
 
@@ -149,13 +166,40 @@ public static class UncText
     /// becomes <see cref="ShareName"/>, so a listing reads <c>share 'eng' (\\fs01\eng) (12 entries):</c> and a refusal names where it
     /// stopped. Pure.
     /// </summary>
+    /// <remarks>
+    /// Only for a sentence that holds no file's text (a refusal, a copy's answer): one that may (a read, a search, a patch's region) is built
+    /// through <see cref="Scoped(Func{string}, UncNamedShare)"/>, which names the root as it is built and leaves the content alone (review H2).
+    /// </remarks>
     public static string Scoped(string sentence, UncNamedShare share)
     {
         ArgumentNullException.ThrowIfNull(sentence);
         string name = ShareName(share);
         return sentence
-            .Replace(FileText.RootName, name, StringComparison.Ordinal)
+            .Replace(FileText.DefaultRootName, name, StringComparison.Ordinal)
             .Replace("The working directory", char.ToUpperInvariant(name[0]) + name[1..], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <paramref name="build"/>'s text with the root named for the share as it is built (<see cref="FileText.NamingRoot"/>), a file's own
+    /// text in it never rewritten (2026-10-22, review H2).
+    /// </summary>
+    public static string Scoped(Func<string> build, UncNamedShare share)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        using (FileText.NamingRoot(ShareName(share)))
+        {
+            return build();
+        }
+    }
+
+    /// <summary>The root named for the share while <paramref name="build"/> runs, whatever it returns (review H2).</summary>
+    public static T Scoped<T>(Func<T> build, UncNamedShare share)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        using (FileText.NamingRoot(ShareName(share)))
+        {
+            return build();
+        }
     }
 
     /// <summary>

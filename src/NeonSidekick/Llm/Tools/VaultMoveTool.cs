@@ -47,6 +47,6 @@ public sealed class VaultMoveTool : VaultTool
             return new ValueTask<object?>(refused);
         }
 
-        return OffThread(() => Vault.Move(note, to), cancellationToken);
+        return OffThread(() => Vault.Move(note, to, cancellationToken), cancellationToken);
     }
 }

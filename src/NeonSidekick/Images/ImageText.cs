@@ -70,7 +70,8 @@ public static class ImageText
 
     public static string CannotFit(long maxKb, long smallest, ImageFormat format) =>
         "Error: could not get under " + N(maxKb) + " KB, so nothing was written; the smallest tried was " + FileText.Size(smallest)
-        + (format.Lossy ? "" : OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colors) or a lossy format such as jpeg");
+        // "colors" only where it is taken (2026-10-22, review R10: it was offered for BMP and TIFF, which refuse it).
+        + (format.Lossy ? "" : !OperatingSystem.IsMacOS() && (format == ImageFormats.Png || format == ImageFormats.Gif) ? ". Try \"colors\" (fewer colors) or a lossy format such as jpeg" : ". Try a smaller size, or a lossy format such as jpeg");
 
     public static string Failed(string detail) => "Error: the picture could not be edited: " + detail;
 

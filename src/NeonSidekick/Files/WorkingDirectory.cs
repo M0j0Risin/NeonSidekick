@@ -91,6 +91,45 @@ public enum FileOutcome
     /// <c>skill_editor</c>.
     /// </summary>
     InSkillFolder,
+
+    /// <summary>A model write into <c>.neon</c>, whose plans, audits and loop files the app trusts (2026-10-22, review P4, <see cref="WriteGuard"/>).</summary>
+    NeonFilesProtected,
+
+    /// <summary>A model write into the app's home or a profile (2026-10-22, review P2/W1, <see cref="WriteGuard"/>): settings, configs and databases.</summary>
+    AppFilesProtected,
+
+    /// <summary>A model write into a skill root other than through <c>skill_editor</c> (2026-10-22, review P3, <see cref="WriteGuard"/>).</summary>
+    SkillFilesProtected,
+
+    /// <summary>
+    /// A model write to the project file the system prompt reads (2026-10-22, review P1, the fix plan's D2): the turn asks the user and runs the
+    /// call again on a yes; with nobody to ask, refused.
+    /// </summary>
+    ProjectFileAsk,
+
+    /// <summary>A write onto a shopping or grocery list's name while the shopping tools are offered (the tripwire, in <see cref="WriteGuard"/> since 2026-10-22).</summary>
+    ShoppingList,
+
+    /// <summary>A path naming an NTFS stream (<c>a.txt:hidden</c>, 2026-10-22, review M2): hidden data, or a file's Mark of the Web.</summary>
+    StreamName,
+
+    /// <summary>A name Windows reserves for a device (<c>NUL</c>, <c>CON</c>, <c>COM1</c>…, 2026-10-22, review O10), not a file.</summary>
+    DeviceName,
+
+    /// <summary>A FIFO, socket or device file (2026-10-22, review N1/N2): a read of one waits forever.</summary>
+    NotARegularFile,
+
+    /// <summary>A home-folder (<c>~/x</c>) or <c>file:</c> URL path, which the file tools take as a relative name (2026-10-22, review S5).</summary>
+    NotAPathHere,
+
+    /// <summary>The working directory was deleted or renamed this session (2026-10-22, review S6): never made again behind the user's back.</summary>
+    RootGone,
+
+    /// <summary>A search needle with a line break in it (2026-10-22, review Q9): the search matches within one line.</summary>
+    OneLineOnly,
+
+    /// <summary>New text the file's own encoding can't hold (2026-10-22, review G4/Q1: a code page and an emoji): refused, never written as '?'.</summary>
+    NotEncodable,
 }
 
 public readonly record struct DirectoryEntry(string Name, bool IsDirectory, long Length);
@@ -117,12 +156,20 @@ public enum SearchOutput
     Files,
 }
 
-public sealed record ListResult(FileOutcome Outcome, string Relative, IReadOnlyList<DirectoryEntry> Entries, bool Truncated, string Detail = "");
+public sealed record ListResult(FileOutcome Outcome, string Relative, IReadOnlyList<DirectoryEntry> Entries, bool Truncated, string Detail = "")
+{
+    /// <summary>The hidden and system entries left out (2026-10-22, review Q10, the fix plan's D14: every read-side walk leaves them out and says how many).</summary>
+    public int Hidden { get; init; }
+}
 
 /// <summary>The <c>/tree</c> walk: <paramref name="FullPath"/> is the walked folder, full with a trailing separator (the header line); <paramref name="Truncated"/> when the cap stopped it.</summary>
 public sealed record FileTreeResult(FileOutcome Outcome, string Relative, string FullPath, IReadOnlyList<FileTreeEntry> Entries, bool Truncated, string Detail = "");
 
-public sealed record FindResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Paths, bool Truncated, string Detail = "");
+public sealed record FindResult(FileOutcome Outcome, string Relative, IReadOnlyList<string> Paths, bool Truncated, string Detail = "")
+{
+    /// <summary>The hidden and system entries left out (D14).</summary>
+    public int Hidden { get; init; }
+}
 
 /// <summary>
 /// <see cref="WorkingDirectory.ListFiles"/>'s answer (2026-10-18): the files, sandbox-relative, and whether the walk was cut by its budget.
@@ -159,10 +206,22 @@ public sealed record SearchResult(
     /// (a share, 2026-09-30) before it had looked at everything; <see cref="Truncated"/> is set with it.
     /// </summary>
     public bool Budgeted { get; init; }
+
+    /// <summary>The files left unread because their data is only in the cloud (2026-10-22, review O1, <see cref="WorkingDirectory.IsOffline"/>).</summary>
+    public int CloudOnly { get; init; }
+
+    /// <summary>The hidden and system entries left out (D14).</summary>
+    public int Hidden { get; init; }
+
+    /// <summary>Why a search aimed at one file did not search it (2026-10-22, review W3, V10): too big, not text, unreadable, cloud-only, filtered out.</summary>
+    public string? Unsearched { get; init; }
 }
 
 public sealed record RecentResult(FileOutcome Outcome, string Relative, IReadOnlyList<RecentEntry> Entries, string Detail = "")
 {
+    /// <summary>The hidden and system entries left out (D14).</summary>
+    public int Hidden { get; init; }
+
     /// <summary>The walk stopped at <see cref="WorkingDirectoryOptions.MaxWalkEntries"/> (a share, 2026-09-30): the newest of what was looked at, not of everything.</summary>
     public bool Budgeted { get; init; }
 }
@@ -185,6 +244,18 @@ public sealed record InfoResult(
 /// <param name="LineCut">A line longer than <see cref="WorkingDirectory.MaxReadChars"/> came back cut (2026-10-11).</param>
 public sealed record ReadResult(FileOutcome Outcome, string Relative, string Text, int TotalLines, int FromLine, int ToLine, bool Truncated, string Detail = "", bool LineCut = false)
 {
+    /// <summary>The encoding the file was read in when it is not plain UTF-8 (<see cref="TextCodec.Label"/>, 2026-10-22, review Q1); null otherwise.</summary>
+    public string? Encoding { get; init; }
+
+    /// <summary>The stamp taken as the read began (2026-10-22, review J12): what <see cref="WorkingDirectory.MarkSeen(string, SeenStamp?)"/> records.</summary>
+    public SeenStamp? Seen { get; init; }
+
+    /// <summary>The first line the read cut, 0 for none, and how long it is (2026-10-22, review Q2: a cut was never said).</summary>
+    public int CutLine { get; init; }
+
+    /// <summary>The cut line's length in characters.</summary>
+    public int CutLength { get; init; }
+
     /// <summary>
     /// Every line of the file came back as it is (2026-10-11, the review: a window or a cut read marked the whole file seen, and
     /// <c>write_file</c> without a mode then replaced it with the part the model had): only such a read marks the file seen.
@@ -193,6 +264,17 @@ public sealed record ReadResult(FileOutcome Outcome, string Relative, string Tex
 }
 
 /// <param name="Image">The picture as the model gets it, its <see cref="ImageAttachment.Path"/> the relative one; null unless <paramref name="Outcome"/> is <see cref="FileOutcome.Ok"/>.</param>
+/// <summary>
+/// A file as the model saw it (2026-10-22, review J12/Q11): its size and write time as the read began, and a hash of the bytes read, so a
+/// change the size and time can't show — the same second on a coarse file system — still counts as a change.
+/// </summary>
+public sealed record SeenStamp(long Length, DateTime Written, string Hash)
+{
+    /// <summary>The stamp for <paramref name="bytes"/> read with <paramref name="length"/> and <paramref name="written"/>.</summary>
+    public static SeenStamp Of(long length, DateTime written, ReadOnlySpan<byte> bytes) =>
+        new(length, written, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)));
+}
+
 public sealed record ImageResult(FileOutcome Outcome, string Relative, ImageAttachment? Image, string Detail = "");
 
 /// <param name="Bytes">The file's bytes, unchanged; null unless <paramref name="Outcome"/> is <see cref="FileOutcome.Ok"/>.</param>
@@ -231,6 +313,7 @@ public sealed class PendingWrite : IDisposable
         Relative = display;
         _temp = WorkingDirectory.TempSibling(full);
         _stream = new FileStream(_temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+        WorkingDirectory.HideTemp(_temp);
     }
 
     /// <summary>The target as the result names it.</summary>
@@ -256,6 +339,14 @@ public sealed class PendingWrite : IDisposable
             if (existed && !_overwrite)
             {
                 return new WriteResult(FileOutcome.Exists, Relative, 0, false);
+            }
+
+            // A new file only where nothing appeared since the write began (2026-10-22, review J3).
+            if (!existed)
+            {
+                return WorkingDirectory.MoveTempNew(_temp, _full)
+                    ? new WriteResult(FileOutcome.Ok, Relative, length, false)
+                    : new WriteResult(FileOutcome.Exists, Relative, 0, false);
             }
 
             WorkingDirectory.MoveIntoPlace(_temp, _full, _preserve);
@@ -324,7 +415,17 @@ public sealed record EditResult(
 public sealed record CreateResult(FileOutcome Outcome, string Relative, string Detail = "");
 
 /// <param name="Renamed">Only the last path segment changed.</param>
-public sealed record MoveResult(FileOutcome Outcome, string From, string To, bool IsDirectory, bool Renamed, string Detail = "");
+public sealed record MoveResult(FileOutcome Outcome, string From, string To, bool IsDirectory, bool Renamed, string Detail = "")
+{
+    /// <summary>A file at the destination was replaced, or a folder merged into (2026-10-22, review J11: an overwrite was never said).</summary>
+    public bool Replaced { get; init; }
+
+    /// <summary>What a folder copy left out (2026-10-22, the fix plan's D17): every <c>.git</c>, and the guarded files, by their paths.</summary>
+    public IReadOnlyList<string> LeftOut { get; init; } = [];
+
+    /// <summary>The refusal is the destination's (2026-10-22, review J10: a refused <c>to</c> was named by the source's path).</summary>
+    public bool AtDestination { get; init; }
+}
 
 /// <summary>What a <see cref="WorkingDirectory.Delete"/> removed, for good (in place since 2026-10-01, when File safe edits and its <c>.trash</c> went, the user's call).</summary>
 public sealed record DeleteResult(FileOutcome Outcome, string Relative, bool IsDirectory, string Detail = "")
@@ -461,7 +562,17 @@ public sealed class PurgeListing
     public PurgeListing Rest(int skip) => skip <= 0 ? this : new(Outcome, FullPath, Entries.Skip(skip).ToList(), Detail);
 }
 
-public sealed record ZipResult(FileOutcome Outcome, string Relative, string Archive, int Entries, long Bytes, string Detail = "");
+public sealed record ZipResult(FileOutcome Outcome, string Relative, string Archive, int Entries, long Bytes, string Detail = "")
+{
+    /// <summary>An archive (or, unzipped, a file) that was there before and was replaced (2026-10-22, review J11).</summary>
+    public bool Replaced { get; init; }
+
+    /// <summary>What was left out (2026-10-22, D17 and review N6): <c>.git</c>, guarded entries, a name a zip can't carry.</summary>
+    public IReadOnlyList<string> LeftOut { get; init; } = [];
+
+    /// <summary>The refusal is the archive's or the target folder's (review J10).</summary>
+    public bool AtDestination { get; init; }
+}
 
 public sealed record OpenResult(FileOutcome Outcome, string Relative, bool IsDirectory, string Detail = "");
 
@@ -586,6 +697,12 @@ public sealed class WorkingDirectory
     /// <summary>Entries a <see cref="Complete"/> walk looks at before it stops: the line's own task walks, so a huge tree must never hang it.</summary>
     public const int MaxMentionVisited = 5_000;
 
+    /// <summary>How long one completion's walk may take before what it found is shown, cut (2026-10-22, review M5).</summary>
+    public static readonly TimeSpan MaxMentionTime = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>The most files one completion's predicate is asked of (2026-10-22, review M5: /read's opens each one).</summary>
+    public const int MaxMentionProbes = MaxMentionMatches * 4;
+
     /// <summary>The <c>File /tree max length</c> setting's range and default: entries a <see cref="FileTree"/> walk lists before it stops.</summary>
     public const int MinTreeLength = 1;
     public const int MaxTreeLength = 10_000;
@@ -604,11 +721,11 @@ public sealed class WorkingDirectory
 
     // The files the model's own file tools read or wrote this session, each with the size and write time it had then (2026-10-10,
     // MarkSeen): write_file without a mode replaces one still as it was. Keyed by full path, case-blind where the file system is.
-    private readonly Dictionary<string, (long Length, DateTime Written)> _seen = new(PathComparer);
+    private readonly Dictionary<string, SeenStamp> _seen = new(PathComparer);
 
     // The files read_file returned text of this session, a window too (2026-10-18, MarkViewed): a code audit's finding needs its file read.
     // The same stamp, the same SeenOff rule and the same lock as _seen.
-    private readonly Dictionary<string, (long Length, DateTime Written)> _viewed = new(PathComparer);
+    private readonly Dictionary<string, SeenStamp> _viewed = new(PathComparer);
     private readonly object _seenGate = new();
 
     /// <summary>
@@ -642,9 +759,9 @@ public sealed class WorkingDirectory
         ArgumentNullException.ThrowIfNull(root);
         return new WorkingDirectory(() => root, _time, _options)
         {
-            Databases = Databases,
-            ShoppingListGuard = ShoppingListGuard,
-            RecycleDeletes = RecycleDeletes,
+            Databases = _databases,
+            ShoppingListGuard = _shoppingListGuard,
+            RecycleDeletes = _recycleDeletes,
             ServerDatabases = ServerDatabases,
             AdminFamilies = AdminFamilies,
             ImagesFolder = ImagesFolder,
@@ -659,9 +776,17 @@ public sealed class WorkingDirectory
     /// The SQLite database files no file tool may change (2026-10-05, the user's call), read at every write: null, or a null
     /// answer, while the SQLite tools are off. Set on the working directory alone (never a share's); a write <see cref="Resolve(string, bool, out string)"/>
     /// to such a file is <see cref="FileOutcome.DatabaseProtected"/>, and a delete or move of a folder holding one too
-    /// (<see cref="HoldsDatabase"/>), so a database changes only through <c>sqlite_execute</c>. The shell police reads it too.
+    /// (<see cref="HoldsGuarded"/>), so a database changes only through <c>sqlite_execute</c>. The shell police reads it too.
     /// </summary>
-    public Func<DatabaseGuard?>? Databases { get; set; }
+    public Func<DatabaseGuard?>? Databases
+    {
+        // An instance with none of its own reads the process-wide facts (2026-10-22, review N4/W1: a share's, the skill editor's and every
+        // other instance made fresh had no guard at all).
+        get => _databases ?? WriteGuard.Facts?.Databases;
+        set => _databases = value;
+    }
+
+    private Func<DatabaseGuard?>? _databases;
 
     /// <summary>
     /// Whether the shopping tools are offered (2026-10-17, the user's report), read at each write tool's call: while true, <c>write_file</c>,
@@ -670,13 +795,26 @@ public sealed class WorkingDirectory
     /// tools', not <see cref="Resolve(string, bool, out string)"/>'s: a delete, a move's source and the app's own writes
     /// (<c>/shopping export</c>) are never refused.
     /// </summary>
-    public Func<bool>? ShoppingListGuard { get; set; }
+    public Func<bool>? ShoppingListGuard
+    {
+        get => _shoppingListGuard ?? WriteGuard.Facts?.ShoppingGuarded;
+        set => _shoppingListGuard = value;
+    }
+
+    private Func<bool>? _shoppingListGuard;
 
     /// <summary>
     /// The bin a <see cref="Delete"/> moves to (later on 2026-10-15, <c>File deletes to Recycle bin</c>), read at each delete: the screen's and
     /// headless's working directory hand the system's bin while the setting is on, else null. Null (unset, a share's, a test's) deletes directly.
     /// </summary>
-    public Func<IRecycleBin?>? RecycleDeletes { get; set; }
+    public Func<IRecycleBin?>? RecycleDeletes
+    {
+        // The facts' bin when unset (2026-10-22, review V3/W4: the images folder's and a local share's deletes skipped the bin).
+        get => _recycleDeletes ?? WriteGuard.Facts?.RecycleBin;
+        set => _recycleDeletes = value;
+    }
+
+    private Func<IRecycleBin?>? _recycleDeletes;
 
     /// <summary>
     /// The server families the shell police guards (2026-10-05, the user's call: SQLite's rule mirrored for SQL Server, Oracle, MySQL
@@ -738,8 +876,41 @@ public sealed class WorkingDirectory
             return Directory.Exists(root) ? root : throw new DirectoryNotFoundException(RootMissingMessage(root));
         }
 
+        // A root seen this session and gone since is never made again (2026-10-22, review S6): every write's EnsureExists quietly
+        // re-made a working directory the user deleted or renamed. The first use still makes one that never existed (<profile>\files).
+        if (Directory.Exists(root))
+        {
+            NoteSeenRoot(root);
+            return root;
+        }
+
+        if (RootSeen(root))
+        {
+            throw new DirectoryNotFoundException(FileText.RootGone);
+        }
+
         Directory.CreateDirectory(root);
+        NoteSeenRoot(root);
         return root;
+    }
+
+    // The roots this instance has seen exist (2026-10-22, review S6), each by its full path.
+    private readonly HashSet<string> _seenRoots = new(PathComparer);
+
+    private void NoteSeenRoot(string root)
+    {
+        lock (_seenRoots)
+        {
+            _seenRoots.Add(root);
+        }
+    }
+
+    private bool RootSeen(string root)
+    {
+        lock (_seenRoots)
+        {
+            return _seenRoots.Contains(root);
+        }
     }
 
     /// <summary>What a missing root that is not created says (<see cref="WorkingDirectoryOptions.CreateRoot"/> off). Pinned.</summary>
@@ -818,10 +989,28 @@ public sealed class WorkingDirectory
         full = "";
         string root = Root;
         string text = (relative ?? "").Trim();
+        if (_options.CreateRoot && RootSeen(root) && !Directory.Exists(root))
+        {
+            return FileOutcome.RootGone;
+        }
+
         if (text.Length == 0 || text == ".")
         {
             full = root;
             return FileOutcome.Ok;
+        }
+
+        // A home-folder or file: URL form (2026-10-22, review S5): read as a relative name it made a literal ~ folder, or a file: one.
+        if (text == "~" || text.StartsWith("~/", StringComparison.Ordinal) || text.StartsWith("~\\", StringComparison.Ordinal)
+            || text.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+        {
+            return FileOutcome.NotAPathHere;
+        }
+
+        // A name Windows keeps for a device (2026-10-22, review O10): GetFullPath made <dir>\NUL into \\.\NUL, read as outside.
+        if (OperatingSystem.IsWindows() && HasDeviceName(text))
+        {
+            return FileOutcome.DeviceName;
         }
 
         string candidate;
@@ -840,6 +1029,14 @@ public sealed class WorkingDirectory
 
         // The root's real spelling (/private/tmp/x for /tmp/x on a Mac) is the root too.
         candidate = InRootSpelling(root, candidate, RealPath.Of);
+
+        // A short (8.3) name is judged as the long one it stands for (2026-10-22, review G2/G3: APPLIC~1.SQL passed the database guard,
+        // GIT~1 the .git one). Only a path that holds a '~', and only its existing part.
+        if (OperatingSystem.IsWindows() && candidate.Contains('~', StringComparison.Ordinal))
+        {
+            candidate = LongNames(root, candidate);
+        }
+
         string walked = linkItself ? Path.GetDirectoryName(candidate) ?? candidate : candidate;
         if (!IsInside(root, candidate))
         {
@@ -848,15 +1045,29 @@ public sealed class WorkingDirectory
                 : FileOutcome.OutsideRoot;
         }
 
+        // A stream name (2026-10-22, review M2): a.txt:payload hid data, and a delete of x.exe:Zone.Identifier stripped the Mark of the Web.
+        // The root's own drive letter is the only ':' a Windows path here holds.
+        if (OperatingSystem.IsWindows() && candidate.IndexOf(':', 2) >= 0)
+        {
+            return FileOutcome.StreamName;
+        }
+
         if (LinkEscape(root, walked, RealLinkTarget) is not null)
         {
             return FileOutcome.OutsideRoot;
         }
 
-        // A write to a SQLite database file while the SQLite tools are on (2026-10-05): the one choke point every writer passes.
-        if (forWrite && Databases?.Invoke() is { } databases && databases.IsDatabaseFile(candidate))
+        // The model's writes judged by the file they reach (2026-10-22, WriteGuard): .git, .neon, the app's home, the skill roots, the project
+        // file (asked), a SQLite database (2026-10-05), a shopping list's name. A delete or a move's source takes the target away (Remove).
+        if (forWrite && WriteGuard.Judge(root, candidate, linkItself ? WriteRole.Remove : WriteRole.Write, ShoppingListGuard, Databases) is { } guarded)
         {
-            return FileOutcome.DatabaseProtected;
+            return guarded;
+        }
+
+        // Plain files only, reads too (2026-10-22, review N1/N2): a read of a FIFO waits forever, on the turn's thread or in the vault's lock.
+        if (OperatingSystem.IsMacOS() && Platform.MacFiles.KindOf(candidate) == Platform.MacFiles.Kind.Other)
+        {
+            return FileOutcome.NotARegularFile;
         }
 
         full = candidate;
@@ -864,20 +1075,74 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// Whether a database file of <paramref name="guard"/> is anywhere under <paramref name="directory"/>, never through a reparse
-    /// point (<see cref="HoldsGit"/>'s walk); the first hit ends it, an unreadable subfolder is passed over.
+    /// Whether a segment of <paramref name="text"/> is a name Windows keeps for a device (2026-10-22, review O10): <c>CON</c>, <c>PRN</c>,
+    /// <c>AUX</c>, <c>NUL</c>, <c>COM0</c>–<c>COM9</c>, <c>LPT0</c>–<c>LPT9</c> (and the superscript digits), with or without an extension, trailing
+    /// dots and spaces ignored. Pure.
     /// </summary>
-    public static bool HoldsDatabase(string directory, DatabaseGuard guard)
+    internal static bool HasDeviceName(string text)
     {
-        ArgumentNullException.ThrowIfNull(directory);
-        ArgumentNullException.ThrowIfNull(guard);
-        return Directory.EnumerateFiles(directory, "*", new EnumerationOptions
+        foreach (string part in text.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries))
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.ReparsePoint,
-            ReturnSpecialDirectories = false,
-        }).Any(guard.IsDatabaseFile);
+            string bare = part.TrimEnd('.', ' ');
+            int dot = bare.IndexOf('.');
+            string stem = (dot >= 0 ? bare[..dot] : bare).TrimEnd(' ');
+            if (stem.Length == 3 && (stem.Equals("CON", StringComparison.OrdinalIgnoreCase) || stem.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+                || stem.Equals("AUX", StringComparison.OrdinalIgnoreCase) || stem.Equals("NUL", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            if (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) || stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase))
+                && (char.IsAsciiDigit(stem[3]) || stem[3] is '\u00B9' or '\u00B2' or '\u00B3'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// <paramref name="candidate"/> with each existing segment under <paramref name="root"/> that holds a <c>~</c> replaced by its long name
+    /// (Windows' directory search matches a short name and answers the long one; no native call). A segment that matches nothing, or holds a
+    /// wildcard, ends the walk: the rest is a name still to be made.
+    /// </summary>
+    private static string LongNames(string root, string candidate)
+    {
+        if (!IsInside(root, candidate) || Under(root, candidate).Length == 0)
+        {
+            return candidate;
+        }
+
+        string current = root;
+        string[] parts = Under(root, candidate).Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string part = parts[i];
+            if (part.Contains('~', StringComparison.Ordinal) && part.IndexOfAny(['*', '?']) < 0)
+            {
+                string? found = null;
+                try
+                {
+                    found = new DirectoryInfo(current).EnumerateFileSystemInfos(part, new EnumerationOptions { IgnoreInaccessible = true, MatchType = MatchType.Win32 })
+                        .Select(info => info.Name).FirstOrDefault();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+                {
+                }
+
+                if (found is null)
+                {
+                    return Path.Join([current, .. parts[i..]]);
+                }
+
+                part = found;
+            }
+
+            current = Path.Join(current, part);
+        }
+
+        return current;
     }
 
     /// <summary>How many links one judgement follows before it gives up and calls the path outside (a loop of links never ends otherwise).</summary>
@@ -902,12 +1167,13 @@ public sealed class WorkingDirectory
         int hops = 0;
         while (true)
         {
-            if (path.Length <= root.Length + 1 || !IsInside(root, path))
+            if (!IsInside(root, path) || Under(root, path).Length == 0)
             {
                 return null;
             }
 
-            string[] parts = path[(root.Length + 1)..].Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+            // This system's separators alone (2026-10-22, review N3: a Mac link named a\b was split in two and never asked).
+            string[] parts = Under(root, path).Split(Separators, StringSplitOptions.RemoveEmptyEntries);
             string current = root;
             string? moved = null;
             for (int i = 0; i < parts.Length; i++)
@@ -993,19 +1259,22 @@ public sealed class WorkingDirectory
             return isDirectory ? trimmed + Path.DirectorySeparatorChar : trimmed;
         }
 
-        if (string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(trimmed, root, CaseRule.Comparison(root)))
         {
             return "";
         }
 
-        string rel = IsInside(root, trimmed) ? trimmed[(root.Length + 1)..] : trimmed;
+        string rel = IsInside(root, trimmed) ? Under(root, trimmed) : trimmed;
         return isDirectory ? rel + Path.DirectorySeparatorChar : rel;
     }
 
     // ---- read side ----
 
     /// <summary>The folder's own entries, folders first; at most <paramref name="limit"/> (clamped to <see cref="MaxResultLimit"/>), <c>Truncated</c> past it.</summary>
-    public ListResult List(string relative, int limit = MaxEntries)
+    public ListResult List(string relative, int limit = MaxEntries) => List(relative, CancellationToken.None, limit);
+
+    /// <summary><see cref="List(string, int)"/> under the call's token, the folder's first <paramref name="limit"/> kept in a heap (review I11: every entry was held and sorted).</summary>
+    public ListResult List(string relative, CancellationToken cancellationToken, int limit = MaxEntries)
     {
         limit = Math.Clamp(limit, 1, MaxResultLimit);
         var outcome = Resolve(relative, forWrite: false, out string full);
@@ -1028,11 +1297,44 @@ public sealed class WorkingDirectory
                 return new ListResult(FileOutcome.Missing, display, [], false);
             }
 
-            var entries = new List<DirectoryEntry>();
-            foreach (var info in new DirectoryInfo(full).EnumerateFileSystemInfos())
+            // The same entries every other walk sees (2026-10-22, review Q10: the listing showed hidden, system and link entries that find,
+            // search and recent never reach, desktop.ini among them): those left out, the hidden counted, temp siblings never shown.
+            var kept = new PriorityQueue<DirectoryEntry, DirectoryEntry>(limit + 2, Comparer<DirectoryEntry>.Create((a, b) => CompareEntries(b, a)));
+            int hidden = 0, seen = 0;
+            foreach (var info in new DirectoryInfo(full).EnumerateFileSystemInfos("*", new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = 0 }))
             {
+                if ((++seen & 1023) == 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                entries.Add(new DirectoryEntry(info.Name, isDirectory, isDirectory ? 0 : ((FileInfo)info).Length));
+                bool isHidden = OperatingSystem.IsWindows()
+                    ? (info.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0
+                    : IsHiddenOffWindows(info.Attributes, info.Name);
+                if (isHidden)
+                {
+                    hidden++;
+                    continue;
+                }
+
+                if (IsLink(info) || IsTempSibling(info.Name))
+                {
+                    continue;
+                }
+
+                var added = new DirectoryEntry(info.Name, isDirectory, isDirectory ? 0 : ((FileInfo)info).Length);
+                kept.Enqueue(added, added);
+                if (kept.Count > limit + 1)
+                {
+                    kept.Dequeue();
+                }
+            }
+
+            var entries = new List<DirectoryEntry>(kept.Count);
+            while (kept.TryDequeue(out var entry, out _))
+            {
+                entries.Add(entry);
             }
 
             entries.Sort(CompareEntries);
@@ -1042,7 +1344,7 @@ public sealed class WorkingDirectory
                 entries.RemoveRange(limit, entries.Count - limit);
             }
 
-            return new ListResult(FileOutcome.Ok, display, entries, truncated);
+            return new ListResult(FileOutcome.Ok, display, entries, truncated) { Hidden = hidden };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1107,13 +1409,14 @@ public sealed class WorkingDirectory
             var options = WalkOptions(recurse: false);
             if (showHidden)
             {
-                options.AttributesToSkip = FileAttributes.ReparsePoint;
+                options.AttributesToSkip = 0;
             }
 
             foreach (var info in new DirectoryInfo(directory).EnumerateFileSystemInfos("*", options))
             {
                 bool isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
-                if ((hideDotEntries && info.Name.StartsWith('.'))
+                if (IsLink(info) || IsTempSibling(info.Name)
+                    || (hideDotEntries && info.Name.StartsWith('.'))
                     || (!showHidden && IsHiddenOffWindows(info.Attributes, info.Name))
                     || (hideGitFolders && isDirectory && string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase)))
                 {
@@ -1149,7 +1452,11 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>The files whose names (or paths, under a path glob) match, every level down to <paramref name="maxDepth"/>, at most <paramref name="limit"/> (clamped to <see cref="MaxResultLimit"/>).</summary>
-    public FindResult Find(string namePattern, string relative, int limit = DefaultFindLimit, int maxDepth = int.MaxValue)
+    public FindResult Find(string namePattern, string relative, int limit = DefaultFindLimit, int maxDepth = int.MaxValue) =>
+        Find(namePattern, relative, CancellationToken.None, limit, maxDepth);
+
+    /// <summary><see cref="Find(string, string, int, int)"/> under the call's token, its walk budgeted over every entry looked at (review G18).</summary>
+    public FindResult Find(string namePattern, string relative, CancellationToken cancellationToken, int limit = DefaultFindLimit, int maxDepth = int.MaxValue)
     {
         limit = Math.Clamp(limit, 1, MaxResultLimit);
         var outcome = Resolve(relative, forWrite: false, out string full);
@@ -1175,20 +1482,27 @@ public sealed class WorkingDirectory
 
             var paths = new List<string>();
             bool truncated = false;
-            int walked = 0;
-            foreach (var entry in Walk(full, pattern, recurse: true, maxDepth: maxDepth))
+            var hidden = new HiddenCount { Max = _options.MaxWalkEntries, Token = cancellationToken };
+            try
             {
-                if (paths.Count >= limit || ++walked > _options.MaxWalkEntries)
+                foreach (var entry in Walk(full, pattern, recurse: true, hidden, maxDepth: maxDepth))
                 {
-                    truncated = true;
-                    break;
-                }
+                    if (paths.Count >= limit)
+                    {
+                        truncated = true;
+                        break;
+                    }
 
-                paths.Add(Relative(entry.FullPath));
+                    paths.Add(Relative(entry.FullPath));
+                }
+            }
+            catch (WalkBudgetSpent)
+            {
+                truncated = true;
             }
 
             paths.Sort(StringComparer.OrdinalIgnoreCase);
-            return new FindResult(FileOutcome.Ok, display, paths, truncated);
+            return new FindResult(FileOutcome.Ok, display, paths, truncated) { Hidden = hidden.Count };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1233,29 +1547,55 @@ public sealed class WorkingDirectory
                 return new MentionResult(File.Exists(full) ? FileOutcome.IsAFile : FileOutcome.Missing, [], false);
             }
 
-            var entries = new List<DirectoryEntry>();
+            // This runs on the input thread at each keystroke (2026-10-22, review M5): the walk has a time budget as well as its entry
+            // budget, a folder on a network or optical drive is listed one level only, and the file predicate (/read's IsTextFile opens
+            // each file) is asked only of the names that would be shown, in their order, at most MaxMentionProbes times.
+            bool slow = FolderCompleter.IsSlowTarget(full);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var named = new List<(DirectoryEntry Entry, string Full)>();
             bool truncated = false;
             int seen = 0;
-            foreach (var entry in Walk(full, null, recurse: prefix.Length > 0, includeDirectories: true))
+            foreach (var entry in Walk(full, null, recurse: prefix.Length > 0 && !slow, includeDirectories: true))
             {
-                if (++seen > MaxMentionVisited)
+                if (++seen > MaxMentionVisited || ((seen & 63) == 0 && clock.Elapsed > MaxMentionTime))
                 {
                     truncated = true;
                     break;
                 }
 
-                if (Path.GetFileName(entry.FullPath).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                    && (entry.IsDirectory || files is null || files(entry.FullPath)))
+                if (Path.GetFileName(entry.FullPath).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 {
-                    entries.Add(new DirectoryEntry(Relative(entry.FullPath, entry.IsDirectory).Replace('\\', '/'), entry.IsDirectory, 0));
+                    named.Add((new DirectoryEntry(Relative(entry.FullPath, entry.IsDirectory).Replace('\\', '/'), entry.IsDirectory, 0), entry.FullPath));
                 }
             }
 
-            entries.Sort(CompareEntries);
-            if (entries.Count > MaxMentionMatches)
+            named.Sort((x, y) => CompareEntries(x.Entry, y.Entry));
+            var entries = new List<DirectoryEntry>();
+            int probes = 0;
+            foreach (var (entry, path) in named)
             {
-                entries.RemoveRange(MaxMentionMatches, entries.Count - MaxMentionMatches);
-                truncated = true;
+                if (entries.Count >= MaxMentionMatches)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                if (entry.IsDirectory || files is null)
+                {
+                    entries.Add(entry);
+                    continue;
+                }
+
+                if (++probes > MaxMentionProbes || clock.Elapsed > MaxMentionTime)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                if (files(path))
+                {
+                    entries.Add(entry);
+                }
             }
 
             return new MentionResult(FileOutcome.Ok, entries.Select(e => e.Name).ToList(), truncated);
@@ -1289,10 +1629,18 @@ public sealed class WorkingDirectory
         }
 
         string display = Relative(full, isDirectory: true);
-        string needle = (text ?? "").Trim();
-        if (needle.Length == 0)
+        // The needle as given (2026-10-22, review O8: it was trimmed, so "  return x" matched lines with no leading spaces and a regex lost
+        // its own); only a trailing line break is taken off. A blank one is no search.
+        string needle = (text ?? "").TrimEnd('\r', '\n');
+        if (needle.Trim().Length == 0)
         {
             return Empty(FileOutcome.Empty, display);
+        }
+
+        // The search reads line by line, so a needle with a line break never matched, and the answer was "0 matches" (2026-10-22, review Q9).
+        if (needle.Contains('\n', StringComparison.Ordinal) || needle.Contains('\r', StringComparison.Ordinal))
+        {
+            return Empty(FileOutcome.OneLineOnly, display);
         }
 
         Regex? expression = null;
@@ -1325,64 +1673,116 @@ public sealed class WorkingDirectory
                 return Empty(FileOutcome.Missing, display);
             }
 
-            IEnumerable<WalkEntry> entries = singleFile
-                ? [new WalkEntry(full, new FileInfo(full).Length, File.GetLastWriteTimeUtc(full), false)]
-                : Walk(full, pattern, recurse: true, maxDepth: maxDepth);
-            var hits = new ConcurrentBag<SearchHit>();
-            var counts = new ConcurrentBag<SearchFileCount>();
-            int matches = 0, searched = 0, matchedFiles = 0, timedOut = 0, walked = 0, budgeted = 0;
+            // In path order, the volume's own case rule, every time (2026-10-22, review Q6, Q13: a capped search kept whatever the parallel
+            // workers found first and called it "the first N"; A.txt and a.txt interleaved). Files are handed out one at a time in that order
+            // and each one started is finished, so what comes back is the hits of a prefix of the files: the same first N on every run.
+            var hidden = new HiddenCount();
+            var comparer = CaseRule.Comparer(full);
+            var entries = new List<WalkEntry>();
+            bool budgeted = false;
+            if (singleFile)
+            {
+                var info = new FileInfo(full);
+                // A filter the one file doesn't match is said, never ignored (2026-10-22, review V10).
+                if (!string.IsNullOrWhiteSpace(filesPattern) && !MatchesName(pattern, full, Path.GetDirectoryName(full)!, Root))
+                {
+                    return Empty(FileOutcome.Ok, display) with { SingleFile = true, Unsearched = FileText.SearchFilterMissesFile(display, pattern) };
+                }
+
+                entries.Add(new WalkEntry(full, info.Length, info.LastWriteTimeUtc, false, info.Attributes));
+            }
+            else
+            {
+                foreach (var entry in Walk(full, pattern, recurse: true, hidden, maxDepth: maxDepth))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (entries.Count >= _options.MaxWalkEntries)
+                    {
+                        budgeted = true;
+                        break;
+                    }
+
+                    entries.Add(entry);
+                }
+
+                entries.Sort((a, b) => comparer.Compare(a.FullPath, b.FullPath));
+            }
+
+            var fileHits = new List<SearchHit>?[entries.Count];
+            var fileCounts = new int[entries.Count];
+            int matches = 0, searched = 0, timedOut = 0, cloudOnly = 0, matchedFiles = 0;
+            string? unsearched = null;
             long bytesRead = 0;
             var options = new ParallelOptions
             {
                 MaxDegreeOfParallelism = _options.SearchParallelism > 0 ? _options.SearchParallelism : Environment.ProcessorCount,
                 CancellationToken = cancellationToken,
             };
-            Parallel.ForEach(entries, options, (entry, state) =>
+            var ordered = System.Collections.Concurrent.Partitioner.Create(Enumerable.Range(0, entries.Count), System.Collections.Concurrent.EnumerablePartitionerOptions.NoBuffering);
+            Parallel.ForEach(ordered, options, (index, state) =>
             {
-                if (Interlocked.Increment(ref walked) > _options.MaxWalkEntries)
+                var entry = entries[index];
+                if (entry.Length > MaxTextFileBytes)
                 {
-                    Volatile.Write(ref budgeted, 1);
-                    state.Stop();
+                    unsearched ??= singleFile ? FileText.SearchFileTooBig(display) : null;
                     return;
                 }
 
-                if (entry.Length > MaxTextFileBytes)
+                // A file whose data is in the cloud is never fetched by a search (2026-10-22, review O1); the result counts it.
+                if (IsOffline(entry.FullPath, entry.Attributes))
                 {
+                    Interlocked.Increment(ref cloudOnly);
+                    unsearched ??= singleFile ? FileText.SearchFileCloudOnly(display) : null;
                     return;
                 }
 
                 // A share's budget (2026-09-30): the bytes read over the network, counted before the read.
                 if (Interlocked.Add(ref bytesRead, entry.Length) > _options.SearchByteBudget)
                 {
-                    Volatile.Write(ref budgeted, 1);
+                    budgeted = true;
                     state.Stop();
                     return;
                 }
 
-                byte[] bytes;
+                // Read no further than the cap whatever the walk saw (2026-10-22, review N10: a log grown since was read whole, gigabytes on a share).
+                byte[]? bytes;
                 try
                 {
-                    bytes = File.ReadAllBytes(entry.FullPath);
+                    bytes = RegularFiles.ReadAtMost(entry.FullPath, MaxTextFileBytes);
                 }
                 catch (Exception ex) when (IsFileFailure(ex))
                 {
+                    unsearched ??= singleFile ? FileText.SearchFileUnreadable(display, ex.Message) : null;
+                    return;
+                }
+
+                if (bytes is null)
+                {
+                    unsearched ??= singleFile ? FileText.SearchFileTooBig(display) : null;
                     return;
                 }
 
                 if (LooksBinary(bytes))
                 {
+                    unsearched ??= singleFile ? FileText.SearchFileNotText(display) : null;
                     return;
                 }
 
                 Interlocked.Increment(ref searched);
                 string content = Decode(bytes, out _);
                 string relativePath = Relative(entry.FullPath);
-                bool fileMatched = false;
-                int line = 0, inFile = 0;
-                List<string>? all = context > 0 && !countOnly ? SplitLines(content) : null;
+                int line = 0, inFile = 0, fileTimeouts = 0;
+                List<string>? all = null;
+                List<SearchHit>? found = null;
                 foreach (var span in content.AsSpan().EnumerateLines())
                 {
                     line++;
+                    // Esc inside a long file (2026-10-22, review G5: the token was read only between files).
+                    if ((line & 1023) == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
                     bool hit;
                     if (expression is null)
                     {
@@ -1397,6 +1797,12 @@ public sealed class WorkingDirectory
                         catch (RegexMatchTimeoutException)
                         {
                             Interlocked.Increment(ref timedOut);
+                            // A pattern that times out over and over gives the file up (review G5: (a+)+$ over a big log ran for hours).
+                            if (++fileTimeouts >= MaxTimeoutsPerFile)
+                            {
+                                break;
+                            }
+
                             continue;
                         }
                     }
@@ -1406,27 +1812,26 @@ public sealed class WorkingDirectory
                         continue;
                     }
 
-                    fileMatched = true;
+                    inFile++;
                     if (countOnly)
                     {
-                        // The file's own count; the cap is on files, checked once the file is done.
-                        inFile++;
-                        Interlocked.Increment(ref matches);
                         continue;
                     }
 
-                    if (Interlocked.Increment(ref matches) > limit)
+                    if (inFile > limit)
                     {
-                        state.Stop();
                         break;
                     }
 
-                    if (all is null)
+                    found ??= [];
+                    if (context == 0)
                     {
-                        hits.Add(new SearchHit(relativePath, line, ClipLine(span)));
+                        found.Add(new SearchHit(relativePath, line, ClipLine(span)));
                         continue;
                     }
 
+                    // The file split into lines only at its first hit (2026-10-22, review W5: every file was split before knowing it had one).
+                    all ??= SplitLines(content);
                     var before = new List<string>(context);
                     for (int i = Math.Max(0, line - 1 - context); i < line - 1 && i < all.Count; i++)
                     {
@@ -1439,49 +1844,65 @@ public sealed class WorkingDirectory
                         after.Add(ClipLine(all[i]));
                     }
 
-                    hits.Add(new SearchHit(relativePath, line, ClipLine(span), before, after));
+                    found.Add(new SearchHit(relativePath, line, ClipLine(span), before, after));
                 }
 
-                if (fileMatched)
+                if (inFile > 0)
                 {
-                    int nth = Interlocked.Increment(ref matchedFiles);
-                    if (countOnly)
+                    fileHits[index] = found;
+                    fileCounts[index] = inFile;
+                    Interlocked.Increment(ref matchedFiles);
+                    if ((countOnly ? Volatile.Read(ref matchedFiles) : Interlocked.Add(ref matches, Math.Min(inFile, limit))) > limit)
                     {
-                        if (nth > limit)
-                        {
-                            state.Stop();
-                            return;
-                        }
-
-                        counts.Add(new SearchFileCount(relativePath, inFile));
+                        state.Stop();
                     }
                 }
             });
 
+            // The files done are a prefix of the ordered list (each started file was finished); their hits in order, the first N kept.
+            bool stopped = false;
             if (countOnly)
             {
-                var files = counts.ToList();
-                files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.RelativePath, b.RelativePath));
-                bool over = Volatile.Read(ref budgeted) != 0;
-                bool cut = files.Count > limit || Volatile.Read(ref matchedFiles) > limit || over;
-                if (files.Count > limit)
+                var files = new List<SearchFileCount>();
+                for (int i = 0; i < entries.Count && files.Count <= limit; i++)
+                {
+                    if (fileCounts[i] > 0)
+                    {
+                        files.Add(new SearchFileCount(Relative(entries[i].FullPath), fileCounts[i]));
+                    }
+                }
+
+                stopped = files.Count > limit;
+                if (stopped)
                 {
                     files.RemoveRange(limit, files.Count - limit);
                 }
 
-                return new SearchResult(FileOutcome.Ok, display, [], searched, Math.Min(matchedFiles, limit), timedOut, cut, _time.GetElapsedTime(started), SingleFile: singleFile, Files: files) { Budgeted = over };
+                return new SearchResult(FileOutcome.Ok, display, [], searched, Math.Min(matchedFiles, limit), timedOut, stopped || budgeted, _time.GetElapsedTime(started), SingleFile: singleFile, Files: files)
+                {
+                    Budgeted = budgeted, CloudOnly = cloudOnly, Hidden = hidden.Count, Unsearched = unsearched,
+                };
             }
 
-            var sorted = hits.ToList();
-            sorted.Sort(CompareHits);
-            bool budget = Volatile.Read(ref budgeted) != 0;
-            bool truncated = sorted.Count > limit || Volatile.Read(ref matches) > limit || budget;
-            if (sorted.Count > limit)
+            var ordered_hits = new List<SearchHit>(Math.Min(limit + 1, 1024));
+            for (int i = 0; i < entries.Count && ordered_hits.Count <= limit; i++)
             {
-                sorted.RemoveRange(limit, sorted.Count - limit);
+                if (fileHits[i] is { } list)
+                {
+                    ordered_hits.AddRange(list);
+                }
             }
 
-            return new SearchResult(FileOutcome.Ok, display, sorted, searched, matchedFiles, timedOut, truncated, _time.GetElapsedTime(started), SingleFile: singleFile) { Budgeted = budget };
+            stopped = ordered_hits.Count > limit || fileCounts.Any(c => c > limit);
+            if (ordered_hits.Count > limit)
+            {
+                ordered_hits.RemoveRange(limit, ordered_hits.Count - limit);
+            }
+
+            return new SearchResult(FileOutcome.Ok, display, ordered_hits, searched, matchedFiles, timedOut, stopped || budgeted, _time.GetElapsedTime(started), SingleFile: singleFile)
+            {
+                Budgeted = budgeted, CloudOnly = cloudOnly, Hidden = hidden.Count, Unsearched = unsearched,
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1496,8 +1917,23 @@ public sealed class WorkingDirectory
             new(outcome, relative, [], 0, 0, 0, false, TimeSpan.Zero, detail);
     }
 
+    /// <summary>How many regex timeouts one file may take before the search gives it up (2026-10-22, review G5).</summary>
+    public const int MaxTimeoutsPerFile = 3;
+
+    /// <summary>Whether <paramref name="full"/> matches a <c>files</c> pattern as a walk would judge it (review V10).</summary>
+    private static bool MatchesName(string pattern, string full, string directory, string root) =>
+        PathGlob.ExpandBraces(pattern).Any(alternative => PathGlob.IsPathPattern(alternative)
+            ? PathGlob.IsMatch(alternative, Path.GetRelativePath(directory, full)) || PathGlob.IsMatch(alternative, Path.GetRelativePath(root, full))
+            : FileSystemName.MatchesSimpleExpression(alternative, Path.GetFileName(full), ignoreCase: true));
+
     /// <summary>The <paramref name="count"/> most recently written files under the path (down to <paramref name="maxDepth"/> levels), newest first: one pass, a bounded top-N, at most <see cref="MaxResultLimit"/>.</summary>
-    public RecentResult Recent(string relative, int count, int maxDepth = int.MaxValue)
+    public RecentResult Recent(string relative, int count, int maxDepth = int.MaxValue) => Recent(relative, count, CancellationToken.None, maxDepth);
+
+    /// <summary>
+    /// <see cref="Recent(string, int, int)"/> under the call's token, with a <c>files</c> pattern (2026-10-22, review M9: order modified dropped it
+    /// and listed every file), the newest kept in a heap (review W6: a sorted insert per entry was entries × limit) and the walk budgeted (G18).
+    /// </summary>
+    public RecentResult Recent(string relative, int count, CancellationToken cancellationToken, int maxDepth = int.MaxValue, string? namePattern = null)
     {
         var outcome = Resolve(relative, forWrite: false, out string full);
         if (outcome != FileOutcome.Ok)
@@ -1515,32 +1951,37 @@ public sealed class WorkingDirectory
                 return new RecentResult(File.Exists(full) ? FileOutcome.IsAFile : FileOutcome.Missing, display, []);
             }
 
-            var top = new List<WalkEntry>(limit + 1);
-            int walked = 0;
+            var heap = new PriorityQueue<WalkEntry, DateTime>(limit + 1);
             bool budgeted = false;
-            foreach (var entry in Walk(full, "*", recurse: true, maxDepth: maxDepth))
+            var hidden = new HiddenCount { Max = _options.MaxWalkEntries, Token = cancellationToken };
+            try
             {
-                if (++walked > _options.MaxWalkEntries)
+                foreach (var entry in Walk(full, string.IsNullOrWhiteSpace(namePattern) ? "*" : namePattern.Trim(), recurse: true, hidden, maxDepth: maxDepth))
                 {
-                    budgeted = true;
-                    break;
-                }
-
-                if (top.Count == limit && entry.LastWriteTimeUtc <= top[^1].LastWriteTimeUtc)
-                {
-                    continue;
-                }
-
-                int at = top.FindIndex(e => e.LastWriteTimeUtc < entry.LastWriteTimeUtc);
-                top.Insert(at < 0 ? top.Count : at, entry);
-                if (top.Count > limit)
-                {
-                    top.RemoveAt(top.Count - 1);
+                    if (heap.Count < limit)
+                    {
+                        heap.Enqueue(entry, entry.LastWriteTimeUtc);
+                    }
+                    else if (heap.TryPeek(out _, out var oldest) && entry.LastWriteTimeUtc > oldest)
+                    {
+                        heap.EnqueueDequeue(entry, entry.LastWriteTimeUtc);
+                    }
                 }
             }
+            catch (WalkBudgetSpent)
+            {
+                budgeted = true;
+            }
 
+            var top = new List<WalkEntry>(heap.Count);
+            while (heap.TryDequeue(out var entry, out _))
+            {
+                top.Add(entry);
+            }
+
+            top.Reverse();
             var entries = top.Select(e => new RecentEntry(Relative(e.FullPath), Local(e.LastWriteTimeUtc), e.Length)).ToList();
-            return new RecentResult(FileOutcome.Ok, display, entries) { Budgeted = budgeted };
+            return new RecentResult(FileOutcome.Ok, display, entries) { Budgeted = budgeted, Hidden = hidden.Count };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1565,9 +2006,10 @@ public sealed class WorkingDirectory
                 int? lines = null, words = null;
                 string ending = "";
                 bool bom = false;
-                if (info.Length <= MaxTextFileBytes)
+                // A cloud-only file's lines aren't counted (2026-10-22, review O1): a count is no reason to download it.
+                if (info.Length <= MaxTextFileBytes && !IsOffline(full, info.Attributes))
                 {
-                    byte[] content = File.ReadAllBytes(full);
+                    byte[] content = RegularFiles.ReadAllBytes(full);
                     if (!LooksBinary(content))
                     {
                         string text = Decode(content, out bom);
@@ -1629,18 +2071,24 @@ public sealed class WorkingDirectory
     /// (create or overwrite, never an append: 2026-10-11, the review) and <c>patch_file</c> mark the file after they succeed, with its size
     /// and write time. Nothing for a file that is not there, nor under <see cref="SeenOff"/>.
     /// </summary>
-    public void MarkSeen(string relative)
+    public void MarkSeen(string relative) => MarkSeen(relative, null);
+
+    /// <summary>
+    /// <see cref="MarkSeen(string)"/> with the stamp the read itself took (2026-10-22, review J12: the stamp was taken after the read, so a
+    /// change between the two counted as seen and a modeless write then replaced it): <see cref="ReadResult.Seen"/>; null takes one now.
+    /// </summary>
+    public void MarkSeen(string relative, SeenStamp? taken)
     {
         if (s_seenOff.Value)
         {
             return;
         }
 
-        if (Stamp(relative) is { } stamp)
+        if (Resolve(relative, forWrite: false, out string full) == FileOutcome.Ok && (taken ?? StampOf(full)) is { } stamp)
         {
             lock (_seenGate)
             {
-                _seen[stamp.Full] = (stamp.Length, stamp.Written);
+                _seen[full] = stamp;
             }
         }
     }
@@ -1651,15 +2099,18 @@ public sealed class WorkingDirectory
     /// </summary>
     public bool WasSeen(string relative)
     {
-        if (s_seenOff.Value || Stamp(relative) is not { } stamp)
+        if (s_seenOff.Value || Resolve(relative, forWrite: false, out string full) != FileOutcome.Ok)
         {
             return false;
         }
 
+        SeenStamp? seen;
         lock (_seenGate)
         {
-            return _seen.TryGetValue(stamp.Full, out var seen) && seen == (stamp.Length, stamp.Written);
+            seen = _seen.GetValueOrDefault(full);
         }
+
+        return seen is not null && StampOf(full) is { } now && now == seen;
     }
 
     /// <summary>
@@ -1667,18 +2118,21 @@ public sealed class WorkingDirectory
     /// marks whole reads alone, <c>write_file</c>'s rule, so a <c>start_line</c>/<c>max_lines</c> window would never count). The same stamp and
     /// <see cref="SeenOff"/> rule as <see cref="MarkSeen"/>: an advisor's read marks nothing.
     /// </summary>
-    public void MarkViewed(string relative)
+    public void MarkViewed(string relative) => MarkViewed(relative, null);
+
+    /// <summary><see cref="MarkViewed(string)"/> with the stamp the read took (<see cref="MarkSeen(string, SeenStamp?)"/>'s rule).</summary>
+    public void MarkViewed(string relative, SeenStamp? taken)
     {
         if (s_seenOff.Value)
         {
             return;
         }
 
-        if (Stamp(relative) is { } stamp)
+        if (Resolve(relative, forWrite: false, out string full) == FileOutcome.Ok && (taken ?? StampOf(full)) is { } stamp)
         {
             lock (_seenGate)
             {
-                _viewed[stamp.Full] = (stamp.Length, stamp.Written);
+                _viewed[full] = stamp;
             }
         }
     }
@@ -1686,15 +2140,18 @@ public sealed class WorkingDirectory
     /// <summary>Whether <c>read_file</c> returned text of <paramref name="relative"/> this session (<see cref="MarkViewed"/>) and it is unchanged since.</summary>
     public bool WasViewed(string relative)
     {
-        if (s_seenOff.Value || Stamp(relative) is not { } stamp)
+        if (s_seenOff.Value || Resolve(relative, forWrite: false, out string full) != FileOutcome.Ok)
         {
             return false;
         }
 
+        SeenStamp? viewed;
         lock (_seenGate)
         {
-            return _viewed.TryGetValue(stamp.Full, out var viewed) && viewed == (stamp.Length, stamp.Written);
+            viewed = _viewed.GetValueOrDefault(full);
         }
+
+        return viewed is not null && StampOf(full) is { } now && now == viewed;
     }
 
     /// <summary>Every file forgotten as seen and as viewed: the session is (<c>/new</c>, <c>/clear</c>, a profile switch).</summary>
@@ -1751,12 +2208,12 @@ public sealed class WorkingDirectory
             bool cut = false;
             var walk = new FileSystemEnumerable<WalkEntry>(
                 full,
-                (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory),
+                (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory, entry.Attributes),
                 WalkOptions(recurse: true))
             {
-                ShouldIncludePredicate = (ref FileSystemEntry entry) => !IsHiddenOffWindows(entry.Attributes, entry.FileName),
+                ShouldIncludePredicate = (ref FileSystemEntry entry) => !IsHiddenOffWindows(entry.Attributes, entry.FileName) && !IsLink(ref entry) && !IsTempSibling(entry.FileName),
                 ShouldRecursePredicate = (ref FileSystemEntry entry) =>
-                    !IsHiddenOffWindows(entry.Attributes, entry.FileName) && !(skip?.Invoke(entry.FileName.ToString()) ?? false)
+                    !IsHiddenOffWindows(entry.Attributes, entry.FileName) && !IsLink(ref entry) && !(skip?.Invoke(entry.FileName.ToString()) ?? false)
                     && !(skipFolder?.Invoke(entry.ToFullPath()) ?? false),
             };
             foreach (var entry in walk)
@@ -1812,9 +2269,7 @@ public sealed class WorkingDirectory
     /// A file's identity for a cache without reading it (2026-10-14, <c>read_pdf</c>'s page texts): its full path, length and last write,
     /// or null when it is outside the sandbox, missing or unreadable. One metadata call, on a UNC share too.
     /// </summary>
-    public (string Full, long Length, DateTime Written)? TryStamp(string relative) => Stamp(relative);
-
-    private (string Full, long Length, DateTime Written)? Stamp(string relative)
+    public (string Full, long Length, DateTime Written)? TryStamp(string relative)
     {
         if (Resolve(relative, forWrite: false, out string full) != FileOutcome.Ok)
         {
@@ -1825,6 +2280,29 @@ public sealed class WorkingDirectory
         {
             var info = new FileInfo(full);
             return info.Exists ? (info.FullName, info.Length, info.LastWriteTimeUtc) : null;
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The file at <paramref name="full"/> as it stands: its size, write time and content hash (2026-10-22, review Q11: on a file system whose
+    /// times step by a second or two — FAT, HFS+, a NAS — a same-size change in the same tick passed the size-and-time check). Null for a file
+    /// that is gone, unreadable or past <see cref="MaxReadFileBytes"/>, which no whole read can have seen.
+    /// </summary>
+    private static SeenStamp? StampOf(string full)
+    {
+        try
+        {
+            var info = new FileInfo(full);
+            if (!info.Exists || info.Length > MaxReadFileBytes)
+            {
+                return null;
+            }
+
+            return SeenStamp.Of(info.Length, info.LastWriteTimeUtc, RegularFiles.ReadAllBytes(full));
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1861,18 +2339,23 @@ public sealed class WorkingDirectory
                 return Fail(FileOutcome.Missing, display);
             }
 
-            if (new FileInfo(full).Length > MaxReadFileBytes)
+            // The size and time before the bytes (2026-10-22, review J12): a change between them never counts as seen.
+            var before = new FileInfo(full);
+            if (before.Length > MaxReadFileBytes)
             {
                 return Fail(FileOutcome.TooBig, display);
             }
 
-            byte[] bytes = File.ReadAllBytes(full);
+            long stampLength = before.Length;
+            DateTime stampWritten = before.LastWriteTimeUtc;
+            byte[] bytes = RegularFiles.ReadAllBytes(full);
             if (LooksBinary(bytes))
             {
                 return Fail(FileOutcome.NotText, display);
             }
 
-            var lines = SplitLines(Decode(bytes, out _));
+            var seen = SeenStamp.Of(stampLength, stampWritten, bytes);
+            var lines = SplitLines(TextFile.Decode(bytes, out var codec));
             int total = lines.Count;
             int from = startLine switch
             {
@@ -1882,14 +2365,16 @@ public sealed class WorkingDirectory
             };
             if (from > total)
             {
-                return new ReadResult(FileOutcome.Ok, display, "", total, total == 0 ? 0 : from, total == 0 ? 0 : from - 1, false);
+                return new ReadResult(FileOutcome.Ok, display, "", total, total == 0 ? 0 : from, total == 0 ? 0 : from - 1, false) { Encoding = codec.Label, Seen = seen };
             }
 
-            int want = maxLines is > 0 ? maxLines.Value : total - from + 1;
-            int to = Math.Min(total, from + want - 1);
+            // In long (2026-10-22, review G20: max_lines int.MaxValue made from + want - 1 wrap, and the window came back empty).
+            long want = maxLines is > 0 ? maxLines.Value : total - from + 1;
+            int to = (int)Math.Min(total, from + want - 1);
             var sb = new StringBuilder();
             bool truncated = false;
             bool lineCut = false;
+            int cutLine = 0, cutLength = 0;
             int shown = from - 1;
             for (int i = from - 1; i < to; i++)
             {
@@ -1904,12 +2389,25 @@ public sealed class WorkingDirectory
                     sb.Append('\n');
                 }
 
+                // A cut never splits a surrogate pair (review G20), and the header names the cut line (review Q2).
+                if (lines[i].Length > maxChars && cutLine == 0)
+                {
+                    cutLine = i + 1;
+                    cutLength = lines[i].Length;
+                }
+
                 lineCut |= lines[i].Length > maxChars;
-                sb.Append(lines[i].Length > maxChars ? lines[i][..maxChars] : lines[i]);
+                sb.Append(TextCut.Safe(lines[i], maxChars));
                 shown = i + 1;
             }
 
-            return new ReadResult(FileOutcome.Ok, display, sb.ToString(), total, from, shown, truncated, LineCut: lineCut);
+            return new ReadResult(FileOutcome.Ok, display, sb.ToString(), total, from, shown, truncated, LineCut: lineCut)
+            {
+                Encoding = codec.Label,
+                Seen = seen,
+                CutLine = cutLine,
+                CutLength = cutLength,
+            };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1948,17 +2446,20 @@ public sealed class WorkingDirectory
                 return new ImageResult(FileOutcome.Missing, display, null);
             }
 
-            if (ImageFile.TryLoad(full, out var image, out var failure))
+            if (ImageFile.TryLoad(full, out var image, out var failure, out string detail))
             {
                 return new ImageResult(FileOutcome.Ok, display, image! with { Path = display });
             }
 
-            return new ImageResult(failure switch
+            // A read that failed, or no codecs here, is said as one (2026-10-22, review K11), never as a broken picture.
+            return failure switch
             {
-                ImageLoadFailure.NotFound => FileOutcome.Missing,
-                ImageLoadFailure.TooLarge => FileOutcome.ImageTooBig,
-                _ => FileOutcome.NotAnImage,
-            }, display, null);
+                ImageLoadFailure.NotFound => new ImageResult(FileOutcome.Missing, display, null),
+                ImageLoadFailure.TooLarge => new ImageResult(FileOutcome.ImageTooBig, display, null),
+                ImageLoadFailure.Unreadable => new ImageResult(FileOutcome.Failed, display, null, detail),
+                ImageLoadFailure.Unsupported => new ImageResult(FileOutcome.Failed, display, null, FileText.NoPictureCodecs),
+                _ => new ImageResult(FileOutcome.NotAnImage, display, null),
+            };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -1998,7 +2499,7 @@ public sealed class WorkingDirectory
                 return new BytesResult(FileOutcome.TooBig, display, null);
             }
 
-            return new BytesResult(FileOutcome.Ok, display, File.ReadAllBytes(full));
+            return new BytesResult(FileOutcome.Ok, display, RegularFiles.ReadAllBytes(full));
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -2037,9 +2538,26 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            // The text it replaces, for the transcript's diff (2026-10-03): only a file that reads as text within the cap.
-            string? before = existed ? PreviousText(full) : null;
-            long bytes = WriteAtomically(full, Utf8NoBom.GetBytes(text), _options.PreserveOnReplace);
+            // The text it replaces, for the transcript's diff (2026-10-03): only a file that reads as text within the cap. Its encoding, mark and
+            // line ending go onto the new text (2026-10-22, review Q3: an overwrite wrote BOM-less UTF-8 with LF, which PowerShell 5.1 then
+            // misread and a .bat's labels broke); a new file is plain UTF-8 as given.
+            TextCodec? codec = null;
+            string ending = "\n";
+            string? before = existed ? PreviousText(full, out codec, out ending) : null;
+            byte[]? encoded = before is null || codec is null ? Utf8NoBom.GetBytes(text) : codec.Encode(WithEnding(NormalizeNewlines(text), ending));
+            if (encoded is null)
+            {
+                return new WriteResult(FileOutcome.NotEncodable, display, 0, false, Detail: codec!.Label ?? "UTF-8");
+            }
+
+            RecheckLinks(full);
+            // A new file made only if it is still not there (2026-10-22, review J3: Exists then a move with overwrite clobbered one made between).
+            if (!existed && !WriteNew(full, encoded))
+            {
+                return new WriteResult(FileOutcome.Exists, display, 0, false);
+            }
+
+            long bytes = existed ? WriteAtomically(full, encoded, _options.PreserveOnReplace) : encoded.LongLength;
             Count(text, out int lines, out int words);
             var diff = !existed || before is not null ? FileDiff.Of(display, before, text) : null;
             return new WriteResult(FileOutcome.Ok, display, bytes, existed, Lines: lines, Words: words) { Diff = diff };
@@ -2079,7 +2597,13 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            long written = WriteAtomically(full, bytes, _options.PreserveOnReplace);
+            RecheckLinks(full);
+            if (!existed && !WriteNew(full, bytes))
+            {
+                return new WriteResult(FileOutcome.Exists, display, 0, false);
+            }
+
+            long written = existed ? WriteAtomically(full, bytes, _options.PreserveOnReplace) : bytes.LongLength;
             return new WriteResult(FileOutcome.Ok, display, written, existed);
         }
         catch (Exception ex) when (IsFileFailure(ex))
@@ -2118,6 +2642,7 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
+            RecheckLinks(full);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace);
             return new WriteResult(FileOutcome.Ok, display, 0, existed);
@@ -2174,48 +2699,71 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.IsDirectory, Relative(full, isDirectory: true), 0, false);
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            // Read, added to and written back whole through a temp file (2026-10-22, review G12): it wrote in place — no binary or encoding
+            // check, a bare '\n' and UTF-8 bytes onto a UTF-16 or CRLF file, through a hard link, and a fragment left by a failure partway
+            // that a retry then doubled. Now the file's own encoding and main line ending, all or nothing, and no total past
+            // MaxReadFileBytes (review P10: what read_file can still open), the counts from the text in hand (no second read).
             bool existed = File.Exists(full);
-            using var stream = new FileStream(full, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            long written = 0;
-            if (stream.Length > 0)
+            SeenStamp? seen = null;
+            string old = "";
+            var codec = TextCodec.Utf8;
+            string ending = "\n";
+            long before = 0;
+            if (existed)
             {
-                stream.Seek(-1, SeekOrigin.End);
-                int last = stream.ReadByte();
-                if (last != '\n')
+                before = new FileInfo(full).Length;
+                if (before > MaxReadFileBytes)
                 {
-                    stream.WriteByte((byte)'\n');
-                    written++;
+                    return new WriteResult(FileOutcome.TooBig, display, 0, false);
                 }
-            }
-            else
-            {
-                stream.Seek(0, SeekOrigin.End);
+
+                byte[] current = RegularFiles.ReadAllBytes(full);
+                if (LooksBinary(current))
+                {
+                    return new WriteResult(FileOutcome.NotText, display, 0, false);
+                }
+
+                old = TextFile.Decode(current, out codec);
+                ending = DetectLineEnding(old);
+                before = current.LongLength;
+                seen = SeenStamp.Of(current.LongLength, File.GetLastWriteTimeUtc(full), current);
             }
 
-            byte[] bytes = Utf8NoBom.GetBytes(text);
-            stream.Write(bytes);
-            written += bytes.Length;
-
-            // The whole file's counts after the append (2026-09-18); a file too big to read as text reports none.
-            int? lines = null, words = null;
-            if (stream.Length <= MaxTextFileBytes)
+            string added = WithEnding(NormalizeNewlines(text), ending);
+            string separator = old.Length > 0 && !old.EndsWith('\n') && !old.EndsWith('\r') ? ending : "";
+            string whole = old + separator + added;
+            if (codec.Encode(whole) is not { } encoded)
             {
-                stream.Seek(0, SeekOrigin.Begin);
-                byte[] whole = new byte[stream.Length];
-                stream.ReadExactly(whole);
-                Count(Decode(whole, out _), out int l, out int w);
-                lines = l;
-                words = w;
+                return new WriteResult(FileOutcome.NotEncodable, display, 0, false, Detail: codec.Label ?? "UTF-8");
             }
+
+            if (encoded.LongLength > MaxReadFileBytes)
+            {
+                return new WriteResult(FileOutcome.TooBig, display, 0, false);
+            }
+
+            RecheckLinks(full);
+            if (existed && StampOf(full) != seen)
+            {
+                return new WriteResult(FileOutcome.Failed, display, 0, false, Detail: FileText.ChangedWhileEditing);
+            }
+
+            if (existed)
+            {
+                WriteAtomically(full, encoded, _options.PreserveOnReplace);
+            }
+            else if (!WriteNew(full, encoded))
+            {
+                return new WriteResult(FileOutcome.Exists, display, 0, false);
+            }
+
+            long written = encoded.LongLength - before;
+            Count(whole, out int total, out int words);
+            int? lines = total;
 
             // The added lines numbered from where they landed (2026-10-03): the file's lines less the appended text's own.
-            FileDiff? diff = null;
-            if (lines is { } total)
-            {
-                Count(text, out int addedLines, out _);
-                diff = FileDiff.Appended(display, Math.Max(0, total - addedLines), text);
-            }
+            Count(text, out int addedLines, out _);
+            var diff = FileDiff.Appended(display, Math.Max(0, total - addedLines), text, existed);
 
             return new WriteResult(FileOutcome.Ok, display, written, existed, Lines: lines, Words: words) { Diff = diff };
         }
@@ -2242,6 +2790,7 @@ public sealed class WorkingDirectory
             MatchOutcome.Ambiguous => new EditResult(FileOutcome.EditAmbiguous, display, 0, match.Count, Strategy: match.Strategy, Locations: match.Locations),
             MatchOutcome.ApproximateAll => new EditResult(FileOutcome.ApproximateAll, display, 0, match.Count, Strategy: match.Strategy, Locations: match.Locations),
             MatchOutcome.EscapeDrift => new EditResult(FileOutcome.EscapeDrift, display, 0, match.Count, Strategy: match.Strategy, Drift: match.Drift),
+            MatchOutcome.TooLarge => new EditResult(FileOutcome.Failed, display, 0, match.Count, Detail: FileText.EditResultTooBig(match.Count)),
             _ => null,
         };
     }
@@ -2287,7 +2836,7 @@ public sealed class WorkingDirectory
 
         try
         {
-            var loaded = LoadForEdit(full, display, out string content, out bool bom, out string ending);
+            var loaded = LoadForEdit(full, display, out string content, out var codec, out string ending, out var before);
             if (loaded is not null)
             {
                 return loaded;
@@ -2300,12 +2849,21 @@ public sealed class WorkingDirectory
             }
 
             string edited = match.Content;
-            Save(full, edited, bom, ending);
+            // Unchanged since it was read, or nothing written (2026-10-22, review J4: a patch or an append landing meanwhile was lost).
+            if (StampOf(full) != before)
+            {
+                return new EditResult(FileOutcome.Failed, display, 0, 0, Detail: FileText.ChangedWhileEditing);
+            }
+
+            if (!Save(full, edited, codec, ending))
+            {
+                return new EditResult(FileOutcome.NotEncodable, display, 0, 0, Detail: codec.Label ?? "UTF-8");
+            }
             var diff = FileDiff.Of(display, content, edited);
 
             if (match.Count > 1)
             {
-                var lines = match.Spans.Select(s => 1 + content.AsSpan(0, s.Start).Count('\n')).ToList();
+                var lines = LineNumbers(content, match.Spans);
                 Count(edited, out int totalLines, out int words);
                 return new EditResult(FileOutcome.Ok, display, lines[0], match.Count, 0, 0, totalLines, null, 0, lines, Words: words, Strategy: match.Strategy) { Diff = diff };
             }
@@ -2327,12 +2885,33 @@ public sealed class WorkingDirectory
         }
     }
 
+    /// <summary>
+    /// Each span's first line, in one pass over the text (2026-10-22, review V1: counting from the file's start for every match was
+    /// matches × size, a million one-character matches in 2 MB about 10^12 characters read).
+    /// </summary>
+    public static List<int> LineNumbers(string content, IReadOnlyList<TextSpan> spans)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(spans);
+        var lines = new List<int>(spans.Count);
+        int line = 1, at = 0;
+        foreach (var span in spans)
+        {
+            line += content.AsSpan(at, span.Start - at).Count('\n');
+            at = span.Start;
+            lines.Add(line);
+        }
+
+        return lines;
+    }
+
     /// <summary>The checks every edit makes before it reads the file: a folder, missing, too big, binary; null = go on, the content LF-normalised.</summary>
-    private EditResult? LoadForEdit(string full, string display, out string content, out bool bom, out string ending)
+    private EditResult? LoadForEdit(string full, string display, out string content, out TextCodec codec, out string ending, out SeenStamp? stamp)
     {
         content = "";
-        bom = false;
+        codec = TextCodec.Utf8;
         ending = "\n";
+        stamp = null;
         EnsureExists();
         if (Directory.Exists(full))
         {
@@ -2349,13 +2928,19 @@ public sealed class WorkingDirectory
             return new EditResult(FileOutcome.TooBig, display, 0, 0);
         }
 
-        byte[] bytes = File.ReadAllBytes(full);
+        var info = new FileInfo(full);
+        long length = info.Length;
+        DateTime written = info.LastWriteTimeUtc;
+        byte[] bytes = RegularFiles.ReadAllBytes(full);
         if (LooksBinary(bytes))
         {
             return new EditResult(FileOutcome.NotText, display, 0, 0);
         }
 
-        string raw = Decode(bytes, out bom);
+        stamp = SeenStamp.Of(length, written, bytes);
+
+        // The file's own encoding (2026-10-22, review G4: a Windows-1252 file lost every non-ASCII character to U+FFFD, reported Ok).
+        string raw = TextFile.Decode(bytes, out codec);
         ending = DetectLineEnding(raw);
         content = NormalizeNewlines(raw);
         return null;
@@ -2365,8 +2950,13 @@ public sealed class WorkingDirectory
     /// A file's text before an overwrite replaces it, for the transcript's diff (2026-10-03): null for one over
     /// <see cref="MaxTextFileBytes"/>, one that looks binary, or one that cannot be read — the write goes on regardless.
     /// </summary>
-    private static string? PreviousText(string full)
+    private static string? PreviousText(string full) => PreviousText(full, out _, out _);
+
+    /// <summary><see cref="PreviousText(string)"/> with the file's encoding and its main line ending, for a write that keeps them (2026-10-22, review Q3).</summary>
+    private static string? PreviousText(string full, out TextCodec? codec, out string ending)
     {
+        codec = null;
+        ending = "\n";
         try
         {
             if (new FileInfo(full).Length > MaxTextFileBytes)
@@ -2374,8 +2964,16 @@ public sealed class WorkingDirectory
                 return null;
             }
 
-            byte[] bytes = File.ReadAllBytes(full);
-            return LooksBinary(bytes) ? null : Decode(bytes, out _);
+            byte[] bytes = RegularFiles.ReadAllBytes(full);
+            if (LooksBinary(bytes))
+            {
+                return null;
+            }
+
+            string text = TextFile.Decode(bytes, out var found);
+            codec = found;
+            ending = DetectLineEnding(text);
+            return text;
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -2383,16 +2981,24 @@ public sealed class WorkingDirectory
         }
     }
 
-    /// <summary>Writes an LF-normalised text back with the file's ending and its BOM.</summary>
-    private void Save(string full, string normalised, bool bom, string ending)
+    /// <summary>An LF-normalised text with <paramref name="ending"/> in place of each <c>\n</c>.</summary>
+    private static string WithEnding(string normalised, string ending) =>
+        ending == "\n" ? normalised : normalised.Replace("\n", ending, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Writes an LF-normalised text back with the file's ending, encoding and mark (2026-10-22: the encoding too, <see cref="TextCodec"/>);
+    /// false, nothing written, when the encoding can't hold the text.
+    /// </summary>
+    private bool Save(string full, string normalised, TextCodec codec, string ending)
     {
-        byte[] output = Utf8NoBom.GetBytes(ending == "\n" ? normalised : normalised.Replace("\n", ending, StringComparison.Ordinal));
-        if (bom)
+        if (codec.Encode(WithEnding(normalised, ending)) is not { } output)
         {
-            output = [0xEF, 0xBB, 0xBF, .. output];
+            return false;
         }
 
+        RecheckLinks(full);
         WriteAtomically(full, output, _options.PreserveOnReplace);
+        return true;
     }
 
     /// <summary>The successful edit's result with the region around the new text (<see cref="EditContextLines"/> each side, none over <see cref="MaxEditRegionLines"/>).</summary>
@@ -2419,17 +3025,46 @@ public sealed class WorkingDirectory
         return text.Contains('\r') ? text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n') : text;
     }
 
-    /// <summary>The line ending the file is written back with: what its first line break is (<c>\n</c> when it has none).</summary>
+    /// <summary>
+    /// The line ending the file is written back with: the one it uses most (2026-10-22, review G12/Q3: the first break decided, so a mixed
+    /// file took whatever came first), the first of a tie, <c>\n</c> when it has none.
+    /// </summary>
     public static string DetectLineEnding(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        int at = text.IndexOfAny(['\r', '\n']);
-        if (at < 0 || text[at] == '\n')
+        int crlf = 0, lf = 0, cr = 0;
+        string? first = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\r')
+            {
+                bool pair = i + 1 < text.Length && text[i + 1] == '\n';
+                first ??= pair ? "\r\n" : "\r";
+                if (pair)
+                {
+                    crlf++;
+                    i++;
+                }
+                else
+                {
+                    cr++;
+                }
+            }
+            else if (text[i] == '\n')
+            {
+                first ??= "\n";
+                lf++;
+            }
+        }
+
+        int most = Math.Max(crlf, Math.Max(lf, cr));
+        if (most == 0)
         {
             return "\n";
         }
 
-        return at + 1 < text.Length && text[at + 1] == '\n' ? "\r\n" : "\r";
+        int tied = (crlf == most ? 1 : 0) + (lf == most ? 1 : 0) + (cr == most ? 1 : 0);
+        return tied > 1 ? first! : crlf == most ? "\r\n" : lf == most ? "\n" : "\r";
     }
 
     /// <summary>The line endings a text uses, for <c>file_info</c>: <c>CRLF</c>, <c>LF</c>, <c>CR</c>, <c>mixed</c>, or empty with no line break.</summary>
@@ -2488,6 +3123,7 @@ public sealed class WorkingDirectory
                 return new CreateResult(FileOutcome.Exists, display);
             }
 
+            RecheckLinks(full);
             Directory.CreateDirectory(full);
             return new CreateResult(FileOutcome.Ok, display);
         }
@@ -2519,16 +3155,17 @@ public sealed class WorkingDirectory
             return new MoveResult(outcome, from, to, false, false);
         }
 
-        // A folder moved takes its databases with it (2026-10-05): refused like moving one of them.
-        if (move && Directory.Exists(source) && RealLinkTarget(source) is null && Databases?.Invoke() is { } databases && HoldsDatabase(source, databases))
+        // A folder moved takes its databases with it (2026-10-05): refused like moving one of them. Its .git may go along (a project moved).
+        if (move && Directory.Exists(source) && RealLinkTarget(source) is null && Databases?.Invoke() is { } databases
+            && HoldsGuarded(source, git: false, databases, CancellationToken.None) is { } held)
         {
-            return new MoveResult(FileOutcome.DatabaseProtected, Relative(source, isDirectory: true), to, false, false);
+            return new MoveResult(held, Relative(source, isDirectory: true), to, false, false);
         }
 
         outcome = Resolve(to, forWrite: true, out string destination);
         if (outcome != FileOutcome.Ok)
         {
-            return new MoveResult(outcome, Relative(source), to, false, false);
+            return new MoveResult(outcome, Relative(source), to, false, false) { AtDestination = true };
         }
 
         try
@@ -2547,12 +3184,17 @@ public sealed class WorkingDirectory
                 return new MoveResult(FileOutcome.Exists, fromDisplay, toDisplay, isDirectory, false);
             }
 
-            if (isDirectory && IsInside(source, destination))
+            // Into itself by where the paths lead, not their spelling (2026-10-22, review N5: a junction back into the source made a copy
+            // recurse into its own output).
+            if (isDirectory && IsInside(FinalPath(source), FinalPath(destination)))
             {
                 return new MoveResult(FileOutcome.IntoItself, fromDisplay, toDisplay, isDirectory, false);
             }
 
-            bool caseOnly = string.Equals(source, destination, StringComparison.OrdinalIgnoreCase);
+            // A case-only change of name is a rename only where case is blind (2026-10-22, review G17: on a case-sensitive folder it
+            // overwrote a different A.txt without overwrite).
+            string destinationFolder = Path.GetDirectoryName(destination)!;
+            bool caseOnly = !CaseRule.IsSensitive(destinationFolder) && string.Equals(source, destination, StringComparison.OrdinalIgnoreCase);
             bool inTheWay = !caseOnly && (File.Exists(destination) || Directory.Exists(destination));
             if (inTheWay && !overwrite)
             {
@@ -2563,41 +3205,66 @@ public sealed class WorkingDirectory
             // folder a folder is copied over, which merges.
             bool folderInTheWay = inTheWay && Directory.Exists(destination);
             bool merge = folderInTheWay && isDirectory && !move;
-            if (inTheWay && !merge)
+            if (folderInTheWay && !merge)
             {
-                if (folderInTheWay)
+                return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, Relative(destination, isDirectory: true), isDirectory, false);
+            }
+
+            // A folder's copy planned whole first (2026-10-22): its .git and the guarded files left out and listed (D17), the volume's free
+            // space checked (D16), nothing written before every check passed.
+            CopyPlan? plan = null;
+            if (isDirectory && !move)
+            {
+                plan = PlanCopy(source, destination, this, CancellationToken.None);
+                if (plan.Refusal is { } refused)
                 {
-                    return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, Relative(destination, isDirectory: true), isDirectory, false);
+                    return new MoveResult(refused.Outcome, fromDisplay, toDisplay, isDirectory, false, refused.Detail);
                 }
-                else if (isDirectory)
+
+                if (FreeSpaceRefusal(destinationFolder, plan.Bytes) is { } full)
                 {
-                    File.Delete(destination);
+                    return new MoveResult(FileOutcome.Failed, fromDisplay, toDisplay, isDirectory, false, full);
                 }
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            bool renamed = string.Equals(Path.GetDirectoryName(source), Path.GetDirectoryName(destination), StringComparison.OrdinalIgnoreCase);
+            RecheckLinks(destination);
+            Directory.CreateDirectory(destinationFolder);
+            bool renamed = string.Equals(Path.GetDirectoryName(source), destinationFolder, StringComparison.OrdinalIgnoreCase);
             if (isDirectory)
             {
+                // A file in the way of a folder is set aside, and deleted only once the folder is in (2026-10-22, review J7: it was deleted
+                // first, and a failing move or copy then lost it).
+                using var aside = inTheWay && !folderInTheWay ? Aside.Of(destination) : null;
                 if (move)
                 {
                     Directory.Move(source, destination);
                 }
                 else
                 {
-                    CopyDirectory(source, destination);
+                    RunCopy(plan!);
                 }
+
+                aside?.Commit();
+            }
+            else if (move && inTheWay)
+            {
+                // Over a file: the one replace (mechanism 7), so its ACL and attributes stay and a read-only one is refused (review I4, O2).
+                MoveIntoPlace(source, destination, _options.PreserveOnReplace, unhide: false);
             }
             else if (move)
             {
-                File.Move(source, destination, overwrite: true);
+                File.Move(source, destination, overwrite: caseOnly);
             }
             else
             {
-                File.Copy(source, destination, overwrite: true);
+                CopyFile(source, destination, inTheWay, _options.PreserveOnReplace);
             }
 
-            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, renamed);
+            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, renamed)
+            {
+                Replaced = inTheWay,
+                LeftOut = plan?.LeftOut ?? [],
+            };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -2624,7 +3291,15 @@ public sealed class WorkingDirectory
     /// replaced on a target with <see cref="WorkingDirectoryOptions.PreserveOnReplace"/> keeps its ACL. One call carries at most
     /// <see cref="MaxTransferFiles"/> files and <see cref="MaxTransferBytes"/> bytes, counted before anything is written.
     /// </summary>
-    public static MoveResult CopyBetween(WorkingDirectory from, string fromRelative, WorkingDirectory to, string? toRelative, bool overwrite)
+    public static MoveResult CopyBetween(WorkingDirectory from, string fromRelative, WorkingDirectory to, string? toRelative, bool overwrite) =>
+        CopyBetween(from, fromRelative, to, toRelative, overwrite, CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="CopyBetween(WorkingDirectory, string, WorkingDirectory, string?, bool)"/> under the call's token (2026-10-22, review H3:
+    /// unc_fetch was abandoned on Esc while its copy ran on, unseen): read between files, and a folder's copy stopped there is taken back
+    /// as a failed one is; the cancellation is thrown.
+    /// </summary>
+    public static MoveResult CopyBetween(WorkingDirectory from, string fromRelative, WorkingDirectory to, string? toRelative, bool overwrite, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(from);
         ArgumentNullException.ThrowIfNull(to);
@@ -2638,7 +3313,7 @@ public sealed class WorkingDirectory
         outcome = to.Resolve(target, forWrite: true, out string destination);
         if (outcome != FileOutcome.Ok)
         {
-            return new MoveResult(outcome, from.Relative(source), target, false, false);
+            return new MoveResult(outcome, from.Relative(source), target, false, false) { AtDestination = true };
         }
 
         try
@@ -2658,22 +3333,22 @@ public sealed class WorkingDirectory
                 return new MoveResult(FileOutcome.Exists, fromDisplay, toDisplay, isDirectory, false);
             }
 
-            int files = 1;
-            long bytes = isDirectory ? 0 : new FileInfo(source).Length;
-            if (isDirectory)
+            // A folder copied into itself across the two roots (2026-10-22, review I3: a share holding the working directory, or held by it,
+            // made the copy recurse into its own output and fill the disk).
+            if (isDirectory && IsInside(FinalPath(source), FinalPath(destination)))
             {
-                files = 0;
-                foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: true)).Where(f => !IsHiddenOffWindows(f.Attributes, f.Name)))
-                {
-                    files++;
-                    bytes += file.Length;
-                    if (files > MaxTransferFiles || bytes > MaxTransferBytes)
-                    {
-                        break;
-                    }
-                }
+                return new MoveResult(FileOutcome.IntoItself, fromDisplay, toDisplay, isDirectory, false);
             }
 
+            // Planned whole first (2026-10-22): folders counted with the files (review I5), every .git and guarded file left out (D17).
+            CopyPlan? plan = isDirectory ? PlanCopy(source, destination, to, cancellationToken) : null;
+            if (plan?.Refusal is { } refused)
+            {
+                return new MoveResult(refused.Outcome, fromDisplay, toDisplay, isDirectory, false, refused.Detail);
+            }
+
+            int files = plan is null ? 1 : plan.Files.Count + plan.Folders.Count;
+            long bytes = plan?.Bytes ?? new FileInfo(source).Length;
             if (files > MaxTransferFiles || bytes > MaxTransferBytes)
             {
                 return new MoveResult(FileOutcome.Failed, fromDisplay, toDisplay, isDirectory, false, TransferCapDetail(files, bytes));
@@ -2691,38 +3366,22 @@ public sealed class WorkingDirectory
                 return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, to.Relative(destination, isDirectory: true), isDirectory, false);
             }
 
-            if (inTheWay && !folderInTheWay && isDirectory)
-            {
-                File.Delete(destination);
-            }
-
+            to.RecheckLinks(destination);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             if (isDirectory)
             {
-                CopyDirectory(source, destination);
-            }
-            else if (to._options.PreserveOnReplace && File.Exists(destination))
-            {
-                string temp = TempSibling(destination);
-                try
-                {
-                    File.Copy(source, temp);
-                    if (!TryReplace(temp, destination))
-                    {
-                        File.Move(temp, destination, overwrite: true);
-                    }
-                }
-                finally
-                {
-                    DeleteQuietly(temp);
-                }
+                // A file in the way set aside until the folder is in (review J7).
+                using var aside = inTheWay && !folderInTheWay ? Aside.Of(destination) : null;
+                RunCopy(plan!, cancellationToken);
+                aside?.Commit();
             }
             else
             {
-                File.Copy(source, destination, overwrite: true);
+                cancellationToken.ThrowIfCancellationRequested();
+                CopyFile(source, destination, inTheWay, to._options.PreserveOnReplace);
             }
 
-            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, false);
+            return new MoveResult(FileOutcome.Ok, fromDisplay, toDisplay, isDirectory, false) { Replaced = inTheWay, LeftOut = plan?.LeftOut ?? [] };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -2737,7 +3396,13 @@ public sealed class WorkingDirectory
     /// anything in it and a folder with a <c>.git</c> anywhere under it — <see cref="FileOutcome.GitProtected"/>: a
     /// repository's history is not the model's to lose.
     /// </summary>
-    public DeleteResult Delete(string relative)
+    public DeleteResult Delete(string relative) => Delete(relative, CancellationToken.None);
+
+    /// <summary>
+    /// <see cref="Delete(string)"/> with the walk under a folder cancellable (2026-10-22, review P9: the .git and database walks ran one after
+    /// the other, unbounded, on the turn's thread; now one walk, read between entries, which the tool runs off that thread).
+    /// </summary>
+    public DeleteResult Delete(string relative, CancellationToken cancellationToken)
     {
         var outcome = Resolve(relative, forWrite: true, linkItself: true, out string full);
         if (outcome != FileOutcome.Ok)
@@ -2762,17 +3427,19 @@ public sealed class WorkingDirectory
 
             // A link (2026-10-03) goes alone: its target is neither searched for a .git nor emptied, only the link removed.
             bool isLink = RealLinkTarget(full) is not null;
-            if (IsGitPath(Relative(full)) || (isDirectory && !isLink && HoldsGit(full)))
+            if (IsGitPath(Relative(full)))
             {
                 return new DeleteResult(FileOutcome.GitProtected, display, isDirectory);
             }
 
-            if (isDirectory && !isLink && Databases?.Invoke() is { } databases && HoldsDatabase(full, databases))
+            // Uncapped on purpose: a guard never passes what it didn't look at; a big folder (node_modules) still deletes after one walk.
+            if (isDirectory && !isLink && HoldsGuarded(full, git: true, Databases?.Invoke(), cancellationToken) is { } held)
             {
-                return new DeleteResult(FileOutcome.DatabaseProtected, display, isDirectory);
+                return new DeleteResult(held, display, isDirectory);
             }
 
             // To the bin while the setting is on (later on 2026-10-15); a link, a drive with no bin and the setting off delete directly.
+            RecheckLinks(full, linkItself: true);
             var way = FileDeletes.Remove(full, isDirectory, isLink, RecycleDeletes?.Invoke());
             DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)) + (way == DeleteWay.Recycled ? " (to the " + FileText.RecycleBinName + ")" : ""));
             return new DeleteResult(FileOutcome.Ok, display, isDirectory) { Way = way };
@@ -2792,19 +3459,43 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// Whether a <c>.git</c> is anywhere under <paramref name="directory"/> — a folder, or the file a worktree or a
-    /// submodule keeps in its place — never through a reparse point; the first hit ends the walk. An unreadable
-    /// subfolder is passed over (the delete that follows fails on it anyway).
+    /// What under <paramref name="directory"/> a delete or move must not take (2026-10-22, review P9, one walk for both): with
+    /// <paramref name="git"/>, a <c>.git</c> (a folder, or the file a worktree or submodule keeps in its place), and with
+    /// <paramref name="databases"/>, a database file — the first hit ends the walk, never through a reparse point, an unreadable folder
+    /// passed over. Null when there is neither. Reads <paramref name="cancellationToken"/> between entries.
     /// </summary>
-    private static bool HoldsGit(string directory) =>
-        Directory.EnumerateFileSystemEntries(directory, GitFolderName, new EnumerationOptions
+    internal static FileOutcome? HoldsGuarded(string directory, bool git, DatabaseGuard? databases, CancellationToken cancellationToken)
+    {
+        if (!git && databases is null)
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.ReparsePoint,
-            MatchCasing = MatchCasing.CaseInsensitive,
-            ReturnSpecialDirectories = false,
-        }).Any();
+            return null;
+        }
+
+        // A cloud placeholder is walked (review O1: a cloud-tagged .git passed); a real link never is.
+        var entries = new FileSystemEnumerable<(string Path, bool IsDirectory)>(
+            directory,
+            (ref FileSystemEntry entry) => (entry.ToFullPath(), entry.IsDirectory),
+            new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0, ReturnSpecialDirectories = false })
+        {
+            ShouldIncludePredicate = (ref FileSystemEntry entry) => !IsLink(ref entry),
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => !IsLink(ref entry),
+        };
+        foreach (var (path, isDirectory) in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (git && string.Equals(Path.GetFileName(path), GitFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return FileOutcome.GitProtected;
+            }
+
+            if (databases is not null && !isDirectory && databases.IsDatabaseFile(path))
+            {
+                return FileOutcome.DatabaseProtected;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>The <see cref="Delete"/>: <c>Deleted notes.md</c>. Pinned.</summary>
     public static string DeletedLogLine(string relative) => $"Deleted {relative}";
@@ -3175,24 +3866,32 @@ public sealed class WorkingDirectory
 
             string display = Relative(source, isDirectory);
             string archive;
-            if (string.IsNullOrWhiteSpace(to))
+            bool named = !string.IsNullOrWhiteSpace(to);
+            if (!named)
             {
                 archive = isDirectory ? source + ".zip" : Path.ChangeExtension(source, ".zip");
-                if (string.Equals(source, Root, StringComparison.OrdinalIgnoreCase))
+                // A .zip zipped with no to named the archive itself (2026-10-22, review X3: with overwrite, release.zip became a zip of
+                // the old release.zip): into itself.
+                if (string.Equals(source, Root, StringComparison.OrdinalIgnoreCase) || string.Equals(archive, source, StringComparison.OrdinalIgnoreCase))
                 {
                     return new ZipResult(FileOutcome.IntoItself, display, Relative(archive), 0, 0);
                 }
+
+                // An unnamed archive is never a replace (2026-10-22, review R12, the fix plan's mechanism 4): the first free name, -2, -3…;
+                // overwrite is for a named to alone.
+                archive = FirstFree(archive);
             }
             else
             {
-                outcome = Resolve(to, forWrite: true, out archive);
+                outcome = Resolve(to!, forWrite: true, out archive);
                 if (outcome != FileOutcome.Ok)
                 {
-                    return new ZipResult(outcome, display, to, 0, 0);
+                    return new ZipResult(outcome, display, to!, 0, 0) { AtDestination = true };
                 }
             }
 
-            if (isDirectory && IsInside(source, archive))
+            // Into itself by where the paths lead (2026-10-22, review N5: a junction let the archive be written into the folder it zips).
+            if (isDirectory && IsInside(FinalPath(source), FinalPath(archive)))
             {
                 return new ZipResult(FileOutcome.IntoItself, display, Relative(archive), 0, 0);
             }
@@ -3202,49 +3901,59 @@ public sealed class WorkingDirectory
                 return new ZipResult(FileOutcome.IsDirectory, display, Relative(archive, isDirectory: true), 0, 0);
             }
 
-            if (File.Exists(archive) && !overwrite)
+            bool replaced = File.Exists(archive);
+            if (replaced && !overwrite)
             {
                 return new ZipResult(FileOutcome.Exists, display, Relative(archive), 0, 0);
             }
 
+            // The entries planned first (2026-10-22): hidden files and dot-names kept (D14), empty folders as entries (review V11), links and
+            // temp siblings never, a Mac name with a backslash left out (review N6: it became a path in the archive), and the caps counted
+            // before anything is written, folders with the files (review G7).
+            var leftOut = new List<string>();
+            var plan = isDirectory ? ZipEntries(source, leftOut) : [(source, Path.GetFileName(source), false)];
+            int counted = isDirectory ? plan.Count + CountFolders(source) : 1;
+            long bytes = plan.Where(e => !e.Folder).Sum(e => new FileInfo(e.Full).Length);
+            if (counted > MaxTransferFiles || bytes > MaxTransferBytes)
+            {
+                return new ZipResult(FileOutcome.Failed, display, Relative(archive), 0, 0, ZipCapDetail(counted, bytes));
+            }
+
+            RecheckLinks(archive);
             Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
             string temp = TempSibling(archive);
-            int entries = 0;
             try
             {
                 using (var zip = ZipFile.Open(temp, ZipArchiveMode.Create))
                 {
-                    if (isDirectory)
+                    foreach (var (full, name, folder) in plan)
                     {
-                        // Entries sorted by their name, ordinal (2026-10-06, the macOS build): the walk follows the folder's enumeration
-                        // order, which NTFS and APFS give differently, so the same folder made a different zip on each. This changes
-                        // Windows' zips too, on purpose: the same folder now makes the same zip on both systems.
-                        string baseName = Path.GetFileName(source);
-                        var files = Walk(source, null, recurse: true)
-                            .Select(entry => (entry.FullPath, Name: baseName + "/" + entry.FullPath[(source.Length + 1)..].Replace('\\', '/')))
-                            .OrderBy(file => file.Name, StringComparer.Ordinal)
-                            .ToList();
-                        foreach (var (fullPath, name) in files)
+                        if (folder)
                         {
-                            zip.CreateEntryFromFile(fullPath, name, CompressionLevel.Optimal);
-                            entries++;
+                            zip.CreateEntry(name);
                         }
-                    }
-                    else
-                    {
-                        zip.CreateEntryFromFile(source, Path.GetFileName(source), CompressionLevel.Optimal);
-                        entries = 1;
+                        else
+                        {
+                            zip.CreateEntryFromFile(full, name, CompressionLevel.Optimal);
+                        }
                     }
                 }
 
-                File.Move(temp, archive, overwrite: true);
+                if (replaced)
+                {
+                    MoveIntoPlace(temp, archive, _options.PreserveOnReplace);
+                }
+                else
+                {
+                    MoveTempOver(temp, archive);
+                }
             }
             finally
             {
                 DeleteQuietly(temp);
             }
 
-            return new ZipResult(FileOutcome.Ok, display, Relative(archive), entries, new FileInfo(archive).Length);
+            return new ZipResult(FileOutcome.Ok, display, Relative(archive), plan.Count, new FileInfo(archive).Length) { Replaced = replaced, LeftOut = leftOut };
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -3253,9 +3962,92 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// Extracts a zip into a folder (blank <paramref name="to"/> = one named after the archive,
-    /// next to it). All or nothing: every entry's destination is checked to lie under the folder
-    /// (zip-slip) with no link on its way leading outside, and, without <paramref name="overwrite"/>, to be free, before anything is written.
+    /// A folder's zip entries, sorted by name, ordinal (2026-10-06, the macOS build: the same folder makes the same zip on both systems): its
+    /// files and its empty folders (a trailing '/'), walked without recursion, never through a link or onto a temp sibling, hidden ones kept.
+    /// </summary>
+    private static List<(string Full, string Name, bool Folder)> ZipEntries(string source, List<string> leftOut)
+    {
+        string baseName = Path.GetFileName(source);
+        var entries = new List<(string Full, string Name, bool Folder)>();
+        var pending = new Stack<string>();
+        pending.Push(source);
+        while (pending.Count > 0)
+        {
+            string folder = pending.Pop();
+            bool empty = true;
+            foreach (var info in new DirectoryInfo(folder).EnumerateFileSystemInfos("*", new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = 0 }))
+            {
+                if (IsLink(info) || IsTempSibling(info.Name))
+                {
+                    continue;
+                }
+
+                empty = false;
+                string under = Path.GetRelativePath(source, info.FullName);
+                if (!OperatingSystem.IsWindows() && under.Contains('\\', StringComparison.Ordinal))
+                {
+                    leftOut.Add(under);
+                    continue;
+                }
+
+                if ((info.Attributes & FileAttributes.Directory) != 0)
+                {
+                    pending.Push(info.FullName);
+                }
+                else
+                {
+                    entries.Add((info.FullName, baseName + "/" + under.Replace('\\', '/'), false));
+                }
+            }
+
+            if (empty && !string.Equals(folder, source, StringComparison.Ordinal))
+            {
+                entries.Add((folder, baseName + "/" + Path.GetRelativePath(source, folder).Replace('\\', '/') + "/", true));
+            }
+        }
+
+        entries.Sort((a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+        return entries;
+    }
+
+    private static int CountFolders(string source) =>
+        new DirectoryInfo(source).EnumerateDirectories("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }).Take(MaxTransferFiles + 1).Count();
+
+    /// <summary>A zip or unzip past the caps (2026-10-22, review G7): the entries and bytes, against one transfer's caps.</summary>
+    public static string ZipCapDetail(int entries, long bytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"{entries:N0} entries, {bytes:N0} bytes is over the cap of {MaxTransferFiles:N0} entries and {MaxTransferBytes:N0} bytes; nothing was written");
+
+    /// <summary>The ratio past which an entry over <see cref="BombEntryBytes"/> is a zip bomb's (2026-10-22, review G7).</summary>
+    public const int MaxCompressionRatio = 100;
+
+    /// <summary>The size an entry must pass before its ratio is judged.</summary>
+    public const long BombEntryBytes = 1_000_000;
+
+    /// <summary>
+    /// The first free path of <paramref name="full"/>'s spelling (2026-10-22, the fix plan's mechanism 4, PdfEditing.Write's rule of 2026-10-20):
+    /// itself, then <c>name-2.ext</c>, <c>name-3.ext</c>… — what an unnamed default output takes, so it never replaces anything.
+    /// </summary>
+    public static string FirstFree(string full)
+    {
+        ArgumentNullException.ThrowIfNull(full);
+        for (int n = 1; n < 1000; n++)
+        {
+            string candidate = n == 1 ? full : Images.ImageOutput.Numbered(full, n);
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return full;
+    }
+
+    /// <summary>
+    /// Extracts a zip into a folder (blank <paramref name="to"/> = one named after the archive, next to it). All or nothing since 2026-10-22
+    /// (review G8): every entry is planned before anything is written — inside the folder (zip-slip) with no link on its way leading out,
+    /// free without <paramref name="overwrite"/>, no two entries on one path and no file where a folder goes, the caps and a bomb's ratio
+    /// (review G7), every <c>.git</c> and every guarded target left out and listed (D17) — then each file is extracted to a temp sibling, and
+    /// only once all of them are is each moved into place; a failure on the way takes the temps and the new folders back.
     /// </summary>
     public ZipResult Unzip(string relative, string? to, bool overwrite)
     {
@@ -3287,14 +4079,21 @@ public sealed class WorkingDirectory
             string folder;
             if (string.IsNullOrWhiteSpace(to))
             {
-                folder = Path.Combine(Path.GetDirectoryName(source)!, Path.GetFileNameWithoutExtension(source));
+                // A name with no stem (".zip") or no extension ("data") named the archive's own folder or the archive itself (2026-10-22,
+                // review S9): such an archive unzips into "<name>-files".
+                string stem = Path.GetFileNameWithoutExtension(source);
+                folder = Path.Combine(Path.GetDirectoryName(source)!, stem);
+                if (stem.Length == 0 || string.Equals(folder, source, StringComparison.OrdinalIgnoreCase))
+                {
+                    folder = source + "-files";
+                }
             }
             else
             {
                 outcome = Resolve(to, forWrite: true, out folder);
                 if (outcome != FileOutcome.Ok)
                 {
-                    return new ZipResult(outcome, display, to, 0, 0);
+                    return new ZipResult(outcome, display, to, 0, 0) { AtDestination = true };
                 }
             }
 
@@ -3313,45 +4112,142 @@ public sealed class WorkingDirectory
             }
 
             using var zip = ZipFile.OpenRead(source);
-            var plan = new List<(ZipArchiveEntry Entry, string Target)>();
+            var files = new List<(ZipArchiveEntry Entry, string Target, bool Exists)>();
+            var folders = new List<string> { folder };
+            var leftOut = new List<string>();
+            var comparer = CaseRule.Comparer(Path.GetDirectoryName(folder) ?? folder);
+            var taken = new HashSet<string>(comparer);
+            var asFolders = new HashSet<string>(comparer);
+            long total = 0;
+            if (zip.Entries.Count > MaxTransferFiles)
+            {
+                return new ZipResult(FileOutcome.Failed, display, folderDisplay, 0, 0, ZipCapDetail(zip.Entries.Count, 0));
+            }
 
-            // Taken once (the review, 2026-10-05): the guard reads the sqlite.json files, so a call per entry read them per entry.
-            var databases = Databases?.Invoke();
             foreach (var entry in zip.Entries)
             {
-                if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
-                {
-                    continue;
-                }
-
-                string target = Path.GetFullPath(Path.Combine(folder, entry.FullName));
+                bool isFolderEntry = entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\');
+                string target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(folder, entry.FullName)));
                 if (!IsInside(folder, target) || LinkEscape(root, target, RealLinkTarget) is not null)
                 {
                     return new ZipResult(FileOutcome.OutsideRoot, display, folderDisplay, 0, 0, entry.FullName);
                 }
 
-                if (!overwrite && (File.Exists(target) || Directory.Exists(target)))
+                // A repository's data and the guarded files are left out and said (D17): no hooks or config planted by an archive.
+                if (IsGitPath(Path.GetRelativePath(folder, target)) || WriteGuard.Judge(root, target, WriteRole.Write, ShoppingListGuard, Databases) is not null)
+                {
+                    leftOut.Add(Relative(target, isFolderEntry));
+                    continue;
+                }
+
+                if (isFolderEntry)
+                {
+                    if (File.Exists(target) || taken.Contains(target))
+                    {
+                        return new ZipResult(FileOutcome.IsAFile, display, Relative(target), 0, 0);
+                    }
+
+                    asFolders.Add(target);
+                    folders.Add(target);
+                    continue;
+                }
+
+                // A bomb's ratio and the total, counted before the write (review G7).
+                if (entry.Length > BombEntryBytes && entry.CompressedLength > 0 && entry.Length / entry.CompressedLength > MaxCompressionRatio)
+                {
+                    return new ZipResult(FileOutcome.Failed, display, folderDisplay, 0, 0, FileText.ZipBomb(entry.FullName));
+                }
+
+                total += entry.Length;
+                if (total > MaxTransferBytes)
+                {
+                    return new ZipResult(FileOutcome.Failed, display, folderDisplay, 0, 0, ZipCapDetail(zip.Entries.Count, total));
+                }
+
+                // Two entries on one path, or a file where another entry's folder goes (review G8: the first was written, then the second
+                // failed with the tree half made).
+                if (!taken.Add(target) || asFolders.Contains(target) || IsUnderAny(target, taken, comparer))
+                {
+                    return new ZipResult(FileOutcome.Exists, display, Relative(target), 0, 0, FileText.ZipConflict(entry.FullName));
+                }
+
+                if (Directory.Exists(target))
+                {
+                    return new ZipResult(FileOutcome.FolderInTheWay, display, Relative(target, isDirectory: true), 0, 0);
+                }
+
+                bool exists = File.Exists(target);
+                if (!overwrite && exists)
                 {
                     return new ZipResult(FileOutcome.Exists, display, Relative(target), 0, 0);
                 }
 
-                // An entry that would land on a database file (2026-10-05): the whole archive refused, nothing extracted.
-                if (databases is not null && databases.IsDatabaseFile(target))
+                files.Add((entry, target, exists));
+            }
+
+            // The archive's internet mark goes on what comes out of it (2026-10-22, review O5): SmartScreen, Protected View and Gatekeeper
+            // still ask about a downloaded archive's program or document.
+            byte[]? mark = MarkOfTheWeb.Read(source);
+            var made = new List<string>();
+            var temps = new List<(string Temp, string Target, bool Exists)>();
+            try
+            {
+                foreach (string each in folders.Concat(files.Select(f => Path.GetDirectoryName(f.Target)!)).Distinct(comparer).OrderBy(f => f.Length))
                 {
-                    return new ZipResult(FileOutcome.DatabaseProtected, display, Relative(target), 0, 0);
+                    if (!Directory.Exists(each))
+                    {
+                        RecheckLinks(each);
+                        Directory.CreateDirectory(each);
+                        made.Add(each);
+                    }
                 }
 
-                plan.Add((entry, target));
+                foreach (var (entry, target, exists) in files)
+                {
+                    RecheckLinks(target);
+                    string temp = TempSibling(target);
+                    temps.Add((temp, target, exists));
+                    entry.ExtractToFile(temp, overwrite: false);
+                }
             }
-
-            Directory.CreateDirectory(folder);
-            foreach (var (entry, target) in plan)
+            catch (Exception ex) when (IsFileFailure(ex) || ex is InvalidDataException)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                entry.ExtractToFile(target, overwrite: true);
+                // Nothing left behind: the temps and the folders this call made go (deepest first).
+                foreach (var (temp, _, _) in temps)
+                {
+                    DeleteQuietly(temp);
+                }
+
+                foreach (string each in made.OrderByDescending(f => f.Length))
+                {
+                    try
+                    {
+                        Directory.Delete(each);
+                    }
+                    catch (Exception cleanup) when (IsFileFailure(cleanup))
+                    {
+                    }
+                }
+
+                throw;
             }
 
-            return new ZipResult(FileOutcome.Ok, display, folderDisplay, plan.Count, new FileInfo(source).Length);
+            bool replaced = false;
+            foreach (var (temp, target, exists) in temps)
+            {
+                if (exists)
+                {
+                    MoveIntoPlace(temp, target, _options.PreserveOnReplace);
+                    replaced = true;
+                }
+                else
+                {
+                    MoveTempOver(temp, target);
+                }
+            }
+
+            MarkOfTheWeb.Carry(mark, files.Select(f => f.Target));
+            return new ZipResult(FileOutcome.Ok, display, folderDisplay, files.Count, new FileInfo(source).Length) { Replaced = replaced, LeftOut = leftOut };
         }
         catch (InvalidDataException ex)
         {
@@ -3361,6 +4257,20 @@ public sealed class WorkingDirectory
         {
             return new ZipResult(FileOutcome.Failed, display, to ?? "", 0, 0, ex.Message);
         }
+    }
+
+    /// <summary>Whether <paramref name="target"/> lies under one of the files already planned (a file where a folder must go).</summary>
+    private static bool IsUnderAny(string target, HashSet<string> files, StringComparer comparer)
+    {
+        for (string? parent = Path.GetDirectoryName(target); parent is not null; parent = Path.GetDirectoryName(parent))
+        {
+            if (files.Contains(parent))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -3408,15 +4318,46 @@ public sealed class WorkingDirectory
 
     // ---- helpers ----
 
-    private readonly record struct WalkEntry(string FullPath, long Length, DateTime LastWriteTimeUtc, bool IsDirectory);
+    private readonly record struct WalkEntry(string FullPath, long Length, DateTime LastWriteTimeUtc, bool IsDirectory, FileAttributes Attributes = 0);
 
+    /// <summary>
+    /// The walks' options. Reparse points are no longer skipped here (2026-10-22, review O1: every walk skipped them all, so OneDrive's
+    /// placeholders — 41 of 42 entries under this PC's Documents — and deduplicated files were invisible to search, find, tree, info,
+    /// copy and zip, and to the .git and database guards): each walk skips a real link alone (<see cref="IsLink"/>) in its predicates.
+    /// </summary>
     private static EnumerationOptions WalkOptions(bool recurse) => new()
     {
         RecurseSubdirectories = recurse,
         IgnoreInaccessible = true,
-        AttributesToSkip = OperatingSystem.IsWindows() ? FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint : FileAttributes.ReparsePoint,
+        AttributesToSkip = OperatingSystem.IsWindows() ? FileAttributes.Hidden | FileAttributes.System : 0,
         ReturnSpecialDirectories = false,
     };
+
+    /// <summary>
+    /// Whether a walked entry is a real link — a symlink or junction, which a walk never follows or lists — rather than another kind of
+    /// reparse point, a cloud placeholder or a deduplicated file, which is the user's file like any other (2026-10-22, review O1). Only a
+    /// reparse point is asked where it leads.
+    /// </summary>
+    private static bool IsLink(ref FileSystemEntry entry) =>
+        (entry.Attributes & FileAttributes.ReparsePoint) != 0 && RealLinkTarget(entry.ToFullPath()) is not null;
+
+    /// <summary><see cref="IsLink(ref FileSystemEntry)"/> for an entry already in hand.</summary>
+    private static bool IsLink(FileSystemInfo info) => (info.Attributes & FileAttributes.ReparsePoint) != 0 && RealLinkTarget(info.FullName) is not null;
+
+    private const FileAttributes RecallOnOpen = (FileAttributes)0x0004_0000;
+    private const FileAttributes RecallOnDataAccess = (FileAttributes)0x0040_0000;
+
+    /// <summary>
+    /// Whether a file's data is not on this PC — a cloud placeholder (<c>RECALL_ON_DATA_ACCESS</c>, <c>RECALL_ON_OPEN</c>) or an offline
+    /// file (2026-10-22, review O1): it is listed and counted, and a read, copy or zip of that one file fetches it, but a search, a line
+    /// count or a picture's header probe never reads it, so no walk downloads gigabytes. <see cref="OfflineOverride"/> stands in for the
+    /// attribute in the tests.
+    /// </summary>
+    internal static bool IsOffline(string path, FileAttributes attributes) =>
+        OfflineOverride is { } probe ? probe(path) : (attributes & (FileAttributes.Offline | RecallOnOpen | RecallOnDataAccess)) != 0;
+
+    /// <summary>The tests' seam for <see cref="IsOffline"/> (no test can make a cloud placeholder); null in the app.</summary>
+    internal static Func<string, bool>? OfflineOverride { get; set; }
 
     /// <summary>
     /// Whether a walk leaves an entry out as hidden off Windows (2026-10-06, the macOS build). .NET reads every dot-name as
@@ -3440,22 +4381,77 @@ public sealed class WorkingDirectory
     /// Brace groups are expanded first (<see cref="PathGlob.ExpandBraces"/>, 2026-09-24) and each
     /// alternative is judged name-or-path on its own, so <c>{src/*.cs,*.md}</c> mixes the two.
     /// </summary>
-    private FileSystemEnumerable<WalkEntry> Walk(string directory, string? namePattern, bool recurse, bool includeDirectories = false, int maxDepth = int.MaxValue)
+    /// <summary>
+    /// What a read-side walk left out as hidden (2026-10-22, D14), counted as it goes; with <see cref="Max"/> also the walk's budget over every
+    /// entry it looks at, matching or not (review G18: find counted its matches alone, so a pattern that matched nothing walked everything),
+    /// and the call's token read between entries (Esc inside the walk).
+    /// </summary>
+    private sealed class HiddenCount
+    {
+        public int Count;
+        public int Seen;
+        public int Max = int.MaxValue;
+        public CancellationToken Token;
+
+        public void Look()
+        {
+            Token.ThrowIfCancellationRequested();
+            if (++Seen > Max)
+            {
+                throw new WalkBudgetSpent();
+            }
+        }
+    }
+
+    /// <summary>A walk past its budget (<see cref="HiddenCount.Max"/>): the caller's result is cut.</summary>
+    private sealed class WalkBudgetSpent : Exception;
+
+    /// <summary>Whether a walked entry is hidden: Windows' Hidden or System attribute, a Mac's hidden flag and .git (<see cref="IsHiddenOffWindows"/>).</summary>
+    private static bool IsHiddenEntry(ref FileSystemEntry entry) =>
+        OperatingSystem.IsWindows()
+            ? (entry.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0
+            : IsHiddenOffWindows(entry.Attributes, entry.FileName);
+
+    private FileSystemEnumerable<WalkEntry> Walk(string directory, string? namePattern, bool recurse, bool includeDirectories = false, int maxDepth = int.MaxValue) =>
+        Walk(directory, namePattern, recurse, null, includeDirectories, maxDepth);
+
+    /// <summary>
+    /// <see cref="Walk(string, string?, bool, bool, int)"/> counting into <paramref name="hidden"/> the hidden entries it leaves out (D14: a
+    /// listing, find, search and recent all leave them out and say how many) — the attributes skip moved into the predicates so they can be
+    /// counted — and never a temp sibling (review P7).
+    /// </summary>
+    private FileSystemEnumerable<WalkEntry> Walk(string directory, string? namePattern, bool recurse, HiddenCount? hidden, bool includeDirectories = false, int maxDepth = int.MaxValue)
     {
         string root = Root;
         GlobAlternative[]? alternatives = namePattern is null
             ? null
             : [.. PathGlob.ExpandBraces(namePattern).Select(p => new GlobAlternative(p, PathGlob.IsPathPattern(p)))];
+        var options = WalkOptions(recurse);
+        options.AttributesToSkip = 0;
         return new FileSystemEnumerable<WalkEntry>(
             directory,
-            (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory),
-            WalkOptions(recurse))
+            (ref FileSystemEntry entry) => new WalkEntry(entry.ToFullPath(), entry.IsDirectory ? 0 : entry.Length, entry.LastWriteTimeUtc.UtcDateTime, entry.IsDirectory, entry.Attributes),
+            options)
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
-                (includeDirectories || !entry.IsDirectory)
-                && !IsHiddenOffWindows(entry.Attributes, entry.FileName)
-                && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root)),
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth && !IsHiddenOffWindows(entry.Attributes, entry.FileName),
+            {
+                hidden?.Look();
+                if (IsHiddenEntry(ref entry))
+                {
+                    if (hidden is not null)
+                    {
+                        Interlocked.Increment(ref hidden.Count);
+                    }
+
+                    return false;
+                }
+
+                return (includeDirectories || !entry.IsDirectory)
+                    && !IsTempSibling(entry.FileName)
+                    && (alternatives is null || entry.IsDirectory || MatchesAny(alternatives, ref entry, directory, root))
+                    && !IsLink(ref entry);
+            },
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => DepthUnder(entry.Directory, directory) < maxDepth && !IsHiddenEntry(ref entry) && !IsLink(ref entry),
         };
     }
 
@@ -3549,24 +4545,326 @@ public sealed class WorkingDirectory
     }
 
     /// <summary><paramref name="path"/> equals <paramref name="root"/> or lies under it, by spelling.</summary>
-    internal static bool IsInside(string root, string path) =>
-        string.Equals(path, root, StringComparison.OrdinalIgnoreCase)
-        || (path.Length > root.Length
-            && path.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-            && (path[root.Length] == Path.DirectorySeparatorChar || path[root.Length] == Path.AltDirectorySeparatorChar));
-
-    private static void CopyDirectory(string source, string destination)
+    internal static bool IsInside(string root, string path)
     {
-        Directory.CreateDirectory(destination);
-        foreach (var file in new DirectoryInfo(source).EnumerateFiles("*", WalkOptions(recurse: false)).Where(f => !IsHiddenOffWindows(f.Attributes, f.Name)).Select(f => f.FullName))
+        // The root's own case rule (2026-10-22, review G16: case-blind everywhere, so ../FILES counted as inside "files" on a
+        // case-sensitive volume), and a root that ends in a separator, a drive's or a share's root, holds what starts with it (review I6:
+        // E:\ refused every path, its next character being no separator).
+        var comparison = CaseRule.Comparison(root);
+        if (string.Equals(path, root, comparison))
         {
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: true);
+            return true;
         }
 
-        foreach (var folder in new DirectoryInfo(source).EnumerateDirectories("*", WalkOptions(recurse: false)).Where(d => !IsHiddenOffWindows(d.Attributes, d.Name)).Select(d => d.FullName))
+        if (path.Length <= root.Length || !path.StartsWith(root, comparison))
         {
-            CopyDirectory(folder, Path.Combine(destination, Path.GetFileName(folder)));
+            return false;
         }
+
+        return EndsInSeparator(root) || IsSeparator(path[root.Length]);
+    }
+
+    /// <summary>
+    /// The part of <paramref name="path"/> under <paramref name="root"/>, no separator first; empty for the root itself (2026-10-22, review
+    /// I6: <c>path[(root.Length + 1)..]</c> dropped a character after a root that ends in a separator). <paramref name="path"/> inside
+    /// <paramref name="root"/> (<see cref="IsInside"/>).
+    /// </summary>
+    internal static string Under(string root, string path)
+    {
+        int cut = root.Length;
+        if (cut < path.Length && !EndsInSeparator(root) && IsSeparator(path[cut]))
+        {
+            cut++;
+        }
+
+        return cut >= path.Length ? "" : path[cut..];
+    }
+
+    /// <summary>
+    /// The links on the way to <paramref name="full"/> asked again just before a write lands (2026-10-22, review G13): <see cref="Resolve(string, bool, out string)"/>
+    /// asked them once, and a folder swapped for a junction since — while a file was read, diffed or a copy planned — took the write outside.
+    /// What is left is a race inside the one system call itself (documented). With <paramref name="linkItself"/> the last name is never asked
+    /// (a delete or move of a link). Throws <see cref="IOException"/>, which every writer already reports.
+    /// </summary>
+    internal void RecheckLinks(string full, bool linkItself = false)
+    {
+        string walked = linkItself ? Path.GetDirectoryName(full) ?? full : full;
+        if (LinkEscape(Root, walked, RealLinkTarget) is not null)
+        {
+            throw new IOException(FileText.LinkMovedDetail);
+        }
+    }
+
+    /// <summary>The separators this system's paths use (2026-10-22, review N3: on a Mac a backslash is a name's character, never one).</summary>
+    internal static readonly char[] Separators = [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar];
+
+    private static bool IsSeparator(char c) => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar;
+
+    private static bool EndsInSeparator(string root) => root.Length > 0 && IsSeparator(root[^1]);
+
+    /// <summary>
+    /// A folder copy planned before anything is written (2026-10-22: reviews G14, G15, I3, I5, N5 and the fix plan's D14, D16, D17): its files and
+    /// folders by an iterative walk (a 15,000-deep tree overflowed the recursion's stack), never through a link, hidden files and dot-names
+    /// kept (a copy then delete lost what the walk had skipped), every <c>.git</c> and temp sibling left out, each target judged by the write
+    /// guard of <paramref name="to"/> and left out when it refuses (a merge wrote over a database), and a target that is the wrong kind (a
+    /// folder where a file goes, or the other way) refusing the whole copy.
+    /// </summary>
+    private sealed record CopyPlan(List<(string Source, string Target, long Length, bool Exists)> Files, List<string> Folders, List<string> LeftOut, long Bytes, (FileOutcome Outcome, string Detail)? Refusal);
+
+    private static CopyPlan PlanCopy(string source, string destination, WorkingDirectory to, CancellationToken cancellationToken)
+    {
+        var files = new List<(string, string, long, bool)>();
+        var folders = new List<string> { destination };
+        var leftOut = new List<string>();
+        long bytes = 0;
+        var pending = new Stack<(string From, string Into)>();
+        pending.Push((source, destination));
+        while (pending.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (from, into) = pending.Pop();
+            foreach (var info in new DirectoryInfo(from).EnumerateFileSystemInfos("*", new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = 0, ReturnSpecialDirectories = false }))
+            {
+                if (IsLink(info) || IsTempSibling(info.Name))
+                {
+                    continue;
+                }
+
+                string target = Path.Join(into, info.Name);
+                bool isFolder = (info.Attributes & FileAttributes.Directory) != 0;
+                if (string.Equals(info.Name, GitFolderName, StringComparison.OrdinalIgnoreCase))
+                {
+                    leftOut.Add(to.Relative(target, isFolder));
+                    continue;
+                }
+
+                if (WriteGuard.Judge(to.Root, target, WriteRole.Write, to.ShoppingListGuard, to.Databases) is not null)
+                {
+                    leftOut.Add(to.Relative(target, isFolder));
+                    continue;
+                }
+
+                if (isFolder)
+                {
+                    if (File.Exists(target))
+                    {
+                        return new CopyPlan(files, folders, leftOut, bytes, (FileOutcome.IsAFile, to.Relative(target)));
+                    }
+
+                    folders.Add(target);
+                    pending.Push((info.FullName, target));
+                }
+                else
+                {
+                    if (Directory.Exists(target))
+                    {
+                        return new CopyPlan(files, folders, leftOut, bytes, (FileOutcome.FolderInTheWay, to.Relative(target, isDirectory: true)));
+                    }
+
+                    long length = ((FileInfo)info).Length;
+                    files.Add((info.FullName, target, length, File.Exists(target)));
+                    bytes += length;
+                }
+            }
+        }
+
+        return new CopyPlan(files, folders, leftOut, bytes, null);
+    }
+
+    /// <summary>
+    /// A planned copy carried out: the folders made, each file copied — over one already there by the one replace (mechanism 7). A failure
+    /// partway takes back the new files and folders it made (2026-10-22, review J7: a half-made folder stood where the copy failed), then
+    /// throws; a file it replaced stays replaced.
+    /// </summary>
+    private static void RunCopy(CopyPlan plan, CancellationToken cancellationToken = default)
+    {
+        var madeFolders = new List<string>();
+        var madeFiles = new List<string>();
+        try
+        {
+            foreach (string folder in plan.Folders)
+            {
+                if (!Directory.Exists(folder))
+                {
+                    Directory.CreateDirectory(folder);
+                    madeFolders.Add(folder);
+                }
+            }
+
+            foreach (var (source, target, _, exists) in plan.Files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                CopyFile(source, target, exists, preserve: true);
+                if (!exists)
+                {
+                    madeFiles.Add(target);
+                }
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex) || ex is OperationCanceledException)
+        {
+            foreach (string file in madeFiles)
+            {
+                DeleteQuietly(file);
+            }
+
+            foreach (string folder in madeFolders.OrderByDescending(f => f.Length))
+            {
+                try
+                {
+                    Directory.Delete(folder);
+                }
+                catch (Exception cleanup) when (IsFileFailure(cleanup))
+                {
+                    DiagnosticLog.Debug(Category, $"Could not take back {folder}: {cleanup.Message}");
+                }
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// One file copied: a new one straight, one already there by a temp sibling and the one replace, so it keeps its ACL and attributes and a
+    /// read-only one is refused (2026-10-22, review I4, O2, V5: an overwrite and a folder merge were File.Copy over it).
+    /// </summary>
+    private static void CopyFile(string source, string target, bool exists, bool preserve)
+    {
+        if (!exists)
+        {
+            File.Copy(source, target, overwrite: false);
+            return;
+        }
+
+        string temp = TempSibling(target);
+        try
+        {
+            File.Copy(source, temp);
+            MoveIntoPlace(temp, target, preserve);
+        }
+        finally
+        {
+            DeleteQuietly(temp);
+        }
+    }
+
+    /// <summary>
+    /// The space a local folder copy may take (2026-10-22, the fix plan's D16: no count cap, the volume's free space less 1 GB): null when it
+    /// fits or the volume can't be asked, else the refusal's detail.
+    /// </summary>
+    internal static string? FreeSpaceRefusal(string folder, long bytes)
+    {
+        try
+        {
+            if (Path.GetPathRoot(Path.GetFullPath(folder)) is not { Length: > 0 } volume)
+            {
+                return null;
+            }
+
+            long free = new DriveInfo(volume).AvailableFreeSpace;
+            return bytes > free - FreeSpaceReserve ? FileText.NoRoomToCopy(bytes, free) : null;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>What a local copy always leaves free on its volume (D16).</summary>
+    public const long FreeSpaceReserve = 1_000_000_000;
+
+    /// <summary>A file set aside under a temp name while a folder takes its place, put back unless <see cref="Commit"/> (review J7).</summary>
+    private sealed class Aside : IDisposable
+    {
+        private readonly string _path;
+        private readonly string _held;
+        private bool _committed;
+
+        private Aside(string path, string held)
+        {
+            _path = path;
+            _held = held;
+        }
+
+        public static Aside Of(string path)
+        {
+            string held = TempSibling(path);
+            File.Move(path, held);
+            return new Aside(path, held);
+        }
+
+        public void Commit()
+        {
+            _committed = true;
+            DeleteQuietly(_held);
+        }
+
+        public void Dispose()
+        {
+            if (_committed)
+            {
+                return;
+            }
+
+            // Never discarded uncommitted: put back, or, with something in its place, kept under its temp name and said.
+            try
+            {
+                if (!File.Exists(_path) && !Directory.Exists(_path))
+                {
+                    File.Move(_held, _path);
+                    return;
+                }
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                DiagnosticLog.Warn(Category, $"Could not put {_path} back from {_held}: {ex.Message}");
+                return;
+            }
+
+            DiagnosticLog.Warn(Category, $"{_path} is taken; the file that was there is kept as {_held}");
+        }
+    }
+
+    /// <summary>
+    /// Where <paramref name="path"/> really leads (2026-10-22, review N5, I3): each existing segment from the volume down asked where it links
+    /// (<see cref="RealLinkTarget"/>), up to <see cref="MaxLinkHops"/>; the rest spelled as given. Two folders compared by this are compared by
+    /// what they are.
+    /// </summary>
+    internal static string FinalPath(string path)
+    {
+        string full;
+        try
+        {
+            full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path;
+        }
+
+        string? volume = Path.GetPathRoot(full);
+        if (string.IsNullOrEmpty(volume))
+        {
+            return full;
+        }
+
+        string current = volume;
+        var parts = new Queue<string>(full[volume.Length..].Split(Separators, StringSplitOptions.RemoveEmptyEntries));
+        int hops = 0;
+        while (parts.Count > 0)
+        {
+            string next = Path.Join(current, parts.Dequeue());
+            if (hops < MaxLinkHops && RealLinkTarget(next) is { Length: > 0 } target)
+            {
+                hops++;
+                current = Path.TrimEndingDirectorySeparator(target);
+                continue;
+            }
+
+            current = next;
+        }
+
+        return current;
     }
 
     /// <summary>
@@ -3579,10 +4877,25 @@ public sealed class WorkingDirectory
     internal static long WriteAtomically(string full, byte[] bytes, bool preserve = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        SweepStaleTemps(Path.GetDirectoryName(full)!);
+        // A file with other names is written in place (2026-10-22, review I4): a temp and a rename would give this name a new file and
+        // leave the others on the old text, silently.
+        if (File.Exists(full))
+        {
+            RefuseReadOnly(full);
+            if (FileLinks.Count(full) > 1)
+            {
+                using var stream = new FileStream(full, FileMode.Truncate, FileAccess.Write, FileShare.None);
+                stream.Write(bytes);
+                return bytes.LongLength;
+            }
+        }
+
         string temp = TempSibling(full);
         try
         {
             File.WriteAllBytes(temp, bytes);
+            HideTemp(temp);
             MoveIntoPlace(temp, full, preserve);
         }
         finally
@@ -3593,12 +4906,125 @@ public sealed class WorkingDirectory
         return bytes.LongLength;
     }
 
-    /// <summary>The written <paramref name="temp"/> in <paramref name="full"/>'s place: replaced in place under <paramref name="preserve"/> when a file is there, else moved over it (<see cref="WriteAtomically"/>'s step, shared with <see cref="PendingWrite.Commit"/> since 2026-10-01).</summary>
-    internal static void MoveIntoPlace(string temp, string full, bool preserve)
+    /// <summary>
+    /// The written <paramref name="temp"/> in <paramref name="full"/>'s place (<see cref="WriteAtomically"/>'s step, shared with
+    /// <see cref="PendingWrite.Commit"/>) — since 2026-10-22 the fix plan's mechanism 7, for every working directory, not a share's alone
+    /// (review I4, O2, V5): a read-only target is refused on both systems (a Mac's rename went over a chmod 444 file); on Windows an existing
+    /// target is replaced with <c>ReplaceFile</c>, which keeps its ACL, owner, attributes and streams (a move gave it the folder's inherited
+    /// security); on a Mac the target's mode goes onto the new file first (a script kept its +x, a 0600 secret stayed 0600).
+    /// <paramref name="preserve"/> is kept for the callers; every replace preserves now.
+    /// </summary>
+    internal static void MoveIntoPlace(string temp, string full, bool preserve, bool unhide = true)
     {
-        if (!preserve || !File.Exists(full) || !TryReplace(temp, full))
+        _ = preserve;
+        if (File.Exists(full))
+        {
+            RefuseReadOnly(full);
+            if (OperatingSystem.IsWindows() && TryReplace(temp, full))
+            {
+                return;
+            }
+
+            if (!OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    File.SetUnixFileMode(temp, File.GetUnixFileMode(full));
+                }
+                catch (Exception ex) when (IsFileFailure(ex))
+                {
+                    DiagnosticLog.Debug(Category, $"Could not carry the mode of {full}: {ex.Message}");
+                }
+            }
+        }
+
+        if (unhide)
+        {
+            MoveTempOver(temp, full);
+        }
+        else
         {
             File.Move(temp, full, overwrite: true);
+        }
+    }
+
+    /// <summary>
+    /// A new file written whole and put in place only if nothing is there yet (2026-10-22, review J3): false, nothing written, when a file
+    /// appeared at <paramref name="full"/> meanwhile — the move with overwrite off is the one check that can't be raced.
+    /// </summary>
+    internal static bool WriteNew(string full, byte[] bytes)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        SweepStaleTemps(Path.GetDirectoryName(full)!);
+        string temp = TempSibling(full);
+        try
+        {
+            File.WriteAllBytes(temp, bytes);
+            HideTemp(temp);
+            return MoveTempNew(temp, full);
+        }
+        finally
+        {
+            DeleteQuietly(temp);
+        }
+    }
+
+    /// <summary>A temp file moved to <paramref name="target"/> only when nothing is there: false when something is (review J3).</summary>
+    internal static bool MoveTempNew(string temp, string target)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                File.SetAttributes(temp, File.GetAttributes(temp) & ~FileAttributes.Hidden);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                DiagnosticLog.Debug(Category, $"Could not unhide {temp}: {ex.Message}");
+            }
+        }
+
+        try
+        {
+            File.Move(temp, target, overwrite: false);
+            return true;
+        }
+        catch (IOException) when (File.Exists(target) || Directory.Exists(target))
+        {
+            return false;
+        }
+    }
+
+    /// <summary>A temp file moved over <paramref name="target"/>, its hidden mark taken off first (a new name keeps the temp's attributes).</summary>
+    internal static void MoveTempOver(string temp, string target)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                File.SetAttributes(temp, File.GetAttributes(temp) & ~FileAttributes.Hidden);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                DiagnosticLog.Debug(Category, $"Could not unhide {temp}: {ex.Message}");
+            }
+        }
+
+        File.Move(temp, target, overwrite: true);
+    }
+
+    /// <summary>
+    /// Refuses a read-only target (2026-10-22, review O2: a Mac's rename went over a chmod 444 file, Windows' refused): the read-only attribute
+    /// on Windows, no owner write on a Mac.
+    /// </summary>
+    private static void RefuseReadOnly(string full)
+    {
+        bool readOnly = OperatingSystem.IsWindows()
+            ? (File.GetAttributes(full) & FileAttributes.ReadOnly) != 0
+            : (File.GetUnixFileMode(full) & UnixFileMode.UserWrite) == 0;
+        if (readOnly)
+        {
+            throw new UnauthorizedAccessException(FileText.ReadOnlyDetail);
         }
     }
 
@@ -3617,7 +5043,64 @@ public sealed class WorkingDirectory
         }
     }
 
-    internal static string TempSibling(string full) => full + "." + Guid.NewGuid().ToString("N") + ".tmp";
+    /// <summary>The prefix and suffix of every temp sibling the file tools write (2026-10-22, review P7/K9, <see cref="TempSibling"/>).</summary>
+    public const string TempPrefix = ".~";
+
+    /// <summary>The temp siblings' suffix.</summary>
+    public const string TempSuffix = ".neon-tmp";
+
+    /// <summary>
+    /// A temp sibling's path in <paramref name="full"/>'s folder (2026-10-22, review P7/K9): <c>.~&lt;32 hex&gt;.neon-tmp</c>, 43 characters
+    /// whatever the target's name — a name within 37 of the 255 limit could not be written when the temp added 37 to it — and one shape every
+    /// walk can leave out (<see cref="IsTempSibling"/>). Hidden on Windows once made (<see cref="HideTemp"/>), the mark taken off at the move.
+    /// </summary>
+    internal static string TempSibling(string full) => Path.Join(Path.GetDirectoryName(full), TempPrefix + Guid.NewGuid().ToString("N") + TempSuffix);
+
+    /// <summary>How old a temp sibling must be before a write in its folder sweeps it: a crash's, never a write still running.</summary>
+    public static readonly TimeSpan StaleTemp = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// The temp siblings in <paramref name="folder"/> older than <see cref="StaleTemp"/> deleted (2026-10-22, review P7: a crash's were never
+    /// swept, and were searched, zipped, copied and counted ever after). Each write sweeps its own folder; there is no walk at start. Best effort.
+    /// </summary>
+    internal static void SweepStaleTemps(string folder)
+    {
+        try
+        {
+            foreach (var info in new DirectoryInfo(folder).EnumerateFiles(TempPrefix + "*" + TempSuffix, new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = true }))
+            {
+                if (IsTempSibling(info.Name) && DateTime.UtcNow - info.LastWriteTimeUtc > StaleTemp)
+                {
+                    DeleteQuietly(info.FullName);
+                }
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex) || ex is System.Security.SecurityException)
+        {
+        }
+    }
+
+    /// <summary>Whether a file name is a temp sibling's (<see cref="TempSibling"/>): a crash's leftover, never the user's file.</summary>
+    public static bool IsTempSibling(ReadOnlySpan<char> name) =>
+        name.Length == TempPrefix.Length + 32 + TempSuffix.Length && name.StartsWith(TempPrefix, StringComparison.Ordinal) && name.EndsWith(TempSuffix, StringComparison.Ordinal);
+
+    /// <summary>Marks a new temp sibling hidden on Windows (best effort): Explorer and a listing don't show a write in flight.</summary>
+    internal static void HideTemp(string temp)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            File.SetAttributes(temp, File.GetAttributes(temp) | FileAttributes.Hidden);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            DiagnosticLog.Debug(Category, $"Could not hide {temp}: {ex.Message}");
+        }
+    }
 
     internal static void DeleteQuietly(string path)
     {
@@ -3653,12 +5136,17 @@ public sealed class WorkingDirectory
         }
     }
 
-    /// <summary>UTF-8 without a leading byte-order mark (PowerShell writes one; the model must never see U+FEFF).</summary>
+    /// <summary>
+    /// A text file's bytes as text, the mark dropped (the model must never see U+FEFF): since 2026-10-22 in the encoding the file is in
+    /// (<see cref="TextFile"/>: UTF-8, UTF-16 or UTF-32 by the mark or the NULs, else a code page that keeps every byte), UTF-8 alone before.
+    /// <paramref name="bom"/> says whether it had a mark; a caller that writes the text back takes the codec instead (<see cref="TextFile.Decode"/>).
+    /// </summary>
     public static string Decode(byte[] bytes, out bool bom)
     {
         ArgumentNullException.ThrowIfNull(bytes);
-        bom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
-        return bom ? Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3) : Encoding.UTF8.GetString(bytes);
+        string text = TextFile.Decode(bytes, out var codec);
+        bom = codec.HasBom;
+        return text;
     }
 
     /// <summary>
@@ -3666,8 +5154,7 @@ public sealed class WorkingDirectory
     /// byte (2026-10-14, the PDF plan: a PDF with no early NUL was read as its raw syntax; <see cref="PdfFile.LooksLikePdf"/>, offset 0
     /// only, so a text that mentions the header further down stays text).
     /// </summary>
-    public static bool LooksBinary(ReadOnlySpan<byte> bytes) =>
-        bytes[..Math.Min(BinaryProbeBytes, bytes.Length)].IndexOf((byte)0) >= 0 || PdfFile.LooksLikePdf(bytes);
+    public static bool LooksBinary(ReadOnlySpan<byte> bytes) => TextFile.LooksBinary(bytes);
 
     /// <summary>
     /// Whether the file at <paramref name="full"/> would read as text: its first
@@ -3679,7 +5166,7 @@ public sealed class WorkingDirectory
         ArgumentNullException.ThrowIfNull(full);
         try
         {
-            using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, BinaryProbeBytes);
+            using var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite, BinaryProbeBytes);
             Span<byte> head = stackalloc byte[BinaryProbeBytes];
             int read = stream.ReadAtLeast(head, BinaryProbeBytes, throwOnEndOfStream: false);
             return !LooksBinary(head[..read]);
@@ -3694,7 +5181,7 @@ public sealed class WorkingDirectory
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var stream = RegularFiles.OpenRead(path);
             Span<byte> head = stackalloc byte[2];
             return stream.Read(head) == 2 && head[0] == (byte)'P' && head[1] == (byte)'K';
         }
@@ -3704,27 +5191,44 @@ public sealed class WorkingDirectory
         }
     }
 
+    /// <remarks>
+    /// An <see cref="ArgumentOutOfRangeException"/> or <see cref="ArgumentNullException"/> is a bug, not the file system's answer (2026-10-22,
+    /// review K18: a slicing mistake read as a file failure, its message handed to the model), and is left to throw.
+    /// </remarks>
     internal static bool IsFileFailure(Exception ex) =>
-        ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException;
+        ex is IOException or UnauthorizedAccessException or NotSupportedException || (ex is ArgumentException && ex is not (ArgumentOutOfRangeException or ArgumentNullException));
 
-    /// <summary>Lines by <c>\n</c> with a <c>\r</c> before it dropped; a trailing newline adds no empty last line.</summary>
+    /// <summary>
+    /// Lines by <c>\r\n</c>, <c>\n</c> or a lone <c>\r</c>; a trailing newline adds no empty last line. Only those three since 2026-10-22
+    /// (review N9, H1, H6): .NET's line enumeration also broke at a form feed, U+0085, U+2028 and U+2029, which <c>patch_file</c>
+    /// (<see cref="NormalizeNewlines"/>) never does, so a read showed lines an edit could not match, an edit's region was off by a line per
+    /// such break, and a vault note rebuilt from its lines turned them into newlines.
+    /// </summary>
     public static List<string> SplitLines(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         var lines = new List<string>();
-        if (text.Length == 0)
+        int start = 0;
+        for (int i = 0; i < text.Length; i++)
         {
-            return lines;
+            char c = text[i];
+            if (c is not ('\n' or '\r'))
+            {
+                continue;
+            }
+
+            lines.Add(text[start..i]);
+            if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+            {
+                i++;
+            }
+
+            start = i + 1;
         }
 
-        foreach (var line in text.AsSpan().EnumerateLines())
+        if (start < text.Length)
         {
-            lines.Add(line.ToString());
-        }
-
-        if (lines.Count > 0 && lines[^1].Length == 0 && text.Length > 0 && (text[^1] == '\n' || text[^1] == '\r'))
-        {
-            lines.RemoveAt(lines.Count - 1);
+            lines.Add(text[start..]);
         }
 
         return lines;
@@ -3754,7 +5258,8 @@ public sealed class WorkingDirectory
     private static string ClipLine(ReadOnlySpan<char> line)
     {
         var trimmed = line.Trim();
-        return trimmed.Length <= MaxLineChars ? trimmed.ToString() : string.Concat(trimmed[..(MaxLineChars - 1)], "…");
+        // Never inside a surrogate pair (2026-10-22, review G20).
+        return trimmed.Length <= MaxLineChars ? trimmed.ToString() : string.Concat(TextCut.Safe(trimmed, MaxLineChars - 1), "…");
     }
 
     private DateTimeOffset Local(DateTime utc) =>
@@ -3768,11 +5273,5 @@ public sealed class WorkingDirectory
         }
 
         return StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name);
-    }
-
-    private static int CompareHits(SearchHit a, SearchHit b)
-    {
-        int byPath = StringComparer.OrdinalIgnoreCase.Compare(a.RelativePath, b.RelativePath);
-        return byPath != 0 ? byPath : a.Line.CompareTo(b.Line);
     }
 }

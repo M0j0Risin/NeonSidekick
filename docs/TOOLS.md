@@ -62,7 +62,7 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 
 * `/cmd` runs your own line through the same guards ([Your own shell line](COMMANDS.md#your-own-shell-line)).
 * Commands run hidden, with colors, pagers and input off; a line over 8,192 characters is cut.
-* A command that times out, or that you stop with Esc, stops with everything it started. A program a command opens (`code .`) stays open.
+* A command that times out, or that you stop with Esc, stops with everything it started. A program a command opens (`code .`) stays open until the app closes, even after a crash; on a Mac a crash leaves it.
 * Background commands stop when the app closes, even after a crash; `/process` lists them ([process window](INTERFACE.md#the-process-window)).
 * **On a Mac,** a daemon a command starts can slip away, and a command that asks at the terminal (a `sudo` password) fails at once.
 * **Headless,** under `ask` only allow-listed commands run, and a run that refused one exits with code 3; `--yolo` allows all ([HEADLESS.md](HEADLESS.md)).
@@ -73,7 +73,9 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script. It asks like `run_command`; allowing it for the session covers that language. |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
-* **The tool bridge:** with *Shell tool bridge* on, a script can call the app's other tools (Python `from neon_tools import call`, Node `neon.call(...)`, PowerShell `Invoke-NeonTool`) but not `execute_code` or `ask_user`. A `run_command` through it still asks, and can't run in the background.
+* **The tool bridge:** with *Shell tool bridge* on, a script can call the app's other tools (Python `from neon_tools import call`, Node `neon.call(...)`, PowerShell `Invoke-NeonTool`) but not `execute_code` or `ask_user`. A `run_command` through it still asks, and can't run in the background (nor with a timeout past the foreground cap). A call is at most 2 MB.
+* **The shell police also** refuses a line, a script it runs, an `execute_code` script or a `process` write that names `.git`, `.neon`, the project file or the app's own folder (a bare `git` command excepted); a script the line runs before it exists; and a script holding a forbidden string. Like every police rule it reads the text, not what runs.
+* **A `cmd` line with an unclosed quote** always asks, whatever the allow list holds.
 
 ### Clock
 
@@ -122,28 +124,35 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `get_working_directory` | — | The working directory's path. Called at the start of every conversation. |
 | `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex. Without `text`, lists a folder, a tree (`depth` 2–4), matching names or the newest files (the `images` folder too). |
 | `file_info` | `path` | A file's size, time, lines, words, line ending and BOM, or a folder's counts; also whether something exists. |
-| `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end). |
+| `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end), in its own encoding: UTF-8, UTF-16 or UTF-32, else Windows-1252 as a guess the header names. A line over 32,000 characters is cut, and the header says so. |
 | `read_pdf` | `path, pages?, pictures?, find?, fields?, share?` | A PDF's text page by page; `find` lists pages holding words, `pictures` sends pages as pictures, `fields` lists a form's fields ([Reading PDFs](#reading-pdfs)). |
-| `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched, unchanged since. |
-| `patch_file` | `path, old_text, new_text, replace_all?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. |
+| `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched, unchanged since. An overwrite or append keeps the file's encoding, BOM and line ending; an append stops at 8 MB. |
+| `patch_file` | `path, old_text, new_text, replace_all?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. A one-line `old_text` must match closely; an edit already made is not made twice; the result may not pass 8 MB. |
 | `create_directory` | `path` | Creates a folder and any missing parents. |
-| `move` | `from, to, overwrite?` | Renames or moves a file or folder; replaces nothing unless `overwrite`. |
-| `copy` | `from, to, overwrite?` | Copies under the same rule; a folder copied over a folder merges. |
-| `delete` | `path` | To the Recycle bin (the Trash on a Mac) under *File deletes to Recycle bin*, else for good. With no bin (a share, a removable drive) or too big for it, deleted for good. `.git`, what's in it and a folder holding one are refused. |
-| `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default. Off in a new profile. |
-| `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing. Off in a new profile. |
-| `open` | `path?, share?` | Opens a file in its own program, a picture where *Image viewer* says, or a folder in Explorer (Finder on a Mac); `share` opens one on a UNC share. |
+| `move` | `from, to, overwrite?` | Renames or moves a file or folder; replaces nothing unless `overwrite`, and says what it replaced. |
+| `copy` | `from, to, overwrite?` | Copies under the same rule; a folder copied over a folder merges. Hidden files come along; every `.git` and guarded file is left out and named. A copy that would leave under 1 GB free is refused. |
+| `delete` | `path` | To the Recycle bin (the Trash on a Mac) under *File deletes to Recycle bin*, else for good. With no bin (a share, a removable drive), deleted for good; an item the bin can't take is not deleted, and the tool says so. `.git`, what's in it and a folder holding one are refused. |
+| `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default under a free name (`overwrite` is for a named `to`). Hidden files and empty folders come along; up to 5,000 entries and 500 MB. Off in a new profile. |
+| `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing: up to 5,000 entries and 500 MB, no zip bomb. Every `.git` and guarded entry is left out and named. A downloaded archive's internet mark goes on every file, so Windows and macOS still warn. Off in a new profile. |
+| `open` | `path?, share?` | Opens a document, picture, PDF, audio, video or text file in its own program, a picture where *Image viewer* says, or a folder in Explorer (Finder on a Mac); `share` opens one on a UNC share. Programs, scripts, shortcuts, installers and unlisted types are refused; `/open` opens them. |
 | `convert_to_pdf` | `path?, url?, markdown?, title?, to?, overwrite?, landscape?, paper?` | A PDF from a file, a web page (needs *Web tools*) or Markdown ([Making PDFs](#making-pdfs)). |
 | `pdf_edit` | `action, path?, paths?, pages?, angle?, fields?, flatten?, to?, overwrite?` | Merges, extracts, deletes or rotates pages, or fills in a form, into a new PDF ([Editing PDFs](#editing-pdfs)). |
 
 * A deletion with no bin says so. In the `images` folder, `open` opens only pictures and folders; a `runas` UNC share can't be opened.
+* **Keeping a file's form:** a write in the file's own encoding that can't hold a character is refused, never written as `?`. A read-only file is never written over; a hard-linked one is written in place so its other names see it; a replace keeps the file's permissions.
+* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git` and `.neon`, the app's home and profiles, skill folders (`skill_editor` changes a skill), and a SQLite database while the SQLite tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
+* **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md` in the working directory) changes only after you allow it on the pane; with nobody to ask (headless, an advisor, a script, a pass that may not ask) it is refused.
+* **Paths:** a `~/` or `file:` path, a device name (`NUL`, `COM1`), a pipe or socket, and a working directory deleted during the session are refused; the last is never made again.
+* **Names with hidden characters** (right-to-left marks, zero-width or control characters) show them as escapes in results and the log, so a name can't disguise itself.
+* **Searching:** the first hits come back in path order, the same on every run, at most 32,000 characters in all, then a note. `text` is matched as given, its spaces kept. One file as `path` that isn't searched (too big, not text, missed by `files`) says why. `files` reads `./` and `**.cs`.
+* **Cloud files** (OneDrive's online-only ones) are listed and counted; a search leaves them unread and says how many, and reading one fetches it.
 
 #### Reading PDFs
 
 `read_pdf` reads a PDF in a headless Edge, Chrome, Brave or (on a Mac) Chromium, and refuses without one; `read_file` points to it.
 
-* **Pages:** `"3"`, `"2-5"`, `"5-"` or `"1,3,7-9"`, physical numbers (a different printed one shows beside it). Left out, it starts at page 1 with the outline; a long PDF comes back in part, naming the pages to read next.
-* **`find`** lists up to 20 pages holding every word (any case or accent). **`pictures`** sends pages as pictures (at most *File view image max images*); a saved session keeps a line naming each. **`fields`** lists a form's fields for `pdf_edit`.
+* **Pages:** `"3"`, `"2-5"`, `"5-"` or `"1,3,7-9"` (up to 100 parts), physical numbers (a different printed one shows beside it). A page past 32,000 characters is cut; `from_char` with that one page reads on. Left out, it starts at page 1 with the outline; a long read comes back in part, `next` naming what is left of the pages asked.
+* **`find`** lists up to 20 pages holding every word (any case or accent, a word split by a hyphen across lines too), searching the first 2,000 pages. **`pictures`** sends pages as pictures (at most *File view image max images*); a saved session keeps a line naming each. **`fields`** lists a form's fields for `pdf_edit`, their values cut at 1,000 characters.
 * **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean read. `share`, or a `\\server\share` path, reads a PDF on an offered UNC share in place.
 * **Kept apart:** the PDF is read in a page cut off from the network, in a profile of its own (`%TEMP%\NeonSidekick\browser-pdf`, `$TMPDIR/…` on a Mac), never the web tools' cookie profile.
 * **On the web:** `web_fetch` reads a PDF link the same way (outline and first 40 pages, up to 32 MB); `download_file` then `read_pdf` reads the rest.
@@ -152,19 +161,19 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 
 `pdf_edit` and `/pdf merge|extract|delete|rotate` change PDFs in the working directory, in the same network-less headless browser as [reading](#reading-pdfs), whatever *PDF engine* says.
 
-* **`merge`** joins `paths` in order (20 at most, 64 MB together). **`extract`** copies the given pages to a new PDF; **`delete`** makes a copy without them (never without every page). **`rotate`** turns pages by `angle` (90, 180, 270, -90), all when `pages` is left out.
+* **`merge`** joins `paths` in order (20 at most, 64 MB together). **`extract`** copies the given pages, in the order given, to a new PDF; **`delete`** makes a copy without them (never without every page). **`rotate`** turns pages by `angle` (90, 180, 270, -90), all when `pages` is left out.
 * **`fill_form`** sets `fields` by name: text, `true`/`false`, an option, or a list for a multi-choice list. An unknown name or option is refused with the real ones, and nothing is written. `flatten: true` bakes the values in; an XFA form is refused.
 * **Output:** a new PDF beside the first, named for the edit (`report-p2-5.pdf`, `a-merged.pdf`; `-2` when taken), or `to`. The original is replaced only when `to` names it with `overwrite`.
 * **Limits:** 32 MB each; a password-locked PDF is refused, never decrypted. A PDF on a UNC share must be fetched first (`unc_fetch`).
 
 ### Image
 
-Under *Image tools* (`/tools image`, or the toolbar's 🌄), apart from *File tools*; off in a new profile. They reach the working directory and, by full path, the profile's `images` folder.
+Under *Image tools* (`/tools image`, or the toolbar's 🌄), apart from *File tools*; off in a new profile. They reach the working directory and, by full path, the profile's `images` folder. Every picture sent to a model, by any tool or a paste, goes without its EXIF, GPS and XMP (the file on disk keeps them).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `view_image` | `path?, paths?` | Attaches pictures to the next message (up to *File view image max images*) for the model to see. |
-| `image_info` | `path?, paths?` | Format, size, frames, transparency, orientation and metadata (EXIF, GPS, XMP…), and what `image_edit` can write. |
+| `view_image` | `path?, paths?` | Attaches pictures to the next message (up to *File view image max images*, each once) for the model to see, without their metadata. |
+| `image_info` | `path?, paths?` | Format, size, frames, transparency, orientation and metadata (EXIF, GPS, XMP…) of up to 20 files, and what `image_edit` can write. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x?, crop_y?, crop_width?, crop_height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, rotates, recolors or converts a picture into a new file ([Editing pictures](#editing-pictures)). |
 | `set_splash_image` | `path, name?` | Copies a picture into the profile's `images\splash` for the welcome splash; the first replaces the bundled set. |
 
@@ -172,10 +181,10 @@ Under *Image tools* (`/tools image`, or the toolbar's 🌄), apart from *File to
 
 `image_edit` uses the system's codecs and encodes once, so a JPEG loses quality once.
 
-* **Size:** `width` and/or `height`, or `scale`; with both, `fit` is `contain`, `cover` (cut at `anchor`), `pad`, `stretch` or `shrink`. A crop needs all four `crop_*`; `rotate` is 90, 180 or 270; `filter` is `gray`, `sepia`, `negative` or `polaroid`.
+* **Size:** `width` and/or `height`, or `scale`; with both, `fit` is `contain`, `cover` (cut at `anchor`), `pad`, `stretch` or `shrink`. A crop needs all four `crop_*`; `rotate` is a quarter turn (90, 180, 270, or -90); `filter` is `gray`, `sepia`, `negative` or `polaroid`. Colors are names, `#rgb`, `#rrggbb` or `#rrggbbaa`.
 * **Formats:** writes PNG, JPEG, GIF, BMP and TIFF (JPEG XL and HEIF with Windows' extensions); WebP and AVIF read only. A Mac's: [MAC.md](MAC.md#what-works).
-* **`max_kb`** lowers the quality, then the size, until it fits. **Metadata** is dropped unless kept (*Image edit metadata*, or `metadata`); `metadata: none` alone strips EXIF (GPS too) and XMP without re-encoding.
-* **Output:** `photo-edited.png` beside the source (or in *Image edit output folder*), or `to`; an existing file only with `overwrite`, the source under *Image edit mode*.
+* **`max_kb`** (1 KB = 1,000 bytes) lowers the quality, then the size, until it fits. **Metadata** is dropped unless kept (*Image edit metadata*, or `metadata`); `metadata: none` alone strips EXIF (GPS too), XMP and a JPEG's own thumbnail without re-encoding, keeping the orientation. A PNG's or WebP's orientation is applied first.
+* **Output:** `photo-edited.png` beside the source (or in *Image edit output folder*) under a free name (`-2`, `-3`…), or a named `to`, which replaces a file only with `overwrite`; the source itself under *Image edit mode*, a replaced one to the Recycle bin when that setting is on.
 * **Limits:** 200 MB and 100 megapixels in; 32,768 pixels a side and 100 megapixels out.
 
 ### UNC shares and outside folders
@@ -184,11 +193,11 @@ Under *UNC tools*. They reach named network shares (`\\server\share`, or a folde
 
 * **Setting up:** shares live in `unc.json`, in the home's or profile's `configs` folder like the [database connections](#managing-connections).
 * *UNC add/edit share* adds and tests one, *UNC set password* changes a password, *UNC shares offered* picks what the model sees.
-* **Changes need two keys:** *UNC writes* on **and** the share's `access` `readwrite`; only then do the changing tools appear. Changes are permanent (no trash) and logged; `unc_delete` starts off even then.
+* **Changes need two keys:** *UNC writes* on **and** the share's `access` `readwrite`; only then do the changing tools appear. Changes are permanent (no trash) and logged, one that failed partway too; `unc_delete` starts off even then.
 * **Signing in:** `windows` uses what your sign-in has for that server (a mapped drive, a `cmdkey` entry); `runas` signs in fresh each call. Use server names, not IP addresses. The shell can't use a `runas` sign-in: `unc_fetch` the file instead.
 * **`path`** (required): a share, a folder under one or a full local path, never a whole drive. In JSON double the backslashes or use `/`.
 * **`auth`** `windows` (default) or `runas`, with **`user`** (`DOMAIN\name` or `name@domain`) and **`passwordStore`** `file` or `credman` (`NeonSidekick/unc/<share_name>`). **`access`** `read` (default) or `readwrite`; **`description`** for the model.
-* Paths stay under the share's root; a DFS link's target needs its own share.
+* Paths stay under the share's root; a DFS link's target needs its own share. A name given twice in one file (ignoring case) loads neither entry.
 
 ```json
 {
@@ -206,12 +215,12 @@ Under *UNC tools*. They reach named network shares (`\\server\share`, or a folde
 | `unc_search` | `share?, text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | `search_files` on a share. |
 | `unc_info` | `share?, path?` | A file's size, dates, lines and words, or a folder's counts. |
 | `unc_read` | `share?, path, start_line?, max_lines?` | Reads a text file, whole or in part. |
-| `unc_fetch` | `share?, path, to?, overwrite?` | Copies into the working directory (needs *File tools*), up to 5,000 files and 500 MB. |
+| `unc_fetch` | `share?, path, to?, overwrite?` | Copies into the working directory (needs *File tools*), up to 5,000 files and 500 MB. Esc stops a folder's copy between files and takes back what it copied. |
 | `unc_write` | `share?, path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. |
 | `unc_patch` | `share?, path, old_text, new_text, replace_all?` | Changes part of a text file. |
 | `unc_create_directory` | `share?, path` | Creates a folder. |
 | `unc_move` / `unc_copy` | `share?, from, to, overwrite?` | Moves, renames or copies within one share. |
-| `unc_delete` | `share?, path` | Deletes a file or folder for good. Off by default. |
+| `unc_delete` | `share?, path` | Deletes a file or folder: for good on a network share; an outside folder on this PC uses the Recycle bin under *File deletes to Recycle bin*. Off by default. |
 | `unc_put` | `from, share?, to?, overwrite?` | Copies from the working directory onto a share (needs *File tools*), up to 5,000 files and 500 MB. |
 
 `share` may be left out for a full path or a single share. `--unc-check <share>` tests a share.
@@ -219,9 +228,9 @@ Under *UNC tools*. They reach named network shares (`\\server\share`, or a folde
 #### UNC shares on a Mac
 
 * **Paths:** `smb://server/share`, `\\server\share` and `//server/share` read the same, so one `unc.json` serves both. A local folder is a full path; a drive path is skipped.
-* **The mount:** a share is mounted on first use, hidden from Finder and **read-only** for `access: read`, and unmounted at exit (or at the next start after a crash).
+* **The mount:** a share is mounted on first use, hidden from Finder and **read-only** unless a change is being made, and unmounted at exit (or at the next start after a crash). A `runas` share's writable mount goes when the change ends.
 * **While mounted, anything you run can read the share.** Only the shell police keeps the model's shell off it, and it reads only the paths written in a command.
-* **Signing in:** as you, it uses your Kerberos ticket or a Keychain password Finder saved; `runas` mounts as the account (`name@REALM` or `DOMAIN\name`) with its stored password.
+* **Signing in:** as you, it uses your Kerberos ticket or a Keychain password Finder saved; `runas` mounts as the account (`name@REALM` or `DOMAIN\name`) with its stored password. A share already mounted is used as you only when it is your own mount, signed in as you.
 
 ### GitLib
 
@@ -396,7 +405,7 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says:
 
 ### Obsidian
 
-Under *Obsidian tools*, on the vault *Obsidian vault* names, working on its files directly (Obsidian needn't run). Notes are found by name, `[[wikilink]]`, alias or path.
+Under *Obsidian tools*, on the vault *Obsidian vault* names, working on its files directly (Obsidian needn't run). Notes are found by name, `[[wikilink]]`, alias or path, as Obsidian resolves a link: the linking note's own folder first, `./` and `../` from it.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -404,11 +413,14 @@ Under *Obsidian tools*, on the vault *Obsidian vault* names, working on its file
 | `vault_list` | `what?, folder?, tag?, property?, value?, max_results?` | Notes by folder, tag or property (`status: draft`), or every tag or property key with its count. |
 | `vault_read` | `note, heading?, start_line?, max_lines?` | A note with its properties, one heading's section, or a window of lines. |
 | `vault_links` | `note` | The note's links and embeds, and every backlink. |
-| `vault_daily` | `date?, append?` | The daily note for a day (`today`, `+3`, `2026-09-22`), made from the vault's template if missing; `append` adds to it. |
+| `vault_daily` | `date?, append?` | The daily note for a day (`today`, `+3`, `2026-09-22`), made from the vault's template if missing; `append` adds to it. Periodic Notes' daily settings win while it makes the daily notes. |
 | `vault_write` | `note, content, mode?, heading?` | `create`, `overwrite`, `append` or `prepend`, to the note or one heading's section. |
 | `vault_properties` | `note, set?, remove?` | Lists, sets or removes properties in one write; only the named keys change. |
-| `vault_move` | `note, to` | Renames or moves a note and rewrites every link to it. |
-| `vault_delete` | `note` | Moves a note or attachment (never a folder) to the vault's `.trash`, only while *Obsidian allow delete (.trash)* is on. |
+| `vault_move` | `note, to` | Renames or moves a note and rewrites every link to it, in properties and canvases too; a move that fails puts the rewritten notes back. |
+| `vault_delete` | `note` | Moves a note or attachment (never a folder) where the vault's *Deleted files* setting says: the system's bin or the vault's `.trash`, never deleted for good. Only while *Obsidian allow delete (.trash)* is on. |
+
+* **Changes find their note strictly:** a write, move, delete or property change takes a path as written or a name, never an alias, and asks for the path when several notes share the name.
+* **Limits:** 200,000 characters a write, 2 MB a note; a link or value shows 200 characters, a result 32,000. A link never resolves by an alias, as in Obsidian.
 
 ## Admin
 
@@ -879,10 +891,11 @@ Under *Print tools*. `/print` and these tools print on any installed printer; *P
 
 `/pdf` and `convert_to_pdf` make a PDF in the working directory.
 
-* **Sources:** Markdown (pictures from the working directory only), text and code, a picture, an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF is refused, pointing to `read_pdf`, `pdf_edit`, `web_fetch` or `download_file`.
-* **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`; a web page keeps its own layout.
+* **Sources:** Markdown (pictures from the working directory only), text and code, a picture (PNG, JPEG, GIF, WebP, BMP or SVG; convert HEIC or TIFF with `image_edit` first), an HTML file (scripts removed), or a web page (when *Web browser network mode* allows it). A PDF, or an address serving one, is refused, pointing to `read_pdf`, `pdf_edit`, `web_fetch` or `download_file`.
+* **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`, an HTML file's own page size overridden; a web page keeps its own layout. A PDF made over 100 MB is not kept.
+* **What a print reaches:** a web page only its own host, at the address *Web browser network mode* approved; a redirect, frame or picture elsewhere (a CDN) prints missing. A file's page reaches no network. The Browser window's print after a bot check is not held this way.
 * **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium. Without one, Microsoft Print to PDF draws Markdown, text and pictures in black and white (Windows only).
-* **Output:** beside the source (`example.com-intro.pdf` for a page), or `to`; an existing PDF only with `overwrite`. A page behind a bot check goes to [the Browser window](#the-browser-window), which prints the page you let through.
+* **Output:** beside the source (`example.com-intro.pdf` for a page) under a free name (`-2`, `-3`…), or a named `to`, which replaces a PDF only with `overwrite`. A page behind a bot check goes to [the Browser window](#the-browser-window), which prints the page you let through.
 
 ## Home
 

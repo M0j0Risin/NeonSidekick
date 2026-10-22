@@ -68,7 +68,7 @@ public sealed class BridgeServer : IAsyncDisposable
     /// app's memory as long as it wrote); room for a large <c>write_file</c>. Past it the call is answered
     /// <see cref="ShellText.RequestTooLarge"/> and the connection closed. Pinned.
     /// </summary>
-    public const int MaxRequestBytes = 32 * 1024 * 1024;
+    public const int MaxRequestBytes = 2 * 1024 * 1024;
 
     /// <summary>
     /// The most connections served at once (2026-10-19, the code review): the per-request <see cref="MaxRequestBytes"/> cap bounds one
@@ -130,14 +130,14 @@ public sealed class BridgeServer : IAsyncDisposable
                 return;
             }
 
-            // A slot per in-flight connection (2026-10-19): a flood past the cap waits here rather than buffering, and a connection that
-            // never frees its slot within the read timeout is dropped below, so the held memory and the open count both stay bounded.
+            // A slot per in-flight connection (2026-10-19), taken now or the connection told the bridge is busy (2026-10-22, review F7: the
+            // loop waited up to the read timeout for a slot, accepting nobody, and the waiting client sat unserved).
             bool got;
             try
             {
-                got = await _slots.WaitAsync(ReadTimeout, _stop.Token).ConfigureAwait(false);
+                got = _slots.Wait(0);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+            catch (ObjectDisposedException)
             {
                 client.Dispose();
                 return;
@@ -145,11 +145,30 @@ public sealed class BridgeServer : IAsyncDisposable
 
             if (!got)
             {
-                client.Dispose();
+                _ = BusyAsync(client);
                 continue;
             }
 
             _ = ServeAsync(client);
+        }
+    }
+
+    /// <summary>A connection past the slots: answered busy and closed, never waited on (review F7).</summary>
+    private async Task BusyAsync(TcpClient client)
+    {
+        using (client)
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
+                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                byte[] bytes = Encoding.UTF8.GetBytes(Serialize(new BridgeResponse { Error = ShellText.BridgeBusy }) + "\n");
+                await client.GetStream().WriteAsync(bytes, timeout.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or SocketException or InvalidOperationException)
+            {
+                // Gone already: nothing to tell.
+            }
         }
     }
 
@@ -200,6 +219,13 @@ public sealed class BridgeServer : IAsyncDisposable
     public async Task<BridgeResponse> AnswerAsync(string line, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(line);
+        // The call cap before the line is parsed (2026-10-22, review F3: a line was parsed whole, and only then counted), for a line that
+        // leads with this run's token: a stranger still hears that the token is wrong.
+        if (Volatile.Read(ref _calls) >= _maxCalls && LeadsWithToken(Encoding.UTF8.GetBytes(line.Length <= PreAuthBytes ? line : line[..PreAuthBytes])))
+        {
+            return new BridgeResponse { Error = ShellText.ToolCallLimit(_maxCalls) };
+        }
+
         BridgeRequest? request;
         try
         {

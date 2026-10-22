@@ -519,7 +519,7 @@ The tools most profiles use, and the pane's own options.
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks first) or `yolo` (everything runs). See [Shell guards](#shell-guards). | `off` |
 | Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow â€¦ always* adds one. The list can remove one or step the policy ([Pane keys](INTERFACE.md#pane-keys)). | empty |
-| Shell police | Refuses a command, script or process input that names a path outside the working directory. Turning it off asks first, and also stops the forbidden strings and the database rules. | on |
+| Shell police | Refuses a command, script or process input that names a path outside the working directory, or `.git`, `.neon`, the project file or the app's folder. Turning it off asks first, and also stops the forbidden strings and the database rules. | on |
 | Shell police forbidden strings | Strings the police refuses outright, ignoring case and spacing. A new profile starts with a list of harmful actions; `r` restores it. `/profile push policestrings` copies the list. | the starter list |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers, once a turn. | on |
 | Shell default shell | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd` or `bash` (Git Bash). On a Mac: `zsh`, `bash` or `powershell`. | `powershell` (`zsh` on a Mac) |
@@ -703,7 +703,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` â
 |---|---|---|
 | Obsidian tools | Offers the vault tools (search, list, read, links, daily, write, properties, move) once a vault is set. | off |
 | Obsidian vault | The vault's folder (the one holding `.obsidian`), separate from the working directory. | empty |
-| Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment into the vault's `.trash`. | on |
+| Obsidian allow delete (.trash) | Offers `vault_delete`, which moves a note or attachment to the system's bin or the vault's `.trash`, as the vault's *Deleted files* setting says. | on |
 
 ### Admin
 

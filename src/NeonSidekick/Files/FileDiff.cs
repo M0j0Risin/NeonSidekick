@@ -33,8 +33,10 @@ public sealed record FileDiff(string Path, bool Created, IReadOnlyList<UnifiedDi
     /// <summary>
     /// An append's diff (<c>write_file</c> mode append): <paramref name="appended"/> as added lines after the
     /// <paramref name="oldLines"/> the file held, with no context — the file's head is not read for it. Null for nothing added.
+    /// <paramref name="existed"/> says whether the file was there (2026-10-22, review M11: an append to an empty file that was there read as
+    /// created, its line count being 0).
     /// </summary>
-    public static FileDiff? Appended(string path, int oldLines, string appended)
+    public static FileDiff? Appended(string path, int oldLines, string appended, bool existed = true)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(appended);
@@ -45,6 +47,6 @@ public sealed record FileDiff(string Path, bool Created, IReadOnlyList<UnifiedDi
         }
 
         var lines = added.Select(l => "+" + l).ToList();
-        return new FileDiff(path, oldLines == 0, [new UnifiedDiff.Hunk(oldLines + 1, 0, oldLines + 1, added.Count, lines)], added.Count, 0);
+        return new FileDiff(path, !existed, [new UnifiedDiff.Hunk(oldLines + 1, 0, oldLines + 1, added.Count, lines)], added.Count, 0);
     }
 }

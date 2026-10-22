@@ -443,11 +443,19 @@ public sealed class WebFetcher
     /// is asked. The socket (<see cref="LanPolicy.ConnectAsync"/>) judges again on what it connects to. Public since 2026-10-03:
     /// <c>convert_to_pdf</c> asks it before the browser prints a web page, the one check that path gets.
     /// </summary>
-    public async Task<FetchOutcome?> PreflightAsync(string host, FetchOptions options, CancellationToken cancellationToken)
+    public async Task<FetchOutcome?> PreflightAsync(string host, FetchOptions options, CancellationToken cancellationToken) =>
+        (await AdmitAsync(host, options, cancellationToken).ConfigureAwait(false)).Refused;
+
+    /// <summary>
+    /// <see cref="PreflightAsync"/>'s judgement with the addresses it approved (2026-10-22, review R1: <c>convert_to_pdf</c> pins the print
+    /// to them, <see cref="PrintReach"/>): null addresses under <c>both</c> (nothing judged, nothing pinned), none for a private spelling or
+    /// a name that did not resolve.
+    /// </summary>
+    public async Task<(FetchOutcome? Refused, IReadOnlyList<IPAddress>? Addresses)> AdmitAsync(string host, FetchOptions options, CancellationToken cancellationToken)
     {
         if (options.Reach == NetworkReach.Both)
         {
-            return null;
+            return (null, null);
         }
 
         IReadOnlyList<IPAddress> addresses;
@@ -469,16 +477,17 @@ public sealed class WebFetcher
             }
             catch (SocketException)
             {
-                return null;
+                return (null, []);
             }
             catch (ArgumentException)
             {
-                return null;
+                return (null, []);
             }
         }
 
         // The judgement is LanPolicy.Admit's since later on 2026-10-15 (the admin-tools plan), the network tools' too.
-        FetchOutcome? refused = LanPolicy.Admit(host, addresses, options.Reach).Refusal switch
+        var admission = LanPolicy.Admit(host, addresses, options.Reach);
+        FetchOutcome? refused = admission.Refusal switch
         {
             NetworkRefusal.Lan => FetchOutcome.LanRefused,
             NetworkRefusal.Internet => FetchOutcome.InternetRefused,
@@ -489,7 +498,7 @@ public sealed class WebFetcher
             DiagnosticLog.Info(Category, RefusedLogLine(host, outcome, options.Reach));
         }
 
-        return refused;
+        return (refused, admission.Addresses);
     }
 
     /// <summary>A host the network mode refused ahead of the request: <c>Refused 10.0.0.5: a LAN address under internet</c>. Pinned.</summary>

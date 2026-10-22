@@ -274,12 +274,36 @@ public sealed class ShellRunnerTests : IDisposable
             Assert.True(registry.Close(background));
             Assert.True(await GoneAsync(left), "the background command's leftover outlived its session");
 
-            var foreground = _runner.Start(Zsh("zsh ./orphan3.sh"), "run_000013");
-            foreground.CloseInput();
-            opened = await OrphanPidAsync("orphan3");
-            await ExitAsync(foreground);
-            foreground.Dispose();
-            Assert.False(await GoneQuicklyAsync(opened));   // a foreground command's leftover lives on
+            // The foreground group stays tracked after its leader's reap (2026-10-22, review F2), so the exit's kill reaches the leftover.
+            var groups = OperatingSystem.IsMacOS() ? new ShellGroups(Path.Combine(_dir, "records"), guardExecutable: null) : null;
+            var previous = OperatingSystem.IsMacOS() ? ShellGroups.Current : null;
+            if (OperatingSystem.IsMacOS())
+            {
+                ShellGroups.Current = groups;
+            }
+
+            try
+            {
+                var foreground = _runner.Start(Zsh("zsh ./orphan3.sh"), "run_000013");
+                foreground.CloseInput();
+                opened = await OrphanPidAsync("orphan3");
+                await ExitAsync(foreground);
+                foreground.Dispose();
+                Assert.False(await GoneQuicklyAsync(opened));   // a foreground command's leftover lives on
+                if (OperatingSystem.IsMacOS())
+                {
+                    Assert.NotEmpty(groups!.Tracked);
+                    groups.KillTracked();
+                    Assert.True(await GoneAsync(opened), "the foreground command's leftover outlived the app's exit kill");
+                }
+            }
+            finally
+            {
+                if (OperatingSystem.IsMacOS())
+                {
+                    ShellGroups.Current = previous;
+                }
+            }
         }
         finally
         {
@@ -406,10 +430,11 @@ public sealed class ShellRunnerTests : IDisposable
         await ExitAsync(foreground);
         foreground.Dispose();
         Assert.False(await GoneQuicklyAsync(opened));   // a foreground command's leftover lives on
-        using (var process = System.Diagnostics.Process.GetProcessById(opened))
-        {
-            process.Kill();
-        }
+
+        // ...until the app ends (2026-10-22, review F1, the fix plan's D9): its kill-on-close job is kept, and its close is the exit's.
+        Assert.True(NeonSidekick.EmbeddedLlm.ChildJob.KeptCount > 0);
+        NeonSidekick.EmbeddedLlm.ChildJob.CloseKept();
+        Assert.True(await GoneAsync(opened), "the foreground command's leftover outlived the app's end");
     }
 
     private static async Task<bool> GoneQuicklyAsync(int pid)

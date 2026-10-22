@@ -21,7 +21,7 @@ public sealed class UncDeleteTool : UncTool
           "type": "object",
           "properties": {
             "share": { "type": "string", "description": "The share's name (unc_shares lists them); it may be left out only when there is one share, or when path is a full \\\\server\\share path or a folder under one." },
-            "path": { "type": "string", "description": "The file or folder to delete for good, relative to the share (or a full path under it)." }
+            "path": { "type": "string", "description": "The file or folder to delete, relative to the share (or a full path under it)." }
           },
           "required": ["path"]
         }
@@ -34,7 +34,8 @@ public sealed class UncDeleteTool : UncTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Deletes a file or folder, with everything in it, on one of the user's read-write network shares (or outside folders). It is gone for good: there is no trash on a share and no way back. " +
+        // A local outside folder's delete goes to the Recycle bin too since 2026-10-22 (review W4); a network share has none.
+        "Deletes a file or folder, with everything in it, on one of the user's read-write network shares (or outside folders). On a network share it is gone for good: there is no trash there and no way back; an outside folder on this PC uses the " + FileText.RecycleBinName + " when the user's setting says so, and the result says which. " +
         "Only when the user asks for exactly this deletion.";
 
     public override JsonElement JsonSchema => Schema;
@@ -51,7 +52,7 @@ public sealed class UncDeleteTool : UncTool
         return await WriteAsync(ReadShare(arguments), path, "deleted", (files, relative) =>
         {
             var deleted = files.Delete(relative);
-            return (FileText.Deleted(deleted), deleted.Outcome == FileOutcome.Ok);
+            return new UncChange(FileText.Deleted(deleted), deleted.Outcome == FileOutcome.Ok, Partial: deleted.Outcome == FileOutcome.Failed);
         }, cancellationToken).ConfigureAwait(false);
     }
 }

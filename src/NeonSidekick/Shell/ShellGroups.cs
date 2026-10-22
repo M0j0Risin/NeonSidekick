@@ -95,6 +95,12 @@ public sealed class ShellGroups
     {
         lock (_lock)
         {
+            // A foreground group kept after its leader (2026-10-22, review F2) is forgotten once nothing in it runs.
+            foreach (int kept in _tracked.Where(t => t.Value is null && t.Key != pgid && !ShellGuard.GroupAlive(t.Key)).Select(t => t.Key).ToList())
+            {
+                _tracked.Remove(kept);
+            }
+
             _tracked[pgid] = null;
             if (!watched)
             {

@@ -75,7 +75,9 @@ public sealed class ImageToolsTests : IDisposable
             Edit.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name));
         Assert.Equal(["path"], Edit.JsonSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.All(Edit.JsonSchema.GetProperty("properties").EnumerateObject(), p => Assert.False(string.IsNullOrWhiteSpace(p.Value.GetProperty("description").GetString())));
-        Assert.Equal([0, 90, 180, 270], Edit.JsonSchema.GetProperty("properties").GetProperty("rotate").GetProperty("enum").EnumerateArray().Select(e => e.GetInt32()));
+        // No enum since 2026-10-22 (review T7: the code takes -90 and 450 too): the description says a quarter turn.
+        Assert.False(Edit.JsonSchema.GetProperty("properties").GetProperty("rotate").TryGetProperty("enum", out _));
+        Assert.Equal(360, Edit.JsonSchema.GetProperty("properties").GetProperty("hue").GetProperty("maximum").GetInt32());
         Assert.Equal(ImageFormats.All.Select(f => f.Name), Edit.JsonSchema.GetProperty("properties").GetProperty("format").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
         Assert.Contains("never write a script", ImageEditTool.DescriptionText);
         Assert.Contains("in this order: crop, resize, rotate, flip, color, blur, border", ImageEditTool.DescriptionText);
@@ -91,6 +93,10 @@ public sealed class ImageToolsTests : IDisposable
 
         Assert.Matches(@"^wrote photos[/\\]cat-edited\.bmp \(BMP, 20×10 from 40×20, [\d.]+ [KB ]+\)$", first);
         Starts(Rel("wrote photos/cat-edited-2.bmp") + " (BMP, 20×10 from 40×20, ", second);
+        Assert.Equal((20, 10, "image/bmp"), ImageFixtures.Size(Get("photos/cat-edited.bmp")));
+
+        // overwrite with no to still takes the next free name (2026-10-22, review G9: it replaced the earlier edit).
+        Starts(Rel("wrote photos/cat-edited-3.bmp"), await Text(Edit, ("path", "photos/cat.bmp"), ("width", 10), ("overwrite", true)));
         Assert.Equal((20, 10, "image/bmp"), ImageFixtures.Size(Get("photos/cat-edited.bmp")));
     }
 

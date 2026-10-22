@@ -55,10 +55,14 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
         return Task.FromResult(Html is null ? new BrowserDump(null, Failure) : new BrowserDump(Html, "", FinalUrl, Cookies.ToList()));
     }
 
-    public Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken)
+    /// <summary>Each print's reach (2026-10-22, review R1), in run order.</summary>
+    public List<PrintReach?> PdfReaches { get; } = [];
+
+    public Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, PrintReach? reach, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         PdfRuns.Add((page, outputPath));
+        PdfReaches.Add(reach);
         if (page.IsFile && File.Exists(page.LocalPath))
         {
             PdfPages.Add(File.ReadAllText(page.LocalPath));

@@ -185,7 +185,8 @@ public static class ImageColor
     };
 
     /// <summary>
-    /// A colour as the model writes one: <c>#rgb</c>, <c>#rrggbb</c>, <c>#aarrggbb</c> (the <c>#</c> optional) or a name of
+    /// A colour as the model writes one: <c>#rgb</c>, <c>#rrggbb</c>, <c>#rrggbbaa</c> (CSS's order, 2026-10-22, review R9: it was read as
+    /// <c>#aarrggbb</c>, the alpha and channels swapped; the <c>#</c> optional) or a name of
     /// <see cref="Names"/>. Built with <see cref="Color.FromArgb(int, int, int, int)"/>, never a known colour, so equality is by value. Pure.
     /// </summary>
     public static bool TryParseColor(string text, out Color colour)
@@ -208,7 +209,7 @@ public static class ImageColor
         {
             3 => Color.FromArgb(255, (int)((n >> 8) & 0xF) * 17, (int)((n >> 4) & 0xF) * 17, (int)(n & 0xF) * 17),
             6 => Color.FromArgb(255, (int)((n >> 16) & 0xFF), (int)((n >> 8) & 0xFF), (int)(n & 0xFF)),
-            _ => Color.FromArgb((int)(n >> 24), (int)((n >> 16) & 0xFF), (int)((n >> 8) & 0xFF), (int)(n & 0xFF)),
+            _ => Color.FromArgb((int)(n & 0xFF), (int)(n >> 24), (int)((n >> 16) & 0xFF), (int)((n >> 8) & 0xFF)),
         };
         return true;
     }

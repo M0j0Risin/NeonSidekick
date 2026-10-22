@@ -5,8 +5,16 @@ using NeonSidekick.Web;
 
 namespace NeonSidekick.Pdf;
 
-/// <summary>A PDF's identity for the cache: the file's full path, length and last write (<see cref="WorkingDirectory.TryStamp"/>).</summary>
-public sealed record PdfDocKey(string Full, long Length, DateTime Written);
+/// <summary>
+/// A PDF's identity for the cache: the file's full path, length and last write (<see cref="WorkingDirectory.TryStamp"/>), and who reads it
+/// (<paramref name="Reader"/>: empty for the working directory, a UNC share's name and account for a share — 2026-10-22, review M3: a
+/// share's account that could only see the file's size and time was answered with text another account had read).
+/// </summary>
+public sealed record PdfDocKey(string Full, long Length, DateTime Written, string Reader = "")
+{
+    /// <summary>The cache's slot: the reader and the path.</summary>
+    public string Slot => Reader.Length == 0 ? Full : Reader + "\n" + Full;
+}
 
 /// <summary>
 /// What a read asks for: <see cref="Pages"/> (physical numbers; null = the first <see cref="MaxPages"/>), every page with
@@ -63,15 +71,28 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
 
     private readonly Func<string?> _executable = executable ?? throw new ArgumentNullException(nameof(executable));
     private readonly Dictionary<string, Document> _documents = new(PathComparer);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(PathComparer);
+    private readonly Dictionary<string, Gate> _gates = new(PathComparer);
     private readonly Lock _lock = new();
     private long _tick;
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private sealed class Document(PdfDocKey key)
+    /// <summary>One document's read lock and how many callers hold or wait on it (2026-10-22, review K13: a gate per path was never let go).</summary>
+    private sealed class Gate
+    {
+        public SemaphoreSlim Lock { get; } = new(1, 1);
+        public int Users { get; set; }
+    }
+
+    private sealed class Document(PdfDocKey key, string display)
     {
         public PdfDocKey Key { get; } = key;
+
+        /// <summary>The path as the logs name it (2026-10-22, review T11: the eviction line logged the full path).</summary>
+        public string Display { get; } = display;
+
+        /// <summary>A SHA-256 of the bytes its pages were read from (2026-10-22, review Q12): pages of two versions never mix.</summary>
+        public string? Hash { get; set; }
         public int PageCount { get; set; } = -1;
         public Dictionary<int, string> Texts { get; } = [];
         public IReadOnlyList<PdfOutlineItem>? Outline { get; set; }
@@ -80,6 +101,18 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         public bool PureXfa { get; set; }
         public long Chars { get; set; }
         public long Used { get; set; }
+    }
+
+    /// <summary>The read locks held now (for the tests: none once every read is done, review K13).</summary>
+    public int Gates
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _gates.Count;
+            }
+        }
     }
 
     /// <summary>The documents held now (for the tests).</summary>
@@ -104,8 +137,27 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         ArgumentNullException.ThrowIfNull(display);
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(ask);
-        var gate = _gates.GetOrAdd(key.Full, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Gate gate;
+        lock (_lock)
+        {
+            if (!_gates.TryGetValue(key.Slot, out gate!))
+            {
+                _gates[key.Slot] = gate = new Gate();
+            }
+
+            gate.Users++;
+        }
+
+        try
+        {
+            await gate.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            LetGo(key.Slot, gate);
+            throw;
+        }
+
         try
         {
             var held = Take(key);
@@ -131,8 +183,9 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
                 return Fail(PdfText.NotAPdf(display));
             }
 
+            // Every page for find, but no more than one read's (2026-10-22, review M8: it was int.MaxValue, a 300,000-page PDF read whole).
             var options = new PdfReadOptions(
-                MaxPages: plan.Unknown && ask.AllPages ? int.MaxValue : ask.MaxPages,
+                MaxPages: plan.Unknown && ask.AllPages ? MaxPagesPerRead : ask.MaxPages,
                 Pictures: false,
                 Pages: plan.Unknown && ask.Pages is null ? null : [.. plan.Pages.Union(ask.PicturePages).Order()],
                 PicturePages: ask.PicturePages,
@@ -150,13 +203,26 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
                 return Fail(PdfText.ReadFailed(display, read.Detail));
             }
 
-            var document = Keep(key, read);
+            var document = Keep(key, display, read, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data)));
             var pictures = read.Pages.Where(p => p.Png is not null).ToList();
             return Answer(document, pictures, read.Detail);   // a document over MaxChars alone is not held (Keep)
         }
         finally
         {
-            gate.Release();
+            gate.Lock.Release();
+            LetGo(key.Slot, gate);
+        }
+    }
+
+    /// <summary>One caller done with <paramref name="gate"/>; the last lets it go (review K13).</summary>
+    private void LetGo(string slot, Gate gate)
+    {
+        lock (_lock)
+        {
+            if (--gate.Users == 0 && _gates.TryGetValue(slot, out var current) && ReferenceEquals(current, gate))
+            {
+                _gates.Remove(slot);
+            }
         }
     }
 
@@ -172,7 +238,7 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         }
 
         IEnumerable<int> wanted = ask.AllPages
-            ? Enumerable.Range(1, held.PageCount)
+            ? Enumerable.Range(1, Math.Min(held.PageCount, MaxPagesPerRead))
             : ask.Pages is { } pages ? pages.Where(p => p <= held.PageCount) : Enumerable.Range(1, Math.Min(held.PageCount, ask.MaxPages));
         return ([.. wanted.Where(p => !held.Texts.ContainsKey(p))], false, outline, labels, fields);
     }
@@ -181,14 +247,14 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
     {
         lock (_lock)
         {
-            if (!_documents.TryGetValue(key.Full, out var document))
+            if (!_documents.TryGetValue(key.Slot, out var document))
             {
                 return null;
             }
 
             if (document.Key != key)
             {
-                _documents.Remove(key.Full);   // the file changed: read again
+                _documents.Remove(key.Slot);   // the file changed: read again
                 return null;
             }
 
@@ -197,16 +263,19 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
         }
     }
 
-    private Document Keep(PdfDocKey key, PdfRead read)
+    private Document Keep(PdfDocKey key, string display, PdfRead read, string hash)
     {
         lock (_lock)
         {
-            if (!_documents.TryGetValue(key.Full, out var document) || document.Key != key)
+            // Pages read from other bytes than those held start the document again (review Q12: two versions in one tick, or a file rewritten
+            // between its stamp and its read, mixed their pages).
+            if (!_documents.TryGetValue(key.Slot, out var document) || document.Key != key || (document.Hash is { } held && held != hash))
             {
-                document = new Document(key);
-                _documents[key.Full] = document;
+                document = new Document(key, display);
+                _documents[key.Slot] = document;
             }
 
+            document.Hash = hash;
             document.PageCount = read.PageCount;
             foreach (var page in read.Pages)
             {
@@ -219,12 +288,24 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
                 document.Chars += page.Text.Length;
             }
 
-            document.Outline ??= read.Outline;
-            document.Labels ??= read.Labels;
+            // The outline, labels and fields count with the text (2026-10-22, review S3: only the pages' text was counted against MaxChars).
+            if (document.Outline is null && read.Outline is not null)
+            {
+                document.Outline = read.Outline;
+                document.Chars += read.Outline.Sum(o => (long)o.Title.Length);
+            }
+
+            if (document.Labels is null && read.Labels is not null)
+            {
+                document.Labels = read.Labels;
+                document.Chars += read.Labels.Sum(l => (long)(l?.Length ?? 0));
+            }
+
             if (document.Fields is null && read.Fields is not null)
             {
                 document.Fields = read.Fields;   // a form filled is a new file, a new stamp: read again (gap 98)
                 document.PureXfa = read.PureXfa;
+                document.Chars += read.Fields.Sum(f => (long)f.Name.Length + f.Value.Length + f.Options.Sum(o => o.Length));
             }
 
             document.Used = ++_tick;
@@ -232,11 +313,11 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
             {
                 // Over the limit alone: answered, not kept (the plan's gap 93), and taken out before Evict would let every other
                 // document go to make room for it (2026-10-20, review).
-                _documents.Remove(key.Full);
+                _documents.Remove(key.Slot);
                 return document;
             }
 
-            Evict(key.Full);
+            Evict(key.Slot);
             return document;
         }
     }
@@ -246,14 +327,14 @@ public sealed class PdfReading(IHeadlessBrowser? browser, Func<string?> executab
     {
         while (_documents.Count > MaxDocuments || _documents.Values.Sum(d => d.Chars) > MaxChars)
         {
-            var oldest = _documents.Values.Where(d => !PathComparer.Equals(d.Key.Full, keep)).MinBy(d => d.Used);
+            var oldest = _documents.Values.Where(d => !PathComparer.Equals(d.Key.Slot, keep)).MinBy(d => d.Used);
             if (oldest is null)
             {
                 return;
             }
 
-            _documents.Remove(oldest.Key.Full);
-            DiagnosticLog.Debug(PdfText.Category, $"read_pdf's cache let {oldest.Key.Full} go ({oldest.Chars.ToString(System.Globalization.CultureInfo.InvariantCulture)} characters).");
+            _documents.Remove(oldest.Key.Slot);
+            DiagnosticLog.Debug(PdfText.Category, $"read_pdf's cache let {oldest.Display} go ({oldest.Chars.ToString(System.Globalization.CultureInfo.InvariantCulture)} characters).");
         }
     }
 

@@ -303,7 +303,8 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
 
         Assert.Equal(FileOutcome.Ok, _files.Delete(P(@"repo/readme.md")).Outcome);   // a file beside a .git is the user's own
         Assert.Equal(FileOutcome.Ok, _files.Delete(P("plain")).Outcome);
-        Assert.Equal($@"Error: '{P("repo/")}' is or holds a .git folder, which delete never removes", FileText.Deleted(_files.Delete(P("repo"))));
+        // The sentence covers every write since 2026-10-22 (review I1/I2: .git was guarded for delete alone).
+        Assert.Equal($@"Error: '{P("repo/")}' is in, is or holds a .git folder, which the file tools never change, move or delete; git's own tools change a repository", FileText.Deleted(_files.Delete(P("repo"))));
         Assert.True(WorkingDirectory.IsGitPath(@"a/.Git/b"));
         Assert.False(WorkingDirectory.IsGitPath(@"a/.github/b"));
         Assert.False(WorkingDirectory.IsGitPath(".gitignore"));

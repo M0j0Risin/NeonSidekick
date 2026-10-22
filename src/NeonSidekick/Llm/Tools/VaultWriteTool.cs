@@ -85,6 +85,13 @@ public sealed class VaultWriteTool : VaultTool, IRefusesPrunedStubs
 
         string content = ToolArguments.ReadString(arguments, ContentArgument);
         string heading = ToolArguments.ReadString(arguments, VaultReadTool.HeadingArgument);
-        return OffThread(() => Vault.Write(note, content, mode, heading), cancellationToken);
+        // A heading names where an append or prepend goes; create and overwrite write the whole note, so one there is refused (2026-10-22,
+        // review X1: "replace section Tasks" rewrote the whole note and answered "replaced Plan.md").
+        if (heading.Trim().Length > 0 && mode is VaultWriteMode.Create or VaultWriteMode.Overwrite)
+        {
+            return new ValueTask<object?>(ObsidianText.HeadingNeedsInsert);
+        }
+
+        return OffThread(() => Vault.Write(note, content, mode, heading, cancellationToken), cancellationToken);
     }
 }

@@ -61,13 +61,36 @@ public sealed class UncFetchTool : UncTool
         }
 
         string to = ToolArguments.ReadString(arguments, ToArgument).Trim();
-        return await ReadAsync(ReadShare(arguments), path, (files, relative, share) =>
+        var target = Unc.Resolve(ReadShare(arguments), path, out string relative, out string? error);
+        if (target is null)
+        {
+            return error!;
+        }
+
+        // Waited out as a write is, the copy reading the token between files (2026-10-22, review H3: it writes the working directory, but
+        // ran as a read, so Esc returned the turn while the copy ran on and a retry raced a second one); what it wrote is logged.
+        var result = await Unc.RunAsync(target, write: true, files =>
         {
             // The share's end judged first, in the share's words; what fails after is the working directory's end, or the copy.
             var side = files.Resolve(relative, forWrite: false, out _);
-            return side != FileOutcome.Ok
-                ? UncText.Scoped(FileText.Error(side, relative, "fetch"), share)
-                : UncText.Fetched(WorkingDirectory.CopyBetween(files, relative, _sandbox, to, overwrite ?? false), share);
+            if (side != FileOutcome.Ok)
+            {
+                return (Text: UncText.Scoped(FileText.Error(side, relative, "fetch"), target), Done: false);
+            }
+
+            var copied = WorkingDirectory.CopyBetween(files, relative, _sandbox, to, overwrite ?? false, cancellationToken);
+            return (Text: UncText.Fetched(copied, target), Done: copied.Outcome == FileOutcome.Ok);
         }, cancellationToken).ConfigureAwait(false);
+        if (result.Error is { } failed)
+        {
+            return failed;
+        }
+
+        if (result.Value.Done)
+        {
+            UncAccess.Audit(target, "fetched", relative, to.Length > 0 ? to : Path.GetFileName(relative.TrimEnd('/', '\\')));
+        }
+
+        return result.Value.Text;
     }
 }

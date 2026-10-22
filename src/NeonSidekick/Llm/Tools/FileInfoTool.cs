@@ -41,9 +41,11 @@ public sealed class FileInfoTool : FileTool
 
     public string Describe(string path) => FileText.Info(FilesFor(path).Info(path));
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return new ValueTask<object?>(Describe(ReadPath(arguments)));
+        string path = ReadPath(arguments);
+        // Off the turn's thread (2026-10-22, review R11: a 2 MB line count or a 10,000-entry walk held it), Esc returning the turn.
+        return await Task.Run(() => Describe(path), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 }

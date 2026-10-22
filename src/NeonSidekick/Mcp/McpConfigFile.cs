@@ -67,7 +67,9 @@ public sealed class McpConfigFile
             return new McpConfigLoad(path, [], [new McpConfigProblem(path, McpText.UnreadableFile(detail))]);
         }
 
-        if (file is null || file.McpServers.Count == 0)
+        // "mcpServers": null reads as null past the non-nullable type (2026-10-22, review K1: it threw here, and the
+        // startup encryption pass and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
+        if (file?.McpServers is not { Count: > 0 })
         {
             return McpConfigLoad.Empty(path);
         }

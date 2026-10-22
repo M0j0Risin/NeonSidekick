@@ -273,7 +273,9 @@ public class ImageFileTests : IDisposable
         Assert.Equal(ImageFile.Png, ImageFile.SentAs("image/gif"));
         Assert.Equal(ImageFile.Png, ImageFile.SentAs("image/bmp"));
         Assert.Equal(ImageFile.Png, ImageFile.SentAs(""));
-        Assert.Equal(OperatingSystem.IsMacOS() ? ImageFile.Jpeg : ImageFile.Png, ImageFile.SentAs("image/heic"));   // a photo on a Mac (2026-10-07); Windows unchanged
+        // A photo on every system (2026-10-22, review V6; a Mac's alone since 2026-10-07), JPEG XL too.
+        Assert.Equal(ImageFile.Jpeg, ImageFile.SentAs("image/heic"));
+        Assert.Equal(ImageFile.Jpeg, ImageFile.SentAs("image/jxl"));
         Assert.Throws<ArgumentNullException>(() => ImageFile.SentAs(null!));
     }
 

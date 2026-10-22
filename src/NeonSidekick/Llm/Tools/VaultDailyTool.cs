@@ -40,6 +40,6 @@ public sealed class VaultDailyTool : VaultTool
         ArgumentNullException.ThrowIfNull(arguments);
         string date = ToolArguments.ReadString(arguments, DateArgument);
         string append = ToolArguments.ReadString(arguments, AppendArgument);
-        return OffThread(() => Vault.Daily(date, append), cancellationToken);
+        return OffThread(() => Vault.Daily(date, append, cancellationToken), cancellationToken);
     }
 }

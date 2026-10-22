@@ -42,7 +42,7 @@ public abstract class UncTool : AIFunction
     /// share's account, its result scoped to the share — or the refusal that kept it from running.
     /// </summary>
     protected Task<string> ReadAsync(string? share, string path, Func<WorkingDirectory, string, string> describe, CancellationToken cancellationToken) =>
-        ReadAsync(share, path, (files, relative, target) => UncText.Scoped(describe(files, relative), target), cancellationToken);
+        ReadAsync(share, path, (files, relative, target) => UncText.Scoped(() => describe(files, relative), target), cancellationToken);
 
     /// <summary>
     /// <see cref="ReadAsync(string?, string, Func{WorkingDirectory, string, string}, CancellationToken)"/> for a tool that words its own
@@ -66,19 +66,15 @@ public abstract class UncTool : AIFunction
     /// (<see cref="UncAccess.WriteRefusal"/>); else <paramref name="change"/> over the share's sandbox as the share's account, waited
     /// out, and on success an audit line naming <paramref name="action"/> and the path. The result scoped to the share.
     /// </summary>
-    protected Task<string> WriteAsync(string? share, string path, string action, Func<WorkingDirectory, string, (string Text, bool Done)> change, CancellationToken cancellationToken) =>
-        WriteAsync(share, path, action, (files, relative, target) =>
-        {
-            var (text, done) = change(files, relative);
-            return (UncText.Scoped(text, target), done);
-        }, cancellationToken);
+    protected Task<string> WriteAsync(string? share, string path, string action, Func<WorkingDirectory, string, UncChange> change, CancellationToken cancellationToken, string? to = null) =>
+        WriteAsync(share, path, action, (files, relative, target) => UncText.Scoped(() => change(files, relative), target), cancellationToken, to);
 
     /// <summary>
     /// <see cref="WriteAsync(string?, string, string, Func{WorkingDirectory, string, ValueTuple{string, bool}}, CancellationToken)"/> for a
     /// tool that words its own result (<c>unc_put</c>, whose other end is the working directory): <paramref name="change"/> gets the
     /// share too, and its text is returned as it stands.
     /// </summary>
-    protected async Task<string> WriteAsync(string? share, string path, string action, Func<WorkingDirectory, string, UncNamedShare, (string Text, bool Done)> change, CancellationToken cancellationToken)
+    protected async Task<string> WriteAsync(string? share, string path, string action, Func<WorkingDirectory, string, UncNamedShare, UncChange> change, CancellationToken cancellationToken, string? to = null)
     {
         var target = Unc.Resolve(share, path, out string relative, out string? error);
         if (target is null)
@@ -91,17 +87,39 @@ public abstract class UncTool : AIFunction
             return refused;
         }
 
-        var result = await Unc.RunAsync(target, write: true, files => change(files, relative, target), cancellationToken).ConfigureAwait(false);
+        var result = await Unc.RunAsync(target, write: true, files =>
+        {
+            try
+            {
+                return change(files, relative, target);
+            }
+            catch
+            {
+                // Thrown after it began: what changed is not known, so it is logged as partway (review J8).
+                UncAccess.Audit(target, action, relative, to, partial: true);
+                throw;
+            }
+        }, cancellationToken).ConfigureAwait(false);
         if (result.Error is { } failed)
         {
             return failed;
         }
 
-        if (result.Value.Done)
+        if (result.Value.Done || result.Value.Partial)
         {
-            UncAccess.Audit(target, action, relative);
+            UncAccess.Audit(target, action, relative, to, partial: !result.Value.Done);
         }
 
         return result.Value.Text;
     }
+}
+
+/// <summary>
+/// What a change on a share did (2026-10-22, review J8): its answer, whether it was done, and whether a failure may have left part of it done
+/// (a recursive delete, a copy or move that failed after it began) — each of the last two is an audit line. A <c>(text, done)</c> pair is one
+/// that was done or did nothing.
+/// </summary>
+public readonly record struct UncChange(string Text, bool Done, bool Partial = false)
+{
+    public static implicit operator UncChange((string Text, bool Done) change) => new(change.Text, change.Done);
 }

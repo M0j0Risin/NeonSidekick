@@ -254,8 +254,9 @@ public sealed class FileToolsTests : IDisposable
         Assert.Contains("2 matches for 'needle' in 1 file", await Invoke(search, ("text", "needle"), ("files", "docs/**/*.txt")));
         Assert.Contains("0 matches for 'needle'", await Invoke(search, ("text", "needle"), ("files", "docs/**/*.md")));
         Assert.Equal(ClockText.BadInteger("context", "lots"), await Invoke(search, ("text", "x"), ("context", "lots")));
-        // One file as the path (2026-09-18): searched alone, the header naming it.
-        string one = await Invoke(search, ("text", "needle"), ("path", @"docs\c.txt"), ("files", "*.md"));
+        // One file as the path (2026-09-18): searched alone, the header naming it. A files pattern it misses says so (2026-10-22, review V10).
+        Assert.Contains(FileText.SearchFilterMissesFile(@"docs\c.txt", "*.md"), await Invoke(search, ("text", "needle"), ("path", @"docs\c.txt"), ("files", "*.md")));
+        string one = await Invoke(search, ("text", "needle"), ("path", @"docs\c.txt"), ("files", "*.txt"));
         Assert.StartsWith("2 matches for 'needle' in docs\\c.txt (", one, StringComparison.Ordinal);
         Assert.EndsWith(" s):\ndocs\\c.txt:1: Needle again\ndocs\\c.txt:2: and needle", one);
         // limit cuts the hits; output files counts per file (2026-09-19).
@@ -487,12 +488,13 @@ public sealed class FileToolsTests : IDisposable
         Put("c.txt", "c");
         Assert.Equal(FileText.Exists(@"papers\b.txt"), await Invoke(move, ("from", "c.txt"), ("to", @"papers\b.txt")));
         // With overwrite a file in the way is replaced in place, nothing kept, and a folder in the way is refused (2026-09-20).
-        Assert.Equal("moved c.txt to papers\\b.txt", await Invoke(move, ("from", "c.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
+        // An overwrite says what it replaced since 2026-10-22 (review J11).
+        Assert.Equal("moved c.txt to papers\\b.txt (replacing the file that was there)", await Invoke(move, ("from", "c.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
         Assert.Equal("c", File.ReadAllText(Path.Combine(_root, "papers", "b.txt")));
         Put("e.txt", "e");
         Assert.Equal(FileText.FolderInTheWay(@"papers\"), await Invoke(move, ("from", "e.txt"), ("to", "papers"), ("overwrite", Json("true"))));
         Assert.Equal("Error: 'papers\\' is a folder in the way — move it aside first", FileText.FolderInTheWay(@"papers\"));
-        Assert.Equal("moved e.txt to papers\\b.txt", await Invoke(move, ("from", "e.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
+        Assert.Equal("moved e.txt to papers\\b.txt (replacing the file that was there)", await Invoke(move, ("from", "e.txt"), ("to", @"papers\b.txt"), ("overwrite", Json("true"))));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
         Assert.Equal(FileText.BadBoolean("overwrite", "y"), await Invoke(move, ("from", "x"), ("to", "y"), ("overwrite", "y")));
         Assert.Equal(FileText.Missing("x"), await Invoke(move, ("from", "x"), ("to", "y")));
@@ -540,12 +542,13 @@ public sealed class FileToolsTests : IDisposable
         Put("c.txt", "c");
         Assert.Equal(FileText.Exists(@"papers/b.txt"), await Invoke(move, ("from", "c.txt"), ("to", @"papers/b.txt")));
         // With overwrite a file in the way is replaced in place, nothing kept, and a folder in the way is refused (2026-09-20).
-        Assert.Equal("moved c.txt to papers/b.txt", await Invoke(move, ("from", "c.txt"), ("to", @"papers/b.txt"), ("overwrite", Json("true"))));
+        // An overwrite says what it replaced since 2026-10-22 (review J11).
+        Assert.Equal("moved c.txt to papers/b.txt (replacing the file that was there)", await Invoke(move, ("from", "c.txt"), ("to", @"papers/b.txt"), ("overwrite", Json("true"))));
         Assert.Equal("c", File.ReadAllText(Path.Combine(_root, "papers", "b.txt")));
         Put("e.txt", "e");
         Assert.Equal(FileText.FolderInTheWay(@"papers/"), await Invoke(move, ("from", "e.txt"), ("to", "papers"), ("overwrite", Json("true"))));
         Assert.Equal("Error: 'papers/' is a folder in the way — move it aside first", FileText.FolderInTheWay(@"papers/"));
-        Assert.Equal("moved e.txt to papers/b.txt", await Invoke(move, ("from", "e.txt"), ("to", @"papers/b.txt"), ("overwrite", Json("true"))));
+        Assert.Equal("moved e.txt to papers/b.txt (replacing the file that was there)", await Invoke(move, ("from", "e.txt"), ("to", @"papers/b.txt"), ("overwrite", Json("true"))));
         Assert.False(Directory.Exists(Path.Combine(_root, ".trash")));
         Assert.Equal(FileText.BadBoolean("overwrite", "y"), await Invoke(move, ("from", "x"), ("to", "y"), ("overwrite", "y")));
         Assert.Equal(FileText.Missing("x"), await Invoke(move, ("from", "x"), ("to", "y")));
@@ -594,16 +597,18 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(
             "Writes a text file under the working directory (the user's cwd / current directory), creating any missing folders. " +
             "mode create (the default) leaves a file that already exists alone — unless you read it whole, wrote it or patched it in this conversation and it is unchanged since, which it replaces; mode overwrite replaces any; mode append adds the content at its end on a new line, creating the file if missing — for journals, logs and lists. " +
-            "The result reports the file's size, line count and word count, so nothing else is needed to check them. To change part of a file use patch_file.",
+            "The result reports the file's size, line count and word count, so nothing else is needed to check them. To change part of a file use patch_file." +
+            FileText.GuardedPathsSentence,   // the write guard's clause on every writer since 2026-10-22
             write.Description);
         Assert.Equal(
             "Renames or moves a file or a folder under the working directory (the user's cwd / current directory): to is the new path " +
             "(a new name in the same place is a rename; a folder moves with everything in it). Refuses to replace something already at the new path unless overwrite is true; " +
-            "a file is replaced in place and a folder in the way is refused.",
+            "a file is replaced in place and a folder in the way is refused." + FileText.GuardedPathsSentence,
             move.Description);
         Assert.Equal(
             "Copies a file or a folder (with everything in it) under the working directory (the user's cwd / current directory) to a new path. " +
-            "Refuses to replace something already at the new path unless overwrite is true; a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it).",
+            "Refuses to replace something already at the new path unless overwrite is true; a file is replaced in place and a folder in the way is refused (a folder copied over a folder merges into it)." +
+            FileText.GuardedPathsSentence,
             copy.Description);
         foreach (var tool in _tools)
         {
@@ -621,7 +626,8 @@ public sealed class FileToolsTests : IDisposable
         Put(@"docs\b.txt", "beta");
 
         Assert.StartsWith("zipped docs\\ into docs.zip (2 entries, ", await Invoke(Tool<ZipTool>(), ("path", "docs")), StringComparison.Ordinal);
-        Assert.Equal(FileText.Exists("docs.zip"), await Invoke(Tool<ZipTool>(), ("path", "docs")));
+        // A second unnamed zip takes the next free name since 2026-10-22 (review R12).
+        Assert.StartsWith("zipped docs", await Invoke(Tool<ZipTool>(), ("path", "docs")), StringComparison.Ordinal);
         Assert.StartsWith("zipped docs\\ into out\\d.zip (2 entries, ", await Invoke(Tool<ZipTool>(), ("path", "docs"), ("to", @"out\d.zip"), ("overwrite", Json("true"))), StringComparison.Ordinal);
         Assert.Equal(FileText.BadBoolean("overwrite", "1"), await Invoke(Tool<ZipTool>(), ("path", "docs"), ("overwrite", Json("1"))));
         Assert.Equal(FileText.Missing("nope"), await Invoke(Tool<ZipTool>(), ("path", "nope")));
@@ -629,7 +635,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal("unzipped docs.zip into restore\\ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")));
         Assert.Equal("beta", File.ReadAllText(Path.Combine(_root, "restore", "docs", "b.txt")));
         Assert.Equal(FileText.Exists(@"restore\docs\a.txt"), await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")));
-        Assert.Equal("unzipped docs.zip into restore\\ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore"), ("overwrite", Json("true"))));
+        Assert.Equal("unzipped docs.zip into restore\\ (2 entries) (replacing files that were there)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore"), ("overwrite", Json("true"))));
         Assert.Equal(FileText.NotAnArchive(@"docs\a.txt"), await Invoke(Tool<UnzipTool>(), ("path", @"docs\a.txt")));
         Assert.Equal(FileText.BadBoolean("overwrite", "no way"), await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("overwrite", "no way")));
 
@@ -648,7 +654,8 @@ public sealed class FileToolsTests : IDisposable
         Put(@"docs/b.txt", "beta");
 
         Assert.StartsWith("zipped docs/ into docs.zip (2 entries, ", await Invoke(Tool<ZipTool>(), ("path", "docs")), StringComparison.Ordinal);
-        Assert.Equal(FileText.Exists("docs.zip"), await Invoke(Tool<ZipTool>(), ("path", "docs")));
+        // A second unnamed zip takes the next free name since 2026-10-22 (review R12).
+        Assert.StartsWith("zipped docs", await Invoke(Tool<ZipTool>(), ("path", "docs")), StringComparison.Ordinal);
         Assert.StartsWith("zipped docs/ into out/d.zip (2 entries, ", await Invoke(Tool<ZipTool>(), ("path", "docs"), ("to", @"out/d.zip"), ("overwrite", Json("true"))), StringComparison.Ordinal);
         Assert.Equal(FileText.BadBoolean("overwrite", "1"), await Invoke(Tool<ZipTool>(), ("path", "docs"), ("overwrite", Json("1"))));
         Assert.Equal(FileText.Missing("nope"), await Invoke(Tool<ZipTool>(), ("path", "nope")));
@@ -657,7 +664,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal("beta", File.ReadAllText(Path.Combine(_root, "restore", "docs", "b.txt")));
         // The first clash in the archive's order, which on APFS is the folder's enumeration order, not by name as on NTFS.
         Assert.Contains(await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore")), new[] { FileText.Exists("restore/docs/a.txt"), FileText.Exists("restore/docs/b.txt") });
-        Assert.Equal("unzipped docs.zip into restore/ (2 entries)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore"), ("overwrite", Json("true"))));
+        Assert.Equal("unzipped docs.zip into restore/ (2 entries) (replacing files that were there)", await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("to", "restore"), ("overwrite", Json("true"))));
         Assert.Equal(FileText.NotAnArchive(@"docs/a.txt"), await Invoke(Tool<UnzipTool>(), ("path", @"docs/a.txt")));
         Assert.Equal(FileText.BadBoolean("overwrite", "no way"), await Invoke(Tool<UnzipTool>(), ("path", "docs.zip"), ("overwrite", "no way")));
 
@@ -689,6 +696,35 @@ public sealed class FileToolsTests : IDisposable
 
         Assert.EndsWith(OpenTool.PictureDescription, open.Description, StringComparison.Ordinal);
         Assert.DoesNotContain(OpenTool.PictureDescription, Tool<OpenTool>().Description, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 2026-10-22, review G1/P6 (the fix plan's D1): <c>open</c> starts only the types on <see cref="OpenRules"/>' list. A script, a
+    /// program, a shortcut, an installer, a file with no extension and a folder named like a bundle are refused, and nothing is opened.
+    /// </summary>
+    [Fact]
+    public async Task Open_RefusesWhatWouldRun()
+    {
+        foreach (string name in new[] { "x.bat", "x.EXE", "x.lnk", "x.msi", "x.vbs", "x.js", "x.hta", "x.command", "runme", "x.reg" })
+        {
+            Put(name, "echo hi");
+        }
+
+        Directory.CreateDirectory(Path.Combine(_root, "viewer.app"));
+        var open = Tool<OpenTool>();
+        Assert.Equal(FileText.OpenRefused("x.bat", OpenRefusal.Script), await Invoke(open, ("path", "x.bat")));
+        Assert.Equal(FileText.OpenRefused("x.EXE", OpenRefusal.Program), await Invoke(open, ("path", "x.EXE")));
+        Assert.Equal(FileText.OpenRefused("x.lnk", OpenRefusal.Shortcut), await Invoke(open, ("path", "x.lnk")));
+        Assert.Equal(FileText.OpenRefused("x.msi", OpenRefusal.Installer), await Invoke(open, ("path", "x.msi")));
+        Assert.Equal(FileText.OpenRefused("runme", OpenRefusal.Unlisted), await Invoke(open, ("path", "runme")));
+        foreach (string name in new[] { "x.vbs", "x.js", "x.hta", "x.command", "x.reg" })
+        {
+            Assert.StartsWith("Error: ", await Invoke(open, ("path", name)), StringComparison.Ordinal);
+        }
+
+        Assert.StartsWith("Error: ", await Invoke(open, ("path", "viewer.app")), StringComparison.Ordinal);
+        Assert.Empty(_opened);
+        Assert.Contains("programs, scripts, shortcuts and installers are refused", open.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -777,8 +813,10 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.Missing("1") + "\n" + FileText.Missing("2") + "\n" + FileText.Missing("3") + "\n" + FileText.Missing("4") + "\n" + FileText.MorePictures(["5", "6"]), over);
         Assert.Equal("2 more not shown; call again with paths: 5, 6", FileText.MorePictures(["5", "6"]));
         var five = Assert.IsType<ToolImageResult>(await view.InvokeAsync(Args(("paths", Json("[\"gone.png\", \"a.bmp\", \"gone.png\", \"b.bmp\", \"a.bmp\"]"))), CancellationToken.None));
+        // Each path once (2026-10-22, review K12): the repeats take no slot, so all three fit and nothing is left for the next call.
         Assert.Equal(["a.bmp", "b.bmp"], five.Images.Select(i => i.Path));
-        Assert.EndsWith("\n" + FileText.MorePictures(["a.bmp"]), five.Text, StringComparison.Ordinal);
+        Assert.Equal(3, five.Text.Split('\n').Length);
+        Assert.DoesNotContain("more not shown", five.Text, StringComparison.Ordinal);
         Assert.Equal(FileText.BadStringList("paths", "[1]"), await Invoke(view, ("paths", Json("[1]"))));
     }
 

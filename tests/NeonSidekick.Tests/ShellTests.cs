@@ -1061,8 +1061,9 @@ public sealed class ShellTests
     {
         static Process Ping() => Process.Start(new ProcessStartInfo("ping", "-n 30 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })!;
 
-        using var foreground = new ProcessChild(Ping(), killOnClose: false);
-        using var background = new ProcessChild(Ping(), killOnClose: true);
+        // Both jobs are kill-on-close since 2026-10-22 (review F1, the fix plan's D9); a foreground one is kept until the app ends.
+        using var foreground = new ProcessChild(Ping(), keepUntilExit: true);
+        using var background = new ProcessChild(Ping(), keepUntilExit: false);
         try
         {
             Assert.True(foreground.InJob && background.InJob);

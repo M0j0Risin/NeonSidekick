@@ -1433,6 +1433,9 @@ public static partial class CommandPrefix
         // A PowerShell here-string's or a bash/zsh here-document's quotes are text up to a line of their own, which no scan here follows:
         // such a line asks (2026-10-19, the second shell review; an apostrophe in either hid the commands after it).
         unreadable |= shell == ShellKind.PowerShell ? HereStringPattern().IsMatch(text) : shell != ShellKind.Cmd && HereDocumentPattern().IsMatch(text);
+        // A cmd line whose double quotes don't close (2026-10-22, review L1): the launch wraps it in a second cmd, the outer one counts the
+        // quotes one more, and the text this reader takes for quoted runs there as commands of its own — so it asks.
+        unreadable |= shell == ShellKind.Cmd && depth == 0 && CmdQuoteOpen(text);
         foreach (string segment in Segments(outer, shell))
         {
             // A PowerShell statement is read as one at every depth (the fourth shell review, 2026-10-19: at the top, $null = Remove-Item x was
@@ -1515,6 +1518,13 @@ public static partial class CommandPrefix
                 }
             }
 
+            // A command defined through its provider drive (2026-10-22, review L2: ${function:git} = ${function:Remove-Item}; git status ran
+            // Remove-Item under the allowed git): an assignment to function: or alias: asks.
+            if (CommandDriveTargetPattern().IsMatch(assignment.Groups["targets"].Value))
+            {
+                return Unreadable;
+            }
+
             return StatementPrefix(statement[assignment.Length..]);
         }
 
@@ -1538,6 +1548,35 @@ public static partial class CommandPrefix
     // casts (one level of nested brackets: [List[string]]) then $ and anything up to a blank, = or , (a subscript's $i, a Hole).
     [GeneratedRegex(@"^(?<targets>(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*\$[^\s=,]+(?:\s*,\s*(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)*\$[^\s=,]+)*)\s*(?:[-+*/%]|\?\?)?=(?!=)\s*", RegexOptions.CultureInvariant)]
     private static partial Regex AssignmentPattern();
+
+    // An assignment target on a drive that defines a command: $function:x, ${function:x}, $alias:x, any case (review L2).
+    [GeneratedRegex(@"\$\{?(?:function|alias|filter):", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex CommandDriveTargetPattern();
+
+    /// <summary>
+    /// Whether a cmd line ends inside a double quote: cmd's own count, a <c>^</c> outside quotes escaping the next character (review L1).
+    /// </summary>
+    public static bool CmdQuoteOpen(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        bool open = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '^' && !open)
+            {
+                i++;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                open = !open;
+            }
+        }
+
+        return open;
+    }
 
     // An assignment target on the env: drive: $env:NAME, ${env:NAME}, any case.
     [GeneratedRegex(@"\$\{?env:(?<name>[^\s}=,\[\]]+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]

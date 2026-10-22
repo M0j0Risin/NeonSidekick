@@ -5,6 +5,9 @@ using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
+// The fixtures' plan writes go through the app's pass since 2026-10-22 (the write guard refuses a model write into .neon; these stand
+// for the app's own writes and the user's edits, which the judge still puts back).
+
 /// <summary>
 /// The Ralph judge's put-back after a pass (2026-10-19, the third review, <see cref="RalphJudge.Restore"/>): every other step's box and every step's
 /// words as they were before the pass, the pass's own box as the model left it (or put back when the pass was stopped), a moved line kept as it was,
@@ -46,13 +49,13 @@ public sealed class RalphJudgeTests
             const string plan = ".neon/plans/guide.md";
             var header = new PlanHeader(PlanStatus.Approved, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "Guide");
             string text = PlanDocument.Render(header, "Guide", Before);
-            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, text, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => files.WriteText(plan, text, overwrite: true)).Outcome);
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
             Assert.Null(RalphLog.MarkInPass(files, plan, Step(text, "One"), Lines(text), headed: true, planStamp: PlanDocument.Stamp(text)));
             // Revised since (a new revision and time), its steps the user's now.
             string revised = PlanDocument.Render(header with { Revision = 2, Updated = DateTimeOffset.UnixEpoch.AddDays(2) }, "Guide",
                 Before.Replace("- [ ] Two\n", "- [x] Two, done by a plain run\n- [ ] Two and a half\n", StringComparison.Ordinal));
-            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, revised, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => files.WriteText(plan, revised, overwrite: true)).Outcome);
 
             var recovered = RalphJudge.RecoverInPass(files, plan)!;
 
@@ -146,7 +149,7 @@ public sealed class RalphJudgeTests
         {
             var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
             const string plan = ".neon/plans/guide.md";
-            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => files.WriteText(plan, Before, overwrite: true)).Outcome);
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
             Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before), headed: true));
             string crashed = Before.Replace("- [ ] One", "- [x] One", StringComparison.Ordinal).Replace("- [ ] Three", "- [x] Three", StringComparison.Ordinal)
@@ -180,7 +183,7 @@ public sealed class RalphJudgeTests
         {
             var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
             const string plan = ".neon/plans/guide.md";
-            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => files.WriteText(plan, Before, overwrite: true)).Outcome);
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
             Assert.Null(RalphLog.MarkInPass(files, plan, Step(Before, "One"), Lines(Before), headed: true));
             File.WriteAllText(Path.Combine(dir, ".neon", "plans", "guide.md"), Before.Replace("- [ ] Three\n", "", StringComparison.Ordinal));
@@ -219,7 +222,7 @@ public sealed class RalphJudgeTests
         {
             var files = new WorkingDirectory(() => dir, new ManualTimeProvider());
             const string plan = ".neon/plans/guide.md";
-            Assert.Equal(FileOutcome.Ok, files.WriteText(plan, Before, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => files.WriteText(plan, Before, overwrite: true)).Outcome);
             var lines = Lines(Before);
             var step = Step(Before, "One");
             Assert.Null(RalphLog.SetHead(files, plan, new RalphLogHead(plan, null, null, false, "pwsh", DateTimeOffset.UnixEpoch)));
@@ -373,7 +376,7 @@ public sealed class RalphJudgeTests
             Host = new FakeRalphHost(Files, Time);
             var header = new PlanHeader(PlanStatus.Approved, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "Guide");
             string text = PlanDocument.Render(header, "Guide", ByHandBody);
-            Assert.Equal(FileOutcome.Ok, Files.WriteText(Plan, text, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText(Plan, text, overwrite: true)).Outcome);
             var steps = PlanSteps.Parse(text);
             Step = PlanSteps.Leaves(steps).Single(s => s.Text == words);
             Lines = PlanSteps.Flat(steps);
@@ -381,8 +384,8 @@ public sealed class RalphJudgeTests
             Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", null, null, false, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1), 3);
             Loop.BeginPass(Step, new PlanPassMeter(Time.GetUtcNow(), 0, 0));
             Assert.Null(Loop.Record(new FinishReport(RalphOutcome.Done, "the pass did it", ["ran it"], null, [], [])));
-            Assert.Equal(FileOutcome.Ok, Files.WriteText("hello.py", "print('hi')\n", overwrite: true).Outcome);
-            Assert.Equal(FileOutcome.Ok, Files.WriteText(Plan, PlanSteps.WithBox(text, Step, true)!, overwrite: true).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText("hello.py", "print('hi')\n", overwrite: true)).Outcome);
+            Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText(Plan, PlanSteps.WithBox(text, Step, true)!, overwrite: true)).Outcome);
         }
 
         public ManualTimeProvider Time { get; } = new();

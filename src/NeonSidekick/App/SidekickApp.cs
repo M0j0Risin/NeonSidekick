@@ -465,6 +465,18 @@ public sealed partial class SidekickApp
     }
 
     /// <summary>Runs the mode selected by <paramref name="options"/> and returns the process exit code.</summary>
+    /// <summary>
+    /// The write guard's facts over the live settings (2026-10-22, <see cref="Files.WriteGuard"/>): the home, the working directory whose root
+    /// holds the project file, every skill root, the SQLite databases and the shopping tripwire while their tools are on, and the bin.
+    /// </summary>
+    internal Files.WriteGuardFacts WriteGuardFacts() => new(
+        Home: () => _settings.StorageDirectory,
+        WorkingDirectory: () => Files.WorkingDirectory.Resolve(EffectiveSettings.WorkingDirectory, _settings.ProfileDirectory),
+        SkillRoots: () => { var roots = SkillRoots.For(_settings, _externalSkills); return [roots.Profile, roots.Global, roots.External]; },
+        Databases: () => EffectiveSettings.SqliteTools ? ChatScreen.SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null,
+        ShoppingGuarded: () => ChatScreen.ShoppingListGuarded(EffectiveSettings),
+        RecycleBin: () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null);
+
     public async Task<int> RunAsync(SidekickOptions options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -473,6 +485,13 @@ public sealed partial class SidekickApp
         // The saved theme in force before anything is drawn (2026-09-23): the banner, the check
         // modes' output and the headless REPL wear it as the screen does.
         ThemeName.Apply(EffectiveSettings, _settings.ThemesDirectory);
+
+        // The hosts a pasted UNC path may reach (2026-10-22, review K7): the configured shares' servers, the profile's and the home's.
+        using var knownHosts = Unc.KnownUncHosts.Configure(() => Unc.UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Shares.Select(s => s.Config.Root));
+
+        // The write guard's facts (2026-10-22, the fix plan's mechanism 1), process-wide so every working directory reads them, the shares',
+        // the skill editor's and the ones made fresh too; set before any tool, Web UI request or pool work runs, put back when the run ends.
+        using var writeGuard = Files.WriteGuard.Configure(WriteGuardFacts());
 
         if (options.Headless)
         {

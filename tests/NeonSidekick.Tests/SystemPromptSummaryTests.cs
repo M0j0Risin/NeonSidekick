@@ -949,7 +949,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Timers (3)", lines[^4]);
 
         using var console = new TestConsole();
-        console.Profile.Width = 900;   // wide enough that no description wraps (patch_file and search_files are the longest, 2026-09-19)
+        console.Profile.Width = 1200;   // wide enough that no description wraps (patch_file the longest; 900 until the write guard's clause, 2026-10-22)
         console.Write(SystemPromptSummary.ToolsTab(groups));
         string output = console.Output;
         foreach (var tool in clock.Concat(timers).Concat(files).Concat(memory))
@@ -963,15 +963,15 @@ public class SystemPromptSummaryTests : IDisposable
         // never a literal width — two cells in under the rule.
         int column = SystemPromptSummary.BodyIndent + groups.SelectMany(g => g.Tools).Max(t => t.Name.Length) + SlashCommands.HelpColumnGap;
         string[] rendered = output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()).ToArray();
-        Assert.Equal(RuleLine("── Clock · 3", 900), rendered[0]);
+        Assert.Equal(RuleLine("── Clock · 3", 1200), rendered[0]);
         Assert.Equal(("  get_current_time").PadRight(column) + clock[0].Description, rendered[1]);
         Assert.Equal("", rendered[4]);   // a one-space row parts the groups
-        Assert.Equal(RuleLine("── Files · 13", 900), rendered[5]);
+        Assert.Equal(RuleLine("── Files · 13", 1200), rendered[5]);
         Assert.Equal("  get_working_directory".PadRight(column) + files[0].Description, rendered[6]);
-        Assert.Equal(RuleLine("── Memory · 2", 900), rendered[20]);   // two rows later with the image tools, 2026-10-04; three sooner since they left for Image, 2026-10-10
+        Assert.Equal(RuleLine("── Memory · 2", 1200), rendered[20]);   // two rows later with the image tools, 2026-10-04; three sooner since they left for Image, 2026-10-10
         Assert.Equal("  save_memory".PadRight(column) + memory[0].Description, rendered[21]);
         Assert.Equal("  recall_memory".PadRight(column) + memory[1].Description, rendered[22]);
-        Assert.Equal(RuleLine("── Timers · 3", 900), rendered[^4]);
+        Assert.Equal(RuleLine("── Timers · 3", 1200), rendered[^4]);
         foreach (var line in rendered.Where(l => l.Length > column && !l.StartsWith(SectionRule.Lead, StringComparison.Ordinal)))
         {
             Assert.Equal(' ', line[column - 1]);
@@ -1018,7 +1018,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Timers (3)", lines[^4]);
 
         using var console = new TestConsole();
-        console.Profile.Width = 900;   // wide enough that no description wraps (patch_file and search_files are the longest, 2026-09-19)
+        console.Profile.Width = 1200;   // wide enough that no description wraps (patch_file the longest; 900 until the write guard's clause, 2026-10-22)
         console.Write(SystemPromptSummary.ToolsTab(groups));
         string output = console.Output;
         foreach (var tool in clock.Concat(timers).Concat(files).Concat(memory))
@@ -1032,15 +1032,15 @@ public class SystemPromptSummaryTests : IDisposable
         // never a literal width — two cells in under the rule.
         int column = SystemPromptSummary.BodyIndent + groups.SelectMany(g => g.Tools).Max(t => t.Name.Length) + SlashCommands.HelpColumnGap;
         string[] rendered = output.TrimEnd('\n').Split('\n').Select(l => l.TrimEnd()).ToArray();
-        Assert.Equal(RuleLine("── Clock · 3", 900), rendered[0]);
+        Assert.Equal(RuleLine("── Clock · 3", 1200), rendered[0]);
         Assert.Equal(("  get_current_time").PadRight(column) + clock[0].Description, rendered[1]);
         Assert.Equal("", rendered[4]);   // a one-space row parts the groups
-        Assert.Equal(RuleLine("── Files · 13", 900), rendered[5]);
+        Assert.Equal(RuleLine("── Files · 13", 1200), rendered[5]);
         Assert.Equal("  get_working_directory".PadRight(column) + files[0].Description, rendered[6]);
-        Assert.Equal(RuleLine("── Memory · 2", 900), rendered[20]);   // three rows sooner without the picture tools
+        Assert.Equal(RuleLine("── Memory · 2", 1200), rendered[20]);   // three rows sooner without the picture tools
         Assert.Equal("  save_memory".PadRight(column) + memory[0].Description, rendered[21]);
         Assert.Equal("  recall_memory".PadRight(column) + memory[1].Description, rendered[22]);
-        Assert.Equal(RuleLine("── Timers · 3", 900), rendered[^4]);
+        Assert.Equal(RuleLine("── Timers · 3", 1200), rendered[^4]);
         foreach (var line in rendered.Where(l => l.Length > column && !l.StartsWith(SectionRule.Lead, StringComparison.Ordinal)))
         {
             Assert.Equal(' ', line[column - 1]);

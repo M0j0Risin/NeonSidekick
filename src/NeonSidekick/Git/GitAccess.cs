@@ -841,7 +841,8 @@ public sealed class GitAccess
                 }
                 else
                 {
-                    if (_files.Resolve(text, forWrite: true, out string each) != FileOutcome.Ok)
+                    // A read (2026-10-22): staging writes the index, never the file, so the write guard has no say (git add AGENTS.md).
+                    if (_files.Resolve(text, forWrite: false, out string each) != FileOutcome.Ok)
                     {
                         return GitStageResult.Refused(GitOutcome.OutsideRoot, text);
                     }
@@ -1068,9 +1069,13 @@ public sealed class GitAccess
                 }
                 else
                 {
-                    if (_files.Resolve(text, forWrite: true, out string each) != FileOutcome.Ok)
+                    // A write: a discard rewrites the file, so the write guard's refusal is said in its own words (2026-10-22).
+                    var resolved = _files.Resolve(text, forWrite: true, out string each);
+                    if (resolved != FileOutcome.Ok)
                     {
-                        return GitDiscardResult.Refused(GitOutcome.OutsideRoot, text);
+                        return WriteGuard.IsRefusal(resolved)
+                            ? GitDiscardResult.Refused(GitOutcome.Guarded, FileText.Error(resolved, text, "restore"))
+                            : GitDiscardResult.Refused(GitOutcome.OutsideRoot, text);
                     }
 
                     if (RepoPath(location, each) is not { } repoPath)

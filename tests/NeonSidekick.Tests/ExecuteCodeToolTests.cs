@@ -422,7 +422,8 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(2, bridge.Calls);
         Assert.Equal("{\"error\":\"Error: the bridge token did not match\"}", await SendAsync(bridge, "{\"token\":\"nope\",\"tool\":\"echo\"}"));
         Assert.Equal("{\"error\":\"Error: the request is not {\\\"token\\\", \\\"tool\\\", \\\"arguments\\\"} on one line\"}", await SendAsync(bridge, "not json"));
-        Assert.Equal("{\"error\":\"Error: the request is not {\\\"token\\\", \\\"tool\\\", \\\"arguments\\\"} on one line\"}", await SendAsync(bridge, "{\"token\":\"" + bridge.Token + "\"}"));
+        // Past the cap, a line with the token is answered before it is parsed (2026-10-22, review F3): the limit, not the shape.
+        Assert.Equal("{\"error\":\"Error: this run's tool call limit (2) is reached\"}", await SendAsync(bridge, "{\"token\":\"" + bridge.Token + "\"}"));
         Assert.Equal("{\"result\":\"it's \\\"quoted\\\"\"}", BridgeServer.Serialize(new BridgeResponse { Result = "it's \"quoted\"" }));   // readable on the wire and in the log
         Assert.Equal(2, bridge.Calls);   // the refused ones never counted
     }
@@ -437,8 +438,8 @@ public sealed class ExecuteCodeToolTests : IDisposable
 
         Assert.Equal("{\"error\":\"Error: the request is over 100 bytes\"}", await SendAsync(bridge, line));
         Assert.Equal(0, calls);
-        Assert.Equal("Error: the request is over 32 MB", ShellText.RequestTooLarge(BridgeServer.MaxRequestBytes));
-        Assert.Equal(32 * 1024 * 1024, BridgeServer.MaxRequestBytes);
+        Assert.Equal("Error: the request is over 2 MB", ShellText.RequestTooLarge(BridgeServer.MaxRequestBytes));   // 32 MB until 2026-10-22 (review F3)
+        Assert.Equal(2 * 1024 * 1024, BridgeServer.MaxRequestBytes);
     }
 
     /// <summary>

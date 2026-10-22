@@ -148,6 +148,54 @@ public static class ConnectionsFileEdit
         }
     }
 
+    /// <summary>
+    /// The entry names under <paramref name="section"/> that appear more than once, ignoring case and spaces around them (2026-10-22, review
+    /// K8: the reader kept the last of two, while the password splice wrote into the first, so a plain password stayed and every load wrote
+    /// the file again; review K2: "eng" and "Eng" loaded as two shares that one name could not tell apart). Empty for JSON it can't read.
+    /// </summary>
+    public static IReadOnlySet<string> RepeatedNames(ReadOnlySpan<byte> json, string section)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var repeated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return repeated;
+            }
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                bool isSection = reader.GetString()!.Equals(section, StringComparison.OrdinalIgnoreCase);
+                reader.Read();
+                if (!isSection || reader.TokenType != JsonTokenType.StartObject)
+                {
+                    reader.Skip();
+                    continue;
+                }
+
+                while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    string name = reader.GetString()!.Trim();
+                    if (!seen.Add(name))
+                    {
+                        repeated.Add(name);
+                    }
+
+                    reader.Read();
+                    reader.Skip();
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // The deserializer says what is wrong with the file.
+        }
+
+        return repeated;
+    }
+
     /// <summary>Where <see cref="ReplaceConnection"/> splices: the entry's name token to the end of its value, or why not.</summary>
     private readonly record struct EntrySpot(int Start, int End, string? Error);
 

@@ -40,18 +40,14 @@ public static partial class ShellPoliceChecks
             return new ShellPoliceRefusal(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
         }
 
-        // The line's script files, read once for both database polices and only if one needs them (2026-10-12).
+        // The line's script files, read once for every police and only if one needs them (2026-10-12).
         var scripts = new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(command, workdir, files.Root));
         var databases = files.Databases?.Invoke();
         var servers = files.ServerDatabases?.Invoke();
         var admin = files.AdminFamilies?.Invoke();
-
-        // A script file too big for them to read is refused while any of them is on (later on 2026-10-19, the third shell review): it
-        // was passed over unread and so passed every one of them.
-        if ((databases is not null || servers is not null || admin is not null) && SqlitePolice.OversizedScript(command, workdir, files.Root) is { } oversized)
+        if (ScriptChecks(request, command, workdir, files, effective, scripts) is { } scripted)
         {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptTooLargeLogLine(request, oversized));
-            return new ShellPoliceRefusal(ShellText.ScriptTooLarge(SqlitePolice.MaxScriptBytes), ShellText.ScriptTooLargeShown(oversized));
+            return scripted;
         }
 
         // The SQLite police (2026-10-05, the user's call), while the SQLite tools are on: a line, or a script
@@ -88,6 +84,66 @@ public static partial class ShellPoliceChecks
         return null;
     }
 
+    /// <summary>
+    /// What every police reads past the line itself (2026-10-22, review L4): a script the line runs that isn't there yet (the line writes
+    /// it, then runs it), one too big to read — refused under the police whatever else is on, since the forbidden strings and the trusted
+    /// files read scripts too — the forbidden strings in a script, and the trusted files in the line and its scripts (the fix plan's D8).
+    /// Shared with <c>process</c>'s writes. Null when they all pass.
+    /// </summary>
+    public static ShellPoliceRefusal? ScriptChecks(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective, Lazy<IReadOnlyList<(string Name, string Text)>>? scripts = null)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(effective);
+        if (!effective.ShellPolice)
+        {
+            return null;
+        }
+
+        scripts ??= new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(command, workdir, files.Root));
+        if (SqlitePolice.MissingScripts(command, workdir, files.Root) is [var missing, ..])
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptMissingLogLine(request, missing));
+            return new ShellPoliceRefusal(ShellText.ScriptMissing(missing), null);
+        }
+
+        if (SqlitePolice.OversizedScript(command, workdir, files.Root) is { } oversized)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptTooLargeLogLine(request, oversized));
+            return new ShellPoliceRefusal(ShellText.ScriptTooLarge(SqlitePolice.MaxScriptBytes), ShellText.ScriptTooLargeShown(oversized));
+        }
+
+        foreach (var (name, text) in scripts.Value)
+        {
+            if (ForbiddenStrings.Find(text, effective.ShellPoliceForbiddenStrings) is { } forbidden)
+            {
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.ForbiddenLogLine(request, forbidden));
+                return new ShellPoliceRefusal(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
+            }
+        }
+
+        if (TrustedFilesPolice.For(files.Root) is { } trusted)
+        {
+            if (TrustedFilesPolice.Find(command, trusted) is { } named)
+            {
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, named, null));
+                return new ShellPoliceRefusal(ShellText.TrustedPoliced, ShellText.TrustedShown(named, null));
+            }
+
+            foreach (var (name, text) in scripts.Value)
+            {
+                if (TrustedFilesPolice.Find(text, trusted) is { } inScript)
+                {
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, inScript, name));
+                    return new ShellPoliceRefusal(ShellText.TrustedPoliced, ShellText.TrustedShown(inScript, name));
+                }
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>How many spill files <see cref="Spill"/> keeps; the oldest beyond go when it writes one.</summary>
     public const int SpillKept = 50;
 
@@ -109,6 +165,13 @@ public static partial class ShellPoliceChecks
         string folder = Path.Combine(root, ShellText.SpillFolderName);
         try
         {
+            // Never through a link that leads out of the working directory (2026-10-22, review L6: a .neon link sent the spill elsewhere).
+            if (WorkingDirectory.LinkEscape(root, Path.Combine(folder, id + ".log"), WorkingDirectory.RealLinkTarget) is not null)
+            {
+                DiagnosticLog.Warn(ShellKinds.Category, $"{id}: {relative} not written: a link on its way leads outside the working directory");
+                return null;
+            }
+
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, id + ".log"), body);
         }

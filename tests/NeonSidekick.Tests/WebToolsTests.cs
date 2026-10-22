@@ -1,3 +1,4 @@
+using NeonSidekick.Files;
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -537,7 +538,7 @@ public sealed partial class WebToolsTests : IDisposable
 
         Assert.Equal("downloaded cat.png (16 B, image/png) from https://example.com/cat.png; view_image shows it", result);
         Assert.Equal(Png, Saved("cat.png"));
-        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
     }
 
     [WindowsFact]
@@ -627,7 +628,7 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal("downloaded big.bin (1.5 MB, application/octet-stream) from https://example.com/big.bin", await _download.DownloadAsync("https://example.com/big.bin", null, false, CancellationToken.None));
         Assert.Equal(1_500_000, new FileInfo(Path.Combine(_root, "big.bin")).Length);
         Assert.Equal("downloaded declared.bin (1.6 MB, application/octet-stream) from https://example.com/declared.bin", await _download.DownloadAsync("https://example.com/declared.bin", null, false, CancellationToken.None));
-        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
     }
 
     [Fact]
@@ -640,7 +641,7 @@ public sealed partial class WebToolsTests : IDisposable
         var download = _download.DownloadAsync("https://example.com/slow.bin", null, false, cts.Token);
         await firstRead.Task.WaitAsync(TimeSpan.FromSeconds(30));
         await Task.Delay(50);
-        Assert.NotEmpty(Directory.GetFiles(_root, "*.tmp"));   // the partial file, beside where the file would go
+        Assert.NotEmpty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));   // the partial file, beside where the file would go
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => download);

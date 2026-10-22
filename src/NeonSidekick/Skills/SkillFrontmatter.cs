@@ -299,9 +299,29 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
     public static string Scalar(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return NeedsQuotes(value)
-            ? "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
-            : value;
+        if (!NeedsQuotes(value))
+        {
+            return value;
+        }
+
+        // Double-quoted, its escapes YAML's own: a control character written as one (2026-10-22, review T10: a tab or a line break inside
+        // went in raw).
+        var sb = new System.Text.StringBuilder(value.Length + 2).Append('"');
+        foreach (char c in value)
+        {
+            sb.Append(c switch
+            {
+                '\\' => "\\\\",
+                '"' => "\\\"",
+                '\t' => "\\t",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                _ when char.IsControl(c) => "\\x" + ((int)c).ToString("X2", CultureInfo.InvariantCulture),
+                _ => c.ToString(),
+            });
+        }
+
+        return sb.Append('"').ToString();
     }
 
     /// <summary>
@@ -317,7 +337,14 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             return true;
         }
 
-        if (value.Contains(": ", StringComparison.Ordinal) || value.Contains(" #", StringComparison.Ordinal))
+        // Spaces at either end, a tab before '#', a control character (2026-10-22, review T10: " draft " read back as "draft", and
+        // "done\t#later" as "done", both reported set).
+        if (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]) || value.Any(char.IsControl))
+        {
+            return true;
+        }
+
+        if (value.Contains(": ", StringComparison.Ordinal) || value.Contains(" #", StringComparison.Ordinal) || value.Contains(":\t", StringComparison.Ordinal))
         {
             return true;
         }

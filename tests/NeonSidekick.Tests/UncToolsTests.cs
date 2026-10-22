@@ -261,11 +261,14 @@ public sealed class UncToolsTests : IDisposable
                 UncText.AuditLogLine("data", me, "appended to", @"new\x.txt"),
                 UncText.AuditLogLine("data", me, "patched", "notes.txt"),
                 UncText.AuditLogLine("data", me, "created", "made"),
-                UncText.AuditLogLine("data", me, "copied", "notes.txt"),
-                UncText.AuditLogLine("data", me, "moved", @"made\copy.txt"),
+                // A copy and a move name where they went (2026-10-22, review J8).
+                UncText.AuditLogLine("data", me, "copied", "notes.txt", @"made\copy.txt", partial: false),
+                UncText.AuditLogLine("data", me, "moved", @"made\copy.txt", @"made\moved.txt", partial: false),
                 UncText.AuditLogLine("data", me, "deleted", "new"),
             ],
             audit);   // the refused create left no line
+        Assert.EndsWith(@"copied notes.txt to made\copy.txt", audit[5], StringComparison.Ordinal);
+        Assert.EndsWith(UncText.PartialAuditNote, UncText.AuditLogLine("data", me, "deleted", "new", null, partial: true), StringComparison.Ordinal);
     }
 
     [WindowsFact]

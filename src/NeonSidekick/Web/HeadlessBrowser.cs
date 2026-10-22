@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using NeonSidekick.Diagnostics;
@@ -40,8 +41,11 @@ public interface IHeadlessBrowser
     /// <summary>The DOM of <paramref name="url"/> after the page ran its scripts, through <paramref name="executable"/>.</summary>
     Task<BrowserDump> DumpDomAsync(string executable, Uri url, CancellationToken cancellationToken);
 
-    /// <summary><paramref name="page"/> printed to a PDF at <paramref name="outputPath"/> through <paramref name="executable"/> (2026-10-03).</summary>
-    Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken);
+    /// <summary>
+    /// <paramref name="page"/> printed to a PDF at <paramref name="outputPath"/> through <paramref name="executable"/> (2026-10-03), reaching
+    /// what <paramref name="reach"/> allows (2026-10-22, review R1; null = whatever the network mode <c>both</c> allows).
+    /// </summary>
+    Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, PrintReach? reach, CancellationToken cancellationToken);
 
     /// <summary><paramref name="pdf"/>'s pages read through <paramref name="executable"/> (2026-10-11): each page's text and picture, by pdf.js in the page (<see cref="BrowserPdfReader"/>).</summary>
     Task<PdfRead> ReadPdfAsync(string executable, byte[] pdf, PdfReadOptions options, CancellationToken cancellationToken);
@@ -463,7 +467,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// budget to settle its scripts and, since 2026-10-11, the installed browser's user agent (<paramref name="identity"/>) in place
     /// of <c>HeadlessChrome</c>; a page the app wrote has neither to need. No GPU: a print lays out the same without one.
     /// </summary>
-    public static IReadOnlyList<string> PdfArguments(Uri page, string outputPath, string userDataDirectory, bool isWeb, BrowserIdentity identity)
+    public static IReadOnlyList<string> PdfArguments(Uri page, string outputPath, string userDataDirectory, bool isWeb, BrowserIdentity identity, PrintReach? reach = null)
     {
         ArgumentNullException.ThrowIfNull(page);
         ArgumentNullException.ThrowIfNull(outputPath);
@@ -473,6 +477,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         list.AddRange(CommonFlags);
         list.Add("--no-pdf-header-footer");
         list.Add("--print-to-pdf=" + outputPath);
+        if (reach is not null)
+        {
+            list.AddRange(reach.Flags());
+        }
+
         if (isWeb)
         {
             list.Add("--virtual-time-budget=" + VirtualTimeBudgetMs.ToString(CultureInfo.InvariantCulture));
@@ -520,7 +529,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
     }
 
-    public async Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, CancellationToken cancellationToken)
+    public async Task<BrowserPdf> PrintToPdfAsync(string executable, Uri page, string outputPath, PrintReach? reach, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(page);
@@ -530,7 +539,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             bool isWeb = page.Scheme is "http" or "https";
             var identity = BrowserIdentity.For(executable);
-            var run = await RunProcessAsync(executable, page, _userData, userData => PdfArguments(page, outputPath, userData, isWeb, identity), PdfTimeout, (process, _, token) => WaitForExitOrWholeAsync(process, () => WholePdf(outputPath), token), cancellationToken).ConfigureAwait(false);
+            var run = await RunProcessAsync(executable, page, _userData, userData => PdfArguments(page, outputPath, userData, isWeb, identity, reach), PdfTimeout, (process, _, token) => WaitForExitOrWholeAsync(process, () => WholePdf(outputPath), token), cancellationToken).ConfigureAwait(false);
             if (run.StartError is not null)
             {
                 return new BrowserPdf(false, run.StartError);
@@ -1549,5 +1558,63 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         ArgumentNullException.ThrowIfNull(text);
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return lines.Length == 0 ? "" : lines[^1];
+    }
+}
+
+/// <summary>
+/// What a print to PDF may reach (2026-10-22, review R1, the fix plan's D10). <c>convert_to_pdf</c> on a web address checked only the
+/// first host against <c>Web browser network mode</c>, and the printing browser then followed a redirect, a frame or a meta refresh to
+/// <c>192.168.1.1</c> or <c>127.0.0.1</c> and printed it into the working directory. Now the browser's own resolver maps the vetted host
+/// to the address <see cref="LanPolicy.Admit"/> approved (no second lookup, so no rebinding) and every other name to nothing, and every
+/// connection but the vetted host's goes to a proxy at the discard port that is not there — which also catches a literal address, which
+/// no name rule sees, and keeps a system proxy from resolving around the rules. So a page's assets from another host (a CDN) print
+/// missing. A page the app wrote (a file's print) reaches nothing at all: <see cref="Nothing"/>, the PDF reads' flags. Pinned.
+/// </summary>
+public sealed record PrintReach(string? Host, IPAddress? Address)
+{
+    /// <summary>No name resolves and no connection is made: a page the app wrote, or a web host with no approved address.</summary>
+    public static readonly PrintReach Nothing = new(null, null);
+
+    /// <summary>
+    /// The reach for a web page on <paramref name="host"/> (a URL's <c>IdnHost</c>) given the addresses the network mode approved: the
+    /// first of them (a map rule names one address), a literal host itself, loopback for <c>localhost</c>; <see cref="Nothing"/> with none.
+    /// </summary>
+    public static PrintReach For(string host, IReadOnlyList<IPAddress> addresses)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(addresses);
+        string bare = host.Trim('[', ']');
+        if (IPAddress.TryParse(bare, out var literal))
+        {
+            return new PrintReach(host, literal);
+        }
+
+        if (addresses.Count > 0)
+        {
+            return new PrintReach(host, addresses[0]);
+        }
+
+        string name = bare.TrimEnd('.');
+        return string.Equals(name, "localhost", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+            ? new PrintReach(host, IPAddress.Loopback)
+            : Nothing;
+    }
+
+    /// <summary>The browser flags that hold a print to this reach.</summary>
+    public IReadOnlyList<string> Flags()
+    {
+        if (Host is null || Address is null)
+        {
+            return ["--host-resolver-rules=MAP * ~NOTFOUND", "--proxy-server=127.0.0.1:9", "--proxy-bypass-list=<-loopback>"];
+        }
+
+        bool literal = IPAddress.TryParse(Host.Trim('[', ']'), out _);
+        string address = Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? "[" + Address + "]" : Address.ToString();
+        return
+        [
+            literal ? "--host-resolver-rules=MAP * ~NOTFOUND" : $"--host-resolver-rules=MAP {Host} {address}, MAP * ~NOTFOUND",
+            "--proxy-server=127.0.0.1:9",
+            $"--proxy-bypass-list={Host};<-loopback>",
+        ];
     }
 }

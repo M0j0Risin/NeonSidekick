@@ -375,12 +375,7 @@ public sealed unsafe class MacPdfDocument : IPrintSurface
 
     private static string? CFText(nint text)
     {
-        if (text == 0)
-        {
-            return null;
-        }
-
-        byte* buffer = stackalloc byte[256];
-        return ImageIONative.CFStringGetCString(text, buffer, 256, ImageIONative.Utf8) != 0 ? Marshal.PtrToStringUTF8((nint)buffer) : null;
+        // Through the reader sized for the string (2026-10-22, review X4's sibling: a fixed 256 bytes read a longer one as null).
+        return text == 0 ? null : ImageIONative.Text(text);
     }
 }

@@ -237,7 +237,11 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
         CloseInput();
         if (!HasExited)
         {
-            await Task.WhenAny(_exited.Task, Task.Delay(DisposeGrace)).ConfigureAwait(false);
+            // The grace's timer let go as soon as the child is gone (2026-10-22, review F6: each dispose left a 5 s timer behind).
+            using var grace = new CancellationTokenSource();
+            var delay = Task.Delay(DisposeGrace, grace.Token);
+            await Task.WhenAny(_exited.Task, delay).ConfigureAwait(false);
+            grace.Cancel();
         }
 
         Dispose(TimeSpan.Zero);

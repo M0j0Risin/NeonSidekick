@@ -74,7 +74,7 @@ public static class PlanFiles
     public static string? WriteTemplate(WorkingDirectory files)
     {
         ArgumentNullException.ThrowIfNull(files);
-        var written = files.WriteText(TemplatePath, TemplateText(), overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(TemplatePath, TemplateText(), overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, TemplatePath, "write", written.Detail);
     }
 
@@ -126,7 +126,7 @@ public static class PlanFiles
             body = references(path, body);
         }
 
-        var written = files.WriteText(path, PlanDocument.Render(header, title, body), overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(path, PlanDocument.Render(header, title, body), overwrite: true));
         if (written.Outcome != FileOutcome.Ok)
         {
             return (null, FileText.Error(written.Outcome, path, "write", written.Detail));
@@ -152,7 +152,7 @@ public static class PlanFiles
             return text;
         }
 
-        return files.WriteText(path, normalized, overwrite: true).Outcome == FileOutcome.Ok ? normalized : text;
+        return WriteGuard.AsApp(() => files.WriteText(path, normalized, overwrite: true)).Outcome == FileOutcome.Ok ? normalized : text;
     }
 
     /// <summary>
@@ -176,7 +176,7 @@ public static class PlanFiles
                 : FileText.Missing(path);
         }
 
-        var written = files.WriteText(path, PlanDocument.WithStatus(text, status, now, requirement, progress), overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(path, PlanDocument.WithStatus(text, status, now, requirement, progress), overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
@@ -201,7 +201,7 @@ public static class PlanFiles
                 : FileText.Missing(path);
         }
 
-        var written = files.WriteText(path, PlanDocument.WithReview(text, review, now, requirement), overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(path, PlanDocument.WithReview(text, review, now, requirement), overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 
@@ -234,7 +234,7 @@ public static class PlanFiles
             return null;
         }
 
-        var written = files.WriteText(path, changed, overwrite: true);
+        var written = WriteGuard.AsApp(() => files.WriteText(path, changed, overwrite: true));
         return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
     }
 

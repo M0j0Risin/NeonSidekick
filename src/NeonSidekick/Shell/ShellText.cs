@@ -102,19 +102,41 @@ public static class ShellText
     }
 
     /// <summary>The head and the tail of <paramref name="text"/> within <paramref name="maxChars"/>, cut at line ends, <see cref="CutLine"/> between them.</summary>
+    /// <summary>The model's sentence for the trusted files' tripwire (2026-10-22, the fix plan's D8). Prompt text.</summary>
+    public const string TrustedPoliced =
+        "Error: refused by the shell police: the command names .git, .neon, the project file or the app's own folder, which only the app's tools change (the git tools, write_file with the user's yes for the project file); use those";
+
+    /// <summary>The transcript's line for it: the word that tripped it, and the script it was in.</summary>
+    public static string TrustedShown(string token, string? file) =>
+        "refused: names " + token + (file is null ? "" : " (in " + file + ")") + ", a file only the app's tools change";
+
+    public static string TrustedLogLine(CommandRequest request, string token, string? file) =>
+        $"police: trusted files ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
+
+    /// <summary>A line that runs a script that isn't there yet (2026-10-22, review L4). Prompt text.</summary>
+    public static string ScriptMissing(string name) =>
+        $"Error: refused by the shell police: {name} isn't there for the police to read before it runs; write it with write_file first, then run it in another call";
+
+    public static string ScriptMissingLogLine(CommandRequest request, string name) =>
+        $"police: script not there yet ('{name}') — {request.Kind} {Quote(request.Command)}";
+
+    /// <summary>A bridge connection past every slot (2026-10-22, review F7). Prompt text.</summary>
+    public const string BridgeBusy = "Error: the tool bridge is busy with as many calls as it takes at once; try the call again";
+
     public static string Cut(string text, int maxChars, string? spill, bool whole = true)
     {
         ArgumentNullException.ThrowIfNull(text);
         int headChars = (int)(maxChars * HeadShare);
         int tailChars = maxChars - headChars;
-        string head = text[..Math.Min(headChars, text.Length)];
+        // Neither end inside a surrogate pair (2026-10-22, review L6).
+        string head = Files.TextCut.Safe(text, Math.Min(headChars, text.Length));
         int lastBreak = head.LastIndexOf('\n');
         if (lastBreak > 0)
         {
             head = head[..lastBreak];
         }
 
-        string tail = text[Math.Max(0, text.Length - tailChars)..];
+        string tail = text[Files.TextCut.SafeStart(text, Math.Max(0, text.Length - tailChars))..];
         int firstBreak = tail.IndexOf('\n');
         if (firstBreak >= 0 && firstBreak < tail.Length - 1)
         {

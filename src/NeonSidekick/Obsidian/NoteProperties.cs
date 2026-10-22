@@ -23,8 +23,16 @@ public sealed record NoteFrontmatter(bool Present, int Close, IReadOnlyList<Note
 {
     public static NoteFrontmatter None { get; } = new(false, -1, []);
 
+    /// <summary>
+    /// The key's entry: the last when it is given more than once (2026-10-22, review H12: the first was read and changed while YAML and
+    /// Obsidian read the last, so a set did nothing visible and a remove said done with the key still there).
+    /// </summary>
     public NoteProperty? Find(string key) =>
-        Properties.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+        Properties.LastOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Every entry of the key, in file order (review H12).</summary>
+    public IReadOnlyList<NoteProperty> FindAll(string key) =>
+        Properties.Where(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase)).ToList();
 }
 
 /// <summary>
@@ -102,7 +110,7 @@ public static class NoteProperties
             }
 
             string key = SkillFrontmatter.Unquote(line[..colon].Trim());
-            string rest = line[(colon + 1)..].Trim();
+            string rest = WithoutComment(line[(colon + 1)..]).Trim();
             int end = index + 1;
             while (end < close && (lines[end].Trim().Length == 0 || char.IsWhiteSpace(lines[end][0]) || lines[end].StartsWith('-')))
             {
@@ -131,6 +139,47 @@ public static class NoteProperties
         }
 
         return new NoteFrontmatter(true, close, properties);
+    }
+
+    /// <summary>
+    /// A value's text without a YAML comment after it (2026-10-22, review R8: <c>tags: [project, work] # note</c> read as the tags
+    /// <c>[project</c> and <c>work]</c>, and a quoted status kept its quotes): a <c>#</c> after a space or tab, outside quotes, ends it.
+    /// </summary>
+    public static string WithoutComment(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        char quote = '\0';
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (quote != '\0')
+            {
+                if (c == '\\' && quote == '"' && i + 1 < value.Length)
+                {
+                    i++;
+                }
+                else if (c == quote)
+                {
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
+            if (c is '"' or '\'' && (i == 0 || value[i - 1] is ' ' or '\t' or '[' or ',' or '{'))
+            {
+                quote = c;
+                continue;
+            }
+
+            // Not the value's own first character: "tags: #a, b" has always read as tags here, as Obsidian users write them.
+            if (c == '#' && i > 0 && value[i - 1] is ' ' or '\t' && value[..i].Trim().Length > 0)
+            {
+                return value[..i].TrimEnd();
+            }
+        }
+
+        return value;
     }
 
     /// <summary>The colon that ends a key (<c>key:</c> at the line's end or before a space), a quoted key's quotes stepped over; -1 when none.</summary>
@@ -166,7 +215,7 @@ public static class NoteProperties
 
             if (content.TrueForAll(l => l.TrimStart().StartsWith('-')))
             {
-                var items = content.Select(l => SkillFrontmatter.Unquote(l.TrimStart()[1..].Trim())).Where(s => s.Length > 0).ToList();
+                var items = content.Select(l => SkillFrontmatter.Unquote(WithoutComment(l.TrimStart()[1..]).Trim())).Where(s => s.Length > 0).ToList();
                 return new NoteProperty(key, null, items, false, start, end, raw);
             }
 
@@ -309,6 +358,13 @@ public static class NoteProperties
     {
         ArgumentNullException.ThrowIfNull(key);
         lines = [];
+        // A key with a line break or another control character is refused (2026-10-22, review H11: one holding "\n---\n" closed the
+        // frontmatter early and wrote the rest into the note's body).
+        if (key.Any(char.IsControl) || key.Contains('\u2028') || key.Contains('\u2029'))
+        {
+            return false;
+        }
+
         string head = SkillFrontmatter.NeedsQuotes(key) || key.Contains(':', StringComparison.Ordinal) ? SkillFrontmatter.Scalar(key) : key;
         switch (value.ValueKind)
         {
@@ -374,11 +430,24 @@ public static class NoteProperties
             return result;
         }
 
-        if (front.Find(key) is { } existing)
+        // Every entry of a key given twice goes, the new lines where the last stood (review H12).
+        var all = front.FindAll(key);
+        if (all.Count > 0)
         {
-            result.AddRange(lines.Take(existing.Start));
-            result.AddRange(rendered);
-            result.AddRange(lines.Skip(existing.End));
+            var last = all[^1];
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (i == last.Start)
+                {
+                    result.AddRange(rendered);
+                }
+
+                if (!all.Any(p => i >= p.Start && i < p.End))
+                {
+                    result.Add(lines[i]);
+                }
+            }
+
             return result;
         }
 
@@ -395,13 +464,15 @@ public static class NoteProperties
         ArgumentNullException.ThrowIfNull(key);
         var front = Parse(lines);
         removed = false;
-        if (front.Find(key) is not { } existing)
+        var all = front.FindAll(key);
+        if (all.Count == 0)
         {
             return [.. lines];
         }
 
+        // Every entry of the key (review H12).
         removed = true;
-        return [.. lines.Take(existing.Start), .. lines.Skip(existing.End)];
+        return lines.Where((_, i) => !all.Any(p => i >= p.Start && i < p.End)).ToList();
     }
 
     /// <summary>A value for a search's <c>value</c> filter: whether any of the property's values equals <paramref name="wanted"/>, ignoring case (a number compared as written).</summary>

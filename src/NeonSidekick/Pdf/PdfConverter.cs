@@ -13,7 +13,8 @@ namespace NeonSidekick.Pdf;
 /// (<paramref name="To"/>: a file, a folder, or blank for beside the source), whether it may replace a file there, and the page
 /// (<paramref name="Landscape"/>, <paramref name="Paper"/>; a web page keeps its own).
 /// </summary>
-public sealed record PdfRequest(string? Path = null, Uri? Url = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null);
+/// <remarks><paramref name="ByUser"/> (2026-10-22, the write guard): the user's own <c>/pdf</c>, whose write takes the app's pass (<see cref="WriteGuard.AppWrites"/>).</remarks>
+public sealed record PdfRequest(string? Path = null, Uri? Url = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null, bool ByUser = false);
 
 /// <summary>
 /// The one door to making PDFs (2026-10-03, the user's ask: PDF conversion with no new package): <c>convert_to_pdf</c>,
@@ -76,7 +77,8 @@ public sealed class PdfConverter
     /// The source loaded: its kind, how results name it, the sandbox file (null for text and pages) and its content; a web page behind
     /// a bot check a person may solve carries the check (<paramref name="Gate"/>, 2026-10-13).
     /// </summary>
-    private sealed record Source(PdfSourceKind Kind, string Display, string? Full, string? Text, byte[]? Bytes, BotCheckRequest? Gate = null);
+    /// <remarks><paramref name="Reach"/> (2026-10-22, review R1): what a web page's print may reach, null under the network mode <c>both</c>.</remarks>
+    private sealed record Source(PdfSourceKind Kind, string Display, string? Full, string? Text, byte[]? Bytes, BotCheckRequest? Gate = null, PrintReach? Reach = null);
 
     public async Task<string> ConvertAsync(PdfRequest request, CancellationToken cancellationToken)
     {
@@ -109,7 +111,19 @@ public sealed class PdfConverter
 
         string? sourceRelative = source.Full is null ? null : source.Display;
         string target = PdfPlan.OutputFor(request.To, sourceRelative, request.Url, request.Title, _time.GetLocalNow(), _files.IsExistingDirectory);
-        var begun = _files.BeginWrite(target, request.Overwrite, out var pending);
+        // An unnamed default is never a replace (2026-10-22, review R2, the fix plan's mechanism 4): the first free name, report-2.pdf…, and
+        // overwrite is for a named to alone (pdf_edit's and image_edit's rule); the refusal no longer invites overwrite onto the user's file.
+        string to = request.To?.Trim() ?? "";
+        bool named = to.Length > 0 && !to.EndsWith('/') && !to.EndsWith('\\') &&!_files.IsExistingDirectory(to);
+        // The user's own /pdf with overwrite still replaces its default file: the rule is the model's (it named no file to replace).
+        bool overwrite = (named || request.ByUser) && request.Overwrite;
+        if (!named && !overwrite && _files.Resolve(target, forWrite: false, out string wanted) == FileOutcome.Ok)
+        {
+            target = _files.Relative(WorkingDirectory.FirstFree(wanted));
+        }
+
+        PendingWrite? pending = null;
+        var begun = request.ByUser ? WriteGuard.AsApp(() => _files.BeginWrite(target, overwrite, out pending)) : _files.BeginWrite(target, overwrite, out pending);
         if (pending is null)
         {
             return FileText.Error(begun.Outcome, begun.Relative, "write", begun.Detail);
@@ -119,6 +133,9 @@ public sealed class PdfConverter
         string htmlPath = System.IO.Path.Combine(_tempFolder, id + ".html");
         string pdfPath = System.IO.Path.Combine(_tempFolder, id + ".pdf");
         string windowPdfPath = System.IO.Path.Combine(_tempFolder, id + ".window.pdf");
+        // The printer's own file (2026-10-22, review T2: the fallback wrote where the failed browser run had left part of a PDF, and the wait
+        // took that file's settled length for the spooler's).
+        string printerPdfPath = System.IO.Path.Combine(_tempFolder, id + ".printer.pdf");
         using (pending)
         {
             try
@@ -157,13 +174,15 @@ public sealed class PdfConverter
 
                     if (route == PdfRoute.Printer)
                     {
-                        string? printed = await PrinterAsync(source, request, pdfPath, cancellationToken).ConfigureAwait(false);
+                        WorkingDirectory.DeleteQuietly(pdfPath);
+                        string? printed = await PrinterAsync(source, request, printerPdfPath, cancellationToken).ConfigureAwait(false);
                         if (printed is not null)
                         {
                             return printed;
                         }
 
                         madeWith = PrintText.PrintToPdfPrinter;
+                        madePath = printerPdfPath;
                     }
                     else
                     {
@@ -173,6 +192,13 @@ public sealed class PdfConverter
 
                 await using (var made = new FileStream(madePath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
                 {
+                    // No bigger than MaxMadeBytes into the working directory (2026-10-22, review T4: a page's own tiny @page made a PDF of
+                    // countless pages, copied in whole).
+                    if (made.Length > MaxMadeBytes)
+                    {
+                        return PdfText.MadeTooLarge(source.Display, MaxMadeBytes);
+                    }
+
                     await made.CopyToAsync(pending.Stream, cancellationToken).ConfigureAwait(false);
                 }
 
@@ -189,9 +215,13 @@ public sealed class PdfConverter
                 WorkingDirectory.DeleteQuietly(htmlPath);
                 WorkingDirectory.DeleteQuietly(pdfPath);
                 WorkingDirectory.DeleteQuietly(windowPdfPath);
+                WorkingDirectory.DeleteQuietly(printerPdfPath);
             }
         }
     }
+
+    /// <summary>The largest PDF a conversion brings into the working directory (review T4, the fix plan's Limits).</summary>
+    public const long MaxMadeBytes = 100L * 1024 * 1024;
 
     /// <summary>Whether choosing needs to know about the printer: not when the browser is there and wanted.</summary>
     private static bool NeedsPrinterCheck(string engine, string? executable) =>
@@ -221,27 +251,34 @@ public sealed class PdfConverter
         }
 
         var options = WebAccess.Options(effective);
-        if (await _fetcher.PreflightAsync(url.Host, options, cancellationToken).ConfigureAwait(false) is { } refused)
+        var (refused, admitted) = await _fetcher.AdmitAsync(url.Host, options, cancellationToken).ConfigureAwait(false);
+        if (refused is { } refusal)
         {
-            return (null, WebText.Error(refused, url.AbsoluteUri, url.Host));
+            return (null, WebText.Error(refusal, url.AbsoluteUri, url.Host));
         }
+
+        // The print is held to the address just approved (2026-10-22, review R1): a redirect, frame or refresh elsewhere fails.
+        var reach = admitted is null ? null : PrintReach.For(url.IdnHost, admitted);
 
         // With someone to ask (2026-10-13), the page as web_fetch gets it first: a bot check a person may solve is the window's to print.
         // Asked without reading a PDF (2026-10-14): the probe only wants to know what the address is, not a 40-page read. Under the
         // default mode over HTTP alone (2026-10-20, the code review: a page of scripts sent the probe's fallback to the headless browser
         // for a DOM that was thrown away, then the print started it again); the headless browser only for a refusal, which it may pass
         // with no person, as web_fetch's fallback would.
+        // The probe runs whether or not there is anyone to solve a bot check (2026-10-22, review T3: headless, or with the window off, a PDF
+        // served from a path without .pdf went to Chromium, which downloaded it, and an empty page was "made"): over HTTP alone then, for
+        // its media type.
         BotCheckRequest? gate = null;
-        if (_botCheck is not null && BotcheckWindow.Resolve(effective) != BotcheckKind.Disabled)
+        bool canAsk = _botCheck is not null && BotcheckWindow.Resolve(effective) != BotcheckKind.Disabled;
         {
             bool fallback = options.Engine == FetchEngine.Default;
-            var probe = await _fetcher.FetchAsync(url, options with { ReadPdf = false, Engine = fallback ? FetchEngine.HttpClient : options.Engine }, cancellationToken).ConfigureAwait(false);
+            var probe = await _fetcher.FetchAsync(url, options with { ReadPdf = false, Engine = fallback || !canAsk ? FetchEngine.HttpClient : options.Engine }, cancellationToken).ConfigureAwait(false);
             if (WebFetcher.IsPdfType(probe.MediaType))
             {
                 return (null, PdfText.UrlIsPdf(url.AbsoluteUri));
             }
 
-            bool offered = BotCheck.Offers(probe);
+            bool offered = canAsk && BotCheck.Offers(probe);
             if (offered && fallback)
             {
                 // The headless browser got the page: no person is needed, and its print will get it too.
@@ -254,7 +291,7 @@ public sealed class PdfConverter
             }
         }
 
-        return (new Source(PdfSourceKind.Url, url.AbsoluteUri, null, null, null, gate), null);
+        return (new Source(PdfSourceKind.Url, url.AbsoluteUri, null, null, null, gate, reach), null);
     }
 
     /// <summary>
@@ -312,11 +349,18 @@ public sealed class PdfConverter
         try
         {
             long length = new FileInfo(full).Length;
+            // A picture the browser can't draw is refused, not printed as an empty page (2026-10-22, review S4: HEIC, TIFF and AVIF went in
+            // labeled PNG and came out blank).
+            if (kind == PdfSourceKind.Picture && PdfHtml.ImageMediaType(full) is null)
+            {
+                return (null, PdfText.PictureNotDrawable(display));
+            }
+
             if (kind == PdfSourceKind.Picture)
             {
                 return length > ImageFile.MaxFileBytes
                     ? (null, FileText.Error(FileOutcome.ImageTooBig, display, "read"))
-                    : (new Source(kind, display, full, null, File.ReadAllBytes(full)), null);
+                    : (new Source(kind, display, full, null, RegularFiles.ReadAllBytes(full)), null);
             }
 
             if (length > PrintText.MaxTextBytes)
@@ -324,7 +368,7 @@ public sealed class PdfConverter
                 return (null, PdfText.TooLarge(display));
             }
 
-            return (new Source(kind, display, full, WorkingDirectory.Decode(File.ReadAllBytes(full), out _), null), null);
+            return (new Source(kind, display, full, WorkingDirectory.Decode(RegularFiles.ReadAllBytes(full), out _), null), null);
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
@@ -352,7 +396,9 @@ public sealed class PdfConverter
             page = new Uri(htmlPath);
         }
 
-        var made = await _browser.PrintToPdfAsync(executable, page, pdfPath, cancellationToken).ConfigureAwait(false);
+        // A page the app wrote reaches nothing (2026-10-22, review R1): its pictures are inlined, and nothing else belongs in it.
+        var reach = source.Kind == PdfSourceKind.Url ? source.Reach : PrintReach.Nothing;
+        var made = await _browser.PrintToPdfAsync(executable, page, pdfPath, reach, cancellationToken).ConfigureAwait(false);
         return (made.Ok, made.Detail);
     }
 
@@ -486,7 +532,7 @@ public sealed class PdfConverter
                 }
 
                 _total += length;
-                return File.ReadAllBytes(full);
+                return RegularFiles.ReadAllBytes(full);
             }
             catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
             {

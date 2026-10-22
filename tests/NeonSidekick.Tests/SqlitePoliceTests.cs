@@ -172,7 +172,8 @@ public sealed class SqlitePoliceTests : IDisposable
         Assert.Equal(FileOutcome.Ok, files.Copy("a.db", "a-copy.txt", overwrite: false).Outcome);
         Assert.Equal(FileOutcome.Ok, files.Resolve("a.db", forWrite: false, out _));
 
-        // An archive with an entry landing on a database: nothing extracted.
+        // An archive with an entry landing on a database: that entry left out and named, the rest extracted (2026-10-22, the fix plan's D17:
+        // a bulk write skips each guarded entry and says so; the whole archive was refused until then).
         string zip = Path.Combine(_dir, "in.zip");
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
         {
@@ -187,8 +188,11 @@ public sealed class SqlitePoliceTests : IDisposable
             }
         }
 
-        Assert.Equal(FileOutcome.DatabaseProtected, files.Unzip("in.zip", "out", overwrite: false).Outcome);
-        Assert.False(Directory.Exists(Path.Combine(_dir, "out")));
+        var unzipped = files.Unzip("in.zip", "out", overwrite: false);
+        Assert.Equal(FileOutcome.Ok, unzipped.Outcome);
+        Assert.True(File.Exists(Path.Combine(_dir, "out", "readme.txt")));
+        Assert.False(File.Exists(Path.Combine(_dir, "out", "x.sqlite")));
+        Assert.Contains(Path.Combine("out", "x.sqlite"), unzipped.LeftOut);
 
         // The guard off (the SQLite tools off): all of it goes.
         var open = Guarded(on: false);

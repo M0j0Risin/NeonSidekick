@@ -104,6 +104,18 @@ internal static unsafe partial class ImageIONative
     public static partial byte CFStringGetCString(nint text, byte* buffer, nint size, uint encoding);
 
     [LibraryImport(CoreFoundation)]
+    public static partial nint CFStringGetLength(nint text);
+
+    [LibraryImport(CoreFoundation)]
+    public static partial byte CFBooleanGetValue(nint boolean);
+
+    [LibraryImport(CoreFoundation)]
+    public static partial nuint CFBooleanGetTypeID();
+
+    [LibraryImport(CoreFoundation)]
+    public static partial nint CFStringGetMaximumSizeForEncoding(nint length, uint encoding);
+
+    [LibraryImport(CoreFoundation)]
     public static partial nint CFArrayGetCount(nint array);
 
     [LibraryImport(CoreFoundation)]
@@ -195,7 +207,10 @@ internal static unsafe partial class ImageIONative
 
     // ---- small helpers over the calls above ----
 
-    /// <summary>A CFString's text; empty for none.</summary>
+    /// <summary>
+    /// A CFString's text; empty for none. The buffer is sized for the string (2026-10-22, review X4: a fixed 512 bytes read a longer one as
+    /// "", so a long NetFS mount point was unmounted as "" and leaked, another with each retry).
+    /// </summary>
     public static string Text(nint text)
     {
         if (text == 0)
@@ -203,8 +218,23 @@ internal static unsafe partial class ImageIONative
             return "";
         }
 
-        byte* buffer = stackalloc byte[512];
-        return CFStringGetCString(text, buffer, 512, Utf8) != 0 ? Marshal.PtrToStringUTF8((nint)buffer) ?? "" : "";
+        long size = (long)CFStringGetMaximumSizeForEncoding(CFStringGetLength(text), Utf8) + 1;
+        if (size <= 1 || size > 64 * 1024 * 1024)
+        {
+            size = size <= 1 ? 1 : 64 * 1024 * 1024;
+        }
+
+        if (size <= 1024)
+        {
+            byte* small = stackalloc byte[1024];
+            return CFStringGetCString(text, small, 1024, Utf8) != 0 ? Marshal.PtrToStringUTF8((nint)small) ?? "" : "";
+        }
+
+        byte[] buffer = new byte[size];
+        fixed (byte* p = buffer)
+        {
+            return CFStringGetCString(text, p, (nint)size, Utf8) != 0 ? Marshal.PtrToStringUTF8((nint)p) ?? "" : "";
+        }
     }
 
     /// <summary>A new CFString (released by the caller).</summary>
@@ -219,6 +249,22 @@ internal static unsafe partial class ImageIONative
 
     /// <summary>A new CFNumber holding a double (released by the caller).</summary>
     public static nint CreateNumber(double value) => CFNumberCreate(0, NumberFloat64, &value);
+
+    /// <summary>A CFNumber's value as a double; null when <paramref name="number"/> is no number (2026-10-22, review O3: a picture's DPI).</summary>
+    public static double? Double(nint number)
+    {
+        if (number == 0 || CFGetTypeID(number) != CFNumberGetTypeID())
+        {
+            return null;
+        }
+
+        double value;
+        return CFNumberGetValue(number, NumberFloat64, &value) != 0 ? value : null;
+    }
+
+    /// <summary>A CFBoolean's value; null when <paramref name="value"/> is no boolean (review O9).</summary>
+    public static bool? Bool(nint value) =>
+        value == 0 || CFGetTypeID(value) != CFBooleanGetTypeID() ? null : CFBooleanGetValue(value) != 0;
 
     /// <summary>A CFNumber's value as an int; null when <paramref name="number"/> is no number.</summary>
     public static int? Int(nint number)

@@ -35,6 +35,12 @@ public sealed class ReadPdfTool : FileTool
     public const string PicturesArgument = "pictures";
     public const string FindArgument = "find";
     public const string FieldsArgument = "fields";
+
+    /// <summary>
+    /// Where one page's text starts (2026-10-22, review S8: a page past the cap was cut with no way to its rest, and the hint sent a text-only
+    /// model to pictures): with a single page in <c>pages</c>, the character to start at; a cut page's note names it.
+    /// </summary>
+    public const string FromCharArgument = "from_char";
     public const string ShareArgument = UncTool.ShareArgument;
 
     /// <summary>The most pages one call reads for its text (the rest are the next call's).</summary>
@@ -56,7 +62,8 @@ public sealed class ReadPdfTool : FileTool
             "pages": { "type": "string", "description": "Which pages, by physical page number from 1: \"3\", \"2-5\", \"5-\" (to the end) or \"1,3,7-9\". Leave it out to start at page 1 with the PDF's outline; after a partial read, call again with the pages its header names as next." },
             "pictures": { "type": "boolean", "description": "true also sends the pages themselves as pictures (a scan, a chart, a form, a page with no text), a few per call." },
             "find": { "type": "string", "description": "Words to look for: lists the pages that hold every word, with a line from each, instead of the text. Combine with pages to search only those." },
-            "fields": { "type": "boolean", "description": "true lists the PDF's form fields instead of its text: each name, kind, value and the values it takes, for pdf_edit's fill_form." }{{(shares ? ShareProperty : "")}}
+            "fields": { "type": "boolean", "description": "true lists the PDF's form fields instead of its text: each name, kind, value and the values it takes, for pdf_edit's fill_form." },
+            "from_char": { "type": "integer", "description": "With one page in pages: the character of its text to start at, to read on past a long page's cut (its note names the number)." }{{(shares ? ShareProperty : "")}}
           },
           "required": ["path"]
         }
@@ -137,14 +144,24 @@ public sealed class ReadPdfTool : FileTool
             return bad;
         }
 
-        var request = new Request(spec, range, pictures, find, ViewImageTool.LimitOf(_effective()), fields);
+        if (!ToolArguments.TryReadInt32(arguments, FromCharArgument, out var fromChar, out string rawFrom) || fromChar < 0)
+        {
+            return ClockText.BadInteger(FromCharArgument, rawFrom);
+        }
+
+        if (fromChar > 0 && (range is null || range.Resolve(int.MaxValue).Count != 1))
+        {
+            return PdfText.FromCharNeedsOnePage;
+        }
+
+        var request = new Request(spec, range, pictures, find, ViewImageTool.LimitOf(_effective()), fields, fromChar ?? 0);
         string? share = ToolArguments.ReadString(arguments, ShareArgument).Trim() is { Length: > 0 } named ? named : null;
         return share is null && !OnAShare(path)
             ? await ReadLocalAsync(path, request, cancellationToken).ConfigureAwait(false)
             : await ReadOnShareAsync(share, path, request, cancellationToken).ConfigureAwait(false);
     }
 
-    private sealed record Request(string Spec, PdfPageRange? Range, bool Pictures, string Find, int PictureLimit, bool Fields = false);
+    private sealed record Request(string Spec, PdfPageRange? Range, bool Pictures, string Find, int PictureLimit, bool Fields = false, int FromChar = 0);
 
     private async Task<object?> ReadLocalAsync(string path, Request request, CancellationToken cancellationToken)
     {
@@ -182,11 +199,16 @@ public sealed class ReadPdfTool : FileTool
             return UncText.Scoped(refused, target);
         }
 
+        // Kept apart from every other reader's copy of the same file (2026-10-22, review M3).
+        docKey = docKey! with { Reader = "unc:" + target.Name + ":" + UncAccess.Account(target) };
+
+        // The root named for the share while the answer is built, the PDF's own text never rewritten (2026-10-22, review H2).
+        using var naming = FileText.NamingRoot(UncText.ShareName(target));
         return await AnswerAsync(docKey!, shown, async token =>
         {
             var read = await _unc.RunAsync(target, write: false, files => Bytes(files, relative), token).ConfigureAwait(false);
             return read.Error is { } e ? (null, e) : read.Value;
-        }, request, text => UncText.Scoped(text, target), cancellationToken).ConfigureAwait(false);
+        }, request, text => text, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Whether a call without a share means one: a full path outside the working directory (and the images folder) while a share is offered (<c>open</c>'s rule).</summary>
@@ -211,7 +233,7 @@ public sealed class ReadPdfTool : FileTool
         }
 
         bool finding = request.Find.Length > 0;
-        IReadOnlyList<int>? pages = request.Range?.Resolve(request.Range.First + PdfReading.MaxPagesPerRead - 1);
+        IReadOnlyList<int>? pages = request.Range?.Resolve(PdfPageRange.LastOf(request.Range.First, PdfReading.MaxPagesPerRead));
         var pictures = !request.Pictures ? [] : (pages ?? [.. Enumerable.Range(1, request.PictureLimit)]).Take(request.PictureLimit).ToList();
         var ask = finding
             ? new PdfAsk(pages, [], Outline: false, Labels: true, AllPages: pages is null, MaxPages: PdfReading.MaxPagesPerRead)
@@ -227,21 +249,28 @@ public sealed class ReadPdfTool : FileTool
             return scope(FindAnswer(display, request, read));
         }
 
+        // A PDF of no pages is said as one (2026-10-22, review K17: it was "pages "" names none of them").
+        if (read.PageCount == 0)
+        {
+            return scope(PdfText.NoPages(display));
+        }
+
         var asked = request.Range?.Resolve(read.PageCount) ?? [.. Enumerable.Range(1, read.PageCount)];
         if (asked.Count == 0)
         {
             return scope(PdfText.PastTheEnd(display, read.PageCount, request.Spec));
         }
 
-        string text = TextAnswer(display, request, read, asked);
+        var (text, shownPages) = TextAnswer(display, request, read, asked);
         var drawn = read.Pictures.Where(p => p.Png is not null).OrderBy(p => p.Number).ToList();
         if (!request.Pictures)
         {
             return scope(text);
         }
 
+        // The pages left out of the pictures are among those the text showed (review K17: with no pages, every page past the text's was named).
         var wantedPictures = asked.Take(request.PictureLimit).ToList();
-        var leftOut = asked.Skip(request.PictureLimit).Take(PagesPerCall).ToList();
+        var leftOut = shownPages.Skip(request.PictureLimit).Take(PagesPerCall).ToList();
         var notDrawn = wantedPictures.Where(n => drawn.All(p => p.Number != n)).ToList();
         var sb = new StringBuilder(text);
         if (drawn.Count > 0)
@@ -265,7 +294,7 @@ public sealed class ReadPdfTool : FileTool
     }
 
     /// <summary>The header, the outline when no pages were given, and the pages' text up to the cap.</summary>
-    private static string TextAnswer(string display, Request request, PdfPages read, IReadOnlyList<int> asked)
+    private static (string Text, IReadOnlyList<int> Shown) TextAnswer(string display, Request request, PdfPages read, IReadOnlyList<int> asked)
     {
         var body = new StringBuilder();
         if (request.Range is null && read.Outline is { Count: > 0 } outline)
@@ -283,6 +312,14 @@ public sealed class ReadPdfTool : FileTool
                 break;   // not read: past this call's pages, or the read stopped short
             }
 
+            // A long page read on from where its cut said (2026-10-22, review S8).
+            int skipped = 0;
+            if (request.FromChar > 0)
+            {
+                skipped = NeonSidekick.Files.TextCut.SafeStart(pageText, Math.Min(request.FromChar, pageText.Length));
+                pageText = pageText[skipped..];
+            }
+
             string heading = PdfText.PageHeading(page, read.LabelOf(page));
             int room = budget - body.Length - heading.Length - 2;
             if (shown.Count > 0 && pageText.Length > room)
@@ -296,8 +333,8 @@ public sealed class ReadPdfTool : FileTool
                 anyText = true;
                 if (pageText.Length > Math.Max(room, 0) && shown.Count == 0)
                 {
-                    int cut = Math.Max(room, 1000);
-                    body.Append('\n').Append(pageText.AsSpan(0, Math.Min(cut, pageText.Length))).Append('\n').Append(PdfText.PageCut(page, Math.Min(cut, pageText.Length), pageText.Length));
+                    int cut = NeonSidekick.Files.TextCut.SafeLength(pageText, Math.Min(Math.Max(room, 1000), pageText.Length));
+                    body.Append('\n').Append(pageText.AsSpan(0, cut)).Append('\n').Append(PdfText.PageCut(page, skipped + cut, skipped + pageText.Length));
                 }
                 else
                 {
@@ -319,10 +356,14 @@ public sealed class ReadPdfTool : FileTool
             body.Append('\n').Append(PdfText.StoppedShort(read.Detail));
         }
 
+        // The rest of what was asked, its end and its gaps kept (2026-10-22, review T1: "10-60" said next "50-", which read past 60); with no
+        // pages given, the rest of the document as an open range.
+        var rest = asked.Skip(shown.Count).ToList();
+        string? nextSpec = rest.Count == 0 ? null : request.Range is null ? rest[0].ToString(CultureInfo.InvariantCulture) + "-" : PdfText.Spec(rest);
         string header = shown.Count == 0
             ? PdfText.ReadFailed(display, read.Detail.Length > 0 ? read.Detail : "no page could be read")
-            : PdfText.Header(display, shown, read.PageCount, next);
-        return body.Length == 0 ? header : header + "\n" + body;
+            : PdfText.HeaderNext(display, shown, read.PageCount, nextSpec);
+        return (body.Length == 0 ? header : header + "\n" + body, shown);
     }
 
     /// <summary><c>find</c>'s answer: the pages holding every word (the first <see cref="PdfFind.MaxResults"/>), a line from each.</summary>

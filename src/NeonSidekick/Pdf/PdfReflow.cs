@@ -39,16 +39,42 @@ public static partial class PdfReflow
         return sb.ToString();
     }
 
-    /// <summary>One page's lines as one paragraph: spaces between, a hyphen at a line's end before a lowercase letter dropped.</summary>
+    /// <summary>
+    /// One page's lines as one paragraph: spaces between, a hyphen at a line's end before a lowercase letter joined — dropped for a word
+    /// broken by hyphenation, kept for a compound (2026-10-22, review T6: "self-" + "evident" was read "selfevident"). The page decides:
+    /// the word written whole elsewhere drops it, written hyphenated keeps it; otherwise a compound's first part keeps it
+    /// (<see cref="CompoundHeads"/>), and any other drops it, as typeset text breaks words far more often than at a compound's hyphen.
+    /// </summary>
     public static string Join(IReadOnlyList<string> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
+        var words = new HashSet<string>(string.Join(' ', lines).Split([' ', '\t', ',', '.', ';', ':', '!', '?', '(', ')', '"'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w.ToLowerInvariant()), StringComparer.Ordinal);
         var sb = new StringBuilder();
         foreach (string line in lines)
         {
             if (sb.Length > 1 && sb[^1] == '-' && char.IsLetter(sb[^2]) && line.Length > 0 && char.IsLower(line[0]))
             {
-                sb.Length--;
+                int start = sb.Length - 1;
+                while (start > 0 && char.IsLetter(sb[start - 1]))
+                {
+                    start--;
+                }
+
+                string head = sb.ToString(start, sb.Length - 1 - start).ToLowerInvariant();
+                int end = 0;
+                while (end < line.Length && char.IsLetter(line[end]))
+                {
+                    end++;
+                }
+
+                string tail = line[..end].ToLowerInvariant();
+                bool keep = !words.Contains(head + tail) && (words.Contains(head + "-" + tail) || CompoundHeads.Contains(head));
+                if (!keep)
+                {
+                    sb.Length--;
+                }
+
                 sb.Append(line);
             }
             else
@@ -59,6 +85,13 @@ public static partial class PdfReflow
 
         return sb.ToString();
     }
+
+    /// <summary>The first parts of English compounds whose hyphen a line's end keeps (review T6).</summary>
+    public static readonly IReadOnlySet<string> CompoundHeads = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "self", "well", "non", "co", "ex", "anti", "multi", "semi", "pre", "post", "cross", "half", "all", "long", "short", "high", "low",
+        "full", "part", "sub", "super", "inter", "intra", "mid", "over", "under", "quasi", "pseudo", "vice", "e",
+    };
 
     /// <summary>The shapes (<see cref="Shape"/>) that repeat on at least half the pages, and on <see cref="MinRepeats"/> at least.</summary>
     private static HashSet<string> Running(IReadOnlyList<string> candidates, int pageCount)

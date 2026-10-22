@@ -66,8 +66,8 @@ public abstract class UncTransferTool : UncTool
             }
 
             var result = _move ? files.Move(relative, spelled, overwrite ?? false) : files.Copy(relative, spelled, overwrite ?? false);
-            return (UncText.Scoped(_move ? FileText.Moved(result) : FileText.Copied(result), share), result.Outcome == FileOutcome.Ok);
-        }, cancellationToken).ConfigureAwait(false);
+            return new UncChange(UncText.Scoped(() => _move ? FileText.Moved(result) : FileText.Copied(result), share), result.Outcome == FileOutcome.Ok, Partial: result.Outcome == FileOutcome.Failed);
+        }, cancellationToken, to).ConfigureAwait(false);
     }
 }
 

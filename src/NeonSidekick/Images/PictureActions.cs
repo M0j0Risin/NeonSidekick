@@ -238,10 +238,11 @@ public static class PictureActions
                 return new PictureEditOutcome(written, null, false, line, false);
             }
 
-            // overwrite-original's conversion: the new file is whole, so the source goes now; a refusal leaves both and says so.
+            // overwrite-original's conversion: the new file is whole, so the source goes now — to the Recycle bin while File deletes to Recycle
+            // bin is on (2026-10-22, review K5: a bare File.Delete took it for good); a refusal leaves both and says so.
             try
             {
-                File.Delete(full);
+                Files.FileDeletes.Remove(full, isDirectory: false, isLink: false, Files.WriteGuard.Facts?.RecycleBin?.Invoke());
                 return new PictureEditOutcome(written, full, false, line + ImageText.SourceDeleted(Path.GetFileName(full)), false);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -265,7 +266,10 @@ public static class PictureActions
             return PictureEditOutcome.Failure(ImageText.CannotStripLosslessly(info.Label));
         }
 
-        var (result, error) = MetadataStripper.Strip(bytes, (int)info.Orientation);
+        // The orientation MagicScaler reads, else the file's own EXIF's (2026-10-22, review U3: a PNG's eXIf orientation was dropped and none
+        // written back, and the picture turned sideways).
+        int orientation = info.Orientation != PhotoSauce.MagicScaler.Orientation.Normal ? (int)info.Orientation : MetadataStripper.ExifOrientation(bytes) ?? 1;
+        var (result, error) = MetadataStripper.Strip(bytes, orientation);
         if (result is null)
         {
             return PictureEditOutcome.Failure(error ?? ImageText.NotAnImage);

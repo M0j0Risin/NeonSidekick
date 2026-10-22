@@ -4,22 +4,16 @@ using System.Runtime.Versioning;
 namespace NeonSidekick.Files;
 
 /// <summary>
-/// Windows' Recycle bin (later on 2026-10-15, <c>File deletes to Recycle bin</c>): shell32's <c>SHFileOperationW</c> with <c>FO_DELETE</c> and
-/// <c>FOF_ALLOWUNDO | FOF_NO_UI</c>, on a short STA thread under <see cref="RecycleBin.Cap"/> (<see cref="RecycleBin.RunCapped"/>). Before the
-/// call: <see cref="RecycleBin.CheckWindows"/> (a full path, no <c>\\?\</c>, <c>MAX_PATH</c>; a UNC path has no bin) and the drive, which must
-/// be fixed (a network or removable drive has no bin, and the shell would delete there for good without saying so). The answer is read
-/// whole (<see cref="RecycleBin.MapWindows"/>: <c>fAnyOperationsAborted</c> too). Not <c>FOF_WANTNUKEWARNING</c>: its warning is a dialog,
-/// and a delete from the model or the phone has nobody at the PC to answer; an item too big for the bin is deleted for good, as Windows
-/// does, and the docs say so. <c>IFileOperation</c> is the newer API but promises nothing more here (the same nuke dialog), so one
-/// blittable struct and one call it is. No new DLL (shell32 is the viewer's already); smoke <c>files:recycle-bin</c>.
+/// Windows' Recycle bin (later on 2026-10-15, <c>File deletes to Recycle bin</c>), on a short STA thread under <see cref="RecycleBin.Cap"/>
+/// (<see cref="RecycleBin.RunCapped"/>). Before the call: <see cref="RecycleBin.CheckWindows"/> (a full path, no <c>\\?\</c>, <c>MAX_PATH</c>; a UNC
+/// path has no bin) and the drive, which must be fixed (a network or removable drive has no bin). The call is <c>IFileOperation</c> with a
+/// progress sink since 2026-10-22 (review J1, <see cref="RecycleBinOperation"/>): <c>SHFileOperationW</c> deleted an item too big for the bin
+/// for good and answered 0, read as "recycled"; the sink aborts such an item, which is not deleted and is said (<see cref="FileText.RecycleWouldDeleteForGood"/>).
+/// The answer is read whole (<see cref="RecycleBin.MapWindows"/>: an abort too). No new DLL; smoke <c>files:recycle-bin</c>.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed partial class WindowsRecycleBin : IRecycleBin
 {
-    private const uint FoDelete = 3;
-    private const ushort FofAllowUndo = 0x0040;
-    private const ushort FofNoUi = 0x0614;   // FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_NOCONFIRMMKDIR
-
     public RecycleResult Move(string fullPath)
     {
         ArgumentNullException.ThrowIfNull(fullPath);
@@ -35,8 +29,8 @@ public sealed partial class WindowsRecycleBin : IRecycleBin
 
         return RecycleBin.RunCapped(() =>
         {
-            var (code, aborted) = Call(fullPath);
-            return RecycleBin.MapWindows(code, aborted);
+            var (code, aborted, notRecyclable) = Call(fullPath);
+            return RecycleBin.MapWindows(code, aborted, notRecyclable);
         }, RecycleBin.Cap, sta: true);
     }
 
@@ -56,22 +50,8 @@ public sealed partial class WindowsRecycleBin : IRecycleBin
         };
     }
 
-    /// <summary>The shell's call itself, its code and abort flag: the smoke's probe runs it on a path that does not exist.</summary>
-    public static (int Code, bool Aborted) Call(string fullPath)
-    {
-        // pFrom is double-null-terminated: StringToHGlobalUni adds one, the path carries the other.
-        nint from = Marshal.StringToHGlobalUni(fullPath + "\0");
-        try
-        {
-            var op = new ShFileOpStruct { Func = FoDelete, From = from, Flags = (ushort)(FofAllowUndo | FofNoUi) };
-            int code = SHFileOperationW(ref op);
-            return (code, op.AnyOperationsAborted != 0);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(from);
-        }
-    }
+    /// <summary>The shell's call itself: its HRESULT, abort flag and whether the bin could not take the item; the smoke's probe runs it on a path that does not exist.</summary>
+    public static (int Code, bool Aborted, bool NotRecyclable) Call(string fullPath) => RecycleBinOperation.Recycle(fullPath);
 
     private static bool OnFixedDrive(string fullPath)
     {
@@ -84,20 +64,4 @@ public sealed partial class WindowsRecycleBin : IRecycleBin
             return false;
         }
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ShFileOpStruct
-    {
-        public nint Window;
-        public uint Func;
-        public nint From;
-        public nint To;
-        public ushort Flags;
-        public int AnyOperationsAborted;
-        public nint NameMappings;
-        public nint ProgressTitle;
-    }
-
-    [LibraryImport("shell32.dll")]
-    private static partial int SHFileOperationW(ref ShFileOpStruct op);
 }

@@ -203,17 +203,54 @@ public static class FolderCompleter
                 return false;   // nothing to list below a missing folder
             }
 
-            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 && info.LinkTarget is { Length: > 0 } target)
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 && IsSlowChain(path, root))
             {
-                string full = Path.IsPathFullyQualified(target) || target.StartsWith(@"\??\", StringComparison.Ordinal) ? target : Path.GetFullPath(target, Path.GetDirectoryName(path) ?? root);
-                if (IsSlowTarget(full))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>The most links followed from one folder (2026-10-22, review M7).</summary>
+    public const int MaxLinkHops = 8;
+
+    /// <summary>
+    /// Whether the link at <paramref name="path"/>, or any link its target leads to, points somewhere slow (2026-10-22, review M7: only the
+    /// first hop was read, so a link to a local link to a share passed and the share was walked on the input thread). Each hop reads only
+    /// the link itself; a hop that is slow ends the walk before it is read; past <see cref="MaxLinkHops"/> the chain counts as slow.
+    /// </summary>
+    private static bool IsSlowChain(string path, string root)
+    {
+        string at = path;
+        for (int hop = 0; hop < MaxLinkHops; hop++)
+        {
+            var info = new DirectoryInfo(at);
+            if ((info.Attributes & FileAttributes.ReparsePoint) == 0 || info.LinkTarget is not { Length: > 0 } target)
+            {
+                return false;
+            }
+
+            string full = Path.IsPathFullyQualified(target) || target.StartsWith(@"\??\", StringComparison.Ordinal) ? target : Path.GetFullPath(target, Path.GetDirectoryName(at) ?? root);
+            if (IsSlowTarget(full))
+            {
+                return true;
+            }
+
+            if (full.StartsWith(@"\??\", StringComparison.Ordinal))
+            {
+                full = full[4..];
+            }
+
+            if (!Directory.Exists(full))
+            {
+                return false;
+            }
+
+            at = full;
+        }
+
+        return true;
     }
 
     private static bool IsSlowDrive(string root)

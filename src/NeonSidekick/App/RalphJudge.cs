@@ -185,7 +185,7 @@ internal static class RalphJudge
                 break;
             case RalphOutcome.Split:
                 if (PlanFiles.ReadWhole(host.Files, path) is { } whole && PlanSteps.WithChildren(whole, target, report.Substeps) is { } withChildren
-                    && host.Files.WriteText(path, withChildren, overwrite: true).Outcome == FileOutcome.Ok)
+                    && WriteGuard.AsApp(() => host.Files.WriteText(path, withChildren, overwrite: true)).Outcome == FileOutcome.Ok)
                 {
                     split = true;
                     SetBox(host, path, target, false);
@@ -599,7 +599,7 @@ internal static class RalphJudge
         }
 
         string? asLeft = restore.PutBackOthers ? RalphLog.KeepAsLeft(files, path, text) : null;
-        return (files.WriteText(path, restore.Text, overwrite: true).Outcome == FileOutcome.Ok, asLeft);
+        return (WriteGuard.AsApp(() => files.WriteText(path, restore.Text, overwrite: true)).Outcome == FileOutcome.Ok, asLeft);
     }
 
     /// <summary>What a written <paramref name="restore"/> says: the boxes and words put back, the lines taken out, and where the plan as the pass left it is.</summary>
