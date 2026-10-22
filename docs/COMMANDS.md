@@ -200,7 +200,7 @@ Each purge asks first and follows *File deletes to Recycle bin*: to the Recycle 
 | `/webui on\|off` | Turns the Web UI on or off for this profile; the server starts or stops at once. |
 | `/webui copy` | Puts the first sign-in link (Tailscale's when there is one) on the clipboard. It holds the token: paste it only where you trust. |
 | `/webui reset` | Makes a new sign-in token after a yes; every browser signed in is signed out. |
-| `/webui browser [--external]` | Opens the Web UI on this PC, already signed in ([how](INTERFACE.md#web-ui)); `--external` always uses the default browser. The Web UI must be on. |
+| `/webui browser [--external]` | Opens the Web UI on the app's computer, already signed in ([how](INTERFACE.md#web-ui)); `--external` always uses the default browser. The Web UI must be on. |
 
 Which commands the Web UI's page may send, and how each shows there: [Commands from the page](INTERFACE.md#commands-from-the-page).
 
@@ -256,10 +256,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/net ping <host> [<count>]` | Pings one host (4 echoes, 10 at most): answered or not, the loss and the round trips. |
 | `/net trace <host> [names]` | The route, hop by hop (30 at most), with each hop's name when `names` is given. |
 | `/net port <host> <port>...` | Whether TCP ports (16 at most) are open, refused or silent on each of the host's addresses. |
-| `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server named. |
+| `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through the system's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server named. |
 | `/net tls <host> [<port>] [smtp\|imap\|pop3\|ldap\|rdp\|none]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; ports 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
-| `/net certs [<store>] [user\|machine] [<words>]` | One of this machine's certificate stores (`my` by default), soonest to end first; nothing exported. On a Mac, `root` reads the system's trust unless `user` is named. |
-| `/eventlog` | This PC's event logs (or the only ticked computer's) in a pane, a tab per log, newest first; an event opens with **copy** and **ask** (a draft asking about it). Full text, with *Event log tools* off too. See [Event logs](TOOLS.md#event-logs). |
+| `/net certs [<store>] [user\|machine] [<words>]` | One of the certificate stores on the app's computer (`my` by default), soonest to end first; nothing exported. On a Mac, `root` reads the system's trust unless `user` is named. |
+| `/eventlog` | The event logs of the app's computer (or the only ticked computer's) in a pane, a tab per log, newest first; an event opens with **copy** and **ask** (a draft asking about it). Full text, with *Event log tools* off too. See [Event logs](TOOLS.md#event-logs). |
 | `/eventlog <log>\|<evtx-file> [<term>…] [<words>]` | Opens on a log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:`, `level:`, `id:`, `provider:`, `field:<Name>=<value>`, `since:`, `until:`, `audit:` and words. On a Mac: `system`, `crashes`, `install` or a `.logarchive`, with `level:`, `process:`, `subsystem:`, `category:`, `pid:`, `exclude:`, `since:`, `until:` ([on a Mac](TOOLS.md#event-logs-on-a-mac)). Without the pane, and from the Web UI, it lists the events. |
 | `/services [computer:<name>] [state:running\|stopped\|failed\|all] [<words>]` | A computer's services in a pane, a tab per state. Each opens with **copy**, **ask** and, on a `readwrite` computer, the actions `controlActions` allow, each asking; the [checks](TOOLS.md#services) but *Service writes* apply. Elsewhere (the Web UI, no pane), a list. |
 | `/tasks [computer:<name>] [folder:<path>] [state:ready\|running\|disabled\|all] [microsoft] [<words>]` | A computer's scheduled tasks, a tab per state; `microsoft` adds Windows' own. Each opens (triggers, actions, account, last result) with **copy**, **ask**, **history** (Task Scheduler's log on) and the allowed actions, each asking; privileged tasks guarded. |
@@ -533,7 +533,7 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 * **Starting:** every start opens `neon`, and a switch lasts until the app closes. A desktop shortcut, `--profile <name>` or `NEONSIDEKICK_PROFILE` opens another for a launch; an unknown name exits with code 2.
 * **Reset:** keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.
 * **Push and pull** ask first; the bare forms copy only `profile.json`.
-* **API keys** in `profile.json` are encrypted (DPAPI on Windows, a key in the Keychain on a Mac), one typed in by hand at the next load. Only you, on this machine, can read them.
+* **API keys** in `profile.json` are encrypted (DPAPI on Windows, a key in the Keychain on a Mac), one typed in by hand at the next load. Only you, on the computer running NeonSidekick, can read them.
 
 ### Desktop shortcuts
 

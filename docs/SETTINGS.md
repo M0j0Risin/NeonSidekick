@@ -506,7 +506,7 @@ The tools most profiles use, and the pane's own options.
 | Web browser privacy | `keep-history` keeps the Browser window's visited pages for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). | `clear-history` |
 | Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* while *YouTube tools* is on. | `default-browser` |
 | Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so its history keeps no token) or `url-with-token` (the usual link, which it may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
-| Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (this machine and the LAN) or `both`. | `internet` |
+| Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
 | Web search max results | Hits per search (1–20). | 20 |
@@ -722,7 +722,7 @@ See [Network](TOOLS.md#network).
 | Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
 | Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
 | Network tools denied hosts | Hosts never reached, in the same forms, a name by its addresses too; wins over the allowed list. | empty |
-| Network certificate stores | Also offers `net_certs`, which lists one of this machine's certificate stores (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |
+| Network certificate stores | Also offers `net_certs`, which lists one of the certificate stores on the app's computer (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |
 
 #### EventLog
 
@@ -731,7 +731,7 @@ See [Event logs](TOOLS.md#event-logs). On a Mac only *Event log tools*, `local` 
 | Setting | What it does | Default |
 |---|---|---|
 | Event log tools | Offers `eventlog_logs`, `eventlog_search`, `eventlog_summary` and `eventlog_event`, read-only, over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way; the on/off page's `o` opens *Event log computers offered*. | off |
-| Event log computers offered | A checklist: `local` (this PC) first, then the computers of both `eventlog.json` files. Untick everything and the tools read `.evtx` files alone. | `local` |
+| Event log computers offered | A checklist: `local` (the computer running NeonSidekick) first, then the computers of both `eventlog.json` files. Untick everything and the tools read `.evtx` files alone. | `local` |
 | Event log set password | Pick a runas computer and type its password, masked; it is stored encrypted in `eventlog.json` or in Windows Credential Manager. | — |
 | Event log add/edit computer | A wizard for a new or saved computer; its test reads the newest System event. For `local`, it asks only for the logs, detail and description. | — |
 | Event log max events | Events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
@@ -747,7 +747,7 @@ See [Services](TOOLS.md#services). The computer rows work like the EventLog tab'
 |---|---|---|
 | Service tools | Offers `service_list` and `service_info`, read-only, over the ticked computers; with *Service writes* also `service_control` and `service_start_type`. `/services` works either way. | off |
 | Service writes | The master switch for start, stop, restart and the start type. Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`; never a driver or protected service, never headless. | off |
-| Service computers offered | A checklist: `local` (this PC) first, then the computers of both `services.json` files. | `local` |
+| Service computers offered | A checklist: `local` (the computer running NeonSidekick) first, then the computers of both `services.json` files. | `local` |
 | Service set password | As *Event log set password*, for runas computers. | — |
 | Service add/edit computer | A wizard: host, sign-in, access, the services visible, and under `readwrite` what may be changed, the actions allowed and its own protected list. Its test lists the services under its account. | — |
 | Service computers (profile) | Enter opens this profile's `services.json` (made with commented examples when missing). | — |
@@ -774,7 +774,7 @@ See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac: 
 | Setting | What it does | Default |
 |---|---|---|
 | Directory tools | Offers `ad_user`, `ad_group`, `ad_computer`, `ad_find`, `ad_ou` and `ad_domain` over the ticked domains; the directory is never written. A list's `to` writes a CSV, only with *File tools* on and not in plan mode. `/ad` works either way. | off |
-| Directory domains offered | A checklist: `current` (this PC's own domain, when it is joined) first, then the domains of both `ad.json` files. | `current` when joined, else none |
+| Directory domains offered | A checklist: `current` (the domain the app's computer is joined to, if any) first, then the domains of both `ad.json` files. | `current` when joined, else none |
 | Directory set password | As *Event log set password*, for runas domains. | — |
 | Directory add/edit domain | A wizard: the domain's name, server, base, LDAPS, sign-in and detail. Its test binds, reads the domain's root object and finds a user. | — |
 | Directory domains (profile) | Enter opens this profile's `ad.json`. | — |

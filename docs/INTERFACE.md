@@ -204,7 +204,7 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 | Ctrl+S | `/server` | waits |
 | Ctrl+T | `/tools` | over the reply |
 | Ctrl+U | `/usage` | over the reply |
-| Ctrl+W | `/webui browser` (the [Web UI](#web-ui) on this PC) | at once |
+| Ctrl+W | `/webui browser` (the [Web UI](#web-ui) on the app's computer) | at once |
 | Ctrl+Y | `/sys` | over the reply |
 | Ctrl+Z | `/theme` | waits |
 | Ctrl+Alt+B | `/botchat --resume` | ends a running botchat at once; otherwise waits |
@@ -505,7 +505,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 
 ### Signing in
 
-* **The pane:** `/webui` (Ctrl+Alt+W, or the toolbar's 📱) shows a tab per address of this machine, each with a QR code and its sign-in link. Scan the code with the phone's camera, or open the link in a browser on the same network.
+* **The pane:** `/webui` (Ctrl+Alt+W, or the toolbar's 📱) shows a tab per address of the computer running NeonSidekick, each with a QR code and its sign-in link. Scan the code with the phone's camera, or open the link in a browser on the same network.
 * **The addresses:** Tailscale's comes first, since its link works at home and away ([Away from home](#away-from-home)). Then the home network's Ethernet and Wi-Fi adapters, fastest first (`localhost` under `local`).
 * Other VPN tunnels and WSL's virtual switch aren't listed, though a browser through them still connects with the address typed.
 * **The link** signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year.
@@ -518,10 +518,10 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 * **The strip:** `📱 Web UI │ enabled │ lan │ reset │ 192.168.1.217 · 100.78.20.125`, three buttons ahead of the address tabs.
 * `e` turns *Web UI* on or off, `l` switches *Web UI reach* between `lan` and `local`, and `r` makes a new token after a yes, as `/webui reset` does. The server restarts at once.
 * **copy** (`c`) puts the shown tab's sign-in link on the clipboard; `/webui copy` puts the first tab's.
-* **A double-click on the link or the QR code** opens it on this PC, as `/webui browser` does.
+* **A double-click on the link or the QR code** opens it on the app's computer, as `/webui browser` does.
 * **Over a reply** the pane opens too, its buttons acting at once; a phone watching that reply drops for a moment and reconnects.
 
-#### On this PC: `/webui browser`
+#### On the app's computer: `/webui browser`
 
 * `/webui browser` (or Ctrl+W) opens the Web UI signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser (with `--external`, always).
 * **The link:** the default browser signs in as *Web browser sign in mode* says. The Browser window gets a one-time link while *Web browser privacy* is `keep-history`, else the usual one.
@@ -530,7 +530,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 
 #### Away from home
 
-* Install Tailscale on this PC and the phone, sign both in to the same tailnet (your own private Tailscale network), and scan the Tailscale tab's code once. The phone then reaches the Web UI wherever it is.
+* Install Tailscale on the app's computer and the phone, sign both in to the same tailnet (your own private Tailscale network), and scan the Tailscale tab's code once. The phone then reaches the Web UI wherever it is.
 * Nothing to open on the router; *Web UI reach* must be `lan`. If Windows calls Tailscale's network Public, the phone can't connect ([the firewall](#safety-and-the-network)).
 
 ### The tabs

@@ -74,7 +74,7 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 * The tests run one at a time, by design.
 * **Before a CI run**, run the suite with `-CiLike`, then repeat the classes you changed under it (`-CiLike -Filter … -Repeat 20`). Most tests that failed only on CI were timing races that a slower machine shows.
 * **Live tests** (a real LLM server, database, camera, microphone, speech model…) are skipped unless their resource is there. [ENVIRONMENT.md](ENVIRONMENT.md#test-suite) lists the variables that turn each one on, and [TESTCONTAINERS.md](TESTCONTAINERS.md) the Docker containers they run against.
-* **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in this machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass without proving anything; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
+* **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in the test machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass without proving anything; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
 * **GPU tests:** two tests load an embedded model onto the GPU, so `build.ps1` leaves them out. Run them with `dotnet test tests/NeonSidekick.Tests -c Release --filter Category=LoadsEmbeddedModel` while no other model holds the GPU.
 
 ## Checking the native exe

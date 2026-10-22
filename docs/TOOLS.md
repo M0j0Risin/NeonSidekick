@@ -276,7 +276,7 @@ Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/
 * The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_WINDOWS_VLLM.md), [SGLang](DOCKER_WINDOWS_SGLANG.md).
 * **Picking one:** `/server` lists a row per chosen container; `docker:<container>` picks one (also in `--url` and `NEONSIDEKICK_LLM_URL`).
 * **Switching** stops the other chosen containers, then starts this one and waits until it's ready (*Docker server stop timeout (s)*, *Docker server post-stop delay (s)*, *Docker server ready timeout (s)*). If a stop fails, nothing starts.
-* **Leaving** for a server that uses this machine's GPU (the embedded model, a local server, a blank *LLM URL*) stops the containers; other servers leave them running. *Docker server stop on exit* stops the one in use at exit.
+* **Leaving** for a server that uses the GPU of the computer running NeonSidekick (the embedded model, a local server, a blank *LLM URL*) stops the containers; other servers leave them running. *Docker server stop on exit* stops the one in use at exit.
 * Bots and advisors share a running container but never start or stop one.
 
 #### Docker on a Mac
@@ -426,12 +426,12 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `net_dns` | `name, type?, server?` | A name's records: A (default) and AAAA through this machine's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA from its DNS servers, or the `server` named (a host too). |
+| `net_dns` | `name, type?, server?` | A name's records: A (default) and AAAA through the system's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA from its DNS servers, or the `server` named (a host too). |
 | `net_ping` | `host, count?` | Echoes (4 by default, 10 at most): answered or not, the loss and the round trips. |
 | `net_trace` | `host, max_hops?, names?` | The route, hop by hop (30 at most, about 45 seconds); `names` looks each hop's name up. |
 | `net_port` | `host, ports` | Whether TCP ports (16 at most) are open, refused or silent, on every address the host has. |
 | `net_tls` | `host, port?, server_name?, starttls?` | A TLS handshake (port 443 by default): protocol, cipher, the certificate's names, issuer and days left, and what's wrong with its chain. Mail, LDAP and RDP ports speak their preamble first. |
-| `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of this machine's certificate stores, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
+| `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of the certificate stores on the app's computer, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
 
 * **One host per call:** a name or an address. A range, block, list, URL, `host:port` or short-form address (`10.1`) is refused.
 * **Where they may go:** *Network tools reach*, *Network tools allowed hosts* and *Network tools denied hosts* ([Network settings](SETTINGS.md#network)). Every address a name resolves to is judged; under `lan` only private ones are used.
@@ -443,7 +443,7 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 
 ### Event logs
 
-Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) on this PC, in `.evtx` files in the working directory, and on remote computers you name.
+Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash, a failed service start, a driver error, a failed sign-in, a PowerShell script block) on the computer running NeonSidekick, in `.evtx` files in the working directory, and on remote computers you name.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -461,7 +461,7 @@ Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash
 
 #### Event log computers
 
-`local` is this PC, built in, and the only one ticked in *Event log computers offered* until you change it; that setting governs the model and `/eventlog` alike. *Event log add/edit computer* adds and tests one; *Event log set password* changes a runas password.
+`local` is the app's computer, built in, and the only one ticked in *Event log computers offered* until you change it; that setting governs the model and `/eventlog` alike. *Event log add/edit computer* adds and tests one; *Event log set password* changes a runas password.
 
 * **`host`** (required): the name or address (`localhost` is a loopback session).
 * **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name`, `name@domain`, or `box\admin` for its own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
@@ -509,7 +509,7 @@ The same four tools read the Mac's own logs: the unified log and the report file
 
 ### Services
 
-Under *Service tools*. The model reads the services on this PC and the computers you tick. With *Service writes* it may start, stop or restart one, or change how it starts, asking you each time.
+Under *Service tools*. The model reads the services on the computer running NeonSidekick and the computers you tick. With *Service writes* it may start, stop or restart one, or change how it starts, asking you each time.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -528,7 +528,7 @@ Under *Service tools*. The model reads the services on this PC and the computers
   * RPC and DCOM, the session manager, security accounts, the event log, WMI, the firewall and Defender, the Task Scheduler.
   * File sharing, Netlogon, DNS and DHCP clients, Remote Desktop, crypto and sign-in services, and a few more.
   * They can be started, never stopped, restarted or changed; a computer's `protected` only adds to the list.
-* **Rights:** reading needs nothing special on this PC; a change needs the app run as administrator, or rights on the service.
+* **Rights:** reading needs nothing special on the app's computer; a change needs the app run as administrator, or rights on the service.
 * Some services (RPC) hide their dependents from an unelevated account: `service_info` says so, and Windows refuses a stop that would break them.
 
 ```json
@@ -548,7 +548,7 @@ The keys of `services.json` and `tasks.json`:
 * **`controlActions`**: the actions allowed (absent: all; `[]`: none). Services: `start`, `stop`, `restart`, `start_type` (`restart` listed on its own). Tasks: `run`, `end`, `enable`, `disable`.
 * **`detail`**: `redacted` (default: secret-like values in program paths and command lines hidden) or `full`, read only by the main chat. **`description`**: for the model.
 * **Services' own:** `services` (the visible ones; absent: all) and `protected`. **Tasks' own:** `folders` (the visible ones; a pattern ending in `\` means that folder's own tasks) and `privileged`.
-* `local` is this PC, built in and read-only until its entry says otherwise; it takes every key but the sign-in ones.
+* `local` is the app's computer, built in and read-only until its entry says otherwise; it takes every key but the sign-in ones.
 
 **A remote computer needs:**
 
@@ -557,7 +557,7 @@ The keys of `services.json` and `tasks.json`:
 
 ### Scheduled tasks
 
-Under *Task tools*. The model reads the scheduled tasks on this PC and the computers you tick. With *Task writes* it may run, end, enable or disable one, asking you each time.
+Under *Task tools*. The model reads the scheduled tasks on the computer running NeonSidekick and the computers you tick. With *Task writes* it may run, end, enable or disable one, asking you each time.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -607,7 +607,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 * **`redacted`** (the default) also leaves out phones, addresses, employee numbers and home folders, and refuses `office`; `full` is the main chat's alone.
 * **`to`** saves the whole list as a UTF-8 CSV: a `.csv` path or folder in the working directory (named from the question, `ad-group-staff.csv`). Never over an existing file; formula-like cells are guarded. Needs *File tools*, never in plan mode.
 
-**Domains:** `domain` takes a ticked entry's name or its DNS name; left out, `current` when ticked, else the only one. **`current`** is this PC's own domain when it is joined (built in, as you, Kerberos). Other domains go in `ad.json`:
+**Domains:** `domain` takes a ticked entry's name or its DNS name; left out, `current` when ticked, else the only one. **`current`** is the domain the app's computer is joined to, if any (built in, as you, Kerberos). Other domains go in `ad.json`:
 
 ```json
 {
@@ -619,7 +619,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 ```
 
 * **`domain`** (required): its DNS name. **`server`**: a domain controller (default: the domain's name). **`baseDn`**: where to search (default: the domain).
-* **`tls`**: `true` for LDAPS on 636, the certificate checked against this machine's trust; otherwise 389, signed and sealed.
+* **`tls`**: `true` for LDAPS on 636, the certificate checked against the trust store on the app's computer; otherwise 389, signed and sealed.
 * **`auth`**, **`user`**, **`passwordStore`** (`NeonSidekick/ad/<name>`), **`detail`**, **`description`**: as `eventlog.json`'s. Outside the domain, `runas` signs in with NTLM.
 * **A refused `runas` password is held:** it isn't tried again this run (repeated tries can lock the account), until *Directory set password* saves a new one.
 * Configured domains are your own entries: *Network tools reach* doesn't judge them. `--ad-check <domain>` tests one.
@@ -1004,7 +1004,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 ## Known issues
 
 * **An event too large to read:** a remote event too large for one reply even alone is stepped over and noted. That step hasn't been tried against a real host.
-* **Remote `runas`:** a remote computer reached with `runas` (event logs, services, scheduled tasks) hasn't been tried against a real second machine; this PC and `localhost` have.
+* **Remote `runas`:** a remote computer reached with `runas` (event logs, services, scheduled tasks) hasn't been tried against a real second machine; the app's own computer and `localhost` have.
 * **YouTube:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 * **Bot-checked downloads:** a site that ties its clearance to the browser's connection may still refuse a download after the Browser window passed its check.
 * **The camera pane:** its "The camera is opening…" line stays until the next key after the camera is on.

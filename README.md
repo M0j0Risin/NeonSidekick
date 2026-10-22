@@ -59,7 +59,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 
 ### Models
-* **Local servers:** finds OpenAI-compatible servers on this machine or your network, or takes a URL.
+* **Local servers:** finds OpenAI-compatible servers on the computer running NeonSidekick or your network, or takes a URL.
 * **Embedded model:** the app downloads a Gemma, Qwen or Muse model (all read pictures and call tools) and runs it on a built-in llama.cpp.
 * **Model sizes:** builds for 8 GB cards and up, best at 16–32 GB, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
 * **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
@@ -101,7 +101,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Files elsewhere:** network shares (`\\server\share` or `//server/share`, and `smb://` on a Mac) and outside folders, as you or another account.
 * **Docker:** containers' logs, health and resource use. Starting, stopping and cleaning up are opt-in and ask first; `/docker` does it by hand.
 * **Network checks:** DNS lookups, ping, traceroute, open ports and TLS certificates, one host at a time; `/net` does it by hand.
-* **Event logs:** crashes, failed service starts and sign-ins, on this PC, in `.evtx` files or on computers you name. Read-only; `/eventlog` does it by hand.
+* **Event logs:** crashes, failed service starts and sign-ins, on the app's computer, in `.evtx` files or on computers you name. Read-only; `/eventlog` does it by hand.
 * **Services & scheduled tasks (Windows only):** read them here or on computers you name; changes are opt-in and ask first (`/services`, `/tasks`).
 * **Active Directory:** users, groups, computers and OUs, and the locked, expiring, stale and privileged accounts. It never writes to the directory; `/ad` does it by hand.
 * **Printing:** `/print` to any printer, and `/pdf` makes a PDF from Markdown, text, pictures or a web page.
@@ -153,7 +153,7 @@ If the app has no model to connect to when it starts, or when you switch to such
 
 | Choice | When to pick it |
 |---|---|
-| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on this machine or your network. It asks where to look (*LLM server scan mode*). |
+| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on the app's computer or your network. It asks where to look (*LLM server scan mode*). |
 | Enter a server's URL | You know the address of an OpenAI-compatible server. |
 | Download an embedded model | You have no server: the app runs a model itself, best on a suitable graphics card or a Mac. |
 | Connect Docker container | You run vLLM or SGLang in Docker Desktop (Windows only). |
