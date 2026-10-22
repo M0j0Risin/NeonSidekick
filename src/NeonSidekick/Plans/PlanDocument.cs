@@ -70,14 +70,15 @@ public static class PlanDocument
     }
 
     /// <summary>
-    /// The body <see cref="Render"/> writes for <paramref name="markdown"/>: a heading from <paramref name="title"/> when it has none.
-    /// What <see cref="Body"/> reads back from the file, so the gap-closing loop (2026-10-13) can tell an unchanged plan from a revision.
+    /// The body <see cref="Render"/> writes for <paramref name="markdown"/>: a heading from <paramref name="title"/> when it has none, and the box forms a
+    /// model drifts into written as task lines (2026-10-22, the user's call after a review, <see cref="PlanSteps.Normalized"/>). What <see cref="Body"/>
+    /// reads back from the file, so the gap-closing loop (2026-10-13) can tell an unchanged plan from a revision.
     /// </summary>
     public static string SavedBody(string title, string markdown)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(markdown);
-        string body = Body(markdown);
+        string body = PlanSteps.Normalized(Body(markdown));
         if (!body.StartsWith('#'))
         {
             body = "# " + title.Trim() + "\n\n" + body;

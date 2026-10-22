@@ -9,6 +9,9 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary><c>unc_patch(share?, path, old_text, new_text, replace_all?)</c> (2026-09-30): <c>patch_file</c> on a read-write share, under <c>UNC writes</c>; the file replaced in place, nothing kept.</summary>
 public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [NewTextArgument];
+
     public const string ToolName = "unc_patch";
     public const string OldTextArgument = PatchFileTool.OldTextArgument;
     public const string NewTextArgument = PatchFileTool.NewTextArgument;

@@ -461,9 +461,10 @@ public class LlmEndpointProbeTests
     }
 
     [Fact]
-    public async Task DiscoverAll_Disabled_AsksNothing_NotEvenTheExtra()
+    public async Task DiscoverAll_Disabled_AsksOnlyTheExtra()
     {
-        // Disabled entirely (2026-09-15): the endpoint in use a bare /server hands over as `extra` is not probed either, and no log line is left.
+        // Disabled (2026-09-15): nothing is scanned and, with no extra, nothing asked and no log line left. The server in use a bare /server hands
+        // over as `extra` is asked alone since 2026-10-22 (a review: with the scan off by default, a typed URL in use met "no server set").
         var stub = new StubHttpMessageHandler();
         var probe = new LlmEndpointProbe(new HttpClient(stub), TimeSpan.FromMilliseconds(500), TwoHosts);
         stub.Map(LmStudio, HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm-model"));
@@ -472,7 +473,7 @@ public class LlmEndpointProbeTests
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Empty(await probe.DiscoverAllAsync("empty", extra: new Uri("http://127.0.0.1:1234"), ScanScope.Disabled, CancellationToken.None));
+            Assert.Empty(await probe.DiscoverAllAsync("empty", extra: null, ScanScope.Disabled, CancellationToken.None));
         }
         finally
         {
@@ -481,6 +482,10 @@ public class LlmEndpointProbeTests
 
         Assert.Empty(stub.Requests);
         Assert.Empty(events);
+
+        var found = await probe.DiscoverAllAsync("empty", extra: new Uri("http://127.0.0.1:1234"), ScanScope.Disabled, CancellationToken.None);
+        Assert.Equal("http://127.0.0.1:1234/v1", Assert.Single(found).BaseUrl.ToString());
+        Assert.Single(stub.Requests);
     }
 
     [Fact]

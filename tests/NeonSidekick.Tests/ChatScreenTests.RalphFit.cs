@@ -141,9 +141,9 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task RalphFit_AMixedPlan_FromThePane_AsksNamingTheUnreadStep_AndYesStartsTheLoop()
+    public async Task RalphFit_AMixedPlan_FromThePane_AsksNamingTheStepWithNoCheck_AndYesStartsTheLoop()
     {
-        // A ### [ ] heading over a - [ ] step (2026-10-21): the step runs, the heading is skipped, and the start says so.
+        // A ### [ ] heading over a - [ ] step (2026-10-21): written as a task line on save since 2026-10-22, so it is a step of its own, with no check.
         _settings.Update(d => { d.RalphLoopReviewer = "off"; d.RalphLoopStopTone = "silent"; });
         _console.Profile.Width = 400;
         PlanFixture([[Keys.Char('l'), Keys.Enter]], "/plan Add a guide", "y", "/exit");
@@ -152,7 +152,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(RalphText.FitQuestion([RalphText.FitUnreadSteps(1)]), output);
-        Assert.Contains(RalphText.StartedNotice(PlanPath, 1, 3, finalOnly: false), output);
+        Assert.Contains(RalphText.FitQuestion([RalphText.FitNoDoneWhen(1)]), output);
+        Assert.Contains(RalphText.StartedNotice(PlanPath, 2, 6, finalOnly: false), output);
     }
 }

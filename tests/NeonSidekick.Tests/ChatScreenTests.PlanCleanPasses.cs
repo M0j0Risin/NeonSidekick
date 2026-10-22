@@ -35,7 +35,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal(10, _chat.Requests.Count);
-        Assert.Equal(PlanText.CleanPassResult(PlanPath, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: PlanGapLoopTests.BodyChars(PlanMarkdown)), PlanResultOf(_chat.Requests[3], "p2"));
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 1, 1, 2, bodyChars: PlanGapLoopTests.BodyChars(PlanMarkdown)), PlanResultOf(_chat.Requests[3], "p2"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model, cleanSoFar: 1), LastUserText(_chat.Requests[4]));
         Assert.Contains(PlanText.ConfirmFocuses[0], _chat.Requests[4][0].Text);
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 3, 5, PlanReviewer.Model), LastUserText(_chat.Requests[6]));
@@ -186,9 +186,9 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Closing.");
         _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown));   // review 1, pass 1: a revision, clean: converged; Close gaps… again
         _chat.EnqueueText("Again.");
-        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n", "Add a ship step"));   // review 2, pass 1: a gap
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n  Done when: it ships\n", "Add a ship step"));   // review 2, pass 1: a gap
         _chat.EnqueueText("Pass 1 done.");
-        _chat.Enqueue(PresentGapsCall("p4", RevisedPlanMarkdown + "- [ ] Ship it\n"));                       // review 2, pass 2: clean; canceled
+        _chat.Enqueue(PresentGapsCall("p4", RevisedPlanMarkdown + "- [ ] Ship it\n  Done when: it ships\n"));                       // review 2, pass 2: clean; canceled
         _chat.EnqueueText("Canceled.");
 
         string output = await RunAsync();
@@ -271,7 +271,7 @@ public partial class ChatScreenTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task PlanGaps_AskUserOn_ButAskUserToolOff_ThePassCannotAsk(bool offOnTools)
+    public async Task PlanGaps_AskUserOn_ButAskUserToolOff_ThePassCannotAsk_AndKeepsTheCameraAndScreen(bool offOnTools)
     {
         await GapPassWithAsksAsync(gapAsks: true, d =>
         {
@@ -287,8 +287,9 @@ public partial class ChatScreenTests
 
         var pass = OfferedNames(_chat.Options[2]);
         Assert.DoesNotContain(AskUserTool.ToolName, pass);
-        Assert.DoesNotContain(CameraCaptureTool.ToolName, pass);
-        Assert.DoesNotContain(ScreenCaptureTool.ToolName, pass);
+        // The setting on: only ask_user is gone (2026-10-22, the user's call after a review; all three were barred from 2026-10-21).
+        Assert.Contains(CameraCaptureTool.ToolName, pass);
+        Assert.Contains(ScreenCaptureTool.ToolName, pass);
         Assert.Contains(PlanText.GapNoAskLine, _chat.Requests[2][0].Text);
         Assert.Contains(PlanText.GapOpenQuestionSentence, _chat.Requests[2][0].Text);
         Assert.DoesNotContain(PlanText.GapAskSentence, _chat.Requests[2][0].Text);

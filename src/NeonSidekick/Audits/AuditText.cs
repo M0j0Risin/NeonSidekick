@@ -380,8 +380,11 @@ public static class AuditText
     /// <summary>The ask bullet while a pass may ask the user.</summary>
     public const string AskLine = "- A question only the user can answer: ask it (with ask_user when it is offered), or put it in present_audit's questions.";
 
-    /// <summary>The ask bullet under <c>Code audit ask user</c> off (2026-10-18): the audit runs unattended. Pinned.</summary>
-    public const string NoAskLine = "- Do not ask the user anything during this audit, and take no photo or screen capture: put a question only the user can answer in present_audit's questions.";
+    /// <summary>
+    /// The ask bullet under <c>Code audit ask user</c> off (2026-10-18): the audit runs unattended; or with no <c>ask_user</c> offered (2026-10-22). Pinned.
+    /// It names no photo or screen capture since 2026-10-22: the setting off withholds those tools, and with only <c>ask_user</c> missing they stay.
+    /// </summary>
+    public const string NoAskLine = "- Do not ask the user anything during this audit: put a question only the user can answer in present_audit's questions.";
 
     /// <summary>The bullet for a pass with nothing new.</summary>
     public const string CleanLine = "- If you find nothing new, call present_audit with checked: one short line for each area you checked.";

@@ -102,8 +102,11 @@ public sealed partial class SidekickApp
             return cancellationToken.IsCancellationRequested ? null : verdict;
         }
 
+        /// <summary>Nobody can be asked headless (2026-10-21): a by-hand step's check and review are not run (2026-10-22, a review).</summary>
+        public bool CanAsk => false;
+
         /// <summary>Nobody can be asked headless (2026-10-21): the step stays unticked and the loop stops with <see cref="RalphStop.NeedsUser"/>.</summary>
-        public Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken) =>
+        public Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, int total, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken) =>
             Task.FromResult<RalphCheckpointAnswer?>(null);
     }
 
@@ -175,12 +178,13 @@ public sealed partial class SidekickApp
                     return true;
                 }
 
-                if (PlanFiles.ReadWhole(files, path) is not { } text)
+                if (PlanFiles.ReadWhole(files, path) is not { } read)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + PlanText.PlanUnreadableError(path)).ConfigureAwait(false);
                     return true;
                 }
 
+                string text = PlanFiles.WithStepsNormalized(files, path, read);
                 var header = PlanDocument.TryParse(text);
                 int? passes = rest.Length == 0 ? null : int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
                 await HeadlessRalphBeginAsync(plan, state, files, path, PlanDocument.Body(text), header?.Verify, header?.Final, plan.Requirement, passes, fromPlanning: true, stored: null, cancellationToken).ConfigureAwait(false);
@@ -229,7 +233,7 @@ public sealed partial class SidekickApp
                             return true;
                         }
 
-                        await HeadlessRalphBeginAsync(plan, state, files, paused, PlanDocument.Body(pausedText), stored.Verify, stored.Final, stored.Requirement, passes, fromPlanning: false, stored, cancellationToken).ConfigureAwait(false);
+                        await HeadlessRalphBeginAsync(plan, state, files, paused, PlanDocument.Body(PlanFiles.WithStepsNormalized(files, paused, pausedText)), stored.Verify, stored.Final, stored.Requirement, passes, fromPlanning: false, stored, cancellationToken).ConfigureAwait(false);
                         return true;
                     }
 
@@ -245,12 +249,13 @@ public sealed partial class SidekickApp
                     return true;
                 }
 
-                if (PlanFiles.ReadWhole(files, path) is not { } text)
+                if (PlanFiles.ReadWhole(files, path) is not { } read)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + PlanText.PickerUnreadableError(path)).ConfigureAwait(false);
                     return true;
                 }
 
+                string text = PlanFiles.WithStepsNormalized(files, path, read);
                 var header = PlanDocument.TryParse(text);
                 // A paused loop on it resumes only in the folder it ran in (2026-10-19); elsewhere the plan is this folder's, its header read afresh.
                 var resumed = state.Executing is { Ralph: true, Path: { } same } held && string.Equals(same, path, StringComparison.Ordinal) && RalphSnapshot.SameRoot(held.Root, files.Root) ? held : null;
@@ -302,10 +307,10 @@ public sealed partial class SidekickApp
         }
 
         var steps = PlanSteps.Parse(body);
-        if (PlanFit.StepsRefusal(body) is { } noSteps)
+        if (PlanFit.StepsRefusal(body, steps) is { } noSteps)
         {
-            // Named (2026-10-21): boxes no step is read from get their own error, and the log says why nothing started.
-            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, "ralph: not started " + path + ": " + noSteps);
+            // Named (2026-10-21): steps outside ## Steps get their own error, and the log says why nothing started, in the screen's words (2026-10-22).
+            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, RalphText.NotStartedLogLine(path, noSteps));
             await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + noSteps).ConfigureAwait(false);
             return;
         }
@@ -354,6 +359,26 @@ public sealed partial class SidekickApp
             steps = PlanSteps.Parse(body);
         }
 
+        // A by-hand question the last pass left unanswered (2026-10-21, the screen's resume question): headless cannot ask it, so a resume stops at once
+        // with no pass, rather than spending one to stop at the same step — before the baseline since 2026-10-22 (a review: its checks ran for a resume
+        // that stopped anyway, and a failing one refused it), and only on a resume (an old run's entry stopped a fresh start).
+        if (stored is not null && PlanFiles.ReadWhole(files, path) is { } now && RalphLog.AwaitingHand(PlanSteps.Parse(now), RalphLog.Read(files, path)) is { } found)
+        {
+            var (waiting, entry) = found;
+            await HeadlessNoticeLineAsync("[notice] " + RalphText.NeedsYouNotice(waiting.Index, RalphText.ByHandCheck(waiting, null).Check)).ConfigureAwait(false);
+            foreach (string line in RalphStart.EndBeforeLoop(files, path, RalphStop.NeedsUser, entry.Changed, canAsk: false))
+            {
+                await HeadlessNoticeLineAsync("[notice] " + line.Trim()).ConfigureAwait(false);
+            }
+
+            if (state.Executing is { Ralph: true } pausedHere)
+            {
+                pausedHere.Paused = true;
+            }
+
+            return;
+        }
+
         var shell = stored?.Shell is { } storedShell && ShellKinds.TryParse(storedShell, out var kind) ? kind : ShellKinds.Resolve(effective);
         if (CommandPolicy.Resolve(effective) != CommandPolicyMode.Off && (verify is { Length: > 0 } || final is { Length: > 0 }))
         {
@@ -396,20 +421,10 @@ public sealed partial class SidekickApp
         }
 
         await HeadlessNoticeLineAsync("[notice] " + (stored is not null ? RalphText.ResumedNotice(path, remaining, loop.Cap) : RalphText.StartedNotice(path, remaining, loop.Cap, snapshot.FinalOnly))).ConfigureAwait(false);
-        if (stored is null && PlanFit.ByHandSteps(body) is int byHand and > 0)
+        if (stored is null && PlanSteps.Leaves(steps).Count(s => !s.Ticked && s.ByHand) is int byHand and > 0)
         {
             // Steps only a person can check (2026-10-21): nobody can be asked headless, so the loop stops at the first one; said on a start only.
             await HeadlessNoticeLineAsync("[notice] " + RalphText.ByHandHeadlessNotice(byHand)).ConfigureAwait(false);
-        }
-
-        // A by-hand question the last pass left unanswered (2026-10-21, the screen's resume question): headless cannot ask it, so the loop stops at once
-        // with no pass, rather than spending one to stop at the same step.
-        if (PlanFiles.ReadWhole(files, path) is { } now && PlanSteps.FirstUnticked(PlanSteps.Parse(now)) is { } waiting
-            && RalphLog.LastEntryAwaitingHand(RalphLog.Read(files, path), waiting) is not null)
-        {
-            await HeadlessNoticeLineAsync("[notice] " + RalphText.NeedsYouNotice(waiting.Index, waiting.DoneWhen ?? waiting.Text)).ConfigureAwait(false);
-            await HeadlessRalphEndAsync(state, files, RalphStop.NeedsUser).ConfigureAwait(false);
-            return;
         }
 
         await HeadlessRalphQueueAsync(state, files, cancellationToken).ConfigureAwait(false);
@@ -604,7 +619,8 @@ public sealed partial class SidekickApp
         files = ralph.Files;
         state.Ralph = null;
         state.Next = null;
-        var ended = RalphStart.End(files, loop, stop, ralph.Requirement, _time);
+        // Nobody is asked headless: a by-hand stop tells the user to tick the box once they have checked it.
+        var ended = RalphStart.End(files, loop, stop, ralph.Requirement, _time, canAsk: false);
         foreach (var (text, _) in ended.Lines)
         {
             await HeadlessNoticeLineAsync("[notice] " + text.Trim()).ConfigureAwait(false);

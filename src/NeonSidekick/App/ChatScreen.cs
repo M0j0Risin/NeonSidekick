@@ -1555,7 +1555,7 @@ internal sealed partial class ChatScreen
         // /skills add (2026-09-26): its picks and install question on the same pane, the network through the web tools' fetcher.
         _skillInstallMenu = new SkillInstallMenu(_menuPane);
         _skillInstall = new SkillInstallFlow(new SkillHub(_web.Fetcher));
-        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses, () => _effective().PlanGapCleanPasses, SavePlanReferences, RalphInlineLimit, converged: () => RingStopTone(_effective().PlanGapStopTone));
+        _presentPlan = new PresentPlanTool(_plan, _files, time, PresentPlanAsync, () => _effective().PlanGapPasses, () => _effective().PlanGapCleanPasses, SavePlanReferences, RalphInlineLimit, converged: loop => RingStopTone(loop, PlanGapStop.Converged, failed: false, _effective().PlanGapStopTone));
         // The Ralph loop (2026-10-18): finish_step over the running loop, its 🔁 line the screen's; the checks through /cmd's launch, or the tests' fake.
         _finishStep = new FinishStepTool(() => _ralph, RalphReported);
         _ralphVerifier = ralphVerifier ?? new Plans.RalphVerifier(_runner, _interpreters.Locate, _random);
@@ -4050,8 +4050,10 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        string where = running ? " behind the running one (" : held ? LearnHeldWhere : " for the queued messages (";
-        DiagnosticLog.Info(SkillCatalog.Category, (forced ? "Reflection (/learn) queued" : "Reflection queued") + where + log + ")" + (_pendingLearn is null ? "." : "; the earlier waiting turn is displaced."));
+        // The real reason it waits (2026-10-22, a review: a /learn that only displaced a held automatic one was logged as waiting "for the queued
+        // messages", none queued, and DrainLearn then started it at once).
+        string where = running ? SkillText.LearnBehindRunning : held ? SkillText.LearnHeldWhere : LearnWaitsForQueue ? SkillText.LearnForQueue : SkillText.LearnInSlot;
+        DiagnosticLog.Info(SkillCatalog.Category, SkillText.LearnQueuedLogLine(forced, where, log, displaced: _pendingLearn is not null));
         _pendingLearn = pending;
         if (running)
         {
@@ -4105,6 +4107,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        if (running.Forced && PassTurnNow)
+        {
+            // A /learn the user asked for runs on through an automated pass (2026-10-22, the user's call after a review: paused at each of a review's
+            // passes and put back after it, it started and was cancelled once a pass, loading every skill each time, and never finished).
+            return;
+        }
+
         Volatile.Write(ref _pausedLearn, running);
         _session.CancelLearning();
         DiagnosticLog.Info(SkillCatalog.Category, LearnPausedLogLine);
@@ -4151,13 +4160,18 @@ internal sealed partial class ChatScreen
     /// Whether <paramref name="pending"/> waits in the slot for a review to end (2026-10-21, the user's log of a 70-pass gap review: a
     /// reflection started after every pass and the next pass's start cancelled it, 67 starts and 65 cancels, each loading every skill; the
     /// one that finally ran asked about a skill for the review loop itself): an automatic one waits while a gap review
-    /// (<see cref="PlanSession.Closing"/>, its first pass not yet begun included) or a code audit (<see cref="AuditSession.Active"/>) runs,
-    /// and the slot's newest takes it as ever. A <c>/learn</c> the user asked for never waits.
+    /// (<see cref="PlanSession.Closing"/>, its first pass not yet begun included), a code audit (<see cref="AuditSession.Active"/>) or, since 2026-10-22
+    /// (a review), a Ralph loop runs, and the slot's newest takes it as ever. A pass turn queues none of its own (<see cref="PassTurnNow"/>), so what
+    /// waits here is one from before the run. A <c>/learn</c> the user asked for never waits.
     /// </summary>
-    private bool LearnHeld(PendingLearn pending) => !pending.Forced && (_plan.Closing is not null || _audit.Active);
+    private bool LearnHeld(PendingLearn pending) => !pending.Forced && (_plan.Closing is not null || _audit.Active || _ralph is not null);
 
-    /// <summary>The middle of the queued line for a reflection a review holds (2026-10-21). Pinned.</summary>
-    public const string LearnHeldWhere = " until the review ends (";
+    /// <summary>
+    /// Whether the turn under way is a pass of an automated run — a gap review's, a code audit's or a Ralph loop's (2026-10-22, the user's call after a
+    /// review): such a turn never reflects of its own accord, nor adds to the tally a later turn reflects on, and a running <c>/learn</c> is not paused
+    /// for it (<see cref="YieldLearn"/>). Read while the turn runs: each run marks its pass begun before the pass's message goes.
+    /// </summary>
+    private bool PassTurnNow => _plan.Reviewing || _audit.InPass || InRalphPass;
 
     /// <summary>A cancel the user asked for (the brain's double-click): the paused reflection, if any, never runs again. Safe from the watcher task.</summary>
     private void ForgetPausedLearn() => Interlocked.Exchange(ref _pausedLearn, null);
@@ -4465,7 +4479,7 @@ internal sealed partial class ChatScreen
             effective.ShellPreferNative,
             // Plan mode's advisors bullet (2026-10-10) as the turn would send it: neon_advisor offered and not off on /tools.
             // ...and its web research bullet (2026-10-17) with the research tools the turn offers.
-            (_plan.Turn(_presentPlan, GapMayAsk(effective), PlanReferenceNames(effective)) ?? AuditTurn(effective))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null)
+            (_plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null)
                 ?? RalphPassTurn()?.Directive,   // a Ralph pass's directive (2026-10-18) in plan mode's place
             HomeAssistantOffered(effective),
             Without(_haTools, disabled).Count,
@@ -7211,7 +7225,13 @@ internal sealed partial class ChatScreen
     /// <c>/botchat</c> bot's turn reads the very same, <see cref="BotGeneralTools"/>): every group with its switch from
     /// <paramref name="effective"/>, the <c>/tools</c> list, <c>ask_user</c> only with the pane, and plan mode's turn.
     /// </summary>
-    private TurnToolInputs TurnInputs(AppSettingsData effective) => WithAdmin(new TurnToolInputs
+    private TurnToolInputs TurnInputs(AppSettingsData effective) => TurnInputs(effective, ToolsText.DisabledSet(effective.ToolsDisabled));
+
+    /// <summary>
+    /// <see cref="TurnInputs(AppSettingsData)"/> over <paramref name="disabled"/>, the <c>/tools</c> list read once for the turn (2026-10-22, a review: each
+    /// reading of whether <c>ask_user</c> is offered built it again).
+    /// </summary>
+    private TurnToolInputs TurnInputs(AppSettingsData effective, IReadOnlySet<string> disabled) => WithAdmin(new TurnToolInputs
     {
         // The timers only while Timer tools is on (later on 2026-10-15), the clock and the manual while Clock tools and Help tools are (2026-10-18):
         // the turn's tools, its clock, timer and manual sentences, its opening clock call, bots and advisors all read Standing.
@@ -7274,16 +7294,19 @@ internal sealed partial class ChatScreen
         ScreenEnabled = ScreenOffered(effective),
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost; so does a Ralph pass
         // with the checkpoint off (later that day: an unattended loop never stops on a question).
-        Disabled = GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(ToolsText.DisabledSet(effective.ToolsDisabled)) : ToolsText.DisabledSet(effective.ToolsDisabled),
-        Plan = _plan.Turn(_presentPlan, GapMayAsk(effective), PlanReferenceNames(effective)) ?? AuditTurn(effective),
+        Disabled = GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(disabled) : disabled,
+        Plan = _plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled),
         Pass = RalphPassTurn(),
         // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under Code audit web research; an advisor asked in it the same.
         OnlyTools = _audit.InPass ? AuditTools.Allowed(effective) : null,
     }, effective);
 
-    /// <summary>The turn's audit part while a pass is under way (2026-10-18, <see cref="AuditSession.Turn"/>), else null.</summary>
-    private PlanTurn? AuditTurn(AppSettingsData effective) =>
-        _audit.Turn(_presentAudit, effective.CodeAuditAskUser, effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations);   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
+    /// <summary>
+    /// The turn's audit part while a pass is under way (2026-10-18, <see cref="AuditSession.Turn"/>), else null: its ask wording only where <c>ask_user</c>
+    /// is really offered (<see cref="AuditMayAsk"/>, 2026-10-22).
+    /// </summary>
+    private PlanTurn? AuditTurn(AppSettingsData effective, IReadOnlySet<string>? disabled = null) =>
+        _audit.Turn(_presentAudit, AuditMayAsk(effective, disabled), effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations);   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
 
     /// <summary>
     /// <paramref name="tools"/> less every one whose name is in <paramref name="disabled"/> (the
@@ -10887,7 +10910,7 @@ internal sealed partial class ChatScreen
             // The chat line's options ahead of the first idle read (2026-10-14, the user's report): the startup's embedded load
             // runs its live row before it, and that row had no completion lists.
             _input.Chat.SetLineOptions(MentionFolderMode.Resolve(_effective()), PastePreviewRows());
-            await ConnectLlmAsync(cancellationToken, quiet: true, startup: true, offerPage: true).ConfigureAwait(false);
+            bool connectPage = await ConnectLlmCoreAsync(cancellationToken, quiet: true, startup: true).ConfigureAwait(false);
             await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
@@ -10895,6 +10918,12 @@ internal sealed partial class ChatScreen
             // failed probe's line sat under the banner and the picture filled what was left: RefitSplash keeps that look). Speech,
             // voice and MCP run behind the line since 2026-09-29; the lines of those still running follow the picture as each finishes.
             RefitSplash(() => _renderScreen(_pane));
+            if (connectPage && _session.Endpoint is null)
+            {
+                // Connect a model last (2026-10-22, a review: it stood before speech, voice and MCP, which waited on it, and a profile switched from
+                // inside it connected them twice).
+                await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -12263,12 +12292,19 @@ internal sealed partial class ChatScreen
     /// </remarks>
     /// <param name="quiet">The banner was just drawn above, or the settings pane just closed: report only what the settings cannot say.</param>
     /// <param name="startup">The app's first connect (<see cref="RunAsync"/>): the server picker opens for a single answer too.</param>
-    /// <param name="offerPage">
-    /// Open the Connect a model page when this connect leaves no endpoint (<see cref="ConnectPageAsync"/>): the app's first connect and a
-    /// profile switch's (2026-10-21, the user's ask; the first alone until then, through <paramref name="startup"/>), with nothing saved to
-    /// connect to — no server answered, or nothing was offered to look through at all, which with every server off by default is a fresh profile.
-    /// </param>
-    private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false, bool offerPage = false)
+    private async Task ConnectLlmAsync(CancellationToken cancellationToken, bool quiet = false, bool startup = false) =>
+        await ConnectLlmCoreAsync(cancellationToken, quiet, startup).ConfigureAwait(false);
+
+    /// <summary>
+    /// <see cref="ConnectLlmAsync"/>'s connect, true when it left no endpoint where the Connect a model page is due (<see cref="ConnectPageAsync"/>):
+    /// nothing to connect to — no server answered, nothing was offered to look through at all (with every server off by default, a fresh profile), or,
+    /// since 2026-10-22 (a review), a saved server that did not answer. The app's first connect and a profile switch's open the page then (2026-10-21,
+    /// the user's ask; the first alone until then), once their speech, voice, MCP and Web UI are the profile's (2026-10-22, a review: the page waited
+    /// in the middle of the switch, the old profile's Web UI and MCP servers still serving, and a profile switched from inside it ran every connect
+    /// twice). <paramref name="scan"/> (2026-10-22, a review, the page's Scan row) looks for servers past a saved URL that is not answering, which the
+    /// connect would otherwise try again.
+    /// </summary>
+    private async Task<bool> ConnectLlmCoreAsync(CancellationToken cancellationToken, bool quiet, bool startup, bool scan = false)
     {
         _llmGeneration++;
         // The hint row's tally is the old model's (2026-10-03, the user's ask): gone through the load and after it, back
@@ -12276,32 +12312,27 @@ internal sealed partial class ChatScreen
         _session.Usage.HideFromHint();
         _pane.RefreshHint();
         var effective = _effective();
-        if (EmbeddedLlm.EmbeddedEndpoint.Chosen(effective))
+        if (!scan && EmbeddedLlm.EmbeddedEndpoint.Chosen(effective))
         {
             await ConnectEmbeddedAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
-            return;
+            return false;
         }
 
-        if (DockerEndpoint.Chosen(effective) && _session.DockerServers is not null)
+        if (!scan && DockerEndpoint.Chosen(effective) && _session.DockerServers is not null)
         {
             // A chosen Docker container (2026-10-02): the others stopped, it started and its model waited for, under the load's watch.
             await ConnectUnderLoadAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
-            return;
+            return false;
         }
 
-        bool blankUrl = BlankLlmUrl(effective);
+        bool blankUrl = scan || BlankLlmUrl(effective);
         if (blankUrl && ConnectsWithoutLooking(effective))
         {
+            // Nothing switched on at all (2026-10-21, every server off by default): the line, then (the caller's) the page that switches one on.
             await _session.ConnectAsync(effective, cancellationToken).ConfigureAwait(false);
             DrainDiagnostics();
             ReportLlm(quiet);
-            if (offerPage && _session.Endpoint is null)
-            {
-                // Nothing switched on at all (2026-10-21, every server off by default): the line, then the page that switches one on.
-                await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            return;
+            return _session.Endpoint is null;
         }
 
         if (!blankUrl || !_menu.CanShowMenus())
@@ -12309,17 +12340,18 @@ internal sealed partial class ChatScreen
             // The label follows a chosen container's stop when one was in use (2026-10-02): leaving it takes seconds.
             if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, setLabel => _session.ConnectAsync(effective, setLabel, token)), cancellationToken).ConfigureAwait(false))
             {
-                return;
+                return false;
             }
 
+            // A saved server that did not answer is no endpoint either (2026-10-22, a review: the page stood only for a blank URL).
             ReportLlm(quiet);
-            return;
+            return _session.Endpoint is null;
         }
 
         IReadOnlyList<LlmServer> servers = Array.Empty<LlmServer>();
         if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, async token => servers = await _transcript.WithSpinnerAsync(SearchLabel(effective, ConnectingLabel), () => _session.DiscoverAsync(effective, token)).ConfigureAwait(false), cancellationToken).ConfigureAwait(false))
         {
-            return;
+            return false;
         }
 
         if (servers.Count > 0)
@@ -12335,13 +12367,13 @@ internal sealed partial class ChatScreen
             if (picked is not null && EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(picked.BaseUrl))
             {
                 await UseEmbeddedRowAsync(picked, cancellationToken).ConfigureAwait(false);
-                return;
+                return false;
             }
 
             if (picked is not null && DockerEndpoint.ContainerOf(picked.BaseUrl) is { } container)
             {
                 await UseDockerAsync(container, cancellationToken).ConfigureAwait(false);
-                return;
+                return false;
             }
 
             if (picked is null && answered.Count == 0)
@@ -12349,7 +12381,7 @@ internal sealed partial class ChatScreen
                 // The embedded rows alone, and ESC (2026-09-30, the user's report): the no-URL pair blamed the URL and the scan
                 // mode; the one line says what happened and where the models are.
                 _transcript.Error(LlmSession.NoServerPickedLine);
-                return;
+                return false;
             }
 
             LlmEndpoint endpoint;
@@ -12371,17 +12403,14 @@ internal sealed partial class ChatScreen
             // The connect itself is instant; the spinner covers the context-window probe that follows it.
             if (await ConnectUnderWatchAsync(NoticeGlyphs.Llm, token => _transcript.WithSpinnerAsync(ConnectingLabel, setLabel => _session.ConnectAsync(effective, endpoint, token, setLabel)), cancellationToken).ConfigureAwait(false))
             {
-                return;
+                return false;
             }
         }
 
+        // Nothing to connect to (2026-10-04, the UI review; Settings › Embedded models alone from 2026-09-30, when no model was downloaded): the
+        // Connect a model page, every way to one, where the startup picker would have stood.
         ReportLlm(quiet);
-        if (offerPage && _session.Endpoint is null)
-        {
-            // Nothing to connect to (2026-10-04, the UI review; Settings › Embedded models alone from 2026-09-30, when no model was
-            // downloaded): the Connect a model page, every way to one, where the startup picker would have stood.
-            await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
-        }
+        return _session.Endpoint is null;
     }
 
     /// <summary>
@@ -12509,6 +12538,7 @@ internal sealed partial class ChatScreen
         long generation = _llmGeneration;
         Speech.ModelResult result = default;
         _downloading = model;
+        _embeddedDownloads++;
         _transcript.Notice(BackgroundJobText.DownloadStarted(model));
         await _jobs.StartAsync(
             BackgroundJobKind.EmbeddedDownload,
@@ -12578,9 +12608,11 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (!_effective().EmbeddedLlmServer)
+        // Switched off (2026-09-29): the catalog still removes, but nothing is used or downloaded to be used — save from the Connect a model page,
+        // where the switch goes on as the model is put to use (2026-10-22, the user's call after a review: installed now, or once its download ends).
+        bool switchOn = !_effective().EmbeddedLlmServer;
+        if (switchOn && !_embeddedFromConnect)
         {
-            // Switched off (2026-09-29): the catalog still removes, but nothing is used or downloaded to be used.
             _transcript.Error(EmbeddedLlm.EmbeddedLlmText.SwitchedOffError);
             return;
         }
@@ -12593,16 +12625,24 @@ internal sealed partial class ChatScreen
                 await _menu.PickReasoningAsync("", _effective().LlmReasoning, cancellationToken).ConfigureAwait(false);
             }
 
-            await StartEmbeddedDownloadAsync(model, () => SwitchToEmbeddedAsync(model, reasoning: false, cancellationToken), cancellationToken).ConfigureAwait(false);
+            await StartEmbeddedDownloadAsync(model, () => SwitchToEmbeddedAsync(model, reasoning: false, cancellationToken, switchOn), cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        await SwitchToEmbeddedAsync(model, reasoning, cancellationToken).ConfigureAwait(false);
+        await SwitchToEmbeddedAsync(model, reasoning, cancellationToken, switchOn).ConfigureAwait(false);
     }
 
-    /// <summary><see cref="UseEmbeddedModelAsync"/>'s tail for an installed model: the save, the reasoning picker when asked, the connect.</summary>
-    private async Task SwitchToEmbeddedAsync(EmbeddedLlm.EmbeddedModel model, bool reasoning, CancellationToken cancellationToken)
+    /// <summary>
+    /// <see cref="UseEmbeddedModelAsync"/>'s tail for an installed model: <c>Embedded servers enabled</c> on when <paramref name="switchOn"/> (a pick from
+    /// the Connect a model page, 2026-10-22), the save, the reasoning picker when asked, the connect.
+    /// </summary>
+    private async Task SwitchToEmbeddedAsync(EmbeddedLlm.EmbeddedModel model, bool reasoning, CancellationToken cancellationToken, bool switchOn = false)
     {
+        if (switchOn && !_settings.Current.EmbeddedLlmServer)
+        {
+            _settings.Update(d => d.EmbeddedLlmServer = true);
+        }
+
         _menu.SaveEmbeddedModel(model.Id);
         if (_overriddenBy(SettingsField.LlmUrl) is not null)
         {
@@ -12787,7 +12827,10 @@ internal sealed partial class ChatScreen
         if (string.IsNullOrWhiteSpace(args))
         {
             var scope = Llm.LlmScanMode.Resolve(effective);
-            if (!Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
+            // The server in use, else the one saved (2026-10-22, a review: with the scan off and nothing else offered — every default since 2026-10-21 —
+            // a typed URL in use met "no server set", and no picker): asked even with the scan off.
+            Uri? inUse = _session.Endpoint?.BaseUrl ?? (BlankLlmUrl(effective) || !Uri.TryCreate(effective.LlmUrl, UriKind.Absolute, out var saved) ? null : saved);
+            if (inUse is null && !Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was. Then the Connect a
                 // model page while nothing is connected (2026-10-21: with every server off by default, the way to switch one on).
@@ -12796,7 +12839,7 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            var servers = await _transcript.WithSpinnerAsync(SearchLabel(effective, ServerSearchLabel), () => _session.ProbeServersAsync(effective, _session.Endpoint?.BaseUrl, cancellationToken)).ConfigureAwait(false);
+            var servers = await _transcript.WithSpinnerAsync(SearchLabel(effective, ServerSearchLabel), () => _session.ProbeServersAsync(effective, inUse, cancellationToken)).ConfigureAwait(false);
             DrainDiagnostics();
             if (servers.Count == 0)
             {
@@ -14509,8 +14552,7 @@ internal sealed partial class ChatScreen
         // The profile's own desktop shortcut offer (2026-10-16, per profile since the home's settings.json went): asked here as at the
         // start, before the connects, the first time a run lands on a profile not yet asked (an add, a switch, a reset all, a pull).
         await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
-        // Connect a model when the new profile has nothing to connect to (2026-10-21, the user's ask: as the start offers it).
-        await ConnectLlmAsync(cancellationToken, quiet: true, offerPage: true).ConfigureAwait(false);
+        bool connectPage = await ConnectLlmCoreAsync(cancellationToken, quiet: true, startup: false).ConfigureAwait(false);
         await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
@@ -14518,6 +14560,13 @@ internal sealed partial class ChatScreen
         ReconcileWebUi();
         ReportTimers();
         RefitSplash(Head);
+        if (connectPage && _session.Endpoint is null)
+        {
+            // Connect a model when the new profile has nothing to connect to (2026-10-21, the user's ask: as the start offers it), last (2026-10-22, a
+            // review: in the middle of the switch, the old profile's Web UI and MCP servers served on while it stood, and a profile switched from inside
+            // it ran this switch's connects again after its own). Nothing follows it here, so a switch inside it is the last word.
+            await ConnectPageAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary><c>/remember &lt;text&gt;</c>: straight into the store, no model involved. Off means nothing is saved.</summary>
@@ -16298,6 +16347,8 @@ internal sealed partial class ChatScreen
                 return outcome == TurnOutcome.Exit;
             }
 
+            // Whether this turn was an automated run's pass, read before the runs move on (2026-10-22): such a turn starts no reflection below.
+            bool passTurn = PassTurnNow;
             // The gap-closing loop after the turn (2026-10-13), ahead of the approval: a converged loop is said and cleared before
             // the approval its pane gave goes ahead; otherwise the next pass, or the plan back on the pane, is acted on below.
             var gapPass = TakeGapPass(outcome);
@@ -16370,7 +16421,7 @@ internal sealed partial class ChatScreen
             {
                 if (gapPass is { Message: { } gapMessage })
                 {
-                    // No reflection between passes (2026-10-13): the tally keeps growing and the loop's last turn reflects on it all.
+                    // No reflection between passes (2026-10-13), nor on the last (2026-10-22: passTurn).
                     return await NextPassAsync(gapMessage, passMessage, cancellationToken).ConfigureAwait(false);
                 }
 
@@ -16380,8 +16431,9 @@ internal sealed partial class ChatScreen
                     return await NextPassAsync(auditMessage, passMessage, cancellationToken).ConfigureAwait(false);
                 }
 
-                // No reflection in a Ralph pass (2026-10-18): one a pass would cost as much as the pass.
-                if (!InRalphPass)
+                // No reflection on an automated run's pass (a Ralph pass since 2026-10-18: one a pass would cost as much as the pass; a gap review's and
+                // an audit's last pass since 2026-10-22, the user's call after a review: it reflected on the whole review and proposed a skill for it).
+                if (!passTurn)
                 {
                     MaybeLearn(focus: null, forced: false, cancellationToken);
                 }
@@ -17122,8 +17174,10 @@ internal sealed partial class ChatScreen
                         DiagnosticLog.Info(SkillCatalog.Category, "The turn wrote a skill itself (" + trace + "); the tally starts over.");
                         _learnTrace = null;
                     }
-                    else
+                    else if (!PassTurnNow)
                     {
+                        // A pass of an automated run adds nothing (2026-10-22, the user's call after a review: the review's last turn reflected on every
+                        // pass's calls, and asked for a skill for the review loop itself).
                         (_learnTrace ??= new TurnTrace()).Absorb(trace);
                     }
                 }

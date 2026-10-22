@@ -2897,7 +2897,8 @@ public class AssistantTests
     /// <summary>
     /// A pruned stub copied back as an argument (2026-10-21, the user's log: <c>neon_advisor</c> was asked "(a 8,402-character argument,
     /// pruned by /compact)"): refused before the tool runs, a plain string or a JSON one, a result's stub too; a tool refusing one in its own
-    /// words (<see cref="NeonSidekick.Llm.Tools.IRefusesPrunedStubs"/>) is left to them; text that only mentions a stub runs.
+    /// words (<see cref="NeonSidekick.Llm.Tools.IRefusesPrunedStubs"/>) is left to them in the arguments it names, and refused in the others
+    /// (2026-10-22, a review); text that only mentions a stub runs.
     /// </summary>
     [Fact]
     public async Task InvokeToolAsync_APrunedStubArgument_IsRefused_BeforeTheToolRuns()
@@ -2910,13 +2911,15 @@ public class AssistantTests
         var (fromJson, _) = await Assistant.InvokeToolAsync([echo], new FunctionCallContent("c2", "echo", new Dictionary<string, object?> { ["text"] = json }), CancellationToken.None);
         var (mention, _) = await Assistant.InvokeToolAsync([echo], new FunctionCallContent("c3", "echo", new Dictionary<string, object?> { ["text"] = "The log reads " + stub }), CancellationToken.None);
         var (own, _) = await Assistant.InvokeToolAsync([new OwnStubEchoTool()], new FunctionCallContent("c4", "own_echo", new Dictionary<string, object?> { ["text"] = stub }), CancellationToken.None);
+        var (ownNote, _) = await Assistant.InvokeToolAsync([new OwnStubEchoTool()], new FunctionCallContent("c5", "own_echo", new Dictionary<string, object?> { ["text"] = "hi", ["note"] = stub }), CancellationToken.None);
 
-        Assert.Equal(ConversationCompactor.PrunedStubSentResult("text"), plain);
-        Assert.Equal(ConversationCompactor.PrunedStubSentResult("text"), fromJson);
+        Assert.Equal(NeonSidekick.App.CompactionText.PrunedStubSentResult("text"), plain);
+        Assert.Equal(NeonSidekick.App.CompactionText.PrunedStubSentResult("text"), fromJson);
+        Assert.Equal(NeonSidekick.App.CompactionText.PrunedStubSentResult("note"), ownNote);
         Assert.Equal(["The log reads " + stub], echo.Received);   // only the mention ran
         Assert.Equal("echo: The log reads " + stub, mention);
         Assert.Equal(OwnStubEchoTool.OwnWords, own);
-        Assert.StartsWith("Error: text is a pruned stub", ConversationCompactor.PrunedStubSentResult("text"), StringComparison.Ordinal);
+        Assert.StartsWith("Error: text is a pruned stub", NeonSidekick.App.CompactionText.PrunedStubSentResult("text"), StringComparison.Ordinal);
     }
     // ---- the --log lines of a turn (2026-09-19) ----
 

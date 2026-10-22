@@ -186,7 +186,9 @@ public static partial class RalphLog
     /// <summary>
     /// <paramref name="entry"/> cleaned and cut as the log keeps it (2026-10-20, a review: finish_step's summary, verified lines and notes, a check's
     /// lines and the files changed had no cap, and <see cref="Bounded"/> always keeps the newest pass, so one long pass made every write of the log
-    /// refused, the in-pass mark with it). Pure.
+    /// refused, the in-pass mark with it). The checkpoint field too (2026-10-22, a review: the by-hand question's Redo note reached it here raw, a key the
+    /// user pasted kept as typed and handed to the next pass, while <see cref="SetCheckpoint(WorkingDirectory, string, int, string, out bool)"/> cleaned the
+    /// checkpoint's own). Pure.
     /// </summary>
     internal static RalphLogEntry Capped(RalphLogEntry entry)
     {
@@ -198,9 +200,13 @@ public static partial class RalphLog
             Verified = entry.Verified.Take(VerifiedLines).Select(v => Shorten(Clean(v), VerifiedChars)).ToList(),
             Tail = entry.Tail is { } tail ? KeepEnd(CleanTail(tail), TailChars) : null,
             Notes = entry.Notes is { } notes ? Shorten(Clean(notes), EntryTextChars) : null,
+            Checkpoint = entry.Checkpoint is { } checkpoint ? CleanCheckpoint(checkpoint) : null,
             Changed = changed,
         };
     }
+
+    /// <summary>A checkpoint field as the log keeps it, by every writer: redacted, scrubbed, on one line, cut at <see cref="EntryTextChars"/>.</summary>
+    private static string CleanCheckpoint(string checkpoint) => Shorten(Flat(Clean(checkpoint)), EntryTextChars);
 
     /// <summary><paramref name="text"/>'s last <paramref name="max"/> characters, led by "…" when it was longer.</summary>
     private static string KeepEnd(string text, int max) => text.Length <= max ? text : "…" + text[^(max - 1)..];
@@ -301,7 +307,7 @@ public static partial class RalphLog
             return null;
         }
 
-        entries[at] = entries[at] with { Checkpoint = Flat(Clean(checkpoint)) };
+        entries[at] = entries[at] with { Checkpoint = CleanCheckpoint(checkpoint) };
         string? failed = Write(files, planPath, document with { Entries = entries });
         written = failed is null;
         return failed;
@@ -405,7 +411,7 @@ public static partial class RalphLog
             return RalphText.ByHandRedoNote + (note.Length > 0 ? ": " + Shorten(Flat(note), NoteChars) : "");
         }
 
-        if (string.Equals(checkpoint, RalphText.ByHandStoppedLog, StringComparison.Ordinal) || string.Equals(checkpoint, RalphText.NeedsYouLog, StringComparison.Ordinal))
+        if (IsAwaitingHand(checkpoint))
         {
             return RalphText.ByHandWaitedNote;
         }
@@ -427,11 +433,23 @@ public static partial class RalphLog
         }
 
         var last = d.Entries[^1];
-        return IsStep(last, step.Text, step.Twins > 1 ? step.Index : null)
-            && last.Checkpoint is { } checkpoint
-            && (string.Equals(checkpoint, RalphText.ByHandStoppedLog, StringComparison.Ordinal) || string.Equals(checkpoint, RalphText.NeedsYouLog, StringComparison.Ordinal))
-            ? last : null;
+        return IsStep(last, step.Text, step.Twins > 1 ? step.Index : null) && IsAwaitingHand(last.Checkpoint) ? last : null;
     }
+
+    /// <summary>
+    /// The step a by-hand question waits on and its entry: <paramref name="steps"/>' first unticked leaf (parsed from the plan file whole, as the loop
+    /// reads it) when <see cref="LastEntryAwaitingHand"/> holds for it; null otherwise (2026-10-22, a review: the resume, <c>/plan show</c> and headless each
+    /// wrote this out, and two of them drifted once). Pure.
+    /// </summary>
+    public static (PlanStep Step, RalphLogEntry Entry)? AwaitingHand(IReadOnlyList<PlanStep> steps, RalphLogDocument? document) =>
+        PlanSteps.FirstUnticked(steps) is { } step && LastEntryAwaitingHand(document, step) is { } entry ? (step, entry) : null;
+
+    /// <summary>
+    /// Whether a checkpoint field holds a by-hand question nobody answered yes or redo to: <see cref="RalphText.ByHandStoppedLog"/> or
+    /// <see cref="RalphText.NeedsYouLog"/> (2026-10-22, a review: two copies of the test).
+    /// </summary>
+    private static bool IsAwaitingHand(string? checkpoint) =>
+        string.Equals(checkpoint, RalphText.ByHandStoppedLog, StringComparison.Ordinal) || string.Equals(checkpoint, RalphText.NeedsYouLog, StringComparison.Ordinal);
 
     /// <summary>Whether <paramref name="entry"/> is a pass on the step of <paramref name="stepText"/> (and of <paramref name="stepIndex"/>, when given).</summary>
     private static bool IsStep(RalphLogEntry entry, string stepText, int? stepIndex) =>

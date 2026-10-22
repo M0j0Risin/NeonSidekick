@@ -153,7 +153,7 @@ If the app has no model to connect to when it starts, or when you switch to such
 
 | Choice | When to pick it |
 |---|---|
-| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on the app's computer or your network. It asks where to look (*LLM server scan mode*). |
+| Scan for local servers | You run LM Studio, Ollama, llama.cpp, vLLM or SGLang on the app's computer or your network. It asks where to look (*LLM server scan mode*) while that's off. |
 | Enter a server's URL | You know the address of an OpenAI-compatible server. |
 | Download an embedded model | You have no server: the app runs a model itself, best on a suitable graphics card or a Mac. |
 | Connect Docker container | You run vLLM or SGLang in Docker Desktop (Windows only). |

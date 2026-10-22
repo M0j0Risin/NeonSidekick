@@ -139,7 +139,8 @@ body[data-user-line="quiet"] .entry.user .glyph {
 }
 body[data-user-line="quiet"] .entry.user { color: var(--text); }
 body[data-user-line="quiet"] .entry.user .glyph { color: var(--user); }
-body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--panel-2); border-radius: 6px; padding: 2px 8px; }
+/* slab: the terminal's MenuHighlight, the body ink on the panel ground (--panel-2, a lighter fill, until 2026-10-22, a review). */
+body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--panel); border-radius: 6px; padding: 2px 8px; }
 .entry.speaker { font-weight: 700; color: var(--accent-2); }
 .entry.assistant { display: flex; gap: 6px; }
 .entry.assistant .body { flex: 1; min-width: 0; }

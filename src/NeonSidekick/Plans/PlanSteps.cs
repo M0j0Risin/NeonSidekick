@@ -17,8 +17,16 @@ public sealed record PlanStep(int Index, int Line, int Indent, string Text, bool
     /// <summary>A step with no children: the kind the loop works.</summary>
     public bool IsLeaf => Children.Count == 0;
 
-    /// <summary>Its <c>Done when:</c> is one only a person can check (<see cref="PlanSteps.IsByHand"/>, 2026-10-21).</summary>
-    public bool ByHand => PlanSteps.IsByHand(DoneWhen);
+    /// <summary>
+    /// The words of its <c>Done when:</c> a person checks, the lead left out (<see cref="PlanSteps.WithoutByHand"/>); null when none is by hand. Worked out
+    /// once as the step is made (2026-10-22, a review: <see cref="ByHand"/> ran its regex on every read, in loops over every leaf). A parsed step reads each
+    /// of its <c>Done when:</c> lines (a command check and a <c>By hand:</c> one under one step: the second made it no by-hand step, joined after the first);
+    /// one made by hand reads <see cref="DoneWhen"/> whole.
+    /// </summary>
+    public string? HandCheck { get; init; } = PlanSteps.HandCheckOf(DoneWhen);
+
+    /// <summary>One of its <c>Done when:</c> lines is one only a person can check (<see cref="PlanSteps.IsByHand"/>, 2026-10-21).</summary>
+    public bool ByHand => HandCheck is not null;
 }
 
 /// <summary>A sub-step a split writes (<see cref="PlanSteps.WithChildren"/>): its words and its <c>Done when:</c>.</summary>
@@ -49,31 +57,76 @@ public static class PlanSteps
     /// </summary>
     public const string ByHandLabel = "By hand:";
 
-    // A hyphen only with a space after it ("by hand-made" is no lead); an italic underscore around the words allowed.
-    private static readonly Regex s_byHand = new(@"^_?(?:by\s+hand_?\s*(?:[:—–]|-(?=\s))|[(\[]\s*by\s+hand\s*[)\]]_?\s*(?:[:—–]|-(?=\s))?)_?\s*", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // A bold or italic mark (**, __, * or _), where one may sit around a label.
+    private const string Emphasis = @"(?:\*{1,2}|_{1,2})?";
+
+    // The lead read off the words as written, its marks matched where they sit (2026-10-22, a review: every *, ** and __ of the words was stripped
+    // first, so a check's `ls *.log` read `ls .log` and __init__.py init.py on the question). A hyphen only with a space after it ("by hand-made" is no lead).
+    private static readonly Regex s_byHand = new(
+        @"^\s*(?<em>\*{1,2}|_{1,2})?(?:by\s+hand" + Emphasis + @"\s*(?:[:—–]|-(?=\s))|[(\[]\s*by\s+hand\s*[)\]]" + Emphasis + @"\s*(?:[:—–]|-(?=\s))?)" + Emphasis + @"\s*",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Whether <paramref name="doneWhen"/> (a step's <c>Done when:</c> words) is one only a person can check: it starts, case aside and bold or italic
-    /// marks stripped, with <c>by hand</c> and a <c>:</c>, <c>—</c>, <c>–</c> or <c>-</c> (a hyphen with a space after it), or with <c>(by hand)</c> or <c>[by hand]</c> (the shapes a
-    /// model drifts into), a colon after or not. "by hand" later in the sentence doesn't count. Pure.
+    /// Whether <paramref name="doneWhen"/> (a step's <c>Done when:</c> words) is one only a person can check: it starts, case aside and a bold or italic
+    /// mark around the lead allowed, with <c>by hand</c> and a <c>:</c>, <c>—</c>, <c>–</c> or <c>-</c> (a hyphen with a space after it), or with <c>(by hand)</c> or
+    /// <c>[by hand]</c> (the shapes a model drifts into), a colon after or not. "by hand" later in the sentence doesn't count. Pure.
     /// </summary>
-    public static bool IsByHand(string? doneWhen) => doneWhen is not null && s_byHand.IsMatch(Unmarked(doneWhen));
+    public static bool IsByHand(string? doneWhen) => doneWhen is not null && s_byHand.IsMatch(doneWhen);
 
     /// <summary>
-    /// <paramref name="doneWhen"/>'s words after whichever lead <see cref="IsByHand"/> matched, bold or italic marks stripped: the check alone, as the
-    /// question and the notices show it; the words as they are when no lead matched. Pure.
+    /// <paramref name="doneWhen"/>'s words after whichever lead <see cref="IsByHand"/> matched, the marks around the lead taken with it (and a bold or
+    /// italic mark closing the whole line) and every mark in the words kept: the check alone, as the question and the notices show it; the words as they
+    /// are when no lead matched. Pure.
     /// </summary>
     public static string WithoutByHand(string doneWhen)
     {
         ArgumentNullException.ThrowIfNull(doneWhen);
-        string bare = Unmarked(doneWhen);
-        var match = s_byHand.Match(bare);
-        return match.Success ? bare[match.Length..].Trim() : doneWhen.Trim();
+        return HandCheckOf(doneWhen) ?? doneWhen.Trim();
     }
 
-    /// <summary>Words with their bold and italic marks taken out, leading space trimmed (as <see cref="DoneWhenOf"/> reads a label).</summary>
-    private static string Unmarked(string text) =>
-        text.Replace("**", "", StringComparison.Ordinal).Replace("__", "", StringComparison.Ordinal).Replace("*", "", StringComparison.Ordinal).TrimStart();
+    /// <summary>
+    /// <see cref="WithoutByHand"/>'s words when <paramref name="doneWhen"/> is by hand (<see cref="IsByHand"/>), else null: what <see cref="PlanStep.HandCheck"/>
+    /// holds. Pure.
+    /// </summary>
+    public static string? HandCheckOf(string? doneWhen)
+    {
+        if (doneWhen is null || s_byHand.Match(doneWhen) is not { Success: true } match)
+        {
+            return null;
+        }
+
+        string rest = doneWhen[match.Length..].Trim();
+        // A mark opened before the lead and not closed in it closes the whole line: "**By hand: it shows**".
+        if (match.Groups["em"] is { Success: true } em && Occurrences(match.Value, em.Value) == 1 && rest.EndsWith(em.Value, StringComparison.Ordinal))
+        {
+            rest = rest[..^em.Value.Length].TrimEnd();
+        }
+
+        return rest;
+    }
+
+    private static int Occurrences(string text, string part)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + part.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// <paramref name="doneWhen"/> without a <c>Done when:</c> label leading it (2026-10-22, a review: a split's sub-step sent as
+    /// <c>Done when: By hand: …</c>, the plan's own line shape, read as no by-hand check and was written as <c>Done when: Done when: …</c>). Pure.
+    /// </summary>
+    public static string WithoutDoneWhenLabel(string doneWhen)
+    {
+        ArgumentNullException.ThrowIfNull(doneWhen);
+        string trimmed = doneWhen.Trim();
+        // A label with no words after it leaves nothing.
+        return s_doneWhen.IsMatch(trimmed[PlanDocument.ListMarker(trimmed)..].TrimStart()) ? DoneWhenOf(trimmed) ?? "" : trimmed;
+    }
 
     private static readonly Regex s_refs = new(@"\bref-(\d+)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex s_backticks = new("`([^`\\s]+)`", RegexOptions.CultureInvariant);
@@ -97,37 +150,157 @@ public static class PlanSteps
     }
 
     /// <summary>
-    /// How many lines of <paramref name="text"/> carry a box <see cref="Parse(string)"/> never reads (2026-10-21, the plan at
-    /// <c>~/.claude/plans/pasted-content-id-319b-i-thought-delegated-stardust.md</c>: a model wrote its steps as <c>### [ ] Step 1</c> headings, the plan
-    /// read as zero steps, and the reviewers converged on it anyway): a line outside fenced code that, past leading <c>#</c>s and a space, an
-    /// optional list marker and leading <c>*</c>/<c>_</c> emphasis, starts with a box, yet is no task line — a heading (<c>### [ ] Step 1</c>), a
-    /// bare box (<c>[ ] Step 1</c>) or a bold one (<c>- **[ ] Step 1**</c>). Anywhere in the text: a real <c>- [ ]</c> outside <c>## Steps</c> is a
-    /// task line, never counted. Glyph boxes and boxes in table cells are not counted. Pure.
+    /// <paramref name="text"/> with the boxes <see cref="Parse(string)"/> would pass over in its steps' scope written as task lines (2026-10-22, the user's
+    /// call after a review: a model wrote its steps as <c>### [ ] Step 1</c> headings, the plan read as zero steps, and a second reader of those boxes
+    /// beside this one refused clean passes on boxes elsewhere and missed a lone bold one): a heading box (<c>### [ ] Step 1</c>, a <c>###</c> to
+    /// <c>######</c> under <c>## Steps</c>, any level in a text with none) becomes <c>- [ ] Step 1</c> at the margin; a bare box (<c>[ ] Step 1</c>) and a
+    /// bold or italic one (<c>- **[ ] Step 1**</c>, <c>**[ ]** Step 1</c>, <c>1. __[x] Step 1__</c>) keep their place and list marker (<c>- </c> for none) and lose
+    /// the marks. A <c>Done when:</c> line under one it rewrote, no deeper than it now is, is indented two past it so it joins the step, as
+    /// <see cref="Parse(string)"/> reads one. Fenced code is never touched, nor are glyph boxes or boxes in table cells; every other byte is kept, each line
+    /// its own ending. Read by the plan's save (<see cref="PlanDocument.SavedBody"/>) and a loop's start on a file edited by hand. Pure.
     /// </summary>
-    public static int UnreadBoxes(string text)
+    public static string Normalized(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        int count = 0;
-        foreach (var (_, raw) in PlanDocument.Walk(text))
+        var walked = PlanDocument.Walk(text).ToList();
+        bool headed = walked.Any(l => IsStepsHeading(l.Text));
+        bool inSteps = !headed;
+        List<(string Content, string Ending)>? lines = null;
+        // The indent of the step a rewrite made, while a Done when: line under it may still need moving in; null otherwise.
+        int? made = null;
+        foreach (var (index, raw) in walked)
         {
-            // A whole file's lines keep their \r (Walk splits on \n alone), and an empty box at a line's end must still read as one.
-            string trimmed = raw.TrimEnd('\r').TrimStart();
-            if (TaskBox(trimmed) is not null)
+            string line = raw.TrimEnd('\r');
+            string trimmed = line.TrimStart();
+            int indent = line.Length - trimmed.Length;
+            if (HeadingLevel(trimmed) is int level and > 0)
+            {
+                made = null;
+                if (headed && level <= 2)
+                {
+                    inSteps = IsStepsHeading(line);
+                    continue;
+                }
+
+                if (inSteps && LooseBox(trimmed[level..].TrimStart()) is { } heading)
+                {
+                    lines ??= SplitKeepingEndings(text);
+                    lines[index] = (TaskLine("- ", heading.Ticked, heading.Words), lines[index].Ending);
+                    made = 0;
+                }
+
+                continue;
+            }
+
+            if (!inSteps || trimmed.Length == 0)
             {
                 continue;
             }
 
-            string rest = trimmed;
-            if (HeadingLevel(rest) is int level and > 0)
+            if (TaskBox(trimmed) is not null)
             {
-                rest = rest[level..].TrimStart();
+                made = null;
+                continue;
             }
 
-            rest = rest[PlanDocument.ListMarker(rest)..].TrimStart('*', '_');
-            count += Box(rest) is null ? 0 : 1;
+            int marker = PlanDocument.ListMarker(trimmed);
+            if (LooseBox(trimmed[marker..]) is { } loose)
+            {
+                lines ??= SplitKeepingEndings(text);
+                lines[index] = (line[..indent] + TaskLine(marker > 0 ? trimmed[..marker] : "- ", loose.Ticked, loose.Words), lines[index].Ending);
+                made = indent;
+                continue;
+            }
+
+            if (made is int under && indent <= under && DoneWhenOf(trimmed) is not null)
+            {
+                lines ??= SplitKeepingEndings(text);
+                lines[index] = (new string(' ', under + 2) + trimmed, lines[index].Ending);
+            }
+        }
+
+        return lines is null ? text : Join(lines);
+
+        static string TaskLine(string marker, bool ticked, string words) => (marker + (ticked ? "[x]" : "[ ]") + (words.Length > 0 ? " " + words : "")).TrimEnd();
+    }
+
+    /// <summary>
+    /// How many steps of <paramref name="text"/> sit outside its <c>## Steps</c> (2026-10-22, a review: <c>## Steps, part 2</c> or <c>## Phase 2</c> with
+    /// <c>- [ ]</c> lines under it was read as no step at all, and a loop called the plan done without them): a task line no deeper than three spaces (an
+    /// indented code block's never counts) or a heading box, under any heading of level 1 or 2 but <c>## Steps</c>, a Verification one or a Risks one
+    /// (their checklists are no steps), outside fenced code. None in a text without <c>## Steps</c>, where every task line is a step. Pure.
+    /// </summary>
+    public static int StraySteps(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var walked = PlanDocument.Walk(text).ToList();
+        if (!walked.Any(l => IsStepsHeading(l.Text)))
+        {
+            return 0;
+        }
+
+        int count = 0;
+        bool passedOver = false;
+        foreach (var (_, raw) in walked)
+        {
+            string line = raw.TrimEnd('\r');
+            string trimmed = line.TrimStart();
+            if (HeadingLevel(trimmed) is int level and > 0)
+            {
+                if (level <= 2)
+                {
+                    passedOver = IsStepsHeading(line) || IsChecklistSection(trimmed[level..]);
+                }
+
+                if (!passedOver && LooseBox(trimmed[level..].TrimStart()) is not null)
+                {
+                    count++;
+                }
+
+                continue;
+            }
+
+            if (!passedOver && line.Length - trimmed.Length <= 3 && TaskBox(trimmed) is not null)
+            {
+                count++;
+            }
         }
 
         return count;
+    }
+
+    /// <summary>A heading's title naming a section whose checklist is no steps: Verification (Verify) or Risks.</summary>
+    private static bool IsChecklistSection(string title)
+    {
+        string bare = title.Trim().TrimEnd(':').Trim();
+        return bare.StartsWith("Verif", StringComparison.OrdinalIgnoreCase) || bare.StartsWith("Risk", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A box that is no task line at the start of <paramref name="rest"/> (past a list marker or a heading's <c>#</c>s): bare (<c>[ ] words</c>), or behind a
+    /// bold or italic mark that closes after the box (<c>**[ ]** words</c>) or at the line's end (<c>**[ ] words**</c>); its words, marks off, and its tick.
+    /// </summary>
+    private static (string Words, bool Ticked)? LooseBox(string rest)
+    {
+        string em = rest.StartsWith("**", StringComparison.Ordinal) ? "**" : rest.StartsWith("__", StringComparison.Ordinal) ? "__"
+            : rest.StartsWith('*') ? "*" : rest.StartsWith('_') ? "_" : "";
+        string after = rest[em.Length..];
+        if (after.Length < 3 || after[0] != '[' || after[2] != ']' || after[1] is not (' ' or 'x' or 'X'))
+        {
+            return null;
+        }
+
+        string tail = after[3..];
+        if (em.Length > 0 && tail.StartsWith(em, StringComparison.Ordinal))
+        {
+            tail = tail[em.Length..];
+        }
+        else if (em.Length > 0 && tail.TrimEnd().EndsWith(em, StringComparison.Ordinal))
+        {
+            tail = tail.TrimEnd()[..^em.Length];
+        }
+
+        return tail.Length == 0 || char.IsWhiteSpace(tail[0]) ? (tail.Trim(), after[1] != ' ') : null;
     }
 
     /// <summary><see cref="Parse(string, bool?)"/>, each task line's <c>Done when:</c> lines noted in <paramref name="doneWhenAt"/> by its line when given.</summary>
@@ -184,6 +357,10 @@ public static class PlanSteps
             {
                 lastTask.DoneWhen = lastTask.DoneWhen is null ? doneWhen : lastTask.DoneWhen + " " + doneWhen;
                 lastTask.DoneWhenLines.Add(index);
+                if (HandCheckOf(doneWhen) is { } handCheck)
+                {
+                    lastTask.HandChecks.Add(handCheck);
+                }
             }
         }
 
@@ -459,8 +636,11 @@ public static class PlanSteps
 
     /// <summary>
     /// <paramref name="text"/> with <paramref name="substeps"/> written under <paramref name="step"/> as indented checkboxes, each with its indented
-    /// <c>Done when:</c> line, after the step's own lines (its <c>Done when:</c> and notes); every line written with the step line's ending. Null
-    /// when the step is not where it was, or has children already.
+    /// <c>Done when:</c> line (a <c>Done when:</c> label the model sent in its words dropped), after the step's own lines (its <c>Done when:</c> and notes);
+    /// every line written with the step line's ending. When a sub-step's check is by hand, the step's own by-hand <c>Done when:</c> lines go
+    /// (2026-10-22, a review: kept, the split the loop insists on made the by-hand parent <see cref="PlanFit"/> calls a problem, and the parent was then
+    /// ticked once its children stood with nobody checking it: the check lives on in the sub-step). Null when the step is not where it was, or has
+    /// children already.
     /// </summary>
     public static string? WithChildren(string text, PlanStep step, IReadOnlyList<PlanSubstep> substeps)
     {
@@ -472,6 +652,11 @@ public static class PlanSteps
         }
 
         var lines = SplitKeepingEndings(text);
+        var doneWhenAt = new Dictionary<int, List<int>>();
+        ParseCore(text, null, doneWhenAt);
+        var dropped = substeps.Any(s => IsByHand(WithoutDoneWhenLabel(s.DoneWhen))) && doneWhenAt.TryGetValue(found.Line, out var held)
+            ? held.Where(i => DoneWhenOf(lines[i].Content.TrimEnd('\r').TrimStart()) is { } words && IsByHand(words)).OrderByDescending(i => i).ToList()
+            : [];
         string ending = lines[found.Line].Ending is { Length: > 0 } own ? own : lines.FirstOrDefault(l => l.Ending.Length > 0).Ending ?? "\n";
         if (ending.Length == 0)
         {
@@ -507,10 +692,16 @@ public static class PlanSteps
         foreach (var sub in substeps)
         {
             added.Add((pad + "- [ ] " + Flat(sub.Text), ending));
-            added.Add((pad + "  " + DoneWhenLabel + " " + Flat(sub.DoneWhen), ending));
+            added.Add((pad + "  " + DoneWhenLabel + " " + Flat(WithoutDoneWhenLabel(sub.DoneWhen)), ending));
         }
 
         lines.InsertRange(last + 1, added);
+        // From the bottom up, all above the lines put in: none of them moves another.
+        foreach (int line in dropped)
+        {
+            lines.RemoveAt(line);
+        }
+
         return Join(lines);
     }
 
@@ -705,6 +896,7 @@ public static class PlanSteps
         public bool Ticked { get; } = ticked;
         public string? DoneWhen { get; set; }
         public List<int> DoneWhenLines { get; } = [];
+        public List<string> HandChecks { get; } = [];
         public int Occurrence { get; set; }
         public int Twins { get; set; } = 1;
         public List<Builder> Children { get; } = [];
@@ -712,7 +904,11 @@ public static class PlanSteps
         public PlanStep Build(int index, IReadOnlyList<PlanStep> children)
         {
             string words = Text + (DoneWhen is { } d ? " " + d : "");
-            return new PlanStep(index, Line, Indent, Text, Ticked, DoneWhen, PathsIn(words), RefsIn(words), children, Occurrence, Twins);
+            // Each Done when: line read on its own (2026-10-22, a review): a By hand: one after a command check is no lead of the joined words.
+            return new PlanStep(index, Line, Indent, Text, Ticked, DoneWhen, PathsIn(words), RefsIn(words), children, Occurrence, Twins)
+            {
+                HandCheck = HandChecks.Count == 0 ? null : string.Join(" ", HandChecks),
+            };
         }
     }
 
@@ -796,7 +992,7 @@ public static class PlanSteps
 
     /// <summary>
     /// The words and box at the start of <paramref name="rest"/> (<c>[</c>, a space or <c>x</c>/<c>X</c>, <c>]</c>, then whitespace or the end), or
-    /// null: <see cref="TaskBox"/>'s test past its list marker, and <see cref="UnreadBoxes"/>' (2026-10-21).
+    /// null: <see cref="TaskBox"/>'s test past its list marker.
     /// </summary>
     private static (string Text, bool Ticked)? Box(string rest)
     {
@@ -808,12 +1004,30 @@ public static class PlanSteps
         return null;
     }
 
-    /// <summary>The words after a <c>Done when:</c> label (a bullet allowed before it, bold or not), or null.</summary>
+    // The label with a bold or italic mark around it or its words (**Done when:**, **Done when**:, _Done when:_, **Done when: words**).
+    private static readonly Regex s_doneWhen = new(@"^(?<em>\*{1,2}|_{1,2})?done\s+when" + Emphasis + @"\s*:" + Emphasis + @"\s*(?<words>.*)$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+    /// <summary>
+    /// The words after a <c>Done when:</c> label (a bullet allowed before it, a bold or italic mark around the label), or null. The words as written
+    /// (2026-10-22, a review: every <c>*</c>, <c>**</c> and <c>__</c> in them was stripped, so a check's <c>ls *.log</c> read <c>ls .log</c>), but a mark that
+    /// opened before the label and closes the line.
+    /// </summary>
     private static string? DoneWhenOf(string trimmed)
     {
         int marker = PlanDocument.ListMarker(trimmed);
-        string rest = trimmed[marker..].Replace("**", "", StringComparison.Ordinal).Replace("__", "", StringComparison.Ordinal).Replace("*", "", StringComparison.Ordinal).TrimStart();
-        return rest.StartsWith(DoneWhenLabel, StringComparison.OrdinalIgnoreCase) && rest[DoneWhenLabel.Length..].Trim() is { Length: > 0 } words ? words : null;
+        if (s_doneWhen.Match(trimmed[marker..].TrimStart()) is not { Success: true } match)
+        {
+            return null;
+        }
+
+        string words = match.Groups["words"].Value.Trim();
+        if (match.Groups["em"] is { Success: true } em && words.EndsWith(em.Value, StringComparison.Ordinal))
+        {
+            words = words[..^em.Value.Length].TrimEnd();
+        }
+
+        return words.Length > 0 ? words : null;
     }
 
     private static string Flat(string text) => PlanDocument.OneLine(text);

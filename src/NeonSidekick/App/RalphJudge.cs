@@ -28,12 +28,19 @@ internal interface IRalphHost
     Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The by-hand question on <paramref name="step"/> (2026-10-21, the plan at <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): does it work?
-    /// <paramref name="summary"/> is the model's report, <paramref name="reviewerReason"/> the reviewer's when it said <c>needs_user</c>,
-    /// <paramref name="detail"/> what changed (a pass's diff, or a log entry's files). Keep is "it works", Redo carries a note, Stop stops; null when
-    /// nobody can answer (headless, no pane and no page, the pane failed). It waits until answered, even under checkpoint 0.
+    /// Whether the by-hand question can be put to anyone now (2026-10-22, a review: headless asked nobody, yet a by-hand step's check and review ran
+    /// first, for nothing): false headless, and on the screen with no pane able to show it and no Web UI page open.
     /// </summary>
-    Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken);
+    bool CanAsk { get; }
+
+    /// <summary>
+    /// The by-hand question on <paramref name="step"/>, step <c>Index</c> of <paramref name="total"/> (2026-10-21, the plan at
+    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): does it work? <paramref name="summary"/> is the model's report, <paramref name="reviewerReason"/>
+    /// the reviewer's when it said <c>needs_user</c>, <paramref name="detail"/> what changed (a pass's diff, or a log entry's files). Keep is "it works",
+    /// Redo carries a note, Stop stops; null when nobody can answer (headless, no pane and no page, the pane failed). It waits until answered, even
+    /// under checkpoint 0.
+    /// </summary>
+    Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, int total, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -58,10 +65,16 @@ internal static class RalphJudge
     /// still checked. The checks: the verify command (a failure, a timeout or Esc unticks, its tail the next pass's note), the evidence, the review
     /// (a fail unticks), then the by-hand question for a step only a person can check, or one the reviewer said needs the user (2026-10-21: it works
     /// stands, anything else unticks; the time it stood open is <see cref="RalphPassFacts.Waited"/>, read off <paramref name="time"/>). A parent whose
-    /// children all stand is ticked. The header's progress follows. <paramref name="step"/> was parsed from the
+    /// children all stand is ticked. The header's progress follows.
+    /// <paramref name="step"/> was parsed from the
     /// plan file whole (<see cref="PlanSteps.Parse"/>), so its line is the file's; <paramref name="lines"/> are the file's task lines before the pass
     /// (<see cref="PlanSteps.Flat"/> of that same parse). A stopped pass decides nothing: its own box goes back as well (2026-10-19, the second review:
     /// a tick the model wrote before Esc stood with no check, and a resume passed the step by).
+    /// <para>Since 2026-10-22 (a review): a by-hand step's box is ticked only once the user says it works (ticked first, the plan showed it done for as
+    /// long as the question waited), and with nobody to ask (<see cref="IRalphHost.CanAsk"/>) its check and review are not run; the reviewer's
+    /// <c>needs_user</c> on a step not marked <c>By hand:</c> is asked only under a checkpoint and with someone to ask, else the step stands unchecked
+    /// (the user's call: an unattended loop is never stopped by a model's judgment); a cancel while the question waits keeps the question for the
+    /// resume (<see cref="RalphHandCheck.Stop"/>).</para>
     /// </summary>
     public static async Task<RalphJudged> JudgeAsync(IRalphHost host, RalphLoop loop, PlanStep? step, int total, IReadOnlyList<PlanStep> lines, bool? headed, RalphSnapshotOfFiles before, bool hadPictures, bool cancelled, bool failed, string requirement, TimeProvider time, CancellationToken cancellationToken)
     {
@@ -199,10 +212,20 @@ internal static class RalphJudge
                     break;
                 }
 
-                SetBox(host, path, target, true);
+                // A by-hand step's box waits for the user's answer, the model's own tick taken back meanwhile.
+                SetBox(host, path, target, !step.ByHand);
                 if (delta.NothingChanged && report?.Outcome == RalphOutcome.Done)
                 {
                     host.Notice(RalphText.NothingChangedNotice);
+                }
+
+                if (step.ByHand && !host.CanAsk)
+                {
+                    // Nobody to ask (headless, no pane and no page): its check and review would decide nothing, so neither runs.
+                    handCheck = RalphHandCheck.NoOneToAsk;
+                    host.Log($"ralph: by-hand check after pass {loop.Pass}: {RalphText.ByHandLogText(handCheck, null)}");
+                    host.Notice(RalphText.NeedsYouNotice(step.Index, RalphText.ByHandCheck(step, null).Check));
+                    break;
                 }
 
                 if (snapshot.StepCheck is { } verify)
@@ -267,11 +290,16 @@ internal static class RalphJudge
                         break;
                     }
 
-                    if (verdict.Kind == RalphVerdictKind.NeedsUser)
+                    if (verdict.Kind == RalphVerdictKind.NeedsUser && (askByHand || (snapshot.Checkpoint > 0 && host.CanAsk)))
                     {
                         askByHand = true;
                         needsUserReason = verdict.Reason;
                         host.Notice(RalphText.ReviewNeedsUserNotice(verdict.Reason));
+                    }
+                    else if (verdict.Kind == RalphVerdictKind.NeedsUser)
+                    {
+                        // Nobody waited for (checkpoint 0, or no pane and no page): the step stands unchecked and the loop goes on (2026-10-22, the user's call).
+                        host.Notice(RalphText.ReviewNeedsUserUncheckedNotice(verdict.Reason));
                     }
                     else if (verdict.Kind == RalphVerdictKind.Unclear && !askByHand)
                     {
@@ -281,20 +309,28 @@ internal static class RalphJudge
 
                 if (askByHand)
                 {
+                    if (!step.ByHand)
+                    {
+                        // The reviewer's needs_user on a step the box was ticked for: unticked while the question waits.
+                        SetBox(host, path, target, false);
+                    }
+
                     var asked = time.GetUtcNow();
-                    var answer = await host.AskByHandAsync(step, report?.Summary, needsUserReason, delta.Diff, cancellationToken).ConfigureAwait(false);
+                    var answer = await host.AskByHandAsync(step, total, report?.Summary, needsUserReason, delta.Diff, cancellationToken).ConfigureAwait(false);
                     var waited = time.GetUtcNow() - asked;
                     if (waited < TimeSpan.Zero)
                     {
                         waited = TimeSpan.Zero;
                     }
 
-                    // The token before the answer: a cancel is a stop whatever came back, never a tick.
+                    // The token before the answer: a cancel is a stop whatever came back, never a tick. The question stays open for the resume
+                    // (2026-10-22, a review: the page's Stop wrote no mark, so a resume ran the finished pass again before asking; Esc on the pane is
+                    // the question's own Stop and kept it).
                     if (cancellationToken.IsCancellationRequested)
                     {
                         SetBox(host, path, target, false);
                         host.Notice(RalphText.CheckStoppedNotice);
-                        return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed, removed, Waited: waited), check, tail, review, delta.Flags, delta.Diff);
+                        return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed, removed, HandCheck: RalphHandCheck.Stop, Waited: waited), check, tail, review, delta.Flags, delta.Diff);
                     }
 
                     handCheck = answer?.Choice switch
@@ -312,12 +348,15 @@ internal static class RalphJudge
                         SetBox(host, path, target, false);
                         host.Notice(handCheck switch
                         {
-                            RalphHandCheck.NoOneToAsk => RalphText.NeedsYouNotice(step.Index, step.DoneWhen ?? step.Text),
+                            RalphHandCheck.NoOneToAsk => RalphText.NeedsYouNotice(step.Index, RalphText.ByHandCheck(step, needsUserReason).Check),
                             RalphHandCheck.Redo => RalphText.ByHandRedoNotice,
                             _ => RalphText.ByHandStoppedNotice,
                         });
                         break;
                     }
+
+                    // It works: the box the question waited on.
+                    SetBox(host, path, target, true);
                 }
 
                 stands = true;

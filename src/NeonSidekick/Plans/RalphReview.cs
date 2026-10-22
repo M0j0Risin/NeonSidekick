@@ -27,7 +27,7 @@ public sealed record RalphVerdict(RalphVerdictKind Kind, string Reason)
 
 /// <summary>
 /// Reading a Ralph review (2026-10-18): a <c>step_verdict</c> tool call's arguments first, else the answer's text — a <c>verdict: pass|fail|needs_user</c>
-/// line, or a lone PASS, FAIL or NEEDS_USER near its end — else <see cref="RalphVerdictKind.Unclear"/>. Pure.
+/// line, or a lone PASS, FAIL or NEEDS USER (any of Kind's words in capitals) near its end — else <see cref="RalphVerdictKind.Unclear"/>. Pure.
 /// </summary>
 public static partial class RalphReview
 {
@@ -81,15 +81,11 @@ public static partial class RalphReview
 
         foreach (int i in Enumerable.Range(Math.Max(0, lines.Count - 3), Math.Min(3, lines.Count)).Reverse())
         {
+            // The words Kind reads, in capitals (2026-10-22, a review: only NEEDS_USER was read here, while the verdict line took NEEDS USER and
+            // NEEDS-USER too, so a bare **NEEDS USER** read as unclear and its step stood unchecked unasked).
             string bare = lines[i].Trim('*', '_', '.', '!', ' ', '`');
-            if (bare is "PASS" or "FAIL" or "NEEDS_USER")
+            if (string.Equals(bare, bare.ToUpperInvariant(), StringComparison.Ordinal) && Kind(bare) is { } kind)
             {
-                var kind = bare switch
-                {
-                    "PASS" => RalphVerdictKind.Pass,
-                    "FAIL" => RalphVerdictKind.Fail,
-                    _ => RalphVerdictKind.NeedsUser,
-                };
                 return new RalphVerdict(kind, Reason(lines, i));
             }
         }

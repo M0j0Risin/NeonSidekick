@@ -367,7 +367,7 @@ public sealed class RalphJudgeTests
 
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
 
-        public ByHandRun(string words, RalphReviewer reviewer)
+        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0)
         {
             Files = new WorkingDirectory(() => _dir, Time);
             Host = new FakeRalphHost(Files, Time);
@@ -378,7 +378,7 @@ public sealed class RalphJudgeTests
             Step = PlanSteps.Leaves(steps).Single(s => s.Text == words);
             Lines = PlanSteps.Flat(steps);
             Before = RalphChanges.Snapshot(Files, null);
-            Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", null, null, false, "pwsh", reviewer, 0, 0, 3, 60, 0, 1), 3);
+            Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", null, null, false, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1), 3);
             Loop.BeginPass(Step, new PlanPassMeter(Time.GetUtcNow(), 0, 0));
             Assert.Null(Loop.Record(new FinishReport(RalphOutcome.Done, "the pass did it", ["ran it"], null, [], [])));
             Assert.Equal(FileOutcome.Ok, Files.WriteText("hello.py", "print('hi')\n", overwrite: true).Outcome);
@@ -476,9 +476,9 @@ public sealed class RalphJudgeTests
     }
 
     [Fact]
-    public async Task AnUnmarkedStep_TheReviewerSaysNeedsUser_IsAsked_WithTheReason()
+    public async Task AnUnmarkedStep_TheReviewerSaysNeedsUser_IsAsked_WithTheReason_UnderACheckpoint()
     {
-        using var run = new ByHandRun("Write hello", RalphReviewer.Model);
+        using var run = new ByHandRun("Write hello", RalphReviewer.Model, checkpoint: 1);
         run.Host.Verdict = new RalphVerdict(RalphVerdictKind.NeedsUser, "only a person can see the window");
         run.Host.Answers.Enqueue(new RalphCheckpointAnswer(RalphCheckpointChoice.Keep, null));
 
@@ -538,7 +538,7 @@ public sealed class RalphJudgeTests
     }
 
     [Fact]
-    public async Task ACancelUnderTheQuestion_IsAStop_EvenWhenItsAnswerWasItWorks()
+    public async Task ACancelUnderTheQuestion_IsAStop_EvenWhenItsAnswerWasItWorks_AndKeepsTheQuestionForTheResume()
     {
         using var run = new ByHandRun("Animate it", RalphReviewer.Off);
         using var cts = new CancellationTokenSource();
@@ -552,5 +552,75 @@ public sealed class RalphJudgeTests
         Assert.False(run.Ticked);
         Assert.Equal(TimeSpan.FromMinutes(3), judged.Facts.Waited);
         Assert.Equal(RalphStop.Stopped, run.Loop.EndPass(judged.Facts, null));
+        // 2026-10-22, a review: the page's Stop wrote no mark, and a resume ran the finished pass again before asking.
+        Assert.Equal(RalphHandCheck.Stop, judged.Facts.HandCheck);
+        Assert.Null(RalphJudge.LogPass(run.Files, run.Loop, run.Step, judged, run.Time));
+        Assert.Equal(RalphText.ByHandStoppedLog, RalphLog.Read(run.Files, ByHandRun.Plan)!.Entries[^1].Checkpoint);
+    }
+
+    // ── 2026-10-22, a review ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnUnmarkedStep_TheReviewerSaysNeedsUser_UnderCheckpoint0_StandsUnchecked_NotAsked()
+    {
+        // The user's call: an unattended loop is never stopped by a model's judgment.
+        using var run = new ByHandRun("Write hello", RalphReviewer.Model);
+        run.Host.Verdict = new RalphVerdict(RalphVerdictKind.NeedsUser, "only a person can see the window");
+
+        var judged = await run.JudgeAsync();
+
+        Assert.True(judged.Facts.Stands);
+        Assert.True(run.Ticked);
+        Assert.Equal(RalphHandCheck.None, judged.Facts.HandCheck);
+        Assert.Empty(run.Host.Asked);
+        Assert.Contains(RalphText.ReviewNeedsUserUncheckedNotice("only a person can see the window"), run.Host.Notices);
+        Assert.Null(run.Loop.EndPass(judged.Facts, null));
+    }
+
+    [Fact]
+    public async Task AByHandStep_StaysUnticked_WhileTheQuestionWaits_AndIsAskedWithTheStepCount()
+    {
+        using var run = new ByHandRun("Animate it", RalphReviewer.Off);
+        bool? tickedWhileAsked = null;
+        run.Host.OnAsk = () => tickedWhileAsked = run.Ticked;
+        run.Host.Answers.Enqueue(new RalphCheckpointAnswer(RalphCheckpointChoice.Keep, null));
+
+        var judged = await run.JudgeAsync();
+
+        Assert.False(tickedWhileAsked);   // the model ticked it; the plan shows it open until the user says it works
+        Assert.True(run.Ticked);
+        Assert.True(judged.Facts.Stands);
+        Assert.Equal([3], run.Host.AskedTotals);
+    }
+
+    [Fact]
+    public async Task AByHandStep_WithNobodyToAsk_RunsNoReview_AndNeedsYou()
+    {
+        using var run = new ByHandRun("Animate it", RalphReviewer.Model);
+        run.Host.CanAsk = false;
+
+        var judged = await run.JudgeAsync();
+
+        Assert.Equal(0, run.Host.Reviews);
+        Assert.Empty(run.Host.Asked);
+        Assert.False(run.Ticked);
+        Assert.Equal(RalphHandCheck.NoOneToAsk, judged.Facts.HandCheck);
+        Assert.Contains(RalphText.NeedsYouNotice(2, "running python hello.py in a real terminal shows the animation"), run.Host.Notices);
+        Assert.Equal(RalphStop.NeedsUser, run.Loop.EndPass(judged.Facts, null));
+    }
+
+    [Fact]
+    public async Task AByHandRedosNote_IsRedacted_InTheLog()
+    {
+        using var run = new ByHandRun("Animate it", RalphReviewer.Off);
+        run.Host.Answers.Enqueue(new RalphCheckpointAnswer(RalphCheckpointChoice.Redo, "it fails: sqlcmd -S db -U sa -P Hunter2"));
+
+        var judged = await run.JudgeAsync();
+        run.Loop.EndPass(judged.Facts, null);
+
+        Assert.Null(RalphJudge.LogPass(run.Files, run.Loop, run.Step, judged, run.Time));
+        string checkpoint = RalphLog.Read(run.Files, ByHandRun.Plan)!.Entries[^1].Checkpoint!;
+        Assert.DoesNotContain("Hunter2", checkpoint, StringComparison.Ordinal);
+        Assert.Contains("-P <redacted>", checkpoint, StringComparison.Ordinal);
     }
 }

@@ -13,6 +13,9 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [ContentArgument];
+
     public const string ToolName = "write_file";
 
     public const string ContentArgument = "content";

@@ -45,6 +45,8 @@ public sealed class RalphReviewTests
     [InlineData("The code is right.\nverdict: needs user — only a person can see the animation", "only a person can see the animation")]
     [InlineData("The code is right.\n**Verdict:** needs_user", "The code is right.")]
     [InlineData("Only a person can see the window.\n\nNEEDS_USER", "Only a person can see the window.")]
+    [InlineData("Only a person can see the window.\n\n**NEEDS USER**", "Only a person can see the window.")]   // 2026-10-22, a review: read as unclear
+    [InlineData("Only a person can see the window.\nNEEDS-USER", "Only a person can see the window.")]
     public void NeedsUser_ComesFromAVerdictLine_OrALoneWord(string text, string reason)
     {
         // 2026-10-21: an advisor answers in text, so the no-tool fallback reads the third verdict too.

@@ -72,19 +72,19 @@ public partial class SidekickAppTests
     }
 
     [Fact]
-    public async Task Headless_PlanRalph_APlanOfHeadingSteps_IsRefused_NamingThem()
+    public async Task Headless_PlanRalph_APlanWithItsStepsUnderAnotherHeading_IsRefused_NamingThem()
     {
         ServerOn1234("llama");
         HeadlessRalphPlan();
         var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
         File.WriteAllText(HeadlessPlanFile, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide", Verify: "dotnet build"), "Guide",
-            "# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n"));
+            "# Guide\n\n## Steps\n\nTo come.\n\n## Phase 2\n\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n  Done when: two.md exists\n"));
 
         string output = await Headless("/plan ralph add-guide\n");
 
         Assert.Empty(_chat.Requests);
         Assert.Empty(_ralphVerifier.Commands);
-        Assert.Contains("[error] " + RalphText.NoStepsUnreadError(2), output);
+        Assert.Contains("[error] " + RalphText.NoStepsStrayError(2), output);
         Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
     }
 
@@ -328,9 +328,9 @@ public partial class SidekickAppTests
         Assert.True(output.IndexOf(started, StringComparison.Ordinal) < output.IndexOf(RalphText.ByHandHeadlessNotice(1), StringComparison.Ordinal));
         string needsYou = "[notice] " + RalphText.NeedsYouNotice(1, "By hand: one.md reads well in the viewer");
         Assert.Equal(2, output.Split('\n').Count(l => l.Contains(needsYou, StringComparison.Ordinal)));   // the pass's, then the resume's
-        Assert.Equal(2, output.Split('\n').Count(l => l.Contains(RalphText.StopNotice(RalphStop.NeedsUser, HeadlessPlanPath, 0, 2), StringComparison.Ordinal)));
+        Assert.Equal(2, output.Split('\n').Count(l => l.Contains(RalphText.StopNotice(RalphStop.NeedsUser, HeadlessPlanPath, 0, 2, canAsk: false), StringComparison.Ordinal)));
         Assert.Contains("[notice] " + RalphText.LeftChangedLine(["one.md"]).Trim(), output);
-        Assert.Contains("[notice] " + RalphText.ResumedNotice(HeadlessPlanPath, 2, 6), output);
+        Assert.DoesNotContain(RalphText.ResumedNotice(HeadlessPlanPath, 2, 6), output);   // the resume stops before its checks and its loop (2026-10-22)
         Assert.Contains("- [ ] One", File.ReadAllText(HeadlessPlanFile));
         Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
         var log = RalphLog.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(HeadlessPlanFile)!, "add-guide", RalphLog.FileName)));

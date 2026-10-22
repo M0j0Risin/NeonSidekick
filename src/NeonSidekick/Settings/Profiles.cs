@@ -512,6 +512,13 @@ public static class Profiles
         to.UserAvatar = from.UserAvatar;         // 2026-10-12: the user's own face, kept as the model's is
         to.WebUiToken = from.WebUiToken;         // 2026-10-14: a phone signed in stays signed in once the Web UI is on again
         to.ShortcutOffered = from.ShortcutOffered; // 2026-10-16: a profile asked once is not asked again after a plain reset
+        // The embedded switch with a kept embedded URL (2026-10-22, a review: off by default since 2026-10-21, so a reset kept the URL and model and
+        // took the switch away, and the saved URL then read as none — the failure the kept settings are for). Not one of ResetKeptSettings: it
+        // follows the URL.
+        if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(from.LlmUrl))
+        {
+            to.EmbeddedLlmServer = from.EmbeddedLlmServer;
+        }
     }
 
     /// <summary>

@@ -118,7 +118,14 @@ public static class PlanFiles
         string? verify = checks?.Verify is { } v ? NullIfBlank(PlanDocument.OneLine(v)) : before?.Verify;
         string? final = checks?.Final is { } f ? NullIfBlank(PlanDocument.OneLine(f)) : before?.Final;
         var header = new PlanHeader(PlanStatus.Draft, revision, session.Created ?? now, now, session.RequirementFor(title), Verify: verify, Final: final);
-        string body = references is null ? markdown : references(path, PlanDocument.SavedBody(title, markdown));
+        // The body as the file holds it, its # title too, with or without the pictures seam (2026-10-22, a review: headless's presentation left the
+        // heading out, and a gap pass's count of it fell short of the file's).
+        string body = PlanDocument.SavedBody(title, markdown);
+        if (references is not null)
+        {
+            body = references(path, body);
+        }
+
         var written = files.WriteText(path, PlanDocument.Render(header, title, body), overwrite: true);
         if (written.Outcome != FileOutcome.Ok)
         {
@@ -127,6 +134,25 @@ public static class PlanFiles
 
         session.Presented(path, title, revision, now);
         return (new PlanPresentation(title, path, revision, PlanDocument.Body(body)) { Checks = verify is null && final is null ? null : new PlanChecks(verify, final) }, null);
+    }
+
+    /// <summary>
+    /// The plan file at <paramref name="path"/> (<paramref name="text"/>, as just read) with the box forms a model drifts into written as task lines
+    /// (2026-10-22, the user's call after a review, <see cref="PlanSteps.Normalized"/>): a plan edited by hand never went through <see cref="Save"/>, so a
+    /// loop's start does it. Written when that changes anything and no other instance holds the plan; the text the file holds now (the old one when the
+    /// write was refused or failed, which the start's own refusals then read).
+    /// </summary>
+    public static string WithStepsNormalized(WorkingDirectory files, string path, string text)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(text);
+        string normalized = PlanSteps.Normalized(text);
+        if (string.Equals(normalized, text, StringComparison.Ordinal) || RalphLog.HeldElsewhere(files, path) is not null)
+        {
+            return text;
+        }
+
+        return files.WriteText(path, normalized, overwrite: true).Outcome == FileOutcome.Ok ? normalized : text;
     }
 
     /// <summary>

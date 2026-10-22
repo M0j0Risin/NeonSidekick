@@ -10,8 +10,9 @@ namespace NeonSidekick.App;
 public enum ConnectChoice
 {
     /// <summary>
-    /// Scan for local servers (the wording the user's, 2026-10-05): <c>Settings › Servers › Http › LLM server scan mode</c> first, then a
-    /// look under what it says (2026-10-21, the user's pick: the scan mode is off by default, so a look under it found nothing).
+    /// Scan for local servers (the wording the user's, 2026-10-05): <c>Settings › Servers › Http › LLM server scan mode</c> first when it is off
+    /// (2026-10-21, the user's pick: the scan mode is off by default, so a look under it found nothing; only when off since 2026-10-22, a review),
+    /// then a look under what it says, past any URL saved (2026-10-22, a review: the saved, dead URL was tried again instead).
     /// </summary>
     Scan,
 
@@ -19,8 +20,9 @@ public enum ConnectChoice
     Url,
 
     /// <summary>
-    /// Download or pick an embedded model (<c>Settings › Embedded › Models</c>), <c>Embedded servers enabled</c> switched on for it
-    /// (2026-10-21, the user's ask: off by default since, and switched back off when the visit picked nothing).
+    /// Download or pick an embedded model (<c>Settings › Embedded › Models</c>), <c>Embedded servers enabled</c> switched on as the model is put
+    /// to use (2026-10-21, the user's ask: off by default since; switched on for the visit and back off after until 2026-10-22, a review: a crash,
+    /// a failed download or a download already running left it on).
     /// </summary>
     Embedded,
 
@@ -63,23 +65,23 @@ internal sealed partial class ChatScreen
     {
         var rows = new List<(ConnectChoice, string, string)>
         {
-            (ConnectChoice.Scan, "Scan for local servers", "LM Studio, Ollama, llama.cpp, vLLM… choose where to look"),
-            (ConnectChoice.Url, "Enter a server's URL", "any OpenAI-compatible server"),
+            (ConnectChoice.Scan, ConnectText.ScanLabel, ConnectText.ScanNote),
+            (ConnectChoice.Url, ConnectText.UrlLabel, ConnectText.UrlNote),
         };
         if (embedded)
         {
-            rows.Add((ConnectChoice.Embedded, "Download an embedded model", "selected GGUF models from Hugging Face"));
+            rows.Add((ConnectChoice.Embedded, ConnectText.EmbeddedLabel, ConnectText.EmbeddedNote));
         }
 
         if (docker)
         {
-            rows.Add((ConnectChoice.Docker, "Connect Docker container", "a vLLM or SGLang container in Docker Desktop"));
+            rows.Add((ConnectChoice.Docker, ConnectText.DockerLabel, ConnectText.DockerNote));
         }
 
-        rows.Add((ConnectChoice.Anthropic, "Use the Anthropic API", "your API key, billed per message"));
-        rows.Add((ConnectChoice.OpenAI, "Use the OpenAI API", "your API key, billed per message"));
-        rows.Add((ConnectChoice.ClaudeCli, "Use Claude Code", "the claude CLI on this machine, with your Claude subscription"));
-        rows.Add((ConnectChoice.NotNow, "Not now", "/server connects later"));
+        rows.Add((ConnectChoice.Anthropic, ConnectText.AnthropicLabel, ConnectText.ApiNote));
+        rows.Add((ConnectChoice.OpenAI, ConnectText.OpenAILabel, ConnectText.ApiNote));
+        rows.Add((ConnectChoice.ClaudeCli, ConnectText.ClaudeCliLabel, ConnectText.ClaudeCliNote));
+        rows.Add((ConnectChoice.NotNow, ConnectText.NotNowLabel, ConnectText.NotNowNote));
         return rows;
     }
 
@@ -94,9 +96,10 @@ internal sealed partial class ChatScreen
     /// </summary>
     /// <remarks>
     /// Since 2026-10-21 (every server off by default, the user's call) it also stands after a profile switch with nothing to connect to
-    /// and after a bare <c>/server</c> with nothing offered; the scan row opens the scan mode first, and the embedded row switches
-    /// <c>Embedded servers enabled</c> on for its visit (<see cref="EmbeddedRowAsync"/>). A profile switched during a row's visit ends
-    /// the page: that switch connected the new profile and offered its own.
+    /// and after a bare <c>/server</c> with nothing offered; the scan row opens the scan mode first when it is off, and the embedded row lets
+    /// the catalog put a model to use with <c>Embedded servers enabled</c> off, switching it on then (<see cref="EmbeddedRowAsync"/>). A profile
+    /// switched during a row's visit ends the page: that switch connected the new profile and offered its own (one check for every row,
+    /// <see cref="VisitAsync"/>, 2026-10-22, a review: each row had its own copy).
     /// </remarks>
     private async Task ConnectPageAsync(CancellationToken cancellationToken)
     {
@@ -130,23 +133,23 @@ internal sealed partial class ChatScreen
             {
                 case ConnectChoice.Scan:
                     // Where to look first (2026-10-21, the user's pick): the scan mode is off by default, so a look under it found
-                    // nothing. A visit that set a URL already reconnected; a mode that looks somewhere looks now; off, the page again.
-                    await OpenSettingsAsync(cancellationToken, SettingsField.LlmScanMode).ConfigureAwait(false);
-                    if (ProfileChanged(profile))
+                    // nothing — asked only while it is off (2026-10-22, a review: a mode that already looked opened the setting every time).
+                    // A visit that set a URL already reconnected; a mode that looks somewhere looks now, past a saved URL that is not
+                    // answering (2026-10-22, a review: the connect tried that one again); off, the page again.
+                    if (!Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(_effective())) && !await VisitAsync(SettingsField.LlmScanMode, profile, cancellationToken).ConfigureAwait(false))
                     {
                         return;
                     }
 
                     if (_session.Endpoint is null && Llm.LlmScanMode.Scans(Llm.LlmScanMode.Resolve(_effective())))
                     {
-                        await ConnectLlmAsync(cancellationToken, quiet: false, startup: false).ConfigureAwait(false);
+                        await ConnectLlmCoreAsync(cancellationToken, quiet: false, startup: false, scan: true).ConfigureAwait(false);
                     }
 
                     break;
 
                 case ConnectChoice.Url:
-                    await OpenSettingsAsync(cancellationToken, SettingsField.LlmUrl).ConfigureAwait(false);
-                    if (ProfileChanged(profile))
+                    if (!await VisitAsync(SettingsField.LlmUrl, profile, cancellationToken).ConfigureAwait(false))
                     {
                         return;
                     }
@@ -165,8 +168,7 @@ internal sealed partial class ChatScreen
                     // The Docker tab's checklist; the containers chosen count only with the switch on, and /server starts one.
                     // With some chosen the page is left (2026-10-06, the code review's catch): no connect was tried, so the loop
                     // would show the page again over the hint, and /server, which the hint names, is typed on the input row.
-                    await OpenSettingsAsync(cancellationToken, SettingsField.DockerServerContainers).ConfigureAwait(false);
-                    if (ProfileChanged(profile))
+                    if (!await VisitAsync(SettingsField.DockerServerContainers, profile, cancellationToken).ConfigureAwait(false))
                     {
                         return;
                     }
@@ -185,8 +187,7 @@ internal sealed partial class ChatScreen
                     break;
 
                 case ConnectChoice.Anthropic:
-                    await OpenSettingsAsync(cancellationToken, SettingsField.AnthropicApiKey).ConfigureAwait(false);
-                    if (ProfileChanged(profile))
+                    if (!await VisitAsync(SettingsField.AnthropicApiKey, profile, cancellationToken).ConfigureAwait(false))
                     {
                         return;
                     }
@@ -200,8 +201,7 @@ internal sealed partial class ChatScreen
                     break;
 
                 case ConnectChoice.OpenAI:
-                    await OpenSettingsAsync(cancellationToken, SettingsField.OpenAIApiKey).ConfigureAwait(false);
-                    if (ProfileChanged(profile))
+                    if (!await VisitAsync(SettingsField.OpenAIApiKey, profile, cancellationToken).ConfigureAwait(false))
                     {
                         return;
                     }
@@ -229,66 +229,45 @@ internal sealed partial class ChatScreen
     private bool ProfileChanged(string profile) => !string.Equals(_settings.ProfileName, profile, StringComparison.Ordinal);
 
     /// <summary>
-    /// The embedded row (2026-10-21, the user's ask: <c>Embedded servers enabled</c> is off by default, and the catalog refuses a pick
-    /// while it is): the switch on, then the catalog. True when the page should end — a profile switched during the visit, or a
-    /// download left running behind the line, whose end connects (<see cref="StartEmbeddedDownloadAsync"/>); the page would stand
-    /// over it otherwise. The switch goes back off when the visit changed nothing — it was off, the same profile is loaded, no
-    /// download runs (a switch off cancels one) and no embedded model is saved — in a <c>finally</c>, so an exit mid-visit
-    /// leaves it as it was too.
+    /// A row's settings visit on <paramref name="field"/>: true to go on, false when it switched profiles and the page ends (<see cref="ProfileChanged"/>;
+    /// 2026-10-22, a review: every row had the check after its visit, and a row added without it would act on the new profile).
     /// </summary>
-    private async Task<bool> EmbeddedRowAsync(string profile, CancellationToken cancellationToken)
+    private async Task<bool> VisitAsync(SettingsField field, string profile, CancellationToken cancellationToken)
     {
-        bool wasOn = _settings.Current.EmbeddedLlmServer;
-        if (!wasOn)
-        {
-            // Before the visit, so the pane counts no change and fires no reconnect; a catalog pick then passes UseEmbeddedModelAsync.
-            _settings.Update(d => d.EmbeddedLlmServer = true);
-        }
-
-        try
-        {
-            await OpenSettingsAsync(cancellationToken, SettingsField.EmbeddedModels).ConfigureAwait(false);
-            return ProfileChanged(profile) || _jobs.Running(BackgroundJobKind.EmbeddedDownload);
-        }
-        finally
-        {
-            if (!wasOn && !_jobs.Running(BackgroundJobKind.EmbeddedDownload))
-            {
-                if (!ProfileChanged(profile))
-                {
-                    if (!EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_settings.Current.LlmUrl) && _settings.Current.EmbeddedLlmServer)
-                    {
-                        _settings.Update(d => d.EmbeddedLlmServer = false);
-                    }
-                }
-                else
-                {
-                    EmbeddedSwitchBackOff(profile);
-                }
-            }
-        }
+        await OpenSettingsAsync(cancellationToken, field).ConfigureAwait(false);
+        return !ProfileChanged(profile);
     }
 
     /// <summary>
-    /// The embedded switch put back off in <paramref name="profile"/>'s saved file (2026-10-21, a review): a visit that switched profiles left the
-    /// page's profile, saved by the switch with the switch on though the visit picked nothing there. Disk only, as a reset of another profile is;
-    /// left as it is when that profile now names an embedded model, and a file that can't be read or written is only logged.
+    /// Whether the catalog may put an embedded model to use with <c>Embedded servers enabled</c> off: true only during the Connect page's embedded
+    /// row (<see cref="EmbeddedRowAsync"/>), where <see cref="UseEmbeddedModelAsync"/> switches it on as the model is used.
     /// </summary>
-    private void EmbeddedSwitchBackOff(string profile)
+    private bool _embeddedFromConnect;
+
+    /// <summary>How many embedded downloads have started: the embedded row tells by it whether its visit started one.</summary>
+    private long _embeddedDownloads;
+
+    /// <summary>
+    /// The embedded row (2026-10-21, the user's ask: <c>Embedded servers enabled</c> is off by default, and the catalog refuses a pick
+    /// while it is): the catalog, its pick put to use with the switch off, which goes on as the model is used — an installed one at once, a
+    /// download at its end (2026-10-22, the user's call after a review: switched on for the visit and back off after, a crash, a failed or
+    /// cancelled download, or a download already running before the row left it on with no model). True when the page should end — a profile
+    /// switched during the visit, or a download this visit started left running behind the line, whose end connects
+    /// (<see cref="StartEmbeddedDownloadAsync"/>); the page would stand over it otherwise.
+    /// </summary>
+    private async Task<bool> EmbeddedRowAsync(string profile, CancellationToken cancellationToken)
     {
-        string path = Profiles.ProfileFile(_settings.StorageDirectory, profile);
+        long downloads = _embeddedDownloads;
+        _embeddedFromConnect = true;
         try
         {
-            var data = Profiles.ReadProfileFile(path);
-            if (data.EmbeddedLlmServer && !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(data.LlmUrl))
-            {
-                data.EmbeddedLlmServer = false;
-                Profiles.WriteProfileFile(path, data);
-            }
+            await OpenSettingsAsync(cancellationToken, SettingsField.EmbeddedModels).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        finally
         {
-            DiagnosticLog.Warn(AppCategory, $"Connect a model: the embedded switch stayed on in profile \"{profile}\" ({ex.Message}).");
+            _embeddedFromConnect = false;
         }
+
+        return ProfileChanged(profile) || (_embeddedDownloads != downloads && _jobs.Running(BackgroundJobKind.EmbeddedDownload));
     }
 }

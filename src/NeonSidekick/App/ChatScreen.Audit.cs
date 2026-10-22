@@ -375,7 +375,9 @@ internal sealed partial class ChatScreen
     /// pass's frame, message and pictures alive until the whole review unwound). A pass's turn hands the next pass back through
     /// <see cref="NextPassAsync"/>, and this loop sends it. An audit's pass that never reached a turn (2026-10-20, a review:
     /// <see cref="RunMessageAsync"/> returns before one when there is no assistant or the model cannot see a picture, and the audit stayed
-    /// mid-pass, every later turn narrowed to its tools and judged as its pass) is recorded and the audit stopped.
+    /// mid-pass, every later turn narrowed to its tools and judged as its pass) is recorded and the audit stopped; a gap review's the same (2026-10-22,
+    /// a review: it stayed mid-pass, the user's next message was judged as its pass, and the reflections it held were held for good). A pass dropped
+    /// because the app is closing is no failed one: no stop tone (2026-10-22, a review).
     /// </summary>
     private async Task<bool> SendPassAsync(string message, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
@@ -387,12 +389,26 @@ internal sealed partial class ChatScreen
             var loop = _audit.Running;
             int pass = loop?.Pass ?? 0;
             long judged = _auditJudged;
+            var gap = _plan.Closing is { Pending: false } reviewing ? reviewing : null;
+            int gapPass = gap?.Pass ?? 0;
+            long gapJudged = _gapJudged;
             bool exit = await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
+            bool closing = cancellationToken.IsCancellationRequested;
             if (loop is not null && ReferenceEquals(_audit.Running, loop) && loop.Pass == pass && _auditJudged == judged)
             {
                 _transcript.Notice(AuditText.PassNotSentNotice(_audit.Name));
                 loop.Next(false, false, null, PlanMeter());
-                EndAudit(loop, PlanGapStop.Stopped, passFailed: true);   // nobody stopped it: the stop tone rings (2026-10-21)
+                EndAudit(loop, PlanGapStop.Stopped, passFailed: !closing);   // nobody stopped it: the stop tone rings (2026-10-21)
+            }
+
+            if (gap is not null && ReferenceEquals(_plan.Closing, gap) && gap.Pass == gapPass && _gapJudged == gapJudged)
+            {
+                _transcript.Notice(PlanText.GapPassNotSentNotice);
+                string? path = _plan.Path;
+                string? body = path is null ? null : ReadPlanBody(path);
+                gap.Next(false, false, body, PlanMeter());
+                _plan.StopClosing();
+                EndGapReview(gap, PlanGapStop.Stopped, path, body, failed: !closing);
             }
 
             if (exit || _nextPass is not { } next)
@@ -430,6 +446,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>How many passes <see cref="TakeAuditPass"/> has judged: a pass's send tells by it whether its turn ran.</summary>
     private long _auditJudged;
+
+    /// <summary>How many gap passes <see cref="TakeGapPass"/> has judged (2026-10-22, as <see cref="_auditJudged"/>).</summary>
+    private long _gapJudged;
 
     /// <summary>The lines queued, held and sent from the page as the audit began (<see cref="MarkAuditBaseline"/>).</summary>
     private (long Typed, long Pended, long Sent) _auditBaseline;
@@ -481,7 +500,7 @@ internal sealed partial class ChatScreen
             _transcript.Notice(AuditText.WorkdirMovedNotice(_audit.Name, _audit.Root!));
             DiagnosticLog.Info(AppCategory, $"code audit: stopped {path}: the working directory moved from {_audit.Root}");
             loop.Next(false, false, null, PlanMeter());
-            return EndAudit(loop, PlanGapStop.Stopped, moved: true);
+            return EndAudit(loop, PlanGapStop.Stopped, moved: true);   // the user's own /cwd: no stop tone (2026-10-22, a review)
         }
 
         bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
@@ -513,15 +532,13 @@ internal sealed partial class ChatScreen
     /// An audit over: the summary of its passes, the report's status and passes line, the stop's notice; for a stop that ended on its own
     /// (converged, limit, stalled, unconfirmed) the report back on the done pane at the idle line. The loop is forgotten. <paramref name="moved"/>
     /// (the working directory changed, its own notice said): no stop line and no pane, the report written in the audit's own folder.
-    /// <see cref="AppSettingsData.CodeAuditStopTone"/> rings for every stop the user didn't cause (2026-10-21, <see cref="PlanGapLoop.Rings"/>):
-    /// <paramref name="passFailed"/> (the pass's turn failed, or was never sent) and <paramref name="moved"/> count as such a <see cref="PlanGapStop.Stopped"/>.
+    /// <see cref="AppSettingsData.CodeAuditStopTone"/> rings for every stop the user didn't cause (2026-10-21, <see cref="PlanGapLoop.TakeRing"/>):
+    /// <paramref name="passFailed"/> (the pass's turn failed, or was never sent) counts as such a <see cref="PlanGapStop.Stopped"/>; a move does not
+    /// (2026-10-22, a review: it is the user's own <c>/cwd</c>, and the setting's help says a stop you caused never rings).
     /// </summary>
     private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false, AuditCoverage? coverage = null, bool passFailed = false)
     {
-        if (PlanGapLoop.Rings(reason, passFailed || moved))
-        {
-            RingStopTone(_effective().CodeAuditStopTone);
-        }
+        RingStopTone(loop, reason, passFailed, _effective().CodeAuditStopTone);
 
         string path = _audit.Path!;
         string name = _audit.Name;

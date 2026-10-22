@@ -409,7 +409,7 @@ public partial class ChatScreenTests
         Assert.Equal(otherText, File.ReadAllText(otherPlan));
         Assert.Contains("- [x] One", RalphPlanText);                  // judged where it ran
         Assert.False(File.Exists(RalphLockFile));
-        Assert.Equal(RalphStart.StopWord(RalphStop.WorkdirMoved), RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Stopped);
+        Assert.Equal(RalphText.StopWord(RalphStop.WorkdirMoved), RalphLog.Parse(File.ReadAllText(RalphLogFile)).Head!.Stopped);
         Assert.False(Directory.Exists(Path.Combine(elsewhere, ".neon", "plans", "add-guide")));   // no log or lock there
     }
 
@@ -825,9 +825,9 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Ralph_APlanOfHeadingSteps_IsRefusedByName_NamingThem_AndLogged()
+    public async Task Ralph_APlanWithItsStepsUnderAnotherHeading_IsRefusedByName_NamingThem_AndLogged()
     {
-        RalphPlan("# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n");
+        RalphPlan("# Guide\n\n## Steps\n\nTo come.\n\n## Phase 2\n\n- [ ] One\n  Done when: one.md exists\n- [ ] Two\n  Done when: two.md exists\n");
         RalphFixture(Line("/plan ralph add-guide"), Line("/exit"));
         var events = new List<string>();
         Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == ChatScreen.AppCategory) { lock (events) { events.Add(e.Message); } } };
@@ -844,13 +844,30 @@ public partial class ChatScreenTests
         }
 
         Assert.Empty(_chat.Requests);
-        Assert.Contains(RalphText.NoStepsUnreadError(2), output);
+        Assert.Contains(RalphText.NoStepsStrayError(2), output);
         Assert.DoesNotContain(RalphText.NoStepsError, output);
         Assert.DoesNotContain("as a Ralph loop?", output);
         lock (events)
         {
-            Assert.Contains("ralph: not started " + PlanPath + ": " + RalphText.NoStepsUnreadError(2), events);
+            Assert.Contains(RalphText.NotStartedLogLine(PlanPath, RalphText.NoStepsStrayError(2)), events);
         }
+    }
+
+    [Fact]
+    public async Task Ralph_APlanOfHeadingSteps_EditedByHand_IsWrittenAsTaskLines_AndAsked()
+    {
+        // 2026-10-22, the user's call after a review: a hand-edited plan never went through the save, so the start writes its box forms as task lines.
+        RalphPlan();
+        string header = File.ReadAllText(PlanFile)[..(File.ReadAllText(PlanFile).IndexOf("# Guide", StringComparison.Ordinal))];
+        File.WriteAllText(PlanFile, header + "# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n");
+        RalphFixture(Line("/plan ralph add-guide"), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("as a Ralph loop?", output);
+        Assert.Contains("- [ ] Step 1 — Rewrite `hello_world.py`", RalphPlanText);
+        Assert.Contains("  Done when: running `python hello_world.py` shows the rain", RalphPlanText);
+        Assert.Equal(2, PlanSteps.Counts(PlanSteps.Parse(RalphPlanText)).Total);
     }
 
     [Fact]
@@ -1175,11 +1192,13 @@ public partial class ChatScreenTests
 
         Assert.Contains(RalphText.StopNotice(RalphStop.UserStopped, PlanPath, 0, 2), output);
         Assert.Contains(RalphText.ShowLines(PlanPath, 0, 2, 1, paused: true, RalphLog.PathFor(PlanPath), waitingOnYou: true)[0], output);
-        // The resume: the question first, with no pass; it works ticks step one, then step two's pass.
+        // The resume: the question first, before the baseline and the loop (2026-10-22, a review), with no pass; it works ticks step one, so the
+        // loop counts one step to go and its cap, then step two's pass.
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Contains("Two", LastUserText(_chat.Requests[2]));
         Assert.Equal(1, Occurrences(output, RalphText.ByHandStartNotice(1)));   // never again on the resume
-        Assert.Contains(RalphText.ResumedNotice(PlanPath, 2, 6), output);
+        Assert.Contains(RalphText.ResumedNotice(PlanPath, 1, 3), output);
+        Assert.True(output.IndexOf(RalphText.StepCheckedByYouNotice(1, 2, "One"), StringComparison.Ordinal) < output.IndexOf(RalphText.ResumedNotice(PlanPath, 1, 3), StringComparison.Ordinal));
         Assert.Contains(RalphText.StepCheckedByYouNotice(1, 2, "One"), output);
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
         var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
@@ -1187,11 +1206,33 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Ralph_TheReviewerSaysNeedsUser_OnAnUnmarkedStep_AndTheUserIsAsked()
+    public async Task Ralph_TheReviewerSaysNeedsUser_OnAnUnmarkedStep_UnderCheckpoint0_StandsUnchecked_AndTheLoopGoesOn()
+    {
+        // 2026-10-22, the user's call after a review: an unattended loop is never stopped by a model's judgment.
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _settings.Update(d => d.RalphLoopReviewer = "model");
+        RalphPass("1");
+        _chat.Enqueue(VerdictCall("v1", "needs_user", "only a person can see the animation"));
+        RalphPass("2");
+        _chat.Enqueue(VerdictCall("v2", "pass", "two.md is there"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.ReviewNeedsUserUncheckedNotice("only a person can see the animation"), output);
+        Assert.DoesNotContain(RalphText.ByHandTitle, output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+        var log = RalphLog.Parse(File.ReadAllText(RalphLogFile));
+        Assert.Equal("needs user: only a person can see the animation", log.Entries[0].Review);
+        Assert.Null(log.Entries[0].Checkpoint);
+    }
+
+    [Fact]
+    public async Task Ralph_TheReviewerSaysNeedsUser_OnAnUnmarkedStep_UnderACheckpoint_AndTheUserIsAsked()
     {
         RalphPlan();
-        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Char('w'), Keys.Enter), Line("/exit"));
-        _settings.Update(d => d.RalphLoopReviewer = "model");
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Answer(Keys.Char('w'), Keys.Enter), Answer(Keys.Enter), Line("/exit"));
+        _settings.Update(d => { d.RalphLoopReviewer = "model"; d.RalphLoopCheckpoint = 2; });
         RalphPass("1");
         _chat.Enqueue(VerdictCall("v1", "needs_user", "only a person can see the animation"));
         RalphPass("2");

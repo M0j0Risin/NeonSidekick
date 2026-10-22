@@ -73,7 +73,11 @@ public static class SplashMode
         _ => "",
     };
 
-    /// <summary>The mode in force for <paramref name="effective"/>; an unknown saved value warns and uses <see cref="Default"/>.</summary>
+    /// <summary>
+    /// The mode in force for <paramref name="effective"/>; an unknown saved value uses <see cref="Default"/> (<c>off</c> since 2026-10-21, so a misspelled
+    /// value hides the splash) and warns, naming the value, once for each value (2026-10-22, the user's call after a review: the line it reads by,
+    /// not one at every draw).
+    /// </summary>
     public static SplashStyle Resolve(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
@@ -82,9 +86,16 @@ public static class SplashMode
             return style;
         }
 
-        DiagnosticLog.Warn(Category,
-            $"{nameof(AppSettingsData.WelcomeSplashMode)}='{effective.WelcomeSplashMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        if (!string.Equals(Interlocked.Exchange(ref s_warned, effective.WelcomeSplashMode), effective.WelcomeSplashMode, StringComparison.Ordinal))
+        {
+            DiagnosticLog.Warn(Category,
+                $"{nameof(AppSettingsData.WelcomeSplashMode)}='{effective.WelcomeSplashMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        }
+
         TryParse(Default, out style);
         return style;
     }
+
+    /// <summary>The unknown value warned about last: each is said once.</summary>
+    private static string? s_warned;
 }

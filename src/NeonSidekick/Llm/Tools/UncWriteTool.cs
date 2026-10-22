@@ -13,6 +13,9 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class UncWriteTool : UncTool, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [ContentArgument];
+
     public const string ToolName = "unc_write";
     public const string ContentArgument = WriteFileTool.ContentArgument;
     public const string ModeArgument = WriteFileTool.ModeArgument;

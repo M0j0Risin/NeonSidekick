@@ -39,6 +39,12 @@ internal sealed class FakeRalphHost(WorkingDirectory files, ManualTimeProvider t
     /// <summary>Each by-hand question asked: the step, the summary, the reviewer's reason and the detail.</summary>
     public List<(PlanStep Step, string? Summary, string? Reason, string Detail)> Asked { get; } = [];
 
+    /// <summary>Whether anyone can be asked (2026-10-22, <see cref="IRalphHost.CanAsk"/>): false is headless, or the screen with no pane and no page.</summary>
+    public bool CanAsk { get; set; } = true;
+
+    /// <summary>The step total each question was given.</summary>
+    public List<int> AskedTotals { get; } = [];
+
     public void Notice(string text) => Notices.Add(text);
 
     public void Tail(string tail)
@@ -56,9 +62,10 @@ internal sealed class FakeRalphHost(WorkingDirectory files, ManualTimeProvider t
         return Task.FromResult(Verdict);
     }
 
-    public Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken)
+    public Task<RalphCheckpointAnswer?> AskByHandAsync(PlanStep step, int total, string? summary, string? reviewerReason, string detail, CancellationToken cancellationToken)
     {
         Asked.Add((step, summary, reviewerReason, detail));
+        AskedTotals.Add(total);
         time.Advance(AnswerTakes);
         OnAsk?.Invoke();
         return Task.FromResult(Answers.Count > 0 ? Answers.Dequeue() : null);

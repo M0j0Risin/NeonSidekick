@@ -2542,11 +2542,12 @@ public sealed class Assistant
             DiagnosticLog.Info(Category, LeakedParameters.LogLine(call.Name, repaired));
         }
 
-        // A pruned stub copied back as an argument (2026-10-21, ConversationCompactor.StubbedArgument): refused before the tool runs, for every
-        // tool not refusing one in its own words, so an advisor is never asked a stub and a search never looks for one.
-        if (tool is not NeonSidekick.Llm.Tools.IRefusesPrunedStubs && ConversationCompactor.StubbedArgument(call.Arguments) is { } stubbed)
+        // A pruned stub copied back as an argument (2026-10-21, ConversationCompactor.StubbedArgument): refused before the tool runs, in every argument
+        // a tool does not refuse one in its own words (each such tool names its own since 2026-10-22, a review: the whole tool was let through), so an
+        // advisor is never asked a stub, a search never looks for one and a plan's verify never holds one.
+        if (ConversationCompactor.StubbedArgument(call.Arguments, (tool as NeonSidekick.Llm.Tools.IRefusesPrunedStubs)?.StubArguments) is { } stubbed)
         {
-            string refusal = ConversationCompactor.PrunedStubSentResult(stubbed);
+            string refusal = App.CompactionText.PrunedStubSentResult(stubbed);
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
             return (refusal, [], null, null);
         }

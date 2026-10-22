@@ -15,6 +15,9 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [NewTextArgument];
+
     public const string ToolName = "patch_file";
     public const string OldTextArgument = "old_text";
     public const string NewTextArgument = "new_text";

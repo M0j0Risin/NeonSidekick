@@ -363,7 +363,7 @@ public sealed class RalphLoop
             }
 
             // A step only a person can check keeps its check through a split (2026-10-21): else its parent would be ticked with nobody checking it.
-            if (step.ByHand && !report.Substeps.Any(s => PlanSteps.IsByHand(s.DoneWhen)))
+            if (step.ByHand && !report.Substeps.Any(s => PlanSteps.IsByHand(PlanSteps.WithoutDoneWhenLabel(s.DoneWhen))))
             {
                 return RalphText.SplitByHandResult;
             }
@@ -443,10 +443,10 @@ public sealed class RalphLoop
         // A by-hand pass reads as its answer, never a plain done or not done (2026-10-21); the plain "stopped" stays the cancel's.
         string outcome = facts.CheckRefused ? "check refused" : facts.Cancelled ? "stopped" : facts.HandCheck switch
         {
-            RalphHandCheck.Passed => "done by hand",
-            RalphHandCheck.Redo => "redo by hand",
-            RalphHandCheck.Stop => "stopped at the check",
-            RalphHandCheck.NoOneToAsk => "needs you",
+            RalphHandCheck.Passed => RalphText.OutcomeDoneByHand,
+            RalphHandCheck.Redo => RalphText.OutcomeRedoByHand,
+            RalphHandCheck.Stop => RalphText.OutcomeStoppedAtCheck,
+            RalphHandCheck.NoOneToAsk => RalphText.NeedsYouLog,
             _ => null,
         } ?? Report?.Outcome switch
         {

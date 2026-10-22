@@ -116,6 +116,24 @@ public sealed class PlanGapLoop
         _ => true,
     };
 
+    /// <summary>
+    /// Whether this loop's stop tone rings now for <paramref name="reason"/> (<see cref="Rings"/>), true once at most (2026-10-22, a review: whether a
+    /// stop rang was decided in three places — a converged review rang as its pane opened, so its end skipped Converged by hand, while an audit's end
+    /// rang it itself). Every ring site asks this, whichever comes first.
+    /// </summary>
+    public bool TakeRing(PlanGapStop reason, bool failed)
+    {
+        if (_rang || !Rings(reason, failed))
+        {
+            return false;
+        }
+
+        _rang = true;
+        return true;
+    }
+
+    private bool _rang;
+
     public PlanGapLoop(PlanReviewer reviewer, int limit) : this(reviewer, limit, 1)
     {
     }

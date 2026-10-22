@@ -833,7 +833,18 @@ public sealed partial class WebUiTests : IDisposable
             {
                 Assert.True(WebTheme.Contrast(palette.Ink, palette.Bg) >= WebTheme.MinContrast, palette.Name);
             }
+            else
+            {
+                // No style's ground either (2026-10-22, a review: the user and tertiary styles' backgrounds reached the dark page).
+                Assert.DoesNotContain("-bg: ", css, StringComparison.Ordinal);
+            }
         }
+
+        var slab = new System.Text.StringBuilder();
+        WebTheme.StyleTokens(slab, "--user", new Spectre.Console.Style(Spectre.Console.Color.Black, Spectre.Console.Color.White), grounds: false);
+        Assert.DoesNotContain("--user-bg", slab.ToString(), StringComparison.Ordinal);
+        WebTheme.StyleTokens(slab, "--user", new Spectre.Console.Style(Spectre.Console.Color.Black, Spectre.Console.Color.White));
+        Assert.Contains("--user-bg: #ffffff;", slab.ToString(), StringComparison.Ordinal);
 
         Assert.Equal(21, WebTheme.Contrast(Spectre.Console.Color.White, Spectre.Console.Color.Black), 1);
     }

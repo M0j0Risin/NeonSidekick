@@ -84,6 +84,50 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task PlanGaps_ChosenAndTheTurnFails_RingsTheStopTone()
+    {
+        // 2026-10-22, a review: a review dropped before its first pass, because the turn that chose it failed, stayed silent.
+        PlanFixture([[Keys.Char('g'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _settings.Update(d => d.PlanGapStopTone = TimerTones.Bell);
+        _chat.Enqueue(PresentPlanCall());           // 0: presented; Close gaps…
+        _chat.EnqueueText("Closing the gaps.");     // 1: fails
+        _chat.BeforeUpdateOf = (request, update, _) => request == 1 ? throw new HttpRequestException("the server went away") : Task.CompletedTask;
+
+        string output = await RunAsync();
+        await UntilAsync(() => _tonePlayback.Writes.Count > 0, CancellationToken.None);
+
+        Assert.Contains(PlanText.GapsDroppedNotice, output);
+        Assert.Equal(Clip(TimerTones.Bell), Assert.Single(_tonePlayback.Writes));
+    }
+
+    [Fact]
+    public async Task CodeAudit_TheWorkingDirectoryMoved_RingsNothing()
+    {
+        // 2026-10-22, a review: a move is the user's own /cwd, and the setting's help says a stop you caused never rings.
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        _settings.Update(d => d.CodeAuditStopTone = TimerTones.Beep);
+        _chat.Enqueue(ReadCall("r1"));
+        _chat.Enqueue(FindingCall("a1"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 1 && update == 0)
+            {
+                _settings.Update(d => d.WorkingDirectory = elsewhere);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(AuditText.Glyph + " Code audit, 1 pass", output);
+        Assert.Empty(_tonePlayback.Writes);
+    }
+
+    [Fact]
     public async Task CodeAudit_TheDefault_RingsNothing()
     {
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));

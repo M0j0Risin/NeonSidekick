@@ -15,7 +15,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
-    private const string PlanMarkdown = "# Guide\n\n## Steps\n- [ ] Write it\n";
+    private const string PlanMarkdown = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n";   // its check since 2026-10-22: a clean gap pass on a step without one is refused
     private const string PlanPath = ".neon/plans/add-guide.md";
 
     private string PlanFile => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, ".neon", "plans", "add-guide.md");
@@ -101,7 +101,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(PresentPlanTool.ToolName, doing);
         Assert.DoesNotContain("PLAN MODE", _chat.Requests[2][0].Text);
         Assert.Equal(PlanText.ExecuteMessage(PlanPath), LastUserText(_chat.Requests[2]));
-        Assert.EndsWith(PlanText.ByHandExecuteSentence, LastUserText(_chat.Requests[2]));   // a By hand: step left for the user (2026-10-21)
+        Assert.DoesNotContain(PlanText.ByHandExecuteSentence, LastUserText(_chat.Requests[2]));   // no By hand: step in this plan (2026-10-22)
         // Carried out without ticking its one step (the fake never writes the file): tracked, and marked incomplete after the turn.
         Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
         Assert.Contains(PlanText.IncompleteNotice(PlanPath, 0, 1), Output);

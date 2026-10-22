@@ -1246,7 +1246,7 @@ public enum SettingsField
     /// <summary>A toggle: whether a turn offers the app's manual, <c>neon_help</c> (<see cref="Settings.AppSettingsData.HelpTools"/>). The Help menu on <c>/tools</c> › Core, after Ask (2026-10-18, the user's ask); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
     HelpTools,
 
-    /// <summary>Typed: the most passes a code audit runs, 0 to 50 (20 until 2026-10-18), 0 for no limit (<see cref="Settings.AppSettingsData.CodeAuditPasses"/>). The Code audit section of Automation (Servers › Common until 2026-10-21), after Ralph loop (2026-10-18, <c>/code-audit</c>); read when an audit starts. Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: the most passes a code audit runs, 0 to 100 (20 until 2026-10-18, 50 until 2026-10-21), 0 for no limit (<see cref="Settings.AppSettingsData.CodeAuditPasses"/>). The Code audit section of Automation (Servers › Common until 2026-10-21), after Ralph loop (2026-10-18, <c>/code-audit</c>); read when an audit starts. Last in the enum, as every newcomer.</summary>
     CodeAuditPasses,
 
     /// <summary>Typed: how many passes in a row must find nothing new before a code audit ends, 1 to 5 (<see cref="Settings.AppSettingsData.CodeAuditCleanPasses"/>). Under <see cref="CodeAuditPasses"/> (2026-10-18); read when an audit starts.</summary>
@@ -10301,10 +10301,21 @@ internal sealed partial class SettingsMenu
     {
         _settings.Update(mutate);
         Sink.Notice(SavedNotice(field, _settings.Current, _settings.ProfileDirectory, field == SettingsField.WebBrowserPath ? _locateBrowser("") : null));
-        if (_overriddenBy(field) is { } overriddenBy)
+        if (_overriddenBy(field) is { } overriddenBy && OverrideHolds(field, _settings.Current))
         {
             Sink.Warning(OverrideNotice(overriddenBy));
         }
+    }
+
+    /// <summary>
+    /// Whether an override of <paramref name="field"/> keeps <paramref name="saved"/>'s value out of force (2026-10-22, a review): always, but for
+    /// <c>Embedded servers enabled</c> switched on, which an embedded URL override only ever forces on — on is what is in force, and the reminder
+    /// that it "still overrides this launch" was wrong.
+    /// </summary>
+    public static bool OverrideHolds(SettingsField field, AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        return !(field == SettingsField.EmbeddedLlmServer && saved.EmbeddedLlmServer);
     }
 
     /// <summary>Whether a menu can be shown at all: the screen asks before offering a startup pick.</summary>

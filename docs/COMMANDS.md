@@ -87,7 +87,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 |---|---|
 | `/profile [<name>]` | Switches profiles for this run: a picker, or the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
-| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars unless `--all`. |
+| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars unless `--all` (and *Embedded servers enabled* with an embedded URL). |
 | `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the five API keys; one the source lacks is cleared in the target, and one set only by a variable isn't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings (server, model, reasoning, sampling, the Embedded, Docker, Anthropic and OpenAI tabs but the keys), replacing the target's. |
@@ -329,8 +329,8 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **The file:** `.neon/plans/<name>.md` in the working directory; 📝 shows while planning. Pictures in the conversation are saved beside it (`<name>/ref-1.png`…, under `## References`). `plan-template.md` there is `/plan template`'s example, never opened or run as a plan.
   * A run sends them with its first message when the model can see pictures (a Ralph pass, the ones its step names).
 * **Steps:** each is a `- [ ]` checkbox under `## Steps`, one change a fresh conversation can make and check, with an indented `Done when:` line (a command where one can tell). The plan stays under 20,000 characters.
-  * A heading, a bare `[ ]` or a bold box isn't a step; a `###` heading may group steps, without a box.
-  * A check only a person can make (something seen in a real window or terminal) starts `Done when: By hand:`, on a step with no sub-steps.
+  * A boxed heading, a bare `[ ]` or a bold box under `## Steps` is saved as a `- [ ]` step; a `###` heading with no box groups steps.
+  * A check only a person can make (something seen in a real window or terminal) has its own `Done when: By hand:` line, on a step with no sub-steps.
   * Its header may carry a `verify:` command (run after each Ralph step) and a `final:` one (run once at the end).
 * **Approving:** **Approve & run**, **Approve, clear context & run**, **Approve & Ralph loop**, **Keep refining…**, **Close gaps…** or **Cancel plan** ([keys](INTERFACE.md#pane-keys)).
   * The run ticks the steps; the file ends `done` ("📝 I ❤️ it when a plan comes together.") or `incomplete`.
@@ -344,7 +344,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Clean passes:** a review ends after *Plan gap clean passes* in a row find no gaps. Small fixes (wording, formatting) don't break a streak.
   * Each pass after a clean one looks at another area (the steps' order, verification, risks, assumptions, size) and must say what it checked.
 * **Who reviews** (with advisors offered): the model alone (`m`), an advisor whose role fits (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
-* **Unattended:** with *Plan gap ask user* off, or where `ask_user` isn't offered, a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, which isn't a gap.
+* **Unattended:** with *Plan gap ask user* off, a pass asks nothing, takes no photo and captures no screen. Where `ask_user` isn't offered, it can't ask you.
+  * Either way, a decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, which isn't a gap.
+* **The plan's shape:** a pass can't end the review while the app measures a step with no `Done when:`, one oversized step, steps outside `## Steps` or a by-hand check on a parent. A plan longer than a Ralph pass sends whole is said, and is no gap.
 * **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on a typed message or Esc.
   * At the limit, the count given or *Plan gap max passes*; a clean pass there returns the pane unconfirmed. A limit below the clean count lowers that count for the run.
 * **The stop tone:** a stop you didn't cause rings *Plan gap stop tone*, a failed pass too; a converged review rings as its pane opens.
@@ -370,8 +372,8 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * The shell police judge it again before every run, so a script a pass rewrote can't slip past them; a refusal, or the policy turned `off`, stops the loop.
   * A failed check unticks the step, and the next pass gets its output.
 * **Before it starts:** the app asks "Start anyway?" on the PC and the Web UI when a plan doesn't suit a loop; a no leaves it presented, to revise.
-  * That's steps that aren't `- [ ]` lines, one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
-  * A plan with no `- [ ]` steps is refused. The approval pane and each gap pass name either problem first, and a gap review doesn't end on one.
+  * That's steps outside `## Steps`, one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or a plan too long to send whole (24,000 characters, or a quarter of a smaller window).
+  * A plan with no `- [ ]` steps under `## Steps` is refused. A hand-edited plan's boxed headings, bare and bold boxes are saved as `- [ ]` steps first.
 * **The baseline:** the checks run once on the project as it is. If `verify:` fails you may start anyway; the steps then go unchecked and verify runs once at the end.
   * If only `final:` fails (say, a test of the work still to do), starting anyway keeps the steps checked.
 * **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan: while the loop runs, the other can't run, open, revise or approve it. Mind that folder before you commit `.neon/`.
@@ -380,9 +382,9 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * Only then may a pass ask you anything (`ask_user`, the camera, the screen). With neither the pane nor the Web UI to ask on, a run has no checkpoint.
   * Each answer goes in the log, so a Redo's note reaches the next pass after a pause or a restart too.
 * **Steps you check by hand:** after a `By hand:` step's pass (and its review), the loop asks **It works: tick it**, **It doesn't: redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the Web UI, even with no checkpoint.
-  * It waits until you answer; Esc stops, the step unticked. *Ralph loop stop tone* rings as it asks.
-  * The reviewer may answer `needs_user` for a step it can't judge (something only seen or felt), and the loop asks you the same.
-  * After a stop at that question, the next `/plan ralph` asks it again before any pass.
+  * It waits until you answer; Esc stops, the step unticked. The step stays unticked until you say it works. *Ralph loop stop tone* rings as it asks.
+  * The reviewer may answer `needs_user` for a step it can't judge (something only seen or felt). With a checkpoint on, the loop asks you the same; with none, the step stands unchecked and the loop goes on.
+  * After a stop at that question, the next `/plan ralph` asks it again before its checks and any pass. Leave the box for that question.
 * **Under *Shell command policy* `ask`,** a pass's own commands still ask, so an unattended loop waits on each; allow the commands it needs, or use `yolo`.
 
 #### When a loop stops

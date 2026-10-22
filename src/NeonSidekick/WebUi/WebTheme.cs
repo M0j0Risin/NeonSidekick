@@ -40,15 +40,17 @@ public static class WebTheme
 
         var css = new StringBuilder("/* The profile's theme, ").Append(CommentSafe(palette.Name)).Append(" (2026-10-15, Web UI profile theme). */\n:root {\n");
         void Token(string name, Color color) => css.Append("  ").Append(name).Append(": ").Append(Hex(color)).Append(";\n");
-        var styles = Theme.StylesOf(palette);
+        // Built here, never the pickers' cache (2026-10-22, a review: a request's thread and the PC's /theme preview rebuilt one shared slot in turn).
+        var styles = Theme.StylesBuilt(palette);
+        bool readable = Readable(palette);
         Token("--accent", palette.Primary);
         Token("--accent-2", palette.Secondary);
-        StyleTokens(css, "--accent-3", styles(ThemeStyleSlot.AccentTertiary));
-        StyleTokens(css, "--user", styles(ThemeStyleSlot.User));
+        StyleTokens(css, "--accent-3", styles(ThemeStyleSlot.AccentTertiary), readable);
+        StyleTokens(css, "--user", styles(ThemeStyleSlot.User), readable);
         Token("--ok", palette.Good);
         Token("--error", palette.Bad);
         Token("--warn", palette.Warn);
-        if (Readable(palette))
+        if (readable)
         {
             Token("--bg", palette.Bg);
             Token("--panel", palette.PanelBg);
@@ -63,9 +65,10 @@ public static class WebTheme
 
     /// <summary>
     /// A theme style as the page's tokens (2026-10-21): <paramref name="name"/> its foreground, then <c>-weight</c>, <c>-font-style</c> and
-    /// <c>-decoration</c> from its decoration, and <c>-bg</c> only when it has a background (<c>app.css</c> holds each one's default).
+    /// <c>-decoration</c> from its decoration, and <c>-bg</c> only when it has a background and <paramref name="grounds"/> (the theme <see cref="Readable"/>:
+    /// 2026-10-22, a review, a light theme's ground reached the dark page under ink meant for the light one) — <c>app.css</c> holds each one's default.
     /// </summary>
-    internal static void StyleTokens(StringBuilder css, string name, Style style)
+    internal static void StyleTokens(StringBuilder css, string name, Style style, bool grounds = true)
     {
         ArgumentNullException.ThrowIfNull(css);
         void Line(string suffix, string value) => css.Append("  ").Append(name).Append(suffix).Append(": ").Append(value).Append(";\n");
@@ -73,7 +76,7 @@ public static class WebTheme
         Line("-weight", style.Decoration.HasFlag(Decoration.Bold) ? "700" : "400");
         Line("-font-style", style.Decoration.HasFlag(Decoration.Italic) ? "italic" : "normal");
         Line("-decoration", style.Decoration.HasFlag(Decoration.Underline) ? "underline" : "none");
-        if (style.Background != Color.Default)
+        if (grounds && style.Background != Color.Default)
         {
             Line("-bg", Hex(style.Background));
         }

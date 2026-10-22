@@ -226,8 +226,9 @@ internal static class RalphStart
     /// <summary>
     /// The loop over in its own folder: the summary, the files a failing step left changed, the plan marked done (else incomplete while steps are
     /// left), the stop's notice, the log's head saying how it stopped, the lock let go. The caller says the lines, forgets or pauses the stored plan.
+    /// <paramref name="canAsk"/> is false headless, where the stop's notice tells the user to tick a checked step's box (<see cref="RalphText.StopNotice"/>).
     /// </summary>
-    public static RalphEnded End(WorkingDirectory files, RalphLoop loop, RalphStop stop, string requirement, TimeProvider time)
+    public static RalphEnded End(WorkingDirectory files, RalphLoop loop, RalphStop stop, string requirement, TimeProvider time, bool canAsk = true)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(loop);
@@ -273,7 +274,7 @@ internal static class RalphStart
                 PlanFiles.MarkFile(files, path, PlanStatus.Incomplete, time.GetLocalNow(), requirement, counts);
             }
 
-            lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2), false));
+            lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2, canAsk), false));
             // A stall or a failing step after a failed review says why, after its notice (2026-10-21, RalphLoop.LastReviewFail).
             if (stop is RalphStop.Stalled or RalphStop.StepFailing && loop.LastReviewFail is { Length: > 0 } reason)
             {
@@ -283,11 +284,38 @@ internal static class RalphStart
 
         if (RalphLog.Read(files, path)?.Head is { } head)
         {
-            RalphLog.SetHead(files, path, head with { Stopped = StopWord(stop) });
+            RalphLog.SetHead(files, path, head with { Stopped = RalphText.StopWord(stop) });
         }
 
         RalphLog.Unlock(files, path, RalphLog.Me);
         return new RalphEnded(lines, forget);
+    }
+
+    /// <summary>
+    /// A resume ended before its loop was built (2026-10-22, a review: the by-hand question a resume asks first comes before the baseline now, so a Stop
+    /// or nobody to answer ends a run that never began, and a failing baseline no longer refuses a resume that would stop there anyway): the files the
+    /// waiting step's passes changed for a <see cref="RalphStop.NeedsUser"/> (<paramref name="changed"/>, from its log entry: no pass of this run made
+    /// them, 2026-10-22, a review), the stop's notice over the plan's counts (<paramref name="canAsk"/> as <see cref="RalphText.StopNotice"/>'s), and the
+    /// log's head saying how it stopped. The plan stays as it was; the lock is the caller's to let go.
+    /// </summary>
+    public static IReadOnlyList<string> EndBeforeLoop(WorkingDirectory files, string path, RalphStop stop, IReadOnlyList<string> changed, bool canAsk)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(changed);
+        var counts = PlanFiles.ReadWhole(files, path) is { } text ? PlanSteps.Counts(PlanSteps.Parse(PlanDocument.Body(text))) : (0, 0);
+        var lines = new List<string>(2);
+        if (stop == RalphStop.NeedsUser && changed.Count > 0)
+        {
+            lines.Add(RalphText.LeftChangedLine(changed));
+        }
+
+        lines.Add(RalphText.StopNotice(stop, path, counts.Item1, counts.Item2, canAsk));
+        if (RalphLog.Read(files, path)?.Head is { } head)
+        {
+            RalphLog.SetHead(files, path, head with { Stopped = RalphText.StopWord(stop) });
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -296,18 +324,4 @@ internal static class RalphStart
     /// </summary>
     public static bool UserCaused(RalphStop stop) => stop is RalphStop.Stopped or RalphStop.Paused or RalphStop.UserStopped;
 
-    /// <summary>The word the log's head and the picker say a stop with.</summary>
-    public static string StopWord(RalphStop stop) => stop switch
-    {
-        RalphStop.StepFailing => "step failing",
-        RalphStop.FinalFailed => "final failed",
-        RalphStop.PlanGone => "plan gone",
-        RalphStop.WorkdirMoved => "workdir moved",
-        RalphStop.UserStopped => "stopped at your answer",
-        RalphStop.StepsRemoved => "steps removed",
-        RalphStop.CheckRefused => "check refused",
-        RalphStop.NeedsUser => "needs you",
-        RalphStop.BaselineRefused => "baseline refused",
-        _ => stop.ToString().ToLowerInvariant(),
-    };
 }

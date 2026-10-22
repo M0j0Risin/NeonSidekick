@@ -412,6 +412,20 @@ public class ProfilesTests : IDisposable
     }
 
     [Fact]
+    public void Reset_KeepsTheEmbeddedSwitch_WithAnEmbeddedUrl()
+    {
+        // 2026-10-22, a review: off by default since 2026-10-21, a reset kept the embedded URL and model and took the switch away.
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmUrl = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.BaseUrl.ToString(), LlmModel = "gemma", EmbeddedLlmServer = true });
+        Profiles.Create(_dir, "home", new AppSettingsData { LlmUrl = "http://llm:1234/v1", EmbeddedLlmServer = true });
+
+        Profiles.Reset(_dir, "work");
+        Profiles.Reset(_dir, "home");
+
+        Assert.True(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "work")).EmbeddedLlmServer);
+        Assert.False(Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, "home")).EmbeddedLlmServer);   // another URL: the default, as before
+    }
+
+    [Fact]
     public void Reset_ACorruptFile_GoesToTheDefaultsWhole()
     {
         Directory.CreateDirectory(Profiles.Directory(_dir, "work"));

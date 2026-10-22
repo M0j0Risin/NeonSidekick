@@ -15,7 +15,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
-    private const string RevisedPlanMarkdown = "# Guide\n\n## Steps\n- [ ] Write it\n- [ ] Test it\n";
+    private const string RevisedPlanMarkdown = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the guide's check passes\n";
 
     /// <summary>A pass's <c>present_plan</c>; with no gaps, a <c>checked</c> line too (2026-10-17: every clean report says what it checked).</summary>
     private static ChatResponseUpdate PresentGapsCall(string id, string markdown, params string[] gaps)
@@ -84,13 +84,13 @@ public partial class ChatScreenTests
         Assert.Contains("A gap review is running (pass 1 of 5)", _chat.Requests[2][0].Text);
         Assert.Contains(PresentPlanTool.ToolName, OfferedNames(_chat.Options[2]));
         Assert.DoesNotContain(WriteFileTool.ToolName, OfferedNames(_chat.Options[2]));
-        Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[3], "p2"));
+        Assert.Equal(PlanText.GapPassResult(PlanPath, 2, 1, bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[3], "p2"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model), LastUserText(_chat.Requests[4]));
         Assert.Contains("A gap review is running (pass 2 of 5)", _chat.Requests[4][0].Text);
         Assert.Contains("only 2 passes in a row with no gaps return the plan to the user", _chat.Requests[4][0].Text);
         Assert.DoesNotContain("this pass checks again", _chat.Requests[4][0].Text);
         // Pass 2 clean: no pane, the streak said; pass 3 is told to look again, with the first focus.
-        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[5], "p3"));
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2, bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[5], "p3"));
         Assert.Equal(PlanText.GapPassMessage(PlanPath, 3, 5, PlanReviewer.Model, cleanSoFar: 1), LastUserText(_chat.Requests[6]));
         Assert.Contains("this pass checks again (clean pass 2 of 2)", _chat.Requests[6][0].Text);
         Assert.Contains(PlanText.ConfirmFocuses[0], _chat.Requests[6][0].Text);
@@ -175,6 +175,31 @@ public partial class ChatScreenTests
         Assert.Single(lines, l => l == ChatScreen.LearnPausedLogLine);   // paused by pass 1 only: never started again under the review
         Assert.Single(lines, l => l == "Reflection starts from the slot.");
     }
+    /// <summary>
+    /// No reflection on a review's last pass (2026-10-22, the user's call after a review: it reflected on every pass's calls and proposed a skill for the
+    /// review loop itself): the passes add nothing to the tally either.
+    /// </summary>
+    [Fact]
+    public async Task PlanGaps_TheLastPass_StartsNoReflection()
+    {
+        _settings.Update(d => { d.ReflectionAutoLearn = true; d.PlanGapPasses = 1; });
+        PlanGapsFixture([[Keys.Escape]],
+            Line("/plan Add a guide"),
+            input => { WaitForRequests(2); PushLine(input, "/plan gaps"); },
+            Key(Keys.Escape),
+            Line("/exit"));
+        _chat.Enqueue(PresentPlanCall());                                                                            // 0: presented; Esc
+        _chat.EnqueueText("Noted.");                                                                                 // 1
+        _chat.Enqueue([.. Enumerable.Range(1, 5).Select(i => FakeChatClient.Call("c" + i, GetCurrentTimeTool.ToolName)), PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step")]);   // 2: pass 1 of 1
+        _chat.EnqueueText("Pass 1 done.");                                                                           // 3: the limit
+
+        string output = await RunAsync();
+
+        Assert.Contains(PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1), output);
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.DoesNotContain(_chat.Requests, r => r[^1].Text == NeonSidekick.Skills.SkillLearner.Request(null));
+    }
+
     [Fact]
     public async Task PlanGaps_ChosenOnThePane_AMessageQueuedUnderTheReply_GoesFirst()
     {

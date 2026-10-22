@@ -454,21 +454,34 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Whether this turn is a gap pass that may not wait on the user (2026-10-18, the user's ask): a pass under way that may not ask
-    /// (<see cref="GapMayAsk"/> false since 2026-10-21; <see cref="AppSettingsData.PlanGapAskUser"/> off until then), read every turn. Such a pass
-    /// is offered none of <see cref="PlanTools.AskingTools"/>, so its directive and its tools agree; the turn whose pane chose <c>Close gaps…</c>
-    /// (the loop still pending) and every other plan-mode turn keep them.
+    /// Whether this turn is a gap pass or an audit pass that may not wait on the user (2026-10-18, the user's ask): a pass under way with
+    /// <see cref="AppSettingsData.PlanGapAskUser"/> (or <see cref="AppSettingsData.CodeAuditAskUser"/>) off, read every turn. Such a pass is offered
+    /// none of <see cref="PlanTools.AskingTools"/>, so its directive and its tools agree; the turn whose pane chose <c>Close gaps…</c> (the loop still
+    /// pending) and every other plan-mode turn keep them. With the setting on and only <c>ask_user</c> not offered (2026-10-21 to 2026-10-22 that barred
+    /// all three; the user's call after a review: the camera and the screen stay, <c>ask_user</c> being gone already), nothing more is taken.
     /// </summary>
-    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !GapMayAsk(effective)) || (_audit.InPass && !effective.CodeAuditAskUser);
+    private bool GapAsksBarred(AppSettingsData effective) => (_plan.Reviewing && !effective.PlanGapAskUser) || (_audit.InPass && !effective.CodeAuditAskUser);
+
+    /// <summary>
+    /// Whether <c>ask_user</c> is really offered this turn (2026-10-22, a review: the gap review read this and the audit did not): tools offered,
+    /// <see cref="AskOffered"/>, the tool not off on <c>/tools</c> (<paramref name="disabled"/>, the turn's set when the caller has it; else read here).
+    /// </summary>
+    private bool AskUserOffered(AppSettingsData effective, IReadOnlySet<string>? disabled = null) =>
+        effective.LlmOfferTools && AskOffered(effective) && !(disabled ?? ToolsText.DisabledSet(effective.ToolsDisabled)).Contains(AskUserTool.ToolName);
 
     /// <summary>
     /// Whether a gap pass may and can ask the user (2026-10-21, the review of the user's question why a pass never asked): <see cref="AppSettingsData.PlanGapAskUser"/>
-    /// on, and <c>ask_user</c> really offered (tools offered, <see cref="AskOffered"/>, the tool not off on <c>/tools</c>). Without the
-    /// tool the "ask" wording would send the pass to a question it cannot put, and it might ask in prose and end without <c>present_plan</c>, so such a
-    /// pass gets the open-question wording instead (<see cref="PlanText.GapOpenQuestionSentence"/>).
+    /// on, and <c>ask_user</c> really offered (<see cref="AskUserOffered"/>). Without the tool the "ask" wording would send the pass to a question it
+    /// cannot put, and it might ask in prose and end without <c>present_plan</c>, so such a pass gets the open-question wording instead
+    /// (<see cref="PlanText.GapOpenQuestionSentence"/>).
     /// </summary>
-    private bool GapMayAsk(AppSettingsData effective) =>
-        effective.PlanGapAskUser && effective.LlmOfferTools && AskOffered(effective) && !ToolsText.DisabledSet(effective.ToolsDisabled).Contains(AskUserTool.ToolName);
+    private bool GapMayAsk(AppSettingsData effective, IReadOnlySet<string>? disabled = null) => effective.PlanGapAskUser && AskUserOffered(effective, disabled);
+
+    /// <summary>
+    /// Whether an audit pass may and can ask the user (2026-10-22, a review: the audit's directive read <see cref="AppSettingsData.CodeAuditAskUser"/>
+    /// alone, so with no pane, <c>Ask user</c> off or the tool off it still said "ask it"): the setting on and <c>ask_user</c> really offered.
+    /// </summary>
+    private bool AuditMayAsk(AppSettingsData effective, IReadOnlySet<string>? disabled = null) => effective.CodeAuditAskUser && AskUserOffered(effective, disabled);
 
     /// <summary>
     /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
@@ -801,7 +814,7 @@ internal sealed partial class ChatScreen
         }
         else
         {
-            message = PlanText.ExecuteMessage(path);
+            message = PlanText.ExecuteMessage(path, PlanFit.ByHandSteps(PlanDocument.Body(text)) > 0);
         }
 
         // Tracked until every step is ticked (2026-09-26, round two): CheckPlanProgress after each turn marks it done or incomplete.
@@ -1274,9 +1287,25 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A stop tone rung, not awaited (2026-10-21, the Ralph loop's ring shared with the gap review and the code audit): the timer tones' player,
-    /// its own device; <c>silent</c> and no audio play nothing, and a tone still sounding keeps the device (this one is dropped).
+    /// its own device; <c>silent</c> and no audio play nothing, and a tone still sounding keeps the device (this one is dropped). A play that fails (a
+    /// device gone mid-tone) is logged (2026-10-22, a review: the dropped task's fault went unseen).
     /// </summary>
-    private void RingStopTone(string tone) => _ = _tones.PlayAsync(tone, CancellationToken.None);
+    private void RingStopTone(string tone) =>
+        _ = _tones.PlayAsync(tone, CancellationToken.None).ContinueWith(
+            static t => DiagnosticLog.Warn(AppCategory, "the stop tone could not play", t.Exception?.GetBaseException()),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+    /// <summary>
+    /// <paramref name="loop"/>'s stop tone (a gap review's or an audit's) for a stop with <paramref name="reason"/>, once a loop
+    /// (<see cref="PlanGapLoop.TakeRing"/>, 2026-10-22: the one place that decides).
+    /// </summary>
+    private void RingStopTone(PlanGapLoop loop, PlanGapStop reason, bool failed, string tone)
+    {
+        if (loop.TakeRing(reason, failed))
+        {
+            RingStopTone(tone);
+        }
+    }
 
     /// <summary>The usage now, for a gap pass's cost (2026-10-17): the main model's tokens less the reflections', the advisors', the screen's clock.</summary>
     private PlanPassMeter PlanMeter()
@@ -1308,7 +1337,7 @@ internal sealed partial class ChatScreen
             // moved aside; said and recorded here, once, plan mode on or off, before the review its pane started (still pending) goes on.
             string? finishedBody = finishedPath is null ? null : ReadPlanBody(finishedPath);
             finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, PlanMeter());
-            EndGapReview(finished, PlanGapStop.Converged, finishedPath, finishedBody, failed: false);   // rung as its pane opened (PresentPlanTool's converged hook)
+            EndGapReview(finished, PlanGapStop.Converged, finishedPath, finishedBody, failed: false);   // rang as its pane opened (PresentPlanTool's converged hook): once a loop
         }
 
         if (_plan.Closing is not { } loop)
@@ -1332,12 +1361,15 @@ internal sealed partial class ChatScreen
                 return BeginGapPass(loop, path, ReadPlanBody(path));
             }
 
+            // Dropped before its first pass: rung when the turn that chose it failed (2026-10-22, a review: a stop nobody caused stayed silent).
             _plan.StopClosing();
             _transcript.Notice(PlanText.GapsDroppedNotice);
+            RingStopTone(loop, PlanGapStop.Stopped, failed: _lastTurnFailed && !_lastTurnCancelled, _effective().PlanGapStopTone);
             return null;
         }
 
         string? body = path is null ? null : ReadPlanBody(path);
+        _gapJudged++;
         var stop = loop.Next(onItsOwn, QueueDrains && _queue.Count > 0, body, PlanMeter());
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
@@ -1369,15 +1401,12 @@ internal sealed partial class ChatScreen
     /// A review over (2026-10-17): the summary of its passes, the <c>review:</c> line for a review that ended on its own (converged, cut short,
     /// at its limit, stalled) written from the file as it now stands, then the stop's own notice — and for a limit, a cut-short or a stall the
     /// plan back on the pane at the idle line (or where it stands, with no pane). <paramref name="failed"/> (2026-10-21): the pass's turn failed, so a
-    /// <see cref="PlanGapStop.Stopped"/> rings <see cref="AppSettingsData.PlanGapStopTone"/> (<see cref="PlanGapLoop.Rings"/>); a converged review
-    /// rang as its pane opened, so it never rings here.
+    /// <see cref="PlanGapStop.Stopped"/> rings <see cref="AppSettingsData.PlanGapStopTone"/> (<see cref="PlanGapLoop.TakeRing"/>); a converged review
+    /// rang as its pane opened, and a loop rings once.
     /// </summary>
     private GapAfterTurn? EndGapReview(PlanGapLoop loop, PlanGapStop reason, string? path, string? body, bool failed)
     {
-        if (reason != PlanGapStop.Converged && PlanGapLoop.Rings(reason, failed))
-        {
-            RingStopTone(_effective().PlanGapStopTone);
-        }
+        RingStopTone(loop, reason, failed, _effective().PlanGapStopTone);
 
         foreach (string line in PlanText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses))
         {

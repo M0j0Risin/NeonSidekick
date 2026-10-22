@@ -238,6 +238,13 @@ public static class RalphText
     public static string ByHandStartNotice(int count) =>
         $"{Glyph} {ByHandLine(count)}. The loop asks you after {(count == 1 ? "its" : "each one's")} pass.";
 
+    /// <summary>
+    /// <see cref="ByHandStartNotice"/> with no pane and no Web UI page to ask on as the loop starts (2026-10-22, a review: it promised a question
+    /// nobody could see, as <see cref="CheckpointNowhereNotice"/> says for the checkpoint). Never on a resume. Pinned.
+    /// </summary>
+    public static string ByHandNowhereNotice(int count) =>
+        $"{Glyph} {ByHandLine(count)}, and no pane or Web UI page is open to ask on: unless one opens, the loop stops at the first one.";
+
     /// <summary>Headless's start on a plan with by-hand steps (2026-10-21): nobody can be asked there. Never on a resume. Pinned.</summary>
     public static string ByHandHeadlessNotice(int count) =>
         $"{Glyph} {ByHandLine(count)}, and headless cannot ask: the loop stops at the first one.";
@@ -344,10 +351,10 @@ public static class RalphText
     public const string FitNoSteps = "no - [ ] steps under ## Steps";
 
     /// <summary>
-    /// Box lines the steps' reader passes over (<see cref="PlanSteps.UnreadBoxes"/>: a heading, a bare <c>[ ]</c>, a bold box), 2026-10-21 as
-    /// <see cref="FitNoSteps"/>. Short for the caption too. Pinned, both forms.
+    /// Steps outside <c>## Steps</c>, which no loop reaches (2026-10-22, a review: <see cref="PlanSteps.StraySteps"/>; the box forms a model drifts into,
+    /// counted here until then, are written as task lines on save, <see cref="PlanSteps.Normalized"/>). Short for the caption too. Pinned, both forms.
     /// </summary>
-    public static string FitUnreadSteps(int count) => count == 1 ? "1 step isn't a - [ ] list line" : $"{Count(count)} steps aren't - [ ] list lines";
+    public static string FitStraySteps(int count) => count == 1 ? "1 step is outside ## Steps" : $"{Count(count)} steps are outside ## Steps";
 
     /// <summary>
     /// Unticked steps with no <c>Done when:</c> line. "indented" since 2026-10-21: a model that turned <c>### [ ]</c> into <c>- [ ]</c> but left its
@@ -410,13 +417,12 @@ public static class RalphText
     public const string NoStepsError = "The plan has no steps to run one at a time: a Ralph loop needs - [ ] checkboxes under ## Steps";
 
     /// <summary>
-    /// <see cref="NoStepsError"/>'s sibling for a plan whose only boxes are ones the steps' reader passes over (2026-10-21,
-    /// <see cref="PlanSteps.UnreadBoxes"/>): names them and their forms. Each refusal site picks one of the two
-    /// (<see cref="PlanFit.StepsRefusal"/>). Pinned, both forms.
+    /// <see cref="NoStepsError"/>'s sibling for a plan whose only steps sit outside <c>## Steps</c> (2026-10-21; outside the section since 2026-10-22,
+    /// <see cref="PlanSteps.StraySteps"/>): names them. Each refusal site picks one of the two (<see cref="PlanFit.StepsRefusal"/>). Pinned, both forms.
     /// </summary>
-    public static string NoStepsUnreadError(int count) =>
-        $"The plan has no steps to run one at a time: {(count == 1 ? "its 1 box isn't" : $"its {Count(count)} boxes aren't")} a - [ ] list line " +
-        "(a heading, a bare [ ] or a bold box isn't a step). A Ralph loop needs - [ ] checkboxes under ## Steps";
+    public static string NoStepsStrayError(int count) =>
+        $"The plan has no steps to run one at a time: {(count == 1 ? "its 1 step is" : $"its {Count(count)} steps are")} under another heading. " +
+        "A Ralph loop needs - [ ] checkboxes under ## Steps";
     public const string NeedsToolsError = "A Ralph loop needs the model's tools: switch LLM offer tools on (/settings) and try again";
     public const string UnderAuditError = "A code audit is running: a Ralph loop waits until it ends";
     public const string UnderBotChatError = "A /botchat is running: a Ralph loop waits until it ends";
@@ -478,15 +484,43 @@ public static class RalphText
     public static string ReviewNeedsUserNotice(string reason) =>
         $"{Glyph} The review says only you can tell whether the step works" + (reason.Length > 0 ? ": " + Flatten(reason) : ".");
 
+    /// <summary>
+    /// The reviewer said <c>needs_user</c> on a step not marked <c>By hand:</c> with nobody to wait for (2026-10-22, the user's call after a review: under
+    /// <c>Ralph loop checkpoint</c> 0, or with no pane or page open, an unattended loop is never stopped by a model's judgment): the step stands
+    /// unchecked, as an unclear review leaves it, and the loop goes on. Pinned.
+    /// </summary>
+    public static string ReviewNeedsUserUncheckedNotice(string reason) =>
+        $"{Glyph} The review says only you can tell whether the step works" + (reason.Length > 0 ? ": " + Flatten(reason).TrimEnd('.') : "") +
+        ". It stands, unchecked: look at it when the loop ends.";
+
+    /// <summary>What the by-hand question names to check when a step has neither a by-hand check nor a Done when line and the reviewer gave no reason.</summary>
+    public const string ByHandStepWorks = "whether the step works";
+
+    /// <summary>
+    /// What the by-hand question on <paramref name="step"/> asks the user to check, and the reviewer's reason to show beside it (2026-10-22, a review: a
+    /// <c>needs_user</c> verdict on a step with no Done when line named the step's words twice): the step's by-hand check
+    /// (<see cref="PlanStep.HandCheck"/>), else its Done when, else the reviewer's reason (then shown once, as the check), else
+    /// <see cref="ByHandStepWorks"/>. Pure.
+    /// </summary>
+    public static (string Check, string? Reason) ByHandCheck(PlanStep step, string? reviewerReason)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        string? reason = reviewerReason is { Length: > 0 } r ? r : null;
+        return step.HandCheck is { } hand ? (hand, reason)
+            : step.DoneWhen is { } doneWhen ? (doneWhen, reason)
+            : reason is not null ? (reason, null)
+            : (ByHandStepWorks, null);
+    }
+
     /// <summary>A step the user checked by hand and said works (2026-10-21). Pinned.</summary>
     public static string StepCheckedByYouNotice(int step, int steps, string text) => $"{Glyph} Step {N(step)} of {N(steps)} stands, checked by you: {Flatten(text)}";
 
     /// <summary>
-    /// A step only a person can check, and nobody to ask it (2026-10-21: headless, no pane or page): unticked, the step and its check named, since the
-    /// stop's notice that follows has no step to name. Pinned.
+    /// A step only a person can check, and nobody to ask it (2026-10-21: headless, no pane or page): unticked, the step and its check named
+    /// (<see cref="ByHandCheck"/>'s; a lead left on it is taken off), since the stop's notice that follows has no step to name. Pinned.
     /// </summary>
-    public static string NeedsYouNotice(int step, string doneWhen) =>
-        $"{Glyph} Step {N(step)} needs you to check it: {Flatten(PlanSteps.WithoutByHand(doneWhen))}. Nobody could be asked, so it stays unticked.";
+    public static string NeedsYouNotice(int step, string check) =>
+        $"{Glyph} Step {N(step)} needs you to check it: {Flatten(PlanSteps.WithoutByHand(check))}. Nobody could be asked, so it stays unticked.";
 
     /// <summary>The user answered Redo at the by-hand question (2026-10-21): unticked, the note the next pass's. Pinned.</summary>
     public const string ByHandRedoNotice = Glyph + " You want the step redone: it is unticked, and the next pass gets your note.";
@@ -559,8 +593,12 @@ public static class RalphText
 
     // ── The stop ───────────────────────────────────────────────────────────
 
-    /// <summary>Why the loop stopped, said once. Pinned.</summary>
-    public static string StopNotice(RalphStop stop, string path, int done, int total)
+    /// <summary>
+    /// Why the loop stopped, said once. Pinned. <paramref name="canAsk"/> (2026-10-22, a review) words <see cref="RalphStop.NeedsUser"/>'s way on: where
+    /// the resume can ask the by-hand question (the screen), the user checks and resumes, the box left for the answer — ticked by hand, the answer was
+    /// never written into the log and the parent never ticked; headless, where nobody can be asked, the box is the user's to tick.
+    /// </summary>
+    public static string StopNotice(RalphStop stop, string path, int done, int total, bool canAsk = true)
     {
         string name = System.IO.Path.GetFileNameWithoutExtension(path);
         string resume = $" /plan ralph{(stop == RalphStop.Paused ? "" : " " + name)} goes on.";
@@ -581,7 +619,8 @@ public static class RalphText
             RalphStop.UserStopped => $"{Glyph} Ralph loop stopped at your answer ({N(done)} of {N(total)} steps done)." + resume,
             RalphStop.StepsRemoved => $"{Glyph} Ralph loop stopped: the pass deleted unfinished steps from {path} ({N(done)} of {N(total)} steps done); put them back or edit the plan, then" + resume,
             RalphStop.CheckRefused => $"{Glyph} Ralph loop stopped: a check was refused ({N(done)} of {N(total)} steps done); allow it, or fix what it runs, then" + resume,
-            RalphStop.NeedsUser => $"{Glyph} Ralph loop stopped: a step needs you to check it ({N(done)} of {N(total)} steps done). Check it, tick its box, and" + resume,
+            RalphStop.NeedsUser => $"{Glyph} Ralph loop stopped: a step needs you to check it ({N(done)} of {N(total)} steps done). " +
+                (canAsk ? "Check it, leave its box as it is, and" + resume + " It asks you whether it works first." : "Check it, tick its box, and" + resume),
             _ => NotStartedNotice,
         };
     }
@@ -617,7 +656,7 @@ public static class RalphText
         {
             var p = history[i];
             string which = p.Step > 0 ? $"step {N(p.Step)}" : "final fix";
-            string line = $"  pass {N(p.Pass)}: {which}, {p.Outcome}" + (i == history.Count - 1 ? ", " + StopWord(stop) : "");
+            string line = $"  pass {N(p.Pass)}: {which}, {p.Outcome}" + (i == history.Count - 1 && !SaysStop(p.Outcome, stop) ? ", " + StopWord(stop) : "");
             if (p.Elapsed is { } elapsed)
             {
                 line += " · " + UI.ThinkingFoldText.Duration(elapsed) + TokensPart((p.Tokens ?? 0) + p.ReviewTokens, " · ");
@@ -629,7 +668,12 @@ public static class RalphText
         return lines;
     }
 
-    private static string StopWord(RalphStop stop) => stop switch
+    /// <summary>
+    /// The word a stop is said with: the summary's last pass, the log's head and the picker (2026-10-22, a review: <c>RalphStart</c> kept a second table,
+    /// and the two named <see cref="RalphStop.PlanGone"/>, <see cref="RalphStop.WorkdirMoved"/>, <see cref="RalphStop.Locked"/> and
+    /// <see cref="RalphStop.BaselineRefused"/> differently). Pinned.
+    /// </summary>
+    public static string StopWord(RalphStop stop) => stop switch
     {
         RalphStop.Done => "done",
         RalphStop.Blocked => "blocked",
@@ -637,14 +681,38 @@ public static class RalphText
         RalphStop.StepFailing => "step failing",
         RalphStop.Limit => "limit",
         RalphStop.Budget => "budget",
+        RalphStop.Stopped => "stopped",
         RalphStop.Paused => "paused",
         RalphStop.FinalFailed => "final failed",
+        RalphStop.BaselineRefused => "baseline refused",
+        RalphStop.PlanGone => "plan gone",
+        RalphStop.WorkdirMoved => "workdir moved",
+        RalphStop.Locked => "locked",
         RalphStop.UserStopped => "stopped at your answer",
         RalphStop.StepsRemoved => "steps removed",
         RalphStop.CheckRefused => "check refused",
-        RalphStop.NeedsUser => "needs you",
+        RalphStop.NeedsUser => NeedsYouLog,
         _ => "stopped",
     };
+
+    /// <summary>
+    /// Whether a pass's <paramref name="outcome"/> already says <paramref name="stop"/> (2026-10-22, a review: the summary read "needs you, needs you" and
+    /// "stopped at the check, stopped at your answer"): the stop's own word, or the by-hand question's Stop under the user's stop.
+    /// </summary>
+    private static bool SaysStop(string outcome, RalphStop stop) =>
+        string.Equals(outcome, StopWord(stop), StringComparison.Ordinal) || (stop == RalphStop.UserStopped && string.Equals(outcome, OutcomeStoppedAtCheck, StringComparison.Ordinal));
+
+    /// <summary>A by-hand pass's outcome (2026-10-21, <see cref="RalphLoop.EndPass"/>; here since 2026-10-22, a review: inline there): it works.</summary>
+    public const string OutcomeDoneByHand = "done by hand";
+
+    /// <summary>A by-hand pass's outcome: the user wants it redone.</summary>
+    public const string OutcomeRedoByHand = "redo by hand";
+
+    /// <summary>A by-hand pass's outcome: the question's Stop.</summary>
+    public const string OutcomeStoppedAtCheck = "stopped at the check";
+
+    /// <summary>The log line a loop refused for no step writes (2026-10-22, a review: the screen and headless each built it by hand).</summary>
+    public static string NotStartedLogLine(string path, string error) => "ralph: not started " + path + ": " + error;
 
     /// <summary>
     /// <c>/plan show</c> outside plan mode while a loop runs or is paused: where it stands. Pinned. <paramref name="waitingOnYou"/> (2026-10-21): a paused
@@ -734,8 +802,8 @@ public static class RalphText
 
     /// <summary>
     /// The by-hand question's caption and the page's body, in the order a cut keeps (the pane cuts a long caption at its end): what to check
-    /// (<paramref name="check"/>, <see cref="PlanSteps.WithoutByHand"/>'s), the step, the reviewer's reason when it said <c>needs_user</c>, the model's
-    /// summary last. Pinned.
+    /// (<paramref name="check"/>, <see cref="ByHandCheck"/>'s), the step, the reviewer's reason when it said <c>needs_user</c> and it is not the check
+    /// already, the model's summary last. Pinned.
     /// </summary>
     public static string ByHandCaption(string check, int step, int steps, string text, string? reviewerReason, string? summary) =>
         $"Check: {Flatten(check)} — step {N(step)} of {N(steps)}: {Flatten(text)}" +
@@ -982,5 +1050,6 @@ public static class RalphText
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>A count with thousands separators (<c>170,298</c>), invariant.</summary>
-    private static string Count(int value) => value.ToString("N0", CultureInfo.InvariantCulture);
+    /// <summary>A count with its thousands marked (24,000): every figure of the plans' text, <see cref="PlanText"/>'s too (2026-10-22, a review: two helpers).</summary>
+    internal static string Count(int value) => value.ToString("N0", CultureInfo.InvariantCulture);
 }

@@ -12,6 +12,27 @@ namespace NeonSidekick.Skills;
 /// </summary>
 public static class SkillText
 {
+    // ── Reflections waiting (2026-10-22, a review: these lived in ChatScreen) ──
+
+    /// <summary>Where a queued reflection waits, in its log line (<see cref="LearnQueuedLogLine"/>): behind the one running.</summary>
+    public const string LearnBehindRunning = " behind the running one (";
+
+    /// <summary>
+    /// … until an automated run ends (2026-10-21: a gap review, a code audit, a Ralph loop since 2026-10-22; in <c>ChatScreen</c> until 2026-10-22, a
+    /// review). Pinned.
+    /// </summary>
+    public const string LearnHeldWhere = " until the review ends (";
+
+    /// <summary>… for the queued messages to go first (<c>Reflection yields to turns</c>).</summary>
+    public const string LearnForQueue = " for the queued messages (";
+
+    /// <summary>… in the slot, nothing ahead of it: a <c>/learn</c> that displaced a waiting one starts at once (2026-10-22, a review).</summary>
+    public const string LearnInSlot = " in the slot, starting now (";
+
+    /// <summary>The Info line for a reflection that waits (or takes the slot), <paramref name="where"/> one of the four above. Pinned.</summary>
+    public static string LearnQueuedLogLine(bool forced, string where, string log, bool displaced) =>
+        (forced ? "Reflection (/learn) queued" : "Reflection queued") + where + log + ")" + (displaced ? "; the earlier waiting turn is displaced." : ".");
+
     // ── load_skill ──────────────────────────────────────────────────────────
 
     /// <summary>

@@ -44,6 +44,9 @@ public sealed record AuditCallReport(
 /// </summary>
 public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [.. ListArguments, SummaryArgument];
+
     public const string ToolName = "present_audit";
 
     public const string FindingsArgument = "findings";

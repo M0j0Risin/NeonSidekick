@@ -27,6 +27,9 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [MarkdownArgument];
+
     public const string ToolName = "present_plan";
 
     public const string TitleArgument = "title";
@@ -64,7 +67,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     private readonly Func<int> _cleanPasses;
     private readonly Func<string, string, string>? _references;
     private readonly Func<int> _inlineLimit;
-    private readonly Action? _converged;
+    private readonly Action<PlanGapLoop>? _converged;
 
     /// <param name="review">Shows the saved plan and waits for the user's verdict; the token is the turn's.</param>
     /// <param name="gapLimit">The gap-closing loop's pass limit (0 for none), read when a <c>Close gaps…</c> verdict starts one; null for the default.</param>
@@ -75,13 +78,14 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     /// </param>
     /// <param name="inlineLimit">
     /// The most characters of a plan a Ralph pass sends whole (later on 2026-10-18, <see cref="RalphText.InlineLimit"/> over the session's window), read
-    /// after each gap pass's save for <see cref="PlanFit.Shape"/>; null for <see cref="RalphText.InlinePlanChars"/>.
+    /// for each gap pass's measure (<see cref="PlanFit.Read"/>, <see cref="PlanFit.TooLong"/>); null for <see cref="RalphText.InlinePlanChars"/>.
     /// </param>
     /// <param name="converged">
     /// Called once as a gap review converges, before its approval pane opens (2026-10-21, the screen's <c>Plan gap stop tone</c>: the pane waits
-    /// inside the turn, and the review's end is said only once it is answered); null for none (headless, the tests).
+    /// inside the turn, and the review's end is said only once it is answered), with the loop, whose <see cref="PlanGapLoop.TakeRing"/> says the ring
+    /// is taken (2026-10-22); null for none (headless, the tests).
     /// </param>
-    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null, Action? converged = null)
+    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null, Action<PlanGapLoop>? converged = null)
     {
         _converged = converged;
         _references = references;
@@ -175,11 +179,13 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 return PlanText.CheckedRequiredResult;
             }
 
-            // A clean pass on a plan whose steps no loop can read (2026-10-21, the user's call: a plan of ### [ ] headings read as zero steps, and
-            // the reviewers converged on it): refused as above, nothing saved, no pass counted. A pass that never presents again ends NoRevision.
-            if (gaps.Count == 0 && PlanFit.StepsProblem(PlanDocument.Body(markdown)) is { } steps)
+            // A clean pass on a plan with a structural problem (2026-10-21 for steps no loop can read: a plan of ### [ ] headings read as zero
+            // steps, and the reviewers converged on it; every structural problem since 2026-10-22, the user's call after a review: the result called
+            // each a gap while the review converged anyway): refused as above, nothing saved, no pass counted, the body measured as the save would
+            // write it. A pass that never presents again ends NoRevision. The length is never one (PlanFit.TooLong).
+            if (gaps.Count == 0 && PlanFit.Read(PlanDocument.SavedBody(title, markdown), null, reviewed: true, _inlineLimit()).Structural is { Count: > 0 } structural)
             {
-                return PlanText.NoStepsCleanResult(steps);
+                return PlanText.ShapeCleanResult(structural);
             }
         }
 
@@ -201,24 +207,29 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
         string path = saved.Path;
         if (loop is not null)
         {
+            // The body as the file holds it (2026-10-22, a review: headless saves with no references seam, and the count left out the # title line the
+            // file has, below what the fit and a Ralph pass measure).
+            int bodyChars = saved.Markdown.Length;
+            string? tooLong = PlanFit.TooLong(bodyChars, _inlineLimit());
             if (gaps.Count > 0)
             {
                 loop.Record(gaps, minor);
-                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, Measured(saved), saved.Markdown.Length);
+                var reading = PlanFit.Read(saved.Markdown, null, reviewed: true, _inlineLimit());
+                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, reading.Structural, bodyChars, tooLong);
             }
 
             if (!loop.WouldConverge)
             {
-                // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself.
+                // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself. No structural problem stands (refused above).
                 int clean = loop.CleanCount;
                 loop.MarkClean(@checked, minor);
-                return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count, Measured(saved), saved.Markdown.Length);
+                return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count, bodyChars, tooLong);
             }
 
             int streak = loop.CleanCount;
             loop.MarkConverged(@checked, minor);
             _session.FinishClosing();
-            _converged?.Invoke();
+            _converged?.Invoke(loop);
             saved = saved with { Note = PlanText.ConvergedNote(loop.Pass, loop.Closed, streak) };
         }
 
@@ -266,12 +277,6 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             ? new PlanPresentation(_session.Title ?? title, path, _session.Revision, body)
             : null;
     }
-
-    /// <summary>
-    /// What the app measured of the revision a gap pass leaves (later on 2026-10-18, <see cref="PlanFit.Shape"/>): the body the save wrote or the
-    /// unchanged one reused, so a clean pass that rewrote nothing is measured as one that did. The convergence's pane shows them on its caption instead.
-    /// </summary>
-    private IReadOnlyList<string> Measured(PlanPresentation saved) => PlanFit.Shape(saved.Markdown, _inlineLimit());
 
     /// <summary>A list argument's lines, trimmed, blanks dropped.</summary>
     private static List<string> Lines(IEnumerable<string> sent) => sent.Select(line => line.Trim()).Where(line => line.Length > 0).ToList();

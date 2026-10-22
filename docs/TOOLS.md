@@ -992,7 +992,7 @@ Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every othe
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `finish_step` | `outcome, summary, verified?, notes?, learned?, substeps?` | Reports the pass, once: `done` (with `verified`, a line per check run), `partial`, `blocked` or `split` (2–6 `substeps`, each with `text` and `done_when`; a `By hand:` step keeps `By hand:` on at least one). `notes` go to the next pass, `learned` to every later one. A script can't call it. |
+| `finish_step` | `outcome, summary, verified?, notes?, learned?, substeps?` | Reports the pass once: `done`, `partial`, `blocked` or `split` (2–6 `substeps`, a `By hand:` check kept on one). `notes` go to the next pass, `learned` to every later one. |
 
 ## MCP servers
 

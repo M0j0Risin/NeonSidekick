@@ -23,8 +23,8 @@ public class PlanGapLoopTests : IDisposable
     private PlanVerdict _verdict = new(PlanChoice.Refine);
     private readonly PresentPlanTool _tool;
 
-    private const string Plan = "# Guide\n\n## Steps\n- [ ] Write it\n";
-    private const string Revised = "# Guide\n\n## Steps\n- [ ] Write it\n- [ ] Test it\n";
+    private const string Plan = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n";   // its check since 2026-10-22: a clean gap pass on a step without one is refused
+    private const string Revised = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the link check passes\n";
 
     public PlanGapLoopTests()
     {
@@ -285,7 +285,7 @@ public class PlanGapLoopTests : IDisposable
 
         object? result = await _tool.InvokeAsync(Args("Guide", Revised, new[] { "Add a test step", "  " }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: BodyChars(Revised)), result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, bodyChars: BodyChars(Revised)), result);
         Assert.Empty(_presented);
         Assert.Equal(["Add a test step"], loop.PassGaps);
         Assert.Equal(1, loop.Presented);
@@ -302,7 +302,7 @@ public class PlanGapLoopTests : IDisposable
         object? result = await _tool.InvokeAsync(Args("Guide", big, new[] { "Add context" }));
 
         string text = Assert.IsType<string>(result);
-        Assert.EndsWith(" The app measured: 1 step: one pass does the whole plan; 1 step has no indented Done when line. Each is a gap; close it in the next pass if you can.", text);
+        Assert.EndsWith(" The app measured: 1 step: one pass does the whole plan; 1 step has no indented Done when line. Each is a gap; close it in the next pass: no pass is clean while one stands.", text);
         Assert.DoesNotContain(RalphText.FitNoCheck, text);
     }
 
@@ -352,17 +352,19 @@ public class PlanGapLoopTests : IDisposable
 
         object? result = await tool.InvokeAsync(Args("Guide", good, new[] { "Add done when lines" }));
 
-        Assert.Contains("The app measured: the plan is ", Assert.IsType<string>(result));
-        Assert.Contains("; a pass sends it whole only up to 40.", (string)result!);
+        // The length is no gap (2026-10-22, the user's call after a review): said apart, after the gaps.
+        Assert.Contains(" Also, the plan is ", Assert.IsType<string>(result));
+        Assert.EndsWith("; a pass sends it whole only up to 40: a shorter plan suits a Ralph loop better, but this alone is not a gap.", (string)result!);
+        Assert.DoesNotContain("The app measured", (string)result!);
     }
 
     [Fact]
     public async Task Tool_APassWithNoGaps_Converges_AndThePaneShowsTheNote_NoNewRevisionWhenUnchanged()
     {
         // A body with no heading of its own: the file has "# Guide" added, and the same markdown again is still no change.
-        var loop = await PassOneAsync("## Steps\n- [ ] Write it\n");
+        var loop = await PassOneAsync("## Steps\n- [ ] Write it\n  Done when: guide.md exists\n");
 
-        object? result = await _tool.InvokeAsync(Args("Guide", "## Steps\n- [ ] Write it\n", Array.Empty<string>(), Checked));
+        object? result = await _tool.InvokeAsync(Args("Guide", "## Steps\n- [ ] Write it\n  Done when: guide.md exists\n", Array.Empty<string>(), Checked));
 
         Assert.Equal(PlanText.RefineResult(_session.Path!, null), result);
         var shown = Assert.Single(_presented);

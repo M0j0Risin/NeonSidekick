@@ -204,7 +204,8 @@ Until you set something, sampling is left to the server and the model's defaults
 
 A model the app downloads and runs itself on llama.cpp's `llama-server`, for when no other server is around. It runs on Windows x64 and on Apple Silicon Macs.
 
-* **Install:** *Install* on **Embedded models** downloads it in the background (📥 on the status bar; a double-click pauses it), then switches to it. It needs *Embedded servers enabled*; Connect a model's *Download an embedded model* switches that on and opens this list.
+* **Install:** *Install* on **Embedded models** downloads it in the background (📥 on the status bar; a double-click pauses it), then switches to it.
+* **Switch:** it needs *Embedded servers enabled*. Connect a model's *Download an embedded model* turns that on once the model you pick is ready.
 * **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
 * **Loading:** the status bar shows `🦙 loading <model>`; Ctrl+C or a double-click on the spinner cancels.
 * **Each row** shows the size, the state (`installed`, `download`, `partial · 42%`) and the quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls and ⛓️‍💥 an uncensored build.
@@ -239,7 +240,7 @@ The catalog, one row per model; the pane lists each build with its own size.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Embedded servers enabled | Offers the embedded models. Off, `/server` lists none and a running embedded server stops; installed models stay on disk. Connect a model's embedded row turns it on. | off |
+| Embedded servers enabled | Offers the embedded models. Off, `/server` lists none and a running embedded server stops; installed models stay on disk. Connect a model turns it on for a model you pick. | off |
 | Embedded models | The catalog. Enter on an installed model offers *Use now* and *Remove* (which asks, then deletes its folder); on any other, *Install*. | — |
 | Embedded download mode | `parallel` fetches each file over 8 connections (about twice as fast); `single` uses one. | `parallel` |
 | Embedded backend | The llama.cpp build: `auto` (CUDA with NVIDIA driver 580 or newer, else Vulkan, else CPU), `cuda`, `vulkan` or `cpu`. On a Mac, `auto` and `metal` both pick Metal. | `auto` |
@@ -345,10 +346,10 @@ Plan mode's gap review, the Ralph loop and code audits: the jobs the model runs 
 |---|---|---|
 | Plan gap max passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs (0–100; 0 is no cap, or 100 headless). Esc stops it; a count on `/plan gaps` overrides it for that run. | 50 |
 | Plan gap clean passes | Passes in a row with no gaps that end the review (1–5). A lower pass limit lowers it for that review; `/plan gaps confirm` needs at least 2. | 2 |
-| Plan gap ask user | Whether a gap pass may use `ask_user`, `camera_capture` and `screen_capture`, and only where `ask_user` is offered (never headless). Otherwise a call only you can make goes into `## Risks` as an open question. | on |
+| Plan gap ask user | Whether a gap pass may use `ask_user`, `camera_capture` and `screen_capture`. Off, or where `ask_user` isn't offered (headless), a call only you can make goes into `## Risks`. | on |
 | Plan gap stop tone | What a review rings when it stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
 | Ralph loop reviewer | Who reviews a [Ralph loop](COMMANDS.md#ralph-loop)'s step once its check passes: `off`, `model` (one request), `advisor` (the first advisor, its thread untouched) or `any` (an advisor if offered, else the model). A fail unticks the step. | `any` |
-| Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass ask you; with no pane or Web UI, a run has none. A `By hand:` step asks either way. | 0 (off) |
+| Ralph loop checkpoint | Asks Keep, Redo, View or Stop after every N steps that stand (0–20; 0 is off). Only with it on may a pass, or the reviewer's `needs_user`, ask you. A `By hand:` step asks either way. | 0 (off) |
 | Ralph loop max passes | The most passes a loop runs (0–200; 0 is three a step, plus one for the final check's fix). A count on `/plan ralph` overrides it. | 0 (three a step) |
 | Ralph loop max step passes | The most passes one step may take before the loop stops (1–20). | 4 |
 | Ralph loop check timeout | How long a check command may run before it's stopped and the step unticked (30–3600 seconds). | 600 |
@@ -356,7 +357,7 @@ Plan mode's gap review, the Ralph loop and code audits: the jobs the model runs 
 | Ralph loop stop tone | What a loop rings when it stops on its own (done, blocked, stalled…) or a step waits for your check, never on Esc: silent, chime, bell, beep or alarm. | silent |
 | Code audit max passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane (0–100; 0 is no cap, or 100 headless). Esc stops it; a count on `/code-audit` overrides it for that run. | 5 |
 | Code audit clean passes | Passes in a row that find nothing new before an audit ends (1–5). A pass after a clean one reads the files no pass has read first; `/code-audit confirm` needs at least 2. | 2 |
-| Code audit ask user | Whether an audit's pass may ask you, take a photo or capture the screen. Off, it gets none of the three and puts a question only you can answer in the report's Open questions. | on |
+| Code audit ask user | Whether an audit's pass may ask you, take a photo or capture the screen. Off, or where `ask_user` isn't offered, a question only you can answer goes in the report's Open questions. | on |
 | Code audit focus | What a `/code-audit` with none named covers: security, correctness, performance, maintainability and tests. At least one stays ticked. | all |
 | Code audit web research | Gives an audit's passes `web_search`, `web_fetch` and `web_links`. Off by default, since audited code may carry instructions that would send code out; off, an advisor asked in a pass gets none either. | off |
 | Code audit pass tool calls | The tool calls a pass is asked to report within (0–500; 0 is no budget). Guidance, not a cut-off: the next pass reads what one leaves. A lower *LLM max tool iterations* is named instead. | 40 |

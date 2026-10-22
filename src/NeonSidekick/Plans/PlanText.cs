@@ -411,6 +411,12 @@ public static class PlanText
 
     public const string GapsDroppedNotice = Glyph + " The gap review was chosen but the reply was stopped: /plan gaps starts it.";
 
+    /// <summary>
+    /// A gap pass's message that never reached a turn (2026-10-22, a review: no assistant, or a picture the model cannot see, and the review stayed
+    /// mid-pass): the review stops. Pinned.
+    /// </summary>
+    public const string GapPassNotSentNotice = Glyph + " The gap review's pass could not be sent, so the review stops; /plan gaps starts a new one.";
+
     /// <summary>Close gaps… chosen inside a reply while a message of the user's was queued (2026-10-14): the message goes first.</summary>
     public const string GapsYieldedNotice = Glyph + " The gap review was chosen but your message goes first: /plan gaps starts it.";
 
@@ -707,10 +713,11 @@ public static class PlanText
 
     /// <summary>
     /// The ask bullet's place in a gap pass that may not wait on the user (2026-10-18, the user's ask: <see cref="Settings.AppSettingsData.PlanGapAskUser"/>
-    /// off, so a review can run unattended). Pinned.
+    /// off, so a review can run unattended), or cannot (no <c>ask_user</c> offered). Pinned. It names no photo or screen capture since 2026-10-22 (the
+    /// user's call after a review): the setting off withholds those tools, and with only <c>ask_user</c> missing they stay.
     /// </summary>
     public const string GapNoAskLine =
-        "- Do not ask the user anything during this review, and take no photo or screen capture: settle what research can, and fold the user's later messages into the plan.";
+        "- Do not ask the user anything during this review: settle what research can, and fold the user's later messages into the plan.";
 
     /// <summary>
     /// The research bullet's second sentence in a gap pass that may not ask (2026-10-18): the user's call written into <c>## Risks</c> as an open
@@ -936,17 +943,21 @@ public static class PlanText
     /// </summary>
     public const int PlanSizeLimit = 20_000;
 
-    /// <summary>A gap-closing pass's revision saved (2026-10-13): the pane is not shown, the next pass starts by itself; its minor fixes since 2026-10-17. Pinned.</summary>
-    public static string GapPassResult(string path, int revision, int gaps, int minor = 0, IReadOnlyList<string>? measured = null, int? bodyChars = null) =>
-        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Measured(measured);
+    /// <summary>
+    /// A gap-closing pass's revision saved (2026-10-13): the pane is not shown, the next pass starts by itself; its minor fixes since 2026-10-17. Pinned.
+    /// <paramref name="tooLong"/> (2026-10-22, <see cref="PlanFit.TooLong"/>) is said after the gaps measured, as no gap (<see cref="LengthSentence"/>).
+    /// </summary>
+    public static string GapPassResult(string path, int revision, int gaps, int minor = 0, IReadOnlyList<string>? measured = null, int? bodyChars = null, string? tooLong = null) =>
+        $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Measured(measured) + Length(tooLong);
 
     /// <summary>
     /// A clean pass that does not end the review (2026-10-17): no pane, the streak said, the next pass starts by itself. Pinned. Since later on
     /// 2026-10-18 both results end with what <see cref="PlanFit.Shape"/> measured, when anything (<paramref name="measured"/> null or empty: as before);
-    /// since 2026-10-21 with the body's count first (<paramref name="bodyChars"/>, <see cref="SizeSentence"/>; null: none).
+    /// since 2026-10-21 with the body's count first (<paramref name="bodyChars"/>, <see cref="SizeSentence"/>; null: none). Since 2026-10-22 a clean pass
+    /// has no structural problem (<see cref="ShapeCleanResult"/> refuses one), so only <paramref name="tooLong"/> follows.
     /// </summary>
-    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0, IReadOnlyList<string>? measured = null, int? bodyChars = null) =>
-        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Measured(measured);
+    public static string CleanPassResult(string path, int revision, int clean, int needed, int minor = 0, int? bodyChars = null, string? tooLong = null) =>
+        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, {N(clean)} of {CleanPassesWord(needed)} in a row. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Length(tooLong);
 
     /// <summary>
     /// The body's length as the app counts it, said after every gap pass (2026-10-21, the user's log of a 70-pass review on a hello-world plan:
@@ -955,23 +966,35 @@ public static class PlanText
     /// file holds, the header left out: what <see cref="PlanFit"/> and a Ralph pass measure. Pinned.
     /// </summary>
     public static string SizeSentence(int bodyChars) =>
-        $"The app counted the plan's body at {Thousands(bodyChars)} characters (its header left out), {(bodyChars > PlanSizeLimit ? "over" : "under")} the {Thousands(PlanSizeLimit)} limit; go by this count, not the file's size in bytes.";
+        $"The app counted the plan's body at {RalphText.Count(bodyChars)} characters (its header left out), {(bodyChars > PlanSizeLimit ? "over" : "under")} the {RalphText.Count(PlanSizeLimit)} limit; go by this count, not the file's size in bytes.";
 
     private static string Size(int? bodyChars) => bodyChars is { } chars ? " " + SizeSentence(chars) : "";
 
-    private static string Thousands(int value) => value.ToString("N0", CultureInfo.InvariantCulture);
-
     /// <summary>
-    /// The facts a gap pass's result carries (later on 2026-10-18): a reviewing model gets the plan's measured fit, not only the rules; "if you can",
-    /// since a plan that truly cannot be shorter must still be able to converge (the pass limit bounds it either way). Pinned.
+    /// The facts a gap pass's result carries (later on 2026-10-18): a reviewing model gets the plan's measured fit, not only the rules. Since 2026-10-22
+    /// (the user's call after a review: "Each is a gap" while the review converged on them anyway) only the structural problems
+    /// (<see cref="PlanFitReading.Structural"/>), which refuse a clean pass until closed; the length is <see cref="LengthSentence"/>'s. Pinned.
     /// </summary>
     public static string MeasuredSentence(IReadOnlyList<string> measured)
     {
         ArgumentNullException.ThrowIfNull(measured);
-        return "The app measured: " + string.Join("; ", measured) + ". Each is a gap; close it in the next pass if you can.";
+        return "The app measured: " + string.Join("; ", measured) + ". Each is a gap; close it in the next pass: no pass is clean while one stands.";
     }
 
     private static string Measured(IReadOnlyList<string>? measured) => measured is { Count: > 0 } m ? " " + MeasuredSentence(m) : "";
+
+    /// <summary>
+    /// A plan longer than a Ralph pass sends whole (2026-10-22, the user's call after a review: <see cref="RalphText.InlineLimit"/> follows the model's window,
+    /// so it can sit under the 20,000 the same result names, and calling it a gap kept a review from converging on a plan under that limit): said, never a
+    /// gap. Pinned.
+    /// </summary>
+    public static string LengthSentence(string tooLong)
+    {
+        ArgumentNullException.ThrowIfNull(tooLong);
+        return $"Also, {tooLong}: a shorter plan suits a Ralph loop better, but this alone is not a gap.";
+    }
+
+    private static string Length(string? tooLong) => tooLong is null ? "" : " " + LengthSentence(tooLong);
 
     /// <summary><c> and 2 minor fixes</c> after a gap count, nothing at 0.</summary>
     private static string MinorAnd(int minor) => minor <= 0 ? "" : minor == 1 ? " and 1 minor fix" : $" and {N(minor)} minor fixes";
@@ -980,12 +1003,16 @@ public static class PlanText
     private static string MinorWith(int minor) => minor <= 0 ? "" : minor == 1 ? " with 1 minor fix" : $" with {N(minor)} minor fixes";
 
     /// <summary>
-    /// A clean pass on a plan with no step a Ralph loop can read, or with boxes it passes over (2026-10-21, <see cref="PlanFit.StepsProblem"/>'s
-    /// <paramref name="problem"/>): nothing saved, no pass counted, as <see cref="CheckedRequiredResult"/>. Pinned.
+    /// A clean pass on a plan with a structural problem (2026-10-21 for no step a loop can read; every structural problem since 2026-10-22, the user's
+    /// call after a review: the review converged with them standing, <see cref="PlanFitReading.Structural"/>'s <paramref name="problems"/>): nothing
+    /// saved, no pass counted, as <see cref="CheckedRequiredResult"/>. A pass that never presents again ends NoRevision. Pinned.
     /// </summary>
-    public static string NoStepsCleanResult(string problem) =>
-        $"Error: {problem}. Only a - [ ] list line is a step: never a heading (a ### heading may group steps, without a box), a bare [ ] or a bold box. " +
-        "Write each step as a - [ ] line under ## Steps with an indented Done when: line, list that in gaps, and call present_plan again.";
+    public static string ShapeCleanResult(IReadOnlyList<string> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        return $"Error: this pass found no gaps, but the app measured: {string.Join("; ", problems)}. Each is a gap: fix it in the plan, list it in gaps, and call present_plan again. " +
+            "A step is a - [ ] line under ## Steps with an indented Done when: line, small enough for one fresh session; a step with sub-steps leaves a By hand: check to one of them.";
+    }
 
     /// <summary>An empty gaps list during a review with no checked list (2026-10-17): nothing saved, no pass counted. Pinned.</summary>
     public const string CheckedRequiredResult = "Error: with gaps empty, checked is required: one short line for each part of the plan you checked this pass. Call present_plan again with it.";
@@ -1002,11 +1029,12 @@ public static class PlanText
 
     /// <summary>
     /// The message that starts an approved plan in the same conversation. Pinned. Its last sentence (2026-10-21, the plan at
-    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): a step only a person can check is left unticked for the user, never ticked unchecked.
+    /// <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): a step only a person can check is left unticked for the user, never ticked unchecked — only
+    /// when the plan has one (<paramref name="byHand"/>, <see cref="PlanFit.ByHandSteps"/>; 2026-10-22, a review: every approval carried it).
     /// </summary>
-    public static string ExecuteMessage(string path) =>
-        $"The plan in {path} is approved. Carry out its steps that are not ticked yet, in order, ticking each checkbox in {path} as you finish the step, and tell me when it is done or if something blocks you. " +
-        ByHandExecuteSentence;
+    public static string ExecuteMessage(string path, bool byHand = false) =>
+        $"The plan in {path} is approved. Carry out its steps that are not ticked yet, in order, ticking each checkbox in {path} as you finish the step, and tell me when it is done or if something blocks you." +
+        (byHand ? " " + ByHandExecuteSentence : "");
 
     /// <summary><see cref="ExecuteMessage"/>'s sentence for a step only a person can check (2026-10-21). Pinned.</summary>
     public const string ByHandExecuteSentence =
@@ -1026,7 +1054,7 @@ public static class PlanText
 
     /// <summary>The message that starts an approved plan in a fresh conversation: the plan's text inline, since nothing of the planning is left. Pinned.</summary>
     public static string ExecuteFreshMessage(string path, string plan) =>
-        ExecuteMessage(path) + "\n\n" + plan.Trim();
+        ExecuteMessage(path, PlanFit.ByHandSteps(plan) > 0) + "\n\n" + plan.Trim();
 
     private static string Flatten(string text) => PlanDocument.OneLine(text).Replace('"', '\'');
 

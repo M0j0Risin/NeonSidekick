@@ -62,10 +62,10 @@ public static partial class ConversationCompactor
     /// <summary>
     /// The first of a call's arguments that is a pruned stub, a string or a JSON string (2026-10-21, the user's log: a gap pass sent
     /// <c>neon_advisor</c> the stub of an earlier question as its <c>question</c>, and the advisor was asked "(a 8,402-character argument,
-    /// pruned by /compact)"); null when none is. Top-level arguments only: a list's items are the tools' own to check
-    /// (<see cref="Tools.IRefusesPrunedStubs"/>).
+    /// pruned by /compact)"); null when none is. Top-level arguments only, and none of <paramref name="except"/>: those a tool refuses in its own
+    /// words (<see cref="Tools.IRefusesPrunedStubs.StubArguments"/>, 2026-10-22). A list's items are the tools' own to check.
     /// </summary>
-    public static string? StubbedArgument(IDictionary<string, object?>? arguments)
+    public static string? StubbedArgument(IDictionary<string, object?>? arguments, IReadOnlyCollection<string>? except = null)
     {
         if (arguments is null)
         {
@@ -74,13 +74,8 @@ public static partial class ConversationCompactor
 
         foreach (var (name, value) in arguments)
         {
-            string? text = value switch
-            {
-                string s => s,
-                System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } element => element.GetString(),
-                _ => null,
-            };
-            if (IsPrunedStub(text))
+            // The one reading of a string argument (2026-10-22, a review: a copy of ArgumentText's switch).
+            if (except?.Contains(name) != true && IsPrunedStub(ArgumentText(value)))
             {
                 return name;
             }
@@ -88,13 +83,6 @@ public static partial class ConversationCompactor
 
         return null;
     }
-
-    /// <summary>
-    /// A tool's answer to a pruned stub sent as <paramref name="argument"/> (2026-10-21), any tool not refusing one in its own words
-    /// (<see cref="Tools.IRefusesPrunedStubs"/>): the call never runs. Pinned.
-    /// </summary>
-    public static string PrunedStubSentResult(string argument) =>
-        $"Error: {argument} is a pruned stub (what /compact leaves of a long text), not the text itself; write the whole text again, reading it from its source if you need to, and call the tool again";
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^\s*\(a [\d,]+-character (?:result|argument), pruned by /compact\)\s*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
     private static partial System.Text.RegularExpressions.Regex StubPattern();

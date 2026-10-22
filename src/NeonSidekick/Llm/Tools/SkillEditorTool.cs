@@ -33,6 +33,9 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> StubArguments { get; } = [ContentArgument, NewTextArgument, InstructionsArgument];
+
     public const string ToolName = "skill_editor";
     public const string ActionArgument = "action";
     public const string ScopeArgument = "scope";

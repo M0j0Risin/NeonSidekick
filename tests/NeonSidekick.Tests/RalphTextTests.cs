@@ -153,10 +153,10 @@ public sealed class RalphTextTests
         Assert.Equal("3 steps have no indented Done when line", RalphText.FitNoDoneWhen(3));
         Assert.Equal("1,200 steps have no indented Done when line", RalphText.FitNoDoneWhen(1200));
         Assert.Equal("no - [ ] steps under ## Steps", RalphText.FitNoSteps);
-        Assert.Equal("1 step isn't a - [ ] list line", RalphText.FitUnreadSteps(1));
-        Assert.Equal("2 steps aren't - [ ] list lines", RalphText.FitUnreadSteps(2));
-        Assert.Equal("The plan has no steps to run one at a time: its 1 box isn't a - [ ] list line (a heading, a bare [ ] or a bold box isn't a step). A Ralph loop needs - [ ] checkboxes under ## Steps", RalphText.NoStepsUnreadError(1));
-        Assert.Equal("The plan has no steps to run one at a time: its 2 boxes aren't a - [ ] list line (a heading, a bare [ ] or a bold box isn't a step). A Ralph loop needs - [ ] checkboxes under ## Steps", RalphText.NoStepsUnreadError(2));
+        Assert.Equal("1 step is outside ## Steps", RalphText.FitStraySteps(1));
+        Assert.Equal("2 steps are outside ## Steps", RalphText.FitStraySteps(2));
+        Assert.Equal("The plan has no steps to run one at a time: its 1 step is under another heading. A Ralph loop needs - [ ] checkboxes under ## Steps", RalphText.NoStepsStrayError(1));
+        Assert.Equal("The plan has no steps to run one at a time: its 2 steps are under another heading. A Ralph loop needs - [ ] checkboxes under ## Steps", RalphText.NoStepsStrayError(2));
         Assert.Equal("the plan is 170,298 characters; a pass sends it whole only up to 24,000", RalphText.FitTooLong(170_298, 24_000));
         Assert.Equal("no check: steps stand unchecked", RalphText.FitNoCheck);
 
@@ -272,7 +272,7 @@ public sealed class RalphTextTests
             }
 
             string name = stop.ToString().ToLowerInvariant();
-            string head = App.RalphStart.StopWord(stop);
+            string head = RalphText.StopWord(stop);
             string summary = RalphText.SummaryLines([new RalphPassRecord(1, 1, "One", "done", true)], stop)[^1];
             if (MultiWord(stop.ToString()))
             {
@@ -296,8 +296,33 @@ public sealed class RalphTextTests
 
         Assert.Equal("ralph: review of pass 1 by the model: needs user — why", App.RalphReviewers.LogLine(1, false, new RalphVerdict(RalphVerdictKind.NeedsUser, "why")));
         Assert.Equal("needs user: why", App.RalphJudge.ReviewWord(new RalphVerdict(RalphVerdictKind.NeedsUser, "why")));
-        Assert.Equal("needs you", App.RalphStart.StopWord(RalphStop.NeedsUser));
-        Assert.Equal("stopped at your answer", App.RalphStart.StopWord(RalphStop.UserStopped));
+        Assert.Equal("needs you", RalphText.StopWord(RalphStop.NeedsUser));
+        Assert.Equal("stopped at your answer", RalphText.StopWord(RalphStop.UserStopped));
+    }
+
+    [Fact]
+    public void TheStopWords_AreOneTable_AndTheSummarySaysAStopOnce()
+    {
+        // 2026-10-22, a review: RalphStart kept a second table, which named these four differently from the summary's.
+        Assert.Equal("plan gone", RalphText.StopWord(RalphStop.PlanGone));
+        Assert.Equal("workdir moved", RalphText.StopWord(RalphStop.WorkdirMoved));
+        Assert.Equal("locked", RalphText.StopWord(RalphStop.Locked));
+        Assert.Equal("baseline refused", RalphText.StopWord(RalphStop.BaselineRefused));
+
+        // ...and the summary read "needs you, needs you" and "stopped at the check, stopped at your answer".
+        Assert.Equal("  pass 3: step 2, needs you", RalphText.SummaryLines([new RalphPassRecord(3, 2, "Two", RalphText.NeedsYouLog, false)], RalphStop.NeedsUser)[^1]);
+        Assert.Equal("  pass 3: step 2, stopped at the check", RalphText.SummaryLines([new RalphPassRecord(3, 2, "Two", RalphText.OutcomeStoppedAtCheck, false)], RalphStop.UserStopped)[^1]);
+        Assert.Equal("  pass 3: step 2, done, stalled", RalphText.SummaryLines([new RalphPassRecord(3, 2, "Two", "done", true)], RalphStop.Stalled)[^1]);
+    }
+
+    [Fact]
+    public void TheNeedsYouStop_SaysHowToGoOn_WhereItCanBeAsked_AndWhereNot()
+    {
+        // 2026-10-22, a review: "tick its box" bypassed the resume's question; headless, where nobody is asked, the box is still the user's.
+        Assert.Equal("🔁 Ralph loop stopped: a step needs you to check it (1 of 3 steps done). Check it, leave its box as it is, and /plan ralph g goes on. It asks you whether it works first.",
+            RalphText.StopNotice(RalphStop.NeedsUser, ".neon/plans/g.md", 1, 3));
+        Assert.Equal("🔁 Ralph loop stopped: a step needs you to check it (1 of 3 steps done). Check it, tick its box, and /plan ralph g goes on.",
+            RalphText.StopNotice(RalphStop.NeedsUser, ".neon/plans/g.md", 1, 3, canAsk: false));
     }
 
     [Fact]
@@ -329,11 +354,13 @@ public sealed class RalphTextTests
         Assert.Equal(["It works: tick it", "It doesn't: redo with a note…", "View the changes", "Stop the loop"], RalphText.ByHandRows);
         Assert.Equal("  the last review said: no loop in the code", RalphText.LastReviewLine("no loop in the code"));
         Assert.Equal("🔁 Ralph loop stopped: a step needs you to check it (1 of 3 steps done). Check it, tick its box, and /plan ralph g goes on.",
-            RalphText.StopNotice(RalphStop.NeedsUser, ".neon/plans/g.md", 1, 3));
+            RalphText.StopNotice(RalphStop.NeedsUser, ".neon/plans/g.md", 1, 3, canAsk: false));
         Assert.Equal("🔁 Ralph loop stopped at your answer (1 of 3 steps done). /plan ralph g goes on.", RalphText.StopNotice(RalphStop.UserStopped, ".neon/plans/g.md", 1, 3));
         Assert.Equal("🔁 Ralph loop paused, waiting for your check on p.md: 1 of 3 steps done, pass 2",
             RalphText.ShowLines("p.md", 1, 3, 2, paused: true, "p/ralph.md", waitingOnYou: true)[0]);
-        Assert.EndsWith(" " + PlanText.ByHandExecuteSentence, PlanText.ExecuteMessage("p.md"));
+        Assert.EndsWith(" " + PlanText.ByHandExecuteSentence, PlanText.ExecuteMessage("p.md", byHand: true));
+        Assert.DoesNotContain(PlanText.ByHandExecuteSentence, PlanText.ExecuteMessage("p.md"));   // only a plan with a By hand: step (2026-10-22)
+        Assert.EndsWith(" " + PlanText.ByHandExecuteSentence + "\n\n# P\n- [ ] A\n  Done when: By hand: it shows", PlanText.ExecuteFreshMessage("p.md", "# P\n- [ ] A\n  Done when: By hand: it shows"));
         Assert.StartsWith(PlanText.ExecuteMessage("p.md"), PlanText.ExecuteFreshMessage("p.md", "# P"));
         Assert.Equal("A step whose Done when starts with By hand: is mine to check: do its work, leave its box unticked, and tell me at the end what to check.", PlanText.ByHandExecuteSentence);
     }

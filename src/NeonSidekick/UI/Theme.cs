@@ -109,6 +109,19 @@ public static class Theme
         return slot => styles[slot];
     }
 
+    /// <summary>
+    /// <see cref="StylesOf"/> without its cache (2026-10-22, a review): the palette in force answers from its own set, any other from a set built for
+    /// this call alone. For a reader off the screen's thread — the Web UI's <c>/theme.css</c> — which would otherwise take the pickers' one slot in turn
+    /// with the PC's preview.
+    /// </summary>
+    public static Func<ThemeStyleSlot, Style> StylesBuilt(ThemePalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        var current = s_current;
+        var styles = ReferenceEquals(current.Palette, palette) ? current : new ThemeStyles(palette);
+        return slot => styles[slot];
+    }
+
     public static Style Body => s_current[ThemeStyleSlot.Body];
     public static Style DimText => s_current[ThemeStyleSlot.DimText];
     public static Style Accent => s_current[ThemeStyleSlot.Accent];

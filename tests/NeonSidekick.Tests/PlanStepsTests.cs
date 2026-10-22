@@ -218,22 +218,30 @@ public sealed class PlanStepsTests
         Assert.Empty(none);
     }
 
+    // ── Box forms written as task lines, and steps outside ## Steps (2026-10-22, the user's call after a review) ──
+
     [Theory]
-    [InlineData("# [ ] Step 1")]
-    [InlineData("## [x] Step 1")]
-    [InlineData("### [X] Step 1")]
-    [InlineData("###### [ ] Step 1")]
-    [InlineData("### [ ]")]
-    [InlineData("### **[ ] Step 1**")]
-    [InlineData("### _[x] Step 1_")]
-    [InlineData("[ ] Step 1")]
-    [InlineData("  [x] Step 1")]
-    [InlineData("- **[ ] Step 1**")]
-    [InlineData("1. __[x] Step 1__")]
-    public void UnreadBoxes_CountsEveryFormTheParserSkips(string line)
+    [InlineData("### [ ] Step 1", "- [ ] Step 1")]
+    [InlineData("###### [x] Step 1", "- [x] Step 1")]
+    [InlineData("### [X] Step 1", "- [x] Step 1")]
+    [InlineData("### [ ]", "- [ ]")]
+    [InlineData("### **[ ] Step 1**", "- [ ] Step 1")]
+    [InlineData("### _[x] Step 1_", "- [x] Step 1")]
+    [InlineData("[ ] Step 1", "- [ ] Step 1")]
+    [InlineData("  [x] Step 1", "  - [x] Step 1")]
+    [InlineData("- **[ ] Step 1**", "- [ ] Step 1")]
+    [InlineData("**[ ]** Step 1", "- [ ] Step 1")]
+    [InlineData("- **[ ]** Step 1", "- [ ] Step 1")]
+    [InlineData("1. __[x] Step 1__", "1. [x] Step 1")]
+    public void Normalized_WritesEachBoxForm_AsATaskLine(string line, string expected)
     {
-        Assert.Equal(1, PlanSteps.UnreadBoxes("# Plan\n\n## Steps\n\n" + line + "\n"));
-        Assert.Empty(PlanSteps.Parse("## Steps\n" + line));
+        Assert.Empty(PlanSteps.Parse("## Steps\n" + line + "\n"));
+
+        string normalized = PlanSteps.Normalized("## Steps\n" + line + "\n");
+
+        Assert.Equal("## Steps\n" + expected + "\n", normalized);
+        Assert.Single(PlanSteps.Parse(normalized));
+        Assert.Equal(normalized, PlanSteps.Normalized(normalized));   // once is enough
     }
 
     [Theory]
@@ -241,27 +249,52 @@ public sealed class PlanStepsTests
     [InlineData("[x]: https://example.com/a")]
     [InlineData("[ ]Step 1")]
     [InlineData("### Step 1 [ ]")]
+    [InlineData("### Phase one")]
     [InlineData("☐ Step 1")]
     [InlineData("| [ ] | a cell |")]
-    public void UnreadBoxes_CountsNoTaskLine_NorAnythingThatIsNoBox(string line)
+    [InlineData("**Done when:** it works")]
+    public void Normalized_LeavesWhatIsNoBox(string line)
     {
-        Assert.Equal(0, PlanSteps.UnreadBoxes("## Steps\n" + line + "\n"));
+        string text = "## Steps\n- [ ] Real\n" + line + "\n";
+        Assert.Same(text, PlanSteps.Normalized(text));
     }
 
     [Fact]
-    public void UnreadBoxes_PassesOverFences_AndTaskLinesElsewhere()
+    public void Normalized_PassesOverFences_AndTheSectionsAfterSteps_AndReadsAHeadedlessTextWhole()
     {
-        Assert.Equal(0, PlanSteps.UnreadBoxes("## Steps\n```\n### [ ] in a fence\n[ ] bare\n```\n- [ ] Real\n\n## Verification\n- [ ] a list task, not an unread step\n"));
-        Assert.Equal(2, PlanSteps.UnreadBoxes(PlanFitTests.HeadingSteps));
+        string headed = "## Steps\n```\n### [ ] in a fence\n[ ] bare\n```\n- [ ] Real\n\n## Verification\n[ ] a check, not a step\n";
+        Assert.Same(headed, PlanSteps.Normalized(headed));
+
+        // A level 2 box heading ends ## Steps where there is one; with none, every line is the steps' scope.
+        Assert.Equal("# Plan\n- [x] Step 1\n", PlanSteps.Normalized("# Plan\n## [x] Step 1\n"));
     }
 
     [Fact]
-    public void UnreadBoxes_ReadsACrlfText_AsItsLfTwin()
+    public void Normalized_HeadingSteps_TakeTheirColumnZeroDoneWhen()
     {
-        string lf = "## Steps\n### [ ]\n### [x] Step 2\n[ ] Step 3\n- [ ] Real\n";
-        Assert.Equal(3, PlanSteps.UnreadBoxes(lf));
-        Assert.Equal(3, PlanSteps.UnreadBoxes(lf.Replace("\n", "\r\n", StringComparison.Ordinal)));
+        // The matrix-rain plan's shape: each step a boxed heading, its Done when: at column 0 under prose and a fence.
+        var steps = PlanSteps.Parse(PlanSteps.Normalized("# Plan\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n\n## Verification\n\n- it runs"));
+
+        Assert.Equal(["Step 1 — Rewrite `hello_world.py`", "Step 2 — Check it"], steps.Select(s => s.Text));
+        Assert.Equal(["running `python hello_world.py` shows the rain", "`python hello_world.py --test` exits 0"], steps.Select(s => s.DoneWhen));
     }
+
+    [Fact]
+    public void Normalized_KeepsEachLinesEnding()
+    {
+        Assert.Equal("## Steps\r\n- [x] Step 2\r\n- [ ] Step 3\r\n- [ ] Real\r\n", PlanSteps.Normalized("## Steps\r\n### [x] Step 2\r\n[ ] Step 3\r\n- [ ] Real\r\n"));
+    }
+
+    [Theory]
+    [InlineData("## Steps\n- [ ] A\n\n## Steps, part 2\n- [ ] B\n- [ ] C\n", 2)]
+    [InlineData("## Steps\n- [ ] A\n\n## Phase 2\n### [ ] B\n", 1)]
+    [InlineData("## Steps\n- [ ] A\n\n## Verification\n- [ ] it runs\n\n## Risks\n- [ ] = not done\n", 0)]
+    [InlineData("## Context\n\n    - [x] enabled\n\n## Steps\n- [ ] A\n", 0)]
+    [InlineData("## Steps\n- [ ] A\n\n## Context\n[x] marks done\n- **[x] build passes**\n", 0)]
+    [InlineData("## Steps\n- [ ] A\n```\n## Phase 2\n- [ ] in a fence\n```\n", 0)]
+    [InlineData("- [ ] A\n\n## Phase 2\n- [ ] B\n", 0)]
+    public void StraySteps_CountsTheStepsNoLoopReaches(string text, int expected) =>
+        Assert.Equal(expected, PlanSteps.StraySteps(text));
 
     // ── The By hand: marker (2026-10-21, the plan at ~/.claude/plans/i-put-you-in-snoopy-perlis.md) ──
 
@@ -299,5 +332,59 @@ public sealed class PlanStepsTests
         var steps = PlanSteps.Parse("## Steps\n- [ ] Animate it\n  Done when: By hand: the terminal shows it\n- [ ] Write it\n  Done when: `hello.py` exists\n- [ ] Nothing said\n");
 
         Assert.Equal([true, false, false], steps.Select(s => s.ByHand));
+    }
+
+    [Fact]
+    public void AStep_IsByHand_ByAnyOfItsDoneWhenLines()
+    {
+        // 2026-10-22, a review: the template's shape, a command check and a by-hand one, read as no by-hand step once joined.
+        var step = PlanSteps.Parse("## Steps\n- [ ] Add the splash\n  Done when: `dotnet test` passes\n  Done when: By hand: the robot appears above the draft line\n")[0];
+
+        Assert.True(step.ByHand);
+        Assert.Equal("the robot appears above the draft line", step.HandCheck);
+        Assert.Equal("`dotnet test` passes By hand: the robot appears above the draft line", step.DoneWhen);
+    }
+
+    [Theory]
+    [InlineData("By hand: run `ls *.log` and open __init__.py", "run `ls *.log` and open __init__.py")]
+    [InlineData("**By hand: it shows**", "it shows")]
+    [InlineData("**By hand**: it **really** shows", "it **really** shows")]
+    public void WithoutByHand_KeepsTheMarksInTheWords(string doneWhen, string expected) =>
+        Assert.Equal(expected, PlanSteps.WithoutByHand(doneWhen));
+
+    [Theory]
+    [InlineData("  Done when: `ls *.log` lists __init__.py", "`ls *.log` lists __init__.py")]
+    [InlineData("  **Done when:** it works", "it works")]
+    [InlineData("  **Done when: it works**", "it works")]
+    [InlineData("  - _Done when:_ it works", "it works")]
+    public void ADoneWhenLine_KeepsTheMarksInItsWords(string line, string expected) =>
+        Assert.Equal(expected, PlanSteps.Parse("## Steps\n- [ ] A\n" + line + "\n")[0].DoneWhen);
+
+    [Theory]
+    [InlineData("Done when: By hand: it shows", "By hand: it shows")]
+    [InlineData("- **Done when:** it runs", "it runs")]
+    [InlineData("Done when:", "")]
+    [InlineData("it runs", "it runs")]
+    public void WithoutDoneWhenLabel_DropsALeadingLabel(string doneWhen, string expected) =>
+        Assert.Equal(expected, PlanSteps.WithoutDoneWhenLabel(doneWhen));
+
+    [Fact]
+    public void WithChildren_ABySplit_MovesTheParentsByHandCheck_IntoItsSubstep()
+    {
+        // 2026-10-22, a review: the parent kept its own By hand: line, which PlanFit then called a problem, and the parent was ticked unchecked.
+        string text = "## Steps\n- [ ] Animate it\n  Done when: By hand: the window shows it\n  A note.\n- [ ] Next\n";
+        var step = PlanSteps.Parse(text)[0];
+
+        string? split = PlanSteps.WithChildren(text, step, [new PlanSubstep("Draw the frames", "`frames.txt` exists"), new PlanSubstep("Show it", "Done when: By hand: the window shows it")]);
+
+        Assert.Equal("## Steps\n- [ ] Animate it\n  A note.\n  - [ ] Draw the frames\n    Done when: `frames.txt` exists\n  - [ ] Show it\n    Done when: By hand: the window shows it\n- [ ] Next\n", split);
+        var parent = PlanSteps.Parse(split!)[0];
+        Assert.False(parent.ByHand);
+        Assert.Equal([false, true], parent.Children.Select(c => c.ByHand));
+        Assert.Equal(0, PlanFit.ByHandParents(split!));
+
+        // A split with no by-hand substep keeps the step's own lines.
+        string kept = PlanSteps.WithChildren(text, step, [new PlanSubstep("a", "b"), new PlanSubstep("c", "d")])!;
+        Assert.Contains("  Done when: By hand: the window shows it\n", kept, StringComparison.Ordinal);
     }
 }

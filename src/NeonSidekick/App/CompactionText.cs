@@ -12,6 +12,13 @@ namespace NeonSidekick.App;
 public static class CompactionText
 {
     /// <summary>
+    /// A tool's answer to a pruned stub sent as <paramref name="argument"/> (2026-10-21; in <c>ConversationCompactor</c> until 2026-10-22, a review), any
+    /// argument a tool does not refuse one in in its own words (<see cref="Llm.Tools.IRefusesPrunedStubs"/>): the call never runs. Pinned.
+    /// </summary>
+    public static string PrunedStubSentResult(string argument) =>
+        $"Error: {argument} is a pruned stub (what /compact leaves of a long text), not the text itself; write the whole text again, reading it from its source if you need to, and call the tool again";
+
+    /// <summary>
     /// What every line of <c>/compact</c> or the automatic compact opens with, inside its parentheses
     /// (2026-09-19, the user's pick; <c>ChatScreen.TrashGlyph</c>'s shape): the clamp U+1F5DC with
     /// its variation selector — bare it is text-presentation — and a space. A line where only tool

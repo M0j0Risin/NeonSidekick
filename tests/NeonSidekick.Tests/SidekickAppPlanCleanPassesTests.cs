@@ -20,7 +20,7 @@ public partial class SidekickAppTests
         _chat.EnqueueText("Saved.");
         _chat.Enqueue(HeadlessPresentGaps("p2", "Test it"));
         _chat.EnqueueText("Pass 1 done.");
-        _chat.Enqueue(HeadlessPresentGapsOver("p3", "# Guide\n\n- [ ] Write it\n- [ ] Test it\n"));   // unchanged and clean: but no pass left
+        _chat.Enqueue(HeadlessPresentGapsOver("p3", "# Guide\n\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: Test it is done\n"));   // unchanged and clean: but no pass left
         _chat.EnqueueText("Clean.");
 
         string output = await Headless("/plan Add a guide\n/plan gaps\n");
@@ -70,7 +70,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[notice] " + PlanText.GapsConfirmFallbackNotice, output);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 5, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[2]));
-        Assert.Equal(PlanText.CleanPassResult(HeadlessPlanPath, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: PlanGapLoopTests.BodyChars("# Guide\n\n- [ ] Write it\n")), _chat.Requests[3].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p2").Result);
+        Assert.Equal(PlanText.CleanPassResult(HeadlessPlanPath, 1, 1, 2, bodyChars: PlanGapLoopTests.BodyChars("# Guide\n\n- [ ] Write it\n  Done when: guide.md exists\n")), _chat.Requests[3].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p2").Result);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 2, 5, PlanReviewer.Model, cleanSoFar: 1), HeadlessLastUser(_chat.Requests[4]));
         Assert.Contains("[notice] " + PlanText.ConvergedNotice(HeadlessPlanPath, 2, 0, 2), output);
     }

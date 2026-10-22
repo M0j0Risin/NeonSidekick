@@ -28,14 +28,8 @@ internal sealed partial class SettingsMenu
         IReadOnlyList<string> values = TimerTones.Names;
         var rows = values.Select(n => CameraModeLabel(n, TimerTones.Describe(n))).ToList();
         var page = new MenuPage(Crumb(FieldName(field)), rows, PickKeys);
-        string current = field switch
-        {
-            SettingsField.RalphLoopStopTone => saved.RalphLoopStopTone,
-            SettingsField.PlanGapStopTone => saved.PlanGapStopTone,
-            SettingsField.CodeAuditStopTone => saved.CodeAuditStopTone,
-            _ => saved.TimerTone,
-        };
-        int at = Math.Max(0, values.ToList().IndexOf(TimerTones.Normalize(current)));
+        var tone = ToneSetting(field);
+        int at = Math.Max(0, values.ToList().IndexOf(TimerTones.Normalize(tone.Get(saved))));
         Action<int>? highlighted = PreviewTone is { } preview
             ? row => _ = preview(values[row], cancellationToken).ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default)
             : null;
@@ -46,14 +40,19 @@ internal sealed partial class SettingsMenu
         }
 
         string value = values[index];
-        Action<AppSettingsData> set = field switch
-        {
-            SettingsField.RalphLoopStopTone => d => d.RalphLoopStopTone = value,
-            SettingsField.PlanGapStopTone => d => d.PlanGapStopTone = value,
-            SettingsField.CodeAuditStopTone => d => d.CodeAuditStopTone = value,
-            _ => d => d.TimerTone = value,
-        };
-        Apply(field, set);
+        Apply(field, d => tone.Set(d, value));
         return true;
     }
+
+    /// <summary>
+    /// A tone setting's reading and its writing, one entry each (2026-10-22, a review: two parallel switches, and a fifth tone added to one alone would
+    /// have read or written <c>Timer tone</c> through the other's default); <c>Timer tone</c> for any other field.
+    /// </summary>
+    private static (Func<AppSettingsData, string> Get, Action<AppSettingsData, string> Set) ToneSetting(SettingsField field) => field switch
+    {
+        SettingsField.RalphLoopStopTone => (d => d.RalphLoopStopTone, (d, v) => d.RalphLoopStopTone = v),
+        SettingsField.PlanGapStopTone => (d => d.PlanGapStopTone, (d, v) => d.PlanGapStopTone = v),
+        SettingsField.CodeAuditStopTone => (d => d.CodeAuditStopTone, (d, v) => d.CodeAuditStopTone = v),
+        _ => (d => d.TimerTone, (d, v) => d.TimerTone = v),
+    };
 }

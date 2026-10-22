@@ -59,15 +59,17 @@ public sealed class EchoTool : AIFunction
 }
 
 /// <summary>
-/// An echo that refuses a pruned stub in its own words (2026-10-21, <see cref="NeonSidekick.Llm.Tools.IRefusesPrunedStubs"/>): the turn's
-/// generic refusal leaves it to its own check.
+/// An echo that refuses a pruned stub in its own words in <c>text</c> (2026-10-21, <see cref="NeonSidekick.Llm.Tools.IRefusesPrunedStubs"/>): the
+/// turn's generic refusal leaves that argument to its own check, and still refuses one in <c>note</c> (2026-10-22).
 /// </summary>
 public sealed class OwnStubEchoTool : AIFunction, NeonSidekick.Llm.Tools.IRefusesPrunedStubs
 {
     public const string OwnWords = "Error: text is a stub; read it again";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
-        """{"type":"object","properties":{"text":{"type":"string","description":"What to echo."}},"required":["text"]}""");
+        """{"type":"object","properties":{"text":{"type":"string","description":"What to echo."},"note":{"type":"string","description":"A note, unread."}},"required":["text"]}""");
+
+    public IReadOnlyCollection<string> StubArguments { get; } = ["text"];
 
     public override string Name => "own_echo";
 

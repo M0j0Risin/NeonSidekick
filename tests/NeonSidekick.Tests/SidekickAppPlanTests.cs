@@ -16,7 +16,7 @@ public partial class SidekickAppTests
         {
             [PresentPlanTool.TitleArgument] = "Guide",
             [PresentPlanTool.NameArgument] = "add-guide",
-            [PresentPlanTool.MarkdownArgument] = "# Guide\n\n- [ ] Write it\n",
+            [PresentPlanTool.MarkdownArgument] = "# Guide\n\n- [ ] Write it\n  Done when: guide.md exists\n",   // a step with its check (2026-10-22: a clean gap pass on one without is refused)
         });
 
     private static List<string> Offered(ChatOptions? options) => options?.Tools?.Cast<AIFunction>().Select(t => t.Name).ToList() ?? [];

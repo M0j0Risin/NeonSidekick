@@ -112,8 +112,23 @@ public sealed class PlanFitTests
     public void NoSteps_IsAProblem()
     {
         Assert.Equal([RalphText.FitNoSteps], PlanFit.Shape("# Hello\n\n## Goal\n\nSay hello.", Limit));
-        Assert.Equal(RalphText.FitNoSteps, PlanFit.StepsProblem("# Hello\n\n## Goal\n\nSay hello."));
+        Assert.Equal([RalphText.FitNoSteps], PlanFit.Read("# Hello\n\n## Goal\n\nSay hello.", null, reviewed: true, Limit).Structural);
         Assert.Equal(RalphText.NoStepsError, PlanFit.StepsRefusal("# Hello\n\n## Goal\n\nSay hello."));
+    }
+
+    [Fact]
+    public void TheReading_SplitsTheStructuralProblems_FromTheLengthAndTheCheck()
+    {
+        // 2026-10-22, the user's call after a review: the structural problems refuse a clean gap pass; the length and the check never.
+        string plan = Plan("- [ ] Build it", pad: 30_000);
+        var reading = PlanFit.Read(plan, null, reviewed: false, Limit);
+
+        Assert.Equal([RalphText.FitOneStep, RalphText.FitNoDoneWhen(1)], reading.Structural);
+        Assert.Equal(RalphText.FitTooLong(plan.Length, Limit), reading.TooLong);
+        Assert.Equal(RalphText.FitNoCheck, reading.NoCheck);
+        Assert.Equal(PlanFit.Problems(plan, null, reviewed: false, Limit), reading.Problems);
+        Assert.Null(PlanFit.TooLong(Limit, Limit));
+        Assert.Equal(RalphText.FitTooLong(Limit + 1, Limit), PlanFit.TooLong(Limit + 1, Limit));
     }
 
     /// <summary>The matrix-rain plan's shape (2026-10-21): steps as boxed headings, their Done when lines at column 0, a fence between.</summary>
@@ -123,18 +138,23 @@ public sealed class PlanFitTests
         "### [ ] Step 2 — Check it\n\nDone when: `python hello_world.py --test` exits 0";
 
     [Fact]
-    public void UnreadSteps_AreNamed()
+    public void HeadingSteps_AreSteps_OnceTheSaveWritesThem()
     {
-        Assert.Equal([RalphText.FitUnreadSteps(2)], PlanFit.Shape(Plan(HeadingSteps), Limit));
-        Assert.Equal(RalphText.NoStepsUnreadError(2), PlanFit.StepsRefusal(Plan(HeadingSteps)));
+        // 2026-10-22, the user's call: the box forms a model drifts into are written as task lines (PlanSteps.Normalized), so no plan saved has them.
+        string saved = PlanDocument.SavedBody("Hello", Plan(HeadingSteps));
+        Assert.Empty(PlanFit.Shape(saved, Limit));
+        Assert.Null(PlanFit.StepsRefusal(saved));
     }
 
     [Fact]
-    public void MixedSteps_NameTheUnread()
+    public void StepsOutsideSteps_AreNamed_AndRefusedOnlyWithNoStepInside()
     {
-        string mixed = "### [ ] Step 1 — Build it\n\n- [ ] Write hello.py\n  Done when: it runs";
-        Assert.Equal([RalphText.FitUnreadSteps(1)], PlanFit.Shape(Plan(mixed), Limit));
-        Assert.Null(PlanFit.StepsRefusal(Plan(mixed)));   // a step runs: only zero steps is refused
+        string stray = "# Hello\n\n## Steps\n\n- [ ] Write hello.py\n  Done when: it runs\n\n## Phase 2\n\n- [ ] Add colors\n  Done when: it is colored";
+        Assert.Equal([RalphText.FitStraySteps(1)], PlanFit.Shape(stray, Limit));
+        Assert.Null(PlanFit.StepsRefusal(stray));   // a step runs: only zero steps is refused
+
+        string none = "# Hello\n\n## Steps\n\nNothing yet.\n\n## Phase 2\n\n- [ ] Add colors\n- [ ] Ship it";
+        Assert.Equal(RalphText.NoStepsStrayError(2), PlanFit.StepsRefusal(none));
     }
 
     [Fact]

@@ -10,7 +10,8 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// The Connect a model page with every server off by default (2026-10-21, the user's call): it stands after the no-server line
 /// when nothing is offered at all, at the start, after a profile switch and after a bare <c>/server</c>; its embedded row switches
-/// <c>Embedded servers enabled</c> on (and back off when nothing was picked), its scan row asks where to look first.
+/// <c>Embedded servers enabled</c> on as a model is put to use (2026-10-22; on for the visit and back off after until then), its scan row asks
+/// where to look first while the scan mode is off.
 /// </summary>
 public partial class ChatScreenTests
 {
@@ -75,7 +76,7 @@ public partial class ChatScreenTests
             string started = BackgroundJobText.DownloadStarted(EmbeddedModelCatalog.Models[0]);
             Assert.Contains(started, output);
             Assert.DoesNotContain(ChatScreen.ConnectTitle, output[output.IndexOf(started, StringComparison.Ordinal)..]);   // the line is the user's
-            Assert.True(_settings.Current.EmbeddedLlmServer);   // the download needs it
+            Assert.False(_settings.Current.EmbeddedLlmServer);   // on once the model is there to use (2026-10-22, the user's call after a review)
             Assert.Empty(embedded.Starts);
         }
         finally

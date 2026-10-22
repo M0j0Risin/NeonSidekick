@@ -235,12 +235,14 @@ public sealed class LlmEndpointProbe
     /// scan with no pre-check. A remote miss leaves no log line of its own (1,500 of them would bury
     /// the log); the scan leaves <see cref="ScanSummary"/> instead.</para>
     ///
-    /// <para>Under <see cref="ScanScope.Disabled"/> nothing is asked — not even <paramref name="extra"/>
-    /// (a bare <c>/server</c> hands it the endpoint in use): the answer is empty, no request, no log line.</para>
+    /// <para>Under <see cref="ScanScope.Disabled"/> nothing is scanned: <paramref name="extra"/> alone is asked (2026-10-22, a review: a bare
+    /// <c>/server</c> hands it the server in use, and with the scan off — the default since 2026-10-21 — nothing was asked, so a typed URL in use
+    /// met "no server set"); with no extra, the answer is empty, no request, no log line.</para>
     /// </summary>
     public async Task<IReadOnlyList<LlmServer>> DiscoverAllAsync(string? apiKey, Uri? extra, ScanScope scope, CancellationToken cancellationToken)
     {
-        if (!LlmScanMode.Scans(scope))
+        bool scans = LlmScanMode.Scans(scope);
+        if (!scans && extra is null)
         {
             return [];
         }
@@ -261,7 +263,7 @@ public sealed class LlmEndpointProbe
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
 
         // The network's candidates sit after the local ones and before the extra: [remoteStart, remoteEnd).
-        int remoteStart = scope == ScanScope.Remote ? 0 : CandidateBaseUrls.Count;
+        int remoteStart = !scans ? 0 : scope == ScanScope.Remote ? 0 : CandidateBaseUrls.Count;
         int remoteEnd = remoteStart + network.Hosts.Count * CandidatePorts.Length;
 
         var found = new List<LlmServer>();

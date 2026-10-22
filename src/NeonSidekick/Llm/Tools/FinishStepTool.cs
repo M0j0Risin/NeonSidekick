@@ -129,7 +129,8 @@ public sealed class FinishStepTool : AIFunction
             foreach (var item in objects)
             {
                 string text = StringOf(item, "text");
-                string doneWhen = StringOf(item, "done_when");
+                // The plan's own line shape sent as the words ("Done when: By hand: …", 2026-10-22, a review): the label dropped, so the check reads as sent.
+                string doneWhen = PlanSteps.WithoutDoneWhenLabel(StringOf(item, "done_when"));
                 if (text.Length == 0 || doneWhen.Length == 0)
                 {
                     return RalphText.SubstepDoneWhenResult;

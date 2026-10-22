@@ -26,8 +26,9 @@ public class PlanCleanPassesTests : IDisposable
     private PlanVerdict _verdict = new(PlanChoice.Refine);
     private readonly PresentPlanTool _tool;
 
-    private const string Plan = "# Guide\n\n## Steps\n- [ ] Write it\n";
-    private const string Revised = "# Guide\n\n## Steps\n- [ ] Write it\n- [ ] Test it\n";
+    // Steps with their Done when lines (2026-10-22): a clean pass on a plan with a structural problem is refused (PlanText.ShapeCleanResult).
+    private const string Plan = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n";
+    private const string Revised = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the guide's check passes\n";
 
     /// <summary>The body's length a pass's result says (2026-10-21, <see cref="PlanText.SizeSentence"/>).</summary>
     private static int BodyChars(string markdown) => PlanGapLoopTests.BodyChars(markdown);
@@ -307,7 +308,7 @@ public class PlanCleanPassesTests : IDisposable
         string off = PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model, AskUser: false));
         string offWeb = PlanText.Directive("R", "p.md", 1, null, new PlanGapState(1, 5, PlanReviewer.Model, AskUser: false), [WebSearchTool.ToolName]);
 
-        Assert.Equal("- Do not ask the user anything during this review, and take no photo or screen capture: settle what research can, and fold the user's later messages into the plan.", PlanText.GapNoAskLine);
+        Assert.Equal("- Do not ask the user anything during this review: settle what research can, and fold the user's later messages into the plan.", PlanText.GapNoAskLine);
         Assert.Equal("A decision only the user can make, write into ## Risks as a plain bullet starting \"Open question (your call):\", never a checkbox; it is not a gap, so leave it out of gaps and list it in minor as \"open question: …\".", PlanText.GapOpenQuestionSentence);
         Assert.Equal("A choice only the user can make (a preference, a trade-off, the scope, anything no file or page can tell you) is theirs: ask them with ask_user, a few questions in one call, rather than picking for them, and close the gap with their answer; settle yourself what research can. " +
             "Ask too about any \"Open question (your call):\" bullet in ## Risks you have not asked about yet. " +
@@ -378,9 +379,9 @@ public class PlanCleanPassesTests : IDisposable
 
         object? first = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: BodyChars(Plan)), first);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, bodyChars: BodyChars(Plan)), first);
         Assert.Equal("No gaps found in this pass of .neon/plans/guide.md (revision 1), 1 of 2 clean passes in a row. Reply with one short line and call no more tools; the next review pass starts by itself."
-            + " " + PlanText.SizeSentence(BodyChars(Plan)) + " The app measured: 1 step has no indented Done when line. Each is a gap; close it in the next pass if you can.", first);
+            + " " + PlanText.SizeSentence(BodyChars(Plan)), first);
         Assert.Empty(_presented);
         Assert.True(loop.PassClean);
         Assert.Equal(Checked, loop.PassChecked);
@@ -404,7 +405,7 @@ public class PlanCleanPassesTests : IDisposable
         await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
         object? again = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, measured: [RalphText.FitNoDoneWhen(1)], bodyChars: BodyChars(Plan)), again);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, bodyChars: BodyChars(Plan)), again);
         Assert.False(loop.Converged);
         Assert.Empty(_presented);
     }
@@ -435,30 +436,45 @@ public class PlanCleanPassesTests : IDisposable
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "Add a test step" }, new[] { "ignored" }, new[] { "fix a typo", "reword the title" }));
 
-        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, 2, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: BodyChars(Revised)), result);
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, 2, bodyChars: BodyChars(Revised)), result);
         Assert.Equal("Revision 2 of .neon/plans/guide.md is saved with 1 gap closed and 2 minor fixes. Reply with one short line and call no more tools; the next review pass starts by itself."
-            + " " + PlanText.SizeSentence(BodyChars(Revised)) + " The app measured: 2 steps have no indented Done when line. Each is a gap; close it in the next pass if you can.", result);
+            + " " + PlanText.SizeSentence(BodyChars(Revised)), result);
         Assert.Equal(1, loop.Closed);
         Assert.Equal(2, loop.MinorFixed);
         Assert.Empty(loop.PassChecked);
         Assert.Equal(["fix a typo", "reword the title"], loop.PassMinor);
     }
 
-    // ── Steps no loop can read (2026-10-21) ─────────────────────────────────
+    // ── A plan's shape (2026-10-21 for steps no loop can read; every structural problem since 2026-10-22, the user's call) ──
 
     private const string HeadingPlan = "# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n";
 
     [Theory]
-    [InlineData(HeadingPlan, 2)]
-    [InlineData("# Guide\n\n## Steps\n\n### [ ] Build it\n\n- [ ] Write it\n  Done when: it runs\n", 1)]
-    [InlineData("# Guide\n\n## Steps\n\n[ ] Write it\n  Done when: it runs\n", 1)]
-    public async Task Tool_ACleanPassOnUnreadSteps_IsRefused_NothingSavedOrCounted(string markdown, int unread)
+    [InlineData(HeadingPlan, "- [ ] Step 2 — Check it")]
+    [InlineData("# Guide\n\n## Steps\n\n[ ] Write it\n  Done when: it runs\n", "- [ ] Write it")]
+    public async Task Tool_ACleanPassOnBoxForms_IsSavedAsTaskLines_AndCounts(string markdown, string written)
     {
         var loop = await PassOneAsync();
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", markdown, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.NoStepsCleanResult(RalphText.FitUnreadSteps(unread)), result);
+        Assert.StartsWith("No gaps found in this pass", (string)result!, StringComparison.Ordinal);
+        Assert.Contains(written, FileText(), StringComparison.Ordinal);
+        Assert.True(loop.PassClean);
+        Assert.Equal(2, _session.Revision);
+    }
+
+    [Theory]
+    [InlineData("# Guide\n\n## Steps\n\n### [ ] Build it\n\n- [ ] Write it\n  Done when: it runs\n", "1 step has no indented Done when line")]
+    [InlineData("# Guide\n\n## Steps\n- [ ] Write it\n", "1 step has no indented Done when line")]
+    [InlineData("# Guide\n\n## Steps\n- [ ] Write it\n  Done when: it runs\n\n## Phase 2\n- [ ] Test it\n  Done when: it passes\n", "1 step is outside ## Steps")]
+    public async Task Tool_ACleanPassOnAStructuralProblem_IsRefused_NothingSavedOrCounted(string markdown, string problem)
+    {
+        var loop = await PassOneAsync();
+
+        object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", markdown, Array.Empty<string>(), Checked));
+
+        Assert.Equal(PlanText.ShapeCleanResult([problem]), result);
         Assert.Equal(0, loop.Presented);
         Assert.Equal(0, loop.CleanStreak);
         Assert.False(loop.PassClean);
@@ -473,19 +489,20 @@ public class PlanCleanPassesTests : IDisposable
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", "# Guide\n\n## Goal\n\nSay hello.\n", Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.NoStepsCleanResult(RalphText.FitNoSteps), result);
+        Assert.Equal(PlanText.ShapeCleanResult([RalphText.FitNoSteps]), result);
         Assert.Equal(1, _session.Revision);
     }
 
     [Fact]
-    public async Task Tool_AGapPassOnUnreadSteps_Saves_AndItsResultNamesThem_ThenTheFixedPlanCounts()
+    public async Task Tool_AGapPass_SaysTheStructuralProblemsAsGaps_ThenTheFixedPlanCounts()
     {
         var loop = await PassOneAsync();
 
-        object? gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", HeadingPlan, new[] { "Split the steps" }));
+        const string Unchecked = "# Guide\n\n## Steps\n\n- [ ] Rewrite it\n- [ ] Check it\n";
+        object? gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Unchecked, new[] { "Split the steps" }));
 
         Assert.Equal(2, _session.Revision);
-        Assert.EndsWith("The app measured: " + RalphText.FitUnreadSteps(2) + ". Each is a gap; close it in the next pass if you can.", (string)gap!);
+        Assert.EndsWith("The app measured: " + RalphText.FitNoDoneWhen(2) + ". Each is a gap; close it in the next pass: no pass is clean while one stands.", (string)gap!);
         NextPass(loop);
 
         const string Fixed = "# Guide\n\n## Steps\n\n- [ ] Rewrite it\n  Done when: python hello_world.py runs\n- [ ] Check it\n  Done when: python hello_world.py --test exits 0\n";
@@ -496,13 +513,31 @@ public class PlanCleanPassesTests : IDisposable
     }
 
     [Fact]
+    public async Task Tool_TheLength_IsSaid_AsNoGap()
+    {
+        // 2026-10-22, the user's call after a review: a plan past what a Ralph pass sends whole (the model's window) is said, and a clean pass counts.
+        var tool = new PresentPlanTool(_session, _files, _time, (plan, _) => Task.FromResult(_verdict), () => 5, () => 2, inlineLimit: () => 40);
+        _session.Enter("Add a guide");
+        await tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan));
+        var loop = _session.StartClosing(PlanReviewer.Model, 5, 2);
+        loop.BeginPass(PlanDocument.Body(FileText()));
+
+        object? clean = await tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
+
+        int chars = BodyChars(Plan);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, bodyChars: chars, tooLong: RalphText.FitTooLong(chars, 40)), clean);
+        Assert.EndsWith(" Also, the plan is " + chars + " characters; a pass sends it whole only up to 40: a shorter plan suits a Ralph loop better, but this alone is not a gap.", (string)clean!);
+        Assert.True(loop.PassClean);
+    }
+
+    [Fact]
     public async Task Tool_OnlyMinorFixes_IsClean_SavesItsRevision_AndTheStreakBuilds()
     {
         var loop = await PassOneAsync();
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, Array.Empty<string>(), Checked, new[] { "reword" }));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1, measured: [RalphText.FitNoDoneWhen(2)], bodyChars: BodyChars(Revised)), result);
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1, bodyChars: BodyChars(Revised)), result);
         Assert.Contains("(revision 2) with 1 minor fix, 1 of 2", (string)result!);
         Assert.Equal(2, _session.Revision);
         Assert.True(loop.PassClean);
