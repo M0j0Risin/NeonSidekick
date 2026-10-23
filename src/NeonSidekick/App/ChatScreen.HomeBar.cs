@@ -133,7 +133,8 @@ internal sealed partial class ChatScreen
             UpdateHomePending(live, now);
             bool stale = live.Status != HaLiveStatus.Live;
             // Each group's chips, a divider only between two of them (2026-10-13); the cache keeps them left, center, right, as the spans count them.
-            List<HomeChip> Chips(IReadOnlyList<string> group) => HomeBar.ShownDividers(group.Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList());
+            // The monitors' 🖥️ only where there is a monitor system (2026-10-23: a profile copied to a Mac keeps it saved, unshown).
+            List<HomeChip> Chips(IReadOnlyList<string> group) => HomeBar.ShownDividers(group.Where(i => _monitors is not null || !HomeBarItems.IsMonitors(i)).Select(i => HomeChips.Build(i, live.Entities, live.Catalog, HomeMarkOf(i), stale, aliases, glyphs, shopping)).ToList());
             var (left, center, right) = (Chips(sides.Left), Chips(sides.Center ?? []), Chips(sides.Right));
             List<HomeChip> chips = [.. left, .. center, .. right];
             row = HomeBar.Render(left, center, right, cells, _homePage);
@@ -665,6 +666,11 @@ internal sealed partial class ChatScreen
             {
                 // The 🛒 chip (later on 2026-10-12): the list's own pane, as /shopping opens it.
                 await HandleShoppingAsync("", sink, spinner: false, cancellationToken).ConfigureAwait(false);
+            }
+            else if (kind == HomeItemKind.Monitors)
+            {
+                // The 🖥️ chip (2026-10-23, the monitors plan): the monitors pane on its Layout tab.
+                await ShowMonitorsAsync(null, sink, cancellationToken).ConfigureAwait(false);
             }
             else if (kind == HomeItemKind.Area)
             {

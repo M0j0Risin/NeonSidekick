@@ -48,6 +48,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop; CPU and memory are the Linux VM's ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). |
 | Event logs: the event-log tools and `/eventlog` | Works on an administrator account | The unified log, crash reports, install.log and `.logarchive` folders; no remote computers or `.evtx` ([Event logs on a Mac](TOOLS.md#event-logs-on-a-mac)). |
 | Services and scheduled tasks: their tools, `/services`, `/tasks` | Not available | A Mac has neither. `/tools`, the toolbar and the help leave them out, and the commands say there's nothing to read. |
+| Monitors: their tools, `/monitor`, the home bar's 🖥️, `--monitor-check` | Not available | Windows only. `/tools` and the help leave them out; a profile's 🖥️ stays saved but isn't drawn. |
 | Active Directory: its tools, `/ad`, `--ad-check` | Works | Read-only, Kerberos only; `runas` takes `name@REALM`, and there's no built-in `current` domain ([Active Directory on a Mac](TOOLS.md#active-directory-on-a-mac)). |
 | Network tools and `/net` | Works | `net_certs` reads only `my` (your login keychain) and `root` (the system's trust). |
 | Docker servers | Not available | Docker on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |

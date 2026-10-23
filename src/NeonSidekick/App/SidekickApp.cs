@@ -97,6 +97,7 @@ public sealed partial class SidekickApp
     private readonly Services.IServiceSystem? _serviceSystem;
     private readonly Tasks.ITaskSystem? _taskSystem;
     private readonly ActiveDirectory.IDirectorySystem? _directorySystem;
+    private readonly Monitors.IMonitorSystem? _monitorSystem;
     private readonly Func<string?> _joinedDomain;
     private readonly bool _headlessNarrow;
     private readonly Plans.IRalphVerifier? _ralphVerifier;
@@ -261,8 +262,11 @@ public sealed partial class SidekickApp
         ActiveDirectory.IDirectorySystem? directorySystem = null,
         Func<string?>? joinedDomain = null,
         bool headlessNarrow = false,
-        Plans.IRalphVerifier? ralphVerifier = null)
+        Plans.IRalphVerifier? ralphVerifier = null,
+        Monitors.IMonitorSystem? monitorSystem = null)
     {
+        // The monitors (2026-10-23, the monitors plan): WindowsMonitorSystem in the app on Windows, a fake in tests, none elsewhere.
+        _monitorSystem = monitorSystem;
         // The Ralph loop's checks (2026-10-18): /cmd's launch for real, a fake in tests; the screen and headless alike.
         _ralphVerifier = ralphVerifier;
         // Headless notices on Terminal.app's main screen, not piped (2026-10-17): a space after a one-cell selector sequence (the ❤️ line).
@@ -587,6 +591,12 @@ public sealed partial class SidekickApp
             // The live proof on the published exe (2026-10-02): reads only, over the pipe the settings name.
             using var dockerCheck = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time, _environment.System);
             return await DockerCheck.RunAsync(_console, dockerCheck, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (options.MonitorCheck)
+        {
+            // The live proof on the published exe (2026-10-23, the monitors plan): this PC's monitors read, nothing changed.
+            return await MonitorCheck.RunAsync(_console, _monitorSystem, _time, cancellationToken).ConfigureAwait(false);
         }
 
         if (options.CameraCheck)
@@ -916,6 +926,8 @@ public sealed partial class SidekickApp
             localTicked: () => EventLog.MacLogAccess.Ticks(EffectiveSettings.EventLogComputersOffered));   // local unticked: archives only (2026-10-20)
         var eventLogTools = _unifiedLog is not null ? ChatScreen.MacLogTools(macLog, () => EffectiveSettings) : ChatScreen.EventLogTools(eventLog, () => EffectiveSettings);
         // The admin families (2026-10-15, the admin-tools plan): every read headless too, never a change (no pane to ask on); one scan budget, reset each turn.
+        // The monitors (2026-10-23, the monitors plan): /monitor over the bare system, no board and no clock; no tools headless (no pane to ask on).
+        var monitorActions = _monitorSystem is null ? null : new Monitors.MonitorActions(new Monitors.MonitorCalls(_monitorSystem, _time), time: _time);
         var network = new Network.NetworkAccess(() => EffectiveSettings, _pinger, _time);
         var networkBudget = new Network.NetworkBudget();
         var networkTools = ChatScreen.NetworkTools(network, networkBudget);
@@ -1387,6 +1399,18 @@ public sealed partial class SidekickApp
                     foreach (string eventLogLine in eventLogResult.Lines)
                     {
                         await HeadlessLineAsync((eventLogResult.Failed ? "[error] " : "") + eventLogLine).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
+                // /monitor (2026-10-23, the monitors plan): ahead of the server check too — no LLM needed; list and the changes, unasked.
+                if (SlashCommands.Parse(text) is (SlashCommand.Monitor, var monitorArgs))
+                {
+                    var (monitorLines, monitorFailed) = await MonitorLinesAsync(monitorActions, EffectiveSettings, monitorArgs, cancellationToken).ConfigureAwait(false);
+                    foreach (string monitorLine in monitorLines)
+                    {
+                        await HeadlessLineAsync((monitorFailed ? "[error] " : "") + monitorLine).ConfigureAwait(false);
                     }
 
                     continue;
@@ -2976,7 +3000,7 @@ public sealed partial class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

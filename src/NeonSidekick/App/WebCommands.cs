@@ -79,7 +79,7 @@ public static class WebCommands
         SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Remember, SlashCommand.Memory,
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
-        SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
+        SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
     };
@@ -176,6 +176,8 @@ public static class WebCommands
             SlashCommand.Browser => BrowserCommand.Parse(args).Verb is BrowserVerb.Save or BrowserVerb.Unsave ? WebCommandVerdict.Run : Pane(word, "/browser save [<url> [<name>]]|unsave <n>"),
             SlashCommand.Camera => Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List ? WebCommandVerdict.List : Pane(word, "/camera list"),
             SlashCommand.Screen => Is(text, "list") ? WebCommandVerdict.List : Pane(word, "/screen list"),
+            // 2026-10-23, the monitors plan: the list as a card; the pane and every change are the PC's (a switch away could take the PC's own screen).
+            SlashCommand.Monitor => Is(text, Monitors.MonitorCommand.ListWord) ? WebCommandVerdict.List : Pane(word, Monitors.MonitorCommand.Word + " " + Monitors.MonitorCommand.ListWord),
             SlashCommand.Tree => settings.FileTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "File tools")),
             SlashCommand.Vault => settings.ObsidianTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "Obsidian tools")),
             SlashCommand.Process => text.Length == 0 ? WebCommandVerdict.List : Pane(word, "/process"),

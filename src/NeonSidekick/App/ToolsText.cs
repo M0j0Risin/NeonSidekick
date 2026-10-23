@@ -40,7 +40,7 @@ public static class ToolsText
         ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.EventLog,
         ToolbarItems.Network, ToolbarItems.Services, ToolbarItems.Tasks, ToolbarItems.Directory, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
-        ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord, TimersSwitchWord, ClockSwitchWord, HelpSwitchWord,
+        ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord, TimersSwitchWord, ClockSwitchWord, HelpSwitchWord, MonitorsSwitchWord,
     ];
 
     /// <summary>
@@ -63,7 +63,7 @@ public static class ToolsText
     /// <see cref="WindowsOnlyMenus"/>' switches (<c>services</c>, <c>tasks</c>), whose pages a Mac never shows. Pure.
     /// </summary>
     public static string[] SwitchWordsFor(bool windows) =>
-        windows ? [.. SwitchWords] : [.. SwitchWords.Where(word => word is not (ToolbarItems.Services or ToolbarItems.Tasks))];
+        windows ? [.. SwitchWords] : [.. SwitchWords.Where(word => word is not (ToolbarItems.Services or ToolbarItems.Tasks or MonitorsSwitchWord))];
 
     /// <summary>The words <c>/tools</c> takes here (<see cref="SwitchWordsFor"/>): its completion and <see cref="SwitchUsageError"/>'s list.</summary>
     public static readonly string[] SwitchWordsHere = SwitchWordsFor(OperatingSystem.IsWindows());
@@ -105,6 +105,7 @@ public static class ToolsText
         TimersSwitchWord => SettingsField.TimerTools,   // later on 2026-10-15, the timer tools' switch
         ClockSwitchWord => SettingsField.ClockTools,   // 2026-10-18, the clock tools' switch
         HelpSwitchWord => SettingsField.HelpTools,   // 2026-10-18, neon_help's switch
+        MonitorsSwitchWord => SettingsField.MonitorTools,   // 2026-10-23, the monitors plan
         _ => null,
     };
 
@@ -194,6 +195,12 @@ public static class ToolsText
     /// <summary>The clock tools' menu and group (2026-10-18, the user's ask): on Core after Shell, before Timers; the Offered group's heading too, "Clock" as it was. Pinned.</summary>
     public const string ClockMenuTitle = "Clock";
 
+    /// <summary>The monitors' menu and group (2026-10-23, the monitors plan): on Home after Shopping; Windows only (<see cref="WindowsOnlyMenus"/>), so a Mac's Home keeps HomeAssistant and Shopping. Pinned.</summary>
+    public const string MonitorsMenuTitle = "Monitors";
+
+    /// <summary><c>/tools monitors</c>' word (2026-10-23): the Monitor tools switch; no toolbar item, as <see cref="ShoppingSwitchWord"/>; Windows only. Pinned.</summary>
+    public const string MonitorsSwitchWord = "monitors";
+
     /// <summary>The app's manual's menu (2026-10-18, the user's ask): on Core after Ask, before Options; the Offered group's heading is <see cref="Help.HelpText.GroupTitle"/>, the same word. Pinned.</summary>
     public const string HelpMenuTitle = "Help";
     /// <summary><c>Git</c> until 2026-09-21, when the user asked for <c>Git (native)</c> (the in-process LibGit2Sharp tools as against git through the shell), and <c>Git</c> again since 2026-09-29, the user's call: the tab and the Offered heading, the rows keep their <c>Git native …</c> labels. <c>GitLib</c> since 2026-09-30 (the user's ask), the tab, the heading, the rows and the tools' names (<c>gitlib_status</c> …) alike.</summary>
@@ -281,14 +288,14 @@ public static class ToolsText
     /// <see cref="HomeTabTitle"/>. "Integrations" until then (the user's pick: it no longer held every integration). Pinned.</summary>
     public const string AppsTabTitle = "Apps";
 
-    /// <summary>The tab that holds the household's menus, the strip's last after Devices (2026-10-11, the user's ask): HomeAssistant (off Integrations) and Shopping (off Core). Pinned.</summary>
+    /// <summary>The tab that holds the household's menus, the strip's last after Devices (2026-10-11, the user's ask): HomeAssistant (off Integrations) and Shopping (off Core); Monitors after Shopping since 2026-10-23 (the monitors plan, Windows only). Pinned.</summary>
     public const string HomeTabTitle = "Home";
 
     /// <summary>
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -304,7 +311,8 @@ public static class ToolsText
     /// the last, HomeAssistant and Shopping on it, and Integrations is Apps: Offered, Core, Files, Apps, Databases, Devices, Home. Since 2026-10-15 (the admin-tools
     /// plan) Admin after Apps holds EventLog (off Apps), Services, Tasks and Directory, and Core holds Network after Web. Since 2026-10-16 (the user's order) Core is Web, Shell, Timers, Ask, Options (Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18),
     /// Admin Network, EventLog, Services, Tasks, Directory, and Devices Camera, Screen, Print. Since 2026-10-17 (the user's order) Obsidian is
-    /// Apps' last menu, after YouTube (Files' last until then): Files File, Image, UNC, GitLib; Apps Docker, ComfyUI, YouTube, Obsidian.</summary>
+    /// Apps' last menu, after YouTube (Files' last until then): Files File, Image, UNC, GitLib; Apps Docker, ComfyUI, YouTube, Obsidian. Since
+    /// 2026-10-23 (the monitors plan) Home is HomeAssistant, Shopping, Monitors (Monitors Windows only).</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, AdminTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
@@ -312,14 +320,14 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21, 30]];
 
     /// <summary>
     /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or
-    /// Task Scheduler, so <c>/tools</c>, the toolbar and the help leave their menus, groups and switches out there (<see cref="MenuHere(int, bool)"/>,
+    /// Task Scheduler — and Monitors since 2026-10-23 (the CCD API and dxva2), so <c>/tools</c>, the toolbar and the help leave their menus, groups and switches out there (<see cref="MenuHere(int, bool)"/>,
     /// <see cref="ToolbarItems.IsHere(string, bool)"/>). <see cref="TabMenus"/> keeps the whole layout. Pinned.
     /// </summary>
-    public static readonly IReadOnlySet<string> WindowsOnlyMenus = new HashSet<string>(StringComparer.Ordinal) { ServicesMenuTitle, TasksMenuTitle };
+    public static readonly IReadOnlySet<string> WindowsOnlyMenus = new HashSet<string>(StringComparer.Ordinal) { ServicesMenuTitle, TasksMenuTitle, MonitorsMenuTitle };
 
     /// <summary>Whether the menu titled <paramref name="title"/> shows on a system (<paramref name="windows"/>): every one on Windows, all but <see cref="WindowsOnlyMenus"/> elsewhere. Pure.</summary>
     public static bool MenuHere(string title, bool windows) => windows || !WindowsOnlyMenus.Contains(title);
@@ -465,6 +473,9 @@ public static class ToolsText
     public const string NoCameraReason = "there is no camera support";
     public const string NoScreenReason = "there is no screen capture support";
     public const string NoPaneReason = "no pane";
+
+    /// <summary>The Monitors group's reason while there is no monitor system (2026-10-23): a Mac, another OS, a test without one. Pinned.</summary>
+    public const string NoMonitorReason = "monitor control needs Windows";
     public const string BlindReason = "the model reads no pictures";
     public const string NoVaultReason = "no Obsidian vault is set";
     public const string NoComfyUrlReason = "no ComfyUI URL is set";

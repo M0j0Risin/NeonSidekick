@@ -748,7 +748,8 @@ public static class SystemPromptSummary
         bool timersEnabled = true,
         IReadOnlyList<AdminGroupSpec>? admin = null,
         bool clockEnabled = true,
-        bool helpEnabled = true)
+        bool helpEnabled = true,
+        AdminGroupSpec? monitors = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -915,6 +916,13 @@ public static class SystemPromptSummary
             // The shopping list (2026-10-11): after YouTube; offered while Shopping tools is on.
             string shoppingNote = !shoppingEnabled ? NotOffered(ShoppingOffSuffix) : standing;
             groups.Add(Group(ToolsText.ShoppingMenuTitle, shopping, shoppingNote, shoppingEnabled && toolsEnabled, SettingsField.ShoppingTools, disabled));
+        }
+
+        if (monitors is { } screens)
+        {
+            // The monitors (2026-10-23, the monitors plan): right after the shopping list, as on /tools › Home; offered while Monitor tools is on, on Windows, with a pane.
+            string monitorsNote = !screens.Enabled ? NotOffered(screens.OffReason) : standing;
+            groups.Add(Group(screens.Title, screens.Tools, monitorsNote, screens.Enabled && toolsEnabled, screens.Switch, disabled));
         }
 
         if (advisors is not null)

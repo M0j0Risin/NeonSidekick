@@ -274,6 +274,9 @@ internal sealed partial class ChatScreen
         TasksEnabled = TasksOffered(effective, _tasks),
         Directory = _directoryTools,
         DirectoryEnabled = DirectoryOffered(effective, _directory),
+        // The monitors (2026-10-23, the monitors plan): Monitor tools, a monitor system, the pane.
+        Monitors = _monitorTools,
+        MonitorsEnabled = MonitorOffered(effective),
     };
 
     /// <summary>

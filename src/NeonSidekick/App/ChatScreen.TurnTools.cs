@@ -97,6 +97,10 @@ internal sealed record TurnToolInputs
     /// <summary>The directory tools (2026-10-15): offered while <see cref="DirectoryEnabled"/> (<c>Directory tools</c>, Windows, a domain ticked).</summary>
     public IReadOnlyList<AIFunction>? Directory { get; init; }
     public bool DirectoryEnabled { get; init; }
+
+    /// <summary>The monitor tools (2026-10-23, the monitors plan): offered while <see cref="MonitorsEnabled"/> (<c>Monitor tools</c>, Windows, a pane).</summary>
+    public IReadOnlyList<AIFunction>? Monitors { get; init; }
+    public bool MonitorsEnabled { get; init; }
     public IReadOnlySet<string>? Disabled { get; init; }
     public PlanTurn? Plan { get; init; }
 
@@ -155,6 +159,7 @@ internal sealed partial class ChatScreen
         var serviceTools = inputs.Services;
         var taskTools = inputs.Tasks;
         var directoryTools = inputs.Directory;
+        var monitorTools = inputs.Monitors;
         var comfyTools = inputs.Comfy;
         var homeTools = inputs.Home;
         var printTools = inputs.Print;
@@ -176,13 +181,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -207,6 +212,7 @@ internal sealed partial class ChatScreen
             serviceTools = serviceTools is null ? null : Without(serviceTools, disabledTools);
             taskTools = taskTools is null ? null : Without(taskTools, disabledTools);
             directoryTools = directoryTools is null ? null : Without(directoryTools, disabledTools);
+            monitorTools = monitorTools is null ? null : Without(monitorTools, disabledTools);
             comfyTools = comfyTools is null ? null : Without(comfyTools, disabledTools);
             homeTools = homeTools is null ? null : Without(homeTools, disabledTools);
             printTools = printTools is null ? null : Without(printTools, disabledTools);
@@ -316,6 +322,13 @@ internal sealed partial class ChatScreen
         {
             tools = [.. tools, .. directoryTools];
             admin |= AdminRules.Directory;
+        }
+
+        // The monitor tools after the directory's (2026-10-23, the monitors plan): Monitor tools on (Windows, a pane); their sentence rides the admin flags.
+        if (inputs.MonitorsEnabled && monitorTools is { Count: > 0 })
+        {
+            tools = [.. tools, .. monitorTools];
+            admin |= AdminRules.Monitors;
         }
 
         // The image tools after the SQL tools (2026-09-24): ComfyUI tools, a URL and a workflow are the group's switch; no rule — the description carries the workflows and the prompt styles.

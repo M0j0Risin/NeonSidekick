@@ -679,6 +679,13 @@ public sealed class Assistant
     public const string DirectoryLockoutRule =
         "To find where a locked account's bad passwords came from, search the Security log for event 4740 on the PDC emulator that " + NeonSidekick.Llm.Tools.AdUserTool.ToolName + " names.";
 
+    /// <summary>
+    /// The sentence the default rules gain while the monitor tools are offered (2026-10-23, the monitors plan): switching a monitor's input away from
+    /// this PC may drop it from this PC, and the model says so before it asks. Pinned.
+    /// </summary>
+    public const string MonitorRule =
+        "Switching a monitor's input away from this PC may take it off this PC's desktop until its own buttons or the other machine bring it back; say so when you switch one.";
+
     /// <summary>The admin families' sentences for <paramref name="admin"/>, each after a space; the pointers into the event logs only with <paramref name="eventLog"/>.</summary>
     public static string AdminTail(AdminRules admin, bool eventLog)
     {
@@ -722,6 +729,11 @@ public sealed class Assistant
             {
                 text.Append(' ').Append(DirectoryLockoutRule);
             }
+        }
+
+        if ((admin & AdminRules.Monitors) != 0)
+        {
+            text.Append(' ').Append(MonitorRule);
         }
 
         return text.ToString();

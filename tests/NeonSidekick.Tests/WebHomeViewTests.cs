@@ -43,7 +43,7 @@ public sealed class WebHomeViewTests
     [Fact]
     public void Items_AreTheBarsOrItsLast_WithoutTheShoppingChip()
     {
-        var shown = new AppSettingsData { HomeBarItems = ["area:den", "shopping:list", "entity:lock.front"] };
+        var shown = new AppSettingsData { HomeBarItems = ["area:den", "shopping:list", "monitors:all", "entity:lock.front"] };   // the 🖥️ left out too (2026-10-23)
         Assert.Equal(["area:den", "entity:lock.front"], WebHomeView.Items(shown));
 
         var hidden = new AppSettingsData { HomeBarItems = [], HomeBarLastItems = ["entity:light.den_lamp", "shopping:list"] };

@@ -96,6 +96,15 @@ public static class HomeChips
     /// <summary>The shopping list's chip (later on 2026-10-12): the toolbar's cart.</summary>
     public const string ShoppingGlyph = ChatScreen.ShoppingToolGlyph;
 
+    /// <summary>
+    /// The monitors' chip (2026-10-23, the monitors plan): 🖥️, the one default glyph outside <see cref="Glyphs"/>, whose test refuses a variation
+    /// selector — 🖥 is text-default, so it needs U+FE0F to draw as an emoji. Two cells by <see cref="TextCells.Width"/> with
+    /// <c>NarrowSelectorSequences</c> off (Windows Terminal; the bar measures with <see cref="TextCells"/>, never Spectre's count, which says
+    /// one). The item is Windows only, so Terminal.app's one-cell drawing never meets it (a user's <c>/homebar emoji</c> could already pick
+    /// such a glyph). 📺 was taken: YouTube's toolbar item and Home Assistant's TV.
+    /// </summary>
+    public const string MonitorsGlyph = "🖥️";
+
     /// <summary>Every glyph, for the width test.</summary>
     public static readonly string[] Glyphs =
     [
@@ -142,6 +151,13 @@ public static class HomeChips
             return HomeBarItems.GlyphOf(glyphs, reference) is { } own ? cart with { Glyph = own } : cart;
         }
 
+        if (kind == HomeItemKind.Monitors)
+        {
+            // The glyph alone, always (2026-10-23, the user's call): never marked, never dimmed for a stale feed (not Home Assistant's).
+            var screens = MonitorsChip(HomeBarItems.Monitors);
+            return HomeBarItems.GlyphOf(glyphs, reference) is { } own ? screens with { Glyph = own } : screens;
+        }
+
         var chip = kind == HomeItemKind.Area
             ? AreaChip(reference, id, entities, catalog)
             : entities.TryGetValue(id, out var entity) ? EntityChip(reference, entity, catalog) : Waiting(reference, GlyphFor(id, null), catalog?.NameOf(id) ?? id, mark);
@@ -172,7 +188,7 @@ public static class HomeChips
             return ToggleGlyph;
         }
 
-        return kind == HomeItemKind.Area ? AreaGlyph : kind == HomeItemKind.Shopping ? ShoppingGlyph : GlyphFor(id, entity ?? (catalog?.State(id) is { } state ? HaLiveEntity.From(state) : null));
+        return kind == HomeItemKind.Area ? AreaGlyph : kind == HomeItemKind.Shopping ? ShoppingGlyph : kind == HomeItemKind.Monitors ? MonitorsGlyph : GlyphFor(id, entity ?? (catalog?.State(id) is { } state ? HaLiveEntity.From(state) : null));
     }
 
     /// <summary>
@@ -192,6 +208,14 @@ public static class HomeChips
         return new HomeChip(reference, ShoppingGlyph, name, "", count.ToString(CultureInfo.InvariantCulture), count > 0 ? Lit(Theme.Secondary) : Off,
             HomeChipAction.Detail, null, HomeBarText.ShoppingNote(count), Label: "");
     }
+
+    /// <summary>
+    /// The monitors' chip (2026-10-23, the monitors plan): <see cref="MonitorsGlyph"/> alone (<see cref="HomeChip.Bare"/>, no label, no value), one
+    /// style, never a mark; nothing on it changes with the monitors, so it never needs a redraw of its own. A double-click or a right-click
+    /// opens the monitors pane (<see cref="HomeChipAction.Detail"/>); a single click flashes a fixed note, no DDC/CI read. Pure.
+    /// </summary>
+    public static HomeChip MonitorsChip(string reference) =>
+        new(reference, MonitorsGlyph, HomeBarText.MonitorsName, "", "", Lit(Theme.Secondary), HomeChipAction.Detail, null, HomeBarText.MonitorsNote, Label: "", Bare: true);
 
     private static HomeChip Waiting(string reference, string glyph, string name, HomeChipMark mark) =>
         new(reference, glyph, name, ShortOf(name, null), "", Theme.DimText, HomeChipAction.None, null, HomeBarText.NotYet(name), mark);

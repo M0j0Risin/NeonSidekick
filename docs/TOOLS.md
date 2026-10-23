@@ -15,7 +15,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
 - [Devices](#devices): [Camera](#camera), [Screen](#screen), [Printing](#printing)
-- [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
+- [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list), [Monitors](#monitors)
 - [Set elsewhere](#set-elsewhere): [Memory](#memory), [Skills](#skills), [Sessions](#sessions), [Advisors](#advisors), [Plan](#plan), [Ralph loop](#ralph-loop)
 - [MCP servers](#mcp-servers)
 - [Known issues](#known-issues)
@@ -939,6 +939,21 @@ Under *Shopping tools*. One list per profile and any number of stores, in the pr
 | `shopping_stores` | `store?` | The stores, the active one marked, and one store's layout. |
 | `shopping_layout` | `action, name, to?, section?, walk?, notes?, store?` | Adds, activates or renames a store; changes its sections, locations and walking order. |
 | `shopping_recent` | `limit?` | What you bought before and isn't on the list, most often first. |
+
+### Monitors
+
+Under *Monitor tools*. Windows only ([MAC.md](MAC.md#what-works)): the layout through Windows, each monitor's input over DDC/CI.
+
+* **Changes ask first,** on the pane (and the Web UI's page): the question names the monitor and the input or layout. Never offered headless or without a pane.
+* **Switching away may drop the screen:** a monitor showing another source can leave this PC's desktop until its own buttons or the other machine bring it back.
+* **The last screen:** the question warns when no other monitor would still show this PC, by the app's own record of what it switched.
+* **Hardware text** (names, the capabilities string) is cleaned of hidden characters; the raw capabilities string never reaches the model.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `monitor_list` | — | The layout, then each monitor: number, name, connector, on the desktop or not, primary, mode, current input and inputs. |
+| `monitor_input` | `monitor, input` | Switches a monitor's input: a name, a standard name (`HDMI-1`) or a code in hex. A code the monitor doesn't list is still sent, and the result says so. |
+| `monitor_layout` | `action, monitor?` | `extend`, `duplicate`, `only` or `primary`; the last two need `monitor`. |
 
 ## Set elsewhere
 

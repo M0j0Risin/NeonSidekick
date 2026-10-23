@@ -152,6 +152,9 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/toolbar edit`, `/perfbar edit`, *Status bar* | see [Bar checklists](#bar-checklists) |
 | `/homebar edit` | **On the bar**: see [Bar checklists](#bar-checklists); Enter for rename and emoji · other tabs: Space or Enter adds or removes, type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |
+| **Monitors** | |
+| The monitors pane (`/monitor`, the 🖥️ chip) | ←/→ a monitor's tab · Enter switches an input or applies a layout row · Esc closes |
+| A monitor's *Input names…* | Enter renames · `h` hides or shows · Delete clears the name · Esc back to the monitor's tab |
 
 ### The event log pane
 
@@ -171,6 +174,16 @@ Windows only.
 * **`/tasks`:** the scheduled tasks (path, state, last run and result, next run); Windows' own under `\Microsoft\` stay hidden until `w`.
 * **Enter** opens one whole, with the actions its computer allows as buttons. Each asks first; a refusal (protected, a driver, privileged, not in `control`) says why.
 * Times are the computer's own clock.
+
+### The monitors pane
+
+Windows only. `/monitor` or a right-click on the home bar's 🖥️.
+
+* **Layout tab:** Extend all, Duplicate, Only *n* and Make *n* primary; a row that would change nothing is left out. With one monitor there's no Layout tab.
+* **A tab per monitor:** its inputs (● current, ↩ the one the app switched it away from), then Only this monitor, Make primary, *Enter a code…* and *Input names…*.
+* **Numbers** are the screen capture's (`monitor:2`). A monitor off the desktop is dim and offers only the rows that bring it back.
+* **Asks first** when a switch would leave no monitor showing this PC, or a layout row affects one the app switched away. Name this PC's input ("This PC") to spot it later.
+* **No inputs?** Many monitors ship with DDC/CI off in their own on-screen menu (look for "DDC/CI"); a duplicated monitor's inputs can't be told apart until Extend.
 
 ### Folder picker
 
@@ -333,11 +346,12 @@ Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **V
 
 ## The home bar
 
-Chips for Home Assistant rooms and devices and the shopping list (*Home bar*); see [TOOLS.md](TOOLS.md#home-assistant). `/homebar` hides or shows it.
+Chips for Home Assistant rooms and devices, the shopping list and this PC's monitors (*Home bar*); see [TOOLS.md](TOOLS.md#home-assistant). `/homebar` hides or shows it.
 
 * **Chips:** a light wears its own color, a room counts its lights on (`2/5`), sensors show values, thermostats current → target, players ▸ or ‖. Off is dim.
 * **Alerts:** an open door, a leak, a jammed lock or a low battery turns amber or red. Every chip goes dim while Home Assistant is unreachable.
 * **🛒 n** counts the shopping lines still to get; it needs no Home Assistant and opens `/shopping`.
+* **🖥️** (Windows only) stands for this PC's monitors, the glyph alone. A double-click or right-click opens [the monitors pane](#the-monitors-pane).
 * **Clicks:** a click shows a chip's state. A double-click acts: it toggles a light, switch or fan, turns a room's lights off (or on), runs a scene, plays or pauses, or moves a cover.
 * **A right-click** opens the chip's pane of actions (a room's: its devices). A chip shows `…` until a change is reported, `!` after six seconds without.
 * **Asks first:** unlocking, opening a garage, gate or door, and disarming an alarm. An alarm that wants a code is disarmed in Home Assistant itself.
@@ -350,8 +364,8 @@ Chips for Home Assistant rooms and devices and the shopping list (*Home bar*); s
   * **Rename on the bar…**: an alias the chip shows ("PC"; blank shows the emoji alone). **Default name** puts Home Assistant's back; panes keep the real name.
   * **Change emoji…**: the [emoji grid](#the-avatar-picker); **Default emoji** or 🚫 puts the chip's own back. A chosen emoji stays fixed, whatever the state. `/homebar emoji <item> = <emoji>` does the same.
   * **+ Add divider** (the last row): a dim `│`, shown only between two chips of its group.
-* **The other tabs:** **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms), **Zones** (people in each), **Other** and **Shopping**.
-* There, Space or Enter adds or removes, and typing filters by name, id, room or label. Without Home Assistant only **On the bar** and **Shopping** show.
+* **The other tabs:** **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms), **Zones** (people in each), **Other**, **Monitors** (Windows only) and **Shopping**.
+* There, Space or Enter adds or removes, and typing filters by name, id, room or label. Without Home Assistant only **On the bar**, **Monitors** and **Shopping** show.
 
 ## Bar checklists
 

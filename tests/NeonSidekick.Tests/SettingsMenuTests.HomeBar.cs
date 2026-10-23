@@ -229,6 +229,51 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The monitors' tab (2026-10-23, the monitors plan): only with the screen's hook, before Shopping, its row's note the monitors connected;
+    /// Space puts the 🖥️ on the bar, and its actions page offers the emoji and no rename.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_TheMonitorsTab_PutsTheItemOnTheBar_AndItHasNoRename()
+    {
+        _console.Profile.Width = 160;
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => throw new InvalidOperationException("never read");
+        menu.HomeMonitors = _ => Task.FromResult<IReadOnlyList<string>>(["1 LG ULTRAWIDE", "2 XG27UQDMS"]);
+        Push(Keys.Right, Keys.Char(' '));           // Monitors: Space puts the 🖥️ on the bar
+        Push(Keys.Left, Keys.Enter, Keys.Escape);    // its actions, then back
+        Push(Keys.Escape);
+
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Equal([HomeBarItems.Monitors], _settings.Current.HomeBarItems);
+        string strip = Output.Split('\n').First(l => l.Contains(HomeBarText.MonitorsTab, StringComparison.Ordinal) && l.Contains(HomeBarText.ShoppingTab, StringComparison.Ordinal));
+        Assert.True(strip.IndexOf(HomeBarText.MonitorsTab, StringComparison.Ordinal) < strip.IndexOf(HomeBarText.ShoppingTab, StringComparison.Ordinal), strip);
+        Assert.Contains("[x] " + HomeChips.MonitorsGlyph + " " + HomeBarText.MonitorsName, Output);
+        Assert.Contains("1 LG ULTRAWIDE, 2 XG27UQDMS", Output);
+        Assert.Contains(" 1. " + HomeChips.MonitorsGlyph + " " + HomeBarText.MonitorsName + "  " + HomeBarText.MonitorsWhere, Output);
+        Assert.Contains(HomeBarText.EmojiItem, Output);
+        Assert.DoesNotContain(HomeBarText.RenameItem, Output);
+        pane.Dispose();
+    }
+
+    /// <summary>Without the hook (no monitor system: a Mac, a test without one) there is no Monitors tab, and a saved 🖥️ is marked not on this PC.</summary>
+    [Fact]
+    public async Task ThePicker_WithoutAMonitorSystem_HasNoMonitorsTab_AndMarksASavedItem()
+    {
+        _console.Profile.Width = 160;
+        _settings.Update(d => d.HomeBarItems = [HomeBarItems.Monitors]);
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => throw new InvalidOperationException("never read");
+        Push(Keys.Escape);
+
+        await menu.EditHomeBarAsync(own: true, CancellationToken.None);
+
+        Assert.DoesNotContain(" " + HomeBarText.MonitorsTab + " ", Output.Split('\n').First(l => l.Contains(HomeBarText.ShoppingTab, StringComparison.Ordinal)));
+        Assert.Contains(HomeBarText.MonitorsNotHere, Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task ThePicker_WithHomeAssistant_PutsShoppingLast()
     {

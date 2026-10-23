@@ -2023,6 +2023,29 @@ public sealed class AppSettingsData
     public bool ShoppingTools { get; set; }
 
     /// <summary>
+    /// Whether a turn offers the model the monitors' tools (2026-10-23, the monitors plan): <c>monitor_list</c>, <c>monitor_input</c> (switch a
+    /// monitor's input over DDC/CI) and <c>monitor_layout</c> (extend, duplicate, only one monitor, make one primary); both changes ask first.
+    /// Windows only, and only with a pane to ask on (never headless). The first row of <c>/tools</c> › Home › Monitors. Read at each turn.
+    /// Off by default, as every tool group. No variable.
+    /// </summary>
+    public bool MonitorTools { get; set; }
+
+    /// <summary>
+    /// The names the user gave a monitor's inputs (2026-10-23, the monitors plan: "Work laptop" for HDMI-1), <c>&lt;key&gt;/&lt;hex&gt;</c> →
+    /// name, the key the monitor's model and port (<see cref="Monitors.MonitorKey"/>, <c>ausaa34-uid4355/11</c>). Set from a monitor's
+    /// <c>Input names…</c> on the 🖥️ pane; trimmed, at most 24 characters, never a name another of its inputs has. Kept by a plain
+    /// <c>/profile reset</c> (it describes this PC's cabling). Null or empty is none. No settings row, no variable.
+    /// </summary>
+    public Dictionary<string, string>? MonitorInputNames { get; set; }
+
+    /// <summary>
+    /// A monitor's inputs the user hid from its tab (2026-10-23, the monitors plan), as <see cref="MonitorInputNames"/> keys them; a hidden input
+    /// still shows while it is the current one and still answers by name or code. Set from <c>Input names…</c> (<c>h</c>). Kept by a plain
+    /// <c>/profile reset</c>. Null or empty is none. No settings row, no variable.
+    /// </summary>
+    public List<string>? MonitorInputsHidden { get; set; }
+
+    /// <summary>
     /// The quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none (2026-10-04, the user's pick, with the
     /// image tools): <see cref="MinImageEditQuality"/> to <see cref="MaxImageEditQuality"/>; also where <c>max_kb</c> starts its search
     /// down. The tool clamps a hand-edited value. Read at each call, no reconnect. No variable.

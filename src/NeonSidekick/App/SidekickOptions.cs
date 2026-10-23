@@ -77,6 +77,13 @@ public sealed record SidekickOptions(
     public const string AdCheckFlag = "--ad-check";
     public const string DockerCheckFlag = "--docker-check";
     public const string CameraCheckFlag = "--camera-check";
+    public const string MonitorCheckFlag = "--monitor-check";
+
+    /// <summary>
+    /// <c>--monitor-check</c> (2026-10-23, the monitors plan): run <see cref="App.MonitorCheck"/> on this PC's monitors and exit 0/1 — the CCD
+    /// and DDC/CI layers' proof on the published binary. Read-only: no input switched, no layout changed. Needs monitors, so not in the build gate.
+    /// </summary>
+    public bool MonitorCheck { get; init; }
 
     /// <summary>
     /// <c>--camera-check</c> (2026-10-02): run <see cref="App.CameraCheck"/> on the camera the settings name and exit 0/1 — the
@@ -145,7 +152,7 @@ public sealed record SidekickOptions(
     public const string DockerCheckSocketLine = "prove the Docker tools against the Docker engine's socket (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -165,6 +172,7 @@ public sealed record SidekickOptions(
         "  --ad-check <domain>          prove the directory tools against that domain of ad.json, or current (reads only), exit 0/1\n" +
         "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
         "  --camera-check               open the camera, read frames and encode one (nothing saved), exit 0/1\n" +
+        "  --monitor-check              read the monitors, their capabilities and inputs (nothing changed; Windows), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
@@ -390,6 +398,9 @@ public sealed record SidekickOptions(
                 case CameraCheckFlag:
                     result = result with { CameraCheck = true };
                     break;
+                case MonitorCheckFlag:
+                    result = result with { MonitorCheck = true };
+                    break;
                 case YoloFlag:
                     result = result with { Yolo = true };
                     break;
@@ -481,10 +492,11 @@ public sealed record SidekickOptions(
         : AdCheck is not null ? "ad-check"
         : DockerCheck ? "docker-check"
         : CameraCheck ? "camera-check"
+        : MonitorCheck ? "monitor-check"
         : "interactive";
 
     /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--sqlite-check</c>, <c>--postgres-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck;
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck || MonitorCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

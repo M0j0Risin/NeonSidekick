@@ -82,6 +82,27 @@ public static class HomeBarText
     /// <summary>Its place on the bar's tab, where a device's room goes.</summary>
     public const string ShoppingWhere = "shopping";
 
+    /// <summary>The monitors' item (2026-10-23, the monitors plan): its name, where the note, the picker and <c>/homebar</c> need one.</summary>
+    public const string MonitorsName = "Monitors";
+
+    /// <summary>The picker's tab for it, before Shopping (Windows only: only while the screen has a monitor system).</summary>
+    public const string MonitorsTab = "Monitors";
+
+    /// <summary>Its row's dim note on that tab when the monitors could not be read in time.</summary>
+    public const string MonitorsRowNote = "🖥️ alone; right-click it to switch an input or the layout";
+
+    /// <summary>Its row's dim note on that tab: the monitors connected.</summary>
+    public static string MonitorsRowNoteFor(IReadOnlyList<string> monitors) => monitors.Count == 0 ? MonitorsRowNote : string.Join(", ", monitors);
+
+    /// <summary>Its place on the bar's tab, where a device's room goes.</summary>
+    public const string MonitorsWhere = "this PC's monitors";
+
+    /// <summary>On the bar's tab where the screen has no monitor system (a profile copied to a Mac): left off the bar, still removable.</summary>
+    public const string MonitorsNotHere = "not on this PC";
+
+    /// <summary>The 🖥️ chip's click note: fixed, no DDC/CI read for a click. Pinned.</summary>
+    public const string MonitorsNote = "Monitors — right-click to switch an input or the layout";
+
     /// <summary>A divider's name on the picker's bar tab (2026-10-13, the user's ask: a divider on the home bar). Pinned.</summary>
     public const string DividerName = "Divider";
 

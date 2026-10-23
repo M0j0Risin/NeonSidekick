@@ -75,6 +75,8 @@ public static class PlanTools
         "net_dns", "net_ping", "net_trace", "net_port", "net_tls", "net_certs",
         "service_list", "service_info", "task_list", "task_info",
         "ad_user", "ad_group", "ad_computer", "ad_find", "ad_ou", "ad_domain",
+        // the monitors (2026-10-23): the topology and each monitor's input read, nothing changed
+        "monitor_list",
     };
 
     /// <summary>The tools plan mode drops because they change something or start something: named, so the classification test can hold every tool to one list.</summary>
@@ -107,6 +109,8 @@ public static class PlanTools
         "youtube_play", "youtube_control", "youtube_save",
         // the shopping list (2026-10-11): a line or a store's layout changed
         "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_place", "shopping_layout",
+        // the monitors (2026-10-23): an input switched, the layout changed
+        "monitor_input", "monitor_layout",
     };
 
     /// <summary>

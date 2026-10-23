@@ -796,4 +796,53 @@ public sealed class HomeBarTests
         var glyphs = new Dictionary<string, string> { [HomeBarItems.Shopping] = "🧺" };
         Assert.Equal("🧺 2", HomeBar.ChipText(HomeChips.Build(HomeBarItems.Shopping, Entities(), null, HomeChipMark.None, false, aliases, glyphs, 2), HomeBar.Fit.Full));
     }
+
+    // ─── the monitors' 🖥️ (2026-10-23, the monitors plan) ───────────────────────
+
+    [Fact]
+    public void TheMonitors_AreAnItem_WithNoNameToChange_AndNoEntities()
+    {
+        Assert.Equal("monitors:all", HomeBarItems.Monitors);   // a contract word: never monitor:, the screen capture's
+        Assert.Equal(HomeBarItems.Monitors, HomeBarItems.Normalize(" Monitors:ALL "));
+        Assert.Null(HomeBarItems.Normalize("monitors:2"));
+        Assert.Null(HomeBarItems.Normalize("monitor:2"));
+        Assert.True(HomeBarItems.TryParse("monitors:all", out var kind, out _));
+        Assert.Equal(HomeItemKind.Monitors, kind);
+        Assert.True(HomeBarItems.IsMonitors(HomeBarItems.Monitors));
+        Assert.Equal(HomeBarText.MonitorsName, HomeBarItems.NameOf(HomeBarItems.Monitors, null));
+        Assert.Empty(HomeBarItems.EntityIds([HomeBarItems.Monitors], Catalog()));
+        Assert.Equal(HomeBarItems.Monitors, HomeBarItems.Find([HomeBarItems.Monitors], "Monitors", null, null));
+        Assert.True(HomeBarItems.IsNameless(HomeBarItems.Monitors));
+        Assert.Null(HomeBarItems.Rename(null, HomeBarItems.Monitors, "Screens", HomeBarText.MonitorsName));
+        Assert.Equal(HomeChips.MonitorsGlyph, HomeChips.DefaultGlyph(HomeBarItems.Monitors, null));
+    }
+
+    [Fact]
+    public void TheMonitorsChip_IsTheGlyphAlone_NeverMarkedOrStale_ItsEmojiChangeable()
+    {
+        var chip = HomeChips.Build(HomeBarItems.Monitors, Entities(), null, HomeChipMark.Failed, stale: true);
+        Assert.Equal(HomeChips.MonitorsGlyph, HomeBar.ChipText(chip, HomeBar.Fit.Full));
+        Assert.Equal(HomeChips.MonitorsGlyph, HomeBar.ChipText(chip, HomeBar.Fit.Tight));
+        Assert.True(chip.Bare);
+        Assert.Equal("", chip.Value);
+        Assert.Equal(HomeChipMark.None, chip.Mark);
+        Assert.Equal(HomeChips.Lit(Theme.Secondary), chip.Style);   // never dimmed for Home Assistant's feed
+        Assert.Equal(HomeChipAction.Detail, chip.Action);
+        Assert.Equal(HomeBarText.MonitorsNote, chip.Note);
+
+        var glyphs = HomeBarItems.SetGlyph(null, HomeBarItems.Monitors, "📺", HomeChips.MonitorsGlyph);
+        Assert.Equal("📺", HomeBar.ChipText(HomeChips.Build(HomeBarItems.Monitors, Entities(), null, HomeChipMark.None, false, null, glyphs), HomeBar.Fit.Full));
+        Assert.Null(HomeBarItems.SetGlyph(glyphs, HomeBarItems.Monitors, HomeChips.MonitorsGlyph, HomeChips.MonitorsGlyph));   // the default takes it off
+    }
+
+    [Fact]
+    public void TheMonitorsGlyph_IsTwoCells_WithItsSelector()
+    {
+        // The one default glyph outside Glyphs (whose test refuses a selector): 🖥 is text-default and needs U+FE0F.
+        Assert.False(TextCells.NarrowSelectorSequences);
+        Assert.Equal(2, TextCells.Width(HomeChips.MonitorsGlyph));
+        Assert.Contains('\uFE0F', HomeChips.MonitorsGlyph);
+        Assert.DoesNotContain(HomeChips.MonitorsGlyph, HomeChips.Glyphs);
+        Assert.NotEqual(HomeChips.TvGlyph, HomeChips.MonitorsGlyph);
+    }
 }

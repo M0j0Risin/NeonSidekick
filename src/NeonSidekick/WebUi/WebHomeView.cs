@@ -28,7 +28,7 @@ public static class WebHomeView
             items = HomeBarItems.Resolve(effective.HomeBarLastItems);
         }
 
-        return items.Where(i => !HomeBarItems.TryParse(i, out var kind, out _) || kind != HomeItemKind.Shopping).ToList();
+        return items.Where(i => !HomeBarItems.TryParse(i, out var kind, out _) || kind is not (HomeItemKind.Shopping or HomeItemKind.Monitors)).ToList();
     }
 
     /// <summary>

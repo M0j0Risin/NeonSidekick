@@ -157,6 +157,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.DirectoryTools, "Access"), (SettingsField.DirectoryDomainsOffered, "Domains"), (SettingsField.DirectoryDomainsProfile, "Files")],
         [(SettingsField.ClockTools, "Clock")],
         [(SettingsField.HelpTools, "Help")],
+        [(SettingsField.MonitorTools, "Monitors")],
     ];
 
     /// <summary>

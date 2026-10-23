@@ -936,6 +936,16 @@ The services that run unasked under `ask` can be changed in `profile.json` (`Hom
 | Shopping list | Enter opens the shopping list, the same pane as `/shopping` and the toolbar's 🛒. | — |
 | Shopping stores | Enter opens the stores' manager: add, rename or remove a store, choose the store the list is ordered for, and edit its layout (`l`). | — |
 
+#### Monitors
+
+Windows only.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Monitor tools | Offers the [monitor tools](TOOLS.md#monitors) (`monitor_list`, `monitor_input`, `monitor_layout`); the changes ask first, and only with the pane. `/monitor` works either way. | off |
+
+Each monitor's input names and hidden inputs are set from its *Input names…* on the [monitors pane](INTERFACE.md#the-monitors-pane), per profile; a plain `/profile reset` keeps them.
+
 ## MCP servers (`/mcp`)
 
 MCP servers are outside programs that give the model more tools.

@@ -251,6 +251,17 @@ public static class HelpCommands
         [
             new("/model [<id>]", "Pick a model from the server's list, or set one by its id, as typed (the server is not asked). The list is A to Z with the model in use under the cursor; typing narrows it, Backspace erases, Esc clears it, a second Esc keeps the model. On the embedded LLM, it lists the installed embedded models. Ctrl+M runs it too."),
         ]),
+        new("/monitor",
+        [
+            new("/monitor", "Open the monitors pane: a Layout tab (Extend all, Duplicate, Only one monitor, Make one primary) and a tab per monitor with its inputs; Enter on an input switches to it over DDC/CI. Right-click the home bar's 🖥️ for the same pane. Windows only."),
+            new("/monitor list", "Print the monitors: number, name, connector, mode, primary, the current input and the inputs, with the layout. Works while a reply runs."),
+            new("/monitor <monitor>", "Open the monitors pane on that monitor's tab: its number (the screen capture's, `monitor:2`) or its name, quoted when it has spaces."),
+            new("/monitor <monitor> input <input>", "Switch the monitor's input: a name you gave it, a standard name (`hdmi-1`) or a code in hex (`0x1B`). Switching away the last monitor still showing this PC asks first."),
+            new("/monitor <monitor> only", "Show the desktop on that monitor alone, turning the others off; it asks first when the app switched that monitor away."),
+            new("/monitor <monitor> primary", "Make the monitor primary: the taskbar and the desktop's origin move there."),
+            new("/monitor extend", "Extend the desktop across every connected monitor, as Win+P's Extend."),
+            new("/monitor duplicate", "Show the same desktop on every monitor, as Win+P's Duplicate; a duplicated monitor's inputs can't be switched until Extend."),
+        ]),
         new("/msgclear",
         [
             new("/msgclear", "Clear this profile's message history, stored and in memory, after a yes."),
@@ -492,7 +503,7 @@ public static class HelpCommands
         new("/tools",
         [
             new("/tools", "Open the tools pane: switch the model's tools on or off on Offered, and edit each tool group's settings on its own tab. On Offered, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes. Ctrl+T runs it too."),
-            new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and Esc comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
+            new("/tools <group>", "Open a group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks`, `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock`, `help` or `monitors`. `shell` opens the *Shell command policy* picker (yolo asks first). Buttons at the top open related settings, and Esc comes back: `shell`'s allowed commands and police (`c`, `p`), `web`'s browser modes (`a`, `h`, `b`), `files`' browser mode (`b`), `image`'s edit mode (`e`), `advisors`' list (`a`), `obsidian`'s vault (`v`), `print`'s printer (`p`), `camera`'s watch, live, snap and screen (`w`, `l`, `s`, `c`), and the offered list of the database, UNC and ComfyUI groups. The toolbar's tool icons run it."),
             new("/tools shell allowed", "Open the *Shell allowed commands* list; Enter removes a prefix after a yes. The policy button (`p`) steps *Shell command policy* from off to ask to yolo, yolo after a yes (a no goes on to off); Esc closes it. The toolbar's lock and Ctrl+Alt+T run it."),
             new("/tools shell police", "Open the *Shell police* on/off page; turning it off asks first, and **strings** (`s`) opens *Shell police forbidden strings*. The toolbar's officer and Ctrl+Alt+O run it."),
         ]),

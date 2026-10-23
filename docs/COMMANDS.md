@@ -100,7 +100,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
 | `/settings changed` | Lists the settings that differ from their defaults, to edit one or put it back. |
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
-| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services` and `tasks` (Windows only), `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
+| `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks` and `monitors` (Windows only), `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
 | `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings; its **loaded** tab shows the skills in this conversation. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
@@ -285,6 +285,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/homebar [on\|off]`, `/homebar edit` | Hides or shows the [home bar](INTERFACE.md#the-home-bar), or opens its picker. |
 | `/homebar tap <item>`, `/homebar show <item>` | Does what a double-click or a right-click on a chip does; unlocking and opening ask first. |
 | `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip your own name or emoji (nothing after `=` shows the emoji alone); `default` puts its own back. |
+| `/monitor`, `/monitor <monitor>` | Opens the [monitors pane](INTERFACE.md#the-monitors-pane), on its Layout tab or that monitor's. Without the pane, prints the list. Windows only ([MAC.md](MAC.md#what-works)). |
+| `/monitor list` | Prints the monitors: number, name, connector, mode, primary, the current input and the inputs. |
+| `/monitor <monitor> input <input>` | Switches the monitor's input: a name you gave it, a standard name (`hdmi-1`) or a code in hex (`0x1B`). |
+| `/monitor <monitor> only\|primary`, `/monitor extend\|duplicate` | Changes the layout as Win+P does: one monitor alone, the primary, every monitor extended, or all showing the same. |
 | `/log` | Opens the [log window](INTERFACE.md#the-log-window). |
 | `/log file`, `/log path` | Opens the `--log` file in your editor, or copies its path (only when started with `--log`). |
 | `/window` | Shows the terminal window's size. |

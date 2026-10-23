@@ -17,4 +17,7 @@ public enum AdminRules
     Tasks = 16,
     TaskWrites = 32,
     Directory = 64,
+
+    /// <summary>The monitor tools (2026-10-23, the monitors plan): <c>Assistant.MonitorRule</c>.</summary>
+    Monitors = 128,
 }

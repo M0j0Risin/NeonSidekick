@@ -1287,6 +1287,9 @@ public enum SettingsField
 
     /// <summary>A picker over the timer tones: what a code audit ends with (<see cref="Settings.AppSettingsData.CodeAuditStopTone"/>, 2026-10-21), last in the Code audit section; the Timer tone picker's preview.</summary>
     CodeAuditStopTone,
+
+    /// <summary>A toggle: whether a turn offers the monitors' tools (<see cref="Settings.AppSettingsData.MonitorTools"/>, 2026-10-23, the monitors plan). The Monitors menu's one row on <c>/tools</c> › Home, after Shopping; Windows only. Last in the enum, as every newcomer.</summary>
+    MonitorTools,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1879,6 +1882,8 @@ internal sealed partial class SettingsMenu
         // The standing groups' own switches (2026-10-18, the user's asks): Clock on Core after Shell, Help on Core after Ask.
         [SettingsField.ClockTools],
         [SettingsField.HelpTools],
+        // The monitors (2026-10-23, the monitors plan): on Home after Shopping, Windows only (ToolsText.WindowsOnlyMenus).
+        [SettingsField.MonitorTools],
     ];
 
     /// <summary>
@@ -2297,7 +2302,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
-            or SettingsField.ShoppingTools or SettingsField.EventLogTools
+            or SettingsField.ShoppingTools or SettingsField.EventLogTools or SettingsField.MonitorTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
             or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.ClockTools or SettingsField.HelpTools
@@ -2600,6 +2605,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileTools => "File tools",
         SettingsField.ImageTools => "Image tools",
         SettingsField.ShoppingTools => "Shopping tools",
+        SettingsField.MonitorTools => "Monitor tools",
         SettingsField.TimerTools => "Timer tools",
         SettingsField.ClockTools => "Clock tools",
         SettingsField.HelpTools => "Help tools",
@@ -3040,6 +3046,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTools => OnOff(data.FileTools),
             SettingsField.ImageTools => OnOff(data.ImageTools),
             SettingsField.ShoppingTools => OnOff(data.ShoppingTools),
+            SettingsField.MonitorTools => OnOff(data.MonitorTools),
             SettingsField.TimerTools => OnOff(data.TimerTools),
             SettingsField.ClockTools => OnOff(data.ClockTools),
             SettingsField.HelpTools => OnOff(data.HelpTools),
@@ -8144,6 +8151,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTools => data.FileTools,
             SettingsField.ImageTools => data.ImageTools,
             SettingsField.ShoppingTools => data.ShoppingTools,
+            SettingsField.MonitorTools => data.MonitorTools,
             SettingsField.TimerTools => data.TimerTools,
             SettingsField.ClockTools => data.ClockTools,
             SettingsField.HelpTools => data.HelpTools,
@@ -8277,6 +8285,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.FileTools: data.FileTools = on; break;
             case SettingsField.ImageTools: data.ImageTools = on; break;
             case SettingsField.ShoppingTools: data.ShoppingTools = on; break;
+            case SettingsField.MonitorTools: data.MonitorTools = on; break;
             case SettingsField.TimerTools: data.TimerTools = on; break;
             case SettingsField.ClockTools: data.ClockTools = on; break;
             case SettingsField.HelpTools: data.HelpTools = on; break;
@@ -8358,6 +8367,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
         SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
         SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",
+        SettingsField.MonitorTools => on ? "monitor tools enabled" : "monitor tools disabled",
         SettingsField.TimerTools => on ? "timer tools enabled" : "timer tools disabled",
         SettingsField.ClockTools => on ? "clock tools enabled" : "clock tools disabled",
         SettingsField.HelpTools => on ? "help tools enabled" : "help tools disabled",

@@ -81,7 +81,7 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 
 Besides `--smoke`, the published exe has checks for real hardware and servers. [COMMANDLINE.md](COMMANDLINE.md) says what each one does.
 
-* **Hardware:** `--audio-check`, `--voice-check`, `--camera-check`.
+* **Hardware:** `--audio-check`, `--voice-check`, `--camera-check`, `--monitor-check`.
 * **Databases:** `--sql-check`, `--oracle-check`, `--mysql-check`, `--postgres-check`, `--sqlite-check`.
 * **Admin and the rest:** `--unc-check`, `--docker-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`.
 

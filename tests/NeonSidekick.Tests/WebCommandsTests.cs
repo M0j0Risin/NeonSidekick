@@ -129,6 +129,7 @@ public sealed class WebCommandsTests
     [InlineData("/print printers", WebCommandKind.List)]
     [InlineData("/camera list", WebCommandKind.List)]
     [InlineData("/screen list", WebCommandKind.List)]
+    [InlineData("/monitor list", WebCommandKind.List)]   // 2026-10-23, the monitors plan: the list alone from the page
     [InlineData("/tree", WebCommandKind.List)]
     [InlineData("/vault", WebCommandKind.List)]
     [InlineData("/process", WebCommandKind.List)]
@@ -159,6 +160,9 @@ public sealed class WebCommandsTests
     [InlineData("/camera", WebCommandKind.Refused)]
     [InlineData("/camera snap", WebCommandKind.Refused)]
     [InlineData("/screen", WebCommandKind.Refused)]
+    [InlineData("/monitor", WebCommandKind.Refused)]
+    [InlineData("/monitor 2 input hdmi-1", WebCommandKind.Refused)]
+    [InlineData("/monitor extend", WebCommandKind.Refused)]
     [InlineData("/screen view", WebCommandKind.Refused)]
     [InlineData("/process abc", WebCommandKind.Refused)]
     [InlineData("/comfy view", WebCommandKind.Refused)]

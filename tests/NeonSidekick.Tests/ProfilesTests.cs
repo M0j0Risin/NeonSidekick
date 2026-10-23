@@ -381,6 +381,8 @@ public class ProfilesTests : IDisposable
             UserAvatar = "🦉",
             WebUiToken = "dpapi:web",
             ShortcutOffered = true,
+            MonitorInputNames = new Dictionary<string, string> { ["ausaa34-uid4355/0f"] = "This PC" },   // this PC's cabling (2026-10-23)
+            MonitorInputsHidden = ["ausaa34-uid4355/12"],
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
         };
@@ -404,7 +406,9 @@ public class ProfilesTests : IDisposable
         Assert.Equal("🦉", kept.UserAvatar);    // the user's own (2026-10-12)
         Assert.Equal("dpapi:web", kept.WebUiToken);   // the Web UI's token (2026-10-14): a signed-in phone stays signed in
         Assert.True(kept.ShortcutOffered);   // the profile was asked for its shortcut (2026-10-16)
-        Assert.Equal(19, Profiles.ResetKeptSettings.Length);
+        Assert.Equal("This PC", kept.MonitorInputNames!["ausaa34-uid4355/0f"]);   // the monitors' input names and hidden inputs (2026-10-23)
+        Assert.Equal(["ausaa34-uid4355/12"], kept.MonitorInputsHidden);
+        Assert.Equal(21, Profiles.ResetKeptSettings.Length);   // the monitors' input names and hidden inputs 2026-10-23
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

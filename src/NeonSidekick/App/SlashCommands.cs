@@ -297,6 +297,13 @@ public enum SlashCommand
     Ad,
 
     /// <summary>
+    /// <c>/monitor</c> (2026-10-23, the monitors plan): bare the monitors pane (a Layout tab, a tab per monitor), <c>list</c> the lines,
+    /// <c>&lt;n|name&gt;</c> on that monitor's tab, <c>&lt;n|name&gt; input &lt;input&gt;</c>, <c>&lt;n|name&gt; only|primary</c>, <c>extend</c>,
+    /// <c>duplicate</c> (<see cref="Monitors.MonitorCommand"/>). The user's own hand, whatever <c>Monitor tools</c> says. Windows only.
+    /// </summary>
+    Monitor,
+
+    /// <summary>
     /// <c>/camera</c> (2026-10-02, the user's ask: a USB camera's pictures for the model): the bare word opens the shutter pane and
     /// puts the photo on the input line; <c>/camera snap | list | use &lt;n|name&gt; | live | watch [seconds|off] | off</c>
     /// (<see cref="Camera.CameraCommand"/>). The user's own hand: never judged by <c>Camera tool</c>.
@@ -457,6 +464,7 @@ public static class SlashCommands
             new("/services", OperatingSystem.IsMacOS() ? "Windows services (a Mac has none)" : "list, start and stop Windows services"),   // the Mac's words since 2026-10-22
             new("/tasks", OperatingSystem.IsMacOS() ? "Windows' scheduled tasks (a Mac has none)" : "list and run scheduled tasks"),
             new("/ad", "look up Active Directory accounts"),
+            new(Monitors.MonitorCommand.Word, OperatingSystem.IsWindows() ? "switch a monitor's input or the layout" : "this PC's monitors (Windows only)"),
             new("/exit", "exit the app"),
             new("/expand", "unfold every item in the transcript"),
             new("/find", "find words in the transcript"),
@@ -606,7 +614,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -704,6 +712,7 @@ public static class SlashCommands
             "/services" => SlashCommand.Services,
             "/tasks" => SlashCommand.Tasks,
             "/ad" => SlashCommand.Ad,
+            "/monitor" => SlashCommand.Monitor,
             "/camera" => SlashCommand.Camera,
             "/screen" => SlashCommand.Screen,
             "/youtube" => SlashCommand.YouTube,
@@ -760,7 +769,7 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
         or SlashCommand.Splash or SlashCommand.Pasted;   // 2026-10-18: view|thumbs|purge
 }

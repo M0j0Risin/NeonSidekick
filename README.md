@@ -109,6 +109,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 ### Smart home
 * **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"); `/ha` drives the house directly.
 * **Shopping list:** one per profile, in your store's aisle order, learning where things are; on your phone too (`/shopping`).
+* **Monitors (Windows only):** switch a monitor's input over DDC/CI, or extend, duplicate or pick one screen, from the home bar's 🖥️ or `/monitor`.
 
 ### Creative
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your own prompt.

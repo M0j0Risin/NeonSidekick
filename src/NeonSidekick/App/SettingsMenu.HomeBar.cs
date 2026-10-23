@@ -15,6 +15,16 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public Func<CancellationToken, Task<(HaCatalog? Catalog, string? Error)>>? HomeCatalog { get; set; }
 
+    /// <summary>
+    /// The monitors connected, as <c>2 XG27UQDMS</c> (2026-10-23, the monitors plan): set by the screen when it has a monitor system, so the
+    /// picker's Monitors tab follows the injected system, not the OS. Read once a visit, off the screen's thread (a topology read, no DDC/CI);
+    /// a failed or slow read leaves the row's note out. Null: no Monitors tab, and the bar's tab marks a saved 🖥️ not on this PC.
+    /// </summary>
+    public Func<CancellationToken, Task<IReadOnlyList<string>>>? HomeMonitors { get; set; }
+
+    /// <summary>How long the picker waits for <see cref="HomeMonitors"/> before it opens without the monitors' names.</summary>
+    public static readonly TimeSpan HomeMonitorsWait = TimeSpan.FromSeconds(2);
+
     /// <summary>The domains each picker tab lists, after On the bar and Rooms; Other takes every domain none of these names.</summary>
     internal static readonly (string Title, string[] Domains)[] HomeDomainTabs =
     [
@@ -70,6 +80,20 @@ internal sealed partial class SettingsMenu
         bool home = catalog is not null;
         catalog ??= new HaCatalog([], [], [], [], [], []);
 
+        // The monitors' names for the Monitors tab's note (2026-10-23): a topology read, waited on a little; null with no monitor system.
+        IReadOnlyList<string>? monitors = null;
+        if (HomeMonitors is { } readMonitors)
+        {
+            try
+            {
+                monitors = await readMonitors(cancellationToken).WaitAsync(HomeMonitorsWait, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is TimeoutException or Monitors.MonitorException)
+            {
+                monitors = [];
+            }
+        }
+
         bool changed = false;
         int tab = 0;
         int cursor = 0;
@@ -81,7 +105,7 @@ internal sealed partial class SettingsMenu
                 var saved = _settings.Current;
                 var sides = HomeBarItems.Sides(saved.HomeBarItems, saved.HomeBarLeft, saved.HomeBarRight);
                 var items = sides.All;
-                var built = HomePickerTabs(catalog, sides, filter, saved.HomeBarAliases, saved.HomeBarGlyphs, home);
+                var built = HomePickerTabs(catalog, sides, filter, saved.HomeBarAliases, saved.HomeBarGlyphs, home, monitors);
                 var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "");
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
@@ -334,15 +358,18 @@ internal sealed partial class SettingsMenu
     /// and matched by the filter; one with an emoji of its own (<paramref name="glyphs"/>) shows it on the bar's tab. Shopping last
     /// (later on 2026-10-12), and the bar's tab and it alone without <paramref name="home"/> (no Home Assistant). Pure over its data.
     /// </summary>
-    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true)
+    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true, IReadOnlyList<string>? monitors = null)
     {
         var items = sides.All;
+        bool monitorsHere = monitors is not null;
         if (!home)
         {
-            return [BarTab(catalog, sides, aliases, glyphs), ShoppingTab(items, filter, glyphs)];
+            return monitorsHere
+                ? [BarTab(catalog, sides, aliases, glyphs, monitorsHere), MonitorsTab(items, filter, glyphs, monitors!), ShoppingTab(items, filter, glyphs)]
+                : [BarTab(catalog, sides, aliases, glyphs, monitorsHere), ShoppingTab(items, filter, glyphs)];
         }
 
-        var tabs = new List<HomeTab> { BarTab(catalog, sides, aliases, glyphs), RoomsTab(catalog, items, filter, aliases) };
+        var tabs = new List<HomeTab> { BarTab(catalog, sides, aliases, glyphs, monitorsHere), RoomsTab(catalog, items, filter, aliases) };
         var named = HomeDomainTabs.SelectMany(t => t.Domains).ToHashSet(StringComparer.Ordinal);
         foreach (var (title, domains) in HomeDomainTabs)
         {
@@ -353,8 +380,23 @@ internal sealed partial class SettingsMenu
             tabs.Add(DomainTab(title, catalog, items, entities, filter, aliases));
         }
 
+        if (monitorsHere)
+        {
+            tabs.Add(MonitorsTab(items, filter, glyphs, monitors!));
+        }
+
         tabs.Add(ShoppingTab(items, filter, glyphs));
         return tabs;
+    }
+
+    // This PC's monitors (2026-10-23, the monitors plan): one 🖥️ row, its emoji as the bar draws it, its note the monitors connected.
+    private static HomeTab MonitorsTab(IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? glyphs, IReadOnlyList<string> monitors)
+    {
+        string glyph = HomeBarItems.GlyphOf(glyphs, HomeBarItems.Monitors) ?? HomeChips.MonitorsGlyph;
+        var rows = MenuFilter.Matches(filter, HomeBarText.MonitorsName, HomeBarItems.Monitors + " screens displays " + string.Join(' ', monitors))
+            ? new List<(string Ref, string Name, string Note)> { (HomeBarItems.Monitors, glyph + " " + HomeBarText.MonitorsName, HomeBarText.MonitorsRowNoteFor(monitors)) }
+            : [];
+        return Sectioned(HomeBarText.MonitorsTab, [("", null, rows)], items, filter);
     }
 
     // The app's own items (later on 2026-10-12): the shopping list's 🛒, its emoji as the bar draws it.
@@ -370,7 +412,7 @@ internal sealed partial class SettingsMenu
     // The bar's tab (later on 2026-10-13, the user's ask: pinned left, center or right): the groups as the sided checklists draw them — a
     // heading each with its count (SidedRows' rows, so SidedRowOf finds an item's row), the items numbered across all three — then
     // + Add divider; with nothing on the bar, its one dim line instead of the headings.
-    private static HomeTab BarTab(HaCatalog catalog, ItemOrder.Sided sides, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
+    private static HomeTab BarTab(HaCatalog catalog, ItemOrder.Sided sides, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool monitorsHere = true)
     {
         var rows = new List<string>();
         var refs = new List<string?>();
@@ -383,7 +425,7 @@ internal sealed partial class SettingsMenu
             refs.Add(null);
             foreach (string item in group)
             {
-                rows.Add(BarRow(catalog, item, number++, aliases, glyphs));
+                rows.Add(BarRow(catalog, item, number++, aliases, glyphs, monitorsHere));
                 refs.Add(item);
             }
         }
@@ -400,7 +442,7 @@ internal sealed partial class SettingsMenu
     }
 
     // One item's row on the bar's tab: its number, its glyph and its name as the chip has them, and where it is, dim.
-    private static string BarRow(HaCatalog catalog, string item, int number, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs)
+    private static string BarRow(HaCatalog catalog, string item, int number, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool monitorsHere = true)
     {
         string at = number.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(2) + ". ";
         HomeBarItems.TryParse(item, out var kind, out string id);
@@ -413,7 +455,8 @@ internal sealed partial class SettingsMenu
         // emoji of the user's own (later that day), the own one dim at the end.
         string own = HomeChips.DefaultGlyph(item, catalog);
         string? custom = HomeBarItems.GlyphOf(glyphs, item);
-        string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : kind == HomeItemKind.Shopping ? HomeBarText.ShoppingWhere : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
+        string where = kind == HomeItemKind.Area ? HomeBarText.RoomsTab.ToLowerInvariant() : kind == HomeItemKind.Shopping ? HomeBarText.ShoppingWhere
+            : kind == HomeItemKind.Monitors ? (monitorsHere ? HomeBarText.MonitorsWhere : HomeBarText.MonitorsNotHere) : catalog.AreaOf(id) is { } area ? catalog.Area(area)?.Name ?? id : id;
         // An alias first, as the bar shows it, and the item's own name dim beside it.
         string name = HomeBarItems.NameOf(item, catalog);
         string? alias = HomeBarItems.AliasOf(aliases, item);

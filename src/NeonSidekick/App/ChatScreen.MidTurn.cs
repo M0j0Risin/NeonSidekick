@@ -254,6 +254,8 @@ internal sealed partial class ChatScreen
         SlashCommand.WebUi when args.Trim().Length == 0 => MidTurnClass.Pane,
         SlashCommand.WebUi when string.Equals(args.Trim(), "copy", StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.WebUi when WebUiBrowserArgs(args) is not null => MidTurnClass.Quick,   // later on 2026-10-15: /webui browser opens at once
+        // /monitor (2026-10-23): the list at once; the pane and the changes on the watcher (the last screen's yes/no needs a pane).
+        SlashCommand.Monitor => Monitors.MonitorCommand.Parse(args) is { Verb: Monitors.MonitorVerb.List } ? MidTurnClass.Quick : MidTurnClass.Pane,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -708,6 +710,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Ad:
                 await HandleAdAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
+            case SlashCommand.Monitor:
+                // /monitor (2026-10-23): the pane or a change on the watcher, the reply streaming on.
+                await HandleMonitorAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.WebUi:
                 // /webui (later on 2026-10-15): the pane on the watcher, its lines through the flow sink.
                 await ShowWebUiMidTurnAsync(_flow, cancellationToken).ConfigureAwait(false);
@@ -732,6 +738,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Queue:
                 HandleQueueArgs(args);
+                break;
+            case SlashCommand.Monitor:
+                // /monitor list (2026-10-23): the reads on the board's worker, the lines through the flow sink.
+                await PrintMonitorListAsync(_flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Perf:
                 HandlePerf(args);

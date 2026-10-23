@@ -15,9 +15,10 @@ public class WindowsOnlyMenusTests
     [Fact]
     public void TheWindowsOnlyMenus_AreServicesAndTasks()
     {
-        Assert.Equal([ToolsText.ServicesMenuTitle, ToolsText.TasksMenuTitle], ToolsText.WindowsOnlyMenus.Order(StringComparer.Ordinal));
+        // Monitors joined them on 2026-10-23 (the monitors plan: the CCD API and dxva2).
+        Assert.Equal([ToolsText.MonitorsMenuTitle, ToolsText.ServicesMenuTitle, ToolsText.TasksMenuTitle], ToolsText.WindowsOnlyMenus.Order(StringComparer.Ordinal));
         Assert.All(ToolsText.MenuTitles, title => Assert.True(ToolsText.MenuHere(title, windows: true)));
-        Assert.Equal(ToolsText.MenuTitles.Where(t => t is not (ToolsText.ServicesMenuTitle or ToolsText.TasksMenuTitle)), ToolsText.MenuTitles.Where(t => ToolsText.MenuHere(t, windows: false)));
+        Assert.Equal(ToolsText.MenuTitles.Where(t => t is not (ToolsText.ServicesMenuTitle or ToolsText.TasksMenuTitle or ToolsText.MonitorsMenuTitle)), ToolsText.MenuTitles.Where(t => ToolsText.MenuHere(t, windows: false)));
     }
 
     [Fact]
@@ -38,7 +39,7 @@ public class WindowsOnlyMenusTests
     public void SwitchWords_OffWindows_LeaveOutServicesAndTasks_AndTheirWordsAreTheUsageError()
     {
         Assert.Equal(ToolsText.SwitchWords, ToolsText.SwitchWordsFor(windows: true));
-        Assert.Equal(ToolsText.SwitchWords.Where(w => w is not ("services" or "tasks")), ToolsText.SwitchWordsFor(windows: false));
+        Assert.Equal(ToolsText.SwitchWords.Where(w => w is not ("services" or "tasks" or "monitors")), ToolsText.SwitchWordsFor(windows: false));
         Assert.Equal(ToolsText.SwitchWordsFor(OperatingSystem.IsWindows()), ToolsText.SwitchWordsHere);
         Assert.Equal(SettingsField.SqlTools, ToolsText.SwitchFieldHere(" SQL "));
         Assert.Equal(OperatingSystem.IsWindows() ? SettingsField.ServiceTools : null, ToolsText.SwitchFieldHere("services"));

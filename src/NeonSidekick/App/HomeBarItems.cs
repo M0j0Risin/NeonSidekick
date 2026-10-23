@@ -10,6 +10,7 @@ public enum HomeItemKind
     Entity,
     Shopping,
     Divider,   // 2026-10-13, the user's ask: a dim │ between chips, any number of them (divider:1, divider:2…)
+    Monitors,  // 2026-10-23, the monitors plan: one 🖥️ for every monitor of this PC (monitors:all)
 }
 
 /// <summary>What <c>/homebar</c> saves (<see cref="HomeBarItems.Toggle"/>): the items shown (empty: hidden), the ones a later show brings back, and whether there is nothing to show yet (the picker opens instead).</summary>
@@ -32,6 +33,16 @@ public static class HomeBarItems
     public const string EntityPrefix = "entity:";
 
     public const string ShoppingPrefix = "shopping:";
+
+    /// <summary>The monitors' prefix (2026-10-23): not <c>monitor:</c>, which the screen capture already spells its targets with (<c>monitor:2</c>).</summary>
+    public const string MonitorsPrefix = "monitors:";
+
+    /// <summary>
+    /// The monitors' item (2026-10-23, the monitors plan): one 🖥️ for all of this PC's monitors, the glyph alone on the bar; its right-click
+    /// opens the monitors pane (a Layout tab, a tab per monitor). No name to change (<see cref="IsNameless"/>); its emoji can be. Windows only:
+    /// without a monitor system the bar leaves it out and the picker marks it not on this PC.
+    /// </summary>
+    public const string Monitors = MonitorsPrefix + "all";
 
     /// <summary>
     /// The shopping list's item (later on 2026-10-12, the user's ask): 🛒 and the lines still to get, the app's own list rather than
@@ -78,6 +89,13 @@ public static class HomeBarItems
             return id == "list";
         }
 
+        if (text.StartsWith(MonitorsPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            kind = HomeItemKind.Monitors;
+            id = text[MonitorsPrefix.Length..].Trim().ToLowerInvariant();
+            return id == "all";
+        }
+
         if (text.StartsWith(EntityPrefix, StringComparison.OrdinalIgnoreCase))
         {
             id = text[EntityPrefix.Length..].Trim().ToLowerInvariant();
@@ -89,10 +107,13 @@ public static class HomeBarItems
 
     /// <summary>A reference in its one spelling (the prefix lower case, an entity id lower case), or null when it is none. Pure.</summary>
     public static string? Normalize(string? reference) =>
-        TryParse(reference, out var kind, out string id) ? kind switch { HomeItemKind.Area => Area(id), HomeItemKind.Shopping => Shopping, HomeItemKind.Divider => ItemOrder.DividerPrefix + id, _ => Entity(id) } : null;
+        TryParse(reference, out var kind, out string id) ? kind switch { HomeItemKind.Area => Area(id), HomeItemKind.Shopping => Shopping, HomeItemKind.Monitors => Monitors, HomeItemKind.Divider => ItemOrder.DividerPrefix + id, _ => Entity(id) } : null;
 
-    /// <summary>An item with no name to change (later on 2026-10-12, the user's call): the shopping list's 🛒 shows its count alone; a divider (2026-10-13) none at all. Pure.</summary>
-    public static bool IsNameless(string reference) => TryParse(reference, out var kind, out _) && kind is HomeItemKind.Shopping or HomeItemKind.Divider;
+    /// <summary>An item with no name to change (later on 2026-10-12, the user's call): the shopping list's 🛒 shows its count alone; a divider (2026-10-13) none at all; the monitors' 🖥️ (2026-10-23) its glyph alone. Pure.</summary>
+    public static bool IsNameless(string reference) => TryParse(reference, out var kind, out _) && kind is HomeItemKind.Shopping or HomeItemKind.Divider or HomeItemKind.Monitors;
+
+    /// <summary>Whether <paramref name="reference"/> is the monitors' item (2026-10-23). Pure.</summary>
+    public static bool IsMonitors(string reference) => TryParse(reference, out var kind, out _) && kind == HomeItemKind.Monitors;
 
     /// <summary>Whether <paramref name="reference"/> is a divider's (2026-10-13): a dim │, no chip, no name, no emoji. Pure.</summary>
     public static bool IsDivider(string reference) => TryParse(reference, out var kind, out _) && kind == HomeItemKind.Divider;
@@ -287,6 +308,11 @@ public static class HomeBarItems
         if (kind == HomeItemKind.Divider)
         {
             return HomeBarText.DividerName;
+        }
+
+        if (kind == HomeItemKind.Monitors)
+        {
+            return HomeBarText.MonitorsName;
         }
 
         return catalog is null ? Readable(id) : catalog.NameOf(id);
