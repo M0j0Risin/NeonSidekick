@@ -1311,14 +1311,13 @@ internal sealed partial class ChatScreen
         // The Docker tools and /docker (2026-10-02): the client made for the pipe in force; a model's change waits on the pane.
         _docker = new DockerSession(_effective, dockerClient, _time, environment);
         _dockerTools = DockerTools(_docker, ConfirmDockerAsync);
-        // The event logs (2026-10-15): the ticked computers and the working directory's .evtx files; the bots' twins read every computer redacted.
+        // The event logs (2026-10-15): the ticked computers and the working directory's .evtx files.
         _eventLog = new EventLog.EventLogAccess(eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().EventLogComputersOffered, _files, time);
         // A Mac's unified log (2026-10-18, the Mac event-log plan): the same four tool names over it when a reader was given.
         _macLog = new EventLog.MacLogAccess(unifiedLog, () => LocalFull(_settings.ProfileDirectory, _settings.StorageDirectory), _files, time, macLogPlaces,
             () => EventLog.MacLogAccess.Ticks(_effective().EventLogComputersOffered));   // local unticked: archives only, as Windows keeps .evtx files (2026-10-20)
         _eventLogTools = unifiedLog is not null ? MacLogTools(_macLog, _effective) : EventLogTools(_eventLog, _effective);
-        _eventLogBotTools = unifiedLog is not null ? MacLogTools(_macLog, _effective, forceRedacted: true) : EventLogTools(_eventLog, _effective, forceRedacted: true);
-        // The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory; the bots' twins read redacted.
+        // The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory.
         InitAdmin(pinger, resolve, serviceSystem, taskSystem, directorySystem, joinedDomain);
         // The camera (2026-10-02): one shared stream; photos into the Camera output folder; the model's tool asks on the pane.
         _camera = new CameraSession(camera, () => CameraSettings.Options(_effective()), _time);
@@ -6021,18 +6020,35 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The groups the <c>Botchat limited tools</c> checklist lists (2026-10-04): <see cref="ToolsFacts"/>' groups with the MCP
-    /// servers' too (as <c>/tools</c>' completion lists them), less Memory, Skills and ComfyUI — the bots' memory, skills and
-    /// workflows have their own botchat switches (ComfyUI's later on 2026-10-04, with <c>Botchat ComfyUI enabled</c>).
+    /// The groups the <c>Botchat limited tools</c> checklist lists (2026-10-04): the groups as <c>/tools</c> builds them, held to the
+    /// eight a bot may have (<see cref="BotChat.LimitedGroups"/> over <see cref="BotLimitedToolNames"/>, 2026-10-22, the user's ask;
+    /// every group but Memory, Skills and ComfyUI, the MCP servers' too, until then), the Image group without <c>set_splash_image</c>.
     /// </summary>
     private IReadOnlyList<ToolGroup> BotChatToolGroups()
     {
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Revalidate();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective));
-        return groups.Where(g => g.Switch is not (SettingsField.MemoryMode or SettingsField.AgentSkills or SettingsField.ComfyTools)).ToList();
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: BotImageTools(), imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective));
+        return BotChat.LimitedGroups(groups, BotLimitedToolNames());
     }
+
+    /// <summary>
+    /// The picture tools a bot may have: every one but <c>set_splash_image</c> (2026-10-12, when it left the ComfyUI group for the
+    /// picture tools, the user's call: a bot would write the loaded profile's splash folder).
+    /// </summary>
+    private IReadOnlyList<AIFunction> BotImageTools() => _imageTools.Where(t => t is not SetSplashImageTool).ToList();
+
+    /// <summary>
+    /// Every tool name a <c>/botchat</c> bot may be offered (2026-10-22, the user's ask, when <c>Botchat tools enabled</c> went): the
+    /// Camera, Clock, Image (<see cref="BotImageTools"/>), Questions, Screen, Timers, Web and YouTube groups' tools, the one
+    /// definition of the eight. The <c>Botchat limited tools</c> checklist lists those groups (<see cref="BotChatToolGroups"/>) and
+    /// <see cref="BotGeneralTools"/> offers a ticked name only from here, so a name saved before (a file, shell or MCP tool) never
+    /// reaches a bot. Shells, files, databases, the admin families, Home Assistant and the rest are the main chat's alone.
+    /// </summary>
+    private HashSet<string> BotLimitedToolNames() =>
+        new(_cameraTools.Concat(_clockTools).Concat(BotImageTools()).Concat(_askTools).Concat(_screenTools).Concat(_timerTools).Concat(_webTools).Concat(_youTubeTools)
+            .Select(t => t.Name), StringComparer.Ordinal);
 
     /// <summary>The skills as the next turn would take them (<see cref="PrepareTurn"/>), from the live settings.</summary>
     private SkillsForTurn SkillsFor(AppSettingsData effective) =>
@@ -15182,7 +15198,7 @@ internal sealed partial class ChatScreen
                 // writer gets the same.
                 var (skills, skillTool) = BotSkills(effective);
                 var botSkills = new BotSkillSet(skills, skillTool);
-                // The main chat's tools (2026-10-04, Botchat tools enabled or Botchat limited tools) and memory (Botchat memory
+                // The main chat's tools (2026-10-04, Botchat limited tools; the eight groups alone since 2026-10-22) and memory (Botchat memory
                 // enabled), read per reply as the rest.
                 var general = BotGeneralTools(effective);
                 var memory = BotMemoryFor(bot, effective, botMemories);
@@ -15598,16 +15614,17 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The main chat's tools a bot is offered this reply (2026-10-04, the user's ask): with <c>Botchat tools enabled</c>, every tool
-    /// a main-chat turn would offer now (<see cref="TurnInputs"/> through <see cref="ComposeTurnTools"/>: the switches, the
-    /// <c>/tools</c> list, the panes' tools); off, the <c>Botchat limited tools</c> alone, each only while the main chat would offer it.
-    /// Never the memory or skill tools (their own botchat switches say) and, while the main chat plans, plan mode's read-only
-    /// narrowing without <c>present_plan</c>. Null with neither, <c>LLM offer tools</c> off, or nothing left.
+    /// The main chat's tools a bot is offered this reply (2026-10-04, the user's ask): the <c>Botchat limited tools</c> that
+    /// <see cref="BotLimitedToolNames"/> holds (the eight groups since 2026-10-22, the user's ask; <c>Botchat tools enabled</c>, every
+    /// tool a main-chat turn would offer, went the same day), each only while the main chat would offer it (<see cref="TurnInputs"/>
+    /// through <see cref="ComposeTurnTools"/>: the switches, the <c>/tools</c> list, the panes). While the main chat plans, plan
+    /// mode's read-only narrowing without <c>present_plan</c>. Null with none ticked, <c>LLM offer tools</c> off, or nothing left.
     /// </summary>
     private TurnToolSet? BotGeneralTools(AppSettingsData effective)
     {
-        var limited = ToolsText.DisabledSet(effective.BotChatLimitedTools ?? []);
-        if (!effective.BotChatTools && limited.Count == 0)
+        var allowed = BotLimitedToolNames();
+        var limited = (effective.BotChatLimitedTools ?? []).Where(allowed.Contains).ToHashSet(StringComparer.Ordinal);
+        if (limited.Count == 0)
         {
             return null;
         }
@@ -15624,19 +15641,23 @@ internal sealed partial class ChatScreen
             ComfyEnabled = false,
             // Never set_splash_image (2026-10-12, when it left the ComfyUI group for the picture tools, the user's call): a bot would
             // write the loaded profile's splash folder; the ComfyUI group's switch above kept it from the bots until then.
-            Images = _imageTools.Where(t => t is not SetSplashImageTool).ToList(),
+            Images = BotImageTools(),
             // Never the advisors (2026-10-10, found comparing botchat with them): neon_advisor frames the loaded profile as the one
             // asking, reads the main chat's history for its recent lines, keeps its calls-per-turn count across the turns of the
             // main chat alone, and files its threads in the main session; a bot's question fits none of that.
             NeonAdvisorEnabled = false,
-            // The event logs read redacted (2026-10-15, the plan's "who sees what"): a computer's full detail is the main chat's alone.
-            EventLog = _eventLogBotTools,
+            // Never the event logs or the admin families (2026-10-22): no bot may have them since the eight groups, so the main
+            // chat's (a computer's full detail, the changes) are not even in a bot's inputs. Their redacted twins for the bots went too.
+            EventLog = null,
+            Network = null,
+            Services = null,
+            Tasks = null,
+            Directory = null,
             Plan = null,
             PlanReadOnly = _plan.Turn(_presentPlan) is not null,
-            OnlyTools = effective.BotChatTools ? null : limited,
+            OnlyTools = limited,
         };
-        // The admin families read redacted for a bot too (2026-10-15, the admin-tools plan), never a change, and on the bots' own scan budget.
-        var set = ComposeTurnTools(WithAdminForBot(inputs, effective));
+        var set = ComposeTurnTools(inputs);
         return set.Tools.Count == 0 ? null : set;
     }
 

@@ -23,7 +23,8 @@ namespace NeonSidekick.App;
 /// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says — over the workflows <c>Botchat ComfyUI enabled</c> or
 /// <c>Botchat ComfyUI limited workflows</c> give (<see cref="ComfyWorkflows"/>, 2026-10-04; <c>Botchat images enabled</c> and one
 /// workflow of each kind until then). Then skills (2026-09-27) and, on 2026-10-04 (the
-/// user's asks), the main chat's tools (<c>Botchat tools enabled</c>, or the <c>Botchat limited tools</c> alone) and memory
+/// user's asks), the main chat's tools (the <c>Botchat limited tools</c>; only the eight groups of <see cref="LimitedGroups"/> since
+/// 2026-10-22, when <c>Botchat tools enabled</c> went) and memory
 /// (<c>Botchat memory enabled</c>, on by default; <see cref="BotChatMemoryMode"/> says whose): each its own switch on the tab.</para>
 ///
 /// <para>Who speaks next (2026-09-25, the user's report: a bot asked another by name and a third answered):
@@ -238,8 +239,8 @@ public static partial class BotChat
     /// <summary>
     /// The system prompt for one speaker's turn: its persona (<see cref="Assistant.DefaultPersona"/> when its
     /// profile has no <c>persona.md</c>) through <see cref="Assistant.BotSystemPrompt"/>, then <see cref="Rules"/>. Built afresh
-    /// for every turn from that speaker's persona alone. With <paramref name="tools"/> (2026-10-04, <c>Botchat tools enabled</c>
-    /// or <c>Botchat limited tools</c>) the default rules carry the sentences of the tools offered, as the main chat's would; with
+    /// for every turn from that speaker's persona alone. With <paramref name="tools"/> (2026-10-04, <c>Botchat limited tools</c>)
+    /// the default rules carry the sentences of the tools offered, as the main chat's would; with
     /// <paramref name="memories"/> (<c>Botchat memory enabled</c>) the memory section with the list follows them
     /// (<paramref name="memorySave"/>: <c>save_memory</c> offered) and <see cref="Rules"/> gains <see cref="MemoryRule"/>. With
     /// <paramref name="skills"/> (<c>Botchat skills enabled</c>, 2026-09-27, or <c>Botchat limited skills</c> since 2026-10-04: the
@@ -314,6 +315,20 @@ public static partial class BotChat
         tools.AddRange(general.Where(tool => seen.Add(tool.Name)));
         tools.AddRange(own.DistinctBy(tool => tool.Name, StringComparer.Ordinal));
         return tools;
+    }
+
+    /// <summary>
+    /// The groups the <c>Botchat limited tools</c> checklist lists (2026-10-22, the user's ask: no more <c>Botchat tools enabled</c>,
+    /// and the bots' tools held to the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups): each of
+    /// <paramref name="groups"/> with at least one tool and every tool in <paramref name="names"/> (the screen's
+    /// <c>BotLimitedToolNames</c>), as it came; a group with any other tool is left out whole. The caller builds the Image group
+    /// without <c>set_splash_image</c>, so the eight come whole and nothing needs recounting. Pure.
+    /// </summary>
+    public static IReadOnlyList<ToolGroup> LimitedGroups(IReadOnlyList<ToolGroup> groups, IReadOnlySet<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(names);
+        return groups.Where(group => group.Tools.Count > 0 && group.Tools.All(tool => names.Contains(tool.Name))).ToList();
     }
 
     /// <summary>

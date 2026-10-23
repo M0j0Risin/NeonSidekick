@@ -55,7 +55,6 @@ public class AppSettingsTests : IDisposable
         BotChatImageMentionMode = "generate",   // disabled by default since 2026-10-13
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
-        BotChatTools = true,
         BotChatLimitedTools = ["web_search", "read_file"],
         BotChatSkills = true,
         BotChatLimitedSkills = ["pony-prompts", "haiku"],

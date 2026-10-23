@@ -15,7 +15,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The admin families on the screen (2026-10-15, the admin-tools plan): a model's service change asked on the pane — yes runs it, no is its
-/// answer —, a task's run the same way, what is offered without a pane and in plan mode, the bots' and scripts' redacted twins, and the user's
+/// answer —, a task's run the same way, what is offered without a pane and in plan mode, the scripts' and advisors' redacted twins, and the user's
 /// own <c>/services</c>, <c>/tasks</c>, <c>/ad</c> and <c>/net</c>.
 /// </summary>
 public partial class ChatScreenTests
@@ -155,12 +155,12 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public void Twins_TheBotsAndScriptsReadRedacted_AndNeverChange()
+    public void Twins_ReadRedacted_AndNeverChange()
     {
         var access = new ServiceAccess(new FakeServiceSystem(), () => ServiceConfigFile.Family.LocalOnly, () => null, _time);
-        var bots = ChatScreen.ServiceTools(access, () => new AppSettingsData(), null, forceRedacted: true);
-        Assert.Equal([ServiceListTool.ToolName, ServiceInfoTool.ToolName], bots.Select(t => t.Name));
-        Assert.All(bots, t => Assert.True(((ServiceTool)t).ForceRedacted));
+        var redacted = ChatScreen.ServiceTools(access, () => new AppSettingsData(), null, forceRedacted: true);
+        Assert.Equal([ServiceListTool.ToolName, ServiceInfoTool.ToolName], redacted.Select(t => t.Name));
+        Assert.All(redacted, t => Assert.True(((ServiceTool)t).ForceRedacted));
         var main = ChatScreen.ServiceTools(access, () => new AppSettingsData(), null);
         Assert.All(main.Select(RedactedTwins.Of).OfType<ServiceListTool>(), t => Assert.True(t.ForceRedacted));
         var directory = new DirectoryAccess(new FakeDirectorySystem(), () => new DirectoryCatalog([], []), () => null, () => null, _time);

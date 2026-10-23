@@ -852,10 +852,7 @@ public enum SettingsField
     /// <summary>Typed: the <c>OpenAI-Project</c> header, empty for none (<see cref="Settings.AppSettingsData.OpenAIApiProject"/>). The OpenAI tab's last row (2026-10-03); a reconnect.</summary>
     OpenAIApiProject,
 
-    /// <summary>A toggle: whether the <c>/botchat</c> bots get the main chat's tools (<see cref="Settings.AppSettingsData.BotChatTools"/>). The Botchat tab, after the non-TTS delay (2026-10-04, the user's ask); no reconnect (read per reply).</summary>
-    BotChatTools,
-
-    /// <summary>A checklist: the tools the <c>/botchat</c> bots get while <see cref="BotChatTools"/> is off (<see cref="Settings.AppSettingsData.BotChatLimitedTools"/>). The Botchat tab, under the tools switch (2026-10-04, the user's ask); no reconnect (read per reply).</summary>
+    /// <summary>A checklist: the tools the <c>/botchat</c> bots get, from the eight groups a bot may have (<see cref="Settings.AppSettingsData.BotChatLimitedTools"/>). The Botchat tab, after the non-TTS delay (2026-10-04, the user's ask; its <c>Botchat tools enabled</c> switch above it retired 2026-10-22); no reconnect (read per reply).</summary>
     BotChatLimitedTools,
 
     /// <summary>A toggle: whether the <c>/botchat</c> bots remember (<see cref="Settings.AppSettingsData.BotChatMemory"/>). The Botchat tab, under the limited skills (2026-10-04, the user's ask); no reconnect (read per reply).</summary>
@@ -1777,7 +1774,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
@@ -2289,7 +2286,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
-            or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatTools or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill
+            or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill
             or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCodeServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
@@ -2499,7 +2496,6 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatImageMentionMode => "Botchat image mention mode",   // "Image mention mode" on the Botchat tab (RowName)
         SettingsField.BotChatImageAsync => "Botchat image async",
         SettingsField.BotChatNonTtsDelaySeconds => "Botchat reading pause (s)",
-        SettingsField.BotChatTools => "Botchat tools enabled",
         SettingsField.BotChatLimitedTools => "Botchat limited tools",
         SettingsField.BotChatSkills => "Botchat skills enabled",
         SettingsField.BotChatVision => "Botchat vision enabled",
@@ -2929,7 +2925,6 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatImageMentionMode => data.BotChatImageMentionMode,
             SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
             SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
-            SettingsField.BotChatTools => OnOff(data.BotChatTools),
             SettingsField.BotChatLimitedTools => LimitedNamesValue(data.BotChatLimitedTools),
             SettingsField.BotChatSkills => OnOff(data.BotChatSkills),
             SettingsField.BotChatVision => OnOff(data.BotChatVision),
@@ -3164,9 +3159,6 @@ internal sealed partial class SettingsMenu
     /// <summary>When the <c>Botchat limited tools</c> checklist has nothing to list (2026-10-04). Pinned.</summary>
     public const string NoToolsToLimit = "No tools to list for the botchat.";
 
-    /// <summary>The <c>Botchat limited tools</c> checklist's caption while <c>Botchat tools enabled</c> is on (2026-10-04): the list waits. Pinned.</summary>
-    public const string LimitedToolsUnusedCaption = "Botchat tools enabled is on: the bots get every tool, and this list is not used until it is off.";
-
     /// <summary>The <c>Botchat ComfyUI limited workflows</c> checklist's caption while <c>Botchat ComfyUI enabled</c> is on (later on 2026-10-04). Pinned.</summary>
     public const string LimitedComfyUnusedCaption = "Botchat ComfyUI enabled is on: the bots get this profile's offered workflows, and this list is not used until it is off.";
 
@@ -3185,9 +3177,6 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The dim note on a <c>Botchat limited skills</c> row whose skill is ticked but not listed now (2026-10-04). Pinned.</summary>
     public const string NotAvailableNote = "not available now";
-
-    /// <summary>The <c>Botchat limited tools</c> heading over the ticked tools not listed now — an MCP server not connected (2026-10-04). Pinned.</summary>
-    public const string NotAvailableHeading = "Not available now";
 
     /// <summary>A ticked <c>Botchat limited skills</c> name with no skill listed now (2026-10-04): the mark, the name, <see cref="NotAvailableNote"/> dim; Enter unticks it, and then it is gone from the list. Pinned.</summary>
     public static string LimitedGoneRow(string name, int width)
@@ -3210,10 +3199,10 @@ internal sealed partial class SettingsMenu
     /// draws it — then a row per tool: the mark, the name padded to <see cref="ToolsText.NameWidth"/>, the description cut short
     /// and dim, with the tool's own note when the main chat would not offer it. The tool's name beside its row, null beside a gap
     /// or a heading; <c>Heading</c> true beside a heading (<see cref="ToolsText.HeadingRows"/>). A group with no tool is left out.
-    /// <paramref name="gone"/>, the ticked names not listed now, close the list under <see cref="NotAvailableHeading"/>, each ticked
-    /// with <see cref="NotAvailableNote"/> (2026-10-04). Pure.
+    /// The ticked names not listed closed the list under a heading of their own until 2026-10-22, when the list stopped following
+    /// the MCP servers (the eight groups a bot may have): the checklist drops them as it opens instead. Pure.
     /// </summary>
-    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> LimitedToolRows(IReadOnlyList<ToolGroup> groups, IReadOnlySet<string> chosen, IReadOnlyList<string>? gone = null)
+    public static IReadOnlyList<(string Markup, string? Tool, bool Heading)> LimitedToolRows(IReadOnlyList<ToolGroup> groups, IReadOnlySet<string> chosen)
     {
         ArgumentNullException.ThrowIfNull(groups);
         ArgumentNullException.ThrowIfNull(chosen);
@@ -3232,17 +3221,6 @@ internal sealed partial class SettingsMenu
                 string note = group.Offered && group.ToolNotes.TryGetValue(tool.Name, out var why) ? "  " + why : "";
                 rows.Add((Markup.Escape((chosen.Contains(tool.Name) ? "[x] " : "[ ] ") + tool.Name.PadRight(ToolsText.NameWidth)) + Theme.DimMarkup(about + note), tool.Name, false));
             }
-        }
-
-        if (gone is { Count: > 0 })
-        {
-            if (rows.Count > 0)
-            {
-                rows.Add(("", null, false));
-            }
-
-            rows.Add((SectionRule.Markup(NotAvailableHeading, gone.Count.ToString(CultureInfo.InvariantCulture)), null, true));
-            rows.AddRange(gone.Select(name => (LimitedGoneRow(name, ToolsText.NameWidth), (string?)name, false)));
         }
 
         return rows;
@@ -8156,7 +8134,6 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedDrafter => data.EmbeddedDrafter,
             SettingsField.BotChatComfy => data.BotChatComfy,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
-            SettingsField.BotChatTools => data.BotChatTools,
             SettingsField.BotChatSkills => data.BotChatSkills,
             SettingsField.BotChatMemory => data.BotChatMemory,
             SettingsField.BotChatVision => data.BotChatVision,
@@ -8290,7 +8267,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.EmbeddedDrafter: data.EmbeddedDrafter = on; break;
             case SettingsField.BotChatComfy: data.BotChatComfy = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
-            case SettingsField.BotChatTools: data.BotChatTools = on; break;
             case SettingsField.BotChatSkills: data.BotChatSkills = on; break;
             case SettingsField.BotChatMemory: data.BotChatMemory = on; break;
             case SettingsField.BotChatVision: data.BotChatVision = on; break;
@@ -8450,7 +8426,6 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedDrafter => on ? "the embedded model drafts ahead with its drafter (faster, same answers)" : "the embedded model decodes one token at a time, no drafter loaded",
         SettingsField.BotChatComfy => on ? "the bots get this profile's offered ComfyUI workflows" : "the bots get the Botchat ComfyUI limited workflows alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
-        SettingsField.BotChatTools => on ? "the bots get every tool this chat would offer" : "the bots get the Botchat limited tools alone",
         SettingsField.BotChatSkills => on ? "the bots get load_skill over the skills this chat sees" : "the bots get the Botchat limited skills alone",
         SettingsField.BotChatMemory => on ? "the bots remember (Botchat memory mode says whose memories)" : "the bots remember nothing",
         SettingsField.BotChatVision => on ? "each bot sees the pictures shown since it last spoke (vision models)" : "the bots see text alone",
@@ -9726,32 +9701,39 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The <c>Botchat limited tools</c> checklist (2026-10-04, the user's ask): the main chat's tools by group
-    /// (<see cref="LimitedToolRows"/>, the memory and skill groups left out — their own botchat switches say), headings never a
-    /// stop. Enter or Space flips one, A every listed tool, N none, saved at once. A ticked name not listed now (an MCP server not
-    /// connected) is a row under <see cref="NotAvailableHeading"/> at the end (2026-10-04, the user's call: until then it rode along
-    /// unseen and even N kept it), never dropped by itself since it may come back; Enter unticks it, A keeps it, N clears it with the
-    /// rest. Its caption says the list waits while <c>Botchat tools enabled</c> is on.
+    /// The <c>Botchat limited tools</c> checklist (2026-10-04, the user's ask): the tools of the eight groups a bot may have by group
+    /// (<see cref="LimitedToolRows"/> over the screen's <c>BotChatToolGroups</c>: Camera, Clock, Image, Questions, Screen, Timers, Web
+    /// and YouTube since 2026-10-22, the user's ask), headings never a stop. Enter or Space flips one, A every listed tool, N none,
+    /// saved at once. A ticked name not listed (another group's, an MCP server's: the bots never get it) is dropped as the
+    /// checklist opens, with <see cref="StaleDroppedNotice"/> (2026-10-22, as the file-backed lists do; a row under a heading of its
+    /// own from 2026-10-04, while the list followed the MCP servers connected).
     /// </summary>
     private async Task<bool> EditBotChatLimitedToolsAsync(CancellationToken cancellationToken)
     {
         bool changed = false;
+        bool pruned = false;
         int cursor = -1;
         while (true)
         {
             var groups = _botChatTools();
-            var listed = groups.SelectMany(g => g.Tools).Select(t => t.Name).Distinct(StringComparer.Ordinal).ToList();
-            var chosen = _settings.Current.BotChatLimitedTools ?? [];
-            var gone = OfferedNames.Gone(chosen, listed, StringComparer.Ordinal);
-            var names = listed.Concat(gone).ToList();
+            var names = groups.SelectMany(g => g.Tools).Select(t => t.Name).Distinct(StringComparer.Ordinal).ToList();
             if (names.Count == 0)
             {
                 Sink.Error(NoToolsToLimit);
                 return changed;
             }
 
+            if (!pruned)
+            {
+                pruned = true;
+                var saved = _settings.Current.BotChatLimitedTools;
+                changed = PruneStale(SettingsField.BotChatLimitedTools, saved, OfferedNames.Stale(saved, names, [], StringComparer.Ordinal), StringComparer.Ordinal,
+                    (d, kept) => d.BotChatLimitedTools = kept.Count == 0 ? null : kept);
+            }
+
+            var chosen = _settings.Current.BotChatLimitedTools ?? [];
             var on = chosen.Select(n => n.Trim()).ToHashSet(StringComparer.Ordinal);
-            var rows = LimitedToolRows(groups, on, gone);
+            var rows = LimitedToolRows(groups, on);
             if (cursor < 0)
             {
                 cursor = Math.Max(0, rows.ToList().FindIndex(r => r.Tool is not null));
@@ -9761,7 +9743,6 @@ internal sealed partial class SettingsMenu
             {
                 SpaceToggles = true,
                 Headings = ToolsText.HeadingRows(rows),
-                Caption = _settings.Current.BotChatTools ? LimitedToolsUnusedCaption : null,
             };
             var picked = await PickChecklistAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)

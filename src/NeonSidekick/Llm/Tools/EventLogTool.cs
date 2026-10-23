@@ -8,7 +8,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// What the four event-log tools share (2026-10-15, the event-log plan, <see cref="DockerTool"/>'s shape): the
 /// <see cref="EventLogAccess"/> door, the settings in force at each call, the arguments' readers, and the redacted twin. A tool built
-/// with <c>forceRedacted</c> reads every computer redacted whatever its <c>detail</c> — the bots' (<c>BotGeneralTools</c>), the advisors'
+/// with <c>forceRedacted</c> reads every computer redacted whatever its <c>detail</c> — the advisors'
 /// (<see cref="NeonAdvisorTool.ReadOnlyOf"/>) and a script's through <c>execute_code</c>'s bridge — so <c>full</c> stays the main chat's
 /// alone. Every tool reads; none changes anything. A refusal is an <c>Error:</c> sentence, never a throw.
 /// </summary>

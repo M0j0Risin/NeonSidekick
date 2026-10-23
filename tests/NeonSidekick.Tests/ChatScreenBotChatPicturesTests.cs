@@ -651,16 +651,16 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The user's report (later on 2026-10-04): with Botchat tools enabled on, the main chat's generate_image (over ComfyUI
-    /// workflows offered) sat beside the bot's own, and the bots drew with the profile's workflows. Now the bots get one
-    /// generate_image, over the botchat workflows alone.
+    /// The user's report (later on 2026-10-04): with Botchat tools enabled on (retired 2026-10-22), the main chat's generate_image
+    /// (over ComfyUI workflows offered) sat beside the bot's own, and the bots drew with the profile's workflows. Now the bots get one
+    /// generate_image, over the botchat workflows alone, even with generate_image ticked in the limited tools.
     /// </summary>
     [Fact]
-    public async Task BotChat_WithBotchatToolsOn_TheBotsGetOneGenerateImage_OverTheBotchatWorkflowsAlone()
+    public async Task BotChat_GenerateImageTicked_TheBotsGetOneGenerateImage_OverTheBotchatWorkflowsAlone()
     {
         var stub = BotPicturesFixture(mode: "autonomous");
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"), File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json")));
-        _settings.Update(d => { d.BotChatTools = true; d.ComfyWorkflowsOffered = ["other-t2i"]; });
+        _settings.Update(d => { d.BotChatLimitedTools = [GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; d.ComfyWorkflowsOffered = ["other-t2i"]; });
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(2);

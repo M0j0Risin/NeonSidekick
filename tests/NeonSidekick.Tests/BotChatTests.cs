@@ -393,6 +393,25 @@ public class BotChatTests
         protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new("ok");
     }
 
+    /// <summary>
+    /// The checklist's groups (2026-10-22, the user's ask): a group whose every tool a bot may have is kept as it came, one with any
+    /// other tool (or none) is left out whole.
+    /// </summary>
+    [Fact]
+    public void LimitedGroups_KeepTheGroupsABotMayHave_Whole()
+    {
+        ToolGroup Group(string label, params string[] tools) => new($"{label} ({tools.Length})", "", tools.Select(t => (AIFunction)new NamedTool(t)).ToList(), true) { Label = label };
+        var clock = Group("Clock", "get_current_time");
+        var web = Group("Web", "web_search", "web_fetch");
+        ToolGroup[] groups = [clock, Group("Files", "read_file"), Group("Mixed", "get_current_time", "read_file"), Group("Empty"), web];
+
+        var kept = BotChat.LimitedGroups(groups, new HashSet<string>(["get_current_time", "web_search", "web_fetch"], StringComparer.Ordinal));
+
+        Assert.Equal(2, kept.Count);
+        Assert.Same(clock, kept[0]);
+        Assert.Same(web, kept[1]);
+    }
+
     [Fact]
     public void TurnTools_TheGeneralTools_Memory_ThePicture_ThenTheSkill()
     {

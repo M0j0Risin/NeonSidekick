@@ -22,12 +22,6 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _eventLogTools;
 
     /// <summary>
-    /// The bots' twins (2026-10-15, the plan's "who sees what"): the same four reading every computer redacted, whatever its <c>detail</c> —
-    /// <see cref="BotGeneralTools"/> offers these in the main chat's place, so <c>full</c> stays the main chat's.
-    /// </summary>
-    private readonly IReadOnlyList<AIFunction> _eventLogBotTools;
-
-    /// <summary>
     /// The event-log tools (2026-10-15): <c>eventlog_logs</c>, <c>eventlog_search</c>, <c>eventlog_summary</c> and <c>eventlog_event</c>, every
     /// one a read; <paramref name="forceRedacted"/> builds the twins that read every computer redacted. Shared with headless.
     /// </summary>

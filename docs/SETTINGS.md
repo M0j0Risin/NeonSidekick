@@ -98,8 +98,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat image mention mode | Shown as *Image mention mode*. Under `autonomous`: `generate` draws a picture a bot mentions but never drew; `off` ignores it. | `off` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture. | on |
 | Botchat reading pause (s) | A pause after each reply to read it, when *TTS output* is off (0–30). A line you send ends it. | 5 |
-| Botchat tools enabled | Offers every bot the tools a turn of this chat would get, with the same approvals. Off, *Botchat limited tools* decides. | off |
-| Botchat limited tools | With *Botchat tools enabled* off, the tools the bots get (a checklist grouped as on `/tools`). None ticked: no tools. | none |
+| Botchat limited tools | The tools the bots get, from the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups (a checklist). None ticked: no tools. | none |
 | Botchat skills enabled | Offers every bot `load_skill` over this chat's skills. Needs *Agent skills*. Off, *Botchat limited skills* decides. | off |
 | Botchat limited skills | With *Botchat skills enabled* off, the skills the bots may load (a checklist). None ticked: no skill tool. | none |
 | Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`. Inside `/botchat` this overrides every profile's *Memory mode*. | on |

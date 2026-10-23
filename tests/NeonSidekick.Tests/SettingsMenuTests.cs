@@ -978,7 +978,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
-                SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
+                SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
                 SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows
                 SettingsField.DiffCollapseCount,   // later still on 2026-10-04, /tools' Options tab under Diff max lines: the diff's fold
                 SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder,   // later still on 2026-10-04, /tools' Files tab: image_edit's defaults
@@ -5158,14 +5158,14 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// Botchat limited tools on the pane (2026-10-04, the user's ask): the tools by group under their headings, the cursor on the
-    /// first tool; Space flips one, A ticks every listed tool, N none — saved as null. A name ticked before but not listed now (an
-    /// MCP server not connected) is a row under its own heading at the end (2026-10-04, the user's call): A keeps it, N clears it.
-    /// While Botchat tools enabled is on, the caption says the list waits.
+    /// first tool; Space flips one, A ticks every listed tool, N none — saved as null. A name ticked before but not listed (another
+    /// group's, an MCP server's: since 2026-10-22 the list holds the eight groups a bot may have) is dropped as the checklist opens,
+    /// with the notice, even when Esc leaves at once.
     /// </summary>
     [Fact]
-    public async Task OnThePane_BotchatLimitedTools_ByGroup_FlipsOne_SelectsAll_ThenNone_AGoneNameARowOfItsOwn()
+    public async Task OnThePane_BotchatLimitedTools_ByGroup_DropsAnUnlistedName_FlipsOne_SelectsAll_ThenNone()
     {
-        _settings.Update(d => d.BotChatLimitedTools = ["chrome__gone"]);
+        _settings.Update(d => d.BotChatLimitedTools = ["get_current_time", "run_command"]);
         ToolGroup[] groups =
         [
             new("Clock (1)", "", [new NamedTool("get_current_time", "The time.")], true) { Label = "Clock" },
@@ -5175,53 +5175,36 @@ public partial class SettingsMenuTests : IDisposable
         GoTo(SettingsTab.BotChat);
         Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
         Push(Keys.Enter);
-        Push(Keys.Char(' '));                   // the clock, the first tool, on
-        Push(Keys.Escape, Keys.Escape);
+        Push(Keys.Escape, Keys.Escape);         // nothing flipped: the unlisted name goes as the list opens
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["get_current_time", "chrome__gone"], _settings.Current.BotChatLimitedTools);
+        Assert.Equal(["get_current_time"], _settings.Current.BotChatLimitedTools);
+        Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.BotChatLimitedTools, ["run_command"]), Output);
         Assert.Contains("not offered: web tools is off", Output);
-        Assert.Contains(SettingsMenu.NotAvailableHeading, Output);
-        Assert.DoesNotContain(SettingsMenu.LimitedToolsUnusedCaption, Output);
 
-        _settings.Update(d => d.BotChatTools = true);
         (menu, pane) = PaneMenu(botChatTools: () => groups);
         GoTo(SettingsTab.BotChat);
         Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
         Push(Keys.Enter);
+        Push(Keys.Char(' '));                   // the clock, the first tool, off
         Push(Keys.Char('a'));                   // all three
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
-        Assert.Equal(["get_current_time", "web_search", "web_fetch", "chrome__gone"], _settings.Current.BotChatLimitedTools);
-        Assert.Contains(SettingsMenu.LimitedToolsUnusedCaption, Output);
+        Assert.Equal(["get_current_time", "web_search", "web_fetch"], _settings.Current.BotChatLimitedTools);
 
         (menu, pane) = PaneMenu(botChatTools: () => groups);
         GoTo(SettingsTab.BotChat);
         Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatLimitedTools));
         Push(Keys.Enter);
-        Push(Keys.Char('n'));                   // none, the gone name too
+        Push(Keys.Char('n'));                   // none
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
         pane.Dispose();
 
         Assert.Null(_settings.Current.BotChatLimitedTools);
-    }
-
-    /// <summary>The limited tools' rows with gone names (2026-10-04): a gap and <see cref="SettingsMenu.NotAvailableHeading"/> after the groups, then each gone name ticked, its name beside its row.</summary>
-    [Fact]
-    public void LimitedToolRows_CloseWithTheGoneNamesUnderTheirHeading()
-    {
-        ToolGroup[] groups = [new("Clock (1)", "", [new NamedTool("get_current_time", "The time.")], true) { Label = "Clock" }];
-        var rows = SettingsMenu.LimitedToolRows(groups, new HashSet<string>(["chrome__gone"], StringComparer.Ordinal), ["chrome__gone"]);
-
-        Assert.Equal([null, "get_current_time", null, null, "chrome__gone"], rows.Select(r => r.Tool));
-        Assert.Equal([0, 3], NeonSidekick.App.ToolsText.HeadingRows(rows).Order());
-        Assert.Contains(SettingsMenu.NotAvailableHeading, rows[3].Markup);
-        Assert.Equal(SettingsMenu.LimitedGoneRow("chrome__gone", NeonSidekick.App.ToolsText.NameWidth), rows[4].Markup);
-        Assert.Equal(2, SettingsMenu.LimitedToolRows(groups, new HashSet<string>(StringComparer.Ordinal), []).Count);   // none gone, no heading
     }
 
     /// <summary>The limited tools' rows (2026-10-04): a heading per group, a gap between, the mark and the name per tool, the tool's name beside its row alone.</summary>

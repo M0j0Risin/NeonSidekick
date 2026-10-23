@@ -74,7 +74,7 @@ public sealed class EventLogAccess
 
     /// <summary>
     /// The computer <paramref name="computer"/> names among the ticked ones (or the default), with its target — the <c>runas</c> password
-    /// resolved now. <paramref name="forceRedacted"/> (a bot's, an advisor's, a script's call) reads it redacted whatever its detail.
+    /// resolved now. <paramref name="forceRedacted"/> (an advisor's, a script's call; a bot's until 2026-10-22) reads it redacted whatever its detail.
     /// </summary>
     public (EventLogSource? Source, string? Error) Computer(string? computer, bool forceRedacted)
     {

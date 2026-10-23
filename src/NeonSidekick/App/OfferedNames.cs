@@ -8,9 +8,10 @@ namespace NeonSidekick.App;
 /// limited skills and tools), 2026-10-04, the user's call. Until that day a saved name the checklist no longer listed was carried
 /// along at every save ("it counts again if it comes back"), so it could never be unticked: <c>profile.json</c> kept workflows
 /// long deleted and N kept them too. Now the lists read from files (and Docker's, from an engine that answered) drop such a name
-/// when their checklist opens (<see cref="Stale"/>), while the two whose listing follows what is running — the botchat's tools
-/// (an MCP server not connected) and skills (external skills, the folder's own) — show it as a row of its own the user can untick
-/// (<see cref="Gone"/>). Pure.
+/// when their checklist opens (<see cref="Stale"/>), the botchat's limited tools too since 2026-10-22 (held to eight groups, they no
+/// longer follow the MCP servers connected), while the one whose listing follows what is running — the botchat's skills (external
+/// skills, the folder's own) — shows it as a row of its own the user can untick (<see cref="Gone"/>; the tools did too until
+/// 2026-10-22). Pure.
 /// </summary>
 public static class OfferedNames
 {
@@ -52,7 +53,7 @@ public static class OfferedNames
             : Stale(saved, listed, problems.Select(p => p.Name).OfType<string>(), StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>The ticked names the botchat's limited tools and skills show as rows of their own: <see cref="Stale"/> with nothing else present.</summary>
+    /// <summary>The ticked names the botchat's limited skills show as rows of their own: <see cref="Stale"/> with nothing else present.</summary>
     public static IReadOnlyList<string> Gone(IReadOnlyList<string>? saved, IEnumerable<string> listed, StringComparer comparer) =>
         Stale(saved, listed, [], comparer);
 

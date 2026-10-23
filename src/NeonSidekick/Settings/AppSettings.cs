@@ -991,7 +991,6 @@ public sealed class AppSettings : IDisposable
         BotChatImageMentionMode = source.BotChatImageMentionMode,
         BotChatImageAsync = source.BotChatImageAsync,
         BotChatNonTtsDelaySeconds = source.BotChatNonTtsDelaySeconds,
-        BotChatTools = source.BotChatTools,
         BotChatLimitedTools = source.BotChatLimitedTools is null ? null : [.. source.BotChatLimitedTools],
         BotChatSkills = source.BotChatSkills,
         BotChatLimitedSkills = source.BotChatLimitedSkills is null ? null : [.. source.BotChatLimitedSkills],

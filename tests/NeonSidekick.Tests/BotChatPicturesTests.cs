@@ -415,8 +415,8 @@ public class BotChatPicturesTests
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal(2, (int)SettingsTab.BotChat);   // third, under Client after Chat and Sessions, since later on 2026-10-10 (the user's order); before the Advisors tab from 2026-10-10; last again from later on 2026-09-27 (the Claude tab moved to /tools)
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatTools, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat ComfyUI enabled", "Botchat ComfyUI limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image mention mode", "Botchat image async", "Botchat reading pause (s)", "Botchat tools enabled", "Botchat limited tools", "Botchat skills enabled", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat ComfyUI enabled", "Botchat ComfyUI limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image mention mode", "Botchat image async", "Botchat reading pause (s)", "Botchat limited tools", "Botchat skills enabled", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         // Botchat recent context (later still on 2026-10-10): a toggle, off, saying what the bots are told.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatRecentContext));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatRecentContext, data, "."));
@@ -466,13 +466,10 @@ public class BotChatPicturesTests
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedSkills));
         Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, data, "."));
         Assert.Equal("haiku, pony-prompts", SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, new AppSettingsData { BotChatLimitedSkills = ["haiku", " pony-prompts ", ""] }, "."));
-        // Tools (2026-10-04): a toggle, off by default, and its checklist, none by default.
-        Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatTools));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatTools, data, "."));
+        // Tools (2026-10-04): a checklist, none by default (its Botchat tools enabled switch retired 2026-10-22).
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedTools));
         Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, data, "."));
         Assert.Equal("web_search, read_file", SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, new AppSettingsData { BotChatLimitedTools = ["web_search", "read_file"] }, "."));
-        Assert.Equal("the bots get every tool this chat would offer", SettingsMenu.ToggleDescribe(SettingsField.BotChatTools, true));
         // Memory (2026-10-04): a toggle, on by default, and its mode, shared-parent by default.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatMemory));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatMemory, data, "."));

@@ -27,37 +27,29 @@ internal sealed partial class ChatScreen
     /// <summary>The main chat's scan budget: reset as each turn's tools are composed; scripts' and advisors' calls count against it too.</summary>
     private readonly NetworkBudget _networkBudget = new();
 
-    /// <summary>The bots' scan budget: reset at each bot turn.</summary>
-    private readonly NetworkBudget _networkBotBudget = new();
-
     private IReadOnlyList<AIFunction> _networkTools = [];
-    private IReadOnlyList<AIFunction> _networkBotTools = [];
     private ServiceAccess _services = null!;
     private IReadOnlyList<AIFunction> _serviceTools = [];
-    private IReadOnlyList<AIFunction> _serviceBotTools = [];
     private TaskAccess _tasks = null!;
     private IReadOnlyList<AIFunction> _taskTools = [];
-    private IReadOnlyList<AIFunction> _taskBotTools = [];
     private DirectoryAccess _directory = null!;
     private IReadOnlyList<AIFunction> _directoryTools = [];
-    private IReadOnlyList<AIFunction> _directoryBotTools = [];
 
-    /// <summary>The four families built over their doors (the constructor's call): the main chat's tools and the bots' redacted twins.</summary>
+    /// <summary>
+    /// The four families built over their doors (the constructor's call): the main chat's tools. The bots' redacted twins and their scan
+    /// budget went on 2026-10-22, when a bot's tools were held to eight groups none of these is in.
+    /// </summary>
     private void InitAdmin(IPinger? pinger, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve, IServiceSystem? serviceSystem, ITaskSystem? taskSystem, IDirectorySystem? directorySystem, Func<string?>? joinedDomain)
     {
         _network = new NetworkAccess(_effective, pinger, _time, resolve);
         _networkTools = NetworkTools(_network, _networkBudget);
-        _networkBotTools = NetworkTools(_network, _networkBotBudget);
         _services = new ServiceAccess(serviceSystem, () => ServiceConfigFile.Family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().ServiceComputersOffered, _time);
         _serviceTools = ServiceTools(_services, _effective, ConfirmAdminAsync);
-        _serviceBotTools = ServiceTools(_services, _effective, null, forceRedacted: true);
         _tasks = new TaskAccess(taskSystem, () => TaskConfigFile.Family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().TaskComputersOffered, _time);
         _taskTools = TaskTools(_tasks, _effective, ConfirmAdminAsync);
-        _taskBotTools = TaskTools(_tasks, _effective, null, forceRedacted: true);
         var joined = joinedDomain ?? (() => DomainJoin.Current);
         _directory = new DirectoryAccess(directorySystem, () => DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, joined()), () => _effective().DirectoryDomainsOffered, joined, _time);
         _directoryTools = DirectoryTools(_directory, saveRoot: DirectorySaveRootNow);
-        _directoryBotTools = DirectoryTools(_directory, forceRedacted: true);
     }
 
     // ── The tools ───────────────────────────────────────────────────────────
@@ -73,7 +65,7 @@ internal sealed partial class ChatScreen
         new NetCertsTool(access, budget),
     ];
 
-    /// <summary>The services tools: the two reads, and the two changes unless <paramref name="forceRedacted"/> (a bot's set). Shared with headless (the changes never offered there).</summary>
+    /// <summary>The services tools: the two reads, and the two changes unless <paramref name="forceRedacted"/> (a redacted set). Shared with headless (the changes never offered there).</summary>
     public static IReadOnlyList<AIFunction> ServiceTools(ServiceAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm, bool forceRedacted = false) =>
         forceRedacted
             ? [new ServiceListTool(access, effective, true), new ServiceInfoTool(access, effective, true)]
@@ -284,23 +276,6 @@ internal sealed partial class ChatScreen
         DirectoryEnabled = DirectoryOffered(effective, _directory),
     };
 
-    /// <summary>The four families' inputs for a bot's turn: the redacted reads alone, the bots' own scan budget, never a change.</summary>
-    private TurnToolInputs WithAdminForBot(TurnToolInputs inputs, AppSettingsData effective)
-    {
-        _networkBotBudget.Reset();
-        return inputs with
-        {
-            Network = NetworkToolsFor(_networkBotTools, effective, _network.Pinger),
-            NetworkEnabled = NetworkOffered(effective),
-            Services = _serviceBotTools,
-            ServicesEnabled = ServicesOffered(effective, _services),
-            Tasks = _taskBotTools,
-            TasksEnabled = TasksOffered(effective, _tasks),
-            Directory = _directoryBotTools,
-            DirectoryEnabled = DirectoryOffered(effective, _directory),
-        };
-    }
-
     /// <summary>
     /// A model's service or task change's question, on the turn task (2026-10-15, the plan's item 1): on the PC's pane and the Web UI's page at
     /// once (<see cref="ConfirmBothAsync"/>), the first answer winning; null (never asked) with nobody to ask.
@@ -323,8 +298,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The note for an admin tool's result (its first line, the family's glyph), or null for another tool's. A network budget refusal is noted
-    /// once a turn (<see cref="NetworkBudget.NoteOnce"/>), nothing after: the bots' budget's note during a bot's turn, the main chat's otherwise
-    /// (2026-10-19, the network review: a bot's refusal spent the main chat's note, which no bot turn resets).
+    /// once a turn (<see cref="NetworkBudget.NoteOnce"/>), nothing after. The bots had a budget of their own from 2026-10-19 until
+    /// 2026-10-22, when the network tools left the tools a bot may have.
     /// </summary>
     private string? AdminNote(string tool, string text)
     {
@@ -332,8 +307,7 @@ internal sealed partial class ChatScreen
         {
             if (NetworkText.IsBudgetSpent(text))
             {
-                var budget = Volatile.Read(ref _botTurn) is null ? _networkBudget : _networkBotBudget;
-                return budget.NoteOnce() ? NetworkText.BudgetNote : "";
+                return _networkBudget.NoteOnce() ? NetworkText.BudgetNote : "";
             }
 
             return NetworkText.Note(text);

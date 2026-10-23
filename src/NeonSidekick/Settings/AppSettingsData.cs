@@ -1290,7 +1290,7 @@ public sealed class AppSettingsData
     /// <c>ComfyUI URL</c>) — a set with nothing to draw with says so once — and <see cref="BotChatImageMode"/> says who draws. It folds in <c>BotChatImages</c> (<c>Botchat images
     /// enabled</c>, 2026-09-25) and, with <see cref="BotChatLimitedComfyWorkflows"/>, replaces <c>BotChatTxt2ImgWorkflow</c> and
     /// <c>BotChatImg2ImgWorkflow</c> (2026-09-27, one workflow of each kind): the three keys retired, no migration, as ever. The
-    /// main chat's own <c>generate_image</c> is never among the bots' tools since: with <see cref="BotChatTools"/> on it was offered
+    /// main chat's own <c>generate_image</c> is never among the bots' tools since: with <c>Botchat tools enabled</c> on (retired 2026-10-22) it was offered
     /// beside botchat's narrowed one under the same name, and the bots drew with the profile's workflows (the user's report).
     /// Read per reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
@@ -1361,21 +1361,12 @@ public sealed class AppSettingsData
     public const int DefaultBotChatNonTtsDelaySeconds = 5;
 
     /// <summary>
-    /// Whether the <c>/botchat</c> bots get the main chat's tools (2026-10-04, the user's ask): on, every bot is offered the
-    /// tools a turn of the main chat would be — the starting profile's tool switches, <c>/tools</c>' Offered list and plan mode's
-    /// read-only narrowing (never <c>present_plan</c>) — with their rules in its prompt, and the panes they ask on (the shell's
-    /// approval, the Docker, Home Assistant and print confirms, <c>ask_user</c>, the camera's shutter) shown as in a normal chat.
-    /// Skills, memory and the ComfyUI tools are not among them: <see cref="BotChatSkills"/>, <see cref="BotChatMemory"/> and
-    /// <see cref="BotChatComfy"/> say (the last since later on 2026-10-04: the main chat's <c>generate_image</c> beside botchat's
-    /// own had the bots drawing with the profile's workflows). Off (the default),
-    /// <see cref="BotChatLimitedTools"/> says. Read per reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
-    /// </summary>
-    public bool BotChatTools { get; set; }
-
-    /// <summary>
-    /// The tools the <c>/botchat</c> bots get while <see cref="BotChatTools"/> is off (2026-10-04, the user's ask): tool names
-    /// (an MCP server's as <c>server__tool</c>), each offered only while the main chat would offer it too — its switch on, not
-    /// off on <c>/tools</c>. Null or empty (the default) is none. A name not offered now is kept and skipped. Read per reply.
+    /// The tools the <c>/botchat</c> bots get (2026-10-04, the user's ask): tool names, each offered only while the main chat
+    /// would offer it too — its switch on, not off on <c>/tools</c> — with its rules in the bot's prompt and the panes it asks on.
+    /// Since 2026-10-22 (the user's ask) only the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups' tools
+    /// (<c>ChatScreen.BotLimitedToolNames</c>, never <c>set_splash_image</c>): any other name is skipped, and the checklist drops it
+    /// as it opens. <c>BotChatTools</c> (<c>Botchat tools enabled</c>, every tool a main-chat turn would get, MCP servers' too) was
+    /// retired the same day, no migration: a profile's key is skipped on read. Null or empty (the default) is none. Read per reply.
     /// The Botchat tab of <c>/settings</c>, a checklist. No variable.
     /// </summary>
     public List<string>? BotChatLimitedTools { get; set; }

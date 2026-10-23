@@ -9,19 +9,22 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The <c>/botchat</c> bots' tools and memory (2026-10-04, the user's asks): <c>Botchat tools enabled</c> and
-/// <c>Botchat limited tools</c>, <c>Botchat memory enabled</c> and <c>Botchat memory mode</c>.
+/// The <c>/botchat</c> bots' tools and memory (2026-10-04, the user's asks): <c>Botchat limited tools</c> (held to eight groups,
+/// and <c>Botchat tools enabled</c> retired, on 2026-10-22), <c>Botchat memory enabled</c> and <c>Botchat memory mode</c>.
 /// </summary>
 public partial class ChatScreenTests
 {
     private static string[] ToolNames(ChatOptions? options) => (options?.Tools ?? []).Cast<AIFunction>().Select(t => t.Name).ToArray();
 
-    /// <summary>Tools on: the bot is offered exactly the main chat's turn's tools, less memory and skills, with the rules they call for.</summary>
+    /// <summary>
+    /// The eight groups alone (2026-10-22, the user's ask): a ticked tool outside the Camera, Clock, Image, Questions, Screen, Timers,
+    /// Web and YouTube groups is never a bot's, though the main chat offers it; the ticked ones of the eight are, with their rules.
+    /// </summary>
     [Fact]
-    public async Task BotChat_ToolsEnabled_TheBotGetsTheMainChatsTools_LessMemoryAndSkills()
+    public async Task BotChat_LimitedTools_OutsideTheEightGroups_NeverOffered()
     {
         BotChatFixture();
-        _settings.Update(d => d.BotChatTools = true);
+        _settings.Update(d => { d.FileTools = true; d.WebTools = true; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, "web_search", "read_file", NeonHelpTool.ToolName]; });
         _chat.EnqueueText("Main reply.");
         _chat.EnqueueText("Hello from Neon.");
         _chat.EnqueueText("Ada ", "answers.");
@@ -33,11 +36,10 @@ public partial class ChatScreenTests
         await RunAsync();
 
         string[] main = ToolNames(_chat.Options[0]);
-        string[] bot = ToolNames(_chat.Options[1]);
-        Assert.Contains(GetCurrentTimeTool.ToolName, bot);
-        Assert.Contains(SaveMemoryTool.ToolName, main);
-        Assert.Equal(main.Where(n => n is not (SaveMemoryTool.ToolName or RecallMemoryTool.ToolName or LoadSkillTool.ToolName or SkillEditorTool.ToolName)), bot);
-        Assert.Contains(Assistant.ToolRules, SystemText(_chat.Requests[1]));
+        Assert.Contains("read_file", main);
+        Assert.Contains(NeonHelpTool.ToolName, main);
+        Assert.Equal([GetCurrentTimeTool.ToolName, "web_search"], ToolNames(_chat.Options[1]).Order(StringComparer.Ordinal));
+        Assert.Contains(Assistant.WebRule, SystemText(_chat.Requests[1]));
         Assert.Contains("in a group chat with ada and the user", SystemText(_chat.Requests[1]));
     }
 
@@ -66,18 +68,16 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// The main chat's ComfyUI tools are never the bots' (later on 2026-10-04, the user's report: its generate_image sat beside the
-    /// bot's own and the bots drew with the profile's workflows): ticked in the limited tools, or with the tools on, they are not
+    /// bot's own and the bots drew with the profile's workflows): ticked in the limited tools, they are not
     /// offered; the Botchat ComfyUI rows alone give a bot generate_image.
     /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BotChat_TheMainChatsComfyTools_AreNeverTheBots(bool toolsEnabled)
+    [Fact]
+    public async Task BotChat_TheMainChatsComfyTools_AreNeverTheBots()
     {
         BotChatFixture();
         ComfyServer();   // pony offered to the main chat
         // The picture tools on too (2026-10-12): set_splash_image is theirs since, and still never a bot's.
-        _settings.Update(d => { d.BotChatTools = toolsEnabled; d.ImageTools = true; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; });
+        _settings.Update(d => { d.ImageTools = true; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; });
         _chat.EnqueueText("Hello from Neon.");
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(2);
@@ -93,17 +93,15 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The advisors are never the bots' (2026-10-10): with the main chat offering <c>neon_advisor</c>, ticked in the limited tools or with
-    /// the tools on, a bot is offered neither the tool nor its rule.
+    /// The advisors are never the bots' (2026-10-10): with the main chat offering <c>neon_advisor</c>, ticked in the limited tools,
+    /// a bot is offered neither the tool nor its rule.
     /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BotChat_TheAdvisors_AreNeverTheBots(bool toolsEnabled)
+    [Fact]
+    public async Task BotChat_TheAdvisors_AreNeverTheBots()
     {
         BotChatFixture();
         AdvisorProfiles();
-        _settings.Update(d => { d.BotChatTools = toolsEnabled; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, NeonAdvisorTool.ToolName]; });
+        _settings.Update(d => { d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, NeonAdvisorTool.ToolName]; });
         _chat.EnqueueText("Hello from Neon.");
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(2);
@@ -120,10 +118,10 @@ public partial class ChatScreenTests
 
     /// <summary>With the main chat's tools a bot's turn has the main chat's round trips, not the botchat's few.</summary>
     [Fact]
-    public async Task BotChat_ToolsEnabled_ABotMayTakeMoreThanThreeRoundTrips()
+    public async Task BotChat_LimitedTools_ABotMayTakeMoreThanThreeRoundTrips()
     {
         BotChatFixture();
-        _settings.Update(d => d.BotChatTools = true);
+        _settings.Update(d => d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName]);
         for (int i = 0; i < 4; i++)
         {
             _chat.Enqueue(FakeChatClient.Call("t" + i, GetCurrentTimeTool.ToolName, new Dictionary<string, object?>()));

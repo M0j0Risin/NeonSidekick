@@ -100,7 +100,7 @@ internal sealed partial class SettingsMenu
                 (SettingsField.BotChatLlmMode, "Models"),
                 (SettingsField.BotChatComfy, "Pictures"),
                 (SettingsField.BotChatNonTtsDelaySeconds, "Pace"),
-                (SettingsField.BotChatTools, "Tools and skills"),
+                (SettingsField.BotChatLimitedTools, "Tools and skills"),
                 (SettingsField.BotChatMemory, "Memory"),
                 (SettingsField.BotChatVision, "Seeing"),
                 (SettingsField.BotChatRecentContext, "Context"),
