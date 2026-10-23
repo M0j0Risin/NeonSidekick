@@ -9,10 +9,16 @@ public sealed record TaskFilter(string Folder = "\\", bool Recursive = true, str
 {
     public static readonly IReadOnlyList<string> States = ["ready", "running", "disabled", "queued"];
 
+    /// <summary>
+    /// Whether Windows' own tasks are listed: asked for, or the folder is under <c>\Microsoft\</c> (2026-10-23, the admin review's I10: a list of
+    /// <c>\Microsoft\Windows\Defrag</c> dropped every task in it and answered "0 of 0 matching" with no hint).
+    /// </summary>
+    public bool ShowsMicrosoft => IncludeMicrosoft || TaskAccess.IsMicrosoft(Folder.TrimEnd('\\') + "\\");
+
     public bool Passes(TaskEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        if (!IncludeMicrosoft && TaskAccess.IsMicrosoft(entry.Path))
+        if (!ShowsMicrosoft && TaskAccess.IsMicrosoft(entry.Path))
         {
             return false;
         }
@@ -39,27 +45,31 @@ public static class TaskRender
     public static string List(string where, IReadOnlyList<TaskEntry> matched, int total, int offset, int limit, TaskFilter filter, string? computerArgument)
     {
         ArgumentNullException.ThrowIfNull(matched);
+        // The header counts the lines that fit, not the page (2026-10-23, the admin review's S9).
         var page = matched.Skip(offset).Take(limit).ToList();
-        var text = new StringBuilder($"Tasks on {where} under {filter.Folder}{(filter.Recursive ? "" : " (not its subfolders)")}: {page.Count.ToString(CultureInfo.InvariantCulture)} of {matched.Count.ToString(CultureInfo.InvariantCulture)} matching ({total.ToString(CultureInfo.InvariantCulture)} in all)"
-            + (filter.State is { } s ? ", state " + s : "") + (filter.Words is { Length: > 0 } w ? ", filter \"" + w + "\"" : "") + (filter.IncludeMicrosoft ? ", Windows' own included" : "") + "; times are the computer's own clock");
+        var lines = new StringBuilder();
         int shown = 0;
         foreach (var entry in page)
         {
             string line = "\n  " + Line(entry);
-            if (text.Length + line.Length > MaxChars - 600)
+            if (lines.Length + line.Length > MaxChars - 1200)
             {
                 break;
             }
 
-            text.Append(line);
+            lines.Append(line);
             shown++;
         }
+
+        var text = new StringBuilder($"Tasks on {where} under {filter.Folder}{(filter.Recursive ? "" : " (not its subfolders)")}: {shown.ToString(CultureInfo.InvariantCulture)} of {matched.Count.ToString(CultureInfo.InvariantCulture)} matching ({total.ToString(CultureInfo.InvariantCulture)} in all)"
+            + (filter.State is { } s ? ", state " + s : "") + (filter.Words is { Length: > 0 } w ? ", filter \"" + UntrustedText.OneLine(w) + "\"" : "") + (filter.IncludeMicrosoft ? ", Windows' own included" : "") + "; times are the computer's own clock");
+        text.Append(lines);
 
         int left = matched.Count - offset - shown;
         if (left > 0)
         {
-            text.Append('\n').Append(left.ToString(CultureInfo.InvariantCulture)).Append(" more tasks; pass folder, filter or state, or next: task_list(offset ")
-                .Append((offset + shown).ToString(CultureInfo.InvariantCulture)).Append(computerArgument is null ? "" : ", computer " + computerArgument).Append(')');
+            text.Append('\n').Append(left.ToString(CultureInfo.InvariantCulture)).Append(" more tasks; narrow with folder, filter or state, or next: ")
+                .Append(NextCall(offset + shown, limit, filter, computerArgument));
         }
 
         if (shown > 0)
@@ -68,6 +78,48 @@ public static class TaskRender
         }
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// The next page's call with every filter and the limit restated (2026-10-23, the admin review's E4: it kept only the offset and the
+    /// computer, so the copied call paged the whole root's list).
+    /// </summary>
+    public static string NextCall(int offset, int limit, TaskFilter filter, string? computerArgument)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        var parts = new List<string> { "offset " + offset.ToString(CultureInfo.InvariantCulture) };
+        if (filter.Folder != "\\")
+        {
+            parts.Add("folder \"" + UntrustedText.OneLine(filter.Folder) + "\"");
+        }
+
+        if (!filter.Recursive)
+        {
+            parts.Add("recursive false");
+        }
+
+        if (filter.State is { } state)
+        {
+            parts.Add("state " + state);
+        }
+
+        if (filter.Words is { Length: > 0 } words)
+        {
+            parts.Add("filter \"" + UntrustedText.OneLine(words).Replace("\"", "'", StringComparison.Ordinal) + "\"");
+        }
+
+        if (filter.IncludeMicrosoft)
+        {
+            parts.Add("include_microsoft true");
+        }
+
+        parts.Add("limit " + limit.ToString(CultureInfo.InvariantCulture));
+        if (computerArgument is not null)
+        {
+            parts.Add("computer " + UntrustedText.OneLine(computerArgument));
+        }
+
+        return "task_list(" + string.Join(", ", parts) + ")";
     }
 
     /// <summary>One task's line: its path fenced (anyone may name a task), its state, last run and result, next run.</summary>
@@ -98,10 +150,13 @@ public static class TaskRender
         }
         else
         {
-            Add(text, "runs as", PrincipalWords(definition.Principal) + (TaskPrincipal.IsPrivileged(definition.Principal, self) ? " (privileged)" : ""));
+            // The remote's own values fenced and cut (2026-10-23, the admin review's B6): the principal, the triggers' values, a time limit the
+            // parser could not read.
+            Add(text, "runs as", UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.OneLine(PrincipalWords(definition.Principal)), 200)) + (TaskPrincipal.IsPrivileged(definition.Principal, self) ? " (privileged)" : ""));
             if (definition.Description is { } description)
             {
-                Add(text, "description", UntrustedText.Fenced(UntrustedText.Cut(description)));
+                // Redacted like the command lines (2026-10-23, the admin review's C3).
+                Add(text, "description", UntrustedText.Fenced(UntrustedText.Cut(redacted ? ToolRedaction.Text(description) : description)));
             }
 
             if (definition.Author is { } author)
@@ -116,7 +171,7 @@ public static class TaskRender
 
             foreach (var trigger in definition.Triggers.Take(50))
             {
-                Add(text, "trigger", UntrustedText.Scrub(TaskWords.Trigger(trigger)));
+                Add(text, "trigger", UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.OneLine(TaskWords.Trigger(trigger)), 300)));
             }
 
             foreach (var action in definition.Actions.Take(32))
@@ -126,7 +181,8 @@ public static class TaskRender
 
             if (definition.ExecutionTimeLimit is { } limit && limit != "PT0S")
             {
-                Add(text, "time limit", TaskWords.Duration(limit));
+                string words = TaskWords.Duration(limit);
+                Add(text, "time limit", words == limit ? UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.OneLine(limit), 100)) : words);
             }
 
             if (definition.Hidden)
@@ -137,16 +193,14 @@ public static class TaskRender
 
         foreach (var instance in detail.Running.Take(16))
         {
-            Add(text, "running", "pid " + instance.EnginePid.ToString(CultureInfo.InvariantCulture) + (instance.CurrentAction.Length > 0 ? ", " + UntrustedText.Fenced(UntrustedText.Cut(instance.CurrentAction, 300)) : ""));
+            // Redacted like the definition's command lines (2026-10-23, the admin review's A11).
+            string current = redacted ? ToolRedaction.Text(instance.CurrentAction) : instance.CurrentAction;
+            Add(text, "running", "pid " + instance.EnginePid.ToString(CultureInfo.InvariantCulture) + (current.Length > 0 ? ", " + UntrustedText.Fenced(UntrustedText.Cut(current, 300)) : ""));
         }
 
-        if (redacted)
-        {
-            text.Append("\nsecret-like values hidden as ").Append(ToolRedaction.Placeholder);
-        }
-
-        text.Append('\n').Append(UntrustedText.QuoteNote);
-        return text.Length > MaxChars ? text.ToString(0, MaxChars - 40) + "\n(cut at " + MaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)" : text.ToString();
+        // The notes kept whole past a cut, the cut never inside a fence (2026-10-23, the admin review's C6).
+        string tail = (redacted ? "\nsecret-like values hidden as " + ToolRedaction.Placeholder : "") + "\n" + UntrustedText.QuoteNote;
+        return UntrustedText.Capped(text.ToString(), tail, MaxChars, "\n(cut at " + MaxChars.ToString("N0", CultureInfo.InvariantCulture) + " characters)");
     }
 
     /// <summary>An action in words: an Exec's command line fenced (redacted first under <c>redacted</c>), a COM handler's class.</summary>
@@ -166,12 +220,16 @@ public static class TaskRender
     /// <summary>
     /// The command lines a run's question shows: every Exec action whole, never redacted (the user decides on them), each on one line
     /// (<see cref="UntrustedText.OneLine"/>, 2026-10-20, a review: a run of spaces or a newline hid a command's tail). Null
-    /// <paramref name="definition"/> is one that could not be read: <see cref="TaskText.CommandsUnknown"/>, never "(no actions)".
+    /// <paramref name="definition"/> is one that could not be read: <see cref="TaskText.CommandsUnknown"/>, never "(no actions)". Since
+    /// 2026-10-23 (the admin review): each escaped as a name is (A4), an Exec's with where it starts (C8: a relative command resolves there,
+    /// <c>\\fs02\drop</c>), a COM handler's class with its data (T11: only the CLSID was shown).
     /// </summary>
     public static string Commands(TaskDefinition? definition) =>
         definition is null ? TaskText.CommandsUnknown
         : definition.Actions.Count == 0 ? "(no actions)"
-        : string.Join("; ", definition.Actions.Select(a => UntrustedText.OneLine(a.Kind == "Exec" ? (a.Command ?? "") + (a.Arguments is { } args ? " " + args : "") : a.Kind + (a.ClassId is { } id ? " " + id : ""))));
+        : string.Join("; ", definition.Actions.Select(a => UntrustedText.Name(a.Kind == "Exec"
+            ? (a.Command ?? "") + (a.Arguments is { } args ? " " + args : "") + (a.WorkingDirectory is { } dir ? " (in " + dir + ")" : "")
+            : a.Kind + (a.ClassId is { } id ? " " + id : "") + (a.Data is { } data ? " with data " + data : ""))));
 
     /// <summary>A principal as people say it: <c>SYSTEM</c>, <c>CORP\ops</c>, <c>the group Administrators</c>.</summary>
     public static string PrincipalWords(TaskPrincipalInfo principal)

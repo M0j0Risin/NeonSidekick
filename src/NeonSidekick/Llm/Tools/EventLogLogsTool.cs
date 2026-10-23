@@ -67,9 +67,12 @@ public sealed class EventLogLogsTool : EventLogTool
         }
 
         var offered = Access.Catalog();
-        var (files, truncated) = EvtxFiles(Access.Files);
         var zone = Zone;
-        var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), ForceRedacted);
+        var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), ForceRedacted, offered);
+
+        // The working directory's files listed only beside this PC's logs, off the turn's thread and bounded (2026-10-23, the admin review's
+        // I11: the walk ran first and synchronously, even for a remote listing).
+        var (files, truncated) = source is { Remote: true } ? ([], false) : await FilesAsync(cancellationToken).ConfigureAwait(false);
         if (source is null)
         {
             return EventLogRender.Logs(offered, null, filter, [], 0, refused, files, truncated, zone);
@@ -126,7 +129,23 @@ public sealed class EventLogLogsTool : EventLogTool
         return (listed, Math.Max(0, names.Count - cap));
     }
 
+    /// <summary>How long the working directory's walk for <c>.evtx</c> files may take before the listing goes on without the rest.</summary>
+    public static readonly TimeSpan FilesTimeout = TimeSpan.FromSeconds(10);
+
     /// <summary>The working directory's <c>.evtx</c> files (<see cref="MaxFiles"/> at most, <see cref="FileDepth"/> folders down) with their sizes; never a throw.</summary>
+
+    private async Task<(IReadOnlyList<EventLogFile> Files, bool Truncated)> FilesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await Task.Run(() => EvtxFiles(Access.Files), CancellationToken.None).WaitAsync(FilesTimeout, Access.Time, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return ([], true);
+        }
+    }
+
     public static (IReadOnlyList<EventLogFile> Files, bool Truncated) EvtxFiles(WorkingDirectory files)
     {
         ArgumentNullException.ThrowIfNull(files);

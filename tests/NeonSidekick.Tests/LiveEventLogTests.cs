@@ -71,7 +71,7 @@ public sealed class LiveEventLogTests : IDisposable
         string answer = (string)(await new EventLogLogsTool(Access(), () => _settings).InvokeAsync(new AIFunctionArguments { ["filter"] = "System", ["computer"] = "live" }))!;
 
         Assert.Contains("Logs on live", answer, StringComparison.Ordinal);
-        Assert.Contains("  System  ", answer, StringComparison.Ordinal);
+        Assert.Contains("  ⟪System⟫  ", answer, StringComparison.Ordinal);   // the channel's name fenced (2026-10-23, the admin review's C10)
     }
 
     [LiveEventLogFact]

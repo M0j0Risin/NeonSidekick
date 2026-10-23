@@ -250,6 +250,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **The `/net` checks** ignore *Network tools reach*, the host lists and the per-turn budget; a dim line says when the model's own call would be refused.
 * **On a Mac:** `/services` and `/tasks` are Windows only; `/eventlog` reads the Mac's own logs ([MAC.md](MAC.md#what-works)).
 * **Keys:** the `/eventlog`, `/services`, `/tasks` and `/ad` panes' keys are in [Pane keys](INTERFACE.md#pane-keys).
+* **Words:** quote a value with spaces (`folder:"\Microsoft\Windows\Windows Defender"`, `computer:"app 01"`). A term needs its value right after the colon, and one that takes a single value is given once.
+* **`/ad`'s verbs** count only in lower case, and `domain` only alone: `/ad Domain Admins` and `/ad Group Policy Creator Owners` look those names up. `nested` counts on a group line, first or last.
+* **`/eventlog`'s log** is the line's first word; later words are the text searched.
 
 | Command | What it does |
 |---|---|

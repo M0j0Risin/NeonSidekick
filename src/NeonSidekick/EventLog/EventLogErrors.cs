@@ -21,10 +21,17 @@ public static class EventLogErrors
         string log = context.Log ?? "the";
         switch (code)
         {
+            case 5 when context.File:
+                // A file's own permissions (2026-10-23, the admin review's J10: it was told to join Event Log Readers).
+                return EventLogText.FileAccessDenied(context.Log ?? "");
             case 5:
+                // With a runas account a wrong password can come back as 5 too (J11, unsettled: no source names the code), so it is named.
                 return context.Remote
-                    ? EventLogText.RemoteAccessDenied(context.Log, context.Host ?? context.Computer, context.Account ?? EventLogText.YouAccount)
+                    ? EventLogText.RemoteAccessDenied(context.Log, context.Host ?? context.Computer, context.Account ?? EventLogText.YouAccount) + (context.Account is not null ? EventLogText.OrPasswordWrong : "")
                     : EventLogText.AccessDenied(context.Log, context.Computer);
+            case 15011 or 15012:
+                // The result went stale under the read (2026-10-23, W16): the log wrapped or was cleared.
+                return EventLogText.ResultStale(context.Log ?? "the");
             case 2 or 3 when context.File:
                 return EventLogText.FileMissing(context.Log ?? "");
             case 2 or 3 or 15000 or 15007:
@@ -42,7 +49,7 @@ public static class EventLogErrors
                 return EventLogText.BadSignIn(context.Host ?? context.Computer, context.Account ?? EventLogText.YouAccount);
             case 1311:
                 return EventLogText.NoLogonServer(context.Host ?? context.Computer);
-            case 1385 or 1327 or 1330 or 1331 or 1907 or 1909:
+            case 1385 or 1327 or 1330 or 1331 or 1793 or 1907 or 1909:   // 1793 the account expired (W16)
                 return EventLogText.AccountRefused(context.Host ?? context.Computer, context.Account ?? EventLogText.YouAccount, LogText.Excerpt(detail ?? ""));
             case 1734:
                 return EventLogText.EventTooLarge;

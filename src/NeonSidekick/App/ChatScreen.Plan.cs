@@ -450,7 +450,7 @@ internal sealed partial class ChatScreen
         turn = _audit.InPass
             ? DisableAllBut(turn, AuditTools.Allowed(effective).Contains, _clockTools, _timerTools, _helpTools, _fileTools, _imageTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _postgresTools, _dockerTools, _eventLogTools, _networkTools, _serviceTools, _taskTools, _directoryTools, _comfyTools, _haTools, _printTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _cameraTools, _screenTools, _neonAdvisorTools, _mcp.Tools)
             : turn;
-        return GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(turn) : turn;
+        return RalphAsksBarred() ? PlanTools.WithoutAskingOrConfirming(turn) : GapAsksBarred(effective) ? PlanTools.WithoutAsking(turn) : turn;
     }
 
     /// <summary>

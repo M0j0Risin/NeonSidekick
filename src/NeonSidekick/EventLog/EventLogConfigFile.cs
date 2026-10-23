@@ -122,6 +122,10 @@ public sealed class EventLogConfigFile
     /// <summary>The computers by name, in file order.</summary>
     public Dictionary<string, EventLogComputerConfig?> Computers { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>Keys beside <c>computers</c>: listed as problems, never used (2026-10-23, DA1).</summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     /// <summary>The home's file: <c>&lt;home&gt;\configs\eventlog.json</c> (configs since 2026-10-16), every profile's.</summary>
@@ -134,15 +138,30 @@ public sealed class EventLogConfigFile
     public static (IReadOnlyList<EventLogComputer> Computers, IReadOnlyList<SqlConfigProblem> Problems) Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return NeonSidekick.Computers.ConfigCache.Get(FileName, path, () => LoadUncached(path));
+    }
+
+    /// <summary>
+    /// The read under <see cref="Load"/>'s cache (2026-10-23, the admin review's mechanism 1): an unknown key (DA1), a name given twice (Q1)
+    /// or a key given twice (C7) refuses its entry.
+    /// </summary>
+    private static (IReadOnlyList<EventLogComputer> Computers, IReadOnlyList<SqlConfigProblem> Problems) LoadUncached(string path)
+    {
         if (!File.Exists(path))
         {
             return ([], []);
         }
 
         EventLogConfigFile? file;
+        IReadOnlySet<string> repeated;
+        IReadOnlyDictionary<string, string> twice;
         try
         {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), EventLogJsonContext.Default.EventLogConfigFile);
+            byte[] bytes = File.ReadAllBytes(path);
+            var json = NeonSidekick.Computers.ConfigChecks.WithoutBom(bytes);
+            repeated = ConnectionsFileEdit.RepeatedNames(json, Section);
+            twice = ConnectionsFileEdit.RepeatedKeys(json, Section);
+            file = JsonSerializer.Deserialize(json, EventLogJsonContext.Default.EventLogConfigFile);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -159,7 +178,7 @@ public sealed class EventLogConfigFile
         }
 
         var computers = new List<EventLogComputer>(file.Computers.Count);
-        var problems = new List<SqlConfigProblem>();
+        var problems = NeonSidekick.Computers.ConfigChecks.UnknownFileKeys(file.Extra, Section).Select(p => new SqlConfigProblem(path, p)).ToList();
         foreach (var (name, config) in file.Computers)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -170,7 +189,10 @@ public sealed class EventLogConfigFile
 
             var entry = config ?? new EventLogComputerConfig();
             string trimmed = name.Trim();
-            if (entry.Problem(trimmed) is { } reason)
+            string? reason = repeated.Contains(trimmed) ? NeonSidekick.Computers.ComputerText.NamedTwice
+                : twice.TryGetValue(trimmed, out string? key) ? NeonSidekick.Computers.ComputerText.KeyTwice(key)
+                : NeonSidekick.Computers.ConfigChecks.UnknownKey(entry.Extra, EventLogJsonContext.Default.EventLogComputerConfig) ?? entry.Problem(trimmed);
+            if (reason is not null)
             {
                 problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, trimmed), reason, Name: trimmed));
                 continue;
@@ -198,7 +220,8 @@ public sealed class EventLogConfigFile
             (global, globalProblems) = Load(GlobalPath(home));
         }
 
-        var names = new HashSet<string>(profile.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+        // A profile entry that was refused still hides the home's of its name (2026-10-23, the admin review's D2).
+        var names = new HashSet<string>(profile.Select(c => c.Name).Concat(profileProblems.Where(p => p.Name is not null).Select(p => p.Name!)), StringComparer.OrdinalIgnoreCase);
         var all = profile.Concat(global.Where(c => !names.Contains(c.Name))).ToList();
         var local = all.FirstOrDefault(c => c.IsLocal) ?? EventLogCatalog.LocalOnly.Computers[0];
         return new EventLogCatalog([local with { Name = EventLogText.LocalName }, .. all.Where(c => !c.IsLocal)], [.. profileProblems, .. globalProblems]);
@@ -228,42 +251,41 @@ public sealed class EventLogConfigFile
     public static string? WritePassword(string path, string name, string value) => ConnectionsFileEdit.WritePassword(path, name, value, Section, Noun);
 
     /// <summary>Adds computer <paramref name="name"/> to <paramref name="path"/> (the wizard), its <c>password</c> left out; null on success.</summary>
-    public static string? AddComputer(string path, string name, EventLogComputerConfig config)
+    public static string? AddComputer(string path, string name, EventLogComputerConfig config, string? sealedPassword = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText, Section, Noun);
+        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config, sealedPassword), EmptyText, Section, Noun);
     }
 
-    /// <summary>Replaces computer <paramref name="oldName"/> with <paramref name="newName"/> and <paramref name="config"/>; null on success.</summary>
-    public static string? ReplaceComputer(string path, string oldName, string newName, EventLogComputerConfig config)
+    /// <summary>
+    /// Replaces computer <paramref name="oldName"/> with <paramref name="newName"/> and <paramref name="config"/>, <paramref name="sealedPassword"/>
+    /// written in the same splice (2026-10-23, H9); null on success.
+    /// </summary>
+    public static string? ReplaceComputer(string path, string oldName, string newName, EventLogComputerConfig config, string? sealedPassword = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
         ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config), Section, Noun);
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config, sealedPassword), Section, Noun);
     }
 
-    private static string EntryText(EventLogComputerConfig config)
+    /// <summary>An entry as the file holds it, from a copy with its password and unknown keys left out (2026-10-23: loaded entries are shared, <c>ConfigCache</c>).</summary>
+    private static string EntryText(EventLogComputerConfig config, string? sealedPassword)
     {
-        string? password = config.Password;
-        config.Password = null;
-        try
+        var info = EventLogJsonContext.Default.EventLogComputerConfig;
+        var copy = JsonSerializer.Deserialize(JsonSerializer.Serialize(config, info), info)!;
+        copy.Password = sealedPassword;
+        copy.Extra = null;
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-            {
-                JsonSerializer.Serialize(writer, config, EventLogJsonContext.Default.EventLogComputerConfig);
-            }
+            JsonSerializer.Serialize(writer, copy, info);
+        }
 
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
-        finally
-        {
-            config.Password = password;
-        }
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>Every <c>eventlog.json</c> under <paramref name="home"/> read once, so the encryption runs over them all at startup. Never throws.</summary>
@@ -313,7 +335,7 @@ public static class EventLogSecrets
         if (config.InCredentialManager)
         {
             string target = config.CredentialTarget(computer.Name);
-            var read = WindowsCredentials.ReadGeneric(target);
+            var read = NeonSidekick.Computers.ComputerConfig.CheckedUser(WindowsCredentials.ReadGeneric(target), target, config.User);
             return read.NotFound ? CredentialResult.Failed(EventLogText.NoCredential(target)) : read;
         }
 

@@ -106,6 +106,10 @@ public static class AdAttributes
         "msFVE-RecoveryPassword", "msFVE-KeyPackage", "msFVE-VolumeGuid", "msDS-ManagedPassword", "msDS-ManagedPasswordId",
         "msDS-ManagedPasswordPreviousId", "msDS-KeyCredentialLink", "msPKIAccountCredentials", "msPKIDPAPIMasterKeys", "msTPM-OwnerInformation",
         "msTPM-TpmInformationForComputer", "thumbnailPhoto", "jpegPhoto", "photo", "userCertificate", "userSMIMECertificate",
+
+        // The trusts' and LSA secrets' keys and roaming credentials (2026-10-23, the admin review's V10).
+        "trustAuthIncoming", "trustAuthOutgoing", "initialAuthIncoming", "initialAuthOutgoing", "currentValue", "priorValue",
+        "msPKI-CredentialRoamingTokens",
     };
 
     /// <summary>Whether a returned attribute's name (its options stripped) is never read.</summary>

@@ -16,6 +16,14 @@ public static class NameGlob
     {
         ArgumentNullException.ThrowIfNull(pattern);
         ArgumentNullException.ThrowIfNull(name);
+
+        // A lone star is everything (2026-10-23, the admin review's J12): it never crossed the separator, so control: ["*"] matched no task
+        // path (each starts with \) and logs: ["*"] no channel with a /, granting far less than it says, silently.
+        if (pattern == "*")
+        {
+            return true;
+        }
+
         int p = 0, n = 0, star = -1, mark = 0;
         while (n < name.Length)
         {

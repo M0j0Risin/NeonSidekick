@@ -726,8 +726,23 @@ internal sealed partial class SettingsMenu
             return null;
         }
 
+        // The entry, then its password, then the tick (2026-10-23, the admin review's H9): a file-store password is sealed first and written with
+        // the entry in one splice, so a failure loses no old one; a Credential Manager password that will not store leaves the entry unticked.
         string path = ComputerWizardPath(spec, draft.Global);
-        if ((draft.Original is { } original ? spec.Family.ReplaceComputer(path, original, draft.Name, c) : spec.Family.AddComputer(path, draft.Name, c)) is { } error)
+        string? sealedPassword = null;
+        if (c.NeedsPassword && !c.InCredentialManager)
+        {
+            var sealedResult = WindowsCredentials.Protect(draft.Password);
+            if (sealedResult.Error is { } sealError)
+            {
+                Sink.Error(SqlText.PasswordSaveFailed(draft.Name, sealError));
+                return null;
+            }
+
+            sealedPassword = sealedResult.Value;
+        }
+
+        if ((draft.Original is { } original ? spec.Family.ReplaceComputer(path, original, draft.Name, c, sealedPassword) : spec.Family.AddComputer(path, draft.Name, c, sealedPassword)) is { } error)
         {
             Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, error) : SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
@@ -735,7 +750,11 @@ internal sealed partial class SettingsMenu
 
         Sink.Notice(draft.Original is null ? SqlText.ConnectionAdded(draft.Name, path) : SqlText.ConnectionChanged(draft.Name, path));
         bool saved = true;
-        if (c.NeedsPassword)
+        if (sealedPassword is not null)
+        {
+            Sink.Notice(SqlText.PasswordSavedToFile(draft.Name, path));
+        }
+        else if (c.NeedsPassword)
         {
             (saved, string notice) = spec.Family.SavePassword(new Computer<TConfig>(draft.Name, c, path), draft.Password);
             if (saved)
@@ -751,6 +770,11 @@ internal sealed partial class SettingsMenu
         if (saved)
         {
             ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(spec.Family.Info, draft.Name) : null);
+        }
+        else
+        {
+            offer = false;
+            Sink.Error(ComputerText.SavedUnticked(draft.Name, spec.Family.Info.SetPasswordRow, spec.Family.Info.MenuPath));
         }
 
         return ApplyOfferedAfterSave(spec.OfferedField, ComputerCatalog<TConfig>.OfferedNames(spec.Offered(_settings.Current)), draft.Original, draft.Name, offer, spec.SetOffered);

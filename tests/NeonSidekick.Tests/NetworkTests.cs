@@ -28,7 +28,7 @@ public sealed class NetworkTests
         ["example.com"] = [IPAddress.Parse("93.184.215.14"), IPAddress.Parse("2606:2800:21f:cb07:6820:80da:af6b:8b2c")],
         ["www.example.com"] = [IPAddress.Parse("93.184.215.14")],
         ["nas.lan"] = [IPAddress.Parse("192.168.1.20")],
-        ["mixed.example"] = [IPAddress.Parse("203.0.113.5"), IPAddress.Parse("10.0.0.5")],
+        ["mixed.example"] = [IPAddress.Parse("93.184.215.5"), IPAddress.Parse("10.0.0.5")],
     };
 
     private NetworkAccess Access(Func<IPAddress, int, CancellationToken, Task<PortState>>? connect = null) =>
@@ -77,7 +77,7 @@ public sealed class NetworkTests
     [Fact]
     public void Admit_JudgesByEveryAddress_AndLanKeepsThePrivateOnes()
     {
-        var mixed = new[] { IPAddress.Parse("203.0.113.5"), IPAddress.Parse("10.0.0.5") };
+        var mixed = new[] { IPAddress.Parse("93.184.215.5"), IPAddress.Parse("10.0.0.5") };
         Assert.Equal(NetworkRefusal.Lan, LanPolicy.Admit("mixed.example", mixed, NetworkReach.Internet).Refusal);
         var lan = LanPolicy.Admit("mixed.example", mixed, NetworkReach.LocalAreaNetwork);
         Assert.True(lan.Admitted);
@@ -348,7 +348,7 @@ public sealed class NetworkTests
         Assert.Equal(NetworkText.Denied("nas.lan", "*.lan"), (await Access().TargetAsync("nas.lan", new NetworkBudget(), [], default)).Error);
         _settings.NetworkDeniedHosts = ["10.0.0.0/8"];
         var mixed = await Access().TargetAsync("mixed.example", new NetworkBudget(), [], default);
-        Assert.Equal([IPAddress.Parse("203.0.113.5")], mixed.Value!.Addresses);
+        Assert.Equal([IPAddress.Parse("93.184.215.5")], mixed.Value!.Addresses);
         _settings.NetworkDeniedHosts = [];
         _settings.NetworkAllowedHosts = ["*.example"];
         Assert.Equal(NetworkText.NotAllowed("example.com"), (await Access().TargetAsync("example.com", new NetworkBudget(), [], default)).Error);
@@ -583,8 +583,10 @@ public sealed class NetworkTests
     [Fact]
     public void Rules_NetworkSentencesRideTheFlags()
     {
-        string rules = Assistant.DefaultRules(markdown: false, tools: true, admin: AdminRules.Network);
+        // Ping and trace named only with their flag (2026-10-23, the admin review's R4).
+        string rules = Assistant.DefaultRules(markdown: false, tools: true, admin: AdminRules.Network | AdminRules.NetworkEcho);
         Assert.Contains(Assistant.NetworkRule, rules);
+        Assert.Contains(Assistant.NetworkRuleNoEcho, Assistant.DefaultRules(markdown: false, tools: true, admin: AdminRules.Network));
         Assert.DoesNotContain(Assistant.NetworkCertsRule, rules);
         Assert.Contains(Assistant.NetworkCertsRule, Assistant.DefaultRules(markdown: false, tools: true, admin: AdminRules.Network | AdminRules.NetworkCerts));
         Assert.DoesNotContain(Assistant.NetworkRule, Assistant.DefaultRules(markdown: false, tools: true));
@@ -637,7 +639,7 @@ public sealed class NetworkTests
         Assert.Equal(NetworkText.ReachRefused("192.168.1.5", NetworkRefusal.Lan), await Call(new NetDnsTool(NoServers(), budget), ("name", "5.1.168.192.in-addr.arpa"), ("type", "TXT")));
         Assert.Equal(NetworkText.ReachRefused("nas.lan", NetworkRefusal.Lan), await Call(new NetDnsTool(NoServers(), budget), ("name", "nas.lan")));
         Assert.Equal(NetworkText.ReachRefused("localhost", NetworkRefusal.Lan), await Call(new NetDnsTool(NoServers(), budget), ("name", "localhost"), ("type", "MX")));
-        Assert.Equal(0, budget.Hosts);
+        Assert.Equal(3, budget.Hosts);   // a refused question spends the budget too (2026-10-23, the admin review's U5); the two PTRs are one host
         _settings.NetworkDeniedHosts = ["*.example"];
         Assert.Equal(NetworkText.Denied("mixed.example", "*.example"), await Call(new NetDnsTool(NoServers(), budget), ("name", "mixed.example"), ("type", "MX")));
     }

@@ -101,6 +101,7 @@ public sealed class LdapConnection : IDisposable
         {
             var ssl = new SslStream(stream, leaveInnerStreamOpen: false);
             SslPolicyErrors refused = SslPolicyErrors.None;
+            var chainFlags = System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NoError;
             try
             {
                 ssl.ReadTimeout = (int)ConnectTimeout.TotalMilliseconds;
@@ -109,8 +110,25 @@ public sealed class LdapConnection : IDisposable
                 var options = new SslClientAuthenticationOptions
                 {
                     TargetHost = host,
-                    RemoteCertificateValidationCallback = (_, _, _, errors) =>
+
+                    // Revocation checked online, as Windows does (2026-10-23, the admin review's V4: .NET's default is no check, so a revoked DC
+                    // certificate was taken).
+                    CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.Online,
+                    RemoteCertificateValidationCallback = (_, _, chain, errors) =>
                     {
+                        foreach (var status in chain?.ChainStatus ?? [])
+                        {
+                            chainFlags |= status.Status;
+                        }
+
+                        // A revocation that could not be checked (an ldap:// CRL point the Mac cannot fetch, a CRL host off the VPN) is
+                        // passed, as Windows' default does (2026-10-23, the branch review of DP7: every such bind was refused); a revoked
+                        // certificate, and every other chain error, is still refused.
+                        if (errors == SslPolicyErrors.RemoteCertificateChainErrors && LdapTls.RevocationUnknownOnly(chainFlags))
+                        {
+                            errors = SslPolicyErrors.None;
+                        }
+
                         refused = errors;
                         return errors == SslPolicyErrors.None;
                     },
@@ -122,7 +140,7 @@ public sealed class LdapConnection : IDisposable
             {
                 ssl.Dispose();
                 client.Dispose();
-                throw new DirectoryException(LdapResultCodes.TlsRefused, DirectoryText.CertificateRefused(host, refused));
+                throw new DirectoryException(LdapResultCodes.TlsRefused, DirectoryText.CertificateRefused(host, refused, chainFlags));
             }
             catch (Exception ex) when (ex is IOException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
             {
@@ -228,7 +246,7 @@ public sealed class LdapConnection : IDisposable
         var reply = LdapMessages.Read(Wrapped ? ReadWrapped() : ReadPlain());
         if (reply.MessageId == 0 && reply.Op == LdapOp.ExtendedResponse)
         {
-            throw new DirectoryException(LdapResultCodes.ServerDown, "the server ended the connection" + (reply.Diagnostic.Length > 0 ? ": " + reply.Diagnostic : ""));
+            throw new DirectoryException(LdapResultCodes.ServerDown, "the server ended the connection" + (reply.Diagnostic.Length > 0 ? ": " + Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(reply.Diagnostic), 300) : ""));
         }
 
         return reply;
@@ -410,5 +428,18 @@ public sealed class LdapConnection : IDisposable
     {
         _stream.Dispose();
         _client?.Dispose();
+    }
+}
+
+/// <summary>The Mac's LDAPS chain rules, kept off <see cref="LdapConnection"/>, whose members are pinned as its only operations (DP7).</summary>
+internal static class LdapTls
+{
+    /// <summary>Whether a chain's only faults are a revocation status that could not be learned (DP7): never <c>Revoked</c>.</summary>
+    internal static bool RevocationUnknownOnly(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags flags)
+    {
+        const System.Security.Cryptography.X509Certificates.X509ChainStatusFlags unknown =
+            System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown
+            | System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.OfflineRevocation;
+        return flags != System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NoError && (flags & ~unknown) == 0;
     }
 }

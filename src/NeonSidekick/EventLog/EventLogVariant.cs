@@ -101,7 +101,9 @@ public static class EventLogVariant
     /// The values <paramref name="insert"/> changes, each with its new text (2026-10-20, a review: only a plain string was rewritten, so an
     /// ANSI string, a string array or a binary value under a secret's name reached the redacted message as it was): every value of
     /// <paramref name="count"/> is read as text (<see cref="Text"/>), handed to <paramref name="insert"/> with its position, and kept when it
-    /// came back different — the caller writes each one back as a plain string. A value that decodes to nothing is handed over as empty.
+    /// came back different — the caller writes each one back as a plain string. A value that decodes to nothing is handed over as empty. A null
+    /// value is shown to <paramref name="insert"/> too (as empty, never rewritten), so the caller counts every value (2026-10-23, the branch
+    /// review of DP7: a last null value made the count one short and withheld the message).
     /// </summary>
     public static IReadOnlyList<(int Index, string Text)> Rewrites(ReadOnlySpan<byte> buffer, nint baseAddress, int count, Func<int, string, string> insert)
     {
@@ -112,6 +114,7 @@ public static class EventLogVariant
             int type = Type(buffer, i);
             if (type == TypeNull)
             {
+                _ = insert(i, "");
                 continue;
             }
 
@@ -277,6 +280,12 @@ public static class EventLogVariant
             TypeGuid or TypeSysTime => 16,
             _ => 8,
         };
+        if (type == TypeBinary)
+        {
+            // A binary array is one run of bytes, its count the bytes (2026-10-23, the admin review's C13: its elements read as nulls).
+            return [Bytes(buffer, offset, count)];
+        }
+
         if (offset + (long)count * width > buffer.Length)
         {
             return null;
@@ -304,6 +313,7 @@ public static class EventLogVariant
                 TypeBoolean => BinaryPrimitives.ReadInt32LittleEndian(cell) != 0,
                 TypeFileTime => FileTime(BinaryPrimitives.ReadInt64LittleEndian(cell)),
                 TypeGuid => new Guid(cell),
+                TypeSysTime => SystemTime(buffer, offset + i * width),   // C13: inline, 16 bytes each
                 _ => null,
             };
         }

@@ -12,13 +12,16 @@ public sealed record MacFileView(string Handle, DateTimeOffset Time, string? Kin
 }
 
 /// <summary>A page of a file log: the entries kept, newest first; how many were read; whether more may follow and the handle the next page starts after; a stop and how far back; the loudest process.</summary>
-public sealed record MacFilePage(IReadOnlyList<MacFileView> Entries, int Read, bool More, string? Cursor, bool BudgetStop, DateTimeOffset? Reached, MacLoudest? Loudest);
+/// <remarks><c>Refused</c> (2026-10-23, the admin review's X11): the crash folders this account could not read, said rather than "no crashes".</remarks>
+public sealed record MacFilePage(IReadOnlyList<MacFileView> Entries, int Read, bool More, string? Cursor, bool BudgetStop, DateTimeOffset? Reached, MacLoudest? Loudest,
+    IReadOnlyList<string>? Refused = null);
 
 /// <summary>One process (and kind)'s share of a file log's summary.</summary>
 public sealed record MacFileGroup(string Process, string? Kind, int Count, DateTimeOffset Newest, string NewestHandle, string Sample);
 
 /// <summary>A file log's summary: the groups by count, the entries counted, the read, a stop and how far back, the loudest process.</summary>
-public sealed record MacFileSummary(IReadOnlyList<MacFileGroup> Groups, int Total, int GroupCount, int Read, bool BudgetStop, DateTimeOffset? Reached, MacLoudest? Loudest);
+public sealed record MacFileSummary(IReadOnlyList<MacFileGroup> Groups, int Total, int GroupCount, int Read, bool BudgetStop, DateTimeOffset? Reached, MacLoudest? Loudest,
+    IReadOnlyList<string>? Refused = null);
 
 /// <summary>
 /// The policy over the Mac's two logs that are files (2026-10-18, the Mac event-log plan's phase 3; <see cref="MacLogSearch"/>'s shape):
@@ -39,11 +42,15 @@ public static class MacFileLogs
 
     public static readonly TimeSpan InstallWindow = TimeSpan.FromDays(1);
 
+    /// <summary>How many entries older than the window in a row end an install.log read (X9).</summary>
+    public const int OlderRun = 50;
+
     /// <summary>The redaction a file log's text gets: the home as <c>~</c>, then the secret-like values hidden.</summary>
     public static Func<string, string> Redactor(MacLogPlaces places, bool redacted)
     {
         ArgumentNullException.ThrowIfNull(places);
-        return redacted ? text => EventLogRedaction.Text(places.Tilde(text)) : text => text;
+        // Other accounts' homes hidden too (2026-10-23, the admin review's X2).
+        return redacted ? text => EventLogRedaction.Text(MacLogPlaces.OtherHomes(places.Tilde(text))) : text => text;
     }
 
     // ── crashes ─────────────────────────────────────────────────────────────
@@ -59,7 +66,8 @@ public static class MacFileLogs
         ArgumentNullException.ThrowIfNull(scan);
         long started = scan.Time.GetTimestamp();
         var redact = Redactor(places, scan.Redacted);
-        var (reports, _) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        var (reports, states) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        var refused = Refused(states);
         if (before is not null && !reports.Any(r => CrashReports.Names(before, r)))
         {
             return null;
@@ -87,13 +95,16 @@ public static class MacFileLogs
 
             if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
             {
-                return new MacFilePage(kept, walk.Read, true, lastRead ?? before, true, walk.Reached, walk.Loudest());
+                return new MacFilePage(kept, walk.Read, true, lastRead ?? before, true, walk.Reached, walk.Loudest(), refused);
             }
 
             walk.Step(report.Process, report.Time);
             string handle = CrashReports.HandleOf(report, shared.Contains(report.Name));
             lastRead = handle;
-            var detail = Safe(report, redact);
+
+            // The listing's line from at most a megabyte unless a text term needs the whole (2026-10-23, the admin review's I7: every listed
+            // report was read in full, up to 4 MB and a JSON parse each; real reports are 15 to 500 KB, so a megabyte keeps their lines).
+            var detail = query.Text is { Length: > 0 } ? Safe(report, redact) : Safe(report, redact, CrashReports.ListingBytes);
             if (query.Text is { Length: > 0 } && !query.KeepsText(report.Name + "\n" + report.Process + "\n" + detail.Summary + "\n" + detail.Text))
             {
                 continue;
@@ -103,11 +114,18 @@ public static class MacFileLogs
             if (kept.Count >= query.Limit)
             {
                 bool more = at < reports.Count - 1;
-                return new MacFilePage(kept, walk.Read, more, more ? handle : null, false, walk.Reached, walk.Loudest());
+                return new MacFilePage(kept, walk.Read, more, more ? handle : null, false, walk.Reached, walk.Loudest(), refused);
             }
         }
 
-        return new MacFilePage(kept, walk.Read, false, null, false, walk.Reached, walk.Loudest());
+        return new MacFilePage(kept, walk.Read, false, null, false, walk.Reached, walk.Loudest(), refused);
+    }
+
+    /// <summary>The folders a listing could not read, by owner (X11).</summary>
+    private static IReadOnlyList<string>? Refused(List<(MacCrashFolder Folder, string? Refused)> states)
+    {
+        var refused = states.Where(s => s.Refused is not null).Select(s => s.Folder.Owner).ToList();
+        return refused.Count == 0 ? null : refused;
     }
 
     /// <summary>The names more than one folder holds: their handles name the folder too.</summary>
@@ -123,7 +141,7 @@ public static class MacFileLogs
         ArgumentNullException.ThrowIfNull(scan);
         long started = scan.Time.GetTimestamp();
         var redact = Redactor(places, scan.Redacted);
-        var (reports, _) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
+        var (reports, states) = CrashReports.List(places.CrashFolders, query.Since, query.Until, cancellationToken);
         var shared = SharedNames(reports);
         var groups = new Dictionary<(string, string?), (MacFileGroup Group, CrashReportInfo Newest)>();
         var walk = new Tally();
@@ -158,7 +176,7 @@ public static class MacFileLogs
         var top = groups.Values.OrderByDescending(g => g.Group.Count).ThenByDescending(g => g.Group.Newest).Take(MacLogSearch.SummaryGroups)
             .Select(g => g.Group with { Sample = Safe(g.Newest, redact).Summary })
             .ToList();
-        return new MacFileSummary(top, total, groups.Count, walk.Read, stopped, walk.Reached, walk.Loudest());
+        return new MacFileSummary(top, total, groups.Count, walk.Read, stopped, walk.Reached, walk.Loudest(), Refused(states));
     }
 
     /// <summary>One report in full by its handle (its name, and its folder when the handle names one); null when no folder holds it.</summary>
@@ -168,11 +186,11 @@ public static class MacFileLogs
         return CrashReports.Find(places.CrashFolders, name) is { } report ? (report, CrashReports.Describe(report, Redactor(places, redacted))) : null;
     }
 
-    private static CrashDetail Safe(CrashReportInfo report, Func<string, string> redact)
+    private static CrashDetail Safe(CrashReportInfo report, Func<string, string> redact, int maxBytes = CrashReports.MaxBytes)
     {
         try
         {
-            return CrashReports.Describe(report, redact);
+            return CrashReports.Describe(report, redact, maxBytes);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or InvalidOperationException or FormatException or ArgumentException)
         {
@@ -208,22 +226,44 @@ public static class MacFileLogs
         var walk = new Tally();
         var kept = new List<MacFileView>();
         string? last = null;
-        foreach (var entry in InstallLog.Backward(log, below))
+        int older = 0;
+        foreach (var entry in InstallLog.Backward(log, below, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (entry.Time < query.Since)
             {
-                break;   // the log is written in order: an older entry ends the window
+                // The log is written in order, but a line stamped with a reset clock (2001-01-01, a setup) is passed over (2026-10-23, the
+                // admin review's X9): only a run of older entries ends the window.
+                if (++older >= OlderRun)
+                {
+                    break;
+                }
+
+                continue;
             }
 
-            if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+            older = 0;
+            if (scan.Time.GetElapsedTime(started) >= scan.Budget)
+            {
+                return new MacFilePage(kept, walk.Read, true, last, true, walk.Reached, walk.Loudest());
+            }
+
+            if (query.Until is { } until && entry.Time > until)
+            {
+                // Newer than the window: stepped over without spending the scan limit, its place kept (2026-10-23, the admin review's I2: they
+                // spent it, so the window was never reached and no next page was given).
+                last = InstallLog.Handle(entry);
+                continue;
+            }
+
+            if (walk.Read >= scan.ScanLimit)
             {
                 return new MacFilePage(kept, walk.Read, true, last, true, walk.Reached, walk.Loudest());
             }
 
             walk.Step(entry.Process, entry.Time);
             last = InstallLog.Handle(entry);
-            if ((query.Until is { } until && entry.Time > until) || !Keeps(query, entry.Process, entry.Pid))
+            if (!Keeps(query, entry.Process, entry.Pid))
             {
                 continue;
             }
@@ -256,13 +296,21 @@ public static class MacFileLogs
         var walk = new Tally();
         int total = 0;
         bool stopped = false;
-        foreach (var entry in InstallLog.Backward(log))
+        int older = 0;
+        foreach (var entry in InstallLog.Backward(log, null, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (entry.Time < query.Since)
             {
-                break;
+                if (++older >= OlderRun)
+                {
+                    break;   // X9: a run of older entries, not one
+                }
+
+                continue;
             }
+
+            older = 0;
 
             if (walk.Read >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
             {

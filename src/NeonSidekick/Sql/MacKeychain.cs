@@ -124,10 +124,11 @@ internal static unsafe class MacKeychain
     public static CredentialResult ReadGeneric(string target)
     {
         int status = Find(target, null, out byte[]? secret, out IntPtr item);
+        string? account = status == ErrSecSuccess ? AccountOf(item) : null;
         Release(item);
         return status switch
         {
-            ErrSecSuccess => CredentialResult.Ok(Encoding.UTF8.GetString(secret!)),
+            ErrSecSuccess => CredentialResult.Ok(Encoding.UTF8.GetString(secret!), account),
             ErrSecItemNotFound => CredentialResult.Failed(SqlText.NoCredential(target), notFound: true),
             _ => CredentialResult.Failed(Describe(status)),
         };
@@ -255,6 +256,39 @@ internal static unsafe class MacKeychain
             }
 
             return CredentialResult.Failed("the app's key could not be read or made in the Keychain");
+        }
+    }
+
+    /// <summary>
+    /// The item's account attribute (2026-10-23, decision DA2: <c>SecKeychainFindGenericPassword</c> gives no account, so the admin families'
+    /// user check reads it with <c>SecKeychainItemCopyAttributesAndData</c>, the same Security framework). Null when it can't be read.
+    /// Unproven off a Mac: the smoke's <c>keys:keychain</c> reads it back.
+    /// </summary>
+    internal static string? AccountOf(IntPtr item)
+    {
+        if (item == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        uint tag = KeychainNative.AccountAttribute;
+        uint format = KeychainNative.FormatString;
+        var info = new KeychainNative.SecKeychainAttributeInfo { Count = 1, Tag = &tag, Format = &format };
+        KeychainNative.SecKeychainAttributeList* list = null;
+        if (KeychainNative.SecKeychainItemCopyAttributesAndData(item, &info, null, &list, null, null) != ErrSecSuccess || list is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return list->Count > 0 && list->Attr[0].Data is not null
+                ? Encoding.UTF8.GetString(new ReadOnlySpan<byte>(list->Attr[0].Data, (int)list->Attr[0].Length))
+                : null;
+        }
+        finally
+        {
+            KeychainNative.SecKeychainItemFreeAttributesAndData(list, null);
         }
     }
 

@@ -205,14 +205,14 @@ public sealed class LiveAdminTests : IDisposable
         Assert.Contains("PDC emulator", domain);
         Assert.Contains("lockout: after ", domain);
         string bob = await Call(new AdUserTool(access), ("name", "bob"));
-        Assert.StartsWith("User bob in ", bob);
+        Assert.StartsWith("User ⟪bob⟫ in ", bob);   // account names fenced (2026-10-23, the admin review's C9)
         Assert.Contains(", nested)", bob);   // tokenGroups
         string staff = await Call(new AdGroupTool(access), ("name", "Staff"), ("nested", true));
-        Assert.Contains("(user bob)", staff);   // through Engineers
+        Assert.Contains("(user ⟪bob⟫)", staff);   // through Engineers
         Assert.Contains(": disabled", await Call(new AdComputerTool(access), ("name", "WS01")));
         Assert.Contains("dave", await Call(new AdFindTool(access), ("kind", "stale_users")));
         Assert.Contains("alice", await Call(new AdFindTool(access), ("kind", "name"), ("words", "ali")));
-        Assert.StartsWith("User carol in ", await Call(new AdUserTool(access), ("name", "carol")));
+        Assert.StartsWith("User ⟪carol⟫ in ", await Call(new AdUserTool(access), ("name", "carol")));
         var (ok, text) = await DirectoryAccess.TestAsync(DirectorySystem(), access.Catalog().Domains.Single(), TimeProvider.System, CancellationToken.None);
         Assert.True(ok, text);
         if (OperatingSystem.IsMacOS())
@@ -259,20 +259,20 @@ public sealed class LiveAdminTests : IDisposable
         Assert.Contains("⟪Neon/Engineering⟫", await Call(find, ("kind", "name"), ("words", "eng"), ("type", "ou")));
         Assert.Contains("⟪Company-wide mail list⟫", await Call(find, ("kind", "name"), ("words", "mail list"), ("type", "group")));
         string staff = await Call(new AdGroupTool(access), ("name", "Staff"), ("nested", true), ("members", "users"));
-        Assert.Contains("(user bob) via ⟪Engineers⟫", staff);
-        Assert.Contains("(user carol) direct", staff);
+        Assert.Contains("(user ⟪bob⟫) via ⟪Engineers⟫", staff);
+        Assert.Contains("(user ⟪carol⟫) direct", staff);
         Assert.Contains(" by primary group)", await Call(new AdGroupTool(access), ("name", "Domain Users"), ("limit", 5)));
         Assert.Contains("⟪Vendor Rep⟫ (contact)", await Call(new AdGroupTool(access), ("name", "All-Hands")));
         string tree = await Call(new AdOuTool(access));
         Assert.Contains("⟪Neon/Engineering⟫", tree);
         Assert.DoesNotContain("⟪System⟫", tree);   // advanced view only
-        Assert.Contains("erin  user  ⟪Erin Ng⟫", await Call(new AdOuTool(access), ("ou", "Neon/Engineering")));
-        Assert.Contains("erin  ⟪Erin Ng⟫", await Call(find, ("kind", "password_never_expires")));
-        Assert.Contains("frank  ⟪Frank Ode⟫  expires ", await Call(find, ("kind", "account_expiring")));
-        Assert.Contains("erin  user  ⟪Erin Ng⟫  created ", await Call(find, ("kind", "created"), ("days", 3650), ("ou", "Neon")));
-        Assert.Contains("erin  ⟪Erin Ng⟫  ⟪Engineering⟫", await Call(find, ("kind", "field"), ("field", "department"), ("words", "engin")));
+        Assert.Contains("⟪erin⟫  user  ⟪Erin Ng⟫", await Call(new AdOuTool(access), ("ou", "Neon/Engineering")));
+        Assert.Contains("⟪erin⟫  ⟪Erin Ng⟫", await Call(find, ("kind", "password_never_expires")));
+        Assert.Contains("⟪frank⟫  ⟪Frank Ode⟫  expires ", await Call(find, ("kind", "account_expiring")));
+        Assert.Contains("⟪erin⟫  user  ⟪Erin Ng⟫  created ", await Call(find, ("kind", "created"), ("days", 3650), ("ou", "Neon")));
+        Assert.Contains("⟪erin⟫  ⟪Erin Ng⟫  ⟪Engineering⟫", await Call(find, ("kind", "field"), ("field", "department"), ("words", "engin")));
         string privileged = await Call(find, ("kind", "privileged"));
-        Assert.Contains("grace  user  ⟪Grace Hu⟫  ", privileged);
+        Assert.Contains("⟪grace⟫  user  ⟪Grace Hu⟫  ", privileged);
         Assert.Contains("via ⟪Tier0⟫", privileged);
         Assert.Contains("⟪Unused⟫", await Call(find, ("kind", "empty_groups")));
         Assert.Contains("direct reports (1): ⟪Frank Ode⟫", await Call(new AdUserTool(access), ("name", "erin")));

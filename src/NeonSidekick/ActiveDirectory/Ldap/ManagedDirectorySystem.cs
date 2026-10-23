@@ -133,8 +133,9 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
         ArgumentNullException.ThrowIfNull(connectedTo);
         return answer.Verdict switch
         {
-            KdcVerdict.KnowsTheAccount or KdcVerdict.Revoked =>
-                new DirectoryException(LdapResultCodes.InvalidCredentials, "the Kerberos sign-in as " + user + " was refused"),
+            KdcVerdict.KnowsTheAccount =>
+                new DirectoryException(LdapResultCodes.InvalidCredentials, DirectoryText.NoTicketPrefix + " as " + user),
+            KdcVerdict.Revoked => new DirectoryException(LdapResultCodes.AccountRevoked, "the KDC on " + connectedTo + " says " + user + " is locked, disabled or expired"),
             KdcVerdict.UnknownAccount => new DirectoryException(LdapResultCodes.UnknownAccount, "the KDC on " + connectedTo + " does not know " + user),
             KdcVerdict.ClockSkew when answer.Skew is { } skew => new DirectoryException(LdapResultCodes.ClockSkew, DirectoryText.ClockOff(skew)),
             KdcVerdict.Unreachable => new DirectoryException(LdapResultCodes.KdcUnreachable, "the KDC on " + connectedTo + " could not be reached"),
@@ -248,39 +249,50 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
             using var deadline = connection.Within(TimeSpan.FromSeconds(seconds) + Margin);
             var entries = new List<DirectoryEntry>();
             byte[]? cookie = null;
-            while (true)
+            try
             {
-                int? pageSize = paged ? Math.Max(1, Math.Min(DirectoryLimits.PageSize, sizeLimit - entries.Count)) : null;
-                int id = connection.Search(baseDn, scope, filter, attributes, sizeLimit, seconds, pageSize, cookie);
-                var done = Replies(connection, id, Math.Max(1, pageSize ?? sizeLimit), reply =>
+                while (true)
                 {
-                    if (entries.Count < sizeLimit)
+                    int? pageSize = paged ? Math.Max(1, Math.Min(DirectoryLimits.PageSize, sizeLimit - entries.Count)) : null;
+                    int id = connection.Search(baseDn, scope, filter, attributes, sizeLimit, seconds, pageSize, cookie);
+                    var done = Replies(connection, id, Math.Max(1, pageSize ?? sizeLimit), reply =>
                     {
-                        entries.Add(ToEntry(reply));
-                    }
-                });
+                        if (entries.Count < sizeLimit)
+                        {
+                            entries.Add(ToEntry(reply));
+                        }
+                    });
 
-                if (done.ResultCode is LdapResultCodes.SizeLimitExceeded or LdapResultCodes.TimeLimitExceeded)
-                {
-                    return new DirectoryResults(entries, true, done.ResultCode == LdapResultCodes.TimeLimitExceeded);
-                }
-
-                if (done.ResultCode != LdapResultCodes.Success)
-                {
-                    throw new DirectoryException(done.ResultCode, "the search failed" + (done.Diagnostic.Length > 0 ? ": " + done.Diagnostic : ""));
-                }
-
-                cookie = done.Cookie;
-                if (!paged || cookie is not { Length: > 0 } || entries.Count >= sizeLimit)
-                {
-                    bool cut = entries.Count >= sizeLimit && cookie is { Length: > 0 };
-                    if (cut && paged)
+                    if (done.ResultCode is LdapResultCodes.SizeLimitExceeded or LdapResultCodes.TimeLimitExceeded)
                     {
-                        Abandon(connection, baseDn, scope, filter, attributes, sizeLimit, seconds, cookie!);
+                        return new DirectoryResults(entries, true, done.ResultCode == LdapResultCodes.TimeLimitExceeded);
                     }
 
-                    return new DirectoryResults(entries, cut, false);
+                    if (done.ResultCode != LdapResultCodes.Success)
+                    {
+                        // The server's text cut and scrubbed before it is anyone's message (2026-10-23, the admin review's F5: up to 16 MB, raw, into
+                        // the exception, the log and the model's answer).
+                        throw new DirectoryException(done.ResultCode, "the search failed" + (done.Diagnostic.Length > 0 ? ": " + Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(done.Diagnostic), 300) : ""));
+                    }
+
+                    cookie = done.Cookie;
+                    if (!paged || cookie is not { Length: > 0 } || entries.Count >= sizeLimit)
+                    {
+                        bool cut = entries.Count >= sizeLimit && cookie is { Length: > 0 };
+                        if (cut && paged)
+                        {
+                            Abandon(connection, baseDn, scope, filter, attributes, sizeLimit, seconds, cookie!);
+                        }
+
+                        return new DirectoryResults(entries, cut, false);
+                    }
                 }
+            }
+            catch (DirectoryException ex) when (ex.Code == LdapResultCodes.Timeout && connection.Expired && entries.Count > 0)
+            {
+                // The pages read stand, as wldap32's do (2026-10-23, the admin review's B5: the deadline's end threw them away with the
+                // connection); the connection is gone, so a later search on the session fails rather than reading out of step.
+                return new DirectoryResults(entries, true, true);
             }
         }
 
@@ -296,6 +308,9 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
                 var reply = connection.Receive();
                 if (reply.MessageId != id)
                 {
+                    // Closed, as the too-many-replies branch is (2026-10-23, the admin review's O8): left open, every later search read the
+                    // wrong replies.
+                    connection.Dispose();
                     throw new DirectoryException(LdapResultCodes.DecodingError, "a reply to another request");
                 }
 

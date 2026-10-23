@@ -613,8 +613,22 @@ internal sealed partial class SettingsMenu
             return null;
         }
 
+        // The entry, then its password, then the tick (2026-10-23, the admin review's H9), as the computer wizard's.
         string path = EventLogWizardPath(draft.Global);
-        if ((draft.Original is { } original ? EventLogConfigFile.ReplaceComputer(path, original, draft.Name, c) : EventLogConfigFile.AddComputer(path, draft.Name, c)) is { } error)
+        string? sealedPassword = null;
+        if (c.NeedsPassword && !c.InCredentialManager)
+        {
+            var sealedResult = WindowsCredentials.Protect(draft.Password);
+            if (sealedResult.Error is { } sealError)
+            {
+                Sink.Error(SqlText.PasswordSaveFailed(draft.Name, sealError));
+                return null;
+            }
+
+            sealedPassword = sealedResult.Value;
+        }
+
+        if ((draft.Original is { } original ? EventLogConfigFile.ReplaceComputer(path, original, draft.Name, c, sealedPassword) : EventLogConfigFile.AddComputer(path, draft.Name, c, sealedPassword)) is { } error)
         {
             Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, error) : SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
@@ -622,7 +636,11 @@ internal sealed partial class SettingsMenu
 
         Sink.Notice(draft.Original is null ? SqlText.ConnectionAdded(draft.Name, path) : SqlText.ConnectionChanged(draft.Name, path));
         bool saved = true;
-        if (c.NeedsPassword)
+        if (sealedPassword is not null)
+        {
+            Sink.Notice(SqlText.PasswordSavedToFile(draft.Name, path));
+        }
+        else if (c.NeedsPassword)
         {
             (saved, string notice) = EventLogSecrets.Save(new EventLogComputer(draft.Name, c, path), draft.Password);
             if (saved)
@@ -638,6 +656,11 @@ internal sealed partial class SettingsMenu
         if (saved)
         {
             ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
+        }
+        else
+        {
+            offer = false;
+            Sink.Error(NeonSidekick.Computers.ComputerText.SavedUnticked(draft.Name, EventLogText.SetPasswordRow, EventLogText.MenuPath));
         }
 
         return ApplyOfferedAfterSave(SettingsField.EventLogComputersOffered, EventLogCatalog.OfferedNames(_settings.Current.EventLogComputersOffered), draft.Original, draft.Name, offer, (d, next) => d.EventLogComputersOffered = next);

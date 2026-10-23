@@ -46,10 +46,39 @@ public static class LdapFilter
     public const string Computers = "(objectCategory=computer)";
     public const string Groups = "(objectCategory=group)";
 
-    /// <summary>The user a name means: sAMAccountName, UPN, displayName, cn or mail equal to it.</summary>
-    public static string UserByName(string name) => "(&" + Users + AnyName(name) + ")";
+    /// <summary>
+    /// The user a name means: sAMAccountName, UPN, displayName, cn or mail equal to it; a <c>DOMAIN\name</c> also by the name after the
+    /// backslash (2026-10-23, the admin review's J9: <c>LAB\carol</c> was "no user named"). Given <paramref name="domain"/> (its DNS name),
+    /// only a prefix that names it — the DNS name or its first label, the usual NetBIOS name — counts (the branch review of DP7:
+    /// <c>OTHERDOM\administrator</c>, a trusted domain's, answered with this domain's Administrator).
+    /// </summary>
+    public static string UserByName(string name, string? domain = null) => "(&" + Users + AnyName(name, domain) + ")";
 
-    public static string GroupByName(string name) => "(&" + Groups + "(|(sAMAccountName=" + Escape(name) + ")(cn=" + Escape(name) + ")(displayName=" + Escape(name) + ")(mail=" + Escape(name) + ")))";
+    public static string GroupByName(string name, string? domain = null) =>
+        "(&" + Groups + "(|(sAMAccountName=" + Escape(name) + ")(cn=" + Escape(name) + ")(displayName=" + Escape(name) + ")(mail=" + Escape(name) + ")" + Bare(name, domain) + "))";
+
+    /// <summary>A <c>DOMAIN\name</c>'s account term, or nothing (J9); with <paramref name="domain"/>, only for a prefix naming it (DP7).</summary>
+    private static string Bare(string name, string? domain)
+    {
+        int slash = name.IndexOf('\\', StringComparison.Ordinal);
+        if (slash <= 0 || slash >= name.Length - 1 || name[..slash].Contains(' ', StringComparison.Ordinal))
+        {
+            return "";
+        }
+
+        string prefix = name[..slash].Trim();
+        if (domain is { Length: > 0 })
+        {
+            string dns = domain.Trim().TrimEnd('.');
+            string first = dns.Split('.')[0];
+            if (!string.Equals(prefix, dns, StringComparison.OrdinalIgnoreCase) && !string.Equals(prefix, first, StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
+        }
+
+        return "(sAMAccountName=" + Escape(name[(slash + 1)..]) + ")";
+    }
 
     /// <summary>
     /// The service accounts (2026-10-15, the AD gaps plan): group managed, standalone managed and Windows Server 2025's delegated one, by class,
@@ -68,16 +97,23 @@ public static class LdapFilter
     /// A computer by its name: the account (with or without its <c>$</c>), the cn, or the DNS name. A service account matches too (2026-10-15, the
     /// AD gaps plan: <c>ad_computer svc_web$</c> finds a gMSA), by its own term here only: <see cref="Computers"/> stays machines for the rest.
     /// </summary>
+    /// <remarks>
+    /// A DNS name's trailing dot dropped and its first label tried as the account and cn (2026-10-23, the admin review's J14:
+    /// <c>fs01.lab.neon.test.</c> was not found).
+    /// </remarks>
     public static string ComputerByName(string name)
     {
-        string bare = name.TrimEnd('$');
-        return "(&(|" + Computers + ServiceAccounts + ")(|(sAMAccountName=" + Escape(bare + "$") + ")(cn=" + Escape(bare) + ")(dNSHostName=" + Escape(name) + ")))";
+        string host = name.Trim().TrimEnd('.');
+        string bare = host.TrimEnd('$');
+        int dot = bare.IndexOf('.', StringComparison.Ordinal);
+        string first = dot > 0 ? bare[..dot] : bare;
+        return "(&(|" + Computers + ServiceAccounts + ")(|(sAMAccountName=" + Escape(first + "$") + ")(cn=" + Escape(first) + ")(dNSHostName=" + Escape(host) + ")))";
     }
 
-    private static string AnyName(string name)
+    private static string AnyName(string name, string? domain)
     {
         string v = Escape(name);
-        return "(|(sAMAccountName=" + v + ")(userPrincipalName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + "))";
+        return "(|(sAMAccountName=" + v + ")(userPrincipalName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + ")" + Bare(name, domain) + ")";
     }
 
     /// <summary>One object by its DN, inside a kind's term: what a clicked row opens (2026-10-15, the AD gaps plan).</summary>
@@ -90,16 +126,21 @@ public static class LdapFilter
     /// Anything whose names hold the words: <c>*words*</c>, the words escaped. The description too since 2026-10-15 (the AD gaps plan); users, groups
     /// and computers without a type, the one kind asked with one (<see cref="TypeTerm"/>).
     /// </summary>
-    public static string NameContains(string words, string? type = null)
+    /// <remarks><paramref name="descriptions"/> false leaves the description term out (2026-10-23, DA5: a redacted read matches descriptions itself).</remarks>
+    public static string NameContains(string words, string? type = null, bool descriptions = true)
     {
         string v = "*" + Escape(words.Trim()) + "*";
+        string description = descriptions ? "(description=" + v + ")" : "";
         return type switch
         {
-            "ou" => "(&" + Ous + "(|(ou=" + v + ")(name=" + v + ")(description=" + v + ")))",
-            "contact" => "(&" + Contacts + "(|(cn=" + v + ")(displayName=" + v + ")(mail=" + v + ")(description=" + v + ")))",
-            _ => "(&" + (type is null ? "(|(&" + Users + ")" + Groups + Computers + ")" : TypeTerm(type)) + "(|(sAMAccountName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + ")(userPrincipalName=" + v + ")(description=" + v + ")))",
+            "ou" => "(&" + Ous + "(|(ou=" + v + ")(name=" + v + ")" + description + "))",
+            "contact" => "(&" + Contacts + "(|(cn=" + v + ")(displayName=" + v + ")(mail=" + v + ")" + description + "))",
+            _ => "(&" + KindTerm(type) + "(|(sAMAccountName=" + v + ")(displayName=" + v + ")(cn=" + v + ")(mail=" + v + ")(userPrincipalName=" + v + ")" + description + "))",
         };
     }
+
+    /// <summary>The objects a name search reads: one type's, or users, groups and computers when none is given.</summary>
+    public static string KindTerm(string? type) => type is null ? "(|(&" + Users + ")" + Groups + Computers + ")" : TypeTerm(type);
 
     /// <summary>The term for one of <c>ad_find</c>'s types: user, group, computer, ou, contact, service.</summary>
     public static string TypeTerm(string type) => type switch
@@ -178,6 +219,9 @@ public static class LdapFilter
     /// <summary>Users or computers never signed in (no <c>lastLogonTimestamp</c>).</summary>
     public static string NeverSignedIn(bool computers) => "(&" + (computers ? Computers : Users) + "(!(lastLogonTimestamp=*)))";
 
-    /// <summary>The domain controllers: computers with SERVER_TRUST_ACCOUNT (8192).</summary>
-    public const string DomainControllers = "(&" + Computers + "(userAccountControl:1.2.840.113556.1.4.803:=8192))";
+    /// <summary>
+    /// The domain controllers: computers with SERVER_TRUST_ACCOUNT (8192), or PARTIAL_SECRETS_ACCOUNT (0x04000000), a read-only DC's (2026-10-23,
+    /// the admin review's G9: RODCs were missing from ad_domain).
+    /// </summary>
+    public const string DomainControllers = "(&" + Computers + "(|(userAccountControl:1.2.840.113556.1.4.803:=8192)(userAccountControl:1.2.840.113556.1.4.803:=67108864)))";
 }

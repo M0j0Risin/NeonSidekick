@@ -16,6 +16,10 @@ public static class ServiceGuard
         "RpcSs", "RpcEptMapper", "DcomLaunch", "LSM", "SamSs", "EventLog", "Winmgmt", "BFE", "MpsSvc", "WinDefend", "WdNisSvc", "SecurityHealthService",
         "Schedule", "LanmanServer", "LanmanWorkstation", "Netlogon", "Dnscache", "Dhcp", "TermService", "CryptSvc", "KeyIso", "gpsvc", "ProfSvc",
         "UserManager", "Power", "PlugPlay", "nsi", "Netman", "NlaSvc", "W32Time", "VaultSvc", "BrokerInfrastructure", "SystemEventsBroker", "CoreMessagingRegistrar",
+
+        // A domain controller's own and remote management (2026-10-23, the admin review's G5): its KDC, the directory, its DNS, the replication
+        // of SYSVOL and the directory, the AD web services, and the remote shell an admin reaches the server by.
+        "kdc", "NTDS", "DNS", "DFSR", "NtFrs", "IsmServ", "ADWS", "WinRM", "RemoteRegistry", "KPSSVC",
     ];
 
     /// <summary>Which list protects <paramref name="name"/>: the app's, the computer's own, or neither.</summary>

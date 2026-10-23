@@ -26,66 +26,19 @@ public abstract class NetworkTool : AIFunction
     public NetworkBudget Budget { get; }
 
     /// <summary>A string argument, or null when blank.</summary>
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    // The shared readers (2026-10-23, the admin review's R18, E7, K6: AdminArguments).
+    protected static string? Optional(AIFunctionArguments arguments, string name) => AdminArguments.Optional(arguments, name);
 
-    /// <summary>A boolean argument: <paramref name="fallback"/> when missing, the refusal when it is not one.</summary>
-    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback)
-    {
-        if (!ToolArguments.TryReadBoolean(arguments, name, out bool? value, out string raw))
-        {
-            return (fallback, NetworkText.NotBoolean(name, raw));
-        }
+    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback) => AdminArguments.Flag(arguments, name, fallback);
 
-        return (value ?? fallback, null);
-    }
-
-    /// <summary>A whole-number argument in <paramref name="min"/>..<paramref name="max"/>: <paramref name="fallback"/> when missing, the refusal otherwise.</summary>
-    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback)
-    {
-        if (!ToolArguments.TryReadInt64(arguments, name, out long? value, out string raw) || value is { } n && (n < min || n > max))
-        {
-            string given = raw.Length > 0 ? raw : value?.ToString(CultureInfo.InvariantCulture) ?? "";
-            return (fallback, NetworkText.OutOfRange(name, given, min, max));
-        }
-
-        return ((int)(value ?? fallback), null);
-    }
+    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback) => AdminArguments.Number(arguments, name, min, max, fallback);
 
     /// <summary>
     /// A list of ports: a JSON array of numbers or of numeric strings, one number, or a string of them split by commas or spaces; each 1–65535,
-    /// <see cref="NetworkChecks.MaxPortsPerCall"/> at most, each once. The refusal for anything else or none.
+    /// <see cref="NetworkChecks.MaxPortsPerCall"/> at most, each once. The refusal for anything else or none. Read by
+    /// <see cref="NetworkPorts.Parse"/>, in the network layer since 2026-10-23 (U18).
     /// </summary>
-    public static (IReadOnlyList<int> Ports, string? Error) Ports(object? sent)
-    {
-        var ports = new List<int>();
-        string raw = sent switch
-        {
-            JsonElement element => element.ValueKind == JsonValueKind.String ? element.GetString() ?? "" : element.GetRawText(),
-            null => "",
-            _ => sent.ToString() ?? "",
-        };
-        IEnumerable<string> parts = sent switch
-        {
-            JsonElement { ValueKind: JsonValueKind.Array } array => array.EnumerateArray().Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() ?? "" : e.GetRawText()),
-            IEnumerable<object?> list when sent is not string => list.Select(o => o?.ToString() ?? ""),
-            _ => raw.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries),
-        };
-        foreach (string part in parts)
-        {
-            if (!int.TryParse(part.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int port) || port < 1 || port > 65535)
-            {
-                return ([], NetworkText.BadPorts(raw));
-            }
-
-            if (!ports.Contains(port))
-            {
-                ports.Add(port);
-            }
-        }
-
-        return ports.Count == 0 || ports.Count > NetworkChecks.MaxPortsPerCall ? ([], NetworkText.BadPorts(raw)) : (ports, null);
-    }
+    public static (IReadOnlyList<int> Ports, string? Error) Ports(object? sent) => NetworkPorts.Parse(sent);
 
     /// <summary>The answer the model reads: the text, never <c>/net</c>'s note.</summary>
     protected static string Text(NetworkAnswer answer) => answer.Text;
@@ -241,7 +194,12 @@ public sealed class NetPortTool(NetworkAccess access, NetworkBudget budget) : Ne
             return NetworkText.Missing(HostArgument);
         }
 
-        arguments.TryGetValue(PortsArgument, out object? sent);
+        // A missing list is said as missing (2026-10-23, the admin review's R17: it was "bad ports ''").
+        if (!arguments.TryGetValue(PortsArgument, out object? sent) || sent is null or JsonElement { ValueKind: JsonValueKind.Null })
+        {
+            return NetworkText.Missing(PortsArgument);
+        }
+
         var (ports, error) = Ports(sent);
         return error ?? Text(await NetworkChecks.PortsAsync(Access, Budget, host, ports, cancellationToken).ConfigureAwait(false));
     }
@@ -370,6 +328,26 @@ public sealed class NetCertsTool(NetworkAccess access, NetworkBudget budget) : N
             return ValueTask.FromResult<object?>(limitError);
         }
 
-        return ValueTask.FromResult<object?>(Text(NetworkChecks.Certificates(Access, store, location, Optional(arguments, FilterArgument), expiring, limit)));
+        return new ValueTask<object?>(CertificatesAsync(store, location, Optional(arguments, FilterArgument), expiring, limit, cancellationToken));
+    }
+
+    /// <summary>The longest a store read may take (R10).</summary>
+    public static readonly TimeSpan StoreTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// The store read off the turn's thread, under Esc and <see cref="StoreTimeout"/> (2026-10-23, the admin review's R10: a slow store or
+    /// keychain read held the turn with no way out); a read left running is abandoned.
+    /// </summary>
+    private async Task<object?> CertificatesAsync(string store, System.Security.Cryptography.X509Certificates.StoreLocation location, string? filter, int? expiring, int limit, CancellationToken cancellationToken)
+    {
+        var read = Task.Run(() => Text(NetworkChecks.Certificates(Access, store, location, filter, expiring, limit)), CancellationToken.None);
+        try
+        {
+            return await read.WaitAsync(StoreTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return NetworkText.CertsTimedOut;
+        }
     }
 }

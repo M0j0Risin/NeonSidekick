@@ -138,7 +138,7 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
         SendDoubleArg(Class("NSDate"), Sel("dateWithTimeIntervalSince1970:"), (time.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) / (double)TimeSpan.TicksPerSecond);
 
     private static DateTimeOffset TimeOf(nint date) =>
-        DateTimeOffset.UnixEpoch.AddTicks((long)(SendDouble(date, Sel("timeIntervalSince1970")) * TimeSpan.TicksPerSecond));
+        DateTimeOffset.UnixEpoch.AddTicks((long)(SendDouble(date, Selectors.TimeIntervalSince1970) * TimeSpan.TicksPerSecond));
 
     private static UnifiedLogException Failure(nint error, string fallback) =>
         error == 0
@@ -167,7 +167,7 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
             cancellationToken.ThrowIfCancellationRequested();
             var batch = new List<MacLogEntry>(MacLogLimits.Batch);
             using var quiet = MacStderr.Quiet();
-            nint logClass = Class("OSLogEntryLog");
+            nint logClass = Selectors.LogEntryClass;
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             while (batch.Count < MacLogLimits.Batch && !cancellationToken.IsCancellationRequested
                 && System.Diagnostics.Stopwatch.GetElapsedTime(started) < MacLogLimits.BatchTime)
@@ -175,21 +175,21 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
                 nint pool = objc_autoreleasePoolPush();
                 try
                 {
-                    nint entry = Send(_enumerator, Sel("nextObject"));
+                    nint entry = Send(_enumerator, Selectors.NextObject);
                     if (entry == 0)
                     {
                         _done = true;
                         break;
                     }
 
-                    var time = TimeOf(Send(entry, Sel("date")));
+                    var time = TimeOf(Send(entry, Selectors.Date));
                     if (filter.Forward ? time > filter.Until : time < filter.Since)
                     {
                         _done = true;   // the time limit's own entry: the read is over
                         break;
                     }
 
-                    if (SendBoolNint(entry, Sel("isKindOfClass:"), logClass) == 0)
+                    if (SendBoolNint(entry, Selectors.IsKindOfClass, logClass) == 0)
                     {
                         continue;   // a signpost or an activity, not a log entry
                     }
@@ -237,19 +237,44 @@ public sealed unsafe partial class MacUnifiedLog : IUnifiedLog
         /// <summary>The entry copied out, its message cut at <see cref="MacLogLimits.MessageChars"/>, and the whole message for the text check.</summary>
         private static (MacLogEntry Entry, string Whole) Copy(nint entry, DateTimeOffset time)
         {
-            string whole = FromNSString(Send(entry, Sel("composedMessage"))) ?? "";
+            string whole = FromNSString(Send(entry, Selectors.ComposedMessage)) ?? "";
             string message = whole.Length > MacLogLimits.MessageChars ? whole[..MacLogLimits.MessageChars] : whole;
+            int level = (int)SendLong(entry, Selectors.Level);
+            string subsystem = FromNSString(Send(entry, Selectors.Subsystem)) ?? "";
+            string category = FromNSString(Send(entry, Selectors.Category)) ?? "";
             return (new MacLogEntry(
                 time,
-                (int)SendLong(entry, Sel("level")),
-                FromNSString(Send(entry, Sel("process"))) ?? "",
-                SendInt(entry, Sel("processIdentifier")),
-                SendULong(entry, Sel("threadIdentifier")),
-                FromNSString(Send(entry, Sel("subsystem"))) ?? "",
-                FromNSString(Send(entry, Sel("category"))) ?? "",
-                FromNSString(Send(entry, Sel("sender"))) ?? "",
-                message), whole);
+                level,
+                FromNSString(Send(entry, Selectors.Process)) ?? "",
+                SendInt(entry, Selectors.ProcessIdentifier),
+                SendULong(entry, Selectors.ThreadIdentifier),
+                subsystem,
+                category,
+                FromNSString(Send(entry, Selectors.Sender)) ?? "",
+                message,
+                MacLogHandle.MarkOf(level, subsystem, category, whole)), whole);   // X5: the mark over the whole message
         }
+    }
+
+    /// <summary>
+    /// The selectors and the class read per entry, looked up once (2026-10-23, the admin review's X17: about eleven lookups an entry, each a lock
+    /// and a dictionary). Initialized on first use, so only a Mac's read ever runs them.
+    /// </summary>
+    private static class Selectors
+    {
+        public static readonly nint NextObject = Sel("nextObject");
+        public static readonly nint Date = Sel("date");
+        public static readonly nint IsKindOfClass = Sel("isKindOfClass:");
+        public static readonly nint ComposedMessage = Sel("composedMessage");
+        public static readonly nint Level = Sel("level");
+        public static readonly nint Process = Sel("process");
+        public static readonly nint ProcessIdentifier = Sel("processIdentifier");
+        public static readonly nint ThreadIdentifier = Sel("threadIdentifier");
+        public static readonly nint Subsystem = Sel("subsystem");
+        public static readonly nint Category = Sel("category");
+        public static readonly nint Sender = Sel("sender");
+        public static readonly nint TimeIntervalSince1970 = Sel("timeIntervalSince1970");
+        public static readonly nint LogEntryClass = Class("OSLogEntryLog");
     }
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]

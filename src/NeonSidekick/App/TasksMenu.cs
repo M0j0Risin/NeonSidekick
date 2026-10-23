@@ -33,7 +33,7 @@ internal sealed class TasksMenu
 
     public static string TitleFor(string where, string folder) => Title + " · " + where + " · " + folder;
 
-    public const string AskOffNotice = "Task tools is off (/tools tasks): the model could not read the task, so nothing was drafted.";
+    public const string AskOffNotice = TaskText.AskOffNotice;
 
     public static string RowMarkup(TaskEntry entry, int width)
     {
@@ -54,6 +54,9 @@ internal sealed class TasksMenu
     private readonly Func<string, CancellationToken, Task<bool?>> _confirm;
     private readonly Func<Computers.Computer<TaskComputerConfig>, string?> _historyComputer;
     private readonly SortedSet<string> _folders = new(StringComparer.OrdinalIgnoreCase) { "\\" };
+
+    /// <summary>The computer <see cref="_folders"/> were seen on (2026-10-23, the admin review's T17: one computer's folders were offered on another's).</summary>
+    private string? _foldersOf;
 
     public TasksMenu(TaskAccess access, Func<Settings.AppSettingsData> effective, INoticeSink transcript, MenuPane pane, InfoPane info, Func<string, bool> copy, Func<int> width,
         Func<string, CancellationToken, Task<bool?>> confirm, Func<Computers.Computer<TaskComputerConfig>, string?> historyComputer)
@@ -108,6 +111,13 @@ internal sealed class TasksMenu
 
     private async Task<Browse> BrowseAsync(TaskSource source, int tab, string folder, bool microsoft, string filter, CancellationToken cancellationToken)
     {
+        if (!string.Equals(_foldersOf, source.Computer.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            _folders.Clear();
+            _folders.Add("\\");
+            _foldersOf = source.Computer.Name;
+        }
+
         bool showComputer = _access.Catalog().Computers.Count > 1;
         IReadOnlyList<TaskEntry>? all = null;
         string? error = null;
@@ -231,21 +241,21 @@ internal sealed class TasksMenu
         _ => true,
     };
 
-    private async Task<string?> PickComputerAsync(string current, CancellationToken cancellationToken)
-    {
-        var computers = _access.Catalog().Computers;
-        int width = computers.Max(c => c.Name.Length) + 2;
-        var rows = computers.Select(c => Markup.Escape(c.Name.PadRight(width)) + Theme.DimMarkup(SettingsMenu.ComputerNote(c))).ToList();
-        int cursor = Math.Max(0, computers.ToList().FindIndex(c => string.Equals(c.Name, current, StringComparison.OrdinalIgnoreCase)));
-        var page = new MenuPage(Title + " · computer", rows, SettingsMenu.PickKeys);
-        return await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { Row: var row } && row >= 0 && row < computers.Count ? computers[row].Name : null;
-    }
+    private Task<string?> PickComputerAsync(string current, CancellationToken cancellationToken) =>
+        SettingsMenu.PickComputerAsync(_pane, Title, _access.Catalog().Computers, current, cancellationToken);   // shared (T19)
 
     private async Task<(TasksMenuOutcome Outcome, bool Changed)> ShowTaskAsync(TaskSource source, string path, CancellationToken cancellationToken)
     {
         bool changed = false;
         while (true)
         {
+            // The computer read again before each page and each change (T17), as the services pane does.
+            if (Fresh(source) is not { } fresh)
+            {
+                return (default, changed);
+            }
+
+            source = fresh;
             var read = await _access.ReadAsync(source, path, session => (Detail: session.Detail(path), session.Self), cancellationToken).ConfigureAwait(false);
             if (read.Error is { } failed)
             {
@@ -303,7 +313,7 @@ internal sealed class TasksMenu
                 case "copy":
                     if (_copy(text))
                     {
-                        Sink.Notice("(" + TaskText.Glyph + " copied " + path + ")");
+                        Sink.Notice(TaskText.CopiedNotice(path));
                     }
 
                     continue;
@@ -319,16 +329,36 @@ internal sealed class TasksMenu
                     return (new TasksMenuOutcome(null, TaskCommand.HistoryLine(path, historyOn == Computers.ComputerConfig.LocalName ? null : historyOn)), changed);
             }
 
-            string answer = await TaskChanges.RunAsync(_access, source, path, action, writesOn: true, byUser: true, _confirm, cancellationToken).ConfigureAwait(false);
-            if (answer.StartsWith("Error:", StringComparison.Ordinal))
+            if (Fresh(source) is not { } now)
             {
-                Sink.Error(answer.Replace("Error: ", "", StringComparison.Ordinal));
+                return (default, changed);
+            }
+
+            string answer = await TaskChanges.RunAsync(_access, now, path, action, writesOn: true, byUser: true, _confirm, cancellationToken).ConfigureAwait(false);
+            var (shown, bad, made) = Computers.ComputerText.ForPane(answer);
+            if (bad)
+            {
+                Sink.Error(shown);
             }
             else
             {
-                Sink.Notice(answer);
-                changed = true;
+                Sink.Notice(shown);
             }
+
+            changed |= made;
         }
+    }
+
+    /// <summary>The computer as its entry stands now (T17), unredacted for the user's own pane; null, said, when it is gone or unticked.</summary>
+    private TaskSource? Fresh(TaskSource source)
+    {
+        var (fresh, refused) = _access.Computer(source.Computer.Name, forceRedacted: false);
+        if (fresh is null)
+        {
+            Sink.Error(refused!);
+            return null;
+        }
+
+        return fresh with { Redacted = false };
     }
 }

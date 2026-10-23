@@ -31,9 +31,9 @@ internal sealed class ServicesMenu
 
     public static string TitleFor(string where) => Title + " · " + where;
 
-    public static string CopiedNotice(string name) => "(" + ServiceText.Glyph + " copied " + name + ")";
+    public static string CopiedNotice(string name) => ServiceText.CopiedNotice(name);
 
-    public const string AskOffNotice = "Service tools is off (/tools services): the model could not read the service, so nothing was drafted.";
+    public const string AskOffNotice = ServiceText.AskOffNotice;
 
     /// <summary>One row: the name padded, the display name, the state. Pinned.</summary>
     public static string RowMarkup(ServiceEntry entry, int nameWidth, int width)
@@ -199,15 +199,8 @@ internal sealed class ServicesMenu
         _ => true,
     };
 
-    private async Task<string?> PickComputerAsync(string current, CancellationToken cancellationToken)
-    {
-        var computers = _access.Catalog().Computers;
-        int width = computers.Max(c => c.Name.Length) + 2;
-        var rows = computers.Select(c => Markup.Escape(c.Name.PadRight(width)) + Theme.DimMarkup(SettingsMenu.ComputerNote(c))).ToList();
-        int cursor = Math.Max(0, computers.ToList().FindIndex(c => string.Equals(c.Name, current, StringComparison.OrdinalIgnoreCase)));
-        var page = new MenuPage(Title + " · computer", rows, SettingsMenu.PickKeys);
-        return await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { Row: var row } && row >= 0 && row < computers.Count ? computers[row].Name : null;
-    }
+    private Task<string?> PickComputerAsync(string current, CancellationToken cancellationToken) =>
+        SettingsMenu.PickComputerAsync(_pane, Title, _access.Catalog().Computers, current, cancellationToken);   // shared (T19)
 
     /// <summary>A service's page with its actions: the draft <c>ask</c> asked for, and whether a change was made (the list is read again).</summary>
     private async Task<(string? Draft, bool Changed)> ShowServiceAsync(ServiceSource source, string name, CancellationToken cancellationToken)
@@ -215,6 +208,14 @@ internal sealed class ServicesMenu
         bool changed = false;
         while (true)
         {
+            // The computer read again before each page and each change (2026-10-23, the admin review's T17: every change of a browse was judged
+            // against the config read when the pane opened, so a service just made protected, or a computer put back to read-only, still changed).
+            if (Fresh(source) is not { } fresh)
+            {
+                return (null, changed);
+            }
+
+            source = fresh;
             var read = await _access.ReadAsync(source, name, session => session.Detail(name), cancellationToken).ConfigureAwait(false);
             if (read.Error is { } failed)
             {
@@ -283,7 +284,7 @@ internal sealed class ServicesMenu
             ServiceStartChoice? choice = null;
             if (action == ServiceActions.StartType)
             {
-                string[] words = ["automatic", "delayed", "manual", "disabled"];
+                var words = ServiceText.StartTypeWords;
                 if (await _choose(words, Title + " · " + name + " · start type", cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     continue;
@@ -292,16 +293,36 @@ internal sealed class ServicesMenu
                 choice = ServiceChanges.Choice(words[picked]);
             }
 
-            string answer = await ServiceChanges.RunAsync(_access, source, name, action, choice, writesOn: true, byUser: true, _confirm, cancellationToken).ConfigureAwait(false);
-            if (answer.StartsWith("Error:", StringComparison.Ordinal))
+            if (Fresh(source) is not { } now)
             {
-                Sink.Error(answer.Replace("Error: ", "", StringComparison.Ordinal));
+                return (null, changed);
+            }
+
+            string answer = await ServiceChanges.RunAsync(_access, now, name, action, choice, writesOn: true, byUser: true, _confirm, cancellationToken).ConfigureAwait(false);
+            var (shown, bad, made) = Computers.ComputerText.ForPane(answer);
+            if (bad)
+            {
+                Sink.Error(shown);
             }
             else
             {
-                Sink.Notice(answer);
-                changed = true;
+                Sink.Notice(shown);
             }
+
+            changed |= made;
         }
+    }
+
+    /// <summary>The computer as its entry stands now (T17), unredacted for the user's own pane; null, said, when it is gone or unticked.</summary>
+    private ServiceSource? Fresh(ServiceSource source)
+    {
+        var (fresh, refused) = _access.Computer(source.Computer.Name, forceRedacted: false);
+        if (fresh is null)
+        {
+            Sink.Error(refused!);
+            return null;
+        }
+
+        return fresh with { Redacted = false };
     }
 }

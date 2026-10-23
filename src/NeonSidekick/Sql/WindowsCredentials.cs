@@ -4,10 +4,14 @@ using Microsoft.Win32.SafeHandles;
 
 namespace NeonSidekick.Sql;
 
-/// <summary>What a credential call gave: the value, or why there is none (<see cref="Error"/> set, <see cref="Value"/> null).</summary>
-public readonly record struct CredentialResult(string? Value, string? Error, bool NotFound = false)
+/// <summary>
+/// What a credential call gave: the value, or why there is none (<see cref="Error"/> set, <see cref="Value"/> null). <see cref="User"/> is a
+/// stored credential's own account name when the store keeps one (2026-10-23, the admin review's N2/V1, decision DA2: the admin families
+/// check it against the entry's user before a password is sent); the SQL and UNC callers ignore it.
+/// </summary>
+public readonly record struct CredentialResult(string? Value, string? Error, bool NotFound = false, string? User = null)
 {
-    public static CredentialResult Ok(string value) => new(value, null);
+    public static CredentialResult Ok(string value, string? user = null) => new(value, null, User: user);
 
     public static CredentialResult Failed(string error, bool notFound = false) => new(null, error, notFound);
 }
@@ -174,7 +178,7 @@ public static unsafe partial class WindowsCredentials
             // cmdkey and CredWriteW below store the password as UTF-16; a blob of odd length is someone else's shape, read as UTF-8.
             var blob = new ReadOnlySpan<byte>(credential->CredentialBlob, (int)credential->CredentialBlobSize);
             string secret = blob.Length % 2 == 0 ? Encoding.Unicode.GetString(blob) : Encoding.UTF8.GetString(blob);
-            return CredentialResult.Ok(secret);
+            return CredentialResult.Ok(secret, credential->UserName is null ? null : new string(credential->UserName));
         }
         finally
         {

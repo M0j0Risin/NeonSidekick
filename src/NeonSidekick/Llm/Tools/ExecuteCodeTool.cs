@@ -41,8 +41,15 @@ public sealed class ExecuteCodeTool : AIFunction
     /// <summary>The folder every run's folder sits in, under the temp directory.</summary>
     public const string RunsFolderName = "neonsidekick-code";
 
-    /// <summary>The tools a script may not reach: itself (a run inside a run) and the question pane (the script has no screen).</summary>
-    public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal) { ToolName, AskUserTool.ToolName, FinishStepTool.ToolName };   // finish_step since 2026-10-18: a script never ends a Ralph pass
+    /// <summary>
+    /// The tools a script's bridge never reaches: itself (a run inside a run), <c>ask_user</c> (the script has no screen), <c>finish_step</c> (2026-10-18: a script never ends a Ralph pass),
+    /// and the admin families' changes (2026-10-23, the admin review's E3: their redacted twin was the tool itself, so a script could loop
+    /// service restarts, each a confirm pane mid-script; leaving them out keeps <see cref="RedactedTwins.Of"/>'s never-null contract).
+    /// </summary>
+    public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ToolName, AskUserTool.ToolName, FinishStepTool.ToolName, ServiceControlTool.ToolName, ServiceStartTypeTool.ToolName, TaskControlTool.ToolName,
+    };
 
     private readonly ShellRunner _runner;
     private readonly WorkingDirectory _files;

@@ -42,6 +42,22 @@ internal sealed partial class SettingsMenu
         return (kept == 0 ? "none" : kept.ToString(CultureInfo.InvariantCulture)) + " of " + loaded.Computers.Count.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// A family's ticked computers on a pick page, the current one under the cursor; the picked name, or null for Esc (2026-10-23, the admin
+    /// review's T19: the services and tasks panes each had a copy).
+    /// </summary>
+    public static async Task<string?> PickComputerAsync<TConfig>(MenuPane pane, string title, IReadOnlyList<Computer<TConfig>> computers, string current, CancellationToken cancellationToken)
+        where TConfig : ComputerConfig
+    {
+        ArgumentNullException.ThrowIfNull(pane);
+        ArgumentNullException.ThrowIfNull(computers);
+        int width = computers.Max(c => c.Name.Length) + 2;
+        var rows = computers.Select(c => Spectre.Console.Markup.Escape(c.Name.PadRight(width)) + Theme.DimMarkup(ComputerNote(c))).ToList();
+        int cursor = Math.Max(0, computers.ToList().FindIndex(c => string.Equals(c.Name, current, StringComparison.OrdinalIgnoreCase)));
+        var page = new MenuPage(title + " · computer", rows, PickKeys);
+        return await pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { Row: var row } && row >= 0 && row < computers.Count ? computers[row].Name : null;
+    }
+
     /// <summary>A computer's note on the checklist: where, as whom, read or readwrite, the detail. Pinned.</summary>
     public static string ComputerNote<TConfig>(Computer<TConfig> computer) where TConfig : ComputerConfig
     {

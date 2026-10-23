@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Sql;
@@ -12,6 +13,10 @@ public sealed class ComputersFile<TConfig> where TConfig : ComputerConfig
 {
     /// <summary>The computers by name, in file order.</summary>
     public Dictionary<string, TConfig?> Computers { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>Keys beside <c>computers</c>: listed as problems, never used (2026-10-23, DA1).</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 /// <summary>
@@ -76,11 +81,43 @@ public sealed record ComputerCatalog<TConfig>(IReadOnlyList<Computer<TConfig>> C
 }
 
 /// <summary>
+/// The ticks of an <c>…computers offered</c> (or domains offered) setting kept in step with the files (2026-10-23, the admin review's H6,
+/// decision DP4): ticks are names, so a tick left after its entry went attached itself to a later entry of that name (another profile's
+/// home-file <c>readwrite</c> one). A load that finds a ticked name gone drops it; only a clean load does (no problem anywhere: a file that
+/// failed to read, or an entry refused by a typo, must not untick a computer). The built-in names stay. Pure.
+/// </summary>
+public static class OfferedTicks
+{
+    /// <summary>
+    /// The ticks with every name not in <paramref name="present"/> dropped, or null when nothing changes (or the load was not clean, or nothing
+    /// was ever ticked). A load with no entries of its own (only <paramref name="builtIn"/>) never prunes (2026-10-23, the branch review of DP7):
+    /// a missing file reads as an empty one, so an editor's save by rename or a home briefly out of reach would have saved the ticks away.
+    /// </summary>
+    public static List<string>? Pruned(IReadOnlyList<string>? offered, IEnumerable<string> present, bool clean, params string[] builtIn)
+    {
+        ArgumentNullException.ThrowIfNull(present);
+        ArgumentNullException.ThrowIfNull(builtIn);
+        var listed = present.ToList();
+        if (offered is null || !clean || !listed.Any(n => !builtIn.Contains(n.Trim(), StringComparer.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        var names = new HashSet<string>(listed.Concat(builtIn), StringComparer.OrdinalIgnoreCase);
+        var kept = offered.Where(n => names.Contains(n.Trim())).ToList();
+        return kept.Count == offered.Count ? null : kept;
+    }
+}
+
+/// <summary>
 /// A family's file and secrets (2026-10-15, the admin-tools plan: <c>EventLogConfigFile</c> and <c>EventLogSecrets</c> made generic): one file
 /// in the profile's <c>configs</c> folder and one in the home's (since 2026-10-16), the profile's winning by name; a missing file is empty, a corrupt one a problem and one
 /// warning; a plain <c>password</c> DPAPI-encrypted in place at the first read that sees it (<see cref="ConnectionsFileEdit"/> under
-/// <c>computers</c>). Each family hands in its source-generated <see cref="JsonTypeInfo{T}"/>s, so there is no reflection path. Read afresh at
-/// every call. Not carried by <c>/profile push|pull</c>, not copied by <c>/profile add</c>.
+/// <c>computers</c>). Each family hands in its source-generated <see cref="JsonTypeInfo{T}"/>s, so there is no reflection path. Read again
+/// once a file changes (<see cref="ConfigCache"/>, 2026-10-23; afresh at every call before). Not carried by <c>/profile push|pull</c>, not
+/// copied by <c>/profile add</c>. Since 2026-10-23 (the admin review's mechanism 1) an entry is refused for an unknown key (DA1), a name
+/// given twice (Q1) or a key given twice (C7), and a profile's refused entry hides the home's of the same name (D2): a broken read-only
+/// lock-down no longer falls back to a readwrite one.
 /// </summary>
 public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new()
 {
@@ -118,15 +155,26 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
     public (IReadOnlyList<Computer<TConfig>> Computers, IReadOnlyList<SqlConfigProblem> Problems) Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return ConfigCache.Get(Info.FileName, path, () => LoadUncached(path));
+    }
+
+    private (IReadOnlyList<Computer<TConfig>> Computers, IReadOnlyList<SqlConfigProblem> Problems) LoadUncached(string path)
+    {
         if (!File.Exists(path))
         {
             return ([], []);
         }
 
         ComputersFile<TConfig>? file;
+        IReadOnlySet<string> repeated;
+        IReadOnlyDictionary<string, string> twice;
         try
         {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), _file);
+            byte[] bytes = File.ReadAllBytes(path);
+            var json = ConfigChecks.WithoutBom(bytes);
+            repeated = ConnectionsFileEdit.RepeatedNames(json, Section);
+            twice = ConnectionsFileEdit.RepeatedKeys(json, Section);
+            file = JsonSerializer.Deserialize(json, _file);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -143,7 +191,7 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
         }
 
         var computers = new List<Computer<TConfig>>(file.Computers.Count);
-        var problems = new List<SqlConfigProblem>();
+        var problems = ConfigChecks.UnknownFileKeys(file.Extra, Section).Select(p => new SqlConfigProblem(path, p)).ToList();
         foreach (var (name, config) in file.Computers)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -154,7 +202,10 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
 
             var entry = config ?? new TConfig();
             string trimmed = name.Trim();
-            if (entry.Problem(trimmed, Info) is { } reason)
+            string? reason = repeated.Contains(trimmed) ? ComputerText.NamedTwice
+                : twice.TryGetValue(trimmed, out string? key) ? ComputerText.KeyTwice(key)
+                : ConfigChecks.UnknownKey(entry.Extra, _entry) ?? entry.Problem(trimmed, Info);
+            if (reason is not null)
             {
                 problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, trimmed), reason, Name: trimmed));
                 continue;
@@ -179,7 +230,8 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
             (global, globalProblems) = Load(GlobalPath(home));
         }
 
-        var names = new HashSet<string>(profile.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+        // A profile entry that was refused still hides the home's of its name (D2): the profile meant its own.
+        var names = new HashSet<string>(profile.Select(c => c.Name).Concat(profileProblems.Where(p => p.Name is not null).Select(p => p.Name!)), StringComparer.OrdinalIgnoreCase);
         var all = profile.Concat(global.Where(c => !names.Contains(c.Name))).ToList();
         var local = all.FirstOrDefault(c => c.IsLocal) ?? LocalOnly.Computers[0];
         return new ComputerCatalog<TConfig>([local with { Name = ComputerConfig.LocalName }, .. all.Where(c => !c.IsLocal)], [.. profileProblems, .. globalProblems], Info);
@@ -208,45 +260,46 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
 
     public static string? WritePassword(string path, string name, string value) => ConnectionsFileEdit.WritePassword(path, name, value, Section, Noun);
 
-    /// <summary>Adds computer <paramref name="name"/> to <paramref name="path"/> (the wizard), its <c>password</c> left out; null on success.</summary>
-    public string? AddComputer(string path, string name, TConfig config)
+    /// <summary>
+    /// Adds computer <paramref name="name"/> to <paramref name="path"/> (the wizard); null on success. <paramref name="sealedPassword"/> (a
+    /// <c>dpapi:</c> value) goes into the entry in the same write (2026-10-23, the admin review's H9: written after, a failed password save left
+    /// the entry with none, the old one lost); null leaves <c>password</c> out.
+    /// </summary>
+    public string? AddComputer(string path, string name, TConfig config, string? sealedPassword = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText, Section, Noun);
+        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config, sealedPassword), EmptyText, Section, Noun);
     }
 
-    /// <summary>Replaces computer <paramref name="oldName"/> with <paramref name="newName"/> and <paramref name="config"/>; null on success.</summary>
-    public string? ReplaceComputer(string path, string oldName, string newName, TConfig config)
+    /// <summary>Replaces computer <paramref name="oldName"/> with <paramref name="newName"/> and <paramref name="config"/> (and <paramref name="sealedPassword"/>, H9); null on success.</summary>
+    public string? ReplaceComputer(string path, string oldName, string newName, TConfig config, string? sealedPassword = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
         ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config), Section, Noun);
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config, sealedPassword), Section, Noun);
     }
 
-    /// <summary>An entry as the file holds it, its password left out.</summary>
-    public string EntryText(TConfig config)
+    /// <summary>
+    /// An entry as the file holds it, its password and unknown keys left out. Written from a copy (2026-10-23: the loaded entries are shared
+    /// through <see cref="ConfigCache"/>, so the old blank-then-restore of <c>Password</c> on the caller's object raced a reader).
+    /// </summary>
+    public string EntryText(TConfig config, string? sealedPassword = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        string? password = config.Password;
-        config.Password = null;
-        try
+        var copy = JsonSerializer.Deserialize(JsonSerializer.Serialize(config, _entry), _entry)!;
+        copy.Password = sealedPassword;
+        copy.Extra = null;
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-            {
-                JsonSerializer.Serialize(writer, config, _entry);
-            }
+            JsonSerializer.Serialize(writer, copy, _entry);
+        }
 
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
-        finally
-        {
-            config.Password = password;
-        }
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>Every file of the family under <paramref name="home"/> read once, so the encryption runs over them all at startup. Never throws.</summary>
@@ -290,7 +343,7 @@ public sealed class ComputerFamily<TConfig> where TConfig : ComputerConfig, new(
         {
             string target = config.CredentialTarget(Info, computer.Name);
             var read = WindowsCredentials.ReadGeneric(target);
-            return read.NotFound ? CredentialResult.Failed(ComputerText.NoCredential(target, Info)) : read;
+            return read.NotFound ? CredentialResult.Failed(ComputerText.NoCredential(target, Info)) : ComputerConfig.CheckedUser(read, target, config.User);
         }
 
         string password = config.Password ?? "";

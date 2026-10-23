@@ -88,7 +88,9 @@ public sealed class EventLogSearchTool : EventLogTool
         {
             // A file's channel is read only when its default view is wanted (2026-10-20, a review: it opened the file twice for nothing).
             var query = parsed.LevelGiven || parsed.AuditGiven ? parsed.Query : parsed.Complete(ChannelOf(system, source, token));
-            var (xpath, built) = EventLogXPath.Build(query, serverFields: !source.Redacted);
+            // The field terms are the client's alone, whatever the detail (2026-10-23, the admin review's W2: the log's XPath reads only
+            // EventData's named values, untrimmed, while the client reads every field, so a full-detail search missed what a redacted one found).
+            var (xpath, built) = EventLogXPath.Build(query, serverFields: false);
             if (xpath is null)
             {
                 return built!;
@@ -203,7 +205,15 @@ public sealed class EventLogSearchTool : EventLogTool
             return (null, limitError);
         }
 
-        query = query with { Since = since, Until = until, BeforeRecord = before, Limit = (int)limit!.Value, Text = Optional(arguments, TextArgument) };
+        // The text term held to MaxTextChars (2026-10-23, the admin review's K6: the next page's call restated it whole, so a 2 MB term made a
+        // 2 MB answer).
+        string? text = Optional(arguments, TextArgument);
+        if (text is { Length: > ArgumentText.MaxTextChars })
+        {
+            return (null, ArgumentText.TooLong(TextArgument, ArgumentText.MaxTextChars));
+        }
+
+        query = query with { Since = since, Until = until, BeforeRecord = before, Limit = (int)limit!.Value, Text = text };
         return (new QueryArgs(query, levelGiven, auditGiven), null);
     }
 }

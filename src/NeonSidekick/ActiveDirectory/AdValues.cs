@@ -32,9 +32,25 @@ public static class AdValues
     public const int TrustedForDelegation = 0x80000;
     public const int PasswordExpired = 0x800000;
 
-    /// <summary>A FILETIME as a moment; null for 0 or the largest value (never).</summary>
+    /// <summary>A read-only DC's account (PARTIAL_SECRETS_ACCOUNT, 2026-10-23, G9).</summary>
+    public const int PartialSecretsAccount = 0x4000000;
+
+    /// <summary>The trust accounts' bits: interdomain, workstation, server (2026-10-23, H3: no password change at sign-in for them).</summary>
+    public const int TrustAccounts = 0x800 | 0x1000 | 0x2000;
+
+    /// <summary>
+    /// A FILETIME as a moment; null for 0 or the largest value (never). Read as UTC (2026-10-23, the admin review's P7):
+    /// <c>DateTimeOffset.FromFileTime</c> goes through the local zone and threw near the top of the range east of UTC, though the guard passed.
+    /// </summary>
     public static DateTimeOffset? FileTime(long value) =>
-        value <= 0 || value == Never ? null : value > DateTime.MaxValue.ToFileTimeUtc() ? null : DateTimeOffset.FromFileTime(value).ToUniversalTime();
+        value <= 0 || value == Never ? null : value > DateTime.MaxValue.ToFileTimeUtc() ? null : new DateTimeOffset(DateTime.FromFileTimeUtc(value), TimeSpan.Zero);
+
+    /// <summary>
+    /// <paramref name="at"/> plus <paramref name="span"/>, or null past the last representable moment (2026-10-23, the admin review's A8: a
+    /// policy interval near "never" overflowed the addition, and the ArgumentOutOfRangeException failed the whole answer).
+    /// </summary>
+    public static DateTimeOffset? Plus(DateTimeOffset at, TimeSpan span) =>
+        span.Ticks > DateTimeOffset.MaxValue.UtcTicks - at.UtcTicks || span.Ticks < DateTimeOffset.MinValue.UtcTicks - at.UtcTicks ? null : at + span;
 
     /// <summary>A FILETIME attribute's text as a moment.</summary>
     public static DateTimeOffset? FileTime(string? text) =>
@@ -43,16 +59,61 @@ public static class AdValues
     /// <summary>A moment as a FILETIME, for a filter's cutoff.</summary>
     public static long ToFileTime(DateTimeOffset moment) => moment.UtcDateTime.ToFileTimeUtc();
 
-    /// <summary>GeneralizedTime (<c>20261015123456.0Z</c>) as a moment; null when it is not one.</summary>
+    /// <summary>
+    /// GeneralizedTime (<c>20261015123456.0Z</c>) as a moment; null when it is not one. RFC 4517's forms (2026-10-23, the admin review's P9: the
+    /// first 14 characters were read as UTC, an offset ignored and the shorter forms refused): the hour, then optional minutes and seconds, an
+    /// optional fraction, then <c>Z</c> or an offset (<c>+0200</c>, <c>-05</c>); no zone is read as UTC, as AD always writes one.
+    /// </summary>
     public static DateTimeOffset? GeneralizedTime(string? text)
     {
-        if (text is null || text.Length < 14)
+        if (text is null)
         {
             return null;
         }
 
-        return DateTimeOffset.TryParseExact(text[..14], "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var moment)
-            ? moment
+        int digits = 0;
+        while (digits < text.Length && char.IsAsciiDigit(text[digits]))
+        {
+            digits++;
+        }
+
+        if (digits is not (10 or 12 or 14))
+        {
+            return null;
+        }
+
+        int at = digits;
+        if (at < text.Length && text[at] is '.' or ',')
+        {
+            at++;
+            while (at < text.Length && char.IsAsciiDigit(text[at]))
+            {
+                at++;
+            }
+        }
+
+        var offset = TimeSpan.Zero;
+        string zone = text[at..];
+        if (zone.Length > 0 && zone != "Z")
+        {
+            if (zone.Length is not (3 or 5) || zone[0] is not ('+' or '-') || !zone[1..].All(char.IsAsciiDigit))
+            {
+                return null;
+            }
+
+            int hours = int.Parse(zone[1..3], CultureInfo.InvariantCulture);
+            int minutes = zone.Length == 5 ? int.Parse(zone[3..5], CultureInfo.InvariantCulture) : 0;
+            if (hours > 14 || minutes > 59)
+            {
+                return null;
+            }
+
+            offset = new TimeSpan(hours, minutes, 0) * (zone[0] == '-' ? -1 : 1);
+        }
+
+        string stamp = text[..digits].PadRight(14, '0');
+        return DateTime.TryParseExact(stamp, "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var local)
+            ? new DateTimeOffset(local, offset).ToUniversalTime()
             : null;
     }
 
@@ -94,7 +155,8 @@ public static class AdValues
             authority = (authority << 8) | bytes[i];
         }
 
-        var text = new StringBuilder("S-1-").Append(authority.ToString(CultureInfo.InvariantCulture));
+        // An authority of 2^32 or more is written in hex, as Windows writes it (2026-10-23, the admin review's V9), so the text round-trips.
+        var text = new StringBuilder("S-1-").Append(authority >= 1L << 32 ? "0x" + authority.ToString("X12", CultureInfo.InvariantCulture) : authority.ToString(CultureInfo.InvariantCulture));
         for (int i = 0; i < count; i++)
         {
             text.Append('-').Append(BinaryPrimitives.ReadUInt32LittleEndian(bytes[(8 + (4 * i))..]).ToString(CultureInfo.InvariantCulture));
@@ -229,8 +291,9 @@ public static class AdValues
         ArgumentNullException.ThrowIfNull(dn);
         ArgumentNullException.ThrowIfNull(baseDn);
         var names = new List<string>();
-        string rest = dn;
-        for (int guard = 0; rest.Length > 0 && !string.Equals(rest, baseDn, StringComparison.OrdinalIgnoreCase) && guard < 64; guard++)
+        string rest = NormalDn(dn);
+        string top = NormalDn(baseDn);   // V8: compared as the server writes a DN
+        for (int guard = 0; rest.Length > 0 && !string.Equals(rest, top, StringComparison.OrdinalIgnoreCase) && guard < 64; guard++)
         {
             names.Add(FirstName(rest).Replace("\\", "\\\\", StringComparison.Ordinal).Replace("/", "\\/", StringComparison.Ordinal));
             rest = Parent(rest);
@@ -305,8 +368,11 @@ public static class AdValues
     {
         ArgumentNullException.ThrowIfNull(sid);
         var parts = sid.Split('-');
+        // The authority in decimal or as 0x hex, and within its 48 bits (V9: its high bits were dropped silently, a search for the wrong SID).
+        bool hex = parts.Length >= 3 && parts[2].StartsWith("0x", StringComparison.OrdinalIgnoreCase);
         if (parts.Length < 3 || parts[0] != "S" || parts[1] != "1" || parts.Length - 3 > 15
-            || !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out long authority))
+            || !long.TryParse(hex ? parts[2][2..] : parts[2], hex ? NumberStyles.AllowHexSpecifier : NumberStyles.None, CultureInfo.InvariantCulture, out long authority)
+            || authority < 0 || authority >= 1L << 48)
         {
             return null;
         }
@@ -396,8 +462,73 @@ public static class AdValues
             : Has("foreignSecurityPrincipal") ? "foreign"
             : Has("organizationalUnit") ? "ou"
             : Has("container") || Has("builtinDomain") ? "container"
-            : "user";
+            : Has("user") || Has("person") ? "user"
+            : ObjectKind;
     }
+
+    /// <summary>
+    /// The kind of an object that is none of the others (2026-10-23, the admin review's V2: lostAndFound, quotas, TPM devices and print queues
+    /// were "user", openable, and opened as "no such user"); never opened.
+    /// </summary>
+    public const string ObjectKind = "object";
+
+    /// <summary>
+    /// A DN with the spaces around its <c>,</c> and <c>=</c> taken out (an escaped one kept), for comparing DNs as the server writes them with one
+    /// a person typed (2026-10-23, the admin review's V8: <c>OU=Neon, DC=lab</c> never matched the server's <c>OU=Neon,DC=lab</c>). Pure.
+    /// </summary>
+    public static string NormalDn(string dn)
+    {
+        ArgumentNullException.ThrowIfNull(dn);
+        var text = new StringBuilder(dn.Length);
+        for (int i = 0; i < dn.Length; i++)
+        {
+            char c = dn[i];
+            if (c == '\\' && i + 1 < dn.Length)
+            {
+                text.Append(c).Append(dn[++i]);
+                continue;
+            }
+
+            if (c is ',' or '=')
+            {
+                while (text.Length > 0 && text[^1] == ' ' && (text.Length < 2 || text[^2] != '\\'))
+                {
+                    text.Length--;
+                }
+
+                text.Append(c);
+                while (i + 1 < dn.Length && dn[i + 1] == ' ')
+                {
+                    i++;
+                }
+
+                continue;
+            }
+
+            text.Append(c);
+        }
+
+        return text.ToString().Trim();
+    }
+
+    /// <summary>A DN's domain part: its trailing run of <c>DC=</c> names, normalized (Q9). Pure.</summary>
+    public static string DomainPart(string dn)
+    {
+        ArgumentNullException.ThrowIfNull(dn);
+        string rest = NormalDn(dn);
+        for (int guard = 0; guard < 64 && rest.Length > 0 && !rest.StartsWith("DC=", StringComparison.OrdinalIgnoreCase); guard++)
+        {
+            rest = Parent(rest);
+        }
+
+        return rest;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="dn"/> is in <paramref name="domainDn"/>'s domain: their domain parts the same (2026-10-23, the admin review's Q9: a
+    /// child domain's <c>DC=child,DC=corp,DC=com</c> ends in its parent's and was judged the same). Pure.
+    /// </summary>
+    public static bool SameDomain(string dn, string domainDn) => string.Equals(DomainPart(dn), DomainPart(domainDn), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The DN of the container holding <paramref name="dn"/> (its parent); "" for a root.</summary>
     public static string Parent(string dn)

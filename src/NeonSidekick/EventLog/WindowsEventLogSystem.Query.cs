@@ -96,6 +96,9 @@ public sealed partial class WindowsEventLogSystem
 
         public int Skipped => _skipped;
 
+        /// <summary>Oversized events stepped over in one <see cref="Next"/> before it returns empty so the caller's budget is read (D6).</summary>
+        private const int MaxSkipsPerBatch = 64;
+
         public IReadOnlyList<RawEvent>? Next()
         {
             ReleaseBatch();
@@ -105,8 +108,17 @@ public sealed partial class WindowsEventLogSystem
             }
 
             _token.ThrowIfCancellationRequested();
+            int skippedNow = 0;
             while (true)
             {
+                // Each round answers the token (2026-10-23, the admin review's D6: stepping over oversized events looped here with nothing
+                // able to stop it), and a long run of them hands back an empty batch so the search's clock and scan limit are read.
+                _token.ThrowIfCancellationRequested();
+                if (skippedNow >= MaxSkipsPerBatch)
+                {
+                    return [];
+                }
+
                 bool ok;
                 int returned;
                 fixed (nint* events = _events)
@@ -143,6 +155,7 @@ public sealed partial class WindowsEventLogSystem
                     // One event too large even alone (2026-10-20, a review: it failed the read, and every later page at that place): stepped
                     // over and counted, so the page says so and the search goes on past it. Unproven against a real host's oversized event.
                     _skipped++;
+                    skippedNow++;
                     continue;
                 }
 
@@ -276,8 +289,9 @@ public sealed partial class WindowsEventLogSystem
                 var message = FormatWith(publisher, handle, valueCount, values);
                 if (message.Problem == EventMessageProblem.Failed && EventLogNative.LastError == EventLogNative.EvtMessageLocaleNotFound)
                 {
-                    // No messages in the user's language: the publisher once more in English.
-                    publisher = Reopen(provider, EnglishLocale);
+                    // No messages in the user's language: the publisher once more in English, for this event alone (2026-10-23, the admin
+                    // review's O6: the English one replaced the user's for the rest of the read).
+                    publisher = Publisher(provider, EnglishLocale).Handle;
                     message = publisher == 0 ? message : FormatWith(publisher, handle, valueCount, values);
                 }
 
@@ -307,6 +321,9 @@ public sealed partial class WindowsEventLogSystem
             {
                 bool ok;
                 int used;
+
+                // Cleared first (2026-10-23, the admin review's O7): a partial message that wrote nothing read the previous event's text.
+                _message[0] = '\0';
                 fixed (char* buffer = _message)
                 {
                     ok = EventLogNative.EvtFormatMessage(publisher, handle, 0, valueCount, values, EventLogNative.FormatMessageEvent, _message.Length, buffer, out used);
@@ -344,7 +361,9 @@ public sealed partial class WindowsEventLogSystem
         /// </summary>
         private (nint Handle, int Refused) Publisher(string provider, int locale)
         {
-            if (_publishers.TryGetValue(provider, out var known))
+            // By locale too (O6): the user's and the English one kept apart.
+            string key = locale.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + provider;
+            if (_publishers.TryGetValue(key, out var known))
             {
                 return known;
             }
@@ -368,18 +387,8 @@ public sealed partial class WindowsEventLogSystem
             }
 
             var entry = (publisher, refused);
-            _publishers[provider] = entry;
+            _publishers[key] = entry;
             return entry;
-        }
-
-        private nint Reopen(string provider, int locale)
-        {
-            if (_publishers.Remove(provider, out var old))
-            {
-                Close(old.Handle);
-            }
-
-            return Publisher(provider, locale).Handle;
         }
 
         public void Dispose()

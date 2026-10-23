@@ -29,6 +29,10 @@ public static partial class ToolRedaction
     /// <c>-pX</c>, <c>net user u &lt;pw&gt;</c>, <c>net use … /user:u &lt;pw&gt;</c>, <c>schtasks /RP x</c>,
     /// <c>ConvertTo-SecureString '…' -AsPlainText</c>, the <c>PSCredential</c> constructor, <c>$password = '…'</c>,
     /// <c>Authorization: Bearer|Basic x</c>, a JWT, a PEM block. Best-effort: no rule can know every secret in free text.
+    /// Since 2026-10-23 (the admin review's A3, C5) also <c>--api_key=</c>, <c>--client_secret=</c>, <c>--account-key</c>,
+    /// <c>--access-key</c>, <c>--auth-token</c> and the other token flags; a key in quotes (JSON's <c>"password": "x"</c>); the token keys
+    /// (<c>?access_token=…</c>, <c>refresh_token=</c>); an XML element (<c>&lt;Password&gt;x&lt;/Password&gt;</c>). Their neighbors that
+    /// hold no secret (<c>token_type</c>, <c>passwordLastSet</c>) are left alone.
     /// </summary>
     public static string Text(string text)
     {
@@ -48,6 +52,7 @@ public static partial class ToolRedaction
         result = SecureString().Replace(result, m => m.Groups["head"].Value + Placeholder);
         result = PsCredential().Replace(result, m => m.Groups["head"].Value + Placeholder);
         result = Assignment().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = XmlElement().Replace(result, m => m.Groups["head"].Value + Placeholder + m.Groups["tail"].Value);
         result = KeyValue().Replace(result, m => m.Groups["head"].Value + Placeholder);
         result = SlashSwitch().Replace(result, m => m.Groups["head"].Value + Placeholder);
         result = DashFlag().Replace(result, m => m.Groups["head"].Value + Placeholder);
@@ -89,13 +94,25 @@ public static partial class ToolRedaction
     [GeneratedRegex(@"(?<head>\$[\w:]*(?:password|passwd|pwd|secret|token|apikey|api_key)[\w]*\s*=\s*)(?:""[^""]*""|'[^']*')", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Assignment();
 
-    [GeneratedRegex(@"(?<head>(?<![\w\-$/])(?:password|passwd|pwd|pass|secret|client[_\-]?secret|api[_\-]?key|access[_\-]?key|account[_\-]?key|shared[_\-]?access[_\-]?key|sig)\s*[=:]\s*)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    // The key names that carry a secret: the password's spellings, secrets and keys, and the tokens (2026-10-23, C5).
+    private const string SecretKey = @"(?:password|passwd|pwd|pass|secret|client[_\-]?secret|api[_\-]?key|access[_\-]?key|account[_\-]?key|shared[_\-]?access[_\-]?key|private[_\-]?key|sig"
+        + @"|token(?=[""']?\s*=)|(?:access|auth|refresh|id|bearer|session|sas|api)[_\-]?token)";   // a bare token only before = ("Elevated Token: Yes" is a Security event's own words)
+
+    // A key, perhaps in quotes (JSON's "password": "x"), then = or :, then its value (C5: the quote after the key missed the rule).
+    [GeneratedRegex(@"(?<head>(?<![\w\-$/])" + SecretKey + @"[""']?\s*[=:]\s*)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex KeyValue();
+
+    // An XML element of a secret key's name: <Password>x</Password> (C5).
+    [GeneratedRegex(@"(?<head><(?<tag>" + SecretKey + @")>)[^<]*(?<tail></\k<tag>>)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex XmlElement();
 
     [GeneratedRegex(@"(?<head>(?<![\w/])/(?:password|pass|pwd|p):)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SlashSwitch();
 
-    [GeneratedRegex(@"(?<head>(?<![\w\-])--?(?:password|passwd|pwd|pass|secret|token|api-?key|client-?secret)(?:\s+|=))(?!-)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    // A flag of a secret's name with its value after a space or =; - and _ alike (2026-10-23, A3: --api_key=, --client_secret=,
+    // --account-key, --access-key and --auth-token passed).
+    [GeneratedRegex(@"(?<head>(?<![\w\-])--?(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|client[_\-]?secret|account[_\-]?key|access[_\-]?key|private[_\-]?key|shared[_\-]?key"
+        + @"|(?:auth|access|refresh|id|bearer|session|sas|api)[_\-]?token)(?:\s+|=))(?!-)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DashFlag();
 
     [GeneratedRegex(@"(?<head>(?<![\w\-])-[pP]\s+)(?!-)" + Value, RegexOptions.CultureInvariant)]

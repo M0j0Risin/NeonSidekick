@@ -40,6 +40,9 @@ internal static unsafe partial class LdapNative
     public const int OptEncrypt = 0x96;
     public const int OptArecExclusive = 0x98;
 
+    /// <summary><c>LDAP_OPT_SERVER_ERROR</c>: the server's own text for the last failure (2026-10-23, the admin review's J5: AD's <c>data 52e</c> and friends).</summary>
+    public const int OptServerError = 0x33;
+
     public const uint AuthNegotiate = 0x0486;
     public const uint ScopeBase = 0;
     public const uint ScopeOneLevel = 1;
@@ -82,6 +85,10 @@ internal static unsafe partial class LdapNative
 
     [LibraryImport("wldap32.dll", EntryPoint = "ldap_set_optionW")]
     public static partial int SetOption(nint ld, int option, void* value);
+
+    /// <summary>An option read back (2026-10-23, the admin review's J5 and J3): the server's error text, the signing and sealing state. A read, never a write.</summary>
+    [LibraryImport("wldap32.dll", EntryPoint = "ldap_get_optionW")]
+    public static partial int GetOption(nint ld, int option, void* value);
 
     [LibraryImport("wldap32.dll", EntryPoint = "ldap_connect")]
     public static partial int Connect(nint ld, LTimeval* timeout);

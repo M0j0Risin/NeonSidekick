@@ -46,6 +46,12 @@ public sealed record WriteGuardFacts(
 /// </list>
 /// A root that is itself inside the home or a skill root (the default <c>&lt;profile&gt;\files</c>, the images folder, the skill editor's
 /// own folder) may write inside itself: "trusted" means inside the home or a skill root and not inside this instance's own root.
+/// <para><b>The home, by name and by identity</b> (2026-10-23, the admin review's M1 and M2): the own-root pass never covers the home or a
+/// profile folder itself — with the working directory there, only a profile's <c>files</c>, <c>images</c> and <c>skills</c> and the home's
+/// <c>skills</c> may be written (<see cref="AppWritable"/>), so <c>configs\services.json</c>, <c>profile.json</c> and <c>persona.md</c> are
+/// refused; before, <c>--cwd</c> at a profile let the model write a <c>readwrite</c>, <c>control: ["*"]</c> services.json. And the home is
+/// found by more than its spelling: a <c>.neonsidekick</c> part anywhere in the path (another spelling of a home: a share, a mapped drive),
+/// and the folder's own identity (<see cref="FileIdentity"/>: <c>\\localhost\C$</c>, <c>\\PC\Users</c>, <c>subst</c>).</para>
 /// <para><b>Fail-safe direction:</b> the guard holds for every write unless an app-write scope is open (<see cref="AppWrites"/>), so a
 /// tool site nobody listed stays guarded and an app site nobody listed fails a test. The scope wraps a synchronous call only; a task
 /// started inside it is guarded again once it closes (the scope is an object the task sees closed). The user's own commands write
@@ -154,7 +160,7 @@ public static class WriteGuard
         var facts = s_facts;
         if (facts is not null)
         {
-            if (Trusted(facts.Home(), judgedRoot, judged))
+            if (InHome(facts.Home(), judgedRoot, judged))
             {
                 return FileOutcome.AppFilesProtected;
             }
@@ -218,6 +224,92 @@ public static class WriteGuard
 
         string folder = Trim(guarded);
         return WorkingDirectory.IsInside(folder, full) && !(WorkingDirectory.IsInside(folder, root) && WorkingDirectory.IsInside(root, full));
+    }
+
+    /// <summary>The home's default folder name, looked for as a part of any path (M2).</summary>
+    public const string HomeFolderName = ".neonsidekick";
+
+    /// <summary>
+    /// Whether <paramref name="full"/> is in the home <paramref name="home"/> where this instance may not write: by its spelling, by a
+    /// <c>.neonsidekick</c> part, or by the identity of one of its folders (M2); the instance's own root writes inside itself only when that
+    /// root is an app-writable folder (M1).
+    /// </summary>
+    private static bool InHome(string? home, string root, string full)
+    {
+        if (string.IsNullOrEmpty(home))
+        {
+            return false;
+        }
+
+        string folder = Trim(home);
+        if (WorkingDirectory.IsInside(folder, full))
+        {
+            return !OwnRootWrites(folder, root, full);
+        }
+
+        if (SpelledHome(full) is { } spelled)
+        {
+            return !OwnRootWrites(spelled, root, full);
+        }
+
+        if (HomeIdentity(folder) is { } id && FileIdentity.AncestorWith(full, id) is { } found)
+        {
+            return !OwnRootWrites(found, root, full);
+        }
+
+        return false;
+    }
+
+    /// <summary>The part of <paramref name="full"/> up to and including a <c>.neonsidekick</c> folder, or null.</summary>
+    private static string? SpelledHome(string full)
+    {
+        int end = 0;
+        foreach (string part in full.Split(WorkingDirectory.Separators))
+        {
+            end += part.Length;
+            if (string.Equals(part.TrimEnd('.', ' '), HomeFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return full[..end];
+            }
+
+            end++;
+        }
+
+        return null;
+    }
+
+    private static bool OwnRootWrites(string home, string root, string full) =>
+        WorkingDirectory.IsInside(home, root) && WorkingDirectory.IsInside(root, full) && AppWritable(WorkingDirectory.Under(home, full));
+
+    /// <summary>
+    /// Whether <paramref name="relative"/> (a path under the home) lies inside a folder the app lets the model write (M1): a profile's
+    /// <c>files</c>, <c>images</c> or <c>skills</c>, or the home's <c>skills</c> — never one of those folders itself, nor the home, <c>profiles</c>,
+    /// a profile folder, <c>configs</c> or <c>db</c>.
+    /// </summary>
+    public static bool AppWritable(string relative)
+    {
+        ArgumentNullException.ThrowIfNull(relative);
+        var parts = relative.Split(WorkingDirectory.Separators, StringSplitOptions.RemoveEmptyEntries);
+        return (parts.Length >= 4 && Is(parts[0], "profiles") && (Is(parts[2], "files") || Is(parts[2], "images") || Is(parts[2], "skills")))
+            || (parts.Length >= 2 && Is(parts[0], "skills"));
+
+        static bool Is(string part, string name) => string.Equals(part.TrimEnd('.', ' '), name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static (string Path, FileId? Id) s_homeIdentity;
+
+    /// <summary>The home's identity, read once per home and kept.</summary>
+    private static FileId? HomeIdentity(string home)
+    {
+        var cached = s_homeIdentity;
+        if (cached.Path == home && cached.Id is not null)
+        {
+            return cached.Id;
+        }
+
+        var id = FileIdentity.Of(home);
+        s_homeIdentity = (home, id);
+        return id;
     }
 
     private static string Trim(string path)

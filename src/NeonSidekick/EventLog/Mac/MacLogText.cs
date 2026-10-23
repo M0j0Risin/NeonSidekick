@@ -33,7 +33,7 @@ public static class MacLogText
     public const string TimedOut = "Error: the read took too long and was stopped; narrow it (a process, a subsystem, a level, or a shorter since).";
 
     /// <summary>A level that is none of OSLog's.</summary>
-    public static string BadLevel(string word) => $"Error: level '{word}' is not one of fault, error, default, info, debug or all.";
+    public static string BadLevel(string word) => $"Error: level '{Llm.Tools.ArgumentText.Echo(word)}' is not one of fault, error, default, info, debug or all.";
 
     /// <summary>A handle not written by an answer.</summary>
     public static string BadHandle(string text) => $"Error: '{text}' is not an entry's handle (the u… an answer shows).";
@@ -76,6 +76,27 @@ public static class MacLogText
     /// <summary>A page's header after its count: <c>, newest first (read 20 entries since …)</c> (moved here from <c>MacLogRender</c>, 2026-10-20).</summary>
     public static string NewestFirstRead(string read, string since) => ", newest first (read " + read + " since " + since + ")";
 
+    /// <summary>A .logarchive holding a link inside it (2026-10-23, X4). Pinned.</summary>
+    public static string ArchiveHoldsLinks(string archive) =>
+        $"Error: {archive} holds links (or is too large to check), which could reach outside it; copy the archive without links into the working directory.";
+
+    /// <summary>An .ips whose body could not be read (cut or malformed, 2026-10-23, X8). Pinned.</summary>
+    public const string ReportBodyUnread = "(the report's body could not be read: it is cut short or not the JSON a report holds)";
+
+    /// <summary>The crash folders a listing could not read (2026-10-23, X11). Pinned.</summary>
+    public static string FoldersRefused(IReadOnlyList<string> owners) =>
+        "(the " + string.Join(" and ", owners) + " report folder" + (owners.Count == 1 ? " was" : "s were") + " not readable from this account, so its reports are not in this answer)";
+
+    /// <summary>What an empty answer adds when the search was narrower than its levels and time (2026-10-23, S2's Mac half); "" when it was not.</summary>
+    public static string Narrowed(MacLogQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return query.Process is { Length: > 0 } || query.Subsystem is { Length: > 0 } || query.Category is { Length: > 0 } || query.Pid is not null
+            || query.Exclude is { Count: > 0 } || query.Until is not null || query.Text is { Length: > 0 }
+            ? " matching the search's other terms"
+            : "";
+    }
+
     /// <summary>What an empty read says: <c>no faults or errors in system since an hour ago</c>. Pinned.</summary>
     public static string NoEntries(string log, IReadOnlyList<string> levels, DateTimeOffset since, DateTimeOffset now, TimeZoneInfo zone)
     {
@@ -109,9 +130,13 @@ public static class MacLogText
     /// <paramref name="fenced"/> (2026-10-20, the code review): the model's answers fence the first mention, a name any program chose; the
     /// <c>exclude_process=</c> value stays plain, to be copied into a call. The user's printed lines leave both plain.
     /// </remarks>
-    public static string Loudest(string process, int count, int of, bool fenced = false) =>
+    /// <remarks>
+    /// <paramref name="copy"/> (2026-10-23, the admin review's S4): the argument to copy, the whole name quoted with the query's own exclusions
+    /// kept; the shown name was cut to 40 with "…", unquoted, and the copied call excluded nothing.
+    /// </remarks>
+    public static string Loudest(string process, int count, int of, bool fenced = false, string? copy = null) =>
         "(" + (fenced ? EventLogText.Quote(process) : process) + " made " + count.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " of the " + of.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
-        + " entries read; exclude_process=" + process + " leaves it out)";
+        + " entries read; exclude_process=" + (copy ?? process) + " leaves it out)";
 
     /// <summary><c>eventlog_logs</c>' header on a Mac.</summary>
     public const string LogsHeader = "The logs on this Mac (eventlog_search's log names):";

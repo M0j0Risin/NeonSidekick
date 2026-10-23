@@ -32,10 +32,33 @@ public static class ConnectionsFileEdit
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(value);
+        lock (LockFor(path))
+        {
+            try
+            {
+                return WritePasswordLocked(path, name, value, section, noun);
+            }
+            finally
+            {
+                Computers.ConfigCache.Invalidate(path);
+            }
+        }
+    }
+
+    private static string? WritePasswordLocked(string path, string name, string value, string section, string noun)
+    {
         try
         {
             byte[] bytes = File.ReadAllBytes(path);
             int bom = Bom(bytes);
+
+            // A key given twice in the entry is refused (2026-10-23, the admin review's C7): the reader keeps the last "password", the splice
+            // below would write into the first, and the plain one stayed on disk for ever.
+            if (RepeatedKeys(bytes.AsSpan(bom), section).TryGetValue(name.Trim(), out string? twice))
+            {
+                return Computers.ComputerText.KeyTwice(twice);
+            }
+
             if (Locate(bytes.AsSpan(bom), name, section) is not { } spot)
             {
                 return SqlText.ConnectionNotInFile(name, noun);
@@ -64,7 +87,21 @@ public static class ConnectionsFileEdit
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(entryJson);
         ArgumentNullException.ThrowIfNull(emptyText);
-        name = name.Trim();
+        lock (LockFor(path))
+        {
+            try
+            {
+                return AddConnectionLocked(path, name.Trim(), entryJson, emptyText, section, noun);
+            }
+            finally
+            {
+                Computers.ConfigCache.Invalidate(path);
+            }
+        }
+    }
+
+    private static string? AddConnectionLocked(string path, string name, string entryJson, string emptyText, string section, string noun)
+    {
         try
         {
             EnsureExists(path, emptyText);
@@ -110,8 +147,21 @@ public static class ConnectionsFileEdit
         ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
         ArgumentNullException.ThrowIfNull(entryJson);
-        oldName = oldName.Trim();
-        newName = newName.Trim();
+        lock (LockFor(path))
+        {
+            try
+            {
+                return ReplaceConnectionLocked(path, oldName.Trim(), newName.Trim(), entryJson, section, noun);
+            }
+            finally
+            {
+                Computers.ConfigCache.Invalidate(path);
+            }
+        }
+    }
+
+    private static string? ReplaceConnectionLocked(string path, string oldName, string newName, string entryJson, string section, string noun)
+    {
         try
         {
             if (!File.Exists(path))
@@ -254,14 +304,18 @@ public static class ConnectionsFileEdit
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(emptyText);
-        if (File.Exists(path))
+        lock (LockFor(path))
         {
-            return false;
-        }
+            if (File.Exists(path))
+            {
+                return false;
+            }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, emptyText);
-        return true;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, emptyText);
+            Computers.ConfigCache.Invalidate(path);
+            return true;
+        }
     }
 
     private static int Bom(byte[] bytes) => bytes.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? 3 : 0;
@@ -275,9 +329,97 @@ public static class ConnectionsFileEdit
         inserted.CopyTo(rewritten.AsSpan(start));
         bytes.AsSpan(end).CopyTo(rewritten.AsSpan(start + inserted.Length));
 
-        string temp = path + ".tmp";
-        File.WriteAllBytes(temp, rewritten);
-        File.Move(temp, path, overwrite: true);
+        // A temp name of its own per write (2026-10-23, the admin review's F6: parallel loads' encryptions shared path + ".tmp" and collided),
+        // under the file's lock (LockFor), so a load's late move can no longer drop an entry the wizard just added.
+        string temp = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+        try
+        {
+            File.WriteAllBytes(temp, rewritten);
+            File.Move(temp, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp))
+            {
+                File.Delete(temp);
+            }
+        }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> s_locks = new(StringComparer.Ordinal);
+
+    /// <summary>The one lock every read-modify-write of <paramref name="path"/> takes (F6), by its full path.</summary>
+    private static object LockFor(string path)
+    {
+        string full;
+        try
+        {
+            full = Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            full = path;
+        }
+
+        return s_locks.GetOrAdd(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? full.ToUpperInvariant() : full, _ => new object());
+    }
+
+    /// <summary>
+    /// The entries under <paramref name="section"/> that hold one key twice (keys ignore case, as the deserializer reads them), each with
+    /// the key (2026-10-23, the admin review's C7). Empty for JSON it can't read.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> RepeatedKeys(ReadOnlySpan<byte> json, string section)
+    {
+        var repeated = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return repeated;
+            }
+
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                bool isSection = reader.GetString()!.Equals(section, StringComparison.OrdinalIgnoreCase);
+                reader.Read();
+                if (!isSection || reader.TokenType != JsonTokenType.StartObject)
+                {
+                    reader.Skip();
+                    continue;
+                }
+
+                while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    string name = reader.GetString()!.Trim();
+                    reader.Read();
+                    if (reader.TokenType != JsonTokenType.StartObject)
+                    {
+                        reader.Skip();
+                        continue;
+                    }
+
+                    var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+                    {
+                        string key = reader.GetString()!;
+                        if (!keys.Add(key))
+                        {
+                            repeated.TryAdd(name, key);
+                        }
+
+                        reader.Read();
+                        reader.Skip();
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // The deserializer says what is wrong with the file.
+        }
+
+        return repeated;
     }
 
     /// <summary>Where <see cref="AddConnection"/>'s bytes go in the file.</summary>

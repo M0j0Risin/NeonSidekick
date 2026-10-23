@@ -122,8 +122,13 @@ public static class MacLogPredicate
         return count;
     }
 
-    /// <summary>A level word's number (1 debug … 5 fault), or 0 for none.</summary>
-    public static int LevelOf(string word) => LevelWords.ToList().IndexOf(word.Trim().ToLowerInvariant()) + 1;
+    private static readonly Dictionary<string, int> LevelNumbers = new(StringComparer.OrdinalIgnoreCase) { ["debug"] = 1, ["info"] = 2, ["default"] = 3, ["error"] = 4, ["fault"] = 5 };
+
+    /// <summary>
+    /// A level word's number (1 debug … 5 fault), or 0 for none: a table lookup (2026-10-23, the admin review's X18: a list copied and the word
+    /// lowercased per call, per level, per entry).
+    /// </summary>
+    public static int LevelOf(string word) => LevelNumbers.TryGetValue(word.Trim(), out int level) ? level : 0;
 
     /// <summary>A value as it may travel: NULs stripped (an NSString built from UTF-8 ends at one) and trimmed.</summary>
     public static string Clean(string? value) => (value ?? "").Replace("\0", "", StringComparison.Ordinal).Trim();
@@ -160,7 +165,9 @@ public static class MacLogMatch
             return false;
         }
 
-        if (filter.Levels.Count > 0 && !filter.Levels.Any(l => MacLogPredicate.LevelOf(l) == entry.Level))
+        // Every level asked is no level term, as the predicate builds it (2026-10-23, the admin review's I13: the client still dropped level 0).
+        if (filter.Levels.Count > 0 && filter.Levels.Select(MacLogPredicate.LevelOf).Where(l => l > 0).Distinct().Count() < MacLogPredicate.LevelWords.Count
+            && !filter.Levels.Any(l => MacLogPredicate.LevelOf(l) == entry.Level))
         {
             return false;
         }
@@ -194,6 +201,7 @@ public static class MacLogMatch
             return false;
         }
 
-        return !(filter.ExcludeProcesses ?? []).Any(p => string.Equals(MacLogPredicate.Clean(p), entry.Process, StringComparison.Ordinal));
+        // A blank exclusion is none, as the predicate drops it (X16: a whitespace one dropped every entry with no process).
+        return !(filter.ExcludeProcesses ?? []).Any(p => MacLogPredicate.Clean(p) is { Length: > 0 } name && string.Equals(name, entry.Process, StringComparison.Ordinal));
     }
 }

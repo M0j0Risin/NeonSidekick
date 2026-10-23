@@ -7,14 +7,18 @@ namespace NeonSidekick.Network;
 /// <summary>One entry of a host list: a name, a glob of whole labels, or a CIDR block.</summary>
 public sealed record HostRule(string Text, HostRuleKind Kind, string? Name, IPAddress? Network, int Prefix)
 {
-    /// <summary>Whether this entry matches the normalized <paramref name="name"/> (<see cref="HostRules.NormalizeName"/>).</summary>
-    public bool MatchesName(string name)
+    /// <summary>
+    /// Whether this entry matches the normalized <paramref name="name"/> (<see cref="HostRules.NormalizeName"/>); with <paramref name="apex"/> a
+    /// glob matches its own domain too (the denied list's reading, 2026-10-23, the admin review's H8: a denied <c>*.corp.example</c> let
+    /// <c>corp.example</c> itself, the DCs' name, through).
+    /// </summary>
+    public bool MatchesName(string name, bool apex = false)
     {
         ArgumentNullException.ThrowIfNull(name);
         return Kind switch
         {
             HostRuleKind.Name => string.Equals(Name, name, StringComparison.Ordinal),
-            HostRuleKind.Glob => HostRules.GlobMatches(Name!, name),
+            HostRuleKind.Glob => HostRules.GlobMatches(Name!, name) || (apex && string.Equals(Name, name, StringComparison.Ordinal)),
             HostRuleKind.Cidr => IPAddress.TryParse(name, out var literal) && MatchesAddress(literal),
             _ => false,
         };
@@ -28,7 +32,7 @@ public sealed record HostRule(string Text, HostRuleKind Kind, string? Name, IPAd
         return Kind switch
         {
             HostRuleKind.Cidr => HostRules.InBlock(address, Network!, Prefix),
-            HostRuleKind.Name => IPAddress.TryParse(Name, out var literal) && literal.Equals(address),
+            HostRuleKind.Name => IPAddress.TryParse(Name, out var literal) && HostRules.Canonical(literal).Equals(address),
             _ => false,
         };
     }
@@ -89,8 +93,9 @@ public static class HostRules
 
         if (entry.StartsWith("*.", StringComparison.Ordinal))
         {
+            // A suffix whose last label is all digits is no domain (2026-10-23, the admin review's U11: an allowed *.1 matched every x.x.x.1's text).
             string rest = NormalizeName(entry[2..]);
-            if (rest.Length == 0 || rest.Contains('*', StringComparison.Ordinal) || !IsHostName(rest))
+            if (rest.Length == 0 || rest.Contains('*', StringComparison.Ordinal) || !IsHostName(rest) || rest.Split('.')[^1].All(char.IsAsciiDigit))
             {
                 return (null, NetworkText.BadGlob(entry));
             }
@@ -115,6 +120,12 @@ public static class HostRules
     public static bool TryParseAddress(string text, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IPAddress? address)
     {
         address = null;
+        if (text.IndexOfAny(['[', ']']) >= 0)
+        {
+            // Brackets are the caller's to take off (2026-10-23, the admin review's U13: [fd00::]:80 parsed with its port dropped).
+            return false;
+        }
+
         if (text.Contains(':', StringComparison.Ordinal))
         {
             return IPAddress.TryParse(text, out address) && address.AddressFamily == AddressFamily.InterNetworkV6;
@@ -153,14 +164,14 @@ public static class HostRules
     public static IReadOnlyList<string> Problems(IReadOnlyList<string>? saved) =>
         saved is null ? [] : saved.Select(t => Parse(t).Error).OfType<string>().ToList();
 
-    /// <summary>The first entry of <paramref name="rules"/> that matches the name or the address; null for none.</summary>
-    public static HostRule? Match(IReadOnlyList<HostRule> rules, string? name, IPAddress? address)
+    /// <summary>The first entry of <paramref name="rules"/> that matches the name or the address; null for none. <paramref name="apex"/>: H8's denied reading.</summary>
+    public static HostRule? Match(IReadOnlyList<HostRule> rules, string? name, IPAddress? address, bool apex = false)
     {
         ArgumentNullException.ThrowIfNull(rules);
         string? normalized = name is null ? null : NormalizeName(name);
         foreach (var rule in rules)
         {
-            if (normalized is { Length: > 0 } && rule.MatchesName(normalized))
+            if (normalized is { Length: > 0 } && rule.MatchesName(normalized, apex))
             {
                 return rule;
             }
@@ -184,9 +195,16 @@ public static class HostRules
             return "";
         }
 
-        if (IPAddress.TryParse(trimmed, out var literal))
+        // An address only as written out in full; a legacy spelling (1234, 10.1) is no name either (2026-10-23, the admin review's P4: net_dns
+        // name=1234 was judged and asked as 0.0.4.210).
+        if (TryParseAddress(trimmed, out var literal))
         {
             return Canonical(literal).ToString();
+        }
+
+        if (IPAddress.TryParse(trimmed, out _))
+        {
+            return "";
         }
 
         try
@@ -199,11 +217,16 @@ public static class HostRules
         }
     }
 
-    /// <summary>An IPv4-mapped IPv6 address as its IPv4; any other as it is.</summary>
+    /// <summary>
+    /// An IPv4-mapped IPv6 address as its IPv4; an IPv6 one without its zone (2026-10-23, the admin review's B7: <c>fe80::1%12</c> got past a
+    /// denied <c>fe80::1</c>, since IPAddress.Equals compares the zone); any other as it is.
+    /// </summary>
     public static IPAddress Canonical(IPAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
-        return address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+        return address.IsIPv4MappedToIPv6 ? address.MapToIPv4()
+            : address.AddressFamily == AddressFamily.InterNetworkV6 && address.ScopeId != 0 ? new IPAddress(address.GetAddressBytes())
+            : address;
     }
 
     /// <summary>Whether <paramref name="name"/> ends with <c>.</c> + <paramref name="suffix"/> with at least one whole label before it.</summary>

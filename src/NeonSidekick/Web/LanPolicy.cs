@@ -96,6 +96,12 @@ public sealed class LanPolicy
                 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
                 || (b[0] == 192 && b[1] == 168)
                 || (b[0] == 100 && b[1] >= 64 && b[1] <= 127)
+                // Not globally reachable (2026-10-23, the admin review's U8, IANA's special-purpose registry): 192.0.0.0/24, benchmarking's
+                // 198.18.0.0/15 (lab and fake-IP networks), and the three documentation blocks.
+                || (b[0] == 192 && b[1] == 0 && b[2] is 0 or 2)
+                || (b[0] == 198 && b[1] is 18 or 19)
+                || (b[0] == 198 && b[1] == 51 && b[2] == 100)
+                || (b[0] == 203 && b[1] == 0 && b[2] == 113)
                 || b[0] >= 224;
         }
 
@@ -116,6 +122,7 @@ public sealed class LanPolicy
                 || (b[0] == 0xFE && (b[1] & 0xC0) == 0x80)   // fe80::/10 link-local
                 || (b[0] == 0xFE && (b[1] & 0xC0) == 0xC0)   // fec0::/10 site-local (deprecated, still routed by some)
                 || (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B && b[4] == 0x00 && b[5] == 0x01)   // 64:ff9b:1::/48 local-use NAT64
+                || (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x0D && b[3] == 0xB8)   // 2001:db8::/32 documentation (U8)
                 || b[0] == 0xFF;   // multicast
         }
 
@@ -147,12 +154,34 @@ public sealed class LanPolicy
             return new IPAddress(b.AsSpan(2, 4));
         }
 
+        // Teredo's 2001:0::/32 (RFC 4380) carries the client's address in its last 32 bits, each bit flipped; ISATAP (RFC 5214) an IPv4 address after
+        // an interface id of 0000:5efe or 0200:5efe (2026-10-23, the admin review's J13: both were judged as public IPv6).
+        if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x00 && b[3] == 0x00)
+        {
+            return new IPAddress([(byte)~b[12], (byte)~b[13], (byte)~b[14], (byte)~b[15]]);
+        }
+
+        if ((b[8] & 0xFD) == 0x00 && b[9] == 0x00 && b[10] == 0x5E && b[11] == 0xFE)
+        {
+            return new IPAddress(b.AsSpan(12, 4));
+        }
+
         bool compatible = b.AsSpan(0, 12).IndexOfAnyExcept((byte)0) < 0;   // :: and ::1 judged before this is asked
         bool translated = b.AsSpan(0, 8).IndexOfAnyExcept((byte)0) < 0 && b[8] == 0xFF && b[9] == 0xFF && b[10] == 0 && b[11] == 0;
         return compatible || translated ? new IPAddress(b.AsSpan(12, 4)) : null;
     }
 
-    /// <summary>Whether <paramref name="host"/> is the name <c>localhost</c> (any case, a trailing dot allowed) or a private literal address.</summary>
+    /// <summary>
+    /// Whether <paramref name="address"/> is the LAN: <see cref="IsPrivate"/>, or this machine's own or on one of its on-link prefixes
+    /// (<see cref="OnLinkNetworks"/>, 2026-10-23, the admin review's U4, decision DA3).
+    /// </summary>
+    public static bool IsLan(IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        return IsPrivate(address) || OnLinkNetworks.Contains(address);
+    }
+
+    /// <summary>Whether <paramref name="host"/> is the name <c>localhost</c> (any case, a trailing dot allowed) or a LAN literal address.</summary>
     public static bool IsPrivateHost(string host)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -162,16 +191,41 @@ public sealed class LanPolicy
             return true;
         }
 
-        return IPAddress.TryParse(name, out var address) && IsPrivate(address);
+        return IPAddress.TryParse(name, out var address) && IsLan(address);
     }
 
-    /// <summary>Whether any of <paramref name="addresses"/> is private (a name that resolves to one is judged by its worst address).</summary>
+    /// <summary>The suffixes only a local network answers (mDNS, the home and internal zones), for <see cref="SpelledLan"/>.</summary>
+    public static readonly IReadOnlyList<string> LanSuffixes = [".local", ".lan", ".home.arpa", ".internal", ".localdomain"];
+
+    /// <summary>
+    /// Whether <paramref name="host"/> is the LAN by its spelling alone, before it is resolved (2026-10-23, the admin review's M7: under
+    /// <c>internet</c> reach a single-label <c>fileserver</c> went out as LLMNR and NetBIOS broadcasts, and a spoofable reply was taken, before it
+    /// was refused): <see cref="IsPrivateHost"/>, a single label, or one of <see cref="LanSuffixes"/>. Pure.
+    /// </summary>
+    public static bool SpelledLan(string host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        string name = host.Trim().TrimEnd('.').Trim('[', ']');
+        if (IsPrivateHost(name))
+        {
+            return true;
+        }
+
+        if (IPAddress.TryParse(name, out _))
+        {
+            return false;
+        }
+
+        return name.Length > 0 && (!name.Contains('.', StringComparison.Ordinal) || LanSuffixes.Any(s => name.EndsWith(s, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>Whether any of <paramref name="addresses"/> is the LAN (a name that resolves to one is judged by its worst address).</summary>
     public static bool AnyPrivate(IReadOnlyList<IPAddress> addresses)
     {
         ArgumentNullException.ThrowIfNull(addresses);
         foreach (var address in addresses)
         {
-            if (IsPrivate(address))
+            if (IsLan(address))
             {
                 return true;
             }
@@ -197,9 +251,15 @@ public sealed class LanPolicy
             return new Admission([], refusal);
         }
 
-        return reach == NetworkReach.LocalAreaNetwork && !privateName
-            ? new Admission(addresses.Where(IsPrivate).ToArray(), NetworkRefusal.None)
-            : new Admission(addresses, NetworkRefusal.None);
+        if (reach != NetworkReach.LocalAreaNetwork)
+        {
+            return new Admission(addresses, NetworkRefusal.None);
+        }
+
+        // Under lan only the LAN's addresses, a LAN-spelled name's too (2026-10-23, the admin review's U3: a resolver answering x.localhost with a
+        // public address reached the internet); none left is the internet refused.
+        var lan = addresses.Where(IsLan).ToArray();
+        return lan.Length > 0 || addresses.Count == 0 ? new Admission(lan, NetworkRefusal.None) : new Admission([], NetworkRefusal.Internet);
     }
 
     /// <summary>

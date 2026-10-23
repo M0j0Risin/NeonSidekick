@@ -230,16 +230,16 @@ public sealed partial class ActiveDirectoryTests
         var answer = GroupOf("All-Hands");
         string text = Model(answer);
         Assert.StartsWith("Group ⟪All-Hands⟫ in lab.example: 5 members, direct\n", text);
-        Assert.Contains("\n  ⟪Erin Ng⟫ (user erin)\n", text);
+        Assert.Contains("\n  ⟪Erin Ng⟫ (user ⟪erin⟫)\n", text);
         Assert.Contains("\n  ⟪Vendor Rep⟫ (contact)\n", text);
         Assert.Contains("\n  ⟪S-1-5-21-9-9-9-1001⟫ (foreign)\n", text);
-        Assert.Contains("\n  ⟪svc_web⟫ (service account svc_web$)\n", text);
+        Assert.Contains("\n  ⟪svc_web⟫ (service account ⟪svc_web$⟫)\n", text);
         Assert.Contains("\n  ⟪Remote User⟫ (" + DirectoryText.OtherDomain + ")\n", text);
         var rows = answer.Tables[0].Rows;
         Assert.Null(rows.Single(r => r.Name == "Vendor Rep").Target);
         Assert.Null(rows.Single(r => r.Name == "Remote User").Target);
         Assert.Equal(Gmsa, rows.Single(r => r.Name == "svc_web").Target!.Dn);
-        Assert.Contains("\n  ⟪Erin Ng⟫ (user erin)", Model(GroupOf("All-Hands", members: "users")));
+        Assert.Contains("\n  ⟪Erin Ng⟫ (user ⟪erin⟫)", Model(GroupOf("All-Hands", members: "users")));
         Assert.DoesNotContain("Vendor", Model(GroupOf("All-Hands", members: "users")));
         Assert.DoesNotContain("svc_web", Model(GroupOf("All-Hands", members: "computers")));   // a gMSA's category is its own
         _system.Entries.Remove(Vendor);
@@ -252,10 +252,10 @@ public sealed partial class ActiveDirectoryTests
         Gaps();
         string text = Model(GroupOf("Ops", nested: true, members: "users"));
         Assert.StartsWith("Group ⟪Ops⟫ in lab.example: 4 users, nested (3 direct, 1 through other groups)\n", text);
-        Assert.Contains("\n  ⟪Dave Lee⟫ (user dave) via ⟪Inner⟫\n", text);
-        Assert.Contains("\n  ⟪Alice Smith⟫ (user alice) direct\n", text);
-        Assert.DoesNotContain("(group Inner)", text);
-        Assert.Contains("(group Inner)", Model(GroupOf("Ops", members: "groups")));
+        Assert.Contains("\n  ⟪Dave Lee⟫ (user ⟪dave⟫) via ⟪Inner⟫\n", text);
+        Assert.Contains("\n  ⟪Alice Smith⟫ (user ⟪alice⟫) direct\n", text);
+        Assert.DoesNotContain("(group ⟪Inner⟫)", text);
+        Assert.Contains("(group ⟪Inner⟫)", Model(GroupOf("Ops", members: "groups")));
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public sealed partial class ActiveDirectoryTests
         var answer = GroupOf("Domain Users");
         string text = Model(answer);
         Assert.StartsWith("Group ⟪Domain Users⟫ in lab.example: 3 members, direct (0 in its member list, 3 by primary group)\n", text);
-        Assert.Contains("\n  ⟪Erin Ng⟫ (user erin) via ⟪Domain Users⟫ (" + DirectoryText.PrimaryGroupWord + ")\n", text);
+        Assert.Contains("\n  ⟪Erin Ng⟫ (user ⟪erin⟫) via ⟪Domain Users⟫ (" + DirectoryText.PrimaryGroupWord + ")\n", text);
         Assert.Contains(_system.Filters, f => f.Contains("(primaryGroupID=513)", StringComparison.Ordinal));
         Assert.Contains("1 member, direct (0 in its member list, 1 by primary group)", Model(GroupOf("Primary Only")));
     }
@@ -275,8 +275,8 @@ public sealed partial class ActiveDirectoryTests
     {
         Gaps();
         string loop = Model(GroupOf("Loop A", nested: true));
-        Assert.Contains("\n  ⟪Loop B⟫ (group Loop B) direct\n", loop);
-        Assert.Contains("\n  ⟪Grace Hu⟫ (user grace) via ⟪Loop B⟫\n", loop);
+        Assert.Contains("\n  ⟪Loop B⟫ (group ⟪Loop B⟫) direct\n", loop);
+        Assert.Contains("\n  ⟪Grace Hu⟫ (user ⟪grace⟫) via ⟪Loop B⟫\n", loop);
         Assert.DoesNotContain("(group Loop A)", loop);   // the group itself, met again, ends the walk and is no member of itself (2026-10-20)
         string previous = Ops;
         for (int i = 0; i < DirectoryLimits.MaxWalkedGroups + 5; i++)
@@ -345,7 +345,7 @@ public sealed partial class ActiveDirectoryTests
         var answer = FindOf(new FindOptions("name", 0, "mail list", 50, Type: "group"));
         string text = Model(answer);
         Assert.StartsWith("groups whose names or descriptions hold \"mail list\" in lab.example: 1\n", text);
-        Assert.Contains("\n  All-Hands  ⟪All-Hands⟫  distribution universal  ⟪Company-wide mail list⟫\n", text);
+        Assert.Contains("\n  ⟪All-Hands⟫  ⟪All-Hands⟫  distribution universal  ⟪Company-wide mail list⟫\n", text);
         Assert.Equal([DirectoryText.ColAccount, DirectoryText.ColName, DirectoryText.ColType, DirectoryText.ColDescription], answer.Tables[0].Columns.Select(c => c.Name));
     }
 
@@ -381,7 +381,7 @@ public sealed partial class ActiveDirectoryTests
         string contacts = Model(FindOf(new FindOptions("name", 0, "vendor", 50, Type: "contact")));
         Assert.Contains("\n  ⟪Vendor Rep⟫  ⟪Our vendor's contact⟫\n", contacts);   // a contact has no account: the name alone
         string services = Model(FindOf(new FindOptions("name", 0, "svc", 50, Type: "service")));
-        Assert.Contains("\n  svc_web$  ⟪svc_web⟫  ⟪The web pool's account⟫\n", services);
+        Assert.Contains("\n  ⟪svc_web$⟫  ⟪svc_web⟫  ⟪The web pool's account⟫\n", services);
         Assert.Contains("contacts whose names or descriptions hold", contacts);
     }
 
@@ -389,10 +389,10 @@ public sealed partial class ActiveDirectoryTests
     public void Find_FieldOsAndOu_TheHeadNamesTheOu()
     {
         Gaps();
-        Assert.Contains("\n  erin  ⟪Erin Ng⟫  ⟪Engineering⟫\n", Model(FindOf(new FindOptions("field", 0, "engin", 50, Field: "department"))));
-        Assert.Contains("\n  WS01$  ⟪ws01.lab.example⟫  ⟪Windows 11 Pro⟫  last ", Model(FindOf(new FindOptions("os", 0, "windows 11", 50))));
+        Assert.Contains("\n  ⟪erin⟫  ⟪Erin Ng⟫  ⟪Engineering⟫\n", Model(FindOf(new FindOptions("field", 0, "engin", 50, Field: "department"))));
+        Assert.Contains("\n  ⟪WS01$⟫  ⟪ws01.lab.example⟫  ⟪Windows 11 Pro⟫  last ", Model(FindOf(new FindOptions("os", 0, "windows 11", 50))));
         string scoped = Model(FindOf(new FindOptions("password_never_expires", 0, null, 50, Ou: "Neon/Engineering")));
-        Assert.StartsWith("users whose password never expires in Neon/Engineering (lab.example): 1\n  erin  ⟪Erin Ng⟫", scoped);
+        Assert.StartsWith("users whose password never expires in Neon/Engineering (lab.example): 1\n  ⟪erin⟫  ⟪Erin Ng⟫", scoped);
         Assert.DoesNotContain("carol", scoped);
         Assert.Equal("the users whose password never expires in the OU Neon/Engineering", DirectoryCommand.Describe(DirectoryCommand.Parse("find password_never_expires ou:Neon/Engineering").Args!));
     }
@@ -468,17 +468,17 @@ public sealed partial class ActiveDirectoryTests
     {
         Gaps();
         string never = Model(FindOf(new FindOptions("password_never_expires", 0, null, 50)));
-        Assert.Contains("\n  carol  ⟪Carol King⟫\n", never);
-        Assert.Contains("\n  erin  ⟪Erin Ng⟫\n", never);
+        Assert.Contains("\n  ⟪carol⟫  ⟪Carol King⟫\n", never);
+        Assert.Contains("\n  ⟪erin⟫  ⟪Erin Ng⟫\n", never);
         var expiring = FindOf(new FindOptions("account_expiring", 30, null, 50));
         string text = Model(expiring);
-        Assert.StartsWith("accounts expiring within 30 days in lab.example: 1\n  frank  ⟪Frank Ode⟫  expires ", text);
-        Assert.Contains("\nalready expired (1):\n  henry  ⟪Henry Ash⟫  expired ", text);
+        Assert.StartsWith("accounts expiring within 30 days in lab.example: 1\n  ⟪frank⟫  ⟪Frank Ode⟫  expires ", text);
+        Assert.Contains("\nalready expired (1):\n  ⟪henry⟫  ⟪Henry Ash⟫  expired ", text);
         var created = Model(FindOf(new FindOptions("created", 30, null, 50)));
-        Assert.Contains("\n  erin  user  ⟪Erin Ng⟫  created ", created);
+        Assert.Contains("\n  ⟪erin⟫  user  ⟪Erin Ng⟫  created ", created);
         Assert.DoesNotContain("frank", created);   // 90 days ago
         Assert.Contains("\n  ⟪Neon/Engineering⟫  ⟪The builders⟫  created ", Model(FindOf(new FindOptions("created", 30, null, 50, Type: "ou"))));
-        Assert.Contains("\n  All-Hands  group  ⟪All-Hands⟫  created ", Model(FindOf(new FindOptions("created", 31, null, 50, Type: "group"))));
+        Assert.Contains("\n  ⟪All-Hands⟫  group  ⟪All-Hands⟫  created ", Model(FindOf(new FindOptions("created", 31, null, 50, Type: "group"))));
     }
 
     [Fact]
@@ -488,11 +488,11 @@ public sealed partial class ActiveDirectoryTests
         var answer = FindOf(new FindOptions("privileged", 0, null, 50));
         string text = Model(answer);
         Assert.StartsWith("privileged accounts in lab.example: 2\n", text);
-        Assert.Contains("\n  grace  user  ⟪Grace Hu⟫  ⟪Domain Admins⟫, ⟪Administrators⟫ via ⟪Tier0⟫\n", text);
-        Assert.Contains("\n  Administrator  user  ⟪Administrator⟫  ⟪Administrators⟫\n", text);
+        Assert.Contains("\n  ⟪grace⟫  user  ⟪Grace Hu⟫  ⟪Domain Admins⟫, ⟪Administrators⟫ via ⟪Tier0⟫\n", text);
+        Assert.Contains("\n  ⟪Administrator⟫  user  ⟪Administrator⟫  ⟪Administrators⟫\n", text);
         Assert.Contains("\n" + DirectoryText.LeftoversTitle + " (2):\n", text);
-        Assert.Contains("\n  krbtgt  user  ⟪krbtgt⟫  " + DirectoryText.ExpectedNote, text);
-        Assert.Contains("\n  oldadmin  user  ⟪Old Admin⟫  " + DirectoryText.LeftoverNote, text);
+        Assert.Contains("\n  ⟪krbtgt⟫  user  ⟪krbtgt⟫  " + DirectoryText.ExpectedNote, text);
+        Assert.Contains("\n  ⟪oldadmin⟫  user  ⟪Old Admin⟫  " + DirectoryText.LeftoverNote, text);
         Assert.DoesNotContain("Tier0  group", text);          // a group nested in a protected one carries adminCount too: no leftover
         Assert.DoesNotContain("Domain Admins  group", text);  // nor the protected groups themselves
         Assert.Contains(DirectoryText.MissingProtected(["Schema Admins", "Enterprise Admins", "Key Admins", "Enterprise Key Admins", "Account Operators", "Server Operators", "Print Operators", "Backup Operators", "Replicator"]), text);
@@ -503,7 +503,7 @@ public sealed partial class ActiveDirectoryTests
     {
         Gaps();
         string text = Model(FindOf(new FindOptions("empty_groups", 0, null, 50)));
-        Assert.Contains("\n  Unused  ⟪Unused⟫  security global\n", text);
+        Assert.Contains("\n  ⟪Unused⟫  ⟪Unused⟫  security global\n", text);
         Assert.DoesNotContain("Primary Only", text);   // henry's primary group
         Assert.DoesNotContain("Domain Users", text);   // a system object
     }
@@ -551,7 +551,7 @@ public sealed partial class ActiveDirectoryTests
         string engineering = Model(Run(s => DirectoryQueries.OuAnswer(s, Source(), "Neon/Engineering", 100)));
         Assert.Contains("\n  GPOs linked: 2 (1 disabled, 1 enforced)\n", engineering);
         Assert.Contains("\n  managed by: ⟪Erin Ng⟫\n", engineering);
-        Assert.Contains("\n  erin  user  ⟪Erin Ng⟫", engineering);
+        Assert.Contains("\n  ⟪erin⟫  user  ⟪Erin Ng⟫", engineering);
         Assert.Contains("GPOs linked: none", Model(Run(s => DirectoryQueries.OuAnswer(s, Source(), "Neon", 100))));
     }
 

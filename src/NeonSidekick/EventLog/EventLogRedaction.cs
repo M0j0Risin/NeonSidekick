@@ -26,14 +26,30 @@ public static class EventLogRedaction
     public const string Placeholder = ToolRedaction.Placeholder;
 
     /// <summary>Whether a field's name says it holds a secret: the strict set, read with case and <c>_ - .</c> ignored.</summary>
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review's W5) also a token by name (<c>token</c>, <c>accesstoken</c>, <c>refreshtoken</c>,
+    /// <c>sastoken</c>: a name ending in <c>token</c>, so <c>TokenElevationType</c> is kept), a credential, a passphrase, an account,
+    /// access or shared key, and a PIN. Never Security's <c>ElevatedToken</c> (4624's yes or no, 2026-10-23, the branch review of DP7: an
+    /// audit fact a security review asks about, hidden by the token rule).
+    /// </remarks>
     public static bool IsSecretField(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         string folded = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        if (folded == "elevatedtoken")
+        {
+            return false;
+        }
+
         return folded.Contains("password", StringComparison.Ordinal) || folded.Contains("passwd", StringComparison.Ordinal)
             || folded == "pwd" || folded.EndsWith("pwd", StringComparison.Ordinal) || folded.Contains("secret", StringComparison.Ordinal)
             || folded.Contains("apikey", StringComparison.Ordinal) || folded.Contains("privatekey", StringComparison.Ordinal)
-            || folded.Contains("connectionstring", StringComparison.Ordinal);
+            || folded.Contains("connectionstring", StringComparison.Ordinal)
+            || folded.EndsWith("token", StringComparison.Ordinal) || folded.EndsWith("tokens", StringComparison.Ordinal)
+            || folded is "credential" or "credentials" || folded.EndsWith("credential", StringComparison.Ordinal) || folded.EndsWith("credentials", StringComparison.Ordinal)
+            || folded.Contains("passphrase", StringComparison.Ordinal)
+            || folded.Contains("accountkey", StringComparison.Ordinal) || folded.Contains("accesskey", StringComparison.Ordinal) || folded.Contains("sharedkey", StringComparison.Ordinal)
+            || folded is "pin" or "pincode" or "userpin" or "smartcardpin";
     }
 
     /// <summary>A field's value as the model reads it: all of it hidden for a secret's name, else its free text's secrets.</summary>
@@ -42,6 +58,16 @@ public static class EventLogRedaction
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
         return IsSecretField(name) ? Placeholder : Text(value);
+    }
+
+    /// <summary>
+    /// A field as the redacted detail shows it: <see cref="Field(string, string)"/>, and a classic event's raw <c>Binary</c> as its length
+    /// alone (2026-10-23, the admin review's W3, decision DP5: hex passed the free-text rules, so a secret written as raw data was decodable).
+    /// </summary>
+    public static string Field(EventField field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return field.Binary ? EventLogText.BinaryLength(field.Value.Count(Uri.IsHexDigit) / 2) : Field(field.Name, field.Value);
     }
 
     /// <summary>

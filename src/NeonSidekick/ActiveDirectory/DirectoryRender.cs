@@ -62,7 +62,8 @@ public static class DirectoryRender
                 {
                     if (table.CutNote is { } note)
                     {
-                        text.Append("\n  ").Append(note(shown.Count - i));
+                        // Every row left, not only those inside Shown (2026-10-23, the admin review's S15: "… 40 more" with 1,940 left).
+                        text.Append("\n  ").Append(note(table.Rows.Count - i));
                     }
 
                     break;
@@ -154,11 +155,16 @@ public static class DirectoryRender
     /// <summary>The card as text (<c>copy</c>, the Web UI's card, headless): <see cref="ForCard"/> unbounded.</summary>
     public static IReadOnlyList<string> CardText(DirectoryAnswer answer) => ForCard(answer, int.MaxValue).Select(l => l.Text).ToList();
 
-    /// <summary>A date cell's text on the card and in the CSV: <c>yyyy-MM-dd HH:mm</c> in <paramref name="zone"/>.</summary>
+    /// <summary>
+    /// A date cell's text on the card and in the CSV: <c>yyyy-MM-dd HH:mm +02:00</c> in <paramref name="zone"/>, its own date's offset with it
+    /// (2026-10-23, the admin review's S14 and K5: no offset on the card, and the CSV's header carried today's, so a date across a DST change read an
+    /// hour off and the fall-back hour was two).
+    /// </summary>
     public static string Date(DateTimeOffset moment, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(zone);
-        return TimeZoneInfo.ConvertTime(moment, zone).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var local = TimeZoneInfo.ConvertTime(moment, zone);
+        return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " " + (local.Offset < TimeSpan.Zero ? "-" : "+") + local.Offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture);
     }
 
     /// <summary>A cell's text on the card: the date, the text cleaned, or <see cref="NoValue"/>.</summary>
@@ -182,7 +188,10 @@ public static class DirectoryRender
     public static string Clean(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        string scrubbed = UntrustedText.Scrub(text);
+
+        // Every character that can disguise a name escaped (2026-10-23, the admin review's A4, folded P site: the marks, zero-width
+        // characters and FEFF passed the bidi strip below).
+        string scrubbed = Files.NameScrub.Display(UntrustedText.Scrub(text), keepLineBreaks: true);
         var clean = new StringBuilder(scrubbed.Length);
         foreach (char c in scrubbed)
         {
@@ -297,6 +306,14 @@ public static class DirectoryRender
         var line = new StringBuilder(lead);
         int used = TextCells.Width(lead);
         bool empty = true;
+        if (used >= width)
+        {
+            // A lead as wide as the line fitted alone (2026-10-23, the admin review's P15: it overflowed, the pane wrapped it, and the lines after it
+            // were a row off, so a double-click opened the wrong one).
+            lines.Add(new DirectoryCardLine(Fitted(lead.TrimEnd(), width), style, target));
+            line.Clear().Append(' ', rest);
+            used = rest;
+        }
         void Flush()
         {
             lines.Add(new DirectoryCardLine(line.ToString(), style, target));

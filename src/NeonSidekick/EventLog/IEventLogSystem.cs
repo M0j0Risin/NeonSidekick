@@ -24,13 +24,14 @@ public sealed record EventLogLogin(string User, string Password, string AuthMeth
 /// <see cref="FilePath"/> (an <c>.evtx</c> under the working directory, already resolved), or a <see cref="Host"/> reached over RPC
 /// as the user or <see cref="Login"/>'s account.
 /// </summary>
-public sealed record EventLogTarget(EventLogTargetKind Kind, string? Host = null, string? FilePath = null, EventLogLogin? Login = null)
+/// <remarks><c>AuthMethod</c> (2026-10-23, the admin review's J2): the entry's sign-in method under <c>windows</c> auth too, not only with a runas login.</remarks>
+public sealed record EventLogTarget(EventLogTargetKind Kind, string? Host = null, string? FilePath = null, EventLogLogin? Login = null, string? AuthMethod = null)
 {
     public static readonly EventLogTarget Local = new(EventLogTargetKind.Local);
 
     public static EventLogTarget File(string path) => new(EventLogTargetKind.File, FilePath: path);
 
-    public static EventLogTarget Remote(string host, EventLogLogin? login) => new(EventLogTargetKind.Remote, Host: host, Login: login);
+    public static EventLogTarget Remote(string host, EventLogLogin? login, string? authMethod = null) => new(EventLogTargetKind.Remote, Host: host, Login: login, AuthMethod: authMethod);
 }
 
 /// <summary>
@@ -77,6 +78,13 @@ public enum EventMessageProblem
 
     /// <summary>The message could not be formatted for another reason.</summary>
     Failed,
+
+    /// <summary>
+    /// The redacted detail withheld the message (2026-10-23, the admin review's I1 and W13): its values could not be matched to its fields
+    /// (an array or a structure is one value over several XML leaves), so a secret's name might not have hidden its value; or a forwarded
+    /// event's own text held a secret too short to take out safely.
+    /// </summary>
+    Withheld,
 }
 
 /// <summary>An event's formatted message, or why there is none (a message that will not format never fails the query).</summary>
@@ -133,6 +141,7 @@ public sealed class RawEvent
 public interface IEventLogReader : IDisposable
 {
     /// <summary>The next batch, or null at the end. The batch before it is no longer valid.</summary>
+    /// <remarks>An empty batch (not the end) is a round that found only events too large to read (2026-10-23, D6): the caller reads its budget and calls again.</remarks>
     IReadOnlyList<RawEvent>? Next();
 
     /// <summary>How many events so far were too large to read even alone and were stepped over (2026-10-20, a review); never counted among the batches.</summary>

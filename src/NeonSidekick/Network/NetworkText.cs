@@ -10,6 +10,12 @@ namespace NeonSidekick.Network;
 /// </summary>
 public static class NetworkText
 {
+    /// <summary>A reply whose round trip was not measured (2026-10-23, S13; here since the branch review of DP7).</summary>
+    public const string TimeNotMeasured = ", time not measured";
+
+    /// <summary>A certificate not valid yet: <c>not valid for 3 more days</c> (2026-10-23, G14; here since DP7).</summary>
+    public static string NotValidFor(string days) => "not valid for " + days;
+
     /// <summary>The log category of everything network.</summary>
     public const string Category = "Network";
 
@@ -32,10 +38,9 @@ public static class NetworkText
 
     public static string Missing(string argument) => $"Error: {argument} is required.";
 
-    public static string NotBoolean(string argument, string raw) => $"Error: {argument} '{raw}' is not true or false.";
+    public static string NotBoolean(string argument, string raw) => Llm.Tools.ArgumentText.NotBoolean(argument, raw);
 
-    public static string OutOfRange(string argument, string given, int min, int max) =>
-        $"Error: {argument} '{given}' is out of range; it must be {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}.";
+    public static string OutOfRange(string argument, string given, int min, int max) => Llm.Tools.ArgumentText.OutOfRange(argument, given, min, max);
 
     /// <summary>A target that is not one host: a range, a block, a wildcard, a list. Pinned.</summary>
     public static string NotOneHost(string host) =>
@@ -44,6 +49,9 @@ public static class NetworkText
     public static string PortInHost(string host) => $"Error: '{Short(host)}' carries a port or a scheme; give the host alone and the port separately.";
 
     public static string BadName(string name) => $"Error: '{Short(name)}' is not a host name or an address.";
+
+    /// <summary>A <c>server_name</c> that is not one host name (an address, a list, a port).</summary>
+    public static string BadServerName(string name) => $"Error: the server name '{Short(name)}' is not one host name.";
 
     public static string NotResolved(string host, string detail) => $"Error: {Short(host)} could not be resolved" + (detail.Length > 0 ? ": " + detail : ".");
 
@@ -86,20 +94,33 @@ public static class NetworkText
     /// <summary>How both budget refusals open: what <see cref="IsBudgetSpent"/> knows them by.</summary>
     private const string BudgetSpentLead = "Error: this turn has checked ";
 
-    /// <summary>The host budget spent. Pinned.</summary>
-    public static string HostBudgetSpent(int hosts) =>
-        $"{BudgetSpentLead}{hosts.ToString(CultureInfo.InvariantCulture)} hosts, the most Network tools max hosts per turn allows.";
+    /// <summary>How an automation run's budget refusals open (DA8).</summary>
+    private const string RunBudgetSpentLead = "Error: this run has checked ";
 
-    /// <summary>The port budget spent. Pinned.</summary>
-    public static string PortBudgetSpent(int used, int wanted) =>
-        $"{BudgetSpentLead}{used.ToString(CultureInfo.InvariantCulture)} host:port pairs and this call would add {wanted.ToString(CultureInfo.InvariantCulture)}, past what Network tools max ports per turn allows.";
+    /// <summary>The host budget spent; <paramref name="run"/> an automation run's, whose whole run the setting holds (DA8). Pinned.</summary>
+    public static string HostBudgetSpent(int hosts, bool run = false) => run
+        ? $"{RunBudgetSpentLead}{hosts.ToString(CultureInfo.InvariantCulture)} hosts, the most Network tools max hosts per turn allows for a whole automation run (a Ralph run, a /loop, a camera watch); the user can raise the setting."
+        : $"{BudgetSpentLead}{hosts.ToString(CultureInfo.InvariantCulture)} hosts, the most Network tools max hosts per turn allows.";
+
+    /// <summary>The port budget spent; <paramref name="run"/> as <see cref="HostBudgetSpent"/>. Pinned.</summary>
+    public static string PortBudgetSpent(int used, int wanted, bool run = false) => run
+        ? $"{RunBudgetSpentLead}{used.ToString(CultureInfo.InvariantCulture)} host:port pairs and this call would add {wanted.ToString(CultureInfo.InvariantCulture)}, past what Network tools max ports per turn allows for a whole automation run; the user can raise the setting."
+        : $"{BudgetSpentLead}{used.ToString(CultureInfo.InvariantCulture)} host:port pairs and this call would add {wanted.ToString(CultureInfo.InvariantCulture)}, past what Network tools max ports per turn allows.";
 
     /// <summary>Whether a tool's result is one of the budget's refusals (<see cref="HostBudgetSpent"/>, <see cref="PortBudgetSpent"/>).</summary>
     public static bool IsBudgetSpent(string result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return result.StartsWith(BudgetSpentLead, StringComparison.Ordinal);
+        return result.StartsWith(BudgetSpentLead, StringComparison.Ordinal) || result.StartsWith(RunBudgetSpentLead, StringComparison.Ordinal);
     }
+
+    /// <summary>A host's admitted addresses past <see cref="NetworkAccess.MaxAddresses"/>, left out (C1). Pinned.</summary>
+    public static string AddressesLeftOut(int count) =>
+        "(" + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " more address" : " more addresses") + " not checked: the network tools reach at most " + NetworkAccess.MaxAddresses.ToString(CultureInfo.InvariantCulture) + " of one host)";
+
+    /// <summary>DNS answers withheld from the model by the reach or the lists (2026-10-23, A1, B9). Pinned.</summary>
+    public static string AnswersWithheld(int count) =>
+        "(" + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " record" : " records") + " withheld: an address or a name the network tools' reach or host lists refuse)";
 
     /// <summary>The transcript's once-a-turn note when the budget refused a call. Pinned.</summary>
     public const string BudgetNote = "(" + Glyph + " the network tools' budget for this turn is spent)";
@@ -123,6 +144,18 @@ public static class NetworkText
 
     public const string NoIpv6Ping = "IPv6 ping is not available here";
 
+    /// <summary>A ping or trace to a host with only IPv6 addresses where IPv6 ping is not (2026-10-23, I8). Pinned.</summary>
+    public static string NoIpv6Host(string host) => $"Error: {Short(host)} has only IPv6 addresses, and {NoIpv6Ping}.";
+
+    /// <summary>The whole lookup took too long (2026-10-23, I5). Pinned.</summary>
+    public const string DnsTookTooLong = "no DNS server answered within the lookup's time limit";
+
+    /// <summary>A certificate store that took too long to read (2026-10-23, R10). Pinned.</summary>
+    public const string CertsTimedOut = "Error: the certificate store took too long to read and was left.";
+
+    /// <summary>The LDAP server ended the session before StartTLS (a Notice of Disconnection, 2026-10-23, P12). Pinned.</summary>
+    public static string LdapDisconnected(int port) => $"Error: the LDAP server on port {port.ToString(CultureInfo.InvariantCulture)} ended the session (a notice of disconnection) before StartTLS.";
+
     // ── DNS ─────────────────────────────────────────────────────────────────
 
     public const string DnsTruncatedReply = "the reply was cut short";
@@ -144,6 +177,7 @@ public static class NetworkText
         3 => "no such name (NXDOMAIN)",
         4 => "the server does not do that (NOTIMP)",
         5 => "the server refused (REFUSED)",
+        16 => "the server does not take this EDNS version (BADVERS)",
         _ => "error code " + code.ToString(CultureInfo.InvariantCulture),
     };
 
@@ -184,6 +218,12 @@ public static class NetworkText
 
     public static string StoreUnreadable(string store, string location, string detail) => $"Error: the {location} {store} store could not be read: {Short(detail)}";
 
+    /// <summary>A store's certificates that would not read (a malformed one), left out of the list.</summary>
+    public static string CertificatesUnreadable(int count) => $"  {count.ToString(CultureInfo.InvariantCulture)} certificate{(count == 1 ? "" : "s")} in this store could not be read and {(count == 1 ? "is" : "are")} not listed.";
+
+    /// <summary>A certificate whose alternative names would not read.</summary>
+    public const string NamesUnreadable = "  names: the certificate's alternative names could not be read (malformed)";
+
     /// <summary>Why <c>net_certs</c> is not offered with the network tools on. Pinned.</summary>
     public const string CertStoresOffReason = "Network certificate stores is off";
 
@@ -212,5 +252,5 @@ public static class NetworkText
     public static string CheckLine(string what, string outcome) => $"  {what,-6} {outcome}";
 
     /// <summary>A string cut for a sentence: 80 characters.</summary>
-    public static string Short(string text) => text.Length > 80 ? text[..79] + "…" : text;
+    public static string Short(string text) => Llm.Tools.UntrustedText.Name(Llm.Tools.UntrustedText.Cut(text.Length > 320 ? text[..320] : text, 80));   // escaped and cut whole (2026-10-23, K6)
 }

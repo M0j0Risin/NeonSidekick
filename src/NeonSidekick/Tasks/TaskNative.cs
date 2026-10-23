@@ -171,7 +171,7 @@ internal static unsafe partial class TaskNative
     {
         double value = 0;
         Check(((delegate* unmanaged<nint, double*, int>)Slot(instance, slot))(instance, &value), call);
-        return value <= 1.0 || DateTime.FromOADate(value).Year < 2000 ? null : DateTime.FromOADate(value);
+        return TaskWords.Date(value);
     }
 
     /// <summary>A method taking a BSTR and giving an interface: GetFolder, GetTask.</summary>

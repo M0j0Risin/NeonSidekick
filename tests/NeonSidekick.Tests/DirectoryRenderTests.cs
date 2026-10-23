@@ -57,7 +57,7 @@ public sealed class DirectoryRenderTests
         int column = TextCells.Width(header[..header.IndexOf(DirectoryText.ColLastSignIn, StringComparison.Ordinal)]);
         Assert.Equal(column, TextCells.Width(alice[..alice.IndexOf("2026-10-14", StringComparison.Ordinal)]));
         Assert.Equal(column, TextCells.Width(bo[..bo.IndexOf("2026-10-11", StringComparison.Ordinal)]));   // 山田太郎 and the emoji two cells each
-        Assert.EndsWith("2026-10-14 10:00", alice);   // the last column unpadded, the date in the card's short form
+        Assert.EndsWith("2026-10-14 10:00 +00:00", alice);   // the last column unpadded, the date with its offset (2026-10-23, the admin review's S14)
         Assert.Contains(lines, l => l.Text == "never signed in (1)" && l.Style == DirectoryCardStyle.Title);   // at the left, as the model's "never signed in (1):"
         Assert.Contains(lines, l => l.Text.StartsWith("  carol", StringComparison.Ordinal) && l.Text.EndsWith(DirectoryRender.NoValue, StringComparison.Ordinal));   // no value: the dash
     }
@@ -70,7 +70,7 @@ public sealed class DirectoryRenderTests
         var lines = DirectoryRender.ForCard(answer, 60);
         Assert.All(lines, l => Assert.True(TextCells.Width(l.Text) <= 60, l.Text));
         var dave = lines.Single(l => l.Text.Contains("dave_the_long_account", StringComparison.Ordinal)).Text;
-        Assert.EndsWith("2026-10-14 10:00", dave);   // the date whole
+        Assert.EndsWith("2026-10-14 10:00 +00:00", dave);   // the date whole
         Assert.Contains("…", dave);                  // the name cut
     }
 
@@ -108,7 +108,8 @@ public sealed class DirectoryRenderTests
         Assert.DoesNotContain('\t', row);
         Assert.DoesNotContain('\u202E', row);
         Assert.Contains("name and more", row);
-        Assert.Equal("a b c", DirectoryRender.Clean("a\tb\nc\u2066\u202A"));
+        // The isolate and the embedding shown as typed since 2026-10-23 (the admin review's A4): stripped, they hid what the name held.
+        Assert.Equal("a b c\\u2066\\u202A", DirectoryRender.Clean("a\tb\nc\u2066\u202A"));
     }
 
     /// <summary>A wrapped row's lines share its target; a contact's row has none; two rows reading alike keep their own targets, found by index.</summary>
@@ -182,12 +183,12 @@ public sealed class DirectoryRenderTests
     {
         var answer = Stale();
         var lines = DirectoryCsv.Text(answer)!.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal("account,name,last sign-in (UTC+00:00),section,dn", lines[0]);
-        Assert.Equal("alice,Alice Smith,2026-10-14 10:00,,\"CN=Alice Smith,DC=x\"", lines[1]);
+        Assert.Equal("account,name,last sign-in (UTC),section,dn", lines[0]);
+        Assert.Equal("alice,Alice Smith,2026-10-14 10:00 +00:00,,\"CN=Alice Smith,DC=x\"", lines[1]);
         Assert.Equal("carol,Carol King,,never signed in,\"CN=Carol King,DC=x\"", lines[3]);   // a date column holds a date or nothing
         var one = new DirectoryAnswer { Head = "h", Zone = Utc };
         one.Tables.Add(answer.Tables[0]);
-        Assert.Equal("account,name,last sign-in (UTC+00:00),dn", DirectoryCsv.Text(one)!.Split("\r\n")[0]);   // no section column with one table
+        Assert.Equal("account,name,last sign-in (UTC),dn", DirectoryCsv.Text(one)!.Split("\r\n")[0]);   // no section column with one table
         var header = DirectoryRender.ForCard(one, 200).Single(l => l.Style == DirectoryCardStyle.Header).Text.Split("  ", StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim());
         Assert.Equal(one.Tables[0].Columns.Select(c => c.Name), header);
         var withLink = new DirectoryAnswer { Head = "h" };
@@ -200,7 +201,7 @@ public sealed class DirectoryRenderTests
     [Fact]
     public void Csv_TheZoneIsNamed_AndAFolderGetsANameFromTheQuestion()
     {
-        Assert.Equal("UTC-05:00", DirectoryCsv.ZoneLabel(TimeZoneInfo.CreateCustomTimeZone("x", TimeSpan.FromHours(-5), "x", "x"), When));
+        Assert.Equal("x", DirectoryCsv.ZoneName(TimeZoneInfo.CreateCustomTimeZone("x", TimeSpan.FromHours(-5), "x", "x")));   // the zone by its id since K5 (ZoneLabel gone, DP7)
         Assert.Equal("ad-group-staff.csv", DirectoryCsv.NameFor("group Staff"));
         Assert.Equal("ad-ou-neon-engineering.csv", DirectoryCsv.NameFor("ou Neon/Engineering"));
         Assert.Equal("ad-find-stale_users.csv", DirectoryCsv.NameFor("find stale_users"));

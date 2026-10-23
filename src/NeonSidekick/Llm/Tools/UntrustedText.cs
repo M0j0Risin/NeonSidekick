@@ -37,7 +37,10 @@ public static class UntrustedText
 
     /// <summary>
     /// <paramref name="text"/> with every C0 and C1 control character (and DEL) replaced by U+FFFD, a tab and a newline kept, a carriage
-    /// return dropped (2026-10-15: an event is anyone's text; for tool answers, the Web UI, sessions and headless alike).
+    /// return dropped (2026-10-15: an event is anyone's text; for tool answers, the Web UI, sessions and headless alike). Since 2026-10-23
+    /// (the admin review's A4, mechanism 3) the bidi overrides, embeddings and isolates (U+202A–U+202E, U+2066–U+2069), which reorder what
+    /// is shown, are written as <c>\u202E</c>-style escapes; the joiners (ZWJ, ZWNJ) and the marks (LRM, RLM) stay, since emoji sequences
+    /// and Persian, Arabic and Indic text need them. A name a pane asks about goes through <see cref="Name"/>, the stronger rule.
     /// </summary>
     public static string Scrub(string text)
     {
@@ -47,20 +50,36 @@ public static class UntrustedText
         {
             char c = text[i];
             bool control = (c < 0x20 && c is not '\t' and not '\n') || c == 0x7F || (c >= 0x80 && c <= 0x9F);
-            if (!control)
+            bool reorders = c is (>= '\u202A' and <= '\u202E') or (>= '\u2066' and <= '\u2069');
+            if (!control && !reorders)
             {
                 built?.Append(c);
                 continue;
             }
 
-            built ??= new StringBuilder(text, 0, i, text.Length);
-            if (c != '\r')
+            built ??= new StringBuilder(text, 0, i, text.Length + 8);
+            if (reorders)
+            {
+                built.Append("\\u").Append(((int)c).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            else if (c != '\r')
             {
                 built.Append('�');
             }
         }
 
         return built?.ToString() ?? text;
+    }
+
+    /// <summary>
+    /// A name or an identifier as a pane, a question or an answer shows it (2026-10-23, the admin review's A4, mechanism 3): one line, and every
+    /// character that can disguise it — bidi controls and marks, zero-width characters, controls — escaped (<see cref="Files.NameScrub"/>), so
+    /// <c>svc\u202Eexe.dll</c> is shown as typed, never reordered, in a service change's or a task run's confirm. Pure.
+    /// </summary>
+    public static string Name(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return Files.NameScrub.Display(OneLine(text));
     }
 
     /// <summary>
@@ -114,7 +133,23 @@ public static class UntrustedText
     public static string Cut(string text, int max = MaxValueChars)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return text.Length <= max ? text : text[..Math.Max(0, max - 1)] + "…";
+
+        // A surrogate pair kept whole (2026-10-23, the admin review's B12).
+        return text.Length <= max ? text : Files.TextCut.Safe(text, Math.Max(0, max - 1)) + "…";
+    }
+
+    /// <summary>
+    /// An answer of <paramref name="body"/> then <paramref name="tail"/> (its notes, <see cref="QuoteNote"/>) held to <paramref name="max"/>
+    /// characters (2026-10-23, the admin review's C6: the services' and tasks' detail cut the whole text raw, so the cut could stop inside ⟪,
+    /// drop the quote note and split a surrogate pair): the body cut by <see cref="CutFenced"/>, then <paramref name="cutNote"/>, then the
+    /// tail, whole. Pure.
+    /// </summary>
+    public static string Capped(string body, string tail, int max, string cutNote)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        ArgumentNullException.ThrowIfNull(tail);
+        ArgumentNullException.ThrowIfNull(cutNote);
+        return body.Length + tail.Length <= max ? body + tail : CutFenced(body, Math.Max(0, max - tail.Length - cutNote.Length)) + cutNote + tail;
     }
 
     /// <summary>

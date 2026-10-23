@@ -58,7 +58,7 @@ public static class MacLogSearch
             return new MacLogView(entry, handle, entry.Message.TrimEnd(), entry.Sender);
         }
 
-        Func<string, string> redact = places is null ? EventLogRedaction.Text : MacFileLogs.Redactor(places, redacted: true);
+        Func<string, string> redact = places is null ? text => EventLogRedaction.Text(MacLogPlaces.OtherHomes(text)) : MacFileLogs.Redactor(places, redacted: true);
         return new MacLogView(entry, handle, redact(entry.Message).TrimEnd(), redact(entry.Sender));
     }
 
@@ -172,17 +172,24 @@ public static class MacLogSearch
                 }
 
                 var handle = walk.Step(entry)!.Value;
-                var view = View(entry, handle, scan.Redacted, places);
-                if (scan.Redacted && !query.KeepsText(view.Message))
+
+                // The entry redacted only when its text decides it or it is a group's first, the sample (2026-10-23, the admin review's I6: every
+                // entry was redacted two or three times, the scan's budget spent on regexes).
+                MacLogView? view = null;
+                if (scan.Redacted && query.Text is { Length: > 0 })
                 {
-                    continue;
+                    view = View(entry, handle, scan.Redacted, places);
+                    if (!query.KeepsText(view.Message))
+                    {
+                        continue;
+                    }
                 }
 
                 total++;
                 var key = (entry.Process, entry.Subsystem, entry.Category);
                 groups[key] = groups.TryGetValue(key, out var group)
                     ? group with { Count = group.Count + 1, Level = Math.Max(group.Level, entry.Level) }
-                    : new MacSummaryGroup(entry.Process, entry.Subsystem, entry.Category, entry.Level, 1, entry.Time, handle, view.FirstLine ?? "");
+                    : new MacSummaryGroup(entry.Process, entry.Subsystem, entry.Category, entry.Level, 1, entry.Time, handle, (view ?? View(entry, handle, scan.Redacted, places)).FirstLine ?? "");
             }
         }
 

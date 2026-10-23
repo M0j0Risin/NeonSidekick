@@ -13,15 +13,21 @@ public sealed record ServiceErrorContext(string Computer, string? Service, bool 
 /// </summary>
 public static class ServiceErrors
 {
+    /// <summary>The app's own code (no Win32 code is negative) for a service whose configuration changed between the question and the change (C2).</summary>
+    public const int ChangedSinceAsked = -1001;
+
     public static string Sentence(int code, ServiceErrorContext context, string detail)
     {
         ArgumentNullException.ThrowIfNull(context);
         string service = context.Service ?? "that service";
         return code switch
         {
+            // A change refused remotely is the service's own permissions (2026-10-23, the admin review's J7: it got the reading sentence).
+            5 when context.Remote && context.Write => $"Error: {context.Computer} refused the change to {service}: {context.Account} needs rights on that service there (its own permissions), and a local administrator's sign-in over the network is filtered by UAC's remote restrictions.",
             5 when context.Remote => $"Error: {context.Computer} refused {context.Account}. Reading its services needs rights on its Service Control Manager (a non-administrator is refused unless the SCM's security grants a group read), and a local administrator's sign-in over the network is filtered by UAC's remote restrictions; a domain account in the Administrators group works.",
             5 when context.Write => $"Error: Windows refused the change to {service}: changing this service needs the app run as administrator, or a service whose permissions allow you.",
             5 => $"Error: Windows refused access to {service} on {context.Computer}.",
+            ChangedSinceAsked => $"Error: {service} on {context.Computer} changed after the question (its program, account or DLL is not the one shown), so nothing was done; ask again.",
             1060 => $"Error: there is no service named '{service}' on {context.Computer}; service_list lists them.",
             1056 => $"Error: {service} is already running.",
             1062 => $"Error: {service} is not running.",

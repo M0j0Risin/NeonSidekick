@@ -34,10 +34,11 @@ public static class MacLogRender
             + MacLogText.NewestFirstRead(EventLogText.Count(page.Read, "entry", "entries"), EventLogText.Time(query.Since, zone)) + (source.Redacted ? "; " + EventLogText.RedactedNote : "");
         if (page.Entries.Count == 0 && !page.BudgetStop)
         {
-            return header + "\n" + MacLogText.NoEntries(Clean(source.Log), query.Levels, query.Since, now, zone) + (query.Text is { Length: > 0 } ? MacLogText.HoldingThatText : "") + ".";
+            return header + "\n" + MacLogText.NoEntries(Clean(source.Log), query.Levels, query.Since, now, zone) + MacLogText.Narrowed(query) + ".";
         }
 
-        int budget = EventLogRender.MaxChars - header.Length - EventLogText.QuoteNote.Length - 300;
+        // The tail measured (2026-10-23, the admin review's S10's Mac half: a fixed 300).
+        int budget = EventLogRender.MaxChars - header.Length - EventLogText.QuoteNote.Length - 400 - (page.Cursor is { } preview ? NextCall(query, preview, zone).Length : 0);
         var cursor = page.Cursor;
         var lines = new List<string>();
         foreach (var view in page.Entries)
@@ -69,7 +70,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.Cut(page.Entries.Count - lines.Count));
         }
 
-        AppendNotes(answer, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone);
+        AppendNotes(answer, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone, query.Exclude);
         if ((page.More || lines.Count < page.Entries.Count) && cursor is { } next)
         {
             answer.Append('\n').Append(NextCall(query, next, zone));
@@ -117,7 +118,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.MoreGroups(summary.GroupCount - shown));
         }
 
-        AppendNotes(answer, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone);
+        AppendNotes(answer, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone, query.Exclude);
         return answer.ToString();
     }
 
@@ -161,8 +162,8 @@ public static class MacLogRender
         }
 
         string message = view.Message.Length > 0 ? view.Message : MacLogText.NoMessage;
-        int room = EventLogRender.EventMaxChars - answer.Length - 40;
-        answer.Append("\nmessage:\n").Append(EventLogText.Quote(Clean(message.Length > room ? message[..room] + "…" : message)));
+        int room = Room(answer);
+        answer.Append("\nmessage:\n").Append(EventLogText.Quote(Clean(message.Length > room ? Files.TextCut.Safe(message, room) + "…" : message)));
         return answer.ToString();
     }
 
@@ -222,10 +223,7 @@ public static class MacLogRender
 
         Add(parts, "text", query.Text);
         parts.Add("before=" + cursor);
-        if (query.Limit != 20)
-        {
-            parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));
-        }
+        parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));   // always (S5's Mac half)
 
         return "next: " + string.Join(" ", parts);
     }
@@ -259,10 +257,11 @@ public static class MacLogRender
 
         if (page.Entries.Count == 0 && !page.BudgetStop)
         {
-            return header + "\n" + MacLogText.NoFileEntries(source.Log, query.Since, now, zone) + (query.Text is { Length: > 0 } ? MacLogText.HoldingThatText : "") + ".";
+            return header + "\n" + MacLogText.NoFileEntries(source.Log, query.Since, now, zone) + MacLogText.Narrowed(query) + "."
+                + (page.Refused is { } emptyRefused ? "\n" + MacLogText.FoldersRefused(emptyRefused) : "");
         }
 
-        int budget = EventLogRender.MaxChars - header.Length - EventLogText.QuoteNote.Length - 300;
+        int budget = EventLogRender.MaxChars - header.Length - EventLogText.QuoteNote.Length - 400 - (page.Cursor is { } preview ? FileNextCall(query, preview, zone).Length : 0);   // S10
         string? cursor = page.Cursor;
         var lines = new List<string>();
         foreach (var view in page.Entries)
@@ -294,7 +293,12 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.Cut(page.Entries.Count - lines.Count));
         }
 
-        AppendNotes(answer, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone);
+        AppendNotes(answer, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone, query.Exclude);
+        if (page.Refused is { } refusedFolders)
+        {
+            answer.Append('\n').Append(MacLogText.FoldersRefused(refusedFolders));   // X11
+        }
+
         if ((page.More || lines.Count < page.Entries.Count) && cursor is { } next)
         {
             answer.Append('\n').Append(FileNextCall(query, next, zone));
@@ -351,7 +355,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.MoreGroups(summary.GroupCount - shown));
         }
 
-        AppendNotes(answer, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone);
+        AppendNotes(answer, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone, query.Exclude);
         return answer.ToString();
     }
 
@@ -370,9 +374,9 @@ public static class MacLogRender
         answer.Append("\nprocess: ").Append(EventLogText.Quote(Clean(report.Process))).Append(detail.Pid is { } pid ? " (pid " + pid.ToString(CultureInfo.InvariantCulture) + ")" : "");
         answer.Append("\nfolder: ").Append(report.Owner);
         answer.Append("\nsummary: ").Append(EventLogText.Quote(Clean(Cut(detail.Summary, 400))));
-        int room = EventLogRender.EventMaxChars - answer.Length - 40;
+        int room = Room(answer);
         string text = detail.Text.Length > 0 ? detail.Text : MacLogText.NoMessage;
-        answer.Append("\nreport:\n").Append(EventLogText.Quote(Clean(text.Length > room ? text[..room] + "…" : text)));
+        answer.Append("\nreport:\n").Append(EventLogText.Quote(Clean(text.Length > room ? Files.TextCut.Safe(text, room) + "…" : text)));
         return answer.ToString();
     }
 
@@ -389,8 +393,8 @@ public static class MacLogRender
         answer.Append("\nprocess: ").Append(EventLogText.Quote(Clean(view.Process.Length > 0 ? view.Process : "?")))
             .Append(view.Pid is { } pid ? " (pid " + pid.ToString(CultureInfo.InvariantCulture) + ")" : "");
         string message = view.Message.Length > 0 ? view.Message : MacLogText.NoMessage;
-        int room = EventLogRender.EventMaxChars - answer.Length - 40;
-        answer.Append("\nmessage:\n").Append(EventLogText.Quote(Clean(message.Length > room ? message[..room] + "…" : message)));
+        int room = Room(answer);
+        answer.Append("\nmessage:\n").Append(EventLogText.Quote(Clean(message.Length > room ? Files.TextCut.Safe(message, room) + "…" : message)));
         return answer.ToString();
     }
 
@@ -418,10 +422,7 @@ public static class MacLogRender
 
         Add(parts, "text", query.Text);
         parts.Add("before=" + Value(cursor));
-        if (query.Limit != 20)
-        {
-            parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));
-        }
+        parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));   // always (S5)
 
         return "next: " + string.Join(" ", parts);
     }
@@ -429,7 +430,7 @@ public static class MacLogRender
     private static string FileWho(string process, int? pid) =>
         Fence(process.Length > 0 ? process : "?", 40) + (pid is { } p ? "[" + p.ToString(CultureInfo.InvariantCulture) + "]" : "");
 
-    private static void AppendNotes(StringBuilder answer, bool stopped, int read, DateTimeOffset? reached, MacLoudest? loudest, TimeZoneInfo zone)
+    private static void AppendNotes(StringBuilder answer, bool stopped, int read, DateTimeOffset? reached, MacLoudest? loudest, TimeZoneInfo zone, IReadOnlyList<string>? exclude = null)
     {
         if (stopped)
         {
@@ -438,7 +439,9 @@ public static class MacLogRender
 
         if (loudest is { } loud)
         {
-            answer.Append('\n').Append(MacLogText.Loudest(Clean(Cut(loud.Process, 40)), loud.Count, loud.Of, fenced: true));
+            // The copyable argument is the whole name, quoted, with the query's own exclusions (S4).
+            string copy = Value(string.Join(",", (exclude ?? []).Append(loud.Process).Distinct(StringComparer.Ordinal)));
+            answer.Append('\n').Append(MacLogText.Loudest(Clean(Cut(loud.Process, 40)), loud.Count, loud.Of, fenced: true, copy: copy));
         }
     }
 
@@ -469,6 +472,12 @@ public static class MacLogRender
     private static string Cut(string text, int max)
     {
         string flat = text.Replace('\n', ' ').Replace('\t', ' ');
-        return flat.Length <= max ? flat : flat[..(max - 1)] + "…";
+        return flat.Length <= max ? flat : Files.TextCut.Safe(flat, max - 1) + "…";   // a surrogate pair kept whole (2026-10-23, B12's sibling)
     }
+
+    /// <summary>
+    /// What is left of an event's budget for its body, never below 0 (2026-10-23, the admin review's O5: a long process name or subsystem
+    /// made it negative and the cut threw). The cut keeps a surrogate pair whole.
+    /// </summary>
+    private static int Room(System.Text.StringBuilder answer) => Math.Max(0, EventLogRender.EventMaxChars - answer.Length - 40);
 }

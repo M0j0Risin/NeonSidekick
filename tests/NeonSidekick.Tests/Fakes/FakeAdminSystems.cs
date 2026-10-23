@@ -17,6 +17,9 @@ public sealed class FakePinger : IPinger
 
     public bool CanTrace { get; set; } = true;
 
+    /// <summary>Whether IPv6 echoes are sent (2026-10-23, U17); a test sets false for the Mac's IPv4-only pinger.</summary>
+    public bool SupportsIPv6 { get; set; } = true;
+
     public Task<PingHop> PingAsync(IPAddress address, int ttl, TimeSpan timeout, CancellationToken cancellationToken)
     {
         lock (Sent)
@@ -49,6 +52,9 @@ public sealed class FakeServiceSystem : IServiceSystem
         public required ServiceConfiguration Config { get; set; }
 
         public List<string> DependsOnMe { get; } = [];
+
+        /// <summary>A shared-process service's DLL (2026-10-23, T10); null for none or unreadable.</summary>
+        public string? Dll { get; set; }
     }
 
     public Dictionary<string, Service> Services { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -107,6 +113,14 @@ public sealed class FakeServiceSystem : IServiceSystem
             var dependents = s.DependsOnMe.Select(d => owner.Services[d].Entry).ToList();
             return new ServiceDetail(s.Config, Status(name), dependents);
         }
+
+        public ServiceDetail Detail(string name, bool dependents)
+        {
+            var detail = Detail(name);
+            return dependents ? detail : detail with { Dependents = [], DependentsKnown = false };
+        }
+
+        public string? ServiceDll(string name) => Find(name).Dll;
 
         public ServiceStatus Status(string name)
         {
@@ -189,6 +203,9 @@ public sealed class FakeTaskSystem : ITaskSystem
     /// <summary>Once a change is made, the task's read back is refused (2026-10-20).</summary>
     public bool EntryFailsAfterChange { get; set; }
 
+    /// <summary>Whether the last list was asked to leave <c>\Microsoft\</c> unwalked (2026-10-23, B4).</summary>
+    public bool ListedSkippingMicrosoft { get; set; }
+
     public static string Xml(string command, string? user = "CORP\\ops", string? runLevel = null, string? group = null, string trigger = "<CalendarTrigger><StartBoundary>2026-01-01T03:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>", string? description = "a task") =>
         "<?xml version=\"1.0\" encoding=\"UTF-16\"?><Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">" +
         "<RegistrationInfo><Author>CORP\\admin</Author>" + (description is null ? "" : "<Description>" + description + "</Description>") + "</RegistrationInfo>" +
@@ -224,10 +241,12 @@ public sealed class FakeTaskSystem : ITaskSystem
         public TaskEntry Entry(string path) =>
             owner.EntryFailsAfterChange && owner.Changes.Count > 0 ? throw new TaskException(unchecked((int)0x80070005), "read refused") : Detail(path).Entry;
 
-        public IReadOnlyList<TaskEntry> List(string folder, bool recursive)
+        public IReadOnlyList<TaskEntry> List(string folder, bool recursive, bool skipMicrosoft = false)
         {
             string prefix = folder.TrimEnd('\\') + "\\";
-            return owner.Tasks.Values.Select(t => t.Entry).Where(e => e.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && (recursive || e.Path.LastIndexOf('\\') == prefix.Length - 1)).ToList();
+            owner.ListedSkippingMicrosoft = skipMicrosoft;
+            return owner.Tasks.Values.Select(t => t.Entry).Where(e => e.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && (recursive || e.Path.LastIndexOf('\\') == prefix.Length - 1)
+                && !(skipMicrosoft && TaskAccess.IsMicrosoft(e.Path) && !TaskAccess.IsMicrosoft(prefix))).ToList();
         }
 
         public TaskDetail Detail(string path) =>
@@ -278,6 +297,9 @@ public sealed class FakeDirectorySystem : IDirectorySystem
 
     /// <summary>Told each search's filter before it runs.</summary>
     public Action<string>? OnSearch { get; set; }
+
+    /// <summary>A search whose filter this says yes to times out at once with nothing read (2026-10-23, the redacted scan's deadline).</summary>
+    public Func<string, bool>? TimesOut { get; set; }
 
     public int? FailWith { get; set; }
 
@@ -355,6 +377,11 @@ public sealed class FakeDirectorySystem : IDirectorySystem
             owner.OnSearch?.Invoke(filter);
             owner.Filters.Add(filter);
             owner.TimeLimits.Add(timeLimit);
+            if (owner.TimesOut?.Invoke(filter) == true)
+            {
+                return new DirectoryResults([], false, true);
+            }
+
             var found = new List<DirectoryEntry>();
             foreach (var (dn, map) in owner.Entries)
             {

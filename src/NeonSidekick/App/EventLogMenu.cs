@@ -263,6 +263,12 @@ internal sealed class EventLogMenu
     {
         if (EventLogQuery.IsFile(line.Log))
         {
+            // A file with a computer refused, as the printed answer does (2026-10-23, the admin review's W8: the pane dropped the computer).
+            if (!string.IsNullOrWhiteSpace(computer))
+            {
+                return (null, 0, EventLogText.FileWithComputer);
+            }
+
             var (fileSource, fileError) = _access.Resolve(null, line.Log, forceRedacted: false);
             return fileSource is null ? (null, 0, fileError) : ([new LogTab(line.Log) { Source = fileSource with { Redacted = false } }], 0, null);
         }
@@ -294,24 +300,58 @@ internal sealed class EventLogMenu
         string where = tabs[0].Source!.IsFile ? tabs[0].Log : tabs[0].Source!.Computer.Name;
         while (true)
         {
-            // Every tab read before the page shows (the pane switches tabs itself, without coming back here): four small reads.
-            foreach (var unread in tabs.Where(t => !t.Loaded))
+            // Every tab read before the page shows (the pane switches tabs itself, without coming back here). The shown one first and alone;
+            // the rest side by side once it answered, none when its failure is the computer's (2026-10-23, the admin review's W7: one after
+            // another, each its own sign-in and timeout, a dead computer showed "Working" for minutes).
+            var unread = tabs.Where(t => !t.Loaded).ToList();
+            if (unread.Count > 0)
             {
-                await LoadAsync(line, unread, append: false, cancellationToken).ConfigureAwait(false);
+                var lead = unread.Contains(tabs[tab]) ? tabs[tab] : unread[0];
+                await LoadAsync(line, lead, append: false, cancellationToken).ConfigureAwait(false);
+                var rest = unread.Where(t => !ReferenceEquals(t, lead)).ToList();
+                if (lead.Error is { } failed && EventLogText.IsComputerWide(failed))
+                {
+                    foreach (var other in rest)
+                    {
+                        other.Loaded = true;
+                        other.Error = failed;
+                        other.More = false;
+                    }
+                }
+                else
+                {
+                    await Task.WhenAll(rest.Select(t => LoadAsync(line, t, append: false, cancellationToken))).ConfigureAwait(false);
+                }
             }
 
             var current = tabs[tab];
 
+            // The More button lit for the tab on show, redrawn when the pane switches to one whose state differs (2026-10-23, W12).
+            using var redraw = new CancellationTokenSource();
+            bool drawnMore = current.More;
             var menuTabs = tabs.Select(t => BuildTab(t, zone)).ToList();
             var page = MenuPage.Tabbed(TitleFor(where), menuTabs.Select(m => m.Tab).ToList(), tab, Keys) with
             {
                 Buttons = ButtonsFor(current.More, showComputer),
                 TabButtons = true,
+                TabShown = shown =>
+                {
+                    if (shown >= 0 && shown < tabs.Count && tabs[shown].More != drawnMore)
+                    {
+                        redraw.Cancel();
+                    }
+                },
             };
-            var picked = await _pane.PickAsync(page, current.Cursor0, cancellationToken).ConfigureAwait(false);
+            var picked = await _pane.PickAsync(page, current.Cursor0, cancellationToken, stale: redraw.Token).ConfigureAwait(false);
             if (picked is not { } pick)
             {
                 return new Outcome(null, null);
+            }
+
+            if (pick.Refresh)
+            {
+                tab = Math.Clamp(pick.Tab, 0, tabs.Count - 1);
+                continue;
             }
 
             if (pick.Tab != tab)
@@ -336,7 +376,10 @@ internal sealed class EventLogMenu
             switch (pick.Button)
             {
                 case 0:
+                    // The line's written times read again from now (2026-10-23, the admin review's H12: since:1h never moved).
+                    line = line.At(_access.Time.GetUtcNow(), zone);
                     current.Events.Clear();
+                    current.Query = null;
                     current.Loaded = false;
                     current.Cursor0 = 0;
                     continue;
@@ -396,7 +439,13 @@ internal sealed class EventLogMenu
         if (listed.Count == 0)
         {
             rows.Add(Theme.DimMarkup(tab.Error ?? (tab.Filter.Length > 0 ? MenuFilter.NoMatchLine(tab.Filter) : tab.Query is { } q
-                ? EventLogText.NoEvents(tab.Log, q.Levels, q.Audit, q.Since, _access.Time.GetUtcNow(), zone) : EventLogText.Working)));
+                ? EventLogText.NoEvents(tab.Log, q.Levels, q.Audit, q.Since, _access.Time.GetUtcNow(), zone) + EventLogText.Narrowed(q) : EventLogText.Working)));
+            behind.Add(null);
+        }
+        else if (tab.Error is { } failed)
+        {
+            // A failed "more" said under the rows it could not add to (2026-10-23, the admin review's W9: the log seemed to end there).
+            rows.Add(Theme.DimMarkup(failed));
             behind.Add(null);
         }
 
@@ -431,7 +480,7 @@ internal sealed class EventLogMenu
                 query = query with { BeforeRecord = tab.Cursor };
             }
 
-            var (xpath, built) = EventLogXPath.Build(query, serverFields: true);
+            var (xpath, built) = EventLogXPath.Build(query, serverFields: false);   // the client's match alone (W2)
             if (xpath is null)
             {
                 return (Query: query, Page: (EventSearchPage?)null, Error: built);
@@ -461,6 +510,7 @@ internal sealed class EventLogMenu
         }
 
         tab.Error = null;
+        tab.NoAccess = false;   // a read that worked clears the mark (2026-10-23, W11)
         if (!append)
         {
             tab.Events.Clear();

@@ -41,9 +41,16 @@ public readonly record struct MacLogHandle(long Microseconds, int Pid, ulong Thr
     /// The entry's mark: FNV-1a (32 bits) over its level, subsystem, category and redacted message, each followed by a NUL. Stable across
     /// runs and machines (never <see cref="string.GetHashCode()"/>, which is salted per process).
     /// </summary>
+    /// <remarks>The reader's own mark, over the whole message, when it gave one (X5): the copy's message is cut, so entries alike in their first part shared a mark.</remarks>
     public static uint MarkOf(MacLogEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        return entry.Mark ?? MarkOf(entry.Level, entry.Subsystem, entry.Category, entry.Message);
+    }
+
+    /// <summary>The mark of an entry's parts (the reader's, over its whole message).</summary>
+    public static uint MarkOf(int level, string subsystem, string category, string message)
+    {
         uint hash = 2_166_136_261;
         void Add(string text)
         {
@@ -56,10 +63,10 @@ public readonly record struct MacLogHandle(long Microseconds, int Pid, ulong Thr
             hash = (hash ^ 0) * 16_777_619;
         }
 
-        Add(entry.Level.ToString(CultureInfo.InvariantCulture));
-        Add(entry.Subsystem);
-        Add(entry.Category);
-        Add(EventLogRedaction.Text(entry.Message).TrimEnd());
+        Add(level.ToString(CultureInfo.InvariantCulture));
+        Add(subsystem);
+        Add(category);
+        Add(EventLogRedaction.Text(message).TrimEnd());
         return hash;
     }
 

@@ -29,7 +29,8 @@ public static partial class EventLogXPath
     {
         ArgumentNullException.ThrowIfNull(query);
         int terms = LevelValues(query.Levels).Count + query.Ids.Sum(r => r.Single ? 1 : 2) + query.Providers.Count;
-        terms += (query.Since is null ? 0 : 1) + (query.Until is null ? 0 : 1) + (query.Audit == EventAudit.Any ? 0 : 1) + (query.BeforeRecord is { Tagged: false } ? 1 : 0);
+        terms += (query.Since is null ? 0 : 1) + (query.Until is null ? 0 : 1) + (query.Audit == EventAudit.Any ? 0 : 1) + (query.BeforeRecord is { Tagged: false } ? 1 : 0)
+            + (query.BeforeRecord is { Tagged: true, Time: not null } ? 1 : 0);
         return terms + (serverFields ? query.Fields.Count : 0);
     }
 
@@ -83,7 +84,8 @@ public static partial class EventLogXPath
 
         if (query.Until is { } until)
         {
-            system.Add("TimeCreated[@SystemTime<='" + Moment(until) + "']");
+            // Rounded up to the millisecond, so the log never leaves out an event the client keeps (2026-10-23, the admin review's W14).
+            system.Add("TimeCreated[@SystemTime<='" + Moment(until, up: true) + "']");
         }
 
         if (query.Audit != EventAudit.Any)
@@ -94,8 +96,13 @@ public static partial class EventLogXPath
 
         if (query.BeforeRecord is { Tagged: false } before)
         {
-            // A tagged cursor (a forwarded log's) is no term: the records are the source computers', so the search skips to it instead.
+            // A tagged cursor (a forwarded log's) is no record term: the records are the source computers', so the search skips to it instead.
             system.Add("EventRecordID<" + before.Record.ToString(CultureInfo.InvariantCulture));
+        }
+        else if (query.BeforeRecord is { Tagged: true, Time: { } at })
+        {
+            // Its time is (A5): the log starts at the cursor's moment, and the skip runs only over events of that same moment.
+            system.Add("TimeCreated[@SystemTime<='" + Moment(at, up: true) + "']");
         }
 
         var parts = new List<string>(2);
@@ -178,9 +185,18 @@ public static partial class EventLogXPath
         return text.Contains('"', StringComparison.Ordinal) ? null : "\"" + text + "\"";
     }
 
-    /// <summary>A moment as the event log's <c>@SystemTime</c> compares it: UTC, milliseconds, <c>Z</c>.</summary>
-    public static string Moment(DateTimeOffset moment) =>
-        moment.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+    /// <summary>A moment as the event log's <c>@SystemTime</c> compares it: UTC, milliseconds, <c>Z</c>; <paramref name="up"/> rounds a part of a millisecond up (W14).</summary>
+    public static string Moment(DateTimeOffset moment, bool up = false)
+    {
+        var utc = moment.UtcDateTime;
+        long part = utc.Ticks % TimeSpan.TicksPerMillisecond;
+        if (up && part != 0 && utc.Ticks <= DateTime.MaxValue.Ticks - TimeSpan.TicksPerMillisecond)
+        {
+            utc = utc.AddTicks(TimeSpan.TicksPerMillisecond - part);
+        }
+
+        return utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     /// <paramref name="xpath"/> for the log (2026-10-15, the plan's logging rule): every quoted literal replaced by its length,

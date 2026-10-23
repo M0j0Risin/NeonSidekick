@@ -8,12 +8,59 @@ namespace NeonSidekick.ActiveDirectory;
 /// </summary>
 public static class DirectoryText
 {
+    /// <summary>A bind whose session read back neither signed nor sealed (2026-10-23, J3; here since the branch review of DP7).</summary>
+    public const string NotSealedAfterBind = "the session was not signed and sealed after the bind";
+
     public const string Category = "Directory";
 
     /// <summary>The group's glyph: an office building (👥 is botchat's resume, 🪪 the profile's).</summary>
     public const string Glyph = "🏢";
 
     public const string MenuPath = "/tools › Admin › Directory";
+
+    /// <summary>
+    /// What a redacted free-text match read (2026-10-23, the admin review's E2, DA5): the values matched on their redacted text, how many
+    /// objects that was, and the call that goes on. Pinned.
+    /// </summary>
+    public static string RedactedScan(string what, int scanned, int from, string? next) =>
+        $"{what} matched on their redacted text, over {scanned.ToString("N0", CultureInfo.InvariantCulture)} objects" + (from > 0 ? $" from the {from.ToString("N0", CultureInfo.InvariantCulture)}th" : "")
+        + (next is null ? "" : "; more are left, next: " + next);
+
+    /// <summary>A redacted scan the call's time ended before it reached its first object (2026-10-23, the branch review of DP7).</summary>
+    public static string ScanUnreached(string what, int from) =>
+        $"{what} not matched: the scan did not reach the {from.ToString("N0", CultureInfo.InvariantCulture)}th object in the call's time; narrow it with ou= or type=";
+
+    /// <summary>The same find from the next object on, as the model calls it.</summary>
+    public static string NextScan(FindOptions o, int from)
+    {
+        ArgumentNullException.ThrowIfNull(o);
+        var parts = new List<string> { "kind=" + o.Kind };
+        if (o.Words is { } words)
+        {
+            parts.Add("words=\"" + Llm.Tools.UntrustedText.OneLine(words).Replace("\"", "'", StringComparison.Ordinal) + "\"");
+        }
+
+        if (o.Type is { } type)
+        {
+            parts.Add("type=" + type);
+        }
+
+        if (o.Field is { } field)
+        {
+            parts.Add("field=" + field);
+        }
+
+        if (o.Ou is { } ou)
+        {
+            parts.Add("ou=\"" + Llm.Tools.UntrustedText.OneLine(ou).Replace("\"", "'", StringComparison.Ordinal) + "\"");
+        }
+
+        parts.Add("scan_from=" + from.ToString(CultureInfo.InvariantCulture));
+        return "ad_find(" + string.Join(", ", parts) + ")";
+    }
+
+    /// <summary>The row a domain's password is set with (2026-10-23, the wizard's unticked save, H9).</summary>
+    public const string SetPasswordRow = "Directory set password";
 
     public const string Working = "Reading the directory…";
 
@@ -67,7 +114,12 @@ public static class DirectoryText
     }
 
     /// <summary>What was wrong with a DC's LDAPS certificate (2026-10-18), for <see cref="DirectoryErrors"/>' refusal. Pinned.</summary>
-    public static string CertificateRefused(string host, System.Net.Security.SslPolicyErrors errors)
+    /// <remarks>
+    /// The chain's own reasons named (2026-10-23, the admin review's S3: every chain error was "no authority this machine trusts signed it", so an
+    /// expired, revoked or unchecked certificate sent the user to trust a CA to no effect).
+    /// </remarks>
+    public static string CertificateRefused(string host, System.Net.Security.SslPolicyErrors errors,
+        System.Security.Cryptography.X509Certificates.X509ChainStatusFlags chain = System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NoError)
     {
         var why = new List<string>();
         if (errors.HasFlag(System.Net.Security.SslPolicyErrors.RemoteCertificateNotAvailable))
@@ -82,10 +134,37 @@ public static class DirectoryText
 
         if (errors.HasFlag(System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors))
         {
-            why.Add("no authority this machine trusts signed it");
+            why.AddRange(ChainWords(chain));
         }
 
         return string.Join(", and ", why);
+    }
+
+    /// <summary>A chain's failures in words; "no authority this machine trusts signed it" when none of the named ones is set.</summary>
+    public static IReadOnlyList<string> ChainWords(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags chain)
+    {
+        var words = new List<string>();
+        if ((chain & (System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NotTimeValid | System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NotTimeNested)) != 0)
+        {
+            words.Add("it has expired or is not valid yet");
+        }
+
+        if ((chain & System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.Revoked) != 0)
+        {
+            words.Add("it has been revoked");
+        }
+
+        if ((chain & (System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown | System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.OfflineRevocation)) != 0)
+        {
+            words.Add("whether it was revoked could not be checked (its revocation list or OCSP server was not reached)");
+        }
+
+        if (words.Count == 0 || (chain & (System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.UntrustedRoot | System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.PartialChain)) != 0)
+        {
+            words.Add("no authority this machine trusts signed it");
+        }
+
+        return words;
     }
 
     /// <summary>The wizard's account question on a Mac. Pinned.</summary>
@@ -133,13 +212,12 @@ public static class DirectoryText
 
     public static string Missing(string argument) => $"Error: {argument} is required.";
 
-    public static string NotBoolean(string argument, string raw) => $"Error: {argument} '{raw}' is not true or false.";
+    public static string NotBoolean(string argument, string raw) => Llm.Tools.ArgumentText.NotBoolean(argument, raw);
 
-    public static string OutOfRange(string argument, string given, int min, int max) =>
-        $"Error: {argument} '{given}' is out of range; it must be {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}.";
+    public static string OutOfRange(string argument, string given, int min, int max) => Llm.Tools.ArgumentText.OutOfRange(argument, given, min, max);
 
     /// <summary>A choice the argument does not take (2026-10-15, the AD gaps plan: one refusal for <c>kind</c>, <c>type</c>, <c>field</c> and <c>members</c>). Pinned.</summary>
-    public static string BadChoice(string argument, string word, IReadOnlyList<string> choices) => $"Error: {argument} '{word}' is not {Join(choices)}.";
+    public static string BadChoice(string argument, string word, IReadOnlyList<string> choices) => $"Error: {argument} '{Llm.Tools.ArgumentText.Echo(word)}' is not {Join(choices)}.";
 
     /// <summary>A kind <c>ad_find</c> has not: its list from <see cref="DirectoryQueries.FindKinds"/>. Pinned.</summary>
     public static string BadKind(string word) => BadChoice("kind", word, DirectoryQueries.FindKinds);
@@ -183,9 +261,9 @@ public static class DirectoryText
     /// <summary>The card's title over the OUs a name matches: a click opens the OU, never the search inside it. Pinned.</summary>
     public static string AmbiguousOuTitle(string name, int count) => $"'{name}' matches {count.ToString(CultureInfo.InvariantCulture)} OUs; type ou: with the path shown";
 
-    /// <summary>A name that matches several objects: the candidates listed. Pinned.</summary>
-    public static string Ambiguous(string name, IReadOnlyList<string> candidates) =>
-        $"Error: '{name}' matches {candidates.Count.ToString(CultureInfo.InvariantCulture)} accounts; name one by its account name:\n  " + string.Join("\n  ", candidates);
+    /// <summary>A name that matches several objects: the candidates listed; <paramref name="more"/> when more matched than are listed (Q13). Pinned.</summary>
+    public static string Ambiguous(string name, IReadOnlyList<string> candidates, bool more = false) =>
+        $"Error: '{name}' matches {(more ? "more than " : "")}{candidates.Count.ToString(CultureInfo.InvariantCulture)} accounts; name one by its account name{(more ? " (the first " + candidates.Count.ToString(CultureInfo.InvariantCulture) + " listed)" : "")}:\n  " + string.Join("\n  ", candidates);
 
     public static string TimedOut(string domain) => $"Error: the search in {domain} took too long and was stopped.";
 
@@ -202,7 +280,7 @@ public static class DirectoryText
     public static string BadBaseDn(string text) => $"\"baseDn\" is '{text}'; it must be a distinguished name such as DC=corp,DC=example";
 
     public static string UnknownDomain(string name, string offered) =>
-        $"Error: no domain named '{name}' is ticked in Directory domains offered" + (offered.Length > 0 ? $"; the ticked ones are: {offered}." : "; none is ticked.");
+        $"Error: no domain named '{Llm.Tools.ArgumentText.Echo(name)}' is ticked in Directory domains offered" + (offered.Length > 0 ? $"; the ticked ones are: {offered}." : "; none is ticked.");
 
     public static string DomainNeeded(string offered) => $"Error: several domains are ticked ({offered}); name one with domain.";
 
@@ -211,10 +289,20 @@ public static class DirectoryText
     public static string NoPassword(string name) => $"no password for '{name}'; set it with Directory set password on {MenuPath}";
 
     public static string NoCredential(string target) =>
-        $"no password in {Sql.SqlText.CredentialStore} for {target}; set it with Directory set password on {MenuPath}, or: {Sql.SqlText.CredentialCommand(target, "<user>")}";
+        $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {SetPasswordRow} on {MenuPath}";   // DP1 (2026-10-23, L4): no cmdkey line
 
+    /// <remarks>The count's noun agrees (2026-10-23, the admin review's S18: "0 user read").</remarks>
     public static string TestOk(string name, string server, string domain, int users) =>
-        $"Reached '{name}' at {server}: {domain}, {users.ToString(CultureInfo.InvariantCulture)} user read.";
+        $"Reached '{name}' at {server}: {domain}, {users.ToString(CultureInfo.InvariantCulture)} {(users == 1 ? "user" : "users")} read.";
+
+    /// <summary>The detail of a Mac's held refusal: the KDC knew the account and gave no ticket (D3), read by <see cref="DirectoryErrors"/>.</summary>
+    public const string NoTicketPrefix = "the KDC knew the account and gave no ticket";
+
+    /// <summary>A <c>to</c> save found closed by the time the answer came (2026-10-23, F7). Pinned.</summary>
+    public static string SaveClosedLate(string reason) => "Not saved: " + reason.Replace("Error: ", "", StringComparison.Ordinal);
+
+    /// <summary>A <c>/ad</c> key word with no value (2026-10-23, V6). Pinned.</summary>
+    public static string KeyNeedsValue(string key) => "/ad " + key + ": needs a value";
 
     // ── Cards ────────────────────────────────────────────────────────────────
 
@@ -255,6 +343,28 @@ public static class DirectoryText
 
     public const string OtherDomain = "in another domain";
 
+    /// <summary>A member whose batch's search was cut or ran out of time (2026-10-23, D7): neither unreadable nor foreign, just not read.</summary>
+    public const string NotRead = "not read (the search stopped)";
+
+    /// <summary>An account past its <c>accountExpires</c>, in a user's head (2026-10-23, H11).</summary>
+    public const string AccountExpiredWord = "account expired";
+
+    /// <summary>An account's groups whose SIDs were not all resolved (2026-10-23, Q5).</summary>
+    public const string GroupsNotAllRead = "not every group was resolved (the read stopped at its limit or the time limit); the list is short";
+
+    /// <summary>The days under which a stale find may list people who signed in lately (2026-10-23, V5, DA6).</summary>
+    public const int StaleLagDays = 14;
+
+    /// <summary>A stale find under <see cref="StaleLagDays"/>: run, and said (DA6).</summary>
+    public const string StaleLagNote = "lastLogonTimestamp is copied between DCs only every 9 to 14 days, so a sign-in of the last two weeks may not show yet; some listed may have signed in lately";
+
+    /// <summary>The domain head gave none of its policy (2026-10-23, Q6).</summary>
+    public const string PolicyNotRead = "not read (the domain head gave none of it)";
+
+    /// <summary>Groups left out of empty_groups because their primary-group read was not whole (2026-10-23, G12).</summary>
+    public static string EmptyGroupsUnsure(int count) =>
+        count.ToString(CultureInfo.InvariantCulture) + " more may be empty, left out: who has them as a primary group was not read whole";
+
     /// <summary>A member brought in by its primary group, beside the group.</summary>
     public const string PrimaryGroupWord = "primary group";
 
@@ -274,6 +384,9 @@ public static class DirectoryText
     public const string LeftoversSection = "adminCount leftovers";
 
     public const string LeftoverNote = "marked protected once; no longer in a protected group";
+
+    /// <summary>A leftover when the walk did not end whole (2026-10-23, Q2): it may still be in a protected group.</summary>
+    public const string NotReachedNote = "marked protected; not reached by the walk, which stopped early (it may still be in a protected group)";
 
     public const string ExpectedNote = "expected (built-in)";
 

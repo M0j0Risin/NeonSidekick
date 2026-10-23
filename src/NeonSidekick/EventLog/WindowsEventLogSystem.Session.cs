@@ -44,6 +44,10 @@ public sealed partial class WindowsEventLogSystem
             password = login.Password;
             flags = AuthFlags(login.AuthMethod);
         }
+        else if (target.AuthMethod is { Length: > 0 } method)
+        {
+            flags = AuthFlags(method);   // the Windows sign-in's method too (J2)
+        }
 
         nint session;
         fixed (char* serverPointer = host)

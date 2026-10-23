@@ -9,8 +9,9 @@ namespace NeonSidekick.ActiveDirectory;
 
 /// <summary>The domain's password and lockout policy: the domain head's, or a fine-grained one's.</summary>
 /// <remarks><see cref="UnreadPso"/>: the fine-grained policy that applies but whose settings this account cannot read, the domain's used in its place.</remarks>
+/// <remarks><c>Unread</c> (2026-10-23, the admin review's Q6): the domain head gave none of its policy, so nothing here is a fact.</remarks>
 public sealed record AdPolicy(string? Name, AdInterval? MaxPasswordAge, AdInterval? LockoutDuration, long? LockoutThreshold, AdInterval? ObservationWindow, long? MinLength, long? History, bool Complex,
-    string? UnreadPso = null);
+    string? UnreadPso = null, bool Unread = false);
 
 /// <summary>A lockout and a password expiry worked out, and how.</summary>
 public sealed record AdAccountState(bool Locked, DateTimeOffset? LockedAt, DateTimeOffset? Unlocks, bool LockedForever, string LockedHow, DateTimeOffset? PasswordSet, DateTimeOffset? Expires, bool NeverExpires, bool MustChange, string ExpiresHow);
@@ -20,7 +21,7 @@ public sealed record AdAccountState(bool Locked, DateTimeOffset? LockedAt, DateT
 /// field, the OU it is held to, how many to list, how many to read at most (<see cref="DirectoryLimits.MaxEntries"/>, or
 /// <see cref="DirectoryLimits.MaxCounted"/> for a <c>to</c>) and whether the cap's note may offer a save.
 /// </summary>
-public sealed record FindOptions(string Kind, int Days, string? Words, int Limit, string? Type = null, string? Ou = null, string? Field = null, int Cap = DirectoryLimits.MaxEntries, bool CanSave = false);
+public sealed record FindOptions(string Kind, int Days, string? Words, int Limit, string? Type = null, string? Ou = null, string? Field = null, int Cap = DirectoryLimits.MaxEntries, bool CanSave = false, int ScanFrom = 0);
 
 /// <summary>
 /// The questions the directory tools answer (2026-10-15, the admin-tools plan, and the AD gaps plan the same day): a user's card, a group's
@@ -146,17 +147,23 @@ public static class DirectoryQueries
 
     // ── Lookups ─────────────────────────────────────────────────────────────
 
+    /// <summary>The most candidates an ambiguous name lists; one more is read to tell "these" from "these and more" (Q13).</summary>
+    public const int MaxCandidates = 20;
+
     /// <summary>The one object a name means; the candidates when several match; null for none.</summary>
     public static (DirectoryEntry? Found, IReadOnlyList<string> Candidates) One(IDirectorySession session, string baseDn, string filter, IReadOnlyList<string> attributes)
     {
         var (found, candidates) = OneOf(session, baseDn, filter, attributes);
-        return (found, candidates.Select(CandidateLine).ToList());
+        return (found, candidates.Take(MaxCandidates).Select(CandidateLine).ToList());
     }
 
-    /// <summary><see cref="One"/>'s entries: the one, or the candidates as entries (the card offers them).</summary>
+    /// <summary>
+    /// <see cref="One"/>'s entries: the one, or the candidates as entries (the card offers them). Up to <see cref="MaxCandidates"/> + 1 are read
+    /// (2026-10-23, the admin review's Q13: 20 were read and listed as if they were all); more than <see cref="MaxCandidates"/> means "and more".
+    /// </summary>
     public static (DirectoryEntry? Found, IReadOnlyList<DirectoryEntry> Candidates) OneOf(IDirectorySession session, string baseDn, string filter, IReadOnlyList<string> attributes, TimeSpan? timeLimit = null)
     {
-        var results = session.Search(baseDn, DirectoryScope.Subtree, filter, attributes, 20, paged: false, timeLimit);
+        var results = session.Search(baseDn, DirectoryScope.Subtree, filter, attributes, MaxCandidates + 1, paged: false, timeLimit);
         return results.Entries.Count switch
         {
             0 => (null, []),
@@ -170,18 +177,40 @@ public static class DirectoryQueries
     /// <summary>A name several accounts share (2026-10-15, the AD gaps plan): the model's refusal as ever, and the candidates as a list the card offers.</summary>
     private static DirectoryAnswer Ambiguous(string name, IReadOnlyList<DirectoryEntry> candidates)
     {
+        bool more = candidates.Count > MaxCandidates;
+        var shown = candidates.Take(MaxCandidates).ToList();
         var table = new DirectoryTable([new(DirectoryText.ColAccount), new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColOu, Flexible: true)]);
-        foreach (var e in candidates)
+        foreach (var e in shown)
         {
             table.Rows.Add(new DirectoryRow(CandidateLine(e), [e.Text("sAMAccountName"), Display(e), AdValues.Parent(e.Dn)], e.Dn, Display(e), Opens: true));
         }
 
         return new DirectoryAnswer
         {
-            Error = DirectoryText.Ambiguous(name, candidates.Select(CandidateLine).ToList()),
+            Error = DirectoryText.Ambiguous(name, shown.Select(CandidateLine).ToList(), more),
             Candidates = table,
-            CandidatesTitle = DirectoryText.AmbiguousTitle(name, candidates.Count),
+            CandidatesTitle = DirectoryText.AmbiguousTitle(name, shown.Count),
         };
+    }
+
+    /// <summary>
+    /// The domain's head, where its policy, its roles, its PSOs and its SID live (2026-10-23, the admin review's H1): the base itself when none is
+    /// configured; else the base's own <c>DC=</c> part, or the domain's name as a DN when it has none. A configured <c>baseDn</c> (an OU) read
+    /// as the head left the policy unread (a stale <c>lockoutTime</c> read as locked), the roles "?", no PSOs and no Domain or Enterprise
+    /// Admins in <c>privileged</c>. Read from the base since the branch review of 2026-10-23 (DP7): the root DSE's
+    /// <c>defaultNamingContext</c> cost a round trip on every answer, and was another domain's head for an OU of a child domain read through a
+    /// parent's DC or a global catalog.
+    /// </summary>
+    public static string HeadOf(IDirectorySession session, DirectoryDomain domain)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(domain);
+        if (string.IsNullOrWhiteSpace(domain.Config.BaseDn))
+        {
+            return domain.BaseDn;
+        }
+
+        return AdValues.DomainPart(domain.BaseDn) is { Length: > 0 } head ? head : AdValues.DomainDn(domain.DomainName);
     }
 
     /// <summary>
@@ -273,7 +302,7 @@ public static class DirectoryQueries
         var head = session.Search(baseDn, DirectoryScope.Base, "(objectClass=*)", AdAttributes.DomainHead, 1, paged: false, deadline.Limit);
         if (head.Entries.Count == 0)
         {
-            return new AdPolicy(null, null, null, null, null, null, null, false);
+            return new AdPolicy(null, null, null, null, null, null, null, false, Unread: true);
         }
 
         var h = head.Entries[0];
@@ -300,17 +329,21 @@ public static class DirectoryQueries
         }
         else
         {
-            locked = lockedAt is { } at && (forever || policy.LockoutDuration?.Span is not { } span || now < at + span);
+            locked = lockedAt is { } at && (forever || policy.LockoutDuration?.Span is not { } span || AdValues.Plus(at, span) is not { } ends || now < ends);
             lockedHow = DirectoryText.WorkedOut;
         }
 
         if (locked && lockedAt is { } since && !forever && policy.LockoutDuration?.Span is { } duration)
         {
-            unlocks = since + duration;
+            unlocks = AdValues.Plus(since, duration);
         }
 
         var set = AdValues.FileTime(user.Text("pwdLastSet"));
-        bool mustChange = AdValues.Integer(user.Text("pwdLastSet")) == 0;
+        // A zero pwdLastSet is a change at next sign-in only for an account whose password can expire (2026-10-23, the admin review's H3:
+        // MS-ADTS sets PASSWORD_EXPIRED without DONT_EXPIRE_PASSWD, SMARTCARD_REQUIRED or a trust bit; a smart-card account read as expired);
+        // the computed bit, when the server gives it, has the last word.
+        bool mustChange = AdValues.Integer(user.Text("pwdLastSet")) == 0 && (uac & (AdValues.DontExpirePassword | AdValues.SmartcardRequired | AdValues.TrustAccounts)) == 0
+            && (AdValues.Integer(user.Text("msDS-User-Account-Control-Computed")) is not { } bits || (bits & AdValues.PasswordExpired) != 0);
         bool neverExpires = (uac & AdValues.DontExpirePassword) != 0;
         DateTimeOffset? expires = null;
         string expiresHow;
@@ -330,7 +363,8 @@ public static class DirectoryQueries
             }
             else if (!neverExpires && !mustChange && set is { } s && policy.MaxPasswordAge?.Span is { } age)
             {
-                expires = s + age;
+                expires = AdValues.Plus(s, age);
+                neverExpires = expires is null;   // an age past the calendar's end never comes
             }
         }
 
@@ -373,9 +407,10 @@ public static class DirectoryQueries
     /// <c>memberOf</c> added so a distribution group shows (2026-10-15, the AD gaps plan); the direct <c>memberOf</c> and the primary group (by
     /// RID) when the domain gives no <c>tokenGroups</c>. Each by its name and DN, by name.
     /// </summary>
-    public static (IReadOnlyList<(string Name, string Dn)> Groups, bool Nested, bool Partial) GroupsOf(IDirectorySession session, string baseDn, DirectoryEntry entry, DirectoryDeadline deadline = default)
+    public static (IReadOnlyList<(string Name, string Dn)> Groups, bool Nested, bool Partial, bool Stopped) GroupsOf(IDirectorySession session, string baseDn, DirectoryEntry entry, DirectoryDeadline deadline = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        bool stopped = false;
         var token = session.Search(entry.Dn, DirectoryScope.Base, "(objectClass=*)", ["tokenGroups"], 1, paged: false, deadline.Limit);
         var sids = token.Entries.Count > 0 ? token.Entries[0].Values("tokenGroups") : [];
         var (memberOf, partial) = entry.ValuesOrFirstRange("memberOf");
@@ -384,6 +419,8 @@ public static class DirectoryQueries
         {
             if (groups.Count >= DirectoryLimits.MaxEntries || !deadline.CanStart)
             {
+                // Said, not silent (2026-10-23, the admin review's Q5: "groups (50, nested)" with most of the SIDs never resolved).
+                stopped = true;
                 break;
             }
 
@@ -404,7 +441,7 @@ public static class DirectoryQueries
             groups.TryAdd(primary.Dn, primary);
         }
 
-        return (groups.Values.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList(), sids.Count > 0, partial);
+        return (groups.Values.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList(), sids.Count > 0, partial, stopped);
     }
 
     /// <summary>An account's primary group (its <c>primaryGroupID</c> under its own SID's domain), by name and DN; null when it has none or none reads.</summary>
@@ -432,24 +469,27 @@ public static class DirectoryQueries
     {
         ArgumentNullException.ThrowIfNull(source);
         string baseDn = source.Domain.BaseDn;
-        var (user, candidates) = OneOf(session, baseDn, dn is null ? LdapFilter.UserByName(name) : LdapFilter.ByDn("(&" + LdapFilter.Users + ")", dn), AdAttributes.User, deadline.Limit);
+        var (user, candidates) = OneOf(session, baseDn, dn is null ? LdapFilter.UserByName(name, source.Domain.DomainName) : LdapFilter.ByDn("(&" + LdapFilter.Users + ")", dn), AdAttributes.User, deadline.Limit);
         if (user is null)
         {
             return candidates.Count > 0 ? Ambiguous(name, candidates) : DirectoryAnswer.Refused(dn is null ? DirectoryText.NotFound("user", name, source.Where) : DirectoryText.Gone(name, source.Where));
         }
 
-        var policy = Policy(session, baseDn, user.Text("msDS-ResultantPSO"), deadline);
+        string head = HeadOf(session, source.Domain);
+        var policy = Policy(session, head, user.Text("msDS-ResultantPSO"), deadline);
         var state = State(user, policy, now);
         int uac = (int)(AdValues.Integer(user.Text("userAccountControl")) ?? 0);
         string account = user.Text("sAMAccountName") ?? name;
         var answer = Start("user", now, zone);
         answer.Self = new DirectoryRowTarget(user.Dn, account);
-        answer.Head = $"User {Plain(account)} in {source.Where}: " + ((uac & AdValues.AccountDisable) != 0 ? "disabled" : "enabled") + (state.Locked ? ", locked" : "");
+        // An account past its expiry cannot sign in (2026-10-23, the admin review's H11: it read "enabled").
+        bool expired = AdValues.FileTime(user.Text("accountExpires")) is { } accountEnds && accountEnds <= now;
+        answer.Head = $"User {Plain(account)} in {source.Where}: " + ((uac & AdValues.AccountDisable) != 0 ? "disabled" : "enabled") + (expired ? ", " + DirectoryText.AccountExpiredWord : "") + (state.Locked ? ", locked" : "");
         Add(answer, "name", Fence(user.Text("displayName") ?? user.Text("cn") ?? "") + (user.Text("userPrincipalName") is { } upn ? " · upn " + Fence(upn) : "") + (user.Text("mail") is { } mail ? " · mail " + Fence(mail) : ""));
         Add(answer, "dn", Fence(user.Dn));
         if (state.Locked)
         {
-            answer.Pdc = RoleHolder(session, baseDn, deadline);
+            answer.Pdc = RoleHolder(session, head, deadline);
             string pdc = answer.Pdc ?? "the PDC emulator";
             Add(answer, DirectoryText.LockedLabel, (state.LockedAt is { } at ? "since " + Time(at, zone) : "yes") + (state.LockedForever ? ", " + DirectoryText.ForeverWord : state.Unlocks is { } unlocks ? ", unlocks " + Time(unlocks, zone) : "")
                 + " (" + state.LockedHow + "); " + DirectoryText.LockoutSource(pdc));
@@ -472,7 +512,7 @@ public static class DirectoryQueries
         {
             if (user.Text(field) is { } value)
             {
-                Add(answer, field, Fence(value));
+                Add(answer, field, Fence(Free(value, source.Redacted)!));
             }
         }
 
@@ -503,12 +543,12 @@ public static class DirectoryQueries
             {
                 if (user.Text(field) is { } value)
                 {
-                    Add(answer, field, Fence(value));
+                    Add(answer, field, Fence(Free(value, source.Redacted)!));
                 }
             }
         }
 
-        var (groups, nested, partial) = GroupsOf(session, baseDn, user, deadline);
+        var (groups, nested, partial, groupsStopped) = GroupsOf(session, baseDn, user, deadline);
         string groupsLabel = "groups (" + groups.Count.ToString(CultureInfo.InvariantCulture) + (nested ? ", nested" : ", direct") + ")";
         answer.Fields.Add(new DirectoryField(groupsLabel, string.Join(", ", groups.Take(200).Select(g => Fence(g.Name))) + (groups.Count > 200 ? " and more" : ""),
             Links: LinkTable(groupsLabel, groups.Take(200))));
@@ -520,6 +560,12 @@ public static class DirectoryQueries
         if (partial || reportsPartial)
         {
             answer.Notes.Add(DirectoryText.FirstRangeNote);
+        }
+
+        if (groupsStopped)
+        {
+            answer.Partial = true;
+            answer.Notes.Add(DirectoryText.GroupsNotAllRead);
         }
 
         return answer;
@@ -554,13 +600,13 @@ public static class DirectoryQueries
         ArgumentNullException.ThrowIfNull(source);
         zone ??= TimeZoneInfo.Utc;
         string baseDn = source.Domain.BaseDn;
-        var (group, candidates) = OneOf(session, baseDn, dn is null ? LdapFilter.GroupByName(name) : LdapFilter.ByDn(LdapFilter.Groups, dn), AdAttributes.Group, deadline.Limit);
+        var (group, candidates) = OneOf(session, baseDn, dn is null ? LdapFilter.GroupByName(name, source.Domain.DomainName) : LdapFilter.ByDn(LdapFilter.Groups, dn), AdAttributes.Group, deadline.Limit);
         if (group is null)
         {
             return candidates.Count > 0 ? Ambiguous(name, candidates) : DirectoryAnswer.Refused(dn is null ? DirectoryText.NotFound("group", name, source.Where) : DirectoryText.Gone(name, source.Where));
         }
 
-        var walk = Walk(session, baseDn, [group], nested, members, cap, deadline);
+        var walk = Walk(session, baseDn, HeadOf(session, source.Domain), [group], nested, members, cap, deadline);
         // A cycle (A holds B, B holds A) brings the group back in through a nested one: never listed or counted as its own member (2026-10-20, a review's finding).
         var listed = walk.Members.Values.Where(m => Wanted(m, members) && !string.Equals(m.Dn, group.Dn, StringComparison.OrdinalIgnoreCase))
             .OrderBy(m => SortKey(m), StringComparer.OrdinalIgnoreCase).ToList();
@@ -573,10 +619,11 @@ public static class DirectoryQueries
         string paren = nested ? " (" + direct.ToString("N0", CultureInfo.InvariantCulture) + " direct, " + through.ToString("N0", CultureInfo.InvariantCulture) + " through other groups"
                 + (primary > 0 ? ", " + primary.ToString("N0", CultureInfo.InvariantCulture) + " by primary group" : "") + ")"
             : primary > 0 ? " (" + direct.ToString("N0", CultureInfo.InvariantCulture) + " in its member list, " + primary.ToString("N0", CultureInfo.InvariantCulture) + " by primary group)" : "";
-        var answer = Start("group", DateTimeOffset.UtcNow, zone);
+        var answer = Start("group", deadline.Now, zone);
         string account = group.Text("sAMAccountName") ?? name;
         answer.Self = new DirectoryRowTarget(group.Dn, account);
-        answer.Partial = walk.Cut || walk.TimedOut;
+        // Groups left unwalked are a partial answer too (2026-10-23, the admin review's Q3: a CSV of a 300-group nesting was saved as complete).
+        answer.Partial = walk.Cut || walk.TimedOut || walk.GroupsCut;
         answer.Head = $"Group {Fence(account)} in {source.Where}: {count} {noun}, " + (nested ? "nested" : "direct") + paren
             + (total > limit ? "; " + DirectoryText.FirstListed(limit, canSave) : "")
             + (walk.Cut ? "; " + DirectoryText.CapNote(cap, false) : "")
@@ -584,7 +631,7 @@ public static class DirectoryQueries
             + (walk.GroupsCut ? "; " + DirectoryText.GroupsNotWalked : "");
         if (group.Text("description") is { } description)
         {
-            Add(answer, "description", Fence(description));
+            Add(answer, "description", Fence(Free(description, source.Redacted)!));
         }
 
         if (AdValues.Integer(group.Text("groupType")) is { } type)
@@ -649,7 +696,15 @@ public static class DirectoryQueries
                 try
                 {
                     var read = session.Search(next, DirectoryScope.Base, "(objectClass=*)", ["memberOf"], 1, paged: false, deadline.Limit);
-                    foreach (string above in read.Entries.Count > 0 ? read.Entries[0].Texts("memberOf") : [])
+                    // A group's own memberOf may come back ranged too (2026-10-23, the admin review's Q8): said, never silent.
+                    IReadOnlyList<string> aboveAll = [];
+                    if (read.Entries.Count > 0)
+                    {
+                        (aboveAll, bool abovePartial) = read.Entries[0].ValuesOrFirstRange("memberOf");
+                        partial |= abovePartial;
+                    }
+
+                    foreach (string above in aboveAll)
                     {
                         if (seen.Add(above) && found.Count < DirectoryLimits.MaxWalkedGroups)
                         {
@@ -721,24 +776,26 @@ public static class DirectoryQueries
             var read = session.Search(groupDn, DirectoryScope.Base, "(objectClass=*)", ["member;range=" + from.ToString(CultureInfo.InvariantCulture) + "-*"], 1, paged: false, deadline.Limit);
             if (read.Entries.Count == 0)
             {
-                break;
+                return (dns, false, false, searches);
             }
 
             var entry = read.Entries[0];
             string? ranged = entry.RangedName("member");
             var values = ranged is null ? entry.Values("member") : entry.Attributes[ranged];
             dns.AddRange(values.Select(v => Encoding.UTF8.GetString(v)));
-            if (dns.Count >= limit)
+            bool ended = ranged is null || ranged.EndsWith("-*", StringComparison.Ordinal);
+            // Truncated only when members are left (2026-10-23, the admin review's Q11: exactly the cap read "N+", a partial answer).
+            if (dns.Count > limit || (dns.Count == limit && !ended))
             {
                 return (dns.Take(limit).ToList(), true, false, searches);
             }
 
-            if (ranged is null || ranged.EndsWith("-*", StringComparison.Ordinal))
+            if (ended)
             {
-                break;
+                return (dns, false, false, searches);
             }
 
-            int dash = ranged.LastIndexOf('-');
+            int dash = ranged!.LastIndexOf('-');
             if (!int.TryParse(ranged[(dash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out int last))
             {
                 break;
@@ -747,7 +804,8 @@ public static class DirectoryQueries
             from = last + 1;
         }
 
-        return (dns, false, false, searches);
+        // 64 rounds and the range still open (Q11): cut, said so.
+        return (dns, true, false, searches);
     }
 
     /// <summary>One object a walk found: its entry once resolved, how it is in (direct, through which groups, by primary group), or why it is unread.</summary>
@@ -811,7 +869,12 @@ public static class DirectoryQueries
     /// resolve is "not readable", one outside it "in another domain". Every search checks <paramref name="deadline"/> first and takes what it has
     /// left. A Windows DC's numbers are a check for <c>.notes/remote_admin_todo.md</c>.
     /// </summary>
-    private static WalkResult Walk(IDirectorySession session, string baseDn, IReadOnlyList<DirectoryEntry> roots, bool nested, string members, int cap, DirectoryDeadline deadline)
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review): a DN a batch did not resolve because the batch's search was cut or ran out of time is "not read", never
+    /// called unreadable or foreign (D7); "in another domain" is judged by the DN's domain part against <paramref name="head"/>'s (Q9: a child
+    /// domain's DN ends in its parent's and was called unreadable).
+    /// </remarks>
+    private static WalkResult Walk(IDirectorySession session, string baseDn, string head, IReadOnlyList<DirectoryEntry> roots, bool nested, string members, int cap, DirectoryDeadline deadline)
     {
         long started = Stopwatch.GetTimestamp();
         var result = new WalkResult();
@@ -903,12 +966,13 @@ public static class DirectoryQueries
                     }
                 }
 
+                bool whole = !found.TimedOut && !found.Truncated;
                 foreach (string dn in batch)
                 {
                     var member = result.Members[dn];
                     if (member.Entry is null)
                     {
-                        member.State = IsUnder(dn, baseDn) ? DirectoryText.NotReadable : DirectoryText.OtherDomain;
+                        member.State = !whole ? DirectoryText.NotRead : AdValues.SameDomain(dn, head) ? DirectoryText.NotReadable : DirectoryText.OtherDomain;
                     }
                 }
             }
@@ -967,8 +1031,6 @@ public static class DirectoryQueries
         return result;
     }
 
-    private static bool IsUnder(string dn, string baseDn) => dn.EndsWith("," + baseDn, StringComparison.OrdinalIgnoreCase) || string.Equals(dn, baseDn, StringComparison.OrdinalIgnoreCase);
-
     // ── A computer ──────────────────────────────────────────────────────────
 
     public static string Computer(IDirectorySession session, DirectorySource source, string name, TimeZoneInfo zone, DirectoryDeadline deadline = default) =>
@@ -987,10 +1049,11 @@ public static class DirectoryQueries
 
         bool service = AdValues.KindOf(computer.Texts("objectClass")) == AdValues.KindServiceAccount;
         int uac = (int)(AdValues.Integer(computer.Text("userAccountControl")) ?? 0);
-        var answer = Start("computer", DateTimeOffset.UtcNow, zone);
+        var answer = Start("computer", deadline.Now, zone);
         answer.Self = new DirectoryRowTarget(computer.Dn, computer.Text("cn") ?? name);
+        // A read-only DC is a DC too (2026-10-23, the admin review's G9: PARTIAL_SECRETS_ACCOUNT with a workstation trust).
         answer.Head = (service ? "Service account " : "Computer ") + $"{Fence(computer.Text("cn") ?? name)} in {source.Where}: " + ((uac & AdValues.AccountDisable) != 0 ? "disabled" : "enabled")
-            + ((uac & AdValues.ServerTrustAccount) != 0 ? ", a domain controller" : "");
+            + ((uac & AdValues.ServerTrustAccount) != 0 ? ", a domain controller" : (uac & AdValues.PartialSecretsAccount) != 0 ? ", a read-only domain controller" : "");
         if (computer.Text("dNSHostName") is { } host)
         {
             Add(answer, "dns name", Fence(host));
@@ -1012,7 +1075,7 @@ public static class DirectoryQueries
         {
             if (computer.Text(field) is { } value)
             {
-                Add(answer, field, Fence(value));
+                Add(answer, field, Fence(Free(value, source.Redacted)!));
             }
         }
 
@@ -1021,7 +1084,14 @@ public static class DirectoryQueries
             answer.Fields.Add(new DirectoryField("managed by", Fence(AdValues.FirstName(owner)), new DirectoryRowTarget(owner, AdValues.FirstName(owner))));
         }
 
-        var groups = computer.Texts("memberOf").Select(g => (Name: AdValues.FirstName(g), Dn: g)).ToList();
+        // memberOf read with its range (2026-10-23, the admin review's Q8), as a user's is.
+        var (memberOf, memberOfPartial) = computer.ValuesOrFirstRange("memberOf");
+        if (memberOfPartial)
+        {
+            answer.Notes.Add(DirectoryText.FirstRangeNote);
+        }
+
+        var groups = memberOf.Select(g => (Name: AdValues.FirstName(g), Dn: g)).ToList();
         if (PrimaryGroupOf(session, baseDn, computer, deadline) is { } primary && !groups.Any(g => string.Equals(g.Dn, primary.Dn, StringComparison.OrdinalIgnoreCase)))
         {
             groups.Add(primary);
@@ -1058,6 +1128,7 @@ public static class DirectoryQueries
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(o);
         string baseDn = source.Domain.BaseDn;
+        string head = HeadOf(session, source.Domain);
         string scope = baseDn;
         string where = source.Where;
         if (o.Ou is { } ou)
@@ -1065,7 +1136,7 @@ public static class DirectoryQueries
             var (branch, candidates) = Branch(session, baseDn, ou, deadline);
             if (branch is null)
             {
-                return candidates.Count > 0 ? AmbiguousOu(ou, candidates, baseDn) : DirectoryAnswer.Refused(DirectoryText.NotFound("OU", ou, source.Where));
+                return candidates.Count > 0 ? AmbiguousOu(ou, candidates, baseDn, source.Redacted) : DirectoryAnswer.Refused(DirectoryText.NotFound("OU", ou, source.Where));
             }
 
             scope = branch.Dn;
@@ -1084,7 +1155,10 @@ public static class DirectoryQueries
         bool timed = false;
         string what;
         int cap = o.Cap;
-        DirectoryResults Search(string filter, IReadOnlyList<string> attributes, int size)
+        // A redacted scan's read is cut at its window by design, never the cap (2026-10-23, the branch review of DP7): only its matches count.
+        DirectoryResults Search(string filter, IReadOnlyList<string> attributes, int size) => Read(filter, attributes, size, scan: false);
+        DirectoryResults ScanSearch(string filter, IReadOnlyList<string> attributes, int size) => Read(filter, attributes, size, scan: true);
+        DirectoryResults Read(string filter, IReadOnlyList<string> attributes, int size, bool scan)
         {
             if (!deadline.CanStart)
             {
@@ -1094,7 +1168,7 @@ public static class DirectoryQueries
 
             var found = session.Search(scope, DirectoryScope.Subtree, filter, attributes, size, paged: true, deadline.Limit);
             timed |= found.TimedOut;
-            cut |= found.Truncated && !found.TimedOut;
+            cut |= !scan && found.Truncated && !found.TimedOut;
             return found;
         }
 
@@ -1103,7 +1177,7 @@ public static class DirectoryQueries
             case "locked":
             {
                 what = "locked users";
-                var policies = new PolicyCache(session, baseDn, deadline);
+                var policies = new PolicyCache(session, head, deadline);
                 foreach (var e in Search(LdapFilter.LockedCandidates, AdAttributes.Find, cap).Entries)
                 {
                     if (policies.For(e) is not { } own)
@@ -1126,7 +1200,7 @@ public static class DirectoryQueries
             case "password_expiring":
             {
                 what = "passwords ending within " + o.Days.ToString(CultureInfo.InvariantCulture) + " days";
-                var policies = new PolicyCache(session, baseDn, deadline);
+                var policies = new PolicyCache(session, head, deadline);
                 var limitDate = now.AddDays(o.Days);
                 var states = new List<(DirectoryEntry Entry, AdAccountState State)>();
                 foreach (var e in Search(LdapFilter.ExpiringCandidates, AdAttributes.Find, cap).Entries)
@@ -1166,8 +1240,16 @@ public static class DirectoryQueries
                 bool computers = o.Kind == "stale_computers";
                 what = (computers ? "computers" : "users") + " not signed in for " + o.Days.ToString(CultureInfo.InvariantCulture) + " days";
                 long cutoff = AdValues.ToFileTime(now.AddDays(-o.Days));
+                if (o.Days < DirectoryText.StaleLagDays)
+                {
+                    // lastLogonTimestamp replicates every 9 to 14 days (2026-10-23, the admin review's V5, decision DA6): run, and say so.
+                    answer.Notes.Add(DirectoryText.StaleLagNote);
+                }
+
                 var found = Search(LdapFilter.StaleSince(computers, cutoff), AdAttributes.Find, cap);
-                var never = Search(LdapFilter.NeverSignedIn(computers), AdAttributes.Find, Math.Max(1, cap - found.Entries.Count));
+                // Its own read, its title a count only when whole (2026-10-23, the admin review's Q12: sized by what was left of the cap, its
+                // capped read printed as the count).
+                var never = Search(LdapFilter.NeverSignedIn(computers), AdAttributes.Find, cap);
                 string NameOf(DirectoryEntry e) => e.Text(computers ? "dNSHostName" : "displayName") ?? AdValues.FirstName(e.Dn);
                 foreach (var e in found.Entries.OrderBy(e => AdValues.Integer(e.Text("lastLogonTimestamp")) ?? 0))
                 {
@@ -1177,7 +1259,7 @@ public static class DirectoryQueries
 
                 apart = new DirectoryTable(main.Columns)
                 {
-                    Title = "never signed in (" + never.Entries.Count.ToString(CultureInfo.InvariantCulture) + ")",
+                    Title = "never signed in (" + never.Entries.Count.ToString(CultureInfo.InvariantCulture) + (never.Truncated ? "+" : "") + ")",
                     TitleInModel = true,
                     Section = "never signed in",
                     Shown = Math.Max(10, o.Limit / 2),
@@ -1194,16 +1276,35 @@ public static class DirectoryQueries
             case "name":
             {
                 what = o.Type is null ? "names holding \"" + (o.Words ?? "") + "\"" : Plural(o.Type) + " whose names or descriptions hold \"" + (o.Words ?? "") + "\"";
-                var found = Search(LdapFilter.NameContains(o.Words ?? "", o.Type), o.Type == "ou" ? AdAttributes.Ou : AdAttributes.Find, cap);
-                foreach (var e in found.Entries)
+                var attributes = o.Type == "ou" ? AdAttributes.Ou : AdAttributes.Find;
+
+                // Under redacted the server is never asked about description text (2026-10-23, the admin review's E2, decision DA5: a hit or a
+                // miss told hidden text a character at a time): names on the server, descriptions matched here on their redacted value. A later
+                // page of the scan (scan_from) reads only the scan.
+                var entries = new List<DirectoryEntry>();
+                if (o.ScanFrom == 0)
+                {
+                    entries.AddRange(Search(LdapFilter.NameContains(o.Words ?? "", o.Type, descriptions: !source.Redacted), attributes, cap).Entries);
+                }
+
+                if (source.Redacted)
+                {
+                    var seen = new HashSet<string>(entries.Select(e => e.Dn), StringComparer.OrdinalIgnoreCase);
+                    var scan = ScanRedacted(ScanSearch, LdapFilter.KindTerm(o.Type), attributes, "description", o.Words ?? "", o.ScanFrom, cap - entries.Count);
+                    entries.AddRange(scan.Matched.Where(e => seen.Add(e.Dn)));
+                    cut |= scan.Capped;
+                    answer.Notes.Add(ScanNote("descriptions", scan, o));
+                }
+
+                foreach (var e in entries)
                 {
                     main.Rows.Add(o.Type switch
                     {
                         null => Row(Acct(e) + "  " + KindOf(e) + "  " + Fence(Display(e)), e, [e.Text("sAMAccountName"), KindOf(e), Display(e)]),
-                        "ou" => OuRow(e, baseDn),
-                        "group" => Row(Acct(e) + "  " + Fence(Display(e)) + "  " + GroupType(e) + Described(e), e, [e.Text("sAMAccountName"), Display(e), GroupType(e), e.Text("description")]),
-                        "contact" => Row(Fence(Display(e)) + Described(e), e, [null, Display(e), e.Text("description")]),
-                        _ => Row(Acct(e) + "  " + Fence(Display(e)) + Described(e), e, [e.Text("sAMAccountName"), Display(e), e.Text("description")]),
+                        "ou" => OuRow(e, source.Redacted, baseDn),
+                        "group" => Row(Acct(e) + "  " + Fence(Display(e)) + "  " + GroupType(e) + Described(e, source.Redacted), e, [e.Text("sAMAccountName"), Display(e), GroupType(e), Free(e.Text("description"), source.Redacted)]),
+                        "contact" => Row(Fence(Display(e)) + Described(e, source.Redacted), e, [null, Display(e), Free(e.Text("description"), source.Redacted)]),
+                        _ => Row(Acct(e) + "  " + Fence(Display(e)) + Described(e, source.Redacted), e, [e.Text("sAMAccountName"), Display(e), Free(e.Text("description"), source.Redacted)]),
                     });
                 }
 
@@ -1216,11 +1317,25 @@ public static class DirectoryQueries
                 string field = o.Field ?? "description";
                 string attribute = AdAttributes.Fields[field];
                 what = Plural(type) + " whose " + field + " holds \"" + (o.Words ?? "") + "\"";
-                var found = Search(LdapFilter.FieldContains(type, attribute, o.Words ?? ""), type == "ou" ? AdAttributes.Ou : [.. AdAttributes.Find, attribute], cap);
-                foreach (var e in found.Entries)
+                IReadOnlyList<string> attributes = type == "ou" ? AdAttributes.Ou : [.. AdAttributes.Find, attribute];
+                IReadOnlyList<DirectoryEntry> entries;
+                if (source.Redacted)
                 {
-                    main.Rows.Add(type == "ou" ? OuRow(e, baseDn)
-                        : Row((type == "contact" ? "" : Acct(e) + "  ") + Fence(Display(e)) + "  " + Fence(e.Text(attribute) ?? ""), e, [e.Text("sAMAccountName"), Display(e), e.Text(attribute)]));
+                    // A free-text field matched here, on its redacted value, never on the server (E2, DA5; C3 redacts the four alike).
+                    var scan = ScanRedacted(ScanSearch, "(&" + LdapFilter.TypeTerm(type) + "(" + attribute + "=*))", attributes, attribute, o.Words ?? "", o.ScanFrom, cap);
+                    entries = scan.Matched;
+                    cut |= scan.Capped;
+                    answer.Notes.Add(ScanNote(field, scan, o));
+                }
+                else
+                {
+                    entries = Search(LdapFilter.FieldContains(type, attribute, o.Words ?? ""), attributes, cap).Entries;
+                }
+
+                foreach (var e in entries)
+                {
+                    main.Rows.Add(type == "ou" ? OuRow(e, source.Redacted, baseDn)
+                        : Row((type == "contact" ? "" : Acct(e) + "  ") + Fence(Display(e)) + "  " + Fence(Free(e.Text(attribute), source.Redacted) ?? ""), e, [e.Text("sAMAccountName"), Display(e), Free(e.Text(attribute), source.Redacted)]));
                 }
 
                 break;
@@ -1263,10 +1378,10 @@ public static class DirectoryQueries
                     main.Rows.Add(Row(Acct(e) + "  " + Fence(Display(e)) + "  expires " + (ends is { } x ? Time(x, zone) : "?"), e, [e.Text("sAMAccountName"), Display(e), DirectoryCell.At(ends)]));
                 }
 
-                var expired = Search(LdapFilter.AccountExpiresBetween(1, from), AdAttributes.Find, Math.Max(1, cap - main.Rows.Count));
+                var expired = Search(LdapFilter.AccountExpiresBetween(1, from), AdAttributes.Find, cap);
                 apart = new DirectoryTable(main.Columns)
                 {
-                    Title = "already expired (" + expired.Entries.Count.ToString(CultureInfo.InvariantCulture) + ")",
+                    Title = "already expired (" + expired.Entries.Count.ToString(CultureInfo.InvariantCulture) + (expired.Truncated ? "+" : "") + ")",
                     TitleInModel = true,
                     Section = "already expired",
                     Shown = Math.Max(10, o.Limit / 2),
@@ -1290,7 +1405,7 @@ public static class DirectoryQueries
                     var made = AdValues.GeneralizedTime(e.Text("whenCreated"));
                     string at = made is { } m ? Time(m, zone) : "?";
                     main.Rows.Add(o.Type == "ou"
-                        ? OuRow(e, baseDn, "  created " + at, DirectoryCell.At(made))
+                        ? OuRow(e, source.Redacted, baseDn, "  created " + at, DirectoryCell.At(made))
                         : Row((o.Type == "contact" ? "" : Acct(e) + "  ") + KindOf(e) + "  " + Fence(Display(e)) + "  created " + at, e, [e.Text("sAMAccountName"), KindOf(e), Display(e), DirectoryCell.At(made)]));
                 }
 
@@ -1300,7 +1415,7 @@ public static class DirectoryQueries
             case "privileged":
             {
                 what = "privileged accounts";
-                (apart, var missing) = Privileged(session, baseDn, main, cap, deadline, ref cut, ref timed);
+                (apart, var missing) = Privileged(session, head, main, cap, deadline, ref cut, ref timed);
                 if (missing.Count > 0)
                 {
                     answer.Notes.Add(DirectoryText.MissingProtected(missing));
@@ -1314,22 +1429,37 @@ public static class DirectoryQueries
                 what = "empty groups";
                 var candidates = Search(LdapFilter.EmptyGroupCandidates, AdAttributes.Find, cap).Entries;
                 var used = new HashSet<uint>();
+                // A group whose primary-group search was cut, ran out of time or never ran is not called empty (2026-10-23, the admin review's
+                // G12: still someone's primary group, it was listed as a deletion candidate with Partial false).
+                var unsure = new HashSet<uint>();
                 var rids = candidates.Select(e => e.Values("objectSid") is { Count: > 0 } s ? AdValues.Rid(s[0]) : null).OfType<uint>().Distinct().ToList();
                 foreach (var batch in rids.Chunk(DirectoryLimits.SidBatch))
                 {
                     if (!deadline.CanStart)
                     {
                         timed = true;
-                        break;
+                        unsure.UnionWith(batch);
+                        continue;
                     }
 
                     var primary = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.PrimaryGroupIn(null, batch), ["primaryGroupID"], DirectoryLimits.MaxCounted, paged: true, deadline.Limit);
                     used.UnionWith(primary.Entries.Select(e => (uint)(AdValues.Integer(e.Text("primaryGroupID")) ?? 0)));
+                    if (primary.Truncated || primary.TimedOut)
+                    {
+                        unsure.UnionWith(batch);
+                        timed |= primary.TimedOut;
+                        cut |= primary.Truncated && !primary.TimedOut;
+                    }
                 }
 
-                foreach (var e in candidates.Where(e => !(e.Values("objectSid") is { Count: > 0 } s && AdValues.Rid(s[0]) is { } rid && used.Contains(rid))).OrderBy(e => e.Text("sAMAccountName") ?? Display(e), StringComparer.OrdinalIgnoreCase))
+                if (unsure.Count > 0)
                 {
-                    main.Rows.Add(Row(Acct(e) + "  " + Fence(Display(e)) + "  " + GroupType(e) + Described(e), e, [e.Text("sAMAccountName"), Display(e), GroupType(e), e.Text("description")]));
+                    answer.Notes.Add(DirectoryText.EmptyGroupsUnsure(candidates.Count(e => e.Values("objectSid") is { Count: > 0 } s && AdValues.Rid(s[0]) is { } rid && unsure.Contains(rid) && !used.Contains(rid))));
+                }
+
+                foreach (var e in candidates.Where(e => !(e.Values("objectSid") is { Count: > 0 } s && AdValues.Rid(s[0]) is { } rid && (used.Contains(rid) || unsure.Contains(rid)))).OrderBy(e => e.Text("sAMAccountName") ?? Display(e), StringComparer.OrdinalIgnoreCase))
+                {
+                    main.Rows.Add(Row(Acct(e) + "  " + Fence(Display(e)) + "  " + GroupType(e) + Described(e, source.Redacted), e, [e.Text("sAMAccountName"), Display(e), GroupType(e), Free(e.Text("description"), source.Redacted)]));
                 }
 
                 break;
@@ -1398,6 +1528,12 @@ public static class DirectoryQueries
     /// groups, which carry it too, nor a DC), the built-in Administrator (500) and krbtgt (502) marked expected. A protected group the domain
     /// does not have (Key Admins before 2016, Schema and Enterprise Admins outside the forest root) is named.
     /// </summary>
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review): read under the domain's head, not a configured base (H1); every member not a group is listed —
+    /// foreign principals, members in another domain or not readable (H2: only users, computers and service accounts were, so admin paths went
+    /// uncounted); a walk that left groups unwalked is cut (Q3); an adminCount search that was cut or ran out of time says so (Q4), and when the
+    /// walk did not end whole, an object it did not reach is "not reached", never "no longer protected" (Q2).
+    /// </remarks>
     private static (DirectoryTable? Apart, IReadOnlyList<string> Missing) Privileged(IDirectorySession session, string baseDn, DirectoryTable main, int cap, DirectoryDeadline deadline, ref bool cut, ref bool timed)
     {
         var head = session.Search(baseDn, DirectoryScope.Base, "(objectClass=*)", ["objectSid"], 1, paged: false, deadline.Limit);
@@ -1413,9 +1549,10 @@ public static class DirectoryQueries
         var roots = found.Entries.ToList();
         var foundSids = roots.Select(r => r.Values("objectSid") is { Count: > 0 } s ? AdValues.Sid(s[0]) : null).ToHashSet(StringComparer.Ordinal);
         var missing = wanted.Where(w => !foundSids.Contains(w.Sid)).Select(w => w.Name).ToList();
-        var walk = Walk(session, baseDn, roots, nested: true, "all", cap, deadline);
-        cut |= walk.Cut;
+        var walk = Walk(session, baseDn, baseDn, roots, nested: true, "all", cap, deadline);
+        cut |= walk.Cut || walk.GroupsCut;
         timed |= walk.TimedOut;
+        bool whole = !walk.Cut && !walk.TimedOut && !walk.GroupsCut;
 
         // Which protected groups reach each member, and through which group: a walk from each root over the edges read.
         var reach = new Dictionary<string, (List<string> Roots, string? Via)>(StringComparer.OrdinalIgnoreCase);
@@ -1479,12 +1616,12 @@ public static class DirectoryQueries
             }
         }
 
-        var accounts = walk.Members.Values.Where(m => m.Kind is "user" or "computer" or AdValues.KindServiceAccount && reach.ContainsKey(m.Dn)).OrderBy(SortKey, StringComparer.OrdinalIgnoreCase).ToList();
+        var accounts = walk.Members.Values.Where(m => m.Kind != "group" && reach.ContainsKey(m.Dn)).OrderBy(SortKey, StringComparer.OrdinalIgnoreCase).ToList();
         foreach (var m in accounts)
         {
             var (inRoots, via) = reach[m.Dn];
-            main.Rows.Add(new DirectoryRow(Plain(m.Account ?? "?") + "  " + m.Kind + "  " + Fence(m.Name) + "  " + string.Join(", ", inRoots.Select(Fence)) + (via is null ? "" : " via " + Fence(via)),
-                [m.Account, m.Kind, m.Name, string.Join(", ", inRoots), via], m.Dn, m.Name, Opens: m.Opens));
+            main.Rows.Add(new DirectoryRow(Plain(m.Account ?? "?") + "  " + m.KindWord + "  " + Fence(m.Name) + "  " + string.Join(", ", inRoots.Select(Fence)) + (via is null ? "" : " via " + Fence(via)),
+                [m.Account, m.KindWord, m.Name, string.Join(", ", inRoots), via], m.Dn, m.Name, Opens: m.Opens));
         }
 
         // The objects once protected the walk did not reach: neither a member, nor a walked group, nor a DC or the DCs' groups.
@@ -1495,6 +1632,8 @@ public static class DirectoryQueries
         }
 
         var marked = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.AdminCount, AdAttributes.Find, cap, paged: true, deadline.Limit);
+        cut |= marked.Truncated && !marked.TimedOut;
+        timed |= marked.TimedOut;
         var walked = walk.Groups.Select(g => g.Dn).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var apart = new DirectoryTable([new(DirectoryText.ColAccount), new(DirectoryText.ColKind), new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColNote, Flexible: true)])
         {
@@ -1512,7 +1651,7 @@ public static class DirectoryQueries
                 continue;
             }
 
-            string note = rid is 500 or 502 ? DirectoryText.ExpectedNote : DirectoryText.LeftoverNote;
+            string note = rid is 500 or 502 ? DirectoryText.ExpectedNote : whole ? DirectoryText.LeftoverNote : DirectoryText.NotReachedNote;
             apart.Rows.Add(Row(Acct(e) + "  " + kind + "  " + Fence(Display(e)) + "  " + note, e, [e.Text("sAMAccountName"), kind, Display(e), note]));
         }
 
@@ -1549,7 +1688,9 @@ public static class DirectoryQueries
             return (null, []);
         }
 
-        var found = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.OuNamed(parts[^1]), AdAttributes.Ou, 50, paged: false, deadline.Limit).Entries;
+        // Every OU of that name, paged (2026-10-23, the admin review's H4: 50 were read, so Sites/Site97/Computers among 120 OUs named
+        // Computers was not found).
+        var found = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.OuNamed(parts[^1]), AdAttributes.Ou, DirectoryLimits.MaxEntries, paged: true, deadline.Limit).Entries;
         var matches = parts.Count > 1
             ? found.Where(e => AdValues.PathParts(PathOf(e, baseDn)).SequenceEqual(parts, StringComparer.OrdinalIgnoreCase)).ToList()
             : found.ToList();
@@ -1562,12 +1703,12 @@ public static class DirectoryQueries
     /// <summary>An OU's path in the domain: its computed <c>canonicalName</c>, else worked out from its DN.</summary>
     private static string PathOf(DirectoryEntry e, string baseDn) => e.Text("canonicalName") is { } canonical ? AdValues.PathOfCanonical(canonical) : AdValues.CanonicalPath(e.Dn, baseDn);
 
-    private static DirectoryAnswer AmbiguousOu(string name, IReadOnlyList<DirectoryEntry> candidates, string baseDn)
+    private static DirectoryAnswer AmbiguousOu(string name, IReadOnlyList<DirectoryEntry> candidates, string baseDn, bool redacted)
     {
         var table = new DirectoryTable([new(DirectoryText.ColPath, Flexible: true), new(DirectoryText.ColDescription, Flexible: true)]);
         foreach (var e in candidates.OrderBy(e => PathOf(e, baseDn), StringComparer.OrdinalIgnoreCase))
         {
-            table.Rows.Add(OuRow(e, baseDn));
+            table.Rows.Add(OuRow(e, redacted, baseDn));
         }
 
         return new DirectoryAnswer
@@ -1579,10 +1720,10 @@ public static class DirectoryQueries
     }
 
     /// <summary>An OU as a row: its path and description (and a created cell when asked); its card opens on a double-click.</summary>
-    private static DirectoryRow OuRow(DirectoryEntry e, string baseDn, string? extraModel = null, DirectoryCell? extra = null, int indent = 0)
+    private static DirectoryRow OuRow(DirectoryEntry e, bool redacted, string baseDn, string? extraModel = null, DirectoryCell? extra = null, int indent = 0)
     {
         string path = PathOf(e, baseDn);
-        string? description = e.Text("description");
+        string? description = Free(e.Text("description"), redacted);
         return new DirectoryRow(new string(' ', indent) + Fence(path) + (description is null ? "" : "  " + Fence(description)) + extraModel,
             extra is null ? [new DirectoryCell(path, Indent: indent), description] : [new DirectoryCell(path, Indent: indent), description, extra], e.Dn, path, Opens: true);
     }
@@ -1600,7 +1741,7 @@ public static class DirectoryQueries
     {
         ArgumentNullException.ThrowIfNull(source);
         string baseDn = source.Domain.BaseDn;
-        var answer = Start("ou", DateTimeOffset.UtcNow, zone ?? TimeZoneInfo.Utc);
+        var answer = Start("ou", deadline.Now, zone ?? TimeZoneInfo.Utc);
         if (ou is null && dn is null)
         {
             return Tree(session, source, answer, deadline);
@@ -1621,7 +1762,7 @@ public static class DirectoryQueries
             var (found, candidates) = Branch(session, baseDn, ou!, deadline);
             if (found is null)
             {
-                return candidates.Count > 0 ? AmbiguousOu(ou!, candidates, baseDn) : DirectoryAnswer.Refused(DirectoryText.NotFound("OU", ou!, source.Where));
+                return candidates.Count > 0 ? AmbiguousOu(ou!, candidates, baseDn, source.Redacted) : DirectoryAnswer.Refused(DirectoryText.NotFound("OU", ou!, source.Where));
             }
 
             branch = found;
@@ -1646,7 +1787,7 @@ public static class DirectoryQueries
         Add(answer, "dn", Fence(branch.Dn));
         if (branch.Text("description") is { } description)
         {
-            Add(answer, "description", Fence(description));
+            Add(answer, "description", Fence(Free(description, source.Redacted)!));
         }
 
         if (branch.Text("managedBy") is { } owner)
@@ -1693,13 +1834,14 @@ public static class DirectoryQueries
             .OrderBy(p => p.Parts, PartsOrder.Instance)
             .ToList();
         bool timed = ous.TimedOut || tops.TimedOut;
-        answer.Partial = timed || ous.Truncated;
+        // The containers' read counts too (2026-10-23, the admin review's Q3).
+        answer.Partial = timed || ous.Truncated || tops.Truncated;
         answer.Head = $"OU tree of {source.Where}: {shown.Count.ToString(CultureInfo.InvariantCulture)} OUs and containers" + (ous.Truncated && !ous.TimedOut ? $"; the first {MaxTree.ToString(CultureInfo.InvariantCulture)} OUs read" : "")
             + (timed ? "; " + DirectoryText.StoppedAtTimeLimit : "");
         var table = new DirectoryTable([new(DirectoryText.ColPath, Flexible: true), new(DirectoryText.ColDescription, Flexible: true)]) { CutNote = left => "… " + left.ToString(CultureInfo.InvariantCulture) + " more; name an OU" };
         foreach (var (e, parts) in shown)
         {
-            table.Rows.Add(OuRow(e, baseDn, indent: 2 * Math.Max(0, parts.Count - 1)));
+            table.Rows.Add(OuRow(e, source.Redacted, baseDn, indent: 2 * Math.Max(0, parts.Count - 1)));
         }
 
         answer.Tables.Add(table);
@@ -1744,16 +1886,19 @@ public static class DirectoryQueries
 
     // ── The domain ──────────────────────────────────────────────────────────
 
-    public static string Domain(IDirectorySession session, DirectorySource source, DirectoryDeadline deadline = default) => DirectoryRender.ForModel(DomainAnswer(session, source, deadline));
+    public static string Domain(IDirectorySession session, DirectorySource source, DirectoryDeadline deadline = default, TimeZoneInfo? zone = null) => DirectoryRender.ForModel(DomainAnswer(session, source, deadline, zone));
 
-    /// <summary>The domain's facts, and its fine-grained password policies (2026-10-15, the AD gaps plan, §5): as many as this account may see.</summary>
-    public static DirectoryAnswer DomainAnswer(IDirectorySession session, DirectorySource source, DirectoryDeadline deadline = default)
+    /// <summary>
+    /// The domain's facts, and its fine-grained password policies (2026-10-15, the AD gaps plan, §5): as many as this account may see. Since
+    /// 2026-10-23 (the admin review): read at the domain's head, not a configured base (H1), and on the call's clock and zone (E9).
+    /// </summary>
+    public static DirectoryAnswer DomainAnswer(IDirectorySession session, DirectorySource source, DirectoryDeadline deadline = default, TimeZoneInfo? zone = null)
     {
         ArgumentNullException.ThrowIfNull(source);
-        string baseDn = source.Domain.BaseDn;
+        string baseDn = HeadOf(session, source.Domain);
         var root = session.RootDse();
         var policy = Policy(session, baseDn, null, deadline);
-        var answer = Start("domain", DateTimeOffset.UtcNow, TimeZoneInfo.Utc);
+        var answer = Start("domain", deadline.Now, zone ?? TimeZoneInfo.Utc);
         answer.Head = $"Domain {source.Where} ({Fence(baseDn)}): functional level {AdValues.FunctionalLevel(AdValues.Integer(root.Text("domainFunctionality")))}, forest {AdValues.FunctionalLevel(AdValues.Integer(root.Text("forestFunctionality")))}";
         var dcs = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.DomainControllers, ["dNSHostName", "cn", "operatingSystem"], 200, paged: true, deadline.Limit);
         var dcTable = new DirectoryTable([new(DirectoryText.ColDnsName), new(DirectoryText.ColOs, Flexible: true)], list: false) { Title = "domain controllers (" + dcs.Entries.Count.ToString(CultureInfo.InvariantCulture) + ")" };
@@ -1841,14 +1986,22 @@ public static class DirectoryQueries
         return table;
     }
 
+    /// <remarks>
+    /// An unread policy says so, and an unread minimum is unknown (2026-10-23, the admin review's Q6: "no minimum length" and "complexity off" were
+    /// stated as facts from a head that answered nothing).
+    /// </remarks>
     public static string PolicyWords(AdPolicy policy) =>
-        (policy.MinLength is { } min ? "at least " + min.ToString(CultureInfo.InvariantCulture) + " characters" : "no minimum length")
+        policy.Unread ? DirectoryText.PolicyNotRead
+        : (policy.MinLength is { } min ? (min == 0 ? "no minimum length" : "at least " + min.ToString(CultureInfo.InvariantCulture) + " characters") : "minimum length unknown")
         + (policy.History is { } history ? ", history " + history.ToString(CultureInfo.InvariantCulture) : "")
         + ", maximum age " + Span(policy.MaxPasswordAge, DirectoryText.NeverWord)
         + (policy.Complex ? ", complexity on" : ", complexity off");
 
+    /// <remarks>An unread threshold is unknown, never "no threshold" (Q6).</remarks>
     public static string LockoutWords(AdPolicy policy) =>
-        policy.LockoutThreshold is null or 0 ? "never (no threshold)"
+        policy.Unread ? DirectoryText.PolicyNotRead
+        : policy.LockoutThreshold is null ? "unknown"
+        : policy.LockoutThreshold == 0 ? "never (no threshold)"
         : "after " + policy.LockoutThreshold.Value.ToString(CultureInfo.InvariantCulture) + " bad passwords within " + Span(policy.ObservationWindow, "any time")
           + ", for " + Span(policy.LockoutDuration, DirectoryText.ForeverWord);
 
@@ -1906,7 +2059,39 @@ public static class DirectoryQueries
 
     private static string GroupType(DirectoryEntry e) => AdValues.Integer(e.Text("groupType")) is { } type ? AdValues.GroupKind(type) : "group";
 
-    private static string Described(DirectoryEntry e) => e.Text("description") is { } description ? "  " + Fence(description) : "";
+    private static string Described(DirectoryEntry e, bool redacted) => Free(e.Text("description"), redacted) is { } description ? "  " + Fence(description) : "";
+
+    /// <summary>
+    /// The objects <paramref name="filter"/> finds, read page by page from the <paramref name="from"/>th up to
+    /// <see cref="DirectoryLimits.RedactedScan"/> more (or the call's deadline), whose <paramref name="attribute"/>, redacted, holds
+    /// <paramref name="words"/> (case ignored), at most <paramref name="cap"/> of them (2026-10-23, the admin review's E2, decision DA5). How
+    /// many were read, and whether more are left (the scan stopped at its limit, or the deadline). Since the branch review of 2026-10-23 (DP7):
+    /// whether more matched than the cap (<c>Capped</c>, the find's own cut), and whether the deadline ended the read before it reached
+    /// <paramref name="from"/> (<c>Unreached</c>: no next call then, or the model would repeat the same one forever).
+    /// </summary>
+    private static ScanRead ScanRedacted(Func<string, IReadOnlyList<string>, int, DirectoryResults> search,
+        string filter, IReadOnlyList<string> attributes, string attribute, string words, int from, int cap)
+    {
+        var read = search(filter, attributes, from + DirectoryLimits.RedactedScan);
+        var scanned = read.Entries.Skip(from).ToList();
+        string wanted = words.Trim();
+        var all = scanned.Where(e => e.Text(attribute) is { } value && ToolRedaction.Text(value).Contains(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+        int room = Math.Max(0, cap);
+        bool unreached = scanned.Count == 0 && read.TimedOut;
+        return new ScanRead(all.Take(room).ToList(), scanned.Count, !unreached && (read.Truncated || read.TimedOut), all.Count > room, unreached);
+    }
+
+    private sealed record ScanRead(IReadOnlyList<DirectoryEntry> Matched, int Scanned, bool More, bool Capped, bool Unreached);
+
+    private static string ScanNote(string what, ScanRead scan, FindOptions o) => scan.Unreached
+        ? DirectoryText.ScanUnreached(what, o.ScanFrom)
+        : DirectoryText.RedactedScan(what, scan.Scanned, o.ScanFrom, scan.More ? DirectoryText.NextScan(o, o.ScanFrom + scan.Scanned) : null);
+
+    /// <summary>
+    /// A free-text value (a description, title, department, company, location) as a redacted read shows it (2026-10-23, the admin review's C3:
+    /// fenced but not redacted, so a password typed into a description reached advisors and scripts); the value itself under full detail.
+    /// </summary>
+    private static string? Free(string? text, bool redacted) => text is null || !redacted ? text : ToolRedaction.Text(text);
 
     /// <summary>A find type's plural ("OUs", "service accounts", "users"), for the finds' heads and <c>/ad</c>'s titles.</summary>
     internal static string Plural(string type) => type switch
@@ -1918,8 +2103,11 @@ public static class DirectoryQueries
 
     private static string Fence(string text) => UntrustedText.Fenced(UntrustedText.Cut(text));
 
-    /// <summary>An account name: scrubbed, not fenced (its characters are limited by the directory).</summary>
-    private static string Plain(string text) => UntrustedText.Scrub(UntrustedText.Cut(text, 120));
+    /// <summary>
+    /// An account name: fenced, one line, cut at 120 (2026-10-23, the admin review's C9: scrubbed only, so a 256-character sAMAccountName of
+    /// instructions read as the app's own words in every head line and row).
+    /// </summary>
+    private static string Plain(string text) => UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.OneLine(text), 120));
 
     private static string Time(DateTimeOffset moment, TimeZoneInfo zone) => EventLogText.Time(moment, zone);
 

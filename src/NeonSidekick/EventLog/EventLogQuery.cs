@@ -39,7 +39,12 @@ public readonly record struct EventIdRange(int From, int To)
 /// which is the event's own and would sit outside a fence where the model copies it. A tagged cursor is never an XPath term: the search
 /// reads from the top and skips to it (<see cref="EventLogSearch.Search"/>).
 /// </summary>
-public readonly record struct EventCursor(long Record, string? Source = null)
+/// <remarks>
+/// <c>Time</c> (2026-10-23, the admin review's A5): a tagged cursor's event time, so the next page asks the log for events at or before it and
+/// skips only from there; without it each page read from the newest again, and a budget stop handed back the same cursor, so deep pages never
+/// advanced. Written as a third part, <c>N@tag@ticks</c>; an older two-part cursor still reads.
+/// </remarks>
+public readonly record struct EventCursor(long Record, string? Source = null, DateTimeOffset? Time = null)
 {
     /// <summary>Whether the cursor names the event's source too (a forwarded log's).</summary>
     public bool Tagged => Source is not null;
@@ -48,7 +53,7 @@ public readonly record struct EventCursor(long Record, string? Source = null)
     public static EventCursor Of(EventSystemValues system, bool tagged)
     {
         ArgumentNullException.ThrowIfNull(system);
-        return new EventCursor(system.Record, tagged ? Tag(system) : null);
+        return new EventCursor(system.Record, tagged ? Tag(system) : null, tagged ? system.Time : null);
     }
 
     /// <summary>The tag of an event's computer and channel (case ignored): the first four bytes of SHA-256 over both, in lowercase hex.</summary>
@@ -86,10 +91,24 @@ public readonly record struct EventCursor(long Record, string? Source = null)
         }
 
         string tag = trimmed[(at + 1)..];
-        return tag.Length == 8 && tag.All(char.IsAsciiHexDigit) ? new EventCursor(record, tag.ToLowerInvariant()) : null;
+        DateTimeOffset? time = null;
+        int second = tag.IndexOf('@', StringComparison.Ordinal);
+        if (second >= 0)
+        {
+            if (!long.TryParse(tag[(second + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out long ticks) || ticks < DateTimeOffset.MinValue.UtcTicks || ticks > DateTimeOffset.MaxValue.UtcTicks)
+            {
+                return null;
+            }
+
+            time = new DateTimeOffset(ticks, TimeSpan.Zero);
+            tag = tag[..second];
+        }
+
+        return tag.Length == 8 && tag.All(char.IsAsciiHexDigit) ? new EventCursor(record, tag.ToLowerInvariant(), time) : null;
     }
 
-    public override string ToString() => Record.ToString(CultureInfo.InvariantCulture) + (Source is null ? "" : "@" + Source);
+    public override string ToString() =>
+        Record.ToString(CultureInfo.InvariantCulture) + (Source is null ? "" : "@" + Source + (Time is { } time ? "@" + time.UtcTicks.ToString(CultureInfo.InvariantCulture) : ""));
 }
 
 /// <summary>A named field's value to match (<c>TargetUserName=alice</c>); EventData's names only.</summary>
@@ -131,7 +150,18 @@ public sealed record EventLogQuery
     /// Whether <paramref name="log"/> is one whose events come from other computers and keep their own records (2026-10-20, a review):
     /// <c>ForwardedEvents</c>, the collector's default; its pages always carry tagged cursors.
     /// </summary>
-    public static bool IsForwarded(string? log) => string.Equals(log?.Trim(), "ForwardedEvents", StringComparison.OrdinalIgnoreCase);
+    /// <remarks>An <c>.evtx</c> too (2026-10-23, the admin review's P1): a forwarded log's export keeps the sources' records.</remarks>
+    public static bool IsForwarded(string? log) => string.Equals(log?.Trim(), "ForwardedEvents", StringComparison.OrdinalIgnoreCase) || (log is not null && IsFile(log));
+
+    /// <summary>
+    /// Why <paramref name="log"/> is no log's name, or null (2026-10-23, the admin review's K1: <c>Security\u0000/Operational</c> passed a
+    /// <c>*/Operational</c> allow-list, and EvtQuery read to the NUL and opened Security): a control character anywhere.
+    /// </summary>
+    public static string? NameProblem(string log)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        return log.Any(char.IsControl) ? EventLogText.BadLogName(log) : null;
+    }
 
     public string? Text { get; init; }
 

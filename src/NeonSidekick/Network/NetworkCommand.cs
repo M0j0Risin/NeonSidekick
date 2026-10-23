@@ -54,7 +54,7 @@ public static class NetworkCommand
                 answer = await NetworkChecks.TraceAsync(access, null, rest[0], NetworkChecks.DefaultHops, names, cancellationToken).ConfigureAwait(false);
                 break;
             case "port" or "ports" when rest.Length >= 2:
-                var (ports, portsError) = Llm.Tools.NetworkTool.Ports(string.Join(',', rest.Skip(1)));
+                var (ports, portsError) = NetworkPorts.Parse(string.Join(',', rest.Skip(1)));
                 if (portsError is not null)
                 {
                     return Failed(portsError);

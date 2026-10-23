@@ -105,6 +105,55 @@ public sealed class NetworkLoopbackTests
     }
 
     /// <summary>
+    /// DP7 (the branch review, 2026-10-23): a server that refuses EDNS (FORMERR) and truncates the plain answer is asked over TCP plainly too;
+    /// an OPT record over TCP would draw the FORMERR back as the lookup's answer.
+    /// </summary>
+    [Fact]
+    public async Task Dns_AfterAFormErr_TheTcpRetryIsPlainToo()
+    {
+        static byte[] FormErr(byte[] query)
+        {
+            var reply = Answer(query, false, 0);
+            reply[3] = 0x81;
+            return reply;
+        }
+
+        static bool HasOpt(byte[] query) => BinaryPrimitives.ReadUInt16BigEndian(query.AsSpan(10)) != 0;
+        var (udp, tcp) = PortPair();
+        using var _ = udp;
+        var endpoint = (IPEndPoint)udp.Client.LocalEndPoint!;
+        try
+        {
+            var serve = Task.Run(async () =>
+            {
+                var first = await udp.ReceiveAsync();
+                await udp.SendAsync(HasOpt(first.Buffer) ? FormErr(first.Buffer) : Answer(first.Buffer, true, 0), first.RemoteEndPoint);
+                var plain = await udp.ReceiveAsync();
+                await udp.SendAsync(Answer(plain.Buffer, true, 0), plain.RemoteEndPoint);
+                using var client = await tcp.AcceptTcpClientAsync();
+                var stream = client.GetStream();
+                var length = new byte[2];
+                await stream.ReadExactlyAsync(length);
+                var body = new byte[BinaryPrimitives.ReadUInt16BigEndian(length)];
+                await stream.ReadExactlyAsync(body);
+                var answer = HasOpt(body) ? FormErr(body) : Answer(body, false, 3);
+                await stream.WriteAsync((byte[])[(byte)(answer.Length >> 8), (byte)answer.Length, .. answer]);
+            });
+
+            var outcome = await DnsClient.AskAsync(endpoint, "example.com", DnsWire.Mx, CancellationToken.None);
+            await serve;
+
+            Assert.True(outcome.OverTcp);
+            Assert.Equal(0, outcome.Reply!.Rcode);
+            Assert.Equal(3, outcome.Reply.Answers.Count);
+        }
+        finally
+        {
+            tcp.Stop();
+        }
+    }
+
+    /// <summary>
     /// A UDP socket and a TCP listener on one loopback port, tried again on a clash. Windows reserves blocks of 100 ports for Hyper-V, of TCP
     /// and of UDP apart, so one protocol's free port may be the other's reserved one; and free ports come in sequence, so twenty TCP-first tries
     /// in a row can all land in one reserved UDP block (2026-10-16: the suite failed so, with 53308–54307 reserved for UDP). The tries

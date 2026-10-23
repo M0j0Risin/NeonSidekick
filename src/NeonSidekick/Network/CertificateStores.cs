@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 namespace NeonSidekick.Network;
 
 /// <summary>What <see cref="CertificateStores.Read"/> found: the certificates, or the sentence saying why not.</summary>
-public sealed record CertificateListing(string Store, string Location, IReadOnlyList<CertificateView> Certificates, string? Error);
+public sealed record CertificateListing(string Store, string Location, IReadOnlyList<CertificateView> Certificates, string? Error, int Unreadable = 0);
 
 /// <summary>
 /// <c>net_certs</c>' reader (2026-10-15, the admin-tools plan): an <see cref="X509Store"/> opened read-only and only if it exists, every
@@ -60,16 +60,27 @@ public static class CertificateStores
         {
             using var opened = new X509Store(store, location);
             opened.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-            var views = new List<CertificateView>(opened.Certificates.Count);
-            foreach (var certificate in opened.Certificates)
+            // Read once (2026-10-23, the admin review's D9: each Certificates read is a full copy, and the one taken for the count was never
+            // disposed); one certificate that will not read is counted, not the whole store's failure (E5).
+            var all = opened.Certificates;
+            var views = new List<CertificateView>(all.Count);
+            int unreadable = 0;
+            foreach (var certificate in all)
             {
                 using (certificate)
                 {
-                    views.Add(CertificateView.Of(certificate));
+                    try
+                    {
+                        views.Add(CertificateView.Of(certificate));
+                    }
+                    catch (CryptographicException)
+                    {
+                        unreadable++;
+                    }
                 }
             }
 
-            return new CertificateListing(store, where, views, null);
+            return new CertificateListing(store, where, views, null, unreadable);
         }
         catch (Exception ex) when (ex is CryptographicException or PlatformNotSupportedException)
         {
@@ -89,7 +100,8 @@ public static class CertificateStores
         {
             string f = filter.Trim();
             kept = kept.Where(c => c.Subject.Contains(f, StringComparison.OrdinalIgnoreCase) || c.Issuer.Contains(f, StringComparison.OrdinalIgnoreCase)
-                || c.Sha256.Contains(f, StringComparison.OrdinalIgnoreCase) || c.Names.Any(n => n.Contains(f, StringComparison.OrdinalIgnoreCase)));
+                || c.Sha256.Contains(f, StringComparison.OrdinalIgnoreCase) || (c.Sha1?.Contains(f, StringComparison.OrdinalIgnoreCase) ?? false)
+                || c.Names.Any(n => n.Contains(f, StringComparison.OrdinalIgnoreCase)));
         }
 
         if (expiringWithinDays is { } days)

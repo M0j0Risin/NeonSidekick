@@ -16,7 +16,8 @@ namespace NeonSidekick.App;
 /// is offered, the reason when it is not, its note when it is (a directory with no domain), and its tools' own notes (a write not offered and
 /// why, <c>net_certs</c> behind its switch, no ping here). <see cref="SystemPromptSummary.ToolGroups"/> makes a group of each.
 /// </summary>
-public sealed record AdminGroupSpec(string Title, IReadOnlyList<AIFunction> Tools, bool Enabled, string OffReason, SettingsField Switch, IReadOnlyDictionary<string, string>? ToolNotes = null, string? OnNote = null);
+/// <remarks>Its <c>OnNote</c> went on 2026-10-23 (the admin review's R16): only the bots' groups had set one.</remarks>
+public sealed record AdminGroupSpec(string Title, IReadOnlyList<AIFunction> Tools, bool Enabled, string OffReason, SettingsField Switch, IReadOnlyDictionary<string, string>? ToolNotes = null);
 
 // ── The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory ──────────────────
 
@@ -26,6 +27,58 @@ internal sealed partial class ChatScreen
 
     /// <summary>The main chat's scan budget: reset as each turn's tools are composed; scripts' and advisors' calls count against it too.</summary>
     private readonly NetworkBudget _networkBudget = new();
+
+    /// <summary>The automation run the budget lasts for now (a <c>/loop</c>, a Ralph run), set by <see cref="BudgetRun"/>; DA8.</summary>
+    private object? _budgetRun;
+
+    /// <summary>The run the budget was last reset for; null for a turn's.</summary>
+    private object? _budgetOwner;
+
+    /// <summary>
+    /// Whether the turn under way is the camera watch's own, unprompted (2026-10-23, the branch review of DP7): only those share the watch's
+    /// budget; the user's own messages while a watch runs each get a fresh one, as any turn does.
+    /// </summary>
+    private bool _watchTurn;
+
+    /// <summary>
+    /// The network budget at a turn's start (2026-10-23, the admin review's L6, decision DA8): a new one each turn, except within an automation
+    /// run — a Ralph run, a <c>/loop</c>, a camera watch's unprompted turns (<see cref="_watchTurn"/>) — whose one budget, reset at its first
+    /// turn, lasts until it ends.
+    /// </summary>
+    private void ResetNetworkBudget()
+    {
+        object? run = _budgetRun ?? (_watchTurn && _cameraWatch.Running ? _cameraWatch : null);
+        if (run is null)
+        {
+            _networkBudget.Reset();
+            _budgetOwner = null;
+        }
+        else if (!ReferenceEquals(run, _budgetOwner))
+        {
+            _networkBudget.Reset(run: true);
+            _budgetOwner = run;
+        }
+    }
+
+    /// <summary>An automation run's scope over the budget (DA8): its turns share one, until the scope ends.</summary>
+    private IDisposable BudgetRun()
+    {
+        var run = new object();
+        object? before = _budgetRun;
+        _budgetRun ??= run;
+        return new BudgetScope(this, run, before);
+    }
+
+    private sealed class BudgetScope(ChatScreen screen, object run, object? before) : IDisposable
+    {
+        public void Dispose()
+        {
+            if (before is null && ReferenceEquals(screen._budgetRun, run))
+            {
+                screen._budgetRun = null;
+            }
+        }
+    }
 
     private IReadOnlyList<AIFunction> _networkTools = [];
     private ServiceAccess _services = null!;
@@ -65,30 +118,31 @@ internal sealed partial class ChatScreen
         new NetCertsTool(access, budget),
     ];
 
-    /// <summary>The services tools: the two reads, and the two changes unless <paramref name="forceRedacted"/> (a redacted set). Shared with headless (the changes never offered there).</summary>
-    public static IReadOnlyList<AIFunction> ServiceTools(ServiceAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm, bool forceRedacted = false) =>
-        forceRedacted
-            ? [new ServiceListTool(access, effective, true), new ServiceInfoTool(access, effective, true)]
-            : [new ServiceListTool(access, effective), new ServiceInfoTool(access, effective), new ServiceControlTool(access, effective, confirm), new ServiceStartTypeTool(access, effective, confirm)];
+    /// <summary>
+    /// The services tools: the two reads and the two changes. Shared with headless (the changes never offered there). A redacted set is each
+    /// tool's twin (<see cref="RedactedTwins.Of"/>, the advisors' and <c>execute_code</c>'s); the <c>forceRedacted</c> parameter, which only the
+    /// bots passed, went on 2026-10-23 (the admin review's R16).
+    /// </summary>
+    public static IReadOnlyList<AIFunction> ServiceTools(ServiceAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm) =>
+        [new ServiceListTool(access, effective), new ServiceInfoTool(access, effective), new ServiceControlTool(access, effective, confirm), new ServiceStartTypeTool(access, effective, confirm)];
 
-    /// <summary>The task tools: the two reads, and <c>task_control</c> unless <paramref name="forceRedacted"/>.</summary>
-    public static IReadOnlyList<AIFunction> TaskTools(TaskAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm, bool forceRedacted = false) =>
-        forceRedacted
-            ? [new TaskListTool(access, effective, true), new TaskInfoTool(access, effective, true)]
-            : [new TaskListTool(access, effective), new TaskInfoTool(access, effective), new TaskControlTool(access, effective, confirm)];
+    /// <summary>The task tools: the two reads and <c>task_control</c> (R16: no redacted set of its own; the twins are).</summary>
+    public static IReadOnlyList<AIFunction> TaskTools(TaskAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm) =>
+        [new TaskListTool(access, effective), new TaskInfoTool(access, effective), new TaskControlTool(access, effective, confirm)];
 
     /// <summary>
     /// The six directory tools, every one a read of the directory; <c>ad_group</c>, <c>ad_find</c> and <c>ad_ou</c> may save a list as a CSV in the
-    /// working directory (2026-10-15, the AD gaps plan), asking <paramref name="saveRoot"/> per call; the twins never save.
+    /// working directory (2026-10-15, the AD gaps plan), asking <paramref name="saveRoot"/> per call; the twins never save (R16: the twins are
+    /// <see cref="RedactedTwins.Of"/>'s).
     /// </summary>
-    public static IReadOnlyList<AIFunction> DirectoryTools(DirectoryAccess access, bool forceRedacted = false, Func<DirectorySaveRoot>? saveRoot = null) =>
+    public static IReadOnlyList<AIFunction> DirectoryTools(DirectoryAccess access, Func<DirectorySaveRoot>? saveRoot = null) =>
     [
-        new AdUserTool(access, forceRedacted),
-        new AdGroupTool(access, forceRedacted, saveRoot),
-        new AdComputerTool(access, forceRedacted),
-        new AdFindTool(access, forceRedacted, saveRoot),
-        new AdOuTool(access, forceRedacted, saveRoot),
-        new AdDomainTool(access, forceRedacted),
+        new AdUserTool(access),
+        new AdGroupTool(access, saveRoot: saveRoot),
+        new AdComputerTool(access),
+        new AdFindTool(access, saveRoot: saveRoot),
+        new AdOuTool(access, saveRoot: saveRoot),
+        new AdDomainTool(access),
     ];
 
     /// <summary>
@@ -202,9 +256,13 @@ internal sealed partial class ChatScreen
             return ToolsText.NoPaneReason;
         }
 
+        // A readwrite computer with no control patterns lets nothing change (2026-10-23, the admin review's L8: the tools were offered, and every
+        // call answered NotInControl while the prompt promised the writes).
         var readWrite = catalog.Computers.Where(c => c.Config.ReadWrite).ToList();
+        var controlled = readWrite.Where(c => c.Config.Control is { Count: > 0 }).ToList();
         return readWrite.Count == 0 ? ToolsText.NoReadWriteComputerReason
-            : readWrite.Any(c => allows(c.Config)) ? null
+            : controlled.Count == 0 ? ToolsText.NoControlReason
+            : controlled.Any(c => allows(c.Config)) ? null
             : noneAllowed;
     }
 
@@ -230,18 +288,22 @@ internal sealed partial class ChatScreen
             networkNotes[NetTraceTool.ToolName] = SystemPromptSummary.NotOffered(ToolsText.NoTraceReason);
         }
 
+        // The files read only for a group that can be offered (2026-10-23, the admin review's R12).
         var serviceNotes = new Dictionary<string, string>(StringComparer.Ordinal);
-        var serviceCatalog = _services.Catalog();
-        foreach (string write in ServiceWriteToolNames)
+        if (ServicesOffered(effective, _services))
         {
-            if (ServiceWriteReason(write, effective, _pane.Enabled, serviceCatalog) is { } why)
+            var serviceCatalog = _services.Catalog();
+            foreach (string write in ServiceWriteToolNames)
             {
-                serviceNotes[write] = SystemPromptSummary.NotOffered(why);
+                if (ServiceWriteReason(write, effective, _pane.Enabled, serviceCatalog) is { } why)
+                {
+                    serviceNotes[write] = SystemPromptSummary.NotOffered(why);
+                }
             }
         }
 
         var taskNotes = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (TaskWriteReason(effective, _pane.Enabled, _tasks.Catalog()) is { } taskWhy)
+        if (TasksOffered(effective, _tasks) && TaskWriteReason(effective, _pane.Enabled, _tasks.Catalog()) is { } taskWhy)
         {
             taskNotes[TaskControlTool.ToolName] = SystemPromptSummary.NotOffered(taskWhy);
         }
@@ -263,14 +325,56 @@ internal sealed partial class ChatScreen
         return groups.Where(g => ToolsText.MenuHere(g.Title)).ToList();
     }
 
-    /// <summary>The four families' inputs for a turn (the main chat's), each list cut by its rules.</summary>
-    private TurnToolInputs WithAdmin(TurnToolInputs inputs, AppSettingsData effective) => inputs with
+    /// <summary>
+    /// The four families' inputs for a turn (the main chat's), each list cut by its rules. A family's files are read only when it can be
+    /// offered (2026-10-23, the admin review's R12: services.json and tasks.json were read, and encrypted in place, every turn with the
+    /// switches off or on a Mac).
+    /// </summary>
+    private TurnToolInputs WithAdmin(TurnToolInputs inputs, AppSettingsData effective)
+    {
+        PruneAdminTicks(effective);
+        return WithAdminTools(inputs, effective);
+    }
+
+    /// <summary>
+    /// Drops the ticks whose entries are gone (2026-10-23, the admin review's H6, DP4), for each family that can be offered, from a clean load
+    /// only (<see cref="OfferedTicks"/>). The saved profile's lists, one update each.
+    /// </summary>
+    private void PruneAdminTicks(AppSettingsData effective)
+    {
+        var saved = _settings.Current;
+        if (ServicesOffered(effective, _services) && _services.Loaded() is var services
+            && OfferedTicks.Pruned(saved.ServiceComputersOffered, services.Computers.Select(c => c.Name), services.Problems.Count == 0, ComputerConfig.LocalName) is { } s)
+        {
+            _settings.Update(d => d.ServiceComputersOffered = s);
+        }
+
+        if (TasksOffered(effective, _tasks) && _tasks.Loaded() is var tasks
+            && OfferedTicks.Pruned(saved.TaskComputersOffered, tasks.Computers.Select(c => c.Name), tasks.Problems.Count == 0, ComputerConfig.LocalName) is { } t)
+        {
+            _settings.Update(d => d.TaskComputersOffered = t);
+        }
+
+        if (EventLogOffered(effective, _eventLog) && _eventLog.Loaded() is var logs
+            && OfferedTicks.Pruned(saved.EventLogComputersOffered, logs.Computers.Select(c => c.Name), logs.Problems.Count == 0, ComputerConfig.LocalName) is { } e)
+        {
+            _settings.Update(d => d.EventLogComputersOffered = e);
+        }
+
+        if (effective.DirectoryTools && DirectoryHere && _directory.Loaded() is var domains
+            && OfferedTicks.Pruned(saved.DirectoryDomainsOffered, domains.Domains.Select(d => d.Name), domains.Problems.Count == 0, DirectoryText.CurrentName) is { } a)
+        {
+            _settings.Update(d => d.DirectoryDomainsOffered = a);
+        }
+    }
+
+    private TurnToolInputs WithAdminTools(TurnToolInputs inputs, AppSettingsData effective) => inputs with
     {
         Network = NetworkToolsFor(_networkTools, effective, _network.Pinger),
         NetworkEnabled = NetworkOffered(effective),
-        Services = ServiceToolsFor(_serviceTools, effective, _pane.Enabled, _services.Catalog()),
+        Services = ServicesOffered(effective, _services) ? ServiceToolsFor(_serviceTools, effective, _pane.Enabled, _services.Catalog()) : [],
         ServicesEnabled = ServicesOffered(effective, _services),
-        Tasks = TaskToolsFor(_taskTools, effective, _pane.Enabled, _tasks.Catalog()),
+        Tasks = TasksOffered(effective, _tasks) ? TaskToolsFor(_taskTools, effective, _pane.Enabled, _tasks.Catalog()) : [],
         TasksEnabled = TasksOffered(effective, _tasks),
         Directory = _directoryTools,
         DirectoryEnabled = DirectoryOffered(effective, _directory),
@@ -475,9 +579,12 @@ internal sealed partial class ChatScreen
             return null;
         }
 
+        // This PC by any of its names is local, and a host matches by its full name or its first label (2026-10-23, the admin review's R11: the
+        // PDC's FQDN never met a short Host, nor the built-in local when the PDC was this PC, so "Search 4740" was missing though readable).
+        bool here = host is null || ComputerConfig.IsThisPc(host);
         foreach (var c in _eventLog.Catalog().Computers)
         {
-            if (host is null ? c.IsLocal : !c.IsLocal && string.Equals(c.Config.Host?.Trim(), host.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (here ? c.IsLocal : !c.IsLocal && SameHost(c.Config.Host, host!))
             {
                 return c.Name;
             }
@@ -486,13 +593,28 @@ internal sealed partial class ChatScreen
         return null;
     }
 
+    /// <summary>Whether two host names are one: equal, or one a bare name the other's first label (R11).</summary>
+    private static bool SameHost(string? a, string b)
+    {
+        string x = a?.Trim().TrimEnd('.') ?? "", y = b.Trim().TrimEnd('.');
+        if (x.Length == 0)
+        {
+            return false;
+        }
+
+        return string.Equals(x, y, StringComparison.OrdinalIgnoreCase)
+            || (!x.Contains('.', StringComparison.Ordinal) && string.Equals(x, y.Split('.')[0], StringComparison.OrdinalIgnoreCase))
+            || (!y.Contains('.', StringComparison.Ordinal) && string.Equals(y, x.Split('.')[0], StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// A task's History (2026-10-15, the plan's item 35): the Task Scheduler's log is off by default, so its enabled state is read first; off, the
     /// sentence says how to turn it on (the app never does: that would be a write to the event logs); on, <c>/eventlog</c> opens on it.
     /// </summary>
     private async Task OpenTaskHistoryAsync(string line, INoticeSink sink, CancellationToken cancellationToken, bool onWatcher)
     {
-        string? computer = line.Contains(" computer:", StringComparison.Ordinal) ? line.Split(' ').First(w => w.StartsWith("computer:", StringComparison.Ordinal))[9..] : null;
+        // The line's words as /eventlog reads them, quotes and all (the History line quotes its computer since 2026-10-23, E8).
+        string? computer = NeonSidekick.EventLog.EventLogCommand.Words(line).FirstOrDefault(w => w.StartsWith("computer:", StringComparison.Ordinal)) is { } word ? word[9..] : null;
         var (source, error) = _eventLog.Resolve(computer, TaskText.HistoryLog, forceRedacted: false);
         if (source is null)
         {

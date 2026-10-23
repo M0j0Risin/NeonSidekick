@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 
 namespace NeonSidekick.Network;
@@ -48,7 +49,7 @@ public static class TlsPreamble
         25 or 587 => StartTls.Smtp,
         143 => StartTls.Imap,
         110 => StartTls.Pop3,
-        389 => StartTls.Ldap,
+        389 or 3268 => StartTls.Ldap,   // 3268: the global catalog's plain LDAP (2026-10-23, the admin review's P17)
         3389 => StartTls.Rdp,
         _ => StartTls.None,
     };
@@ -212,6 +213,11 @@ public static class TlsPreamble
         int length = await ReadBerLengthAsync(reader, cancellationToken).ConfigureAwait(false);
         var body = await reader.ReadBytesAsync(length, cancellationToken).ConfigureAwait(false);
         int code = LdapResultCode(body);
+        if (code == LdapDisconnected)
+        {
+            throw new TlsPreambleException(NetworkText.LdapDisconnected(port));
+        }
+
         if (code < 0)
         {
             throw new TlsPreambleException(NetworkText.PreambleGarbled);
@@ -252,14 +258,26 @@ public static class TlsPreamble
         return (int)length;
     }
 
+    /// <summary><see cref="LdapResultCode"/>'s answer for a Notice of Disconnection (message id 0, RFC 4511 §4.4.1).</summary>
+    public const int LdapDisconnected = -2;
+
     /// <summary>
     /// The resultCode of an LDAPMessage's body (past its outer SEQUENCE header): the messageID INTEGER, then the ExtendedResponse
     /// (<c>[APPLICATION 24]</c>, 0x78) whose first element is the ENUMERATED result. −1 when the body is not that shape.
     /// </summary>
+    /// <remarks>
+    /// The message id is ours, 1 (2026-10-23, the admin review's P12: an unsolicited Notice of Disconnection, id 0, was read as the StartTLS
+    /// answer, its code 2 then "no STARTTLS"); id 0 is <see cref="LdapDisconnected"/>.
+    /// </remarks>
     public static int LdapResultCode(ReadOnlySpan<byte> body)
     {
         int at = 0;
-        if (!Skip(body, ref at, 0x02))
+        if (body.Length >= 3 && body[0] == 0x02 && body[1] == 1 && body[2] == 0)
+        {
+            return LdapDisconnected;
+        }
+
+        if (body.Length < 3 || body[0] != 0x02 || body[1] != 1 || body[2] != 1 || !Skip(body, ref at, 0x02))
         {
             return -1;
         }
@@ -379,12 +397,15 @@ public static class TlsPreamble
             return 0;
         }
 
+        // Read unsigned and kept to the low bits (2026-10-23, the admin review's P13): a set high bit made a selected protocol read as a
+        // failure, and -Math.Max(1, int.MinValue) overflowed. The protocols are the low four bits (TLS, CredSSP, RDSTLS, CredSSP with early
+        // user auth); the failure codes are small numbers, held to 1..0xFFFF.
         var negotiation = confirm[7..];
-        int value = negotiation[4] | (negotiation[5] << 8) | (negotiation[6] << 16) | (negotiation[7] << 24);
+        uint value = BinaryPrimitives.ReadUInt32LittleEndian(negotiation[4..8]);
         return negotiation[0] switch
         {
-            0x02 => (value & 0x3) != 0 ? value : 0,
-            0x03 => -Math.Max(1, value),
+            0x02 => (int)(value & 0xF),
+            0x03 => -(int)Math.Clamp(value, 1u, 0xFFFFu),
             _ => 0,
         };
     }

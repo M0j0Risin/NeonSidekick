@@ -68,11 +68,13 @@ public static class DirectoryCommand
         {
             if (KeyWord(word) is { } key)
             {
+                if (key.Value.Trim().Length == 0)
+                {
+                    // Said, never read as absent (2026-10-23, the admin review's V6: domain: searched the default domain).
+                    return (null, DirectoryText.KeyNeedsValue(key.Key));
+                }
+
                 keys[key.Key] = key.Value;
-            }
-            else if (string.Equals(word, "nested", StringComparison.OrdinalIgnoreCase))
-            {
-                nested = true;
             }
             else
             {
@@ -87,8 +89,10 @@ public static class DirectoryCommand
             return (null, Usage);
         }
 
+        // A verb only as the usage writes it, lower case, and domain only alone (2026-10-23, the admin review's P2: /ad Domain Admins showed the
+        // domain card and /ad Group Policy Creator Owners looked up "Policy Creator Owners"); anything else is a name.
         string verb = words[0].ToLowerInvariant();
-        if (!Verbs.Contains(verb))
+        if (!Verbs.Contains(verb) || !string.Equals(words[0], verb, StringComparison.Ordinal) || (verb == "domain" && words.Count > 1))
         {
             return keys.Keys.FirstOrDefault(k => k != "domain") is { } stray
                 ? (null, KeyNotTaken(stray, "<name>"))
@@ -101,6 +105,14 @@ public static class DirectoryCommand
         }
 
         var rest = words.Skip(1).ToList();
+        if (verb == "group" && rest.Count > 1 && (rest[0] == "nested" || rest[^1] == "nested"))
+        {
+            // nested only for a group, lower case, first or last (2026-10-23, the admin review's P6: lifted from any line, so /ad group Nested
+            // Admins looked up "Admins").
+            rest.RemoveAt(rest[0] == "nested" ? 0 : rest.Count - 1);
+            nested = true;
+        }
+
         string? to = Key("to");
         switch (verb)
         {
@@ -121,9 +133,15 @@ public static class DirectoryCommand
             int days = DirectoryQueries.DefaultDays(kind);
             bool daysGiven = false;
             var others = rest.Skip(1).ToList();
-            if (DirectoryQueries.DaysKinds.Contains(kind) && others.Count > 0 && int.TryParse(others[0], NumberStyles.None, CultureInfo.InvariantCulture, out int given) && given is > 0 and <= 3650)
+            if (DirectoryQueries.DaysKinds.Contains(kind) && others.Count > 0 && long.TryParse(others[0], NumberStyles.None, CultureInfo.InvariantCulture, out long given))
             {
-                days = given;
+                if (given is < 1 or > 3650)
+                {
+                    // Out of range said so (2026-10-23, the admin review's V7: it stayed a find word, refused as "takes no words").
+                    return (null, Bare(Llm.Tools.ArgumentText.OutOfRange("days", others[0], 1, 3650)));
+                }
+
+                days = (int)given;
                 daysGiven = true;
                 others.RemoveAt(0);
             }
@@ -215,7 +233,7 @@ public static class DirectoryCommand
             "user" => DirectoryQueries.UserAnswer(session, source, line.Argument, now, zone, deadline: deadline),
             "group" => DirectoryQueries.GroupAnswer(session, source, line.Argument, line.Nested, line.Members ?? "all", DirectoryLimits.MaxEntries, zone, deadline),
             "computer" => DirectoryQueries.ComputerAnswer(session, source, line.Argument, zone, deadline: deadline),
-            "domain" => DirectoryQueries.DomainAnswer(session, source, deadline),
+            "domain" => DirectoryQueries.DomainAnswer(session, source, deadline, zone),
             "ou" => DirectoryQueries.OuAnswer(session, source, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, deadline, cap: cap, zone: zone),
             "name" => DirectoryQueries.FindAnswer(session, source, new FindOptions("name", 0, line.Argument, DirectoryLimits.MaxEntries, Cap: cap), now, zone, deadline),
             _ => DirectoryQueries.FindAnswer(session, source, new FindOptions(line.Verb[5..], line.Days, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, line.Type, line.Ou, line.Field, cap), now, zone, deadline),
@@ -378,8 +396,9 @@ public static class DirectoryCommand
     };
 
     /// <summary>The draft an answer's <c>ask</c> leaves: what was looked up and the domain by its entry's name and DNS name. Pinned.</summary>
+    /// <remarks>What was looked up escaped and cut (2026-10-23, the admin review's L9: a card's names went in raw).</remarks>
     public static string AskDraft(string what, string domain, string dnsName) =>
-        "Look up " + what + " in Active Directory, domain " + domain + (string.Equals(domain, dnsName, StringComparison.OrdinalIgnoreCase) ? "" : " (" + dnsName + ")") + ", and explain what you find";
+        "Look up " + Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.Name(what), 300) + " in Active Directory, domain " + domain + (string.Equals(domain, dnsName, StringComparison.OrdinalIgnoreCase) ? "" : " (" + dnsName + ")") + ", and explain what you find";
 
     /// <summary>The <c>/eventlog</c> line the "Search 4740" button opens: the Security log's lockouts on the PDC emulator.</summary>
     public static string LockoutLine(string computer) => "Security computer:" + computer + " id:4740 audit:any";

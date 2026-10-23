@@ -39,9 +39,9 @@ public static class TaskChanges
             // An unreadable definition counts as privileged below (the safe reading).
         }
 
-        var definition = readable ?? new TaskDefinition(null, null, null, new TaskPrincipalInfo("SYSTEM", null, null, "HighestAvailable"), [], [], false, null, null);
+        var definition = readable ?? new TaskDefinition(null, null, null, new TaskPrincipalInfo(null, null, null, null), [], [], false, null, null);
         string taskPath = detail.Entry.Path;
-        if (TaskAccess.WriteRefusal(source.Computer, taskPath, action, definition, writesOn, self) is { } refused)
+        if (TaskAccess.WriteRefusal(source.Computer, taskPath, action, readable, writesOn, self, principalUnknown: readable is null) is { } refused)
         {
             return refused;
         }
@@ -53,22 +53,38 @@ public static class TaskChanges
 
         string principal = readable is null ? TaskText.PrincipalUnknown : TaskRender.PrincipalWords(definition.Principal);
         string commands = TaskRender.Commands(readable);
-        if (!byUser && action == TaskActions.Run && commands.Length > ComputerText.MaxShownInQuestion)
+        // The principal counts too (2026-10-23, the admin review's B6): a long one pushed the question past what the pane shows whole.
+        // An enable shows what it lets run too (2026-10-23, the admin review's L2): its next trigger runs those commands.
+        bool showsCommands = action is TaskActions.Run or TaskActions.Enable;
+        int shown = (showsCommands ? commands.Length : 0) + principal.Length;
+        if (!byUser && shown > ComputerText.MaxShownInQuestion)
         {
-            return TaskText.TooLongToAsk(taskPath, commands.Length);
+            return TaskText.TooLongToAsk(taskPath, shown);
         }
 
         string question = action == TaskActions.Run
             ? TaskText.ConfirmRun(taskPath, source.Where, principal, readable is null ? TaskText.RunLevelUnknown : TaskRender.RunLevel(definition.Principal), commands)
-            : TaskText.ConfirmChange(action, taskPath, source.Where, principal);
-        if (await confirm(question, cancellationToken).ConfigureAwait(false) is not true)
+            : TaskText.ConfirmChange(action, taskPath, source.Where, principal, action == TaskActions.Enable ? commands : null);
+        switch (await confirm(question, cancellationToken).ConfigureAwait(false))
         {
-            TaskAccess.Audit(byUser, action, taskPath, source, "declined");
-            return ComputerText.Declined;
+            case null:
+                // Nobody was there to answer (2026-10-23, the admin review's G15): never told as the user's no.
+                TaskAccess.Audit(byUser, action, taskPath, source, "not asked: nobody to answer");
+                return ComputerText.NoPaneToAsk;
+            case false:
+                TaskAccess.Audit(byUser, action, taskPath, source, "declined");
+                return ComputerText.Declined;
         }
 
         var result = await access.ChangeAsync(source, taskPath, session =>
         {
+            // The definition the question showed is the one changed (2026-10-23, the admin review's C2: the change ran in a new session after the
+            // yes with no re-check, so a task re-registered while the pane waited ran another command as another account).
+            if (!string.Equals(session.Detail(taskPath).Xml, detail.Xml, StringComparison.Ordinal))
+            {
+                throw new TaskException(TaskErrors.ChangedSinceAsked, "the definition changed after the question");
+            }
+
             switch (action)
             {
                 case TaskActions.Run:
@@ -81,7 +97,7 @@ public static class TaskChanges
                     session.SetEnabled(taskPath, action == TaskActions.Enable);
                     break;
             }
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
         if (result.Error is { } error)
         {
             TaskAccess.Audit(byUser, action, taskPath, source, "failed: " + error);
@@ -94,7 +110,9 @@ public static class TaskChanges
             return TaskText.DoneUnread(action, taskPath, source.Where);
         }
 
+        // ChangeAsync returns only once the change is made (2026-10-23, the admin review's T13: a cancel noticed after it answered "may still
+        // complete", and a model ran a side-effecting task again).
         TaskAccess.Audit(byUser, action, taskPath, source, TaskText.StateWord(entry.State));
-        return cancellationToken.IsCancellationRequested ? ComputerText.StoppedWaiting : TaskText.Done(action, taskPath, source.Where, entry.State);
+        return TaskText.Done(action, taskPath, source.Where, entry.State);
     }
 }

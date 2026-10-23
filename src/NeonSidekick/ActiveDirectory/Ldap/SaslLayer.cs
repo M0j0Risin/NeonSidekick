@@ -190,7 +190,7 @@ public static class SaslGssapiExchange
 
             if (answer.ResultCode != LdapResultCodes.SaslBindInProgress)
             {
-                throw new DirectoryException(answer.ResultCode, "the bind was refused" + (answer.Diagnostic.Length > 0 ? ": " + answer.Diagnostic : ""));
+                throw new DirectoryException(answer.ResultCode, "the bind was refused" + (answer.Diagnostic.Length > 0 ? ": " + Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(answer.Diagnostic), 300) : ""));
             }
 
             if (chosen is not null)
@@ -232,12 +232,9 @@ public static class SaslGssapiExchange
             return (SaslSecurity.Confidentiality, maximum);
         }
 
-        if ((mask & (int)SaslSecurity.Integrity) != 0 && layer.Signed)
-        {
-            return (SaslSecurity.Integrity, maximum);
-        }
-
-        throw new DirectoryException(LdapResultCodes.AuthUnknown, "the server offered no signed or sealed layer on 389");
+        // Sealed or nothing on 389, as Windows binds (2026-10-23, the admin review's L7: integrity alone was taken in silence though the answers
+        // promise signed and sealed).
+        throw new DirectoryException(LdapResultCodes.AuthUnknown, "the server offered no sealed layer on 389");
     }
 
     /// <summary>The reply: the chosen bit, this client's 3-byte maximum (0 with no layer), no authorization id.</summary>

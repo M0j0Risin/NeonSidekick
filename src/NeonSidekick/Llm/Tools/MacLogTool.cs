@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// What the four event-log tools share on a Mac (2026-10-18, the Mac event-log plan; <see cref="EventLogTool"/>'s shape): the
 /// <see cref="MacLogAccess"/> door, the settings in force at each call, the arguments' readers, and the redacted twin. They answer to
 /// the Windows tools' names (<see cref="EventLogLogsTool.ToolName"/>…) and argument names where they mean the same (<c>log</c>,
-/// <c>record</c>), so the rule, the bots', the advisors' and a script's twins and <c>AdvisorRecent</c>'s stand-ins work unchanged. A
+/// <c>record</c>), so the rule, the advisors' and a script's twins and <c>AdvisorRecent</c>'s stand-ins work unchanged. A
 /// tool built with <c>forceRedacted</c> reads redacted whatever <c>local</c>'s detail. Every tool reads; none changes anything. A refusal
 /// is an <c>Error:</c> sentence, never a throw.
 /// </summary>
@@ -26,7 +26,7 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
 
     protected Func<AppSettingsData> Effective { get; }
 
-    /// <summary>Whether this tool reads redacted whatever <c>local</c>'s detail (a bot's, an advisor's, a script's).</summary>
+    /// <summary>Whether this tool reads redacted whatever <c>local</c>'s detail (an advisor's, a script's).</summary>
     public bool ForceRedacted { get; }
 
     /// <summary>The same tool reading redacted; itself when it already does.</summary>
@@ -44,31 +44,18 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
     protected int DefaultLimit => Math.Clamp(Effective().EventLogMaxEvents, AppSettingsData.MinEventLogMaxEvents, AppSettingsData.MaxEventLogMaxEvents);
 
     /// <summary>A string argument, or null when blank.</summary>
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    // The shared readers (2026-10-23, the admin review's R18, E7, K6: AdminArguments).
+    protected static string? Optional(AIFunctionArguments arguments, string name) => AdminArguments.Optional(arguments, name);
 
-    /// <summary>A whole-number argument in <paramref name="min"/>..<paramref name="max"/>: <paramref name="fallback"/> when missing, the refusal when out of range or not a number.</summary>
-    protected static (long? Value, string? Error) Number(AIFunctionArguments arguments, string name, long min, long max, long? fallback)
-    {
-        if (!ToolArguments.TryReadInt64(arguments, name, out long? value, out string raw) || value is { } n && (n < min || n > max))
-        {
-            string given = raw.Length > 0 ? raw : value?.ToString(CultureInfo.InvariantCulture) ?? "";
-            return (null, EventLogText.OutOfRange(name, given, (int)Math.Min(min, int.MaxValue), (int)Math.Min(max, int.MaxValue)));
-        }
+    protected static (long? Value, string? Error) Number(AIFunctionArguments arguments, string name, long min, long max, long? fallback) => AdminArguments.Number(arguments, name, min, max, fallback);
 
-        return (value ?? fallback, null);
-    }
-
-    /// <summary>A time argument (an age or a moment, in the user's zone); null when missing, the refusal when it is neither.</summary>
-    protected (DateTimeOffset? Value, string? Error) Moment(AIFunctionArguments arguments, string name)
-    {
-        if (Optional(arguments, name) is not { } text)
-        {
-            return (null, null);
-        }
-
-        return TimeArgument.Parse(text, Access.Time.GetUtcNow(), Zone) is { } moment ? (moment, null) : (null, EventLogText.BadTime(name, text));
-    }
+    /// <summary>
+    /// A time argument (an age or a moment, in the user's zone); null when missing, the refusal when it is neither. Held to the whole second,
+    /// a start down and an end (<paramref name="end"/>) up (2026-10-23, the admin review's R1: the fraction was kept, while the next page's
+    /// call restates <c>until</c> to the second, so entries in [T.000, T.300) were skipped between pages).
+    /// </summary>
+    protected (DateTimeOffset? Value, string? Error) Moment(AIFunctionArguments arguments, string name, bool end = false) =>
+        AdminArguments.Moment(arguments, name, Access.Time.GetUtcNow(), Zone, end, EventLogText.BadTime);
 
     /// <summary>
     /// A search's or a summary's terms read off the call (the same words both take) into the one query builder <c>/eventlog</c> shares
@@ -84,7 +71,7 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
             return (null, [], sinceError);
         }
 
-        var (until, untilError) = Moment(arguments, MacLogSearchTool.UntilArgument);
+        var (until, untilError) = Moment(arguments, MacLogSearchTool.UntilArgument, end: true);
         if (untilError is not null)
         {
             return (null, [], untilError);
@@ -94,6 +81,11 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
         if (pidError is not null)
         {
             return (null, [], pidError);
+        }
+
+        if (Optional(arguments, MacLogSearchTool.TextArgument) is { Length: > ArgumentText.MaxTextChars })
+        {
+            return (null, [], ArgumentText.TooLong(MacLogSearchTool.TextArgument, ArgumentText.MaxTextChars));   // K6, as the event logs'
         }
 
         var terms = new MacLogTerms(

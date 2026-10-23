@@ -68,9 +68,33 @@ public static class EventLogRender
             return null;
         }
 
-        string shortName = computer.Split('.')[0];
-        return source.Remote || !string.Equals(shortName, Environment.MachineName, StringComparison.OrdinalIgnoreCase) ? computer : null;
+        // This PC by its NetBIOS name, its DNS host name or its full name (2026-10-23, the admin review's S12: MachineName is 15 characters at
+        // most, so a long host name made every local event "on ⟪…⟫"); read once a run.
+        return source.Remote || !LocalNames.Value.Contains(computer.TrimEnd('.')) && !LocalNames.Value.Contains(computer.Split('.')[0]) ? computer : null;
     }
+
+    /// <summary>This PC's names: NetBIOS, the DNS host name, and the host name with its domain.</summary>
+    private static readonly Lazy<HashSet<string>> LocalNames = new(() =>
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Environment.MachineName };
+        try
+        {
+            string host = System.Net.Dns.GetHostName();
+            names.Add(host);
+            names.Add(host.Split('.')[0]);
+            string domain = System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().DomainName;
+            if (domain.Length > 0)
+            {
+                names.Add(host.Split('.')[0] + "." + domain);
+            }
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or System.Net.NetworkInformation.NetworkInformationException or PlatformNotSupportedException)
+        {
+            // The NetBIOS name alone.
+        }
+
+        return names;
+    });
 
     /// <summary><c>eventlog_search</c>'s answer: the header, the lines that fit, the budget's note, the next call.</summary>
     public static string Search(EventLogSource source, EventLogQuery query, EventSearchPage page, TimeZoneInfo zone, DateTimeOffset now)
@@ -85,11 +109,15 @@ public static class EventLogRender
         {
             return header + "\n" + (page.CursorMissing && query.BeforeRecord is { } gone
                 ? EventLogText.CursorMissing(gone.ToString())
-                : EventLogText.NoEvents(Clean(source.Log), query.Levels, query.Audit, query.Since, now, zone) + (query.Text is { Length: > 0 } ? " holding that text" : "") + "."
+                : EventLogText.NoEvents(Clean(source.Log), query.Levels, query.Audit, query.Since, now, zone) + EventLogText.Narrowed(query) + "."
                     + (page.Skipped > 0 ? "\n" + EventLogText.SkippedNote(page.Skipped) : ""));
         }
 
-        int budget = MaxChars - header.Length - EventLogText.QuoteNote.Length - 200;
+        // The tail measured, not guessed (2026-10-23, the admin review's S10: a fixed 200 for every trailing line, while a next call alone can
+        // carry a 256-character text and the providers, ids and fields, so answers ended hundreds past MaxChars).
+        int tail = 64 + (page.Cursor is { } preview ? NextCall(source, query, preview, zone).Length : 0) + (page.BudgetStop ? BudgetNote(page.Scanned, page.ReachedTime, zone).Length : 0)
+            + (page.Skipped > 0 ? EventLogText.SkippedNote(page.Skipped).Length : 0) + (page.CursorMissing && query.BeforeRecord is { } missing ? EventLogText.CursorMissing(missing.ToString()).Length : 0);
+        int budget = MaxChars - header.Length - EventLogText.QuoteNote.Length - tail;
         var cursor = page.Cursor;
         int shown = 0;
         foreach (var view in page.Events)
@@ -204,11 +232,9 @@ public static class EventLogRender
             parts.Add("text=" + Value(text));
         }
 
+        // The limit always (2026-10-23, the admin review's S5: it was left out at 20, while a call without one gets Event log max events).
         parts.Add("before_record=" + cursor.ToString());
-        if (query.Limit != 20)
-        {
-            parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));
-        }
+        parts.Add("limit=" + query.Limit.ToString(CultureInfo.InvariantCulture));
 
         return "next: " + string.Join(" ", parts);
     }
@@ -230,7 +256,7 @@ public static class EventLogRender
             + EventLogText.Count(summary.Scanned, "event") + ")" + (source.Redacted ? "; " + EventLogText.RedactedNote : "");
         if (summary.Total == 0 && !summary.BudgetStop)
         {
-            return header + "\n" + EventLogText.NoEvents(Clean(source.Log), query.Levels, query.Audit, query.Since, now, zone) + ".";
+            return header + "\n" + EventLogText.NoEvents(Clean(source.Log), query.Levels, query.Audit, query.Since, now, zone) + EventLogText.Narrowed(query) + ".";
         }
 
         var answer = new StringBuilder(header);
@@ -278,7 +304,7 @@ public static class EventLogRender
     {
         ArgumentNullException.ThrowIfNull(group);
         string line = group.Count.ToString(CultureInfo.InvariantCulture) + "×  " + Fence(Cut(group.Provider, ProviderChars)) + " " + group.Id.ToString(CultureInfo.InvariantCulture)
-            + "  " + EventLogText.Level(group.Level, group.Keywords) + "  newest " + EventLogText.Time(group.Newest, zone) + " #" + group.NewestRecord.ToString(CultureInfo.InvariantCulture)
+            + "  " + EventLogText.Level(group.Level, group.Keywords) + "  newest " + EventLogText.Time(group.Newest, zone) + " #" + (group.NewestCursor?.ToString() ?? group.NewestRecord.ToString(CultureInfo.InvariantCulture))
             + "  " + EventLogText.Quote(Clean(Cut(group.Sample ?? "(no message)", LineMessageChars)));
         return group.Unregistered ? line + "  (" + EventLogText.UnregisteredSource + ")" : line;
     }
@@ -367,7 +393,7 @@ public static class EventLogRender
             int budget = MaxChars - 2000;
             foreach (var log in logs)
             {
-                string line = "  " + LogLine(log, zone);
+                string line = "  " + LogLine(log, zone, source.Remote);
                 if (answer.Length + line.Length > budget)
                 {
                     answer.Append("\n  (the rest did not fit; narrow with filter)");
@@ -411,18 +437,23 @@ public static class EventLogRender
     }
 
     /// <summary>One log's line: <c>Application  12,345 records · 20.0 MB · last written …</c>, or why not.</summary>
-    public static string LogLine(EventLogListing log, TimeZoneInfo zone)
+    /// <remarks>
+    /// The channel's name and a failure's text fenced (2026-10-23, the admin review's C10: a remote host's manifests name its channels, and its
+    /// errors carry its words); the no-access advice for a remote computer is the remote one (S6: "run the app as administrator" helps
+    /// nothing there).
+    /// </remarks>
+    public static string LogLine(EventLogListing log, TimeZoneInfo zone, bool remote = false)
     {
         ArgumentNullException.ThrowIfNull(log);
-        string name = Clean(log.Name);
+        string name = Fence(Cut(log.Name, 256));
         if (log.NoAccess)
         {
-            return name + "  no access (join the Event Log Readers group, or run the app as administrator)";
+            return name + "  " + (remote ? EventLogText.NoAccessRemote : EventLogText.NoAccessLocal);
         }
 
         if (log.Error is { } error)
         {
-            return name + "  " + error;
+            return name + "  " + Fence(Cut(error, 300));
         }
 
         if (log.Info is not { } info)
@@ -463,7 +494,8 @@ public static class EventLogRender
     public static string NoMessage(EventView view)
     {
         ArgumentNullException.ThrowIfNull(view);
-        return view.Fields.Count == 0 ? "(no message)" : "(no message; fields: " + string.Join(", ", view.Fields.Take(6).Select(f => f.Name + "=" + Cut(f.Value, 60))) + ")";
+        string what = view.Problem == EventMessageProblem.Withheld ? EventLogText.MessageWithheld : "no message";
+        return view.Fields.Count == 0 ? "(" + what + ")" : "(" + what + "; fields: " + string.Join(", ", view.Fields.Take(6).Select(f => f.Name + "=" + Cut(f.Value, 60))) + ")";
     }
 
     private static string Value(string text) =>
@@ -478,7 +510,8 @@ public static class EventLogRender
 
     private static string Cut(string text, int max)
     {
+        // A surrogate pair kept whole (2026-10-23, the admin review's B12, folded site).
         string flat = text.Replace('\n', ' ').Replace('\t', ' ');
-        return flat.Length <= max ? flat : flat[..(max - 1)] + "…";
+        return flat.Length <= max ? flat : Files.TextCut.Safe(flat, max - 1) + "…";
     }
 }

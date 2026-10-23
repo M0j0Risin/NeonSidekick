@@ -1,4 +1,5 @@
 using NeonSidekick.Computers;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Tasks;
@@ -26,7 +27,9 @@ public static class TaskCommand
         string state = "all";
         bool microsoft = false;
         var words = new List<string>();
-        foreach (string word in args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        // Quoted words kept whole (2026-10-23, the admin review's P3: folder:"\Microsoft\Windows\Windows Defender" could not be named), as
+        // /eventlog reads them.
+        foreach (string word in EventLog.EventLogCommand.Words(args))
         {
             if (word.StartsWith("computer:", StringComparison.OrdinalIgnoreCase))
             {
@@ -34,11 +37,13 @@ public static class TaskCommand
             }
             else if (word.StartsWith("folder:", StringComparison.OrdinalIgnoreCase))
             {
-                folder = word[7..];
-                if (!folder.StartsWith('\\'))
+                var (read, bad) = TaskAccess.Folder(word[7..]);
+                if (read is null)
                 {
-                    return (null, TaskText.BadFolder(folder).Replace("Error: ", "", StringComparison.Ordinal));
+                    return (null, bad!.Replace("Error: ", "", StringComparison.Ordinal));
                 }
+
+                folder = read;
             }
             else if (word.StartsWith("state:", StringComparison.OrdinalIgnoreCase))
             {
@@ -88,7 +93,7 @@ public static class TaskCommand
             return Failed(failed);
         }
 
-        var lines = new List<string> { $"Tasks on {source.Where} under {line.Folder}: {result.Value.Matched.Count}" };
+        var lines = new List<string> { TaskText.CommandHeader(source.Where, line.Folder, result.Value.Matched.Count) };
         lines.AddRange(result.Value.Matched.Select(t => Llm.Tools.UntrustedText.Unfenced(TaskRender.Line(t))));
         return new TaskCommandResult(lines, false);
     }
@@ -108,10 +113,17 @@ public static class TaskCommand
     private static TaskCommandResult Failed(string error) => new([error.Replace("Error: ", "", StringComparison.Ordinal)], true);
 
     /// <summary>The draft a task's <c>ask</c> leaves. Pinned.</summary>
+    /// <remarks>The computer's own path fenced (2026-10-23, the admin review's L9).</remarks>
     public static string AskDraft(string path, Computer<TaskComputerConfig> computer) =>
-        "Explain the scheduled task " + path + (computer.IsLocal ? "" : " on " + computer.Name) + ": what it runs, when, and how its last run went";
+        "Explain the scheduled task " + UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.Name(path), 300)) + (computer.IsLocal ? "" : " on " + computer.Name) + ": what it runs, when, and how its last run went";
 
-    /// <summary>The <c>/eventlog</c> line a task's History button opens: the Task Scheduler's log, filtered to the task's path.</summary>
+    /// <summary>
+    /// The <c>/eventlog</c> line a task's History button opens: the Task Scheduler's log, filtered to the task's path. The path and the computer
+    /// quoted (2026-10-23, the admin review's E8: a remote task named <c>\Ops\Sync computer:dc02</c> read its history from dc02, and
+    /// <c>since:soon</c> in a name broke the line); a double quote, which no task name holds, is dropped.
+    /// </summary>
     public static string HistoryLine(string path, string? eventLogComputer) =>
-        TaskText.HistoryLog + (eventLogComputer is { } c ? " computer:" + c : "") + " level:all " + path;
+        TaskText.HistoryLog + (eventLogComputer is { } c ? " computer:" + Quoted(c) : "") + " level:all " + Quoted(path);
+
+    private static string Quoted(string word) => "\"" + word.Replace("\"", "", StringComparison.Ordinal) + "\"";
 }

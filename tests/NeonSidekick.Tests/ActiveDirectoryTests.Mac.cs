@@ -185,7 +185,7 @@ public sealed partial class ActiveDirectoryTests
         string kdc = DirectoryErrors.Sentence(LdapResultCodes.KdcUnreachable, "lab.example", "dc1.lab.example", 389, "reader@LAB.EXAMPLE", "");
         Assert.Contains("could not reach its KDC on dc1.lab.example (port 88)", kdc, StringComparison.Ordinal);
         string kerberos = DirectoryErrors.Sentence(LdapResultCodes.KerberosFailed, "lab.example", "dc1.lab.example", 389, "reader@LAB.EXAMPLE", "");
-        Assert.Contains("as reader@LAB.EXAMPLE failed. Run kinit", kerberos, StringComparison.Ordinal);
+        Assert.Contains("as reader@LAB.EXAMPLE failed. Check that dc1.lab.example", kerberos, StringComparison.Ordinal);   // the server first, kinit for the Mac's own sign-in (2026-10-23, V11)
         string unknown = DirectoryErrors.Sentence(0x56, "lab.example", "dc1.lab.example", 389, "x", "");
         Assert.Contains(OperatingSystem.IsMacOS() ? "no signed or sealed connection this Mac takes" : "NTLM must be allowed", unknown, StringComparison.Ordinal);
     }

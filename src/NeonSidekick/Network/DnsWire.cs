@@ -102,8 +102,15 @@ public static class DnsWire
             return null;
         }
 
-        var bytes = new byte[v4 ? 4 : 16];
+        // The apex stands for no address (2026-10-23, the admin review's P5: in-addr.arpa itself read as 0.0.0.0, so its NS was refused as this
+        // machine); a zone under it stands for its network's base, so a LAN zone's lookup is judged as the LAN.
         int parts = v4 ? 4 : 32;
+        if (labels.Length < 3 || labels.Length > parts + 2)
+        {
+            return null;
+        }
+
+        var bytes = new byte[v4 ? 4 : 16];
         for (int i = 0; i < parts && labels.Length - 3 - i >= 0; i++)
         {
             string label = labels[labels.Length - 3 - i];
@@ -131,11 +138,26 @@ public static class DnsWire
         return new IPAddress(bytes);
     }
 
-    /// <summary>A query for <paramref name="name"/>/<paramref name="type"/> with <paramref name="id"/>, recursion desired, an EDNS0 OPT record.</summary>
-    public static byte[] Query(ushort id, string name, ushort type)
+    /// <summary>
+    /// A query for <paramref name="name"/>/<paramref name="type"/> with <paramref name="id"/>, recursion desired, an EDNS0 OPT record unless
+    /// <paramref name="edns"/> is false (the retry after a FORMERR, RFC 6891 §6.2.2; 2026-10-23, the admin review's H7).
+    /// </summary>
+    public static byte[] Query(ushort id, string name, ushort type, bool edns = true)
     {
         ArgumentNullException.ThrowIfNull(name);
         var labels = EncodeName(name);
+        if (!edns)
+        {
+            var plain = new byte[12 + labels.Length + 4];
+            BinaryPrimitives.WriteUInt16BigEndian(plain, id);
+            BinaryPrimitives.WriteUInt16BigEndian(plain.AsSpan(2), 0x0100);
+            BinaryPrimitives.WriteUInt16BigEndian(plain.AsSpan(4), 1);
+            labels.CopyTo(plain.AsSpan(12));
+            BinaryPrimitives.WriteUInt16BigEndian(plain.AsSpan(12 + labels.Length), type);
+            BinaryPrimitives.WriteUInt16BigEndian(plain.AsSpan(14 + labels.Length), ClassIn);
+            return plain;
+        }
+
         var packet = new byte[12 + labels.Length + 4 + 11];
         var span = packet.AsSpan();
         BinaryPrimitives.WriteUInt16BigEndian(span, id);
@@ -216,7 +238,8 @@ public static class DnsWire
             at += 4;
         }
 
-        var records = new List<DnsRecord>(answers);
+        // Sized by what the packet can hold (2026-10-23, the admin review's C12: ANCOUNT 65,535 pre-sized half a megabyte for a 12-byte reply).
+        var records = new List<DnsRecord>(Math.Min(answers, packet.Length / 11));
         for (int r = 0; r < answers; r++)
         {
             string owner = ReadName(packet, ref at);
@@ -238,7 +261,42 @@ public static class DnsWire
             at += length;
         }
 
-        return new DnsMessage(id, (flags & 0x8000) != 0, (flags & 0x0200) != 0, flags & 0x000F, questionName, questionType, questionClass, records);
+        return new DnsMessage(id, (flags & 0x8000) != 0, (flags & 0x0200) != 0, (flags & 0x000F) | (ExtendedRcode(packet, at, BinaryPrimitives.ReadUInt16BigEndian(packet[8..]), BinaryPrimitives.ReadUInt16BigEndian(packet[10..])) << 4),
+            questionName, questionType, questionClass, records);
+    }
+
+    /// <summary>
+    /// The OPT record's upper 8 bits of the RCODE (RFC 6891 §6.1.3: its TTL's top byte), read past the authority section; 0 when there is none or
+    /// it cannot be read (2026-10-23, the admin review's P8: BADVERS, 16, read as "no error").
+    /// </summary>
+    private static int ExtendedRcode(ReadOnlySpan<byte> packet, int at, int authority, int additional)
+    {
+        try
+        {
+            for (int r = 0; r < authority + additional; r++)
+            {
+                ReadName(packet, ref at);
+                if (at + 10 > packet.Length)
+                {
+                    return 0;
+                }
+
+                ushort type = BinaryPrimitives.ReadUInt16BigEndian(packet[at..]);
+                uint ttl = BinaryPrimitives.ReadUInt32BigEndian(packet[(at + 4)..]);
+                int length = BinaryPrimitives.ReadUInt16BigEndian(packet[(at + 8)..]);
+                at += 10 + length;
+                if (r >= authority && type == Opt)
+                {
+                    return (int)(ttl >> 24);
+                }
+            }
+        }
+        catch (DnsFormatException)
+        {
+            // An unreadable tail leaves the header's RCODE as it is.
+        }
+
+        return 0;
     }
 
     /// <summary>A name at <paramref name="at"/>, pointers followed backwards only, at most 128 of them, 255 bytes at most; <paramref name="at"/> left past it.</summary>
@@ -290,8 +348,9 @@ public static class DnsWire
                 return name.Length == 0 ? "." : name.ToString();
             }
 
+            // The root byte counts too (2026-10-23, the admin review's P18: 256 octets were accepted, a name EncodeName refuses).
             length += b + 1;
-            if (length > MaxName || position + 1 + b > packet.Length)
+            if (length + 1 > MaxName || position + 1 + b > packet.Length)
             {
                 throw new DnsFormatException(length > MaxName ? NetworkText.DnsNameTooLong : NetworkText.DnsTruncatedReply);
             }
@@ -303,12 +362,22 @@ public static class DnsWire
 
             foreach (byte c in packet.Slice(position + 1, b))
             {
+                // A dot or a backslash inside a label escaped (2026-10-23, the admin review's G11: one label "login.bank.example" under an
+                // attacker's zone read as login.bank.example.attacker).
+                if (c is (byte)'.' or (byte)'\\')
+                {
+                    name.Append('\\');
+                }
+
                 name.Append(c is >= 0x21 and <= 0x7E ? (char)c : '?');
             }
 
             position += 1 + b;
         }
     }
+
+    /// <summary><paramref name="name"/> when the read ended inside its RDATA (C11); else the reply is malformed.</summary>
+    private static string Within(string name, int cursor, int end) => cursor <= end ? name : throw new DnsFormatException(NetworkText.DnsTruncatedReply);
 
     private static string ReadData(ReadOnlySpan<byte> packet, int at, int length, ushort type)
     {
@@ -322,17 +391,18 @@ public static class DnsWire
             case Ns:
             case Cname:
             case Ptr:
-                return ReadName(packet, ref cursor);
+                // Each name held inside its RDATA (2026-10-23, the admin review's C11: a short RDATA read the next record's bytes as the target).
+                return Within(ReadName(packet, ref cursor), cursor, at + length);
             case Mx when length >= 3:
                 ushort preference = BinaryPrimitives.ReadUInt16BigEndian(data);
                 cursor += 2;
-                return preference.ToString(CultureInfo.InvariantCulture) + " " + ReadName(packet, ref cursor);
+                return preference.ToString(CultureInfo.InvariantCulture) + " " + Within(ReadName(packet, ref cursor), cursor, at + length);
             case Srv when length >= 7:
                 ushort priority = BinaryPrimitives.ReadUInt16BigEndian(data);
                 ushort weight = BinaryPrimitives.ReadUInt16BigEndian(data[2..]);
                 ushort port = BinaryPrimitives.ReadUInt16BigEndian(data[4..]);
                 cursor += 6;
-                return priority.ToString(CultureInfo.InvariantCulture) + " " + weight.ToString(CultureInfo.InvariantCulture) + " " + port.ToString(CultureInfo.InvariantCulture) + " " + ReadName(packet, ref cursor);
+                return priority.ToString(CultureInfo.InvariantCulture) + " " + weight.ToString(CultureInfo.InvariantCulture) + " " + port.ToString(CultureInfo.InvariantCulture) + " " + Within(ReadName(packet, ref cursor), cursor, at + length);
             case Soa:
                 string primary = ReadName(packet, ref cursor);
                 string mailbox = ReadName(packet, ref cursor);

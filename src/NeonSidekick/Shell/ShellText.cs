@@ -505,20 +505,31 @@ public static class ShellText
     /// or <c>net.exe</c> path, a ServiceController's own methods on a service read into a variable or a line, WMI's and the Win32 API's service
     /// calls (<c>Invoke-CimMethod … StopService</c>, <c>wmic service … call</c>, <c>ControlService</c>, <c>win32serviceutil.StopService</c>), and a
     /// write to a service's registry key. Regular expressions, case-blind. Pinned.
+    /// <para>Since 2026-10-23 (the admin review's A2, T1, T2, T5, T8, T9; mechanism 7) the patterns run over the line as written and as the shell
+    /// reads it (<see cref="AdminPolice"/>'s Windows pass: escapes and quotes off, so <c>['sc','stop',…]</c> reads <c>[sc,stop,…]</c>), the program
+    /// and its verb may be apart by commas and brackets (a script's argument list) or <c>-ArgumentList</c>; every changing <c>sc</c> verb; the
+    /// cmdlets' default aliases <c>sasv</c> and <c>spsv</c>; a ServiceController's methods anywhere in a script that names one, however it is
+    /// held; every changing Win32_Service method beside the class; <c>reg import|restore|load</c> and <c>regedit /s</c> outright, a service key
+    /// written with <c>/</c> or <c>\</c>, and the .NET registry calls; <c>taskkill</c> of a service's process.</para>
     /// </summary>
     public static readonly IReadOnlyList<string> AdminServiceWords =
     [
-        @"\bsc(?:\.exe)?[""']?\s+(?:\\\\\S+\s+)?(?:config|start|stop|delete|create|failure|failureflag|pause|continue|control|sdset|privs|sidtype)\b",
-        @"\bnet1?(?:\.exe)?[""']?\s+(?:start|stop|pause|continue)\s+\S",
+        @"\bsc(?:\.exe)?[\s,\[\]()]+(?:-ArgumentList[\s,]+)?(?:\\\\\S+[\s,]+)?(?:config|start|stop|delete|create|failure|failureflag|pause|continue|control|sdset|privs|sidtype|description|managedaccount|triggerinfo|preferrednode|boot|lock)\b",
+        @"\bnet1?(?:\.exe)?[\s,\[\]()]+(?:-ArgumentList[\s,]+)?(?:start|stop|pause|continue)[\s,]+\S",
         @"\b(?:Start|Stop|Restart|Set|New|Remove|Suspend|Resume)-Service\b",
-        @"\b(?:Get-Service|gsv|ServiceController)\b[^\r\n;]*\.(?:Start|Stop|Pause|Continue|ExecuteCommand)\s*\(",
-        @"\$(?<v>\w+)\s*=\s*[^\r\n;]*\b(?:Get-Service|gsv|ServiceController)\b[\s\S]{0,4000}?\$\k<v>\.(?:Start|Stop|Pause|Continue|ExecuteCommand)\s*\(",
+        @"(?<![\w-])(?:sasv|spsv)(?![\w-])",
+        @"\b(?:Get-Service|gsv|ServiceController)\b[\s\S]{0,20000}?\.(?:Start|Stop|Pause|Continue|ExecuteCommand)\s*\(",
         @"\b(?:StartService|StopService|RestartService|PauseService|ResumeService|ChangeStartMode|ControlService(?:Ex)?|ChangeServiceConfig2?|DeleteService|CreateService|UserControlService)[AW]?\b",
         @"\bwmic(?:\.exe)?\b[^\r\n;&|]*\bservice\b[^\r\n;&|]*\b(?:call|delete|set)\b",
         @"\b(?:Invoke-(?:Cim|Wmi)Method|Remove-(?:Cim|Wmi)(?:Instance|Object)|Set-(?:Cim|Wmi)Instance)\b[^\r\n]*\bWin32_(?:Base)?Service\b",
         @"\bWin32_(?:Base)?Service\b[^\r\n]*\b(?:Invoke-(?:Cim|Wmi)Method|Remove-(?:Cim|Wmi)(?:Instance|Object)|Set-(?:Cim|Wmi)Instance)\b",
-        @"\breg(?:\.exe)?[""']?\s+(?:add|delete|import|copy|restore|load)\b[^\r\n;&|]*\\(?:CurrentControlSet|ControlSet\d{3})\\Services\\",
-        @"\b(?:Set|New|Remove|Rename|Clear|Copy|Move)-Item(?:Property)?\b[^\r\n;|]*\\(?:CurrentControlSet|ControlSet\d{3})\\Services\\",
+        @"\bWin32_(?:Base)?Service\b[\s\S]{0,20000}?\.(?:Change|Delete|Create|SetSecurityDescriptor)\s*\(",
+        @"\breg(?:\.exe)?[\s,]+(?:import|restore|load)\b",
+        @"\bregedit(?:\.exe)?\b[^\r\n;&|]*[\s,][/-]s\b",
+        @"\breg(?:\.exe)?[\s,]+(?:add|delete|copy)\b[^\r\n;&|]*[\\/](?:CurrentControlSet|ControlSet\d{3})[\\/]+Services\b",
+        @"\b(?:Set|New|Remove|Rename|Clear|Copy|Move)-Item(?:Property)?\b[^\r\n;|]*[\\/](?:CurrentControlSet|ControlSet\d{3})[\\/]+Services\b",
+        @"(?:CurrentControlSet|ControlSet\d{3})[\\/]+Services\b[\s\S]{0,20000}?(?:\b(?:Set|New|Remove|Rename|Clear|Copy|Move)-Item(?:Property)?\b|\.(?:SetValue|DeleteValue|DeleteSubKey(?:Tree)?|CreateSubKey|SetAccessControl)\s*\()",
+        @"\btaskkill(?:\.exe)?\b[^\r\n;&|]*\bservices\s+eq\b",
     ];
 
     /// <summary>
@@ -526,13 +537,22 @@ public static class ShellText
     /// same with a dash, 2026-10-20); the task cmdlets that change one; and since 2026-10-20 (a review) the Task Scheduler's COM object
     /// (<c>Schedule.Service</c>) with a member that changes a task, and WMI's <c>MSFT_ScheduledTask</c> with a method call. Pinned.
     /// </summary>
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review's A2, C4, T3, T4): <c>schtasks</c>' switch after a comma (a script's argument list), the PSScheduledJob
+    /// cmdlets and job triggers, the clustered task cmdlets, the module's <c>PS_ScheduledTask</c> and <c>PS_ClusteredScheduledTask</c> methods,
+    /// a COM member called as a VBScript statement (no parentheses), and the scheduler's own registry cache and task files.
+    /// </remarks>
     public static readonly IReadOnlyList<string> AdminTaskWords =
     [
-        @"\bschtasks(?:\.exe)?\b[^\r\n;&|]*?\s[/-](?:run|end|change|create|delete)\b",
-        @"\b(?:Start|Stop|Enable|Disable|Set|Register|Unregister)-ScheduledTask\b",
-        @"\bSchedule\.Service\b[\s\S]{0,4000}?(?:\.(?:Run|RunEx|Stop|RegisterTask|RegisterTaskDefinition|DeleteTask|DeleteFolder|CreateFolder|SetSecurityDescriptor)\s*\(|\.Enabled\s*=)",
-        @"\bInvoke-CimMethod\b[^\r\n]*\bMSFT_ScheduledTask\b",
-        @"\bMSFT_ScheduledTask\b[^\r\n]*\bInvoke-CimMethod\b",
+        @"\bschtasks(?:\.exe)?\b[^\r\n;&|]*?[\s,][/-](?:run|end|change|create|delete)\b",
+        @"\b(?:Start|Stop|Enable|Disable|Set|Register|Unregister)-(?:Clustered)?ScheduledTask\b",
+        @"\b(?:Register|Set|Enable|Disable|Unregister)-ScheduledJob(?:Option)?\b",
+        @"\b(?:Add|Set|Enable|Disable|Remove)-JobTrigger\b",
+        @"\bSchedule\.Service\b[\s\S]{0,20000}?(?:\.(?:Run|RunEx|Stop|RegisterTask|RegisterTaskDefinition|DeleteTask|DeleteFolder|CreateFolder|SetSecurityDescriptor)\b(?!\s*=[^=])|\.Enabled\s*=)",
+        @"\bInvoke-CimMethod\b[^\r\n]*\b(?:MSFT|PS)_(?:Clustered)?ScheduledTask\b",
+        @"\b(?:MSFT|PS)_(?:Clustered)?ScheduledTask\b[^\r\n]*\bInvoke-CimMethod\b",
+        @"\breg(?:\.exe)?[\s,]+(?:add|delete|import|copy|restore|load)\b[^\r\n;&|]*[\\/]Schedule[\\/]+TaskCache\b",
+        @"\b(?:Set|New|Remove|Rename|Clear|Copy|Move)-Item(?:Property)?\b[^\r\n;|]*(?:[\\/]Schedule[\\/]+TaskCache\b|[\\/]System32[\\/]+Tasks\b)",
     ];
 
     /// <summary>
@@ -540,12 +560,35 @@ public static class ShellText
     /// <c>Add-ADGroupMember</c> …), the ds tools, the LDAP clients that write, an <c>ldifde</c>/<c>csvde</c> import; <c>net user|group … /domain</c>
     /// with a change is judged in <see cref="AdminPolice"/>. Pinned.
     /// </summary>
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review's A2, T16): the changing cmdlets by the module's real nouns (a bare <c>-AD…</c> refused
+    /// <c>Set-AdminAuditLogConfig</c> and any noun starting "Ad"), ADSI's writes (<c>[adsi]</c>, <c>LDAP://</c>, a DirectoryEntry with
+    /// <c>.SetInfo()</c>, <c>.Put(</c>…), <c>setspn</c>'s changes and <c>dsacls</c>' grants and denials.
+    /// </remarks>
     public static readonly IReadOnlyList<string> AdminDirectoryWords =
     [
-        @"\b(?:Set|New|Remove|Add|Unlock|Enable|Disable|Move|Rename|Clear|Reset|Grant|Revoke|Install|Uninstall)-AD[A-Za-z]+\b",
+        @"\b(?:Set|New|Remove|Add|Unlock|Enable|Disable|Move|Rename|Clear|Reset|Grant|Revoke|Install|Uninstall|Restore|Sync)-AD(?:User|Group|Computer|Account|OrganizationalUnit|Object|ServiceAccount|ComputerServiceAccount|DefaultDomainPasswordPolicy|FineGrainedPasswordPolicy|PrincipalGroupMembership|DomainMode|ForestMode|Domain|Forest|Replication|CentralAccess|ClaimT|ResourceProperty|AuthenticationPolicy|DomainController|Trust|OptionalFeature)[A-Za-z]*\b",
         @"\b(?:dsmod|dsadd|dsrm|dsmove)(?:\.exe)?\b",
         @"\b(?:ldapmodify|ldapadd|ldapdelete|ldapmodrdn|ldappasswd)\b",
-        @"\b(?:ldifde|csvde)(?:\.exe)?\b[^\r\n;&|]*?\s-i\b",
+        @"\b(?:ldifde|csvde)(?:\.exe)?\b[^\r\n;&|]*?[\s,]-i\b",
+        @"(?:\[adsi\]|\bLDAP://|\bGC://|\bDirectoryEntry\b)[\s\S]{0,20000}?\.(?:SetInfo|Put|PutEx|DeleteTree|MoveHere|CommitChanges|SetPassword|ChangePassword|Invoke\s*\(\s*[""']?(?:SetPassword|ChangePassword))\b",
+        @"\bsetspn(?:\.exe)?\b[^\r\n;&|]*?[\s,][-/](?:a|s|d|r)\b",
+        @"\bdsacls(?:\.exe)?\b[^\r\n;&|]*?[\s,]/(?:G|R|D|S|P|N)\b",
+    ];
+
+    /// <summary>
+    /// What changes the event logs (2026-10-23, the admin review's L1: no family guarded them, while the app's own sentences point at these):
+    /// <c>wevtutil</c>'s clearing, setting and manifest verbs, the classic log cmdlets that change a log, the reader's own <c>ClearLog</c>, an
+    /// account added to Event Log Readers, and <c>auditpol</c>'s changes. Refused while the event-log tools are on. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AdminEventLogWords =
+    [
+        @"\bwevtutil(?:\.exe)?[\s,\[\]()]+(?:cl|clear-log|sl|set-log|im|install-manifest|um|uninstall-manifest)\b",
+        @"\b(?:Clear|Limit|Remove)-EventLog\b",
+        @"\.ClearLog\s*\(",
+        @"\bnet1?(?:\.exe)?[\s,]+localgroup\b[^\r\n;&|]*Event\s+Log\s+Readers\b[^\r\n;&|]*/(?:add|delete)\b",
+        @"\b(?:Add|Remove)-LocalGroupMember\b[^\r\n;|]*Event\s+Log\s+Readers\b",
+        @"\bauditpol(?:\.exe)?\b[^\r\n;&|]*?[\s,]/(?:set|clear|remove|restore)\b",
     ];
 
     /// <summary>
@@ -596,6 +639,8 @@ public static class ShellText
     {
         AdminPolice.ServicesFamily => $"{AdminHead}: while the service tools are on, a service is changed only through {Llm.Tools.ServiceControlTool.ToolName} and {Llm.Tools.ServiceStartTypeTool.ToolName}, which ask the user. Do not try another way (sc, net, a cmdlet, a script); reading with sc query or Get-Service is allowed.",
         AdminPolice.TasksFamily => $"{AdminHead}: while the task tools are on, a scheduled task is changed only through {Llm.Tools.TaskControlTool.ToolName}, which asks the user. Do not try another way (schtasks, a cmdlet, a script); reading with schtasks /query is allowed.",
+        AdminPolice.EventLogFamily => $"{AdminHead}: while the event-log tools are on, the event logs are not changed from here (cleared, resized, their readers or audit policy): the eventlog_ tools read only. Do not try another way; tell the user what change is needed.",
+        AdminPolice.EncodedFamily => $"{AdminHead}: an encoded PowerShell command that cannot be read is refused while the admin tools are on. Run the command as plain text.",
         _ => $"{AdminHead}: while the directory tools are on, nothing in Active Directory is changed from here: the ad_ tools read only. Do not try to change it another way; tell the user what change is needed.",
     };
 

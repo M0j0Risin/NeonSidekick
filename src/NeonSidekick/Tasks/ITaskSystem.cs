@@ -30,7 +30,11 @@ public sealed class TaskException(int code, string message) : Exception(message)
 }
 
 /// <summary>Who a session signs in as on a remote computer: the account and its password (never logged), straight into <c>Connect</c>.</summary>
-public sealed record TaskLogin(string User, string Password);
+public sealed record TaskLogin(string User, string Password)
+{
+    /// <summary>The account alone (2026-10-23, the admin review's K9: the generated ToString printed the password, into a log or an exception).</summary>
+    public override string ToString() => $"TaskLogin {{ User = {User} }}";
+}
 
 /// <summary>Where a session goes: this PC (no host), or a remote computer, as the user or as <see cref="Login"/>.</summary>
 public sealed record TaskTarget(string? Host, TaskLogin? Login)
@@ -58,8 +62,12 @@ public interface ITaskSession
     /// <summary>One task's entry alone (a change's read back, 2026-10-20: <see cref="Detail"/> also lists its instances, which may be refused).</summary>
     TaskEntry Entry(string path);
 
-    /// <summary>The tasks in <paramref name="folder"/>, and with <paramref name="recursive"/> every folder under it; hidden ones too.</summary>
-    IReadOnlyList<TaskEntry> List(string folder, bool recursive);
+    /// <summary>
+    /// The tasks in <paramref name="folder"/>, and with <paramref name="recursive"/> every folder under it; hidden ones too. With
+    /// <paramref name="skipMicrosoft"/> the walk never enters <c>\Microsoft\</c> (2026-10-23, the admin review's B4: hundreds of Windows' own
+    /// tasks, eight COM reads each, were read and then dropped, and a remote list ran past its timeout).
+    /// </summary>
+    IReadOnlyList<TaskEntry> List(string folder, bool recursive, bool skipMicrosoft = false);
 
     /// <summary>One task: its entry, definition XML and running instances; a missing one throws 0x80070002.</summary>
     TaskDetail Detail(string path);

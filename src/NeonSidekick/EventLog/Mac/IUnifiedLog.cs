@@ -6,6 +6,7 @@ namespace NeonSidekick.EventLog;
 /// 5 fault. <see cref="Message"/> is capped at <see cref="MacLogLimits.MessageChars"/>; macOS has already put <c>&lt;private&gt;</c>
 /// where an app did not mark a value public.
 /// </summary>
+/// <remarks><c>Mark</c> (2026-10-23, the admin review's X5): the reader's, over the whole message, before the copy's cut.</remarks>
 public sealed record MacLogEntry(
     DateTimeOffset Time,
     int Level,
@@ -15,7 +16,8 @@ public sealed record MacLogEntry(
     string Subsystem,
     string Category,
     string Sender,
-    string Message);
+    string Message,
+    uint? Mark = null);
 
 /// <summary>
 /// What a read of the unified log asks for (2026-10-18). <see cref="Since"/> is required: the native read ends at the first entry

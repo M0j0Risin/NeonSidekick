@@ -126,25 +126,42 @@ public sealed class ServiceAccess
             return ServiceResult<T>.Failed(ServiceText.NoneHere);
         }
 
-        using var timeout = new CancellationTokenSource(source.Remote ? RemoteTimeout : LocalTimeout, Time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        // Through the shared sign-in guard (2026-10-23, the admin review's F2, B2: a refused runas password is held, abandoned calls are
+        // capped per computer, an abandoned call's fault is observed).
         var started = Stopwatch.GetTimestamp();
-        try
+        var run = await SignInGuard.RunAsync(Guarded(source), _ => system.Run(source.Target, work), source.Remote ? RemoteTimeout : LocalTimeout, Time, cancellationToken).ConfigureAwait(false);
+        if (Stopped(run.Stop, source) is { } stop)
         {
-            var value = await Task.Run(() => system.Run(source.Target, work), CancellationToken.None).WaitAsync(linked.Token).ConfigureAwait(false);
-            DiagnosticLog.Debug(ServiceText.Category, $"{Describe(source)} read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
-            return ServiceResult<T>.Ok(value);
+            return ServiceResult<T>.Failed(stop);
         }
-        catch (ServiceException ex)
+
+        if (run.Failure is ServiceException ex)
         {
             DiagnosticLog.Debug(ServiceText.Category, $"{Describe(source)} failed: {ex.Message}");
             return ServiceResult<T>.Failed(ServiceErrors.Sentence(ex.Code, source.Context(service), ex.Message));
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+
+        if (run.Failure is { } other)
         {
-            return ServiceResult<T>.Failed(ServiceText.TimedOut(source.Where));
+            global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(other).Throw();
         }
+
+        DiagnosticLog.Debug(ServiceText.Category, $"{Describe(source)} read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
+        return ServiceResult<T>.Ok(run.Value!);
     }
+
+    /// <summary>The guard's facts for <paramref name="source"/>.</summary>
+    private static SignInCall Guarded(ServiceSource source) =>
+        SignInGuard.ForHost("services", source.Target.Host, source.Target.Login?.User, source.Target.Login?.Password, failure => failure is ServiceException { Code: var code } && SignInGuard.IsWrongPassword(code));
+
+    /// <summary>A guarded call's stop as its sentence, or null when the work ran.</summary>
+    private static string? Stopped(SignInStop stop, ServiceSource source) => stop switch
+    {
+        SignInStop.Held => ComputerText.Held(source.Where, source.Computer.Account),
+        SignInStop.StillWaiting => ComputerText.StillWaiting(source.Where),
+        SignInStop.TimedOut => ServiceText.TimedOut(source.Where),
+        _ => null,
+    };
 
     /// <summary>
     /// The one order of checks a change goes through after the switch and the name's own (<see cref="NameProblem"/>, 2026-10-20) (2026-10-15, the plan's): <c>access</c> → the visible list → <c>control</c>
@@ -224,44 +241,43 @@ public sealed class ServiceAccess
             return ServiceResult<ServiceStatus>.Failed(ServiceText.NoneHere);
         }
 
-        var change = Task.Run(() => system.Run(source.Target, session =>
+        // On the guard (2026-10-23, the admin review's B2): the connect and the service's open answer Esc and the timeout, and the change
+        // begins (SignInTurn.Begin) only once they are done, so a cancel never leaves a change half made; after it begins it is waited out.
+        var run = await SignInGuard.RunAsync(Guarded(source), turn => system.Run(source.Target, session =>
         {
+            turn.Begin();
             act(session);
             if (TryStatus(session, name, source) is not { } status)
             {
                 return Unread;
             }
 
-            var deadline = Time.GetUtcNow() + Bound(status.WaitHintMs);
-            // The polls are counted too (at most MaxWait / 250 ms), so a clock that does not move (a test's) still ends the wait.
-            int polls = 0;
-            while (!settled(status) && Time.GetUtcNow() < deadline && !cancellationToken.IsCancellationRequested && polls++ < MaxWait.TotalMilliseconds / 250)
-            {
-                Thread.Sleep(Math.Clamp((int)status.WaitHintMs / 10, 250, 2000));
-                if (TryStatus(session, name, source) is not { } next)
-                {
-                    break;
-                }
-
-                status = next;
-                deadline = Max(deadline, Time.GetUtcNow() + Bound(status.WaitHintMs) / 4);
-                deadline = Min(deadline, Time.GetUtcNow() + MaxWait);
-            }
-
-            return status;
-        }), CancellationToken.None);
-        try
+            return WaitFor(session, name, status, settled, Time, cancellationToken).Status;
+        }), source.Remote ? RemoteTimeout : LocalTimeout, Time, cancellationToken).ConfigureAwait(false);
+        if (Stopped(run.Stop, source) is { } stop)
         {
-            return ServiceResult<ServiceStatus>.Ok(await change.ConfigureAwait(false));
+            return ServiceResult<ServiceStatus>.Failed(run.Stop == SignInStop.TimedOut ? ServiceText.NotChangedTimedOut(name, source.Where) : stop);
         }
-        catch (ServiceException ex)
+
+        if (run.Failure is ServiceException ex)
         {
             DiagnosticLog.Debug(ServiceText.Category, $"{Describe(source)} change failed: {ex.Message}");
             string sentence = ServiceErrors.Sentence(ex.Code, source.Context(name, write: true), ex.Message);
-            return ex.Applied is { } applied
-                ? new ServiceResult<ServiceStatus>(null, ServiceText.Partly(name, source.Where, applied, sentence), Partial: true)
-                : ServiceResult<ServiceStatus>.Failed(sentence);
+            return ex.Applied switch
+            {
+                // A restart stopped the service, then its start failed (2026-10-23, the admin review's G2): it is down now, and said so.
+                ServiceText.StoppedApplied => new ServiceResult<ServiceStatus>(null, ServiceText.RestartStartFailed(name, source.Where, sentence), Partial: true),
+                { } applied => new ServiceResult<ServiceStatus>(null, ServiceText.Partly(name, source.Where, applied, sentence), Partial: true),
+                null => ServiceResult<ServiceStatus>.Failed(sentence),
+            };
         }
+
+        if (run.Failure is { } other)
+        {
+            global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(other).Throw();
+        }
+
+        return ServiceResult<ServiceStatus>.Ok(run.Value!);
     }
 
     /// <summary>A status read after the change was made: null when it fails (logged), never a failure of the change.</summary>
@@ -280,9 +296,56 @@ public sealed class ServiceAccess
 
     private static TimeSpan Bound(uint waitHintMs) => TimeSpan.FromMilliseconds(Math.Clamp(waitHintMs, 1000, (uint)MaxWait.TotalMilliseconds));
 
-    private static DateTimeOffset Max(DateTimeOffset a, DateTimeOffset b) => a > b ? a : b;
+    /// <summary>
+    /// The status polled until <paramref name="settled"/>, the way the SCM asks a waiter to (2026-10-23, the admin review's K3 and T14): the
+    /// wait hint's time from the last progress (a checkpoint that rose, a state that moved), never past <see cref="MaxWait"/> from the start
+    /// (the old loop moved its deadline at every poll and ran to its 240-poll cap, about 8 minutes). The polls are counted too, so a clock that
+    /// does not move (a test's) still ends the wait. How it ended with the last status read.
+    /// </summary>
+    public static (ServiceStatus Status, ServiceWaitEnd End) WaitFor(IServiceSession session, string name, ServiceStatus status, Func<ServiceStatus, bool> settled, TimeProvider time, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(settled);
+        ArgumentNullException.ThrowIfNull(time);
+        var started = time.GetUtcNow();
+        var hardEnd = started + MaxWait;
+        var progressEnd = started + Bound(status.WaitHintMs);
+        int polls = 0;
+        while (!settled(status))
+        {
+            var now = time.GetUtcNow();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return (status, ServiceWaitEnd.Cancelled);
+            }
 
-    private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a < b ? a : b;
+            if (now >= hardEnd || now >= progressEnd || polls++ >= MaxWait.TotalMilliseconds / 250)
+            {
+                return (status, ServiceWaitEnd.TimedOut);
+            }
+
+            Thread.Sleep(Math.Clamp((int)status.WaitHintMs / 10, 250, 2000));
+            ServiceStatus next;
+            try
+            {
+                next = session.Status(name);
+            }
+            catch (ServiceException)
+            {
+                return (status, ServiceWaitEnd.Unreadable);
+            }
+
+            if (next.CheckPoint > status.CheckPoint || next.State != status.State)
+            {
+                var moved = time.GetUtcNow() + Bound(next.WaitHintMs);
+                progressEnd = moved < hardEnd ? moved : hardEnd;
+            }
+
+            status = next;
+        }
+
+        return (status, ServiceWaitEnd.Settled);
+    }
 
     /// <summary>The audit line of one change (Docker's shape): who, what, where, how it went.</summary>
     public static void Audit(bool byUser, string action, string name, ServiceSource source, string outcome)

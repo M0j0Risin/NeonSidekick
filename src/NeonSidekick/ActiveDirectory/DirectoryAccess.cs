@@ -29,74 +29,30 @@ public sealed class DirectoryAccess
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(45);
 
     /// <summary>
-    /// The runas sign-ins a domain refused this run (2026-10-18, the user's call, both systems), as SHA-256s of the domain, account and
-    /// password: a call with the same three is answered <see cref="DirectoryText.Held"/> without reaching the DC, so a model retrying cannot
-    /// lock the account. A new password hashes differently and is tried at once; nothing of the password itself is kept. Calls run on pool
-    /// threads, so the set is locked.
+    /// The abandoned calls one server may hold before the next is refused (<see cref="Computers.SignInGuard.MaxAbandoned"/>). The refused-password
+    /// hold (2026-10-18, the user's call) and this cap (2026-10-20, a review: wldap32's Negotiate bind takes no timeout) moved into the shared
+    /// <see cref="Computers.SignInGuard"/> on 2026-10-23 (the admin review's mechanism 2), which the services, tasks and event logs use too.
     /// </summary>
-    private static readonly HashSet<string> s_held = new(StringComparer.Ordinal);
+    public const int MaxAbandoned = Computers.SignInGuard.MaxAbandoned;
 
-    private static string HoldKey(DirectorySource source, DirectoryLogin login) =>
-        Convert.ToHexString(global::System.Security.Cryptography.SHA256.HashData(global::System.Text.Encoding.UTF8.GetBytes(
-            source.Domain.DomainName.ToLowerInvariant() + "\n" + login.User + "\n" + login.Password)));
-
-    /// <summary>
-    /// The calls abandoned at <see cref="Timeout"/> or ESC whose work still runs, by server and port (2026-10-20, a review's finding):
-    /// wldap32's Negotiate bind (<c>ldap_bind_s</c>) takes no timeout, so a DC that accepts the connection and never answers the bind holds a
-    /// pool thread and its connection until it lets go. At most <see cref="MaxAbandoned"/> such calls stand per server; past them a call is
-    /// answered <see cref="DirectoryText.StillWaiting"/> without connecting, so a model retrying cannot pile up threads. Locked: pool threads.
-    /// </summary>
-    private static readonly Dictionary<string, int> s_abandoned = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>The abandoned calls one server may hold before the next is refused.</summary>
-    public const int MaxAbandoned = 2;
-
-    private static string AbandonKey(DirectoryTarget target) => target.Server + ":" + target.Port.ToString(CultureInfo.InvariantCulture);
+    private static string AbandonKey(DirectoryTarget target) => "ad:" + target.Server + ":" + target.Port.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>How many abandoned calls to <paramref name="target"/> still run (the tests' look).</summary>
     public static int AbandonedRunning(DirectoryTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
-        lock (s_abandoned)
-        {
-            return s_abandoned.GetValueOrDefault(AbandonKey(target));
-        }
+        return Computers.SignInGuard.AbandonedRunning(AbandonKey(target));
     }
 
-    /// <summary>A call given up on while its work runs: counted against its server until the work returns (its fault observed then).</summary>
-    private static void Abandon(Task running, string key)
-    {
-        if (running.IsCompleted)
-        {
-            _ = running.Exception;
-            return;
-        }
-
-        lock (s_abandoned)
-        {
-            s_abandoned[key] = s_abandoned.GetValueOrDefault(key) + 1;
-        }
-
-        _ = running.ContinueWith(done =>
-        {
-            _ = done.Exception;
-            lock (s_abandoned)
-            {
-                if (s_abandoned.TryGetValue(key, out int left) && left > 1)
-                {
-                    s_abandoned[key] = left - 1;
-                }
-                else
-                {
-                    s_abandoned.Remove(key);
-                }
-            }
-        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-    }
-
-    /// <summary>Whether <paramref name="code"/> with <paramref name="detail"/> is a refused password (never Windows' NTLM-blocked variant, never an unreachable KDC).</summary>
+    /// <summary>
+    /// Whether <paramref name="code"/> with <paramref name="detail"/> is a refused password: never Windows' NTLM-blocked variant, never an
+    /// unreachable KDC, and since 2026-10-23 (the admin review's B8, with J5's server error) never an account that is locked, disabled, expired
+    /// or must change its password — 0x31 says all of those, and holding the password made an unlock take effect only at the next start.
+    /// Windows' server error names it (<c>data 775</c>, …: <see cref="DirectoryErrors.SubCode"/>); a Mac's KDC says it apart
+    /// (<see cref="Ldap.LdapResultCodes.AccountRevoked"/>). With no sub-code, 0x31 is held, as before.
+    /// </summary>
     public static bool RefusedPassword(int code, string detail) =>
-        code == 0x31 && !detail.Contains("NTLM", StringComparison.OrdinalIgnoreCase);
+        code == 0x31 && !detail.Contains("NTLM", StringComparison.OrdinalIgnoreCase) && DirectoryErrors.SubCode(detail) is null or "52e";
 
     private readonly Func<DirectoryCatalog> _loaded;
     private readonly Func<IReadOnlyList<string>?> _offered;
@@ -179,63 +135,35 @@ public sealed class DirectoryAccess
             return DirectoryResult<T>.Failed(DirectoryText.NoneHere);
         }
 
-        string? holdKey = source.Target.Login is { } login ? HoldKey(source, login) : null;
-        if (holdKey is not null)
-        {
-            lock (s_held)
-            {
-                if (s_held.Contains(holdKey))
-                {
-                    return DirectoryResult<T>.Failed(DirectoryText.Held(source.Where, source.Domain.Account));
-                }
-            }
-        }
-
-        string abandonKey = AbandonKey(source.Target);
-        lock (s_abandoned)
-        {
-            if (s_abandoned.GetValueOrDefault(abandonKey) >= MaxAbandoned)
-            {
-                DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name}: {MaxAbandoned.ToString(CultureInfo.InvariantCulture)} earlier calls to {source.Target.Server} still waiting; refused");
-                return DirectoryResult<T>.Failed(DirectoryText.StillWaiting(source.Where, source.Target.Server));
-            }
-        }
-
-        using var timeout = new CancellationTokenSource(Timeout, Time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        var call = new Computers.SignInCall(
+            source.Target.Login is { } login ? Computers.SignInGuard.HoldKey("ad:" + source.Domain.DomainName, login.User, login.Password) : null,
+            AbandonKey(source.Target),
+            failure => failure is DirectoryException refused && RefusedPassword(refused.Code, refused.Message));
         var started = Stopwatch.GetTimestamp();
-        var running = Task.Run(() => system.Run(source.Target, session => work(session, deadline)), CancellationToken.None);
-        try
+        var run = await Computers.SignInGuard.RunAsync(call, _ => system.Run(source.Target, session => work(session, deadline)), Timeout, Time, cancellationToken).ConfigureAwait(false);
+        switch (run.Stop)
         {
-            var value = await running.WaitAsync(linked.Token).ConfigureAwait(false);
-            DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name} ({source.Target.Server}) read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
-            return DirectoryResult<T>.Ok(value);
+            case Computers.SignInStop.Held:
+                return DirectoryResult<T>.Failed(DirectoryText.Held(source.Where, source.Domain.Account));
+            case Computers.SignInStop.StillWaiting:
+                return DirectoryResult<T>.Failed(DirectoryText.StillWaiting(source.Where, source.Target.Server));
+            case Computers.SignInStop.TimedOut:
+                return DirectoryResult<T>.Failed(DirectoryText.TimedOut(source.Where));
         }
-        catch (DirectoryException ex)
+
+        if (run.Failure is DirectoryException ex)
         {
             DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name} failed: {ex.Message}");
-            if (holdKey is not null && RefusedPassword(ex.Code, ex.Message))
-            {
-                lock (s_held)
-                {
-                    s_held.Add(holdKey);
-                }
-
-                DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name}: the password for {source.Domain.Account} was refused; held until it changes");
-            }
-
             return DirectoryResult<T>.Failed(DirectoryErrors.Sentence(ex.Code, source.Where, source.Target.Server, source.Target.Port, source.Domain.Account, ex.Message));
         }
-        catch (OperationCanceledException)
-        {
-            Abandon(running, abandonKey);
-            if (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
 
-            return DirectoryResult<T>.Failed(DirectoryText.TimedOut(source.Where));
+        if (run.Failure is { } other)
+        {
+            global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(other).Throw();
         }
+
+        DiagnosticLog.Debug(DirectoryText.Category, $"{source.Domain.Name} ({source.Target.Server}) read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
+        return DirectoryResult<T>.Ok(run.Value!);
     }
 
     /// <summary>A domain tried as it stands (the wizard's Test and <c>--ad-check</c>): RootDSE, the bind, the domain's policy and one user read.</summary>

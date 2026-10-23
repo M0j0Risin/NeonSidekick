@@ -3,8 +3,11 @@ using System.Xml;
 
 namespace NeonSidekick.EventLog;
 
-/// <summary>One named value of an event: an EventData <c>Data</c>, a classic event's numbered one, or a UserData leaf.</summary>
-public sealed record EventField(string Name, string Value);
+/// <summary>
+/// One named value of an event: an EventData <c>Data</c>, a classic event's numbered one, or a UserData leaf; <see cref="Binary"/> for a classic
+/// event's raw <c>&lt;Binary&gt;</c> data, as hex.
+/// </summary>
+public sealed record EventField(string Name, string Value, bool Binary = false);
 
 /// <summary>What <see cref="EventXml.Parse"/> reads of an event's XML besides its system values.</summary>
 public sealed record EventXmlData(IReadOnlyList<EventField> Fields, string? Message, string? SourceName)
@@ -110,11 +113,13 @@ public static class EventXml
             if (parents.Count == 2 && parents[1].Name == "EventData" && frame.Name is "Data" or "Binary")
             {
                 string? fieldName = frame.Name == "Binary" ? "Binary" : frame.DataName;
-                fields.Add(new EventField(string.IsNullOrEmpty(fieldName) ? "Data" + (++unnamed).ToString(CultureInfo.InvariantCulture) : fieldName, frame.Text.ToString()));
+                fields.Add(new EventField(string.IsNullOrEmpty(fieldName) ? "Data" + (++unnamed).ToString(CultureInfo.InvariantCulture) : fieldName, frame.Text.ToString(), frame.Name == "Binary"));
             }
             else if (parents.Count >= 2 && section == "UserData" && !frame.HasChild)
             {
-                fields.Add(new EventField(frame.Name, frame.Text.ToString()));
+                // A Data element inside UserData named by its Name attribute (2026-10-23, the admin review's W4: it read as "Data", so a
+                // <Data Name="Password"> was never a secret's name, nor matched by field:Password).
+                fields.Add(new EventField(frame.Name == "Data" && !string.IsNullOrEmpty(frame.DataName) ? frame.DataName : frame.Name, frame.Text.ToString()));
             }
             else if (parents.Count == 2 && section == "RenderingInfo" && frame.Name == "Message")
             {

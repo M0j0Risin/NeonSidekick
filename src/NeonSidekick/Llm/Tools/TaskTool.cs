@@ -32,29 +32,12 @@ public abstract class TaskTool : AIFunction, IRedactedTwin
 
     public abstract AIFunction AsRedacted();
 
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    // The shared readers (2026-10-23, the admin review's R18, E7, K6: AdminArguments).
+    protected static string? Optional(AIFunctionArguments arguments, string name) => AdminArguments.Optional(arguments, name);
 
-    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback)
-    {
-        if (!ToolArguments.TryReadBoolean(arguments, name, out bool? value, out string raw))
-        {
-            return (fallback, TaskText.NotBoolean(name, raw));
-        }
+    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback) => AdminArguments.Flag(arguments, name, fallback);
 
-        return (value ?? fallback, null);
-    }
-
-    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback)
-    {
-        if (!ToolArguments.TryReadInt64(arguments, name, out long? value, out string raw) || value is { } n && (n < min || n > max))
-        {
-            string given = raw.Length > 0 ? raw : value?.ToString(CultureInfo.InvariantCulture) ?? "";
-            return (fallback, TaskText.OutOfRange(name, given, min, max));
-        }
-
-        return ((int)(value ?? fallback), null);
-    }
+    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback) => AdminArguments.Number(arguments, name, min, max, fallback);
 
     /// <summary>A task path as given: a leading <c>\</c> added when left out.</summary>
     protected static string TaskPath(string path) => path.StartsWith('\\') ? path : "\\" + path;
@@ -80,11 +63,11 @@ public sealed class TaskListTool(TaskAccess access, Func<AppSettingsData> effect
           "type": "object",
           "properties": {
             "computer": { "type": "string", "description": "Which computer; leave out for this PC (or the only one offered)." },
-            "folder": { "type": "string", "description": "The folder to list, e.g. \"\\\\\" (default) or \"\\\\Backup\\\\\"." },
+            "folder": { "type": "string", "description": "The folder to list, e.g. \"\\\" (default) or \"\\Backup\"." },
             "recursive": { "type": "boolean", "description": "Include the folders under it (default true)." },
             "state": { "type": "string", "description": "ready, running, disabled or queued." },
             "filter": { "type": "string", "description": "Only tasks whose path contains this text." },
-            "include_microsoft": { "type": "boolean", "description": "Include Windows' own tasks under \\\\Microsoft\\\\ (default false)." },
+            "include_microsoft": { "type": "boolean", "description": "Include Windows' own tasks under \\Microsoft\\ (default false; a folder under it lists them anyway)." },
             "limit": { "type": "integer", "description": "The most to list, 1 to 500 (default 50)." },
             "offset": { "type": "integer", "description": "Skip this many matches (the answer's next call says)." }
           }
@@ -101,10 +84,11 @@ public sealed class TaskListTool(TaskAccess access, Func<AppSettingsData> effect
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        string folder = Optional(arguments, FolderArgument) ?? "\\";
-        if (!folder.StartsWith('\\'))
+        // The folder judged as a path (2026-10-23, the admin review's R3).
+        var (folder, folderError) = TaskAccess.Folder(Optional(arguments, FolderArgument) ?? "\\");
+        if (folder is null)
         {
-            return TaskText.BadFolder(folder);
+            return folderError;
         }
 
         string? state = Optional(arguments, StateArgument)?.ToLowerInvariant();
@@ -134,13 +118,14 @@ public sealed class TaskListTool(TaskAccess access, Func<AppSettingsData> effect
         return result.Error ?? TaskRender.List(source.Where, result.Value.Matched, result.Value.Total, offset, limit, filter, computer);
     }
 
-    /// <summary>The visible tasks under the folder that pass the filter, by path.</summary>
+    /// <summary>The visible tasks under the folder that pass the filter, by path; <c>\Microsoft\</c> not walked unless shown (B4).</summary>
     public static (IReadOnlyList<TaskEntry> Matched, int Total) Matches(ITaskSession session, TaskSource source, TaskFilter filter)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(filter);
-        var all = session.List(filter.Folder.TrimEnd('\\').Length == 0 ? "\\" : filter.Folder.TrimEnd('\\'), filter.Recursive).Where(t => TaskAccess.Visible(source.Computer, t.Path)).ToList();
+        string folder = filter.Folder.TrimEnd('\\').Length == 0 ? "\\" : filter.Folder.TrimEnd('\\');
+        var all = session.List(folder, filter.Recursive, skipMicrosoft: !filter.ShowsMicrosoft).Where(t => TaskAccess.Visible(source.Computer, t.Path)).ToList();
         return (all.Where(filter.Passes).OrderBy(t => t.Path, StringComparer.OrdinalIgnoreCase).ToList(), all.Count);
     }
 }
@@ -155,7 +140,7 @@ public sealed class TaskInfoTool(TaskAccess access, Func<AppSettingsData> effect
         {
           "type": "object",
           "properties": {
-            "path": { "type": "string", "description": "The task's path as task_list shows it, e.g. \"\\\\Backup\\\\Nightly\"." },
+            "path": { "type": "string", "description": "The task's path as task_list shows it, e.g. \"\\Backup\\Nightly\"." },
             "computer": { "type": "string", "description": "Which computer; leave out for this PC (or the only one offered)." }
           },
           "required": ["path"]
@@ -241,7 +226,23 @@ public sealed class TaskControlTool(TaskAccess access, Func<AppSettingsData> eff
 
     public override string Description => $"Changes a scheduled task: {string.Join(", ", AgreedActions())}. Each call asks the user first; Windows' own tasks and privileged ones are guarded.";
 
-    public override JsonElement JsonSchema => agreed is null ? Schema(AgreedActions()) : _schema ??= Schema(agreed);
+    // The listing's copy parses its schema again only when the agreed actions change (2026-10-23, the admin review's R13).
+    public override JsonElement JsonSchema => agreed is null ? Listed(AgreedActions()) : _schema ??= Schema(agreed);
+
+    private (string Key, JsonElement Schema)? _listed;
+
+    private JsonElement Listed(IReadOnlyList<string> actions)
+    {
+        string key = string.Join(",", actions);
+        if (_listed is { } cached && cached.Key == key)
+        {
+            return cached.Schema;
+        }
+
+        var schema = Schema(actions);
+        _listed = (key, schema);
+        return schema;
+    }
 
     private static JsonElement Schema(IReadOnlyList<string> actions) => ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": {" +
@@ -265,7 +266,20 @@ public sealed class TaskControlTool(TaskAccess access, Func<AppSettingsData> eff
             return action.Length == 0 ? TaskText.Missing(ActionArgument) : TaskText.BadAction(action);
         }
 
-        var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), forceRedacted: false);
+        // The checks that need no password first (2026-10-23, the admin review's R6: a read-only computer whose password was gone answered
+        // "cannot sign in", and a secret was decrypted for a call refused anyway).
+        var (found, unknown) = Access.Catalog().Find(Optional(arguments, ComputerArgument));
+        if (found is null)
+        {
+            return unknown;
+        }
+
+        if (TaskAccess.WriteRefusal(found, TaskPath(given), action, null, Effective().TaskWrites) is { } early)
+        {
+            return early;
+        }
+
+        var (source, refused) = Access.Computer(found.Name, forceRedacted: false);
         if (source is null)
         {
             return refused;

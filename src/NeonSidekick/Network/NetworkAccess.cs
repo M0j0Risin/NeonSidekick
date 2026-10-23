@@ -15,8 +15,11 @@ public readonly record struct NetworkResult<T>(T? Value, string? Error)
     public static NetworkResult<T> Failed(string error) => new(default, error);
 }
 
-/// <summary>A host a check may reach: its name as asked, the addresses admitted, and (for <c>/net</c>) the note when the model would be refused.</summary>
-public sealed record NetworkTarget(string Host, IReadOnlyList<IPAddress> Addresses, string? ModelNote = null);
+/// <summary>
+/// A host a check may reach: its name as asked, the addresses admitted, (for <c>/net</c>) the note when the model would be refused, and how many
+/// admitted addresses were left out past <see cref="NetworkAccess.MaxAddresses"/> (2026-10-23, the admin review's C1).
+/// </summary>
+public sealed record NetworkTarget(string Host, IReadOnlyList<IPAddress> Addresses, string? ModelNote = null, int LeftOut = 0);
 
 /// <summary>
 /// The network tools' one way in (2026-10-15, the admin-tools plan), the tools' and <c>/net</c>'s alike: one host (no ranges, blocks or
@@ -28,6 +31,17 @@ public sealed record NetworkTarget(string Host, IReadOnlyList<IPAddress> Address
 public sealed class NetworkAccess
 {
     private static readonly ConcurrentDictionary<string, byte> s_warned = new(StringComparer.Ordinal);
+
+    /// <summary>The lists read, by their text (2026-10-23, the admin review's U16: every entry parsed twice a call, the denied list three times).</summary>
+    private static readonly ConcurrentDictionary<string, IReadOnlyList<HostRule>> s_parsed = new(StringComparer.Ordinal);
+
+    /// <summary>The most addresses of one host a model's check reaches (C1: 200 A records were 3,200 connects for one host of the budget).</summary>
+    public const int MaxAddresses = 4;
+
+    /// <summary>How long a list's name stays resolved (2026-10-23, the admin review's A10: every call resolved them again, up to 3 s).</summary>
+    public static readonly TimeSpan ListNamesTtl = TimeSpan.FromSeconds(60);
+
+    private readonly ConcurrentDictionary<string, (DateTimeOffset At, IPAddress[] Found)> _listNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<AppSettingsData> _effective;
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolve;
     private readonly Func<IReadOnlyList<IPEndPoint>> _systemDns;
@@ -132,15 +146,23 @@ public sealed class NetworkAccess
         }
 
         string text = host.Trim();
+
+        // A LAN spelling refused before it is resolved, under a reach that refuses the LAN (2026-10-23, the admin review's M7).
+        if (budget is not null && SpelledLanRefusal(text) is { } early)
+        {
+            return Refused(budget, text, early);
+        }
+
         var resolved = await ResolveAsync(text, cancellationToken).ConfigureAwait(false);
         if (resolved.Error is { } unresolved)
         {
-            return NetworkResult<NetworkTarget>.Failed(unresolved);
+            return budget is null ? NetworkResult<NetworkTarget>.Failed(unresolved) : Refused(budget, text, unresolved);
         }
 
         var addresses = resolved.Value!;
         var aliases = await DeniedAddressesAsync(cancellationToken).ConfigureAwait(false);
-        var (admitted, refusal) = Judge(text, addresses, aliases);
+        var allowedAliases = await AllowedAddressesAsync(cancellationToken).ConfigureAwait(false);
+        var (admitted, refusal) = Judge(text, addresses, aliases, allowedAliases);
         if (budget is null)
         {
             return NetworkResult<NetworkTarget>.Ok(new NetworkTarget(text, addresses, refusal is null ? null : NetworkText.ModelWouldBeRefused(refusal)));
@@ -148,17 +170,37 @@ public sealed class NetworkAccess
 
         if (refusal is not null)
         {
-            DiagnosticLog.Info(NetworkText.Category, "Refused " + text + ": " + refusal);
-            return NetworkResult<NetworkTarget>.Failed(refusal);
+            return Refused(budget, text, refusal);
         }
 
-        if (budget.Take(text, admitted, ports, MaxHosts, MaxPorts) is { } spent)
+        var kept = admitted.Take(MaxAddresses).ToList();
+        if (budget.Take(text, kept, ports, MaxHosts, MaxPorts) is { } spent)
         {
             DiagnosticLog.Info(NetworkText.Category, "Refused " + text + ": " + spent);
             return NetworkResult<NetworkTarget>.Failed(spent);
         }
 
-        return NetworkResult<NetworkTarget>.Ok(new NetworkTarget(text, admitted));
+        return NetworkResult<NetworkTarget>.Ok(new NetworkTarget(text, kept, LeftOut: admitted.Count - kept.Count));
+    }
+
+    /// <summary>
+    /// A model's target refused or unresolved, which spends the budget as a host too (2026-10-23, the admin review's U5: neither did, so which
+    /// internal names exist could be listed without end); the budget's refusal when it is spent, else <paramref name="refusal"/>.
+    /// </summary>
+    private NetworkResult<NetworkTarget> Refused(NetworkBudget budget, string text, string refusal)
+    {
+        string answer = budget.Take(text, [], [], MaxHosts, MaxPorts) ?? refusal;
+        DiagnosticLog.Info(NetworkText.Category, "Refused " + text + ": " + answer);
+        return NetworkResult<NetworkTarget>.Failed(answer);
+    }
+
+    /// <summary>The reach's refusal of a LAN-spelled name (<see cref="LanPolicy.SpelledLan"/>) before any lookup; null when it may be looked up.</summary>
+    public string? SpelledLanRefusal(string host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        return LanPolicy.SpelledLan(host) && LanPolicy.Judge(NetworkToolsReach.Resolve(_effective()), lan: true) is var refusal and not NetworkRefusal.None
+            ? NetworkText.ReachRefused(host.Trim(), refusal)
+            : null;
     }
 
     /// <summary>A host's addresses: a literal as itself, a name through the resolver; the refusal's sentence when it resolves to none.</summary>
@@ -167,7 +209,9 @@ public sealed class NetworkAccess
         string bare = host.Trim().Trim('[', ']');
         if (HostRules.TryParseAddress(bare, out var literal))
         {
-            return NetworkResult<IReadOnlyList<IPAddress>>.Ok([literal]);
+            // As its canonical form (2026-10-23, the admin review's J8: an IPv4-mapped literal went to an IPv6 socket without DualMode and read as
+            // unreachable for a host up on IPv4).
+            return NetworkResult<IReadOnlyList<IPAddress>>.Ok([HostRules.Canonical(literal)]);
         }
 
         string name = HostRules.NormalizeName(bare);
@@ -176,7 +220,7 @@ public sealed class NetworkAccess
             var addresses = await _resolve(name, cancellationToken).ConfigureAwait(false);
             return addresses.Length == 0
                 ? NetworkResult<IReadOnlyList<IPAddress>>.Failed(NetworkText.NoAddresses(host))
-                : NetworkResult<IReadOnlyList<IPAddress>>.Ok(addresses.Distinct().ToList());
+                : NetworkResult<IReadOnlyList<IPAddress>>.Ok(addresses.Select(HostRules.Canonical).Distinct().ToList());
         }
         catch (SocketException ex)
         {
@@ -194,7 +238,14 @@ public sealed class NetworkAccess
     /// the list's names resolve to; a denied address dropped, none left a refusal), then the allowed list (the name matching admits every
     /// address; else only the matching addresses). The addresses kept, or the refusal. Pure over the settings.
     /// </summary>
-    public (IReadOnlyList<IPAddress> Addresses, string? Refusal) Judge(string host, IReadOnlyList<IPAddress> addresses, IReadOnlyDictionary<IPAddress, HostRule>? deniedAliases = null)
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review): reach's own addresses only, none a refusal (Q15: an admission with none fell back to every address); a
+    /// denied glob matches its own domain (H8); a denied name's addresses are matched by an address's carried IPv4 too (Q10: a NAT64 form of a
+    /// denied name's address got through); an allowed name's addresses (<paramref name="allowedAliases"/>) are allowed, as a denied name's are
+    /// denied (U14: an allowed host reached by its address or another name was refused).
+    /// </remarks>
+    public (IReadOnlyList<IPAddress> Addresses, string? Refusal) Judge(string host, IReadOnlyList<IPAddress> addresses, IReadOnlyDictionary<IPAddress, HostRule>? deniedAliases = null,
+        IReadOnlyDictionary<IPAddress, HostRule>? allowedAliases = null)
     {
         var effective = _effective();
         var admission = LanPolicy.Admit(host, addresses, NetworkToolsReach.Resolve(effective));
@@ -205,8 +256,13 @@ public sealed class NetworkAccess
 
         var denied = Rules(effective.NetworkDeniedHosts, NetworkText.DeniedSetting);
         var allowed = Rules(effective.NetworkAllowedHosts, NetworkText.AllowedSetting);
-        var kept = admission.Addresses.Count > 0 ? admission.Addresses : addresses;
-        if (HostRules.Match(denied, host, null) is { } byName)
+        var kept = admission.Addresses;
+        if (kept.Count == 0)
+        {
+            return ([], NetworkText.NoAddresses(host));
+        }
+
+        if (HostRules.Match(denied, host, null, apex: true) is { } byName)
         {
             return ([], NetworkText.Denied(host, byName.Text));
         }
@@ -220,7 +276,8 @@ public sealed class NetworkAccess
             {
                 firstDenied ??= entry;
             }
-            else if (deniedAliases is not null && deniedAliases.TryGetValue(HostRules.Canonical(address), out var alias))
+            else if (deniedAliases is not null && (deniedAliases.TryGetValue(HostRules.Canonical(address), out var alias)
+                || (LanPolicy.EmbeddedIPv4(address) is { } inner && deniedAliases.TryGetValue(inner, out alias))))
             {
                 firstDenied ??= alias;
             }
@@ -240,7 +297,7 @@ public sealed class NetworkAccess
             return (notDenied, null);
         }
 
-        var allowedAddresses = notDenied.Where(a => HostRules.Match(allowed, null, a) is not null).ToList();
+        var allowedAddresses = notDenied.Where(a => HostRules.Match(allowed, null, a) is not null || (allowedAliases is not null && allowedAliases.ContainsKey(HostRules.Canonical(a)))).ToList();
         return allowedAddresses.Count == 0 ? ([], NetworkText.NotAllowed(host)) : (allowedAddresses, null);
     }
 
@@ -253,10 +310,21 @@ public sealed class NetworkAccess
     /// Resolved side by side under <see cref="DeniedNamesTimeout"/>; a name that does not resolve in time denies nothing more than itself.
     /// Globs cannot be resolved and still match names alone. Empty when the list holds no name.
     /// </summary>
-    public async Task<IReadOnlyDictionary<IPAddress, HostRule>> DeniedAddressesAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// Since 2026-10-23 (the admin review): a glob's own domain is resolved too (H8: the DCs were reached by the bare domain's name), and each
+    /// name's addresses are kept for <see cref="ListNamesTtl"/> (A10).
+    /// </remarks>
+    public Task<IReadOnlyDictionary<IPAddress, HostRule>> DeniedAddressesAsync(CancellationToken cancellationToken) =>
+        ListAddressesAsync(Rules(_effective().NetworkDeniedHosts, NetworkText.DeniedSetting)
+            .Where(r => (r.Kind == HostRuleKind.Name && !IPAddress.TryParse(r.Name, out _)) || r.Kind == HostRuleKind.Glob).ToList(), cancellationToken);
+
+    /// <summary>The addresses the allowed list's names resolve to now, each with its entry (U14); globs match names alone.</summary>
+    public Task<IReadOnlyDictionary<IPAddress, HostRule>> AllowedAddressesAsync(CancellationToken cancellationToken) =>
+        ListAddressesAsync(Rules(_effective().NetworkAllowedHosts, NetworkText.AllowedSetting)
+            .Where(r => r.Kind == HostRuleKind.Name && !IPAddress.TryParse(r.Name, out _)).ToList(), cancellationToken);
+
+    private async Task<IReadOnlyDictionary<IPAddress, HostRule>> ListAddressesAsync(IReadOnlyList<HostRule> names, CancellationToken cancellationToken)
     {
-        var names = Rules(_effective().NetworkDeniedHosts, NetworkText.DeniedSetting)
-            .Where(r => r.Kind == HostRuleKind.Name && !IPAddress.TryParse(r.Name, out _)).ToList();
         if (names.Count == 0)
         {
             return new Dictionary<IPAddress, HostRule>();
@@ -264,11 +332,19 @@ public sealed class NetworkAccess
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(DeniedNamesTimeout);
+        var now = Time.GetUtcNow();
         var lookups = names.Select(async rule =>
         {
+            if (_listNames.TryGetValue(rule.Name!, out var known) && now - known.At < ListNamesTtl)
+            {
+                return (rule, known.Found);
+            }
+
             try
             {
-                return (rule, await _resolve(rule.Name!, budget.Token).ConfigureAwait(false));
+                var found = await _resolve(rule.Name!, budget.Token).ConfigureAwait(false);
+                _listNames[rule.Name!] = (now, found);
+                return (rule, found);
             }
             catch (Exception ex) when (ex is SocketException or ArgumentException || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
             {
@@ -305,12 +381,13 @@ public sealed class NetworkAccess
         }
 
         var effective = _effective();
-        if (LanPolicy.IsPrivateHost(name) && LanPolicy.Judge(NetworkToolsReach.Resolve(effective), lan: true) is var refusal and not NetworkRefusal.None)
+        // By the LAN's spellings, not only localhost's (2026-10-23, the admin review's M7 and B9: corp.local's zone could be listed).
+        if (SpelledLanRefusal(name) is { } spelled)
         {
-            return ([], NetworkText.ReachRefused(name, refusal));
+            return ([], spelled);
         }
 
-        if (HostRules.Match(Rules(effective.NetworkDeniedHosts, NetworkText.DeniedSetting), name, null) is { } denied)
+        if (HostRules.Match(Rules(effective.NetworkDeniedHosts, NetworkText.DeniedSetting), name, null, apex: true) is { } denied)
         {
             return ([], NetworkText.Denied(name, denied.Text));
         }
@@ -319,9 +396,20 @@ public sealed class NetworkAccess
         return allowed.Count == 0 || HostRules.Match(allowed, name, null) is not null ? ([], null) : ([], NetworkText.NotAllowed(name));
     }
 
-    /// <summary>A saved list's usable entries; each unreadable one warned once per run.</summary>
+    /// <summary>A saved list's usable entries, read once per text (U16); each unreadable one warned once per run.</summary>
     private static IReadOnlyList<HostRule> Rules(IReadOnlyList<string>? saved, string setting)
     {
+        if (saved is null || saved.Count == 0)
+        {
+            return [];
+        }
+
+        string key = setting + "\n" + string.Join('\n', saved);
+        if (s_parsed.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
         foreach (string problem in HostRules.Problems(saved))
         {
             if (s_warned.TryAdd(setting + "|" + problem, 0))
@@ -330,6 +418,11 @@ public sealed class NetworkAccess
             }
         }
 
-        return HostRules.ReadList(saved);
+        if (s_parsed.Count > 64)
+        {
+            s_parsed.Clear();
+        }
+
+        return s_parsed[key] = HostRules.ReadList(saved);
     }
 }

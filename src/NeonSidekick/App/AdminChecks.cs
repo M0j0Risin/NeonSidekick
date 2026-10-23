@@ -26,9 +26,10 @@ internal static class AdminChecks
         var dns = await NetworkChecks.DnsAsync(access, null, host, DnsWire.A, null, cancellationToken).ConfigureAwait(false);
         checks.Add(Line("net:dns", dns));
         var ping = await NetworkChecks.PingAsync(access, null, host, 2, cancellationToken).ConfigureAwait(false);
-        checks.Add(new SmokeCheck("net:ping", !ping.Text.StartsWith("Error:", StringComparison.Ordinal), First(ping.Text)));
+        // A ping with no reply and a port not open fail (2026-10-23, the admin review's I3: anything short of "Error:" passed).
+        checks.Add(new SmokeCheck("net:ping", !ping.Text.StartsWith("Error:", StringComparison.Ordinal) && !ping.Text.Contains(", 0 received", StringComparison.Ordinal), First(ping.Text)));
         var port = await NetworkChecks.PortsAsync(access, null, host, [443], cancellationToken).ConfigureAwait(false);
-        checks.Add(Line("net:port", port));
+        checks.Add(new SmokeCheck("net:port", !port.Text.StartsWith("Error:", StringComparison.Ordinal) && port.Text.Contains(" open", StringComparison.Ordinal), First(port.Text)));
         var tls = await NetworkChecks.TlsAsync(access, null, host, 443, null, null, cancellationToken).ConfigureAwait(false);
         checks.Add(Line("net:tls", tls));
         var store = CertificateStores.Read("My", System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser);

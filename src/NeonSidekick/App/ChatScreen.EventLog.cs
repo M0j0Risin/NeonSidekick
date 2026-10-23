@@ -52,6 +52,17 @@ internal sealed partial class ChatScreen
     public static bool LocalFull(string profileDirectory, string storageDirectory) =>
         EventLogConfigFile.LoadCatalog(profileDirectory, storageDirectory).Computers.FirstOrDefault(c => c.IsLocal)?.Config.Full ?? false;
 
+    /// <summary>Whether a ticked event-log computer lies beyond this one, on Windows (2026-10-23, N3), where a PDC's Security log can be read.</summary>
+    public static bool EventLogRemote(EventLogAccess access)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        return OperatingSystem.IsWindows() && access.System is not null && access.Catalog().Computers.Any(c => !c.IsLocal);
+    }
+
+    /// <summary>local's <c>logs</c> allow-list in eventlog.json (2026-10-23, the admin review's N4: a Mac read it nowhere); null for none.</summary>
+    public static IReadOnlyList<string>? LocalLogs(string profileDirectory, string storageDirectory) =>
+        EventLogConfigFile.LoadCatalog(profileDirectory, storageDirectory).Computers.FirstOrDefault(c => c.IsLocal)?.Config.Logs;
+
     /// <summary>The event-log tools' names: their result's first line is the transcript's note (<see cref="EventLogText.Note"/>); an advisor reads a stand-in for their results.</summary>
     public static readonly IReadOnlySet<string> EventLogToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -111,8 +122,8 @@ internal sealed partial class ChatScreen
             return [];
         }
 
-        var files = EventLogLogsTool.EvtxFiles(_files).Files.Select(f => f.Path).ToList();
-        return EventLogCommand.Complete(argText, _eventLog.Catalog().Computers.Select(c => c.Name).ToList(), files);
+        // The files as last listed, walked on the pool (2026-10-23, the admin review's D4); the catalog from its cache (ConfigCache).
+        return EventLogCommand.Complete(argText, _eventLog.Catalog().Computers.Select(c => c.Name).ToList(), _eventLog.CachedEvtxFiles());
     }
 
     /// <summary>

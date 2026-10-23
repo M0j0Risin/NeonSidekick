@@ -64,6 +64,67 @@ public sealed class EventLogAccess
 
     public WorkingDirectory Files { get; }
 
+    /// <summary>How long a listing of the working directory's <c>.evtx</c> files stands for completion before it is walked again.</summary>
+    public static readonly TimeSpan EvtxCacheTime = TimeSpan.FromSeconds(30);
+
+    private readonly object _evtxGate = new();
+    private (string Root, DateTimeOffset At, IReadOnlyList<string> List)? _evtx;
+    private int _evtxRefreshing;
+
+    /// <summary>
+    /// The working directory's <c>.evtx</c> files as last listed, for <c>/eventlog</c>'s completion (2026-10-23, the admin review's D4: the
+    /// walk, six levels deep, ran on the input thread at every keystroke): a stale or missing listing is walked again on the pool, never
+    /// waited for — the Mac's archives' shape (<c>MacLogAccess.CachedArchives</c>).
+    /// </summary>
+    public IReadOnlyList<string> CachedEvtxFiles()
+    {
+        string root;
+        try
+        {
+            root = Files.Root;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return [];
+        }
+
+        IReadOnlyList<string> known = [];
+        bool fresh = false;
+        lock (_evtxGate)
+        {
+            if (_evtx is { } kept && kept.Root == root)
+            {
+                known = kept.List;
+                fresh = Time.GetUtcNow() - kept.At < EvtxCacheTime;
+            }
+        }
+
+        if (!fresh && Interlocked.Exchange(ref _evtxRefreshing, 1) == 0)
+        {
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var list = Llm.Tools.EventLogLogsTool.EvtxFiles(Files).Files.Select(f => f.Path).ToList();
+                    lock (_evtxGate)
+                    {
+                        _evtx = (root, Time.GetUtcNow(), list);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+                {
+                    DiagnosticLog.Debug(EventLogText.Category, "the .evtx listing failed: " + ex.Message);
+                }
+                finally
+                {
+                    Volatile.Write(ref _evtxRefreshing, 0);
+                }
+            });
+        }
+
+        return known;
+    }
+
     public TimeProvider Time { get; }
 
     /// <summary>Every computer the files hold, ticked or not.</summary>
@@ -76,9 +137,16 @@ public sealed class EventLogAccess
     /// The computer <paramref name="computer"/> names among the ticked ones (or the default), with its target — the <c>runas</c> password
     /// resolved now. <paramref name="forceRedacted"/> (an advisor's, a script's call; a bot's until 2026-10-22) reads it redacted whatever its detail.
     /// </summary>
-    public (EventLogSource? Source, string? Error) Computer(string? computer, bool forceRedacted)
+    public (EventLogSource? Source, string? Error) Computer(string? computer, bool forceRedacted) => Computer(computer, forceRedacted, Catalog());
+
+    /// <summary>
+    /// <see cref="Computer(string?, bool)"/> over a catalog the caller already read (2026-10-23, the admin review's R15: eventlog_logs read it
+    /// twice, and an edit between made the listed computers and the probed one disagree).
+    /// </summary>
+    public (EventLogSource? Source, string? Error) Computer(string? computer, bool forceRedacted, EventLogCatalog catalog)
     {
-        var (found, error) = Catalog().Find(computer);
+        ArgumentNullException.ThrowIfNull(catalog);
+        var (found, error) = catalog.Find(computer);
         if (found is null)
         {
             return (null, error);
@@ -101,7 +169,7 @@ public sealed class EventLogAccess
             login = new EventLogLogin(found.Config.User!.Trim(), secret.Value!, found.Config.AuthMethodWord);
         }
 
-        return (new EventLogSource(found, EventLogTarget.Remote(found.Config.Host!.Trim(), login), "", forceRedacted || !found.Config.Full), null);
+        return (new EventLogSource(found, EventLogTarget.Remote(found.Config.Host!.Trim(), login, found.Config.AuthMethodWord), "", forceRedacted || !found.Config.Full), null);
     }
 
     /// <summary>
@@ -140,6 +208,11 @@ public sealed class EventLogAccess
             return (null, EventLogText.Missing("log"));
         }
 
+        if (EventLogQuery.NameProblem(channel) is { } bad)
+        {
+            return (null, bad);   // K1
+        }
+
         var (source, error) = Computer(computer, forceRedacted);
         if (source is null)
         {
@@ -174,26 +247,37 @@ public sealed class EventLogAccess
             return EventLogResult<T>.Failed(EventLogText.NoneHere);
         }
 
-        using var timeout = new CancellationTokenSource(source.Remote ? RemoteTimeout : LocalTimeout, Time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        var token = linked.Token;
+        // Through the shared sign-in guard (2026-10-23, the admin review's F2, I12: a refused runas password held with the services' and tasks'
+        // of the same host, abandoned reads capped and observed).
+        var login = source.Target.Login;
+        var call = Computers.SignInGuard.ForHost("eventlog", source.Remote ? source.Target.Host : null, login?.User, login?.Password,
+            failure => failure is EventLogException { Code: var code } && Computers.SignInGuard.IsWrongPassword(code));
         var started = Stopwatch.GetTimestamp();
-        try
+        var run = await Computers.SignInGuard.RunAsync(call, turn => work(system, turn.Token), source.Remote ? RemoteTimeout : LocalTimeout, Time, cancellationToken).ConfigureAwait(false);
+        switch (run.Stop)
         {
-            var value = await Task.Run(() => work(system, token), CancellationToken.None).WaitAsync(token).ConfigureAwait(false);
-            DiagnosticLog.Debug(EventLogText.Category, $"{Describe(source)} read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
-            return EventLogResult<T>.Ok(value);
+            case Computers.SignInStop.Held:
+                return EventLogResult<T>.Failed(Computers.ComputerText.Held(source.Context.Computer, login?.User ?? ""));
+            case Computers.SignInStop.StillWaiting:
+                return EventLogResult<T>.Failed(Computers.ComputerText.StillWaiting(source.Context.Computer));
+            case Computers.SignInStop.TimedOut:
+                DiagnosticLog.Debug(EventLogText.Category, $"{Describe(source)} timed out");
+                return EventLogResult<T>.Failed(EventLogText.TimedOut(source.Context.Computer));
         }
-        catch (EventLogException ex)
+
+        if (run.Failure is EventLogException ex)
         {
             DiagnosticLog.Debug(EventLogText.Category, $"{Describe(source)} failed: {ex.Message}");
             return EventLogResult<T>.Failed(EventLogErrors.Sentence(ex.Code, source.Context, ex.Message));
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+
+        if (run.Failure is { } other)
         {
-            DiagnosticLog.Debug(EventLogText.Category, $"{Describe(source)} timed out");
-            return EventLogResult<T>.Failed(EventLogText.TimedOut(source.Context.Computer));
+            global::System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(other).Throw();
         }
+
+        DiagnosticLog.Debug(EventLogText.Category, $"{Describe(source)} read in {Stopwatch.GetElapsedTime(started).TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture)} ms");
+        return EventLogResult<T>.Ok(run.Value!);
     }
 
     /// <summary>
@@ -222,7 +306,12 @@ public sealed class EventLogAccess
     {
         ArgumentNullException.ThrowIfNull(computer);
         var access = new EventLogAccess(system, () => new EventLogCatalog([computer], []), () => [computer.Name], files, time);
-        var (source, error) = access.Resolve(computer.Name, "System", forceRedacted: true);
+
+        // A log the entry allows (2026-10-23, the admin review's E6: System alone was tried, so an entry allowing only Security or Directory
+        // Service failed its own test and --eventlog-check).
+        string log = EventLogCatalog.Allows(computer.Config.Logs, "System") ? "System"
+            : computer.Config.Logs?.Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0 && !l.Contains('*', StringComparison.Ordinal)) ?? "System";
+        var (source, error) = access.Resolve(computer.Name, log, forceRedacted: true);
         if (source is null)
         {
             return (false, error!);

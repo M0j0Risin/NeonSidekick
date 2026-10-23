@@ -536,6 +536,9 @@ internal sealed partial class ChatScreen
     private async Task<bool> RunRalphAsync(CancellationToken cancellationToken)
     {
         var loop = _ralph!;
+
+        // One network budget for the whole run (2026-10-23, the admin review's L6, decision DA8).
+        using var budgetRun = BudgetRun();
         string path = loop.Snapshot.Path;
         var files = RalphFiles;
         RalphStop? stop = null;

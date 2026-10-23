@@ -36,4 +36,7 @@ public interface IPinger
 
     /// <summary>Whether a router's Time Exceeded reaches this pinger, so a trace can be run.</summary>
     bool CanTrace { get; }
+
+    /// <summary>Whether this pinger sends IPv6 echoes (2026-10-23, the admin review's U17: "is it the Mac's" stood for this).</summary>
+    bool SupportsIPv6 => true;
 }

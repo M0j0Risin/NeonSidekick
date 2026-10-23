@@ -69,6 +69,8 @@ public static class NetworkMode
     };
 
     /// <summary>The reach in force for <paramref name="effective"/>; an unknown saved value warns and uses <see cref="Default"/>.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> s_warned = new(StringComparer.Ordinal);
+
     public static NetworkReach Resolve(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
@@ -77,8 +79,12 @@ public static class NetworkMode
             return reach;
         }
 
-        DiagnosticLog.Warn(Category,
-            $"{nameof(AppSettingsData.WebBrowserNetworkMode)}='{effective.WebBrowserNetworkMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        // Once a run per word (2026-10-23, the admin review's U15: every host of every question warned again).
+        if (s_warned.TryAdd(effective.WebBrowserNetworkMode ?? "", 0))
+        {
+            DiagnosticLog.Warn(Category,
+                $"{nameof(AppSettingsData.WebBrowserNetworkMode)}='{effective.WebBrowserNetworkMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        }
         TryParse(Default, out reach);
         return reach;
     }

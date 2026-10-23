@@ -24,7 +24,7 @@ public sealed partial class ActiveDirectoryTests
         Classes(Pat, UserChain);
         string text = Model(FindOf(new FindOptions("privileged", 0, null, 50)));
         Assert.StartsWith("privileged accounts in lab.example: 3\n", text);
-        Assert.Contains("\n  pat  user  ⟪Pat Prime⟫  ⟪Domain Admins⟫, ⟪Administrators⟫\n", text);
+        Assert.Contains("\n  ⟪pat⟫  user  ⟪Pat Prime⟫  ⟪Domain Admins⟫, ⟪Administrators⟫\n", text);
         Assert.DoesNotContain("⟪Pat Prime⟫  " + DirectoryText.LeftoverNote, text);
         Assert.Contains("\n" + DirectoryText.LeftoversTitle + " (2):\n", text);   // krbtgt and oldadmin, as before
     }
@@ -65,19 +65,19 @@ public sealed partial class ActiveDirectoryTests
         _system.Filters.Clear();
         string locked = Model(FindOf(new FindOptions("locked", 0, null, 50)));
         Assert.Equal(2, _system.Filters.Count(f => f == "(objectClass=*)"));   // the domain's policy and the one PSO, for three accounts
-        Assert.Contains("\n  grace  ⟪Grace Hu⟫  locked ", locked);          // three minutes into the PSO's ten
+        Assert.Contains("\n  ⟪grace⟫  ⟪Grace Hu⟫  locked ", locked);          // three minutes into the PSO's ten
         Assert.DoesNotContain("alice", locked);                              // ten minutes in: the PSO's lockout is over
         _system.Filters.Clear();
         string expiring = Model(FindOf(new FindOptions("password_expiring", 14, null, 50)));
         Assert.Equal(2, _system.Filters.Count(f => f == "(objectClass=*)"));
-        Assert.Contains("\n  grace  ⟪Grace Hu⟫  expires ", expiring);       // 25 days into the PSO's 30; the domain's 42 had left her out
+        Assert.Contains("\n  ⟪grace⟫  ⟪Grace Hu⟫  expires ", expiring);       // 25 days into the PSO's 30; the domain's 42 had left her out
     }
 
     [Fact]
     public async Task Cards_RunUnderTheCallsDeadline()
     {
         _system.TimeLimits.Clear();
-        Assert.StartsWith("User alice", await Call(new AdUserTool(Access()), ("name", "alice")));
+        Assert.StartsWith("User ⟪alice⟫", await Call(new AdUserTool(Access()), ("name", "alice")));
         Assert.StartsWith("Computer ", await Call(new AdComputerTool(Access()), ("name", "ws01")));
         Assert.StartsWith("Domain ", await Call(new AdDomainTool(Access())));
         Assert.NotEmpty(_system.TimeLimits);

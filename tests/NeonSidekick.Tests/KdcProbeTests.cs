@@ -144,7 +144,8 @@ public sealed class KdcProbeTests
         foreach (KdcVerdict verdict in Enum.GetValues<KdcVerdict>())
         {
             var refusal = ManagedDirectorySystem.Refusal(new KdcAnswer(verdict, 25, TimeSpan.FromMinutes(9)), "reader@LAB.NEON.TEST", "dc1.lab.neon.test");
-            bool held = verdict is KdcVerdict.KnowsTheAccount or KdcVerdict.Revoked;
+            // A locked, disabled or expired account is no longer held (2026-10-23, the admin review's B8): only the password's own refusal.
+            bool held = verdict is KdcVerdict.KnowsTheAccount;
             Assert.Equal(held, DirectoryAccess.RefusedPassword(refusal.Code, refusal.Message));
         }
 

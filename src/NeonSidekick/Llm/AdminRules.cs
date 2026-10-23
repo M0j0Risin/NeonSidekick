@@ -20,4 +20,19 @@ public enum AdminRules
 
     /// <summary>The monitor tools (2026-10-23, the monitors plan): <c>Assistant.MonitorRule</c>.</summary>
     Monitors = 128,
+
+    /// <summary>Ping and trace offered with the network tools (2026-10-23, the admin review's R4: the rule named them where no pinger is).</summary>
+    NetworkEcho = 256,
+
+    /// <summary>
+    /// <c>service_start_type</c> offered (2026-10-23, the admin review's I4): <see cref="ServiceWrites"/> is <c>service_control</c> alone now, so a
+    /// computer that allows only start types is never told of a tool it lacks.
+    /// </summary>
+    ServiceStartTypes = 512,
+
+    /// <summary>
+    /// The directory's 4740 pointer may be followed (2026-10-23, the admin review's N3): Windows' event logs with a ticked computer beyond this
+    /// one, where a PDC's Security log can be. A Mac's logs have no Security log and no remote computer.
+    /// </summary>
+    DirectoryLockout = 1024,
 }

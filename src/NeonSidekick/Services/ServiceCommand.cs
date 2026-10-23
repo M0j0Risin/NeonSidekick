@@ -1,4 +1,5 @@
 using NeonSidekick.Computers;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Services;
@@ -27,7 +28,8 @@ public static class ServiceCommand
         string? computer = null;
         string state = "running";
         var words = new List<string>();
-        foreach (string word in args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        // Quoted words kept whole (2026-10-23, the admin review's P3: computer:"…" and a display name with spaces), as /eventlog reads them.
+        foreach (string word in EventLog.EventLogCommand.Words(args))
         {
             if (word.StartsWith("computer:", StringComparison.OrdinalIgnoreCase))
             {
@@ -77,7 +79,7 @@ public static class ServiceCommand
             return Failed(failed);
         }
 
-        var lines = new List<string> { $"Services on {source.Where}: {result.Value.Matched.Count} ({line.State})" };
+        var lines = new List<string> { ServiceText.CommandHeader(source.Where, result.Value.Matched.Count, line.State) };
         lines.AddRange(result.Value.Matched.Select(PlainLine));
         return new ServiceCommandResult(lines, false);
     }
@@ -104,6 +106,7 @@ public static class ServiceCommand
     private static ServiceCommandResult Failed(string error) => new([error.Replace("Error: ", "", StringComparison.Ordinal)], true);
 
     /// <summary>The draft a service's <c>ask</c> leaves. Pinned.</summary>
+    /// <remarks>The computer's own name fenced (2026-10-23, the admin review's L9: pasted raw into the user's own message).</remarks>
     public static string AskDraft(string name, Computer<ServiceComputerConfig> computer) =>
-        "Explain the " + name + " service" + (computer.IsLocal ? "" : " on " + computer.Name) + " and whether it is healthy";
+        "Explain the service " + UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.Name(name), 200)) + (computer.IsLocal ? "" : " on " + computer.Name) + " and whether it is healthy";
 }

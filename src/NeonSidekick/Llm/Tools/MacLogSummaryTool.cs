@@ -23,7 +23,11 @@ public sealed class MacLogSummaryTool : MacLogTool
             "level": { "type": "string", "description": "fault, error, default, info, debug, or all; several joined by commas. Default: fault,error." },
             "process": { "type": "string", "description": "Only this process." },
             "subsystem": { "type": "string", "description": "Only subsystems starting with this." },
-            "exclude_process": { "type": "string", "description": "Processes to leave out, joined by commas." }
+            "exclude_process": { "type": "string", "description": "Processes to leave out, joined by commas." },
+            "until": { "type": "string", "description": "Up to then: an age or a moment (a past window)." },
+            "pid": { "type": "integer", "description": "Only this process id." },
+            "category": { "type": "string", "description": "Only this category." },
+            "text": { "type": "string", "description": "Only entries whose message holds this (case ignored)." }
           },
           "required": ["log"]
         }
@@ -222,32 +226,40 @@ public sealed class MacLogLogsTool : MacLogTool
     {
         string? filter = Optional(arguments, "filter");
         var archiveSource = new MacLogSource(MacLogAccess.ArchiveExtension, UnifiedLogTarget.Local, Redacted: true);
-        var archives = await Access.RunFilesAsync(archiveSource, token => Access.Archives(token), cancellationToken).ConfigureAwait(false);
+        var archivesRead = Access.RunFilesAsync(archiveSource, token => Access.Archives(token), cancellationToken);
         if (!Access.LocalTicked)
         {
-            return MacLogRender.Logs(MacLogText.LocalNotTickedLine, MacLogText.LocalNotTickedLine, MacLogText.LocalNotTickedLine, archives.Value ?? [], filter, offered: false);
+            var alone = await archivesRead.ConfigureAwait(false);
+            return MacLogRender.Logs(MacLogText.LocalNotTickedLine, MacLogText.LocalNotTickedLine, MacLogText.LocalNotTickedLine, alone.Value ?? [], filter, offered: false);
         }
 
+        // The four reads side by side, each under the token (2026-10-23, the admin review's R14: one after another, 30 s each, about two minutes
+        // at worst, and the probe's and the install read's lambdas left the token out).
         var source = new MacLogSource(MacLogAccess.SystemNames[0], UnifiedLogTarget.Local, Redacted: true);
-        var probed = await Access.RunAsync(source, (unified, _) =>
+        var probedRead = Access.RunAsync(source, (unified, token) =>
         {
+            token.ThrowIfCancellationRequested();
             unified.Probe(UnifiedLogTarget.Local);
             return true;
-        }, cancellationToken).ConfigureAwait(false);
-        string? why = Bare(probed.Error);
+        }, cancellationToken);
         var now = Access.Time.GetUtcNow();
         var crashSource = new MacLogSource(MacLogAccess.CrashNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Crashes);
-        var crashes = await Access.RunFilesAsync(crashSource, token =>
+        var crashesRead = Access.RunFilesAsync(crashSource, token =>
         {
             var (reports, folders) = CrashReports.List(Access.Places.CrashFolders, now - MacFileLogs.CrashWindow, null, token);
             return MacLogText.CrashesLine(reports.Count, folders.Select(f => (f.Folder.Owner, f.Refused)).ToList());
-        }, cancellationToken).ConfigureAwait(false);
+        }, cancellationToken);
         var installSource = new MacLogSource(MacLogAccess.InstallNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Install);
-        var install = await Access.RunFilesAsync(installSource, _ =>
+        var installRead = Access.RunFilesAsync(installSource, token =>
         {
             using var stream = Access.OpenInstallLog();
-            return MacLogText.InstallLine(InstallLog.Backward(stream).FirstOrDefault() is { } newest ? EventLogText.Time(newest.Time, Zone) : null);
-        }, cancellationToken).ConfigureAwait(false);
+            return MacLogText.InstallLine(InstallLog.Backward(stream, null, token).FirstOrDefault() is { } newest ? EventLogText.Time(newest.Time, Zone) : null);
+        }, cancellationToken);
+        await Task.WhenAll(archivesRead, probedRead, crashesRead, installRead).ConfigureAwait(false);
+        var archives = await archivesRead.ConfigureAwait(false);
+        string? why = Bare((await probedRead.ConfigureAwait(false)).Error);
+        var crashes = await crashesRead.ConfigureAwait(false);
+        var install = await installRead.ConfigureAwait(false);
         return MacLogRender.Logs(why, crashes.Error is { } crashError ? Bare(crashError)! : crashes.Value!, install.Error is { } installError ? MacLogText.InstallRefused(Bare(installError)!) : install.Value!,
             archives.Value ?? [], filter);
     }

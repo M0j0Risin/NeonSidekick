@@ -51,6 +51,18 @@ public static class EventLogText
     /// </summary>
     public const string UnregisteredSource = "source not registered: any program could have written this";
 
+    /// <summary>A log this PC's account may not read (2026-10-23, S6: worded apart from a remote one). Pinned.</summary>
+    public const string NoAccessLocal = "no access (join the Event Log Readers group, or run the app as administrator)";
+
+    /// <summary>A remote computer's log its account may not read. Pinned.</summary>
+    public const string NoAccessRemote = "no access (the account needs rights there: the Event Log Readers group on that computer)";
+
+    /// <summary>A message the redacted detail withheld (2026-10-23, I1, W13). Pinned.</summary>
+    public const string MessageWithheld = "message withheld under redacted detail: its values could not be matched to its fields";
+
+    /// <summary>A classic event's raw data under redacted: its length alone (2026-10-23, W3, DP5). Pinned.</summary>
+    public static string BinaryLength(int bytes) => "binary, " + bytes.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " bytes";
+
     /// <summary>The header's note under the <c>redacted</c> detail. Pinned.</summary>
     public const string RedactedNote = "secret-like values hidden as " + EventLogRedaction.Placeholder;
 
@@ -133,26 +145,25 @@ public static class EventLogText
 
     public static string Missing(string argument) => $"Error: {argument} is required.";
 
-    public static string BadLevel(string word) => $"Error: level '{word}' is not one of critical, error, warning, information, verbose or all.";
+    public static string BadLevel(string word) => $"Error: level '{Llm.Tools.ArgumentText.Echo(word)}' is not one of critical, error, warning, information, verbose or all.";
 
     public static string BadIds(string part) => $"Error: id '{part}' is not an event id (0 to 65535) or a range such as 4700-4799.";
 
     public static string BadField(string text) => $"Error: field '{text}' is not Name=value with a field's name (letters, digits, _ . -).";
 
-    public static string BadAudit(string text) => $"Error: audit '{text}' is not success, failure or any.";
+    public static string BadAudit(string text) => $"Error: audit '{Llm.Tools.ArgumentText.Echo(text)}' is not success, failure or any.";
 
-    public static string BadTime(string argument, string text) => $"Error: {argument} '{text}' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).";
+    public static string BadTime(string argument, string text) => $"Error: {argument} '{Llm.Tools.ArgumentText.Echo(text)}' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).";
 
     public static string BadRecord(string text) => $"Error: '{text}' is not a record number.";
 
     /// <summary>The refusal of a cursor that is neither a record number nor a tagged one (2026-10-20, a review). Pinned.</summary>
     public static string BadCursor(string argument, string text) =>
-        $"Error: {argument} '{(text.Length > 40 ? text[..40] + "…" : text)}' is not a record number, nor one with its tag as an answer gives it (1200@3f9a2c1b).";
+        $"Error: {argument} '{Llm.Tools.ArgumentText.Echo(text)}' is not a record number, nor one with its tag as an answer gives it (1200@3f9a2c1b).";
 
-    public static string OutOfRange(string argument, string given, int min, int max) =>
-        $"Error: {argument} '{given}' is out of range; it must be {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}.";
+    public static string OutOfRange(string argument, string given, int min, int max) => Llm.Tools.ArgumentText.OutOfRange(argument, given, min, max);
 
-    public static string NotBoolean(string argument, string raw) => $"Error: {argument} '{raw}' is not true or false.";
+    public static string NotBoolean(string argument, string raw) => Llm.Tools.ArgumentText.NotBoolean(argument, raw);
 
     public static string BadLiteral(string text) =>
         $"Error: '{(text.Length > 40 ? text[..40] + "…" : text)}' cannot be searched for: it holds both quote marks, a control character, or more than {EventLogXPath.MaxLiteral.ToString(CultureInfo.InvariantCulture)} characters.";
@@ -192,6 +203,33 @@ public static class EventLogText
     public static string AccessDenied(string? log, string computer) =>
         $"Error: Windows refused access to {(log is null ? "that log" : "the " + log + " log")} on {computer}. To read it, join the Event Log Readers group (or run the app as administrator).";
 
+    /// <summary>A .evtx the file's own permissions keep out (2026-10-23, J10). Pinned.</summary>
+    public static string FileAccessDenied(string path) => $"Error: Windows refused access to {path}; its own permissions keep this account out (a copy you own reads).";
+
+    /// <summary>What a remote refusal adds for a runas account (J11). Pinned.</summary>
+    public const string OrPasswordWrong = " With a runas account this can also be a wrong password: check the entry's password.";
+
+    /// <summary>A read whose result went stale (2026-10-23, W16). Pinned.</summary>
+    public static string ResultStale(string log) => $"Error: the {log} log changed while it was read (it wrapped or was cleared); read it again.";
+
+    /// <summary>A <c>/eventlog</c> key with no value (2026-10-23, W10). Pinned.</summary>
+    public static string KeyNeedsValue(string key) => "/eventlog " + key + " needs a value (no space after the colon)";
+
+    /// <summary>A <c>/eventlog</c> key given twice that takes one value (2026-10-23, P16). Pinned.</summary>
+    public static string KeyTwice(string key) => "/eventlog takes one " + key + " (it was given twice)";
+
+    /// <summary>
+    /// Whether <paramref name="error"/> is about the computer, not one log (2026-10-23, the admin review's W7): unreachable, a refused or
+    /// impossible sign-in, or a timeout, which every other log of that computer would answer too.
+    /// </summary>
+    public static bool IsComputerWide(string error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return error.Contains("did not answer the event log's RPC call", StringComparison.Ordinal) || error.Contains("refused the sign-in as", StringComparison.Ordinal)
+            || error.Contains("no logon server could check", StringComparison.Ordinal) || error.Contains("refused the account", StringComparison.Ordinal)
+            || error.Contains("took too long and was stopped", StringComparison.Ordinal) || error.StartsWith("Error: cannot sign in to", StringComparison.Ordinal);
+    }
+
     public static string RemoteAccessDenied(string? log, string host, string account) =>
         $"Error: {host} refused {account} access to {(log is null ? "its logs" : "the " + log + " log")}. The account needs to be in the Event Log Readers group on {host}; a local administrator's sign-in is filtered by UAC over the network, so membership is the dependable way.";
 
@@ -227,8 +265,11 @@ public static class EventLogText
 
     public const string NoComputerTicked = "Error: no computer is ticked in Event log computers offered (/tools › Admin › EventLog); only .evtx files in the working directory can be read.";
 
+    /// <summary>A log name with a control character in it (2026-10-23, K1). Pinned.</summary>
+    public static string BadLogName(string log) => $"Error: '{Llm.Tools.UntrustedText.Name(log)}' is no log's name.";
+
     public static string LogNotAllowed(string log, string computer) =>
-        $"Error: the {log} log on {computer} is not among its \"logs\" in eventlog.json; eventlog_logs lists the ones it allows.";
+        $"Error: the {Llm.Tools.ArgumentText.Echo(log)} log on {computer} is not among the logs offered there; eventlog_logs lists the ones it allows.";   // DP1 (2026-10-23): no key named
 
     public const string FileWithComputer = "Error: a .evtx file is read on this PC; leave computer out for a file.";
 
@@ -258,9 +299,15 @@ public static class EventLogText
 
     public static string UnreadableFile(string detail) => $"the file could not be read: {detail}";
 
-    public static string NoPassword(string name) => $"no password for '{name}'; set it with Event log set password on /tools › Admin › EventLog";
+    /// <summary>Where a computer's password is set (2026-10-23: named apart for the wizard's unticked save, H9).</summary>
+    public const string MenuPath = "/tools › Admin › EventLog";
 
-    public static string NoCredential(string target) => $"no password in {Sql.SqlText.CredentialStore} for {target}; set it with Event log set password on /tools › Admin › EventLog, or: {Sql.SqlText.CredentialCommand(target, "<user>")}";
+    public const string SetPasswordRow = "Event log set password";
+
+    public static string NoPassword(string name) => $"no password for '{name}'; set it with {SetPasswordRow} on {MenuPath}";
+
+    // DP1 (2026-10-23, the admin review's L4): no cmdkey line for the model to run or to ask the password for.
+    public static string NoCredential(string target) => $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {SetPasswordRow} on {MenuPath}";
 
     public static string CannotSignIn(string name, string reason) => $"Error: cannot sign in to '{name}': {reason}.";
 
@@ -296,20 +343,42 @@ public static class EventLogText
         return "no " + what + " in " + log + (since is { } s ? " since " + Since(s, now, zone) : "");
     }
 
-    /// <summary>A since as a person says it: <c>yesterday</c> for about a day back, else the local time.</summary>
+    /// <summary>
+    /// A since as a person says it, as near as it was (2026-10-23, the admin review's S1: anything up to an hour back was "an hour ago", so
+    /// since=5m read "since an hour ago", and 23 to 25 hours "yesterday"): minutes under an hour, hours under two days, else the local time.
+    /// </summary>
     public static string Since(DateTimeOffset since, DateTimeOffset now, TimeZoneInfo zone)
     {
         var back = now - since;
-        if (back > TimeSpan.FromHours(23) && back < TimeSpan.FromHours(25))
+        if (back > TimeSpan.Zero && back < TimeSpan.FromMinutes(1))
         {
-            return "yesterday";
+            return "under a minute ago";
         }
 
-        if (back > TimeSpan.Zero && back <= TimeSpan.FromHours(1))
+        if (back >= TimeSpan.FromMinutes(1) && back < TimeSpan.FromHours(1))
         {
-            return "an hour ago";
+            int minutes = (int)Math.Round(back.TotalMinutes);
+            return minutes == 1 ? "a minute ago" : minutes.ToString(CultureInfo.InvariantCulture) + " minutes ago";
+        }
+
+        if (back >= TimeSpan.FromHours(1) && back < TimeSpan.FromHours(48))
+        {
+            int hours = (int)Math.Round(back.TotalHours);
+            return hours == 1 ? "an hour ago" : hours.ToString(CultureInfo.InvariantCulture) + " hours ago";
         }
 
         return Time(since, zone);
+    }
+
+    /// <summary>
+    /// What an empty answer adds when the search was narrower than its level and time (2026-10-23, the admin review's S2: an empty id,
+    /// provider, field, until or text search read as an empty log); "" when it was not.
+    /// </summary>
+    public static string Narrowed(EventLogQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return query.Ids.Count > 0 || query.Providers.Count > 0 || query.Fields.Count > 0 || query.Until is not null || query.Text is { Length: > 0 }
+            ? " matching the search's other terms"
+            : "";
     }
 }

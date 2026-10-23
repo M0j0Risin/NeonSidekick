@@ -48,6 +48,10 @@ public sealed class DirectoryDomainConfig
 
     public string? Description { get; set; }
 
+    /// <summary>Keys the file does not know (2026-10-23, the admin review's H5, DA1); the loader refuses the entry, naming the key.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
     [JsonIgnore]
     public bool IsRunAs => string.Equals(Auth?.Trim(), RunAsAuth, StringComparison.OrdinalIgnoreCase);
 
@@ -92,6 +96,11 @@ public sealed class DirectoryDomainConfig
         if (store.Length > 0 && !store.Equals(SqlConnectionConfig.FileStore, StringComparison.OrdinalIgnoreCase) && !store.Equals(SqlConnectionConfig.CredmanStore, StringComparison.OrdinalIgnoreCase))
         {
             return SqlText.BadPasswordStore(store);
+        }
+
+        if (Computers.ComputerConfig.CredentialProblem(Credential, CredentialPrefix) is { } credential)
+        {
+            return credential;
         }
 
         if (IsRunAs)
@@ -201,6 +210,10 @@ public sealed class DirectoryConfigFile
 
     public Dictionary<string, DirectoryDomainConfig?> Domains { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>Keys beside <c>domains</c>: listed as problems, never used (2026-10-23, DA1).</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
     /// <summary>What a fresh file holds: Windows' text, or on a Mac its own (2026-10-18: Kerberos, no joined PC, the Keychain). Pinned.</summary>
     public static string EmptyText => OperatingSystem.IsMacOS() ? MacEmptyText : WindowsEmptyText;
 
@@ -256,15 +269,27 @@ public sealed class DirectoryConfigFile
     public static (IReadOnlyList<DirectoryDomain> Domains, IReadOnlyList<SqlConfigProblem> Problems) Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return Computers.ConfigCache.Get(FileName, path, () => LoadUncached(path));
+    }
+
+    /// <summary>The read under <see cref="Load"/>'s cache (2026-10-23, the admin review's mechanism 1: DA1, Q1, C7 as the other families).</summary>
+    private static (IReadOnlyList<DirectoryDomain> Domains, IReadOnlyList<SqlConfigProblem> Problems) LoadUncached(string path)
+    {
         if (!File.Exists(path))
         {
             return ([], []);
         }
 
         DirectoryConfigFile? file;
+        IReadOnlySet<string> repeated;
+        IReadOnlyDictionary<string, string> twice;
         try
         {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), DirectoryJsonContext.Default.DirectoryConfigFile);
+            byte[] bytes = File.ReadAllBytes(path);
+            var json = Computers.ConfigChecks.WithoutBom(bytes);
+            repeated = ConnectionsFileEdit.RepeatedNames(json, Section);
+            twice = ConnectionsFileEdit.RepeatedKeys(json, Section);
+            file = JsonSerializer.Deserialize(json, DirectoryJsonContext.Default.DirectoryConfigFile);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -281,7 +306,7 @@ public sealed class DirectoryConfigFile
         }
 
         var domains = new List<DirectoryDomain>();
-        var problems = new List<SqlConfigProblem>();
+        var problems = Computers.ConfigChecks.UnknownFileKeys(file.Extra, Section).Select(p => new SqlConfigProblem(path, p)).ToList();
         foreach (var (name, config) in file.Domains)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -292,7 +317,10 @@ public sealed class DirectoryConfigFile
 
             var entry = config ?? new DirectoryDomainConfig();
             string trimmed = name.Trim();
-            if (entry.Problem(trimmed) is { } reason)
+            string? reason = repeated.Contains(trimmed) ? Computers.ComputerText.NamedTwice
+                : twice.TryGetValue(trimmed, out string? key) ? Computers.ComputerText.KeyTwice(key)
+                : Computers.ConfigChecks.UnknownKey(entry.Extra, DirectoryJsonContext.Default.DirectoryDomainConfig) ?? entry.Problem(trimmed);
+            if (reason is not null)
             {
                 problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, trimmed), reason, Name: trimmed));
                 continue;
@@ -317,7 +345,8 @@ public sealed class DirectoryConfigFile
             (global, globalProblems) = Load(GlobalPath(home));
         }
 
-        var names = new HashSet<string>(profile.Select(d => d.Name), StringComparer.OrdinalIgnoreCase);
+        // A profile entry that was refused still hides the home's of its name (2026-10-23, the admin review's D2).
+        var names = new HashSet<string>(profile.Select(d => d.Name).Concat(profileProblems.Where(p => p.Name is not null).Select(p => p.Name!)), StringComparer.OrdinalIgnoreCase);
         var all = profile.Concat(global.Where(d => !names.Contains(d.Name))).ToList();
         if (joined is { Length: > 0 })
         {
@@ -347,31 +376,28 @@ public sealed class DirectoryConfigFile
         }
     }
 
-    public static string? AddDomain(string path, string name, DirectoryDomainConfig config) =>
-        ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText, Section, Noun);
+    /// <summary>Adds a domain; <paramref name="sealedPassword"/> written in the same splice (2026-10-23, the admin review's H9). Null on success.</summary>
+    public static string? AddDomain(string path, string name, DirectoryDomainConfig config, string? sealedPassword = null) =>
+        ConnectionsFileEdit.AddConnection(path, name, EntryText(config, sealedPassword), EmptyText, Section, Noun);
 
-    public static string? ReplaceDomain(string path, string oldName, string newName, DirectoryDomainConfig config) =>
-        ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config), Section, Noun);
+    public static string? ReplaceDomain(string path, string oldName, string newName, DirectoryDomainConfig config, string? sealedPassword = null) =>
+        ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config, sealedPassword), Section, Noun);
 
-    public static string EntryText(DirectoryDomainConfig config)
+    /// <summary>An entry as the file holds it, from a copy with its password and unknown keys left out (2026-10-23: loaded entries are shared, <c>ConfigCache</c>).</summary>
+    public static string EntryText(DirectoryDomainConfig config, string? sealedPassword = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        string? password = config.Password;
-        config.Password = null;
-        try
+        var info = DirectoryJsonContext.Default.DirectoryDomainConfig;
+        var copy = JsonSerializer.Deserialize(JsonSerializer.Serialize(config, info), info)!;
+        copy.Password = sealedPassword;
+        copy.Extra = null;
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-            {
-                JsonSerializer.Serialize(writer, config, DirectoryJsonContext.Default.DirectoryDomainConfig);
-            }
+            JsonSerializer.Serialize(writer, copy, info);
+        }
 
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
-        finally
-        {
-            config.Password = password;
-        }
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     public static IReadOnlyList<string> EncryptAll(string home)
@@ -413,7 +439,7 @@ public sealed class DirectoryConfigFile
         {
             string target = config.CredentialTarget(domain.Name);
             var read = WindowsCredentials.ReadGeneric(target);
-            return read.NotFound ? CredentialResult.Failed(DirectoryText.NoCredential(target)) : read;
+            return read.NotFound ? CredentialResult.Failed(DirectoryText.NoCredential(target)) : Computers.ComputerConfig.CheckedUser(read, target, config.User);
         }
 
         string password = config.Password ?? "";

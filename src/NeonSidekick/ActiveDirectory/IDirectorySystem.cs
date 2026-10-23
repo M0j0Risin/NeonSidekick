@@ -56,7 +56,11 @@ public enum DirectoryScope
 public sealed record DirectoryResults(IReadOnlyList<DirectoryEntry> Entries, bool Truncated, bool TimedOut = false);
 
 /// <summary>Who a session binds as: the account and its password (never logged), handed to Negotiate as an explicit identity.</summary>
-public sealed record DirectoryLogin(string User, string Password);
+public sealed record DirectoryLogin(string User, string Password)
+{
+    /// <summary>The account alone (2026-10-23, the admin review's K9: the generated ToString printed the password, into a log or an exception).</summary>
+    public override string ToString() => $"DirectoryLogin {{ User = {User} }}";
+}
 
 /// <summary>
 /// Where a session goes: the server (a DC, or the domain's name), its port, LDAPS or not, and the sign-in; and the domain's DNS name
@@ -105,8 +109,26 @@ public static class DirectoryLimits
 {
     public const int PageSize = 500;
 
+    /// <summary>Pages past <c>sizeLimit / PageSize</c> a paged walk may take (short pages) before it stops as cut (2026-10-23, the admin review's N1).</summary>
+    public const int PageSlack = 8;
+
+    /// <summary>Empty pages in a row a paged walk takes before it stops as cut (N1: RFC 2696 allows one; a server answering only those spun the walk).</summary>
+    public const int MaxEmptyPages = 3;
+
     /// <summary>The most entries one call reads, the client-side refining included.</summary>
     public const int MaxEntries = 1000;
+
+    /// <summary>
+    /// The objects one redacted free-text match reads (2026-10-23, the admin review's E2, decision DA5): their descriptions matched here, the
+    /// server never asked about them; a <c>scan_from</c> goes on past them.
+    /// </summary>
+    public const int RedactedScan = 5000;
+
+    /// <summary>
+    /// The furthest a redacted scan starts (2026-10-23, the branch review of DP7): each page reads from the first object, so a start of a
+    /// million held a million entries in memory; twenty pages' worth.
+    /// </summary>
+    public const int MaxScanFrom = 20 * RedactedScan;
 
     /// <summary>The time one search may take, on the server and on the client.</summary>
     public static readonly TimeSpan SearchTime = TimeSpan.FromSeconds(30);
@@ -146,6 +168,12 @@ public readonly record struct DirectoryDeadline(DateTimeOffset? Ends, TimeProvid
         ArgumentNullException.ThrowIfNull(time);
         return new DirectoryDeadline(time.GetUtcNow() + budget, time, token);
     }
+
+    /// <summary>
+    /// The call's clock now (2026-10-23, the admin review's E9: the group, computer, OU and domain cards read the machine's clock, not the
+    /// app's <see cref="TimeProvider"/>); the machine's only with no deadline.
+    /// </summary>
+    public DateTimeOffset Now => Time?.GetUtcNow() ?? DateTimeOffset.UtcNow;
 
     /// <summary>The time left; null with no deadline.</summary>
     public TimeSpan? Left => Ends is { } ends && Time is { } time ? ends - time.GetUtcNow() : null;

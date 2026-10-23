@@ -1,9 +1,10 @@
+using System.Text;
 using System.Xml;
 
 namespace NeonSidekick.Tasks;
 
 /// <summary>One action of a task: what it runs.</summary>
-public sealed record TaskAction(string Kind, string? Command, string? Arguments, string? WorkingDirectory, string? ClassId);
+public sealed record TaskAction(string Kind, string? Command, string? Arguments, string? WorkingDirectory, string? ClassId, string? Data = null);
 
 /// <summary>One trigger of a task: its kind and the values that say when.</summary>
 public sealed record TaskTrigger(string Kind, IReadOnlyDictionary<string, string> Values, bool Enabled);
@@ -30,6 +31,10 @@ public sealed class TaskXmlException(string message) : Exception(message);
 /// A task's definition read from <c>IRegisteredTask::get_Xml</c> (2026-10-15, the admin-tools plan: the XML avoids the ITaskDefinition and
 /// IExecAction vtables altogether). One <see cref="XmlReader"/> pass over local names (the task schema's namespace or none), DTDs prohibited,
 /// no resolver, at most <see cref="MaxCharacters"/> — a bigger task is reported, not parsed. Fixtures under <c>tests/…/Fixtures/tasks</c>. Pure.
+/// An element's value is every text and CDATA piece inside it joined, then trimmed (2026-10-23, the admin review's D1): each piece used to be
+/// assigned on its own, so <c>&lt;Command&gt;note&lt;!----&gt;pad.exe&lt;/Command&gt;</c> or two CDATA sections read as the last piece alone —
+/// the run's confirm showed one program while the Task Scheduler ran the whole, and a split <c>UserId</c> got past
+/// <see cref="TaskPrincipal.IsPrivileged(TaskPrincipalInfo, IReadOnlyCollection{string}?)"/>. Whitespace between the pieces counts too.
 /// </summary>
 public static class TaskXml
 {
@@ -55,7 +60,7 @@ public static class TaskXml
             XmlResolver = null,
             MaxCharactersInDocument = MaxCharacters,
             IgnoreComments = true,
-            IgnoreWhitespace = true,
+            IgnoreWhitespace = false,
         };
         string? author = null, description = null, date = null, userId = null, groupId = null, logonType = null, runLevel = null, timeLimit = null;
         bool hidden = false;
@@ -63,6 +68,7 @@ public static class TaskXml
         var triggers = new List<TaskTrigger>();
         var actions = new List<TaskAction>();
         var path = new List<string>(16);
+        var texts = new List<StringBuilder?>(16);
         Dictionary<string, string>? trigger = null;
         string? triggerKind = null;
         bool triggerEnabled = true;
@@ -82,6 +88,7 @@ public static class TaskXml
                         string name = reader.LocalName;
                         bool empty = reader.IsEmptyElement;
                         path.Add(name);
+                        texts.Add(null);
                         int depth = path.Count;
                         string parent = depth >= 2 ? path[depth - 2] : "";
                         if (parent == "Triggers" && TriggerKinds.Contains(name))
@@ -113,75 +120,33 @@ public static class TaskXml
                         if (empty)
                         {
                             Close(path, ref trigger, ref triggerKind, triggerEnabled, triggerDepth, triggers, ref action, ref actionKind, actionDepth, actions);
+                            texts.RemoveAt(texts.Count - 1);
                         }
 
                         break;
                     case XmlNodeType.Text:
                     case XmlNodeType.CDATA:
-                        string value = reader.Value.Trim();
-                        if (path.Count == 0)
+                    case XmlNodeType.Whitespace:
+                    case XmlNodeType.SignificantWhitespace:
+                        if (texts.Count > 0)
                         {
-                            break;
-                        }
-
-                        string leaf = path[^1];
-                        string under = path.Count >= 2 ? path[^2] : "";
-                        if (trigger is not null && path.Count > triggerDepth)
-                        {
-                            if (leaf == "Enabled" && path.Count == triggerDepth + 1)
-                            {
-                                triggerEnabled = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
-                            }
-                            else if (under == "DaysOfMonth" && leaf == "Day")
-                            {
-                                trigger["DaysOfMonth"] = trigger.TryGetValue("DaysOfMonth", out string? days) && days.Length > 0 ? days + " " + value : value;
-                            }
-                            else
-                            {
-                                trigger[leaf] = value;
-                            }
-                        }
-                        else if (action is not null && path.Count > actionDepth)
-                        {
-                            action[leaf] = value;
-                        }
-                        else if (under == "RegistrationInfo")
-                        {
-                            switch (leaf)
-                            {
-                                case "Author": author = value; break;
-                                case "Description": description = value; break;
-                                case "Date": date = value; break;
-                            }
-                        }
-                        else if (under == "Principal" && firstPrincipal)
-                        {
-                            switch (leaf)
-                            {
-                                case "UserId": userId = value; break;
-                                case "GroupId": groupId = value; break;
-                                case "LogonType": logonType = value; break;
-                                case "RunLevel": runLevel = value; break;
-                            }
-                        }
-                        else if (under == "Settings")
-                        {
-                            switch (leaf)
-                            {
-                                case "Hidden": hidden = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
-                                case "Enabled": enabled = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase); break;
-                                case "ExecutionTimeLimit": timeLimit = value; break;
-                            }
+                            (texts[^1] ??= new StringBuilder()).Append(reader.Value);
                         }
 
                         break;
                     case XmlNodeType.EndElement:
+                        if (texts.Count > 0 && texts[^1] is { } piece && piece.ToString().Trim() is { Length: > 0 } whole)
+                        {
+                            Assign(whole);
+                        }
+
                         if (path.Count > 0 && path[^1] == "Principal")
                         {
                             firstPrincipal = false;
                         }
 
                         Close(path, ref trigger, ref triggerKind, triggerEnabled, triggerDepth, triggers, ref action, ref actionKind, actionDepth, actions);
+                        texts.RemoveAt(texts.Count - 1);
                         break;
                 }
             }
@@ -192,6 +157,65 @@ public static class TaskXml
         }
 
         return new TaskDefinition(author, description, date, new TaskPrincipalInfo(userId, groupId, logonType, runLevel), triggers, actions, hidden, enabled, timeLimit);
+
+        // One element's whole value, at its end (the path still holds it).
+        void Assign(string value)
+        {
+            string leaf = path[^1];
+            string under = path.Count >= 2 ? path[^2] : "";
+            if (trigger is not null && path.Count > triggerDepth)
+            {
+                if (leaf == "Enabled" && path.Count == triggerDepth + 1)
+                {
+                    triggerEnabled = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+                }
+                else if (under == "DaysOfMonth" && leaf == "Day")
+                {
+                    trigger["DaysOfMonth"] = trigger.TryGetValue("DaysOfMonth", out string? days) && days.Length > 0 ? days + " " + value : value;
+                }
+                else if (under == "Weeks" && leaf == "Week")
+                {
+                    // Every week of a monthly day-of-week trigger (2026-10-23, the admin review's G7: each one overwrote the last).
+                    trigger["Weeks"] = trigger.TryGetValue("Weeks", out string? weeks) && weeks.Length > 0 ? weeks + " " + value : value;
+                }
+                else
+                {
+                    trigger[leaf] = value;
+                }
+            }
+            else if (action is not null && path.Count > actionDepth)
+            {
+                action[leaf] = value;
+            }
+            else if (under == "RegistrationInfo")
+            {
+                switch (leaf)
+                {
+                    case "Author": author = value; break;
+                    case "Description": description = value; break;
+                    case "Date": date = value; break;
+                }
+            }
+            else if (under == "Principal" && firstPrincipal)
+            {
+                switch (leaf)
+                {
+                    case "UserId": userId = value; break;
+                    case "GroupId": groupId = value; break;
+                    case "LogonType": logonType = value; break;
+                    case "RunLevel": runLevel = value; break;
+                }
+            }
+            else if (under == "Settings")
+            {
+                switch (leaf)
+                {
+                    case "Hidden": hidden = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
+                    case "Enabled": enabled = !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase); break;
+                    case "ExecutionTimeLimit": timeLimit = value; break;
+                }
+            }
+        }
     }
 
     /// <summary>An element ends: a trigger or an action finished at its own depth is kept, then the path pops.</summary>
@@ -207,7 +231,8 @@ public static class TaskXml
 
         if (action is not null && path.Count == actionDepth)
         {
-            actions.Add(new TaskAction(actionKind!, Value(action, "Command"), Value(action, "Arguments"), Value(action, "WorkingDirectory"), Value(action, "ClassId")));
+            // A COM handler's Data kept (2026-10-23, the admin review's T11: the run's question showed only the CLSID).
+            actions.Add(new TaskAction(actionKind!, Value(action, "Command"), Value(action, "Arguments"), Value(action, "WorkingDirectory"), Value(action, "ClassId"), Value(action, "Data")));
             action = null;
             actionKind = null;
         }

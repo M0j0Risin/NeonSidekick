@@ -158,7 +158,7 @@ public sealed class EventLogWindowsTests : IDisposable
         Assert.Contains("next: log=Application level=all before_record=", search, StringComparison.Ordinal);
         Assert.StartsWith("app.evtx on this PC: 2 events", fromFile, StringComparison.Ordinal);
         Assert.StartsWith("Application on local since ", summary, StringComparison.Ordinal);
-        Assert.Contains("  Application  ", logs, StringComparison.Ordinal);
+        Assert.Contains("  ⟪Application⟫  ", logs, StringComparison.Ordinal);   // fenced since 2026-10-23 (C10)
         Assert.Contains("app.evtx", logs, StringComparison.Ordinal);
     }
 

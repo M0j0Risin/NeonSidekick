@@ -45,6 +45,11 @@ internal static partial class ServiceNative
     [LibraryImport("advapi32.dll", EntryPoint = "OpenServiceW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint OpenService(nint manager, string serviceName, uint desiredAccess);
 
+    /// <summary>A service's key name from its display name (2026-10-23, the admin review's N5: the canonical name the checks and the audit use).</summary>
+    [LibraryImport("advapi32.dll", EntryPoint = "GetServiceKeyNameW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static unsafe partial bool GetServiceKeyName(nint manager, string displayName, char* serviceName, ref uint length);
+
     [LibraryImport("advapi32.dll", EntryPoint = "CloseServiceHandle", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseServiceHandle(nint handle);

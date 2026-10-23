@@ -52,6 +52,13 @@ public static class MacLogReads
                 }, cancellationToken).ConfigureAwait(false), source, cursor);
             default:
             {
+                // A cursor that is no handle is gone, as a file log's is (2026-10-23, the admin review's X14: page one was read again, and the pane
+                // added it twice).
+                if (cursor is not null && !MacLogHandle.TryParse(cursor, out _))
+                {
+                    return Gone(EventLogResult<MacRowsPage?>.Ok(null), source, cursor);
+                }
+
                 var paged = cursor is not null && MacLogHandle.TryParse(cursor, out var before) ? query with { Before = before } : query;
                 return await access.RunAsync(source, (unified, token) =>
                 {

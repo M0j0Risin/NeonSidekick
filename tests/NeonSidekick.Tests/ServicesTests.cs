@@ -231,7 +231,8 @@ public sealed class ServicesTests : IDisposable
         _answer = false;
         Assert.Equal(ComputerText.Declined, await Change("MyAppWeb", "start"));
         _answer = null;
-        Assert.Equal(ComputerText.Declined, await Change("MyAppWeb", "start"));
+        // A question nobody answered is not the user's no (2026-10-23, the admin review's G15).
+        Assert.Equal(ComputerText.NoPaneToAsk, await Change("MyAppWeb", "start"));
         Assert.Equal(ComputerText.NoPaneToAsk, await Change("MyAppWeb", "start", pane: false));
         Assert.Empty(_system.Changes);
     }
@@ -277,12 +278,15 @@ public sealed class ServicesTests : IDisposable
         using var stop = new CancellationTokenSource();
         Task<bool?> YesThenEsc(string question, CancellationToken cancellationToken)
         {
-            stop.Cancel();   // the user's Esc while the stop is waited for
+            // The user's Esc while the stop is waited for: a moment after the yes, once the change has begun (2026-10-23, the admin review's
+            // B2: an Esc already pressed when the change would begin now stops it before anything is done).
+            stop.CancelAfter(TimeSpan.FromMilliseconds(300));
             return Task.FromResult<bool?>(true);
         }
 
         string answer = await Change("MyAppWorker", "restart", confirm: YesThenEsc, cancellationToken: stop.Token);
-        Assert.Equal(ServiceText.RestartNotStarted("MyAppWorker", ComputerText.ThisPc, ServiceRunState.StopPending), answer);
+        // The reason named (2026-10-23, the admin review's T14): the user stopped the wait, not "did not stop in time".
+        Assert.Equal(ServiceText.RestartNotStarted("MyAppWorker", ComputerText.ThisPc, ServiceRunState.StopPending, RestartStop.Cancelled), answer);
         Assert.Equal(["stop MyAppWorker"], _system.Changes);
     }
 
@@ -323,7 +327,7 @@ public sealed class ServicesTests : IDisposable
         Assert.Contains("depends on: 2 services not shown here", info);
         Assert.Contains("needed by: 1 service not shown here", info);
         Assert.DoesNotContain("MyAppWorker", info);
-        Assert.Contains("needed by: MyAppWorker (running)", await Call(new ServiceInfoTool(Access(), () => _settings), ("name", "Spooler")));
+        Assert.Contains("needed by: ⟪MyAppWorker⟫ (running)", await Call(new ServiceInfoTool(Access(), () => _settings), ("name", "Spooler")));
     }
 
     /// <summary>
@@ -337,7 +341,7 @@ public sealed class ServicesTests : IDisposable
         await Change("MyAppOdd", "start");
         string question = Assert.Single(_asked);
         Assert.Equal("Start MyAppOdd on " + ComputerText.ThisPc + "?", question[..question.IndexOf('\n', StringComparison.Ordinal)]);
-        Assert.Contains("My App Odd, as ", question);
+        Assert.Contains("My App Odd, runs as ", question);
         Assert.Contains("It runs worker.exe & net user x /add", question);
         Assert.Single(question, c => c == '\n');
 
@@ -382,7 +386,8 @@ public sealed class ServicesTests : IDisposable
         var entries = Enumerable.Range(0, 7).Select(i => new ServiceEntry("Svc" + i, "Service " + i, ServiceRunState.Running, 10 + i, ServiceKinds.Win32OwnProcess, 0, 0)).ToList();
         string text = ServiceRender.List("app01", entries, 9, 0, 5, new ServiceFilter("running"), "app01");
         Assert.StartsWith("Services on app01: 5 of 7 matching (9 in all), state running", text);
-        Assert.Contains("\n2 more services; pass filter or state, or next: service_list(offset 5, computer app01)", text);
+        // Every filter and the limit restated (2026-10-23, the admin review's E4).
+        Assert.Contains("\n2 more services; narrow with filter or state, or next: service_list(offset 5, state running, limit 5, computer app01)", text);
         Assert.True(ServiceRender.Failed(new ServiceEntry("x", "x", ServiceRunState.Stopped, 0, 0x10, 1066, 3)));
         Assert.False(ServiceRender.Failed(new ServiceEntry("x", "x", ServiceRunState.Stopped, 0, 0x10, 1077, 0)));
         Assert.Equal("service error 3", ServiceRender.ExitCode(1066, 3));
@@ -396,7 +401,7 @@ public sealed class ServicesTests : IDisposable
         var narrow = Access(local: new ServiceComputerConfig { Services = ["MyApp*", "Drv"] });
         string list = await Call(new ServiceListTool(narrow, () => _settings));
         Assert.StartsWith("Services on this PC: 2 of 2 matching (2 in all)", list);
-        Assert.Contains("MyAppWeb  ⟪My App Web⟫  stopped exit service error 0", list);
+        Assert.Contains("⟪MyAppWeb⟫  ⟪My App Web⟫  stopped exit service error 0", list);   // the key name fenced since 2026-10-23 (B11)
         Assert.Contains("1 of", await Call(new ServiceListTool(narrow, () => _settings), ("drivers", true), ("filter", "drv")));
         Assert.Contains("MyAppWeb", await Call(new ServiceListTool(Access(), () => _settings), ("state", "failed")));
         Assert.Contains("MyAppWeb", await Call(new ServiceListTool(Access(), () => _settings), ("start", "manual")));

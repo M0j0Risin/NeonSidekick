@@ -196,11 +196,8 @@ public sealed partial class WindowsEventLogSystem
                 long n => n,
                 _ => null,
             };
+            // One read (2026-10-23, the admin review's D10: a second EvtGetLogInfo hoped for a ulong the decode never gives, a wasted RPC a log).
             var written = LogValue(opened, EventLogNative.LogLastWriteTime, buffer) is DateTimeOffset t ? t : (DateTimeOffset?)null;
-            if (written is null && LogValue(opened, EventLogNative.LogLastWriteTime, buffer) is ulong fileTime && fileTime > 0 && fileTime < (ulong)DateTime.MaxValue.ToFileTimeUtc())
-            {
-                written = new DateTimeOffset(DateTime.FromFileTimeUtc((long)fileTime), TimeSpan.Zero);
-            }
 
             return new EventLogInfo(log, records, size, written, enabled, type);
         }

@@ -28,22 +28,30 @@ public static class NetworkRender
         private string _leftNoun = "lines";
         private string _narrow = "";
 
+        /// <summary>
+        /// A server's value fenced on one line (2026-10-23, the admin review's S7: a TXT or CAA value or a hop name holding line breaks
+        /// spanned lines inside one fence, looking like more records, while the cap counted it as one).
+        /// </summary>
         public string Fence(string value)
         {
             _fenced = true;
-            return UntrustedText.Fenced(UntrustedText.Cut(value));
+            return UntrustedText.Fenced(UntrustedText.Cut(UntrustedText.OneLine(value)));
         }
 
-        /// <summary>Adds a line, or counts it as left out once the cap is near.</summary>
+        /// <summary>
+        /// Adds a line, or counts it as left out once the cap is near. A long line is cut to what is left rather than dropped with every line after
+        /// it (2026-10-23, the admin review's K2: a certificate with 50 long names hid net_tls's chain status and policy errors).
+        /// </summary>
         public void Line(string line)
         {
-            if (_left > 0 || _text.Length + line.Length + 1 > MaxChars - 400)
+            int room = MaxChars - 400 - _text.Length - 1;
+            if (_left > 0 || room < 80)
             {
                 _left++;
                 return;
             }
 
-            _text.Append('\n').Append(line);
+            _text.Append('\n').Append(line.Length <= room ? line : UntrustedText.Cut(line, room - 1));
         }
 
         public void LeftOut(string noun, string narrow)
@@ -55,6 +63,19 @@ public static class NetworkRender
         public void Extra(int more)
         {
             _left += more;
+        }
+
+        /// <summary>The lines counted out past the cap so far.</summary>
+        public int Left => _left;
+
+        /// <summary>
+        /// The header put in afresh once the lines are in, so it counts what was shown (2026-10-23, the admin review's S9: "100 of 300" headed 70
+        /// lines and "230 more").
+        /// </summary>
+        public void Retitle(string header)
+        {
+            int end = _text.ToString().IndexOf('\n', StringComparison.Ordinal);
+            _text.Remove(0, end < 0 ? _text.Length : end).Insert(0, header);
         }
 
         public override string ToString()
@@ -134,7 +155,7 @@ public static class NetworkRender
             string n = "#" + (i + 1).ToString(CultureInfo.InvariantCulture);
             answer.Line(e.Status switch
             {
-                PingStatus.Reply => $"  {n} reply from {e.From} in {Ms(e.Rtt?.TotalMilliseconds ?? 0)}",
+                PingStatus.Reply => $"  {n} reply from {e.From}" + (e.Rtt is { } rtt ? " in " + Ms(rtt.TotalMilliseconds) : NetworkText.TimeNotMeasured),   // S13
                 PingStatus.TtlExpired => $"  {n} TTL ran out at {e.From}",
                 PingStatus.Unreachable => $"  {n} unreachable" + (e.From is null ? "" : " (said " + e.From + ")"),
                 PingStatus.TimedOut => $"  {n} no answer",
@@ -151,7 +172,7 @@ public static class NetworkRender
         ArgumentNullException.ThrowIfNull(hops);
         string ending = hops.Count > 0 && hops[^1].Reached ? $"reached in {Count(hops.Count, "hop")}"
             : hops.Count > 0 && hops[^1].Unreachable ? $"unreachable after {Count(hops.Count, "hop")}"
-            : hops.Count < maxHops ? $"stopped after {Count(hops.Count, "hop")} (the 45 s budget)"
+            : hops.Count < maxHops ? $"stopped after {Count(hops.Count, "hop")} (the {NetworkProbes.TraceBudget.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s budget)"   // S19
             : $"not reached in {Count(maxHops, "hop")}";
         var answer = new Answer($"Trace to {host} ({address}), {Count(maxHops, "hop")} at most: {ending}");
         foreach (var hop in hops)
@@ -202,6 +223,11 @@ public static class NetworkRender
         {
             answer.Line("  subject: " + answer.Fence(leaf.Subject));
             answer.Line("  issuer: " + answer.Fence(leaf.Issuer));
+            if (leaf.NamesUnreadable)
+            {
+                answer.Line(NetworkText.NamesUnreadable);
+            }
+
             if (leaf.Names.Count > 0)
             {
                 answer.Line("  names: " + string.Join(", ", leaf.Names.Take(50).Select(answer.Fence)) + (leaf.Names.Count > 50 ? $" and {(leaf.Names.Count - 50).ToString(CultureInfo.InvariantCulture)} more" : ""));
@@ -256,7 +282,16 @@ public static class NetworkRender
             answer.Line($"  {answer.Fence(certificate.Subject)} issued by {answer.Fence(certificate.Issuer)}; ends {EventLogText.Time(certificate.NotAfter, zone)} ({DaysLeft(certificate, now)}); private key: {(certificate.HasPrivateKey ? "yes" : "no")}; sha256 {certificate.Sha256}");
         }
 
+        // The count of the lines that fit (S9).
+        answer.Retitle($"Certificates in the {listing.Location} {listing.Store} store: {(listed - answer.Left).ToString(CultureInfo.InvariantCulture)} of {listing.Certificates.Count.ToString(CultureInfo.InvariantCulture)} shown"
+            + (narrowed.Count > 0 ? " (" + string.Join(", ", narrowed) + ")" : ""));
+
         answer.Extra(Math.Max(0, shown.Count - limit));
+        if (listing.Unreadable > 0)
+        {
+            answer.Line(NetworkText.CertificatesUnreadable(listing.Unreadable));
+        }
+
         answer.LeftOut("certificates", "pass filter or expiring_within_days, or raise limit");
         return answer.ToString();
     }
@@ -271,8 +306,22 @@ public static class NetworkRender
             return "expired " + Count(ago, "day") + " ago";
         }
 
+        // Not valid yet said, and a part of a day left never "ends today" (2026-10-23, the admin review's G14).
+        if (certificate.NotBefore > now)
+        {
+            int until = Math.Max(1, (int)Math.Ceiling((certificate.NotBefore - now).TotalDays));
+            return NetworkText.NotValidFor(Count(until, "more day"));
+        }
+
+        var left = certificate.NotAfter - now;
+        if (left < TimeSpan.FromDays(1))
+        {
+            int hours = Math.Max(1, (int)Math.Ceiling(left.TotalHours));
+            return Count(hours, "hour") + " left";
+        }
+
         int days = certificate.DaysLeft(now);
-        return days == 0 ? "ends today" : Count(days, "day") + " left";
+        return Count(days, "day") + " left";
     }
 
     private static string Ms(double milliseconds) => milliseconds < 1 ? "<1 ms" : Math.Round(milliseconds).ToString("0", CultureInfo.InvariantCulture) + " ms";

@@ -43,59 +43,22 @@ public abstract class EventLogTool : AIFunction, IRedactedTwin
     protected int ScanLimit => Math.Clamp(Effective().EventLogScanLimit, AppSettingsData.MinEventLogScanLimit, AppSettingsData.MaxEventLogScanLimit);
 
     /// <summary>A string argument, or null when blank.</summary>
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    // The shared readers (2026-10-23, the admin review's R18, E7, K6: AdminArguments).
+    protected static string? Optional(AIFunctionArguments arguments, string name) => AdminArguments.Optional(arguments, name);
 
-    /// <summary>A boolean argument: <paramref name="fallback"/> when missing, the refusal when it is not one.</summary>
-    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback)
-    {
-        if (!ToolArguments.TryReadBoolean(arguments, name, out bool? value, out string raw))
-        {
-            return (fallback, EventLogText.NotBoolean(name, raw));
-        }
+    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback) => AdminArguments.Flag(arguments, name, fallback);
 
-        return (value ?? fallback, null);
-    }
-
-    /// <summary>A whole-number argument in <paramref name="min"/>..<paramref name="max"/>: <paramref name="fallback"/> when missing, the refusal when out of range or not a number.</summary>
-    protected static (long? Value, string? Error) Number(AIFunctionArguments arguments, string name, long min, long max, long? fallback)
-    {
-        if (!ToolArguments.TryReadInt64(arguments, name, out long? value, out string raw) || value is { } n && (n < min || n > max))
-        {
-            string given = raw.Length > 0 ? raw : value?.ToString(CultureInfo.InvariantCulture) ?? "";
-            return (null, EventLogText.OutOfRange(name, given, (int)Math.Min(min, int.MaxValue), (int)Math.Min(max, int.MaxValue)));
-        }
-
-        return (value ?? fallback, null);
-    }
+    protected static (long? Value, string? Error) Number(AIFunctionArguments arguments, string name, long min, long max, long? fallback) => AdminArguments.Number(arguments, name, min, max, fallback);
 
     /// <summary>
     /// A time argument (an age or a moment, in the user's zone); null when missing, the refusal when it is neither. Held to the whole second,
     /// the start down and an end (<paramref name="end"/>) up (2026-10-20, a review: the next call restates it to the second, so a page's
     /// window and the next one's differed by the fraction).
     /// </summary>
-    protected (DateTimeOffset? Value, string? Error) Moment(AIFunctionArguments arguments, string name, bool end = false)
-    {
-        if (Optional(arguments, name) is not { } text)
-        {
-            return (null, null);
-        }
+    protected (DateTimeOffset? Value, string? Error) Moment(AIFunctionArguments arguments, string name, bool end = false) =>
+        AdminArguments.Moment(arguments, name, Access.Time.GetUtcNow(), Zone, end, EventLogText.BadTime);
 
-        return TimeArgument.Parse(text, Access.Time.GetUtcNow(), Zone) is { } moment ? (WholeSecond(moment, end), null) : (null, EventLogText.BadTime(name, text));
-    }
-
-    /// <summary><paramref name="moment"/> at a whole second: down, or (<paramref name="up"/>) up when it has a fraction.</summary>
-    internal static DateTimeOffset WholeSecond(DateTimeOffset moment, bool up)
-    {
-        long fraction = moment.Ticks % TimeSpan.TicksPerSecond;
-        if (fraction == 0)
-        {
-            return moment;
-        }
-
-        var down = moment.AddTicks(-fraction);
-        return up && down < DateTimeOffset.MaxValue.AddSeconds(-1) ? down.AddSeconds(1) : down;
-    }
+    internal static DateTimeOffset WholeSecond(DateTimeOffset moment, bool up) => AdminArguments.WholeSecond(moment, up);
 
     /// <summary>A cursor argument (a record, or one with its tag): null when missing, the refusal when it is neither.</summary>
     protected static (EventCursor? Value, string? Error) Cursor(AIFunctionArguments arguments, string name)

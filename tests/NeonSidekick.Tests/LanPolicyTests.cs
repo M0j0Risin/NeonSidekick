@@ -50,7 +50,7 @@ public class LanPolicyTests
     [InlineData("100.128.0.1")]
     [InlineData("11.0.0.1")]
     [InlineData("2606:2800:220:1:248:1893:25c8:1946")]
-    [InlineData("2001:db8::1")]
+    [InlineData("2606:4700:4700::1111")]   // 2001:db8::/32 is documentation, not public, since 2026-10-23 (U8)
     [InlineData("::ffff:8.8.8.8")]
     [InlineData("64:ff9b::8.8.8.8")]
     [InlineData("2002:808:808::1")]
@@ -75,7 +75,7 @@ public class LanPolicyTests
     [InlineData("example.com")]
     [InlineData("localhost.example.com")]
     [InlineData("8.8.8.8")]
-    [InlineData("[2001:db8::1]")]
+    [InlineData("[2606:4700:4700::1111]")]
     public void OtherHosts_AreNotJudgedByName(string host)
     {
         Assert.False(LanPolicy.IsPrivateHost(host));

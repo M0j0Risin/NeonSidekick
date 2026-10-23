@@ -47,7 +47,7 @@ public sealed class WindowsServiceSystem : IServiceSystem
 
         try
         {
-            return work(new Session(manager));
+            return work(new Session(manager, host));
         }
         finally
         {
@@ -61,7 +61,7 @@ public sealed class WindowsServiceSystem : IServiceSystem
         return new ServiceException(code, call + " failed: " + Marshal.GetPInvokeErrorMessage(code));
     }
 
-    private sealed unsafe class Session(nint manager) : IServiceSession
+    private sealed unsafe class Session(nint manager, string? host) : IServiceSession
     {
         public IReadOnlyList<ServiceEntry> List(bool drivers)
         {
@@ -69,8 +69,15 @@ public sealed class WindowsServiceSystem : IServiceSystem
             var entries = new List<ServiceEntry>(512);
             uint resume = 0;
             byte[] buffer = new byte[64 * 1024];
-            while (true)
+            for (int round = 0; ; round++)
             {
+                // Bounded (2026-10-23, the admin review's D5): an SCM that kept answering ERROR_MORE_DATA (a remote one misbehaving, a resume
+                // handle that never moves) spun here for ever holding the runas token; Query and DependentsOf already stop at three tries.
+                if (round >= MaxEnumRounds || entries.Count >= MaxEnumEntries)
+                {
+                    throw new ServiceException(ServiceNative.ErrorMoreData, "EnumServicesStatusExW kept asking for more");
+                }
+
                 bool done;
                 uint needed, returned;
                 fixed (byte* p = buffer)
@@ -99,16 +106,41 @@ public sealed class WindowsServiceSystem : IServiceSystem
                 {
                     buffer = new byte[needed];
                 }
+                else if (returned == 0)
+                {
+                    // More data, nothing returned and no bigger buffer asked for: the next round would be this one again.
+                    throw new ServiceException(ServiceNative.ErrorMoreData, "EnumServicesStatusExW returned nothing and asked for more");
+                }
             }
         }
 
-        public ServiceDetail Detail(string name)
+        /// <summary>A whole enumeration's rounds: 64 KB a round holds a few hundred services, so 256 is far past any real machine.</summary>
+        private const int MaxEnumRounds = 256;
+
+        /// <summary>The services (and drivers) one list may hold before it is refused as runaway.</summary>
+        private const int MaxEnumEntries = 50_000;
+
+        public ServiceDetail Detail(string name) => Detail(name, dependents: true);
+
+        public ServiceDetail Detail(string name, bool dependents)
         {
             nint service = OpenOne(name, ServiceNative.ServiceQueryConfig | ServiceNative.ServiceQueryStatus);
             try
             {
                 var config = Configuration(service, name);
+
+                // The SCM's own spelling of the name (N5): the caller's was kept, so the checks and the audit judged the model's string.
+                if (KeyName(config.DisplayName) is { } key)
+                {
+                    config = config with { Name = key };
+                }
+
                 var status = StatusOf(service);
+                if (!dependents)
+                {
+                    return new ServiceDetail(config, status, [], DependentsKnown: false);
+                }
+
                 try
                 {
                     return new ServiceDetail(config, status, Dependents(name, activeOnly: false));
@@ -123,6 +155,56 @@ public sealed class WindowsServiceSystem : IServiceSystem
                 ServiceNative.CloseServiceHandle(service);
             }
         }
+
+        /// <summary>A service's key name from its display name; null when it cannot be had.</summary>
+        private string? KeyName(string displayName)
+        {
+            if (displayName.Length == 0)
+            {
+                return null;
+            }
+
+            uint length = 257;
+            char* buffer = stackalloc char[257];
+            return ServiceNative.GetServiceKeyName(manager, displayName, buffer, ref length) && length > 0 && length < 257 ? new string(buffer, 0, (int)length) : null;
+        }
+
+        public string? ServiceDll(string name)
+        {
+            if (name.Contains('\0', StringComparison.Ordinal) || name.Contains('\\', StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            // Read locally, or over Remote Registry under the same impersonation as the SCM's (Run wraps the session); unreadable is null. The
+            // remote read has a cap of its own (2026-10-23, the branch review of DP7): a firewalled or stopped Remote Registry stalled the connect
+            // past the call's time, so every svchost service's change answered "took too long"; past the cap the DLL is unread and the stuck
+            // read is left behind (its task flows the impersonation, as any task under RunImpersonated does).
+            if (host is null)
+            {
+                return Read(() => Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Default));
+            }
+
+            var remote = Task.Run(() => Read(() => Microsoft.Win32.RegistryKey.OpenRemoteBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, host.TrimStart('\\'))));
+            return remote.Wait(RemoteRegistryTimeout) ? remote.Result : null;
+
+            string? Read(Func<Microsoft.Win32.RegistryKey> open)
+            {
+                try
+                {
+                    using var root = open();
+                    using var parameters = root.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name + @"\Parameters");
+                    return parameters?.GetValue("ServiceDll", null, Microsoft.Win32.RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+                {
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>The longest a remote service's DLL read waits on Remote Registry (DP7).</summary>
+        private static readonly TimeSpan RemoteRegistryTimeout = TimeSpan.FromSeconds(5);
 
         public ServiceStatus Status(string name)
         {
@@ -344,10 +426,15 @@ public sealed class WindowsServiceSystem : IServiceSystem
 
         private delegate (bool Ok, uint Needed) Call(byte* buffer, uint size);
 
-        /// <summary>The ask-twice dance: an 8 KB buffer, then the size the call said it needs.</summary>
+        /// <summary>
+        /// The ask-twice dance: an 8 KB buffer, then the size the call said it needs. The buffer is allocated pinned (2026-10-23, the admin
+        /// review's O1): QueryServiceConfig(2)W write absolute pointers into it (the strings, the failure actions), and every caller reads them
+        /// after this method's <c>fixed</c> has ended, so an ordinary array the GC moved in between left them pointing at the old place —
+        /// garbage strings or an access violation no handler catches. A pinned-heap array never moves, so the pointers stay true.
+        /// </summary>
         private static byte[] Query(Call call, string name)
         {
-            byte[] buffer = new byte[8 * 1024];
+            byte[] buffer = GC.AllocateArray<byte>(8 * 1024, pinned: true);
             for (int attempt = 0; attempt < 3; attempt++)
             {
                 fixed (byte* p = buffer)
@@ -364,7 +451,7 @@ public sealed class WindowsServiceSystem : IServiceSystem
                         throw new ServiceException(error, name + " failed: " + Marshal.GetPInvokeErrorMessage(error));
                     }
 
-                    buffer = new byte[needed];
+                    buffer = GC.AllocateArray<byte>((int)needed, pinned: true);
                 }
             }
 

@@ -446,10 +446,12 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 | `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of the certificate stores on the app's computer, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
 
 * **One host per call:** a name or an address. A range, block, list, URL, `host:port` or short-form address (`10.1`) is refused.
-* **Where they may go:** *Network tools reach*, *Network tools allowed hosts* and *Network tools denied hosts* ([Network settings](SETTINGS.md#network)). Every address a name resolves to is judged; under `lan` only private ones are used.
+* **Where they may go:** *Network tools reach*, *Network tools allowed hosts* and *Network tools denied hosts* ([Network settings](SETTINGS.md#network)). Every address a name resolves to is judged; under `lan` only LAN ones are used.
+* **What counts as the LAN:** the private ranges, this machine's own addresses and its adapters' prefixes (VPNs too), so public neighbors count. Under `internet` a one-label or `.local`-style name is refused before any lookup.
 * **Lookups too:** a `net_dns` question is judged like a host (a PTR by its address) and counts toward the budget.
 * **A denied name** also denies the addresses it resolves to, so another name or the bare address won't reach it.
-* **A budget per turn:** *Network tools max hosts per turn* and *Network tools max ports per turn*, spent by scripts and advisors too; bots have their own.
+* **A budget per turn:** *Network tools max hosts per turn* and *Network tools max ports per turn*, spent by scripts, advisors and refused names too.
+* **A budget per run:** a Ralph run, a `/loop` or a camera watch gets one budget for the whole run. At most 4 addresses of one host are checked.
 * **Nothing fetched, nothing sent:** a TLS check downloads no certificate and asks for no revocation list, and no credential is ever sent.
 * **Server text** (TXT records, certificate names, banners) is fenced as untrusted data (`⟪ ⟫`), an answer held to 16,000 characters.
 
@@ -477,6 +479,7 @@ Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash
 
 * **`host`** (required): the name or address (`localhost` is a loopback session).
 * **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name`, `name@domain`, or `box\admin` for its own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
+* **`credential`**: another Credential Manager entry, which must start with the family's own `NeonSidekick/<family>/`. Its stored user must be the entry's `user` (an entry stored with no user is accepted), else nothing is sent.
 * **`logs`**: the logs allowed, case ignored, `*` matching anything but `/` (`Microsoft-Windows-*/Operational`). Absent: all.
 * **`detail`**: `redacted` (default) or `full` ([Who sees what](#who-sees-what)). **`description`**: for the model. An entry named `local` may set only `logs`, `detail` and `description`.
 
@@ -492,12 +495,21 @@ Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash
 
 **A remote computer needs** the "Remote Event Log Management" firewall rule on and the account in its Event Log Readers group (UAC filters a local administrator's network sign-in). `--eventlog-check <computer>` tests one.
 
+**The admin files** (`eventlog.json`, `services.json`, `tasks.json`, `ad.json`):
+
+* **A key the entry doesn't know** (a typo such as `controlAction`) leaves the entry unused, its problem naming the key and the one meant. A key beside `computers` (`domains`) is listed and ignored.
+* **A name given twice** (case and spaces aside) uses neither entry; **a key given twice** in an entry leaves it unused.
+* **A profile's entry that can't be used** hides the home file's entry of that name, so a broken lock-down never falls back to a wider one.
+* **A tick whose entry is gone** is dropped from the setting when the files next read without a problem.
+* **A refused `runas` password is held** for every family: it isn't tried again this run (repeated tries can lock the account), until it's set again. A locked, disabled or expired account isn't held, so an unlock works at once. While a password is unproven, its calls sign in one at a time.
+* **A computer that doesn't answer** is given at most two abandoned calls before the next is refused for a while. A change can be stopped while it connects; once it begins, it is waited out.
+
 #### Who sees what
 
-* **`redacted`** hides secret-looking values: fields named like a password, secret, API key, private key or connection string.
-* **In free text** it hides URL passwords, password switches and arguments (`password=…`, `-Password x`, `/pass:x`, `-p x`, `net user`/`net use` passwords, `schtasks /RP`), `ConvertTo-SecureString … -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks.
-* The message is built from the hidden values, and `text` and `field` match only those. **It is best-effort:** no rule knows every secret in free text.
-* **`full`** is read only by the main chat. Bots, advisors and `execute_code`'s bridge always read redacted; an advisor's recent lines name an event-log call, never its result.
+* **`redacted`** hides secret-looking values: fields named like a password, secret, API, access, account or private key, token, credential, passphrase, PIN or connection string. An event's raw binary data shows as its length only.
+* **In free text** it hides URL passwords, password switches and arguments (`password=…`, `-Password x`, `--api_key=…`, `/pass:x`, `-p x`, `net user`/`net use` passwords, `schtasks /RP`), keys in JSON or XML (`"password": "…"`, `<Password>…</Password>`), token parameters (`access_token=…`), `ConvertTo-SecureString … -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks.
+* The message is built from the hidden values, and `text` and `field` match only those. When an event's values can't be matched to its fields, its message is withheld and said so. **It is best-effort:** no rule knows every secret in free text.
+* **`full`** is read only by the main chat. Advisors and `execute_code`'s bridge always read redacted; an advisor's recent lines name an event-log call, never its result. The same redaction covers service and task descriptions and command lines.
 * **A `.evtx` file takes `local`'s detail, and no `logs` list applies to it:** a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
 * **Out of any rule's reach:** what the main model quotes, and saved sessions. Set `full` only where you are content to have the events anywhere the conversation goes.
 * **Event text is untrusted:** any program can write an event. Messages and values are fenced as quoted data (`⟪ ⟫`), never instructions, with control characters replaced.
@@ -516,7 +528,7 @@ The same four tools read the Mac's own logs: the unified log and the report file
 
 * **The unified log is vast,** so a read keeps to its window and *Event log scan limit*, says how far back it got, and names a process that filled most of it (with the `exclude_process` to drop it). With `until` and no `since`, the window is the hour (day, week) before `until`.
 * **`local` unticked** in *Event log computers offered*: `system`, `crashes` and `install` are refused, and only `.logarchive` folders are read.
-* **Detail:** only the `local` entry applies; `redacted` (the default) also writes your home folder as `~`. `crashes` and `install` ignore `level`, `subsystem` and `category`, and say so.
+* **Detail:** only the `local` entry applies; `redacted` (the default) also writes your home folder as `~` and hides other accounts' names in `/Users/…` paths. `crashes` and `install` ignore `level`, `subsystem` and `category`, and say so.
 * **Permissions:** the unified log needs an administrator account, the system's report folder the `_analyticsusers` group (administrators are in it). A folder you can't read is named. `--eventlog-check local` tests them.
 
 ### Services
@@ -557,7 +569,7 @@ The keys of `services.json` and `tasks.json`:
 
 * **`host`**, **`auth`**, **`user`**, **`passwordStore`**, **`credential`**: as `eventlog.json`'s (`NeonSidekick/services/<name>`, `NeonSidekick/tasks/<name>`).
 * **`access`**: `read` (default) or `readwrite`; nothing is changed on a `read` computer. **`control`**: what may be changed (`*` matches anything). Absent: nothing.
-* **`controlActions`**: the actions allowed (absent: all; `[]`: none). Services: `start`, `stop`, `restart`, `start_type` (`restart` listed on its own). Tasks: `run`, `end`, `enable`, `disable`.
+* **`controlActions`**: the actions allowed (absent: all; `[]`: none). Services: `start`, `stop`, `restart`, `start_type` (`restart` listed on its own). Tasks: `run`, `end`, `enable`, `disable`. The wizard always writes it.
 * **`detail`**: `redacted` (default: secret-like values in program paths and command lines hidden) or `full`, read only by the main chat. **`description`**: for the model.
 * **Services' own:** `services` (the visible ones; absent: all) and `protected`. **Tasks' own:** `folders` (the visible ones; a pattern ending in `\` means that folder's own tasks) and `privileged`.
 * `local` is the app's computer, built in and read-only until its entry says otherwise; it takes every key but the sign-in ones.
@@ -591,7 +603,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 | `ad_user` | `name, domain?` | A user's card: enabled, locked and when (the source machine: Security event 4740 on the PDC emulator), bad passwords, password and account expiry, last sign-in, title, department, manager, reports, OU, flags, groups. |
 | `ad_group` | `name, nested?, members?, limit?, to?, domain?` | A group's card (type, owner, mail, created, its own groups) and its members, direct or `nested`; `members` is `all`, `users`, `computers` or `groups`. |
 | `ad_computer` | `name, domain?` | A computer's or managed service account's card: OS, enabled, domain controller or not, last sign-in, machine password, OU, owner, groups. |
-| `ad_find` | `kind, days?, words?, type?, field?, ou?, limit?, to?, domain?` | A structured search; the kinds are below. |
+| `ad_find` | `kind, days?, words?, type?, field?, ou?, limit?, scan_from?, to?, domain?` | A structured search; the kinds are below. |
 | `ad_ou` | `ou?, limit?, to?, domain?` | The OU tree with descriptions, or one OU: owner, linked GPOs, and the objects directly in it, counted by kind. |
 | `ad_domain` | `domain?` | Its domain controllers, functional levels, role holders, password and lockout policy, and the fine-grained policies this account may see. |
 
@@ -617,6 +629,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 * **Caps:** a search stops at 1,000 entries (10,000 for a group's members and for `to`), a call at 40 seconds, and says which cut it. Last sign-in can be about 14 days stale.
 * **Never read:** passwords and their hashes, LAPS and BitLocker recovery values, managed and key credentials, certificates and photos.
 * **`redacted`** (the default) also leaves out phones, addresses, employee numbers and home folders, and refuses `office`; `full` is the main chat's alone.
+* **Under `redacted`, descriptions and the other free-text fields are redacted too, and matched here, never on the server:** a search reads up to 5,000 objects and says how many, with a `next:` (`scan_from`) to go on.
 * **`to`** saves the whole list as a UTF-8 CSV: a `.csv` path or folder in the working directory (named from the question, `ad-group-staff.csv`). Never over an existing file; formula-like cells are guarded. Needs *File tools*, never in plan mode.
 
 **Domains:** `domain` takes a ticked entry's name or its DNS name; left out, `current` when ticked, else the only one. **`current`** is the domain the app's computer is joined to, if any (built in, as you, Kerberos). Other domains go in `ad.json`:
@@ -630,10 +643,10 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 }
 ```
 
-* **`domain`** (required): its DNS name. **`server`**: a domain controller (default: the domain's name). **`baseDn`**: where to search (default: the domain).
+* **`domain`** (required): its DNS name. **`server`**: a domain controller (default: the domain's name). **`baseDn`**: where to search (default: the domain); the domain's policy, roles and privileged accounts are always read domain-wide.
 * **`tls`**: `true` for LDAPS on 636, the certificate checked against the trust store on the app's computer; otherwise 389, signed and sealed.
 * **`auth`**, **`user`**, **`passwordStore`** (`NeonSidekick/ad/<name>`), **`detail`**, **`description`**: as `eventlog.json`'s. Outside the domain, `runas` signs in with NTLM.
-* **A refused `runas` password is held:** it isn't tried again this run (repeated tries can lock the account), until *Directory set password* saves a new one.
+* **A refused `runas` password is held** ([The admin files](#event-log-computers)): a refusal for a locked, disabled or expired account is named and isn't held.
 * Configured domains are your own entries: *Network tools reach* doesn't judge them. `--ad-check <domain>` tests one.
 
 #### Active Directory on a Mac
@@ -646,7 +659,7 @@ The same tools, `/ad` and `--ad-check`, read-only as on Windows.
 * **Sealed:** on 389 always signed and sealed (a DC offering neither is refused); on LDAPS the DC's certificate must be trusted in the Keychain. A DC auditing unsigned binds (event 2889) logs these sealed ones too.
 * **A `runas` ticket** goes in its own cache, which macOS may make the default when you have none (`klist -l`); `kdestroy -p <name@REALM>` removes it.
 * **A refused password or an unreachable KDC:** macOS doesn't say why a `runas` sign-in got no ticket, so the app asks the DC's own KDC (port 88) about the account, sending no password.
-  * It knows the account, or says the account is locked or disabled: the password is held as refused.
+  * It knows the account: the password is held as refused. It says the account is locked, disabled or expired: that is named, and nothing is held.
   * Its clock is more than 5 minutes off yours: the clock is named. Nothing is held.
   * It doesn't know the account: the account is named. Nothing is held.
   * Nothing answers: the KDC is named unreachable, also when a firewall blocks 88 but not 389. Nothing is held.
@@ -655,14 +668,15 @@ The same tools, `/ad` and `--ad-check`, read-only as on Windows.
 
 ### What the shell may not do while these are on
 
-While *Service tools*, *Task tools* or *Directory tools* is on, with *Shell police*, a `run_command` line, a script file it runs, an `execute_code` script or a `process` write that would change one of them is refused before any approval, whatever *Shell command policy* says.
+While *Service tools*, *Task tools*, *Directory tools* or *Event log tools* is on, with *Shell police*, a `run_command` line, a script file it runs, an `execute_code` script or a `process` write that would change one of them is refused before any approval, whatever *Shell command policy* says.
 
-* **Refused:** changing a service (`sc stop`, `net stop`, `Restart-Service`, a `ServiceController`'s `.Stop()`, WMI's `StopService`, its registry key…), a task (`schtasks /run`, `Disable-ScheduledTask`, the `Schedule.Service` object…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, a changing `net user … /domain`…). On a Mac also:
+* **Refused:** changing a service (`sc stop`, `net stop`, `Restart-Service`, a `ServiceController`'s `.Stop()`, WMI's `StopService`, its registry key…), a task (`schtasks /run`, `Disable-ScheduledTask`, the `Schedule.Service` object…) or the directory (`Set-ADUser`, `Unlock-ADAccount`, `dsmod`, `ldapmodify`, a changing `net user … /domain`…) or the event logs (`wevtutil cl`, `Clear-EventLog`, `auditpol /set`, an account added to Event Log Readers…). On a Mac also:
   * `dscl` writing (`-create`, `-createpl`, `-delete`, `-passwd`, `-mcxset`…, with or without the dash) anywhere but the local node (`.`, `/Local/…`), or on a line naming `/Active Directory` or `/Search`.
   * `dscl` reading its commands from its input (no command, `< file`, `| dscl`).
   * `dsconfigad` with any option but `-show` and `-xml`.
   * `dseditgroup -o edit|create|delete` on a directory node.
-* **Reading passes** (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`); changes go through the tools and your yes. Like the forbidden strings, it's a tripwire, not a sandbox.
+* **Windows lines are also read as the shell reads them:** carets, backticks and quotes are taken off, and a PowerShell encoded command is decoded and judged. One that won't decode is refused.
+* **Reading passes** (`sc query`, `Get-Service`, `schtasks /query`, `Get-ADUser`, `wevtutil qe`), and so do a lookup (`Get-Help`, `Get-Command`, `findstr`, `Select-String`…) and a `-WhatIf`; changes go through the tools and your yes. Like the forbidden strings, it's a tripwire, not a sandbox.
 
 ## Databases
 
@@ -1016,7 +1030,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 
 ### Ralph loop
 
-Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every other tool.
+Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every other tool. A pass with no checkpoint, which no one watches, isn't offered the tools that change a computer and ask first (services, tasks, monitors).
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -1033,6 +1047,8 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 
 * **An event too large to read:** a remote event too large for one reply even alone is stepped over and noted. That step hasn't been tried against a real host.
 * **Remote `runas`:** a remote computer reached with `runas` (event logs, services, scheduled tasks) hasn't been tried against a real second machine; the app's own computer and `localhost` have.
+* **A remote task's times:** `task_list`'s last and next run are the remote computer's own clock, unlabelled; whether Windows gives them in its zone or UTC hasn't been checked against a second machine.
+* **A wrong `runas` password on a remote event log** may come back as access denied; the answer names both.
 * **YouTube:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 * **Bot-checked downloads:** a site that ties its clearance to the browser's connection may still refuse a download after the Browser window passed its check.
 * **The camera pane:** its "The camera is opening…" line stays until the next key after the camera is on.

@@ -31,9 +31,20 @@ public static class DnsClient
     public static IReadOnlyList<IPEndPoint> SystemServers()
     {
         var found = new List<IPAddress>();
+        NetworkInterface[] adapters;
         try
         {
-            foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
+            adapters = NetworkInterface.GetAllNetworkInterfaces();
+        }
+        catch (NetworkInformationException)
+        {
+            return [];
+        }
+
+        foreach (var adapter in adapters)
+        {
+            // Each adapter read alone (2026-10-23, the admin review's U9: one that threw discarded the servers already found).
+            try
             {
                 if (adapter.OperationalStatus != OperationalStatus.Up || adapter.NetworkInterfaceType == NetworkInterfaceType.Loopback)
                 {
@@ -50,10 +61,10 @@ public static class DnsClient
                     found.Add(address);
                 }
             }
-        }
-        catch (NetworkInformationException)
-        {
-            return [];
+            catch (NetworkInformationException)
+            {
+                // That adapter's servers unknown; the others stand.
+            }
         }
 
         return found.OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1).Select(a => new IPEndPoint(a, Port)).ToList();
@@ -87,9 +98,26 @@ public static class DnsClient
         // server answers better. NXDOMAIN and no error are answers.
         DnsOutcome last = new(null, null, NetworkText.DnsNoAnswer(servers[0].Address.ToString()));
         DnsOutcome? failed = null;
+
+        // One limit over the whole lookup (2026-10-23, the admin review's I5: 2 × 3 s per resolver in turn, ten dead ones about a minute).
+        using var whole = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        whole.CancelAfter(QueryBudget);
         foreach (var server in servers)
         {
-            last = await AskAsync(server, name, type, cancellationToken).ConfigureAwait(false);
+            if (whole.IsCancellationRequested)
+            {
+                return failed ?? new DnsOutcome(null, null, NetworkText.DnsTookTooLong);
+            }
+
+            try
+            {
+                last = await AskAsync(server, name, type, whole.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return failed ?? new DnsOutcome(null, null, NetworkText.DnsTookTooLong);
+            }
+
             if (last.Reply is { } reply)
             {
                 if (!ServerFailed(reply.Rcode))
@@ -107,23 +135,36 @@ public static class DnsClient
     /// <summary>Whether <paramref name="rcode"/> says the server could not or would not answer (FORMERR, SERVFAIL, NOTIMP, REFUSED), not that the name has none.</summary>
     public static bool ServerFailed(int rcode) => rcode is 1 or 2 or 4 or 5;
 
-    /// <summary>One server: UDP with <see cref="Tries"/> tries, TCP once when the reply is truncated.</summary>
+    /// <summary>The longest a whole lookup takes over every server (I5).</summary>
+    public static readonly TimeSpan QueryBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>One server: UDP with <see cref="Tries"/> tries, TCP once when the reply is truncated; after a FORMERR, once more without EDNS (H7).</summary>
     public static async Task<DnsOutcome> AskAsync(IPEndPoint server, string name, ushort type, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(server);
+        bool edns = true;
         for (int attempt = 0; attempt < Tries; attempt++)
         {
             ushort id = (ushort)RandomNumberGenerator.GetInt32(0, 0x10000);
-            var reply = await UdpAsync(server, id, name, type, cancellationToken).ConfigureAwait(false);
+            var reply = await UdpAsync(server, id, name, type, cancellationToken, edns).ConfigureAwait(false);
             if (reply is null)
             {
                 continue;
             }
 
+            if (reply.Rcode == 1 && edns)
+            {
+                // A server that does not take EDNS says FORMERR (RFC 6891 §6.2.2): asked again plainly, that answer is the server's.
+                edns = false;
+                ushort plainId = (ushort)RandomNumberGenerator.GetInt32(0, 0x10000);
+                reply = await UdpAsync(server, plainId, name, type, cancellationToken, edns: false).ConfigureAwait(false) ?? reply;
+            }
+
             if (reply.Truncated)
             {
                 ushort tcpId = (ushort)RandomNumberGenerator.GetInt32(0, 0x10000);
-                var whole = await TcpAsync(server, tcpId, name, type, cancellationToken).ConfigureAwait(false);
+                // Over TCP as plainly as the reply was asked (2026-10-23, the branch review of DP7: EDNS again drew the FORMERR back).
+                var whole = await TcpAsync(server, tcpId, name, type, cancellationToken, edns).ConfigureAwait(false);
                 return whole is null ? new DnsOutcome(reply, server, null) : new DnsOutcome(whole, server, null, OverTcp: true);
             }
 
@@ -133,17 +174,22 @@ public static class DnsClient
         return new DnsOutcome(null, server, NetworkText.DnsNoAnswer(server.Address.ToString()));
     }
 
-    /// <summary>Whether <paramref name="reply"/> answers our query: the id, the QR bit, the question echoed (name case ignored, type, class).</summary>
+    /// <summary>
+    /// Whether <paramref name="reply"/> answers our query: the id, the QR bit, the question echoed (name case ignored, type, class) — or, for a
+    /// server's refusal (FORMERR, SERVFAIL, NOTIMP, REFUSED), no question at all, which no rule requires it to echo (2026-10-23, the admin
+    /// review's H7: those were dropped and read as no answer).
+    /// </summary>
     public static bool Answers(DnsMessage reply, ushort id, string name, ushort type) =>
-        reply.Id == id && reply.IsResponse && reply.QuestionType == type && reply.QuestionClass == DnsWire.ClassIn
-        && string.Equals(reply.QuestionName.TrimEnd('.'), name.Trim().TrimEnd('.'), StringComparison.OrdinalIgnoreCase);
+        reply.Id == id && reply.IsResponse
+        && ((reply.QuestionType == type && reply.QuestionClass == DnsWire.ClassIn && string.Equals(reply.QuestionName.TrimEnd('.'), name.Trim().TrimEnd('.'), StringComparison.OrdinalIgnoreCase))
+            || (reply.QuestionName.Length == 0 && reply.QuestionType == 0 && ServerFailed(reply.Rcode)));
 
-    private static async Task<DnsMessage?> UdpAsync(IPEndPoint server, ushort id, string name, ushort type, CancellationToken cancellationToken)
+    private static async Task<DnsMessage?> UdpAsync(IPEndPoint server, ushort id, string name, ushort type, CancellationToken cancellationToken, bool edns = true)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(UdpTimeout);
-        var query = DnsWire.Query(id, name, type);
+        var query = DnsWire.Query(id, name, type, edns);
         var buffer = new byte[4096];
         try
         {
@@ -183,7 +229,7 @@ public static class DnsClient
         }
     }
 
-    private static async Task<DnsMessage?> TcpAsync(IPEndPoint server, ushort id, string name, ushort type, CancellationToken cancellationToken)
+    private static async Task<DnsMessage?> TcpAsync(IPEndPoint server, ushort id, string name, ushort type, CancellationToken cancellationToken, bool edns = true)
     {
         using var socket = new Socket(server.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -192,7 +238,7 @@ public static class DnsClient
         {
             await socket.ConnectAsync(server, budget.Token).ConfigureAwait(false);
             await using var stream = new NetworkStream(socket, ownsSocket: false);
-            var query = DnsWire.Query(id, name, type);
+            var query = DnsWire.Query(id, name, type, edns);
             var framed = new byte[query.Length + 2];
             BinaryPrimitives.WriteUInt16BigEndian(framed, (ushort)query.Length);
             query.CopyTo(framed, 2);

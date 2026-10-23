@@ -81,11 +81,13 @@ public static class KdcProbe
         }
 
         byte[] request = AsRequest(parts.Name, parts.Realm, DateTimeOffset.UtcNow, (uint)RandomNumberGenerator.GetInt32(1, int.MaxValue));
+        bool connected = false;
         try
         {
             using var timeout = new CancellationTokenSource(Timeout);
             using var client = new TcpClient { NoDelay = true };
             client.ConnectAsync(address, port, timeout.Token).AsTask().GetAwaiter().GetResult();
+            connected = true;
             var stream = client.GetStream();
             byte[] framed = new byte[4 + request.Length];
             BinaryPrimitives.WriteInt32BigEndian(framed, request.Length);
@@ -105,7 +107,8 @@ public static class KdcProbe
         }
         catch (Exception ex) when (ex is SocketException or OperationCanceledException or IOException)
         {
-            return new KdcAnswer(KdcVerdict.Unreachable);
+            // Port 88 answered, then closed or went quiet (2026-10-23, the admin review's P10): reached, its answer unread, never "unreachable".
+            return new KdcAnswer(connected ? KdcVerdict.Other : KdcVerdict.Unreachable);
         }
     }
 
@@ -218,10 +221,12 @@ public static class KdcProbe
             {
                 null => new KdcAnswer(KdcVerdict.Other),
                 ApSkew => new KdcAnswer(KdcVerdict.ClockSkew, code, skew),
-                _ when skew is { } off && off.Duration() > MaxSkew => new KdcAnswer(KdcVerdict.ClockSkew, code, skew),
-                PreauthRequired when skew is not null => new KdcAnswer(KdcVerdict.KnowsTheAccount, code, skew),
+                // The account's own answers before the clock's (2026-10-23, the admin review's P11: an unknown account on a skewed DC was told
+                // "fix the clock").
                 ClientRevoked => new KdcAnswer(KdcVerdict.Revoked, code, skew),
                 PrincipalUnknown => new KdcAnswer(KdcVerdict.UnknownAccount, code, skew),
+                _ when skew is { } off && off.Duration() > MaxSkew => new KdcAnswer(KdcVerdict.ClockSkew, code, skew),
+                PreauthRequired when skew is not null => new KdcAnswer(KdcVerdict.KnowsTheAccount, code, skew),
                 _ => new KdcAnswer(KdcVerdict.Other, code, skew),
             };
         }

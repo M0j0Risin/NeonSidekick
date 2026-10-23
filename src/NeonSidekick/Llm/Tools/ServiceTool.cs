@@ -35,29 +35,12 @@ public abstract class ServiceTool : AIFunction, IRedactedTwin
     /// <summary>The same tool reading every computer redacted; itself when it already does (or when it changes something, never a twin's).</summary>
     public abstract AIFunction AsRedacted();
 
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    // The shared readers (2026-10-23, the admin review's R18, E7, K6: AdminArguments).
+    protected static string? Optional(AIFunctionArguments arguments, string name) => AdminArguments.Optional(arguments, name);
 
-    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback)
-    {
-        if (!ToolArguments.TryReadBoolean(arguments, name, out bool? value, out string raw))
-        {
-            return (fallback, ServiceText.NotBoolean(name, raw));
-        }
+    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback) => AdminArguments.Flag(arguments, name, fallback);
 
-        return (value ?? fallback, null);
-    }
-
-    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback)
-    {
-        if (!ToolArguments.TryReadInt64(arguments, name, out long? value, out string raw) || value is { } n && (n < min || n > max))
-        {
-            string given = raw.Length > 0 ? raw : value?.ToString(CultureInfo.InvariantCulture) ?? "";
-            return (fallback, ServiceText.OutOfRange(name, given, min, max));
-        }
-
-        return ((int)(value ?? fallback), null);
-    }
+    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback) => AdminArguments.Number(arguments, name, min, max, fallback);
 }
 
 /// <summary><c>service_list(computer?, state?, start?, filter?, drivers?, limit?, offset?)</c> (2026-10-15): the services on a computer.</summary>
@@ -80,7 +63,7 @@ public sealed class ServiceListTool(ServiceAccess access, Func<AppSettingsData> 
           "properties": {
             "computer": { "type": "string", "description": "Which computer, as the ticked ones are named; leave out for this PC (or the only one offered)." },
             "state": { "type": "string", "description": "running, stopped or failed (stopped with an error)." },
-            "start": { "type": "string", "description": "automatic, delayed, manual or disabled." },
+            "start": { "type": "string", "description": "automatic, delayed, manual, disabled, boot or system (boot and system with drivers)." },
             "filter": { "type": "string", "description": "Only services whose name or display name contains this text." },
             "drivers": { "type": "boolean", "description": "Also list drivers (default false)." },
             "limit": { "type": "integer", "description": "The most to list, 1 to 500 (default 50)." },
@@ -127,35 +110,50 @@ public sealed class ServiceListTool(ServiceAccess access, Func<AppSettingsData> 
         }
 
         var filter = new ServiceFilter(state, start, Optional(arguments, FilterArgument), drivers);
-        var result = await Access.ReadAsync(source, null, session => Matches(session, source, filter), cancellationToken).ConfigureAwait(false);
-        return result.Error ?? ServiceRender.List(source.Where, result.Value.Matched, result.Value.Total, offset, limit, filter, computer);
+        var result = await Access.ReadAsync(source, null, session => Matches(session, source, filter, offset + limit), cancellationToken).ConfigureAwait(false);
+        return result.Error ?? ServiceRender.List(source.Where, result.Value.Matched, result.Value.Total, offset, limit, filter, computer, result.Value.Complete);
     }
 
-    /// <summary>The visible services that pass the filter, by name; the start filter read per service only when given.</summary>
-    public static (IReadOnlyList<ServiceEntry> Matched, int Total) Matches(IServiceSession session, ServiceSource source, ServiceFilter filter)
+    /// <summary>
+    /// The visible services that pass the filter, by name; the start filter read per service only when given, in name order and only until
+    /// <paramref name="enough"/> have matched and one more (2026-10-23, the admin review's A7: every service's start type was read before the
+    /// page, 2–3 calls each, and a remote computer's 300 services ran past the timeout). <c>Complete</c> false when that read stopped early.
+    /// </summary>
+    public static (IReadOnlyList<ServiceEntry> Matched, int Total, bool Complete) Matches(IServiceSession session, ServiceSource source, ServiceFilter filter, int enough = int.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(filter);
         var all = session.List(filter.Drivers).Where(e => ServiceAccess.Visible(source.Computer, e.Name)).ToList();
-        var matched = all.Where(filter.Passes).Where(e =>
+        var candidates = all.Where(filter.Passes).OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        if (filter.Start is null)
         {
-            if (filter.Start is null)
+            return (candidates, all.Count, true);
+        }
+
+        var matched = new List<ServiceEntry>();
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            if (matched.Count > enough)
             {
-                return true;
+                return (matched, all.Count, false);
             }
 
             try
             {
-                var (kind, delayed) = session.StartOf(e.Name);
-                return filter.PassesStart(kind, delayed);
+                var (kind, delayed) = session.StartOf(candidates[i].Name);
+                if (filter.PassesStart(kind, delayed))
+                {
+                    matched.Add(candidates[i]);
+                }
             }
             catch (ServiceException)
             {
-                return false;
+                // A service that will not say its start type is no match.
             }
-        }).OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        return (matched, all.Count);
+        }
+
+        return (matched, all.Count, true);
     }
 }
 
@@ -234,9 +232,27 @@ public sealed class ServiceControlTool(ServiceAccess access, Func<AppSettingsDat
     /// <summary>This tool for one turn: its actions agreed from <paramref name="catalog"/>, the turn's own read.</summary>
     public ServiceControlTool ForCatalog(ComputerCatalog<ServiceComputerConfig> catalog) => new(Access, Effective, confirm, catalog.AgreedActions(ServiceActions.Control));
 
-    public override string Description => $"Changes whether a Windows service runs: {string.Join(", ", AgreedActions())}. Each call asks the user first. A protected or driver service cannot be stopped.";
+    // A driver is refused for every action, a protected service for stop and restart (2026-10-23, the admin review's R8: it said only "stopped").
+    public override string Description => $"Changes whether a Windows service runs: {string.Join(", ", AgreedActions())}. Each call asks the user first. A driver is never changed, and a protected service is never stopped or restarted.";
 
-    public override JsonElement JsonSchema => agreed is null ? Schema(AgreedActions()) : _schema ??= Schema(agreed);
+    // The listing's copy (agreed null: /tools, /sysprompt) parses its schema again only when the agreed actions change (2026-10-23, R13:
+    // each draw parsed a new JsonDocument).
+    public override JsonElement JsonSchema => agreed is null ? Listed(AgreedActions()) : _schema ??= Schema(agreed);
+
+    private (string Key, JsonElement Schema)? _listed;
+
+    private JsonElement Listed(IReadOnlyList<string> actions)
+    {
+        string key = string.Join(",", actions);
+        if (_listed is { } cached && cached.Key == key)
+        {
+            return cached.Schema;
+        }
+
+        var schema = Schema(actions);
+        _listed = (key, schema);
+        return schema;
+    }
 
     private static JsonElement Schema(IReadOnlyList<string> actions) => ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": {" +
@@ -260,7 +276,20 @@ public sealed class ServiceControlTool(ServiceAccess access, Func<AppSettingsDat
             return action.Length == 0 ? ServiceText.Missing(ActionArgument) : ServiceText.BadAction(action);
         }
 
-        var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), forceRedacted: false);
+        // The checks that need no password first (2026-10-23, the admin review's R6: a read-only computer whose password was gone answered
+        // "cannot sign in", and a secret was decrypted for a call refused anyway).
+        var (found, unknown) = Access.Catalog().Find(Optional(arguments, ComputerArgument));
+        if (found is null)
+        {
+            return unknown;
+        }
+
+        if (ServiceAccess.WriteRefusal(found, name, action, null, Effective().ServiceWrites) is { } early)
+        {
+            return early;
+        }
+
+        var (source, refused) = Access.Computer(found.Name, forceRedacted: false);
         if (source is null)
         {
             return refused;
@@ -310,7 +339,20 @@ public sealed class ServiceStartTypeTool(ServiceAccess access, Func<AppSettingsD
             return word.Length == 0 ? ServiceText.Missing(StartTypeArgument) : ServiceText.BadStartChoice(word);
         }
 
-        var (source, refused) = Access.Computer(Optional(arguments, ComputerArgument), forceRedacted: false);
+        // The checks that need no password first (2026-10-23, the admin review's R6: a read-only computer whose password was gone answered
+        // "cannot sign in", and a secret was decrypted for a call refused anyway).
+        var (found, unknown) = Access.Catalog().Find(Optional(arguments, ComputerArgument));
+        if (found is null)
+        {
+            return unknown;
+        }
+
+        if (ServiceAccess.WriteRefusal(found, name, ServiceActions.StartType, null, Effective().ServiceWrites) is { } early)
+        {
+            return early;
+        }
+
+        var (source, refused) = Access.Computer(found.Name, forceRedacted: false);
         if (source is null)
         {
             return refused;

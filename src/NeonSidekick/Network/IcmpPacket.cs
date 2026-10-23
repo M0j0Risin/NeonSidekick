@@ -91,7 +91,9 @@ public static class IcmpPacket
             case UnreachableType:
                 // The original datagram follows the 8-byte header: its IP header, then at least 8 bytes of our echo request.
                 var original = icmp[HeaderLength..];
-                if (original.Length < 20 || original[0] >> 4 != 4)
+                // The quoted datagram must be ICMP (protocol 1), ours (2026-10-23, the admin review's P14: another program's UDP traceroute error
+                // was read as our hop).
+                if (original.Length < 20 || original[0] >> 4 != 4 || original[9] != 1)
                 {
                     return (IcmpReplyKind.None, 0);
                 }
@@ -127,6 +129,13 @@ public static class IcmpPacket
         }
 
         return packet;
+    }
+
+    /// <summary>Whether an echo reply carries the request's own payload (C14): the bytes after both ICMP headers.</summary>
+    public static bool SamePayload(ReadOnlySpan<byte> reply, ReadOnlySpan<byte> request)
+    {
+        var icmp = StripIpHeader(reply);
+        return icmp.Length >= HeaderLength && request.Length >= HeaderLength && icmp[HeaderLength..].SequenceEqual(request[HeaderLength..]);
     }
 
     private static bool Matches(ReadOnlySpan<byte> icmp, ushort id, ushort sequence) =>

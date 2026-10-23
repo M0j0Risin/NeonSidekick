@@ -84,7 +84,8 @@ public sealed class MacLogToolsTests : IDisposable
         static string[] Properties(AIFunction tool) => tool.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToArray();
 
         Assert.Equal(["log", "level", "process", "pid", "subsystem", "category", "text", "exclude_process", "since", "until", "before", "limit"], Properties(Tool(EventLogSearchTool.ToolName)));
-        Assert.Equal(["log", "since", "level", "process", "subsystem", "exclude_process"], Properties(Tool(EventLogSummaryTool.ToolName)));
+        // The terms the summary reads, declared (2026-10-23, the admin review's R7).
+        Assert.Equal(["log", "since", "level", "process", "subsystem", "exclude_process", "until", "pid", "category", "text"], Properties(Tool(EventLogSummaryTool.ToolName)));
         Assert.Equal(["log", "record"], Properties(Tool(EventLogEventTool.ToolName)));
         Assert.Equal(["filter"], Properties(Tool(EventLogLogsTool.ToolName)));
         Assert.Equal(EventLogTool.LogArgument, "log");
@@ -172,7 +173,7 @@ public sealed class MacLogToolsTests : IDisposable
 
         Assert.Equal(Handles(one).Concat(Handles(two)).Concat(Handles(three)).Distinct().Count(), Handles(one).Length + Handles(two).Length + Handles(three).Length);
         Assert.Null(NextBefore(three));
-        Assert.Equal(tie + MacLogSearch.Microsecond, _log.Opens[1].Filter.Until);   // the cursor's whole microsecond
+        Assert.Equal(tie + 4 * MacLogSearch.Microsecond, _log.Opens[1].Filter.Until);   // the cursor's whole microsecond and a margin (2026-10-23, the admin review's X6)
     }
 
     [Fact]
@@ -206,7 +207,7 @@ public sealed class MacLogToolsTests : IDisposable
         Assert.Null(_log.Opens[0].Filter.Text);
         Assert.Equal("hunter2", _log.Opens[1].Filter.Text);
         Assert.Contains("no faults or errors in system since", redacted, StringComparison.Ordinal);
-        Assert.Contains(" holding that text.", redacted, StringComparison.Ordinal);
+        Assert.Contains(" matching the search's other terms.", redacted, StringComparison.Ordinal);   // every narrowing term said (2026-10-23, S2)
         Assert.Contains("hunter2", full, StringComparison.Ordinal);
     }
 

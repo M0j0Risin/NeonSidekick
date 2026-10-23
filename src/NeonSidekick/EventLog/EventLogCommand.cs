@@ -8,8 +8,30 @@ namespace NeonSidekick.EventLog;
 /// What a <c>/eventlog</c> line asks for (2026-10-15): the log (an alias, a channel, a quoted name with spaces, or an <c>.evtx</c>), the
 /// computer, and the query's terms; <see cref="LevelGiven"/> and <see cref="AuditGiven"/> say whether the log's default view applies.
 /// </summary>
-public sealed record EventLogCommandArgs(string Log, string? Computer, EventLogQuery Query, bool LevelGiven, bool AuditGiven, bool LogGiven)
+/// <remarks>
+/// <c>SinceText</c>, <c>UntilText</c> (2026-10-23, the admin review's H12): the times as written, so a refresh reads them again from now
+/// (<see cref="At"/>); <c>since:1h</c> was fixed at the line's parse and never moved.
+/// </remarks>
+public sealed record EventLogCommandArgs(string Log, string? Computer, EventLogQuery Query, bool LevelGiven, bool AuditGiven, bool LogGiven, string? SinceText = null, string? UntilText = null)
 {
+    /// <summary>The line with its written times read again at <paramref name="now"/> (H12); itself when it wrote none.</summary>
+    public EventLogCommandArgs At(DateTimeOffset now, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        var query = Query;
+        if (SinceText is { } since && Llm.Tools.TimeArgument.Parse(since, now, zone) is { } s)
+        {
+            query = query with { Since = s };
+        }
+
+        if (UntilText is { } until && Llm.Tools.TimeArgument.Parse(until, now, zone) is { } u)
+        {
+            query = query with { Until = u };
+        }
+
+        return this with { Query = query };
+    }
+
     /// <summary>The query for <paramref name="channel"/>: the line's terms, the channel's default view where the line named neither a level nor an audit.</summary>
     public EventLogQuery For(string log, string channel)
     {
@@ -95,20 +117,26 @@ public static class EventLogCommand
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(zone);
-        string? log = null, computer = null;
+        string? log = null, computer = null, sinceText = null, untilText = null;
         var query = new EventLogQuery { Log = "", Limit = limit };
         bool levelGiven = false, auditGiven = false;
         var text = new List<string>();
         var providers = new List<string>();
         var fields = new List<EventFieldTerm>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        bool first = true;
         foreach (string word in Words(args))
         {
             int colon = word.IndexOf(':', StringComparison.Ordinal);
             string key = colon > 0 ? word[..(colon + 1)].ToLowerInvariant() : "";
             string value = colon > 0 ? word[(colon + 1)..].Trim() : "";
+            bool firstWord = first;
+            first = false;
             if (!Keys.Contains(key))
             {
-                if (log is null && text.Count == 0)
+                // The log only as the line's first word (2026-10-23, the admin review's W6: the first word that was no key, anywhere, became
+                // the log, so /eventlog level:error disk failure read a log named "disk").
+                if (firstWord)
                 {
                     log = word;
                 }
@@ -118,6 +146,19 @@ public static class EventLogCommand
                 }
 
                 continue;
+            }
+
+            if (value.Length == 0)
+            {
+                // A key with no value is said, never read as no filter (W10: level: showed every audit success, computer: read this PC, and
+                // computer: dc01 with a space read the log "dc01").
+                return (null, EventLogText.KeyNeedsValue(key));
+            }
+
+            if (key is "computer:" or "level:" or "audit:" or "since:" or "until:" && !seen.Add(key))
+            {
+                // One of each (P16: a second kept the last silently).
+                return (null, EventLogText.KeyTwice(key));
             }
 
             switch (key)
@@ -173,6 +214,15 @@ public static class EventLogCommand
                     }
 
                     query = key == "since:" ? query with { Since = moment } : query with { Until = moment };
+                    if (key == "since:")
+                    {
+                        sinceText = value;
+                    }
+                    else
+                    {
+                        untilText = value;
+                    }
+
                     break;
                 }
 
@@ -193,7 +243,7 @@ public static class EventLogCommand
 
         query = query with { Providers = providers, Fields = fields, Text = text.Count == 0 ? null : string.Join(" ", text) };
         string chosen = log ?? DefaultLog;
-        return (new EventLogCommandArgs(chosen, string.IsNullOrWhiteSpace(computer) ? null : computer, query with { Log = chosen }, levelGiven, auditGiven, log is not null), null);
+        return (new EventLogCommandArgs(chosen, string.IsNullOrWhiteSpace(computer) ? null : computer, query with { Log = chosen }, levelGiven, auditGiven, log is not null, sinceText, untilText), null);
     }
 
     /// <summary>
@@ -283,7 +333,7 @@ public static class EventLogCommand
         {
             string channel = EventLogAccess.ChannelOf(system, source, token);
             var query = parsed.For(source.Log, channel);
-            var (xpath, built) = EventLogXPath.Build(query, serverFields: true);
+            var (xpath, built) = EventLogXPath.Build(query, serverFields: false);   // the client's match alone (W2)
             if (xpath is null)
             {
                 return (Page: (EventSearchPage?)null, Query: query, Error: built);
@@ -323,7 +373,7 @@ public static class EventLogCommand
         ArgumentNullException.ThrowIfNull(page);
         string where = EventLogText.Scrub(source.Log) + " on " + source.Where;
         return page.Events.Count == 0
-            ? EventLogText.NoEvents(EventLogText.Scrub(source.Log), query.Levels, query.Audit, query.Since, now, zone) + (source.IsFile ? "" : " on " + source.Where)
+            ? EventLogText.NoEvents(EventLogText.Scrub(source.Log), query.Levels, query.Audit, query.Since, now, zone) + EventLogText.Narrowed(query) + (source.IsFile ? "" : " on " + source.Where)
             : where + ": " + EventLogText.Count(page.Events.Count, "event") + ", newest first";
     }
 

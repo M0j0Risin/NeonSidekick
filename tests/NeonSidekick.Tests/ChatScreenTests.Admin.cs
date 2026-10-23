@@ -131,7 +131,7 @@ public partial class ChatScreenTests
     {
         var settings = new AppSettingsData { ServiceTools = true, ServiceWrites = true, TaskTools = true, TaskWrites = true };
         var system = new FakeServiceSystem();
-        var readWrite = new ComputerCatalog<ServiceComputerConfig>([new Computer<ServiceComputerConfig>("local", new ServiceComputerConfig { Access = "readwrite", ControlActions = ["start"] })], [], ServiceConfigFile.Info);
+        var readWrite = new ComputerCatalog<ServiceComputerConfig>([new Computer<ServiceComputerConfig>("local", new ServiceComputerConfig { Access = "readwrite", Control = ["App*"], ControlActions = ["start"] })], [], ServiceConfigFile.Info);   // a control pattern since 2026-10-23 (L8: none offers no write)
         var access = new ServiceAccess(system, () => readWrite, () => null, _time);
         var tools = ChatScreen.ServiceTools(access, () => settings, (_, _) => Task.FromResult<bool?>(true));
 
@@ -158,15 +158,14 @@ public partial class ChatScreenTests
     public void Twins_ReadRedacted_AndNeverChange()
     {
         var access = new ServiceAccess(new FakeServiceSystem(), () => ServiceConfigFile.Family.LocalOnly, () => null, _time);
-        var redacted = ChatScreen.ServiceTools(access, () => new AppSettingsData(), null, forceRedacted: true);
-        Assert.Equal([ServiceListTool.ToolName, ServiceInfoTool.ToolName], redacted.Select(t => t.Name));
-        Assert.All(redacted, t => Assert.True(((ServiceTool)t).ForceRedacted));
+        // The redacted set is each tool's twin since 2026-10-23 (the admin review's R16: the builders' forceRedacted, only the bots', went).
         var main = ChatScreen.ServiceTools(access, () => new AppSettingsData(), null);
+        Assert.All(main.Select(RedactedTwins.Of).OfType<ServiceInfoTool>(), t => Assert.True(t.ForceRedacted));
         Assert.All(main.Select(RedactedTwins.Of).OfType<ServiceListTool>(), t => Assert.True(t.ForceRedacted));
         var directory = new DirectoryAccess(new FakeDirectorySystem(), () => new DirectoryCatalog([], []), () => null, () => null, _time);
         Assert.All(ChatScreen.DirectoryTools(directory).Select(RedactedTwins.Of), t => Assert.True(((DirectoryTool)t).ForceRedacted));
         var tasks = new TaskAccess(new FakeTaskSystem(), () => TaskConfigFile.Family.LocalOnly, () => null, _time);
-        Assert.DoesNotContain(ChatScreen.TaskTools(tasks, () => new AppSettingsData(), null, forceRedacted: true), t => t is TaskControlTool);
+        Assert.All(ChatScreen.TaskTools(tasks, () => new AppSettingsData(), null).Select(RedactedTwins.Of).OfType<TaskListTool>(), t => Assert.True(t.ForceRedacted));
     }
 
     [WindowsFact]

@@ -76,6 +76,13 @@ public abstract class ComputerConfig
     /// <summary>The actions allowed here (the family's words); absent, all; empty, none.</summary>
     public List<string>? ControlActions { get; set; }
 
+    /// <summary>
+    /// Keys the family does not know (2026-10-23, the admin review's H5, decision DA1): <c>controlAction</c> for <c>controlActions</c> read as
+    /// "every action" and <c>protect</c> for <c>protected</c> as "nothing protected". The loader refuses an entry holding one, naming the key.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+
     [JsonIgnore]
     public bool IsRunAs => string.Equals(Auth?.Trim(), RunAsAuth, StringComparison.OrdinalIgnoreCase);
 
@@ -165,6 +172,18 @@ public abstract class ComputerConfig
             return SqlText.BadPasswordStore(store);
         }
 
+        if (CredentialProblem(Credential, family.CredentialPrefix) is { } credential)
+        {
+            return credential;
+        }
+
+        if (IsRunAs && IsThisPc(Host))
+        {
+            // Another account's sign-in does not apply to this PC (2026-10-23, the admin review's J6): a NEW_CREDENTIALS token changes only
+            // what goes over the network, so the change ran as the app's own user while the question and the audit named the runas account.
+            return ComputerText.RunAsOnThisPc;
+        }
+
         if (IsRunAs)
         {
             if (string.IsNullOrWhiteSpace(User))
@@ -185,8 +204,65 @@ public abstract class ComputerConfig
         return ExtraProblem(family);
     }
 
+    /// <summary>
+    /// Whether <paramref name="host"/> names this PC: <c>localhost</c>, a loopback address, <c>.</c>, or this PC's name (its NetBIOS or DNS
+    /// name, bare or with a domain after it).
+    /// </summary>
+    public static bool IsThisPc(string? host)
+    {
+        string name = host?.Trim().TrimStart('\\').TrimEnd('.').ToLowerInvariant() ?? "";
+        if (name.Length == 0)
+        {
+            return false;
+        }
+
+        if (name is "localhost" or "." or "::1" or "[::1]" || name.StartsWith("127.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        string first = name.Split('.')[0];
+        string own = Environment.MachineName.ToLowerInvariant();
+        string dns;
+        try
+        {
+            dns = System.Net.Dns.GetHostName().ToLowerInvariant();
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+            dns = own;
+        }
+
+        return first == own || name == dns || first == dns.Split('.')[0];
+    }
+
     /// <summary>The family's own reason this entry cannot be used, or null.</summary>
     protected virtual string? ExtraProblem(ComputerFamilyInfo family) => null;
+
+    /// <summary>A <c>credential</c> that does not sit under <paramref name="prefix"/> (DA2), or null. Shared by the event logs' and AD's entries.</summary>
+    public static string? CredentialProblem(string? credential, string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        return string.IsNullOrWhiteSpace(credential) || (credential.Trim().StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && credential.Trim().Length > prefix.Length)
+            ? null
+            : ComputerText.CredentialOutsidePrefix(prefix);
+    }
+
+    /// <summary>
+    /// <paramref name="read"/> when its stored user is empty or is <paramref name="user"/> (case ignored), else the refusal naming both (DA2).
+    /// An empty stored user (<c>cmdkey /generic:… /pass</c> without <c>/user</c>) is accepted, as before.
+    /// </summary>
+    public static CredentialResult CheckedUser(CredentialResult read, string target, string? user)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (read.Error is not null || string.IsNullOrWhiteSpace(read.User) || user is null
+            || string.Equals(read.User.Trim(), user.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return read;
+        }
+
+        return CredentialResult.Failed(ComputerText.CredentialUserMismatch(target, read.User.Trim(), user.Trim()));
+    }
 }
 
 /// <summary>A computer by its name, and the file it came from (null for <c>local</c> with no entry). <see cref="IsLocal"/> for this PC.</summary>

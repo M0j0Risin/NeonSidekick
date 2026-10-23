@@ -98,7 +98,9 @@ public sealed class WindowsTaskSystem : ITaskSystem
             }
             try
             {
-                if (local && WindowsIdentity.GetCurrent().User is { } own)
+                // Disposed (2026-10-23, the admin review's O9: a token handle leaked per local task session).
+                using var current = local ? WindowsIdentity.GetCurrent() : null;
+                if (current?.User is { } own)
                 {
                     forms.Add(own.Value);
                 }
@@ -115,13 +117,13 @@ public sealed class WindowsTaskSystem : ITaskSystem
             return forms;
         }
 
-        public IReadOnlyList<TaskEntry> List(string folder, bool recursive)
+        public IReadOnlyList<TaskEntry> List(string folder, bool recursive, bool skipMicrosoft = false)
         {
             var entries = new List<TaskEntry>(128);
             nint root = TaskNative.GetByPath(service, TaskNative.ServiceGetFolder, folder, "ITaskService.GetFolder");
             try
             {
-                Walk(root, recursive, entries, 0);
+                Walk(root, recursive, skipMicrosoft, entries, 0);
             }
             finally
             {
@@ -131,7 +133,7 @@ public sealed class WindowsTaskSystem : ITaskSystem
             return entries;
         }
 
-        private static void Walk(nint folder, bool recursive, List<TaskEntry> entries, int depth)
+        private static void Walk(nint folder, bool recursive, bool skipMicrosoft, List<TaskEntry> entries, int depth)
         {
             nint tasks = TaskNative.GetByFlags(folder, TaskNative.FolderGetTasks, TaskNative.TaskEnumHidden, "ITaskFolder.GetTasks");
             try
@@ -139,9 +141,12 @@ public sealed class WindowsTaskSystem : ITaskSystem
                 int count = TaskNative.GetInt(tasks, TaskNative.CollectionCount, "IRegisteredTaskCollection.Count");
                 for (int i = 1; i <= count; i++)
                 {
-                    nint task = TaskNative.Item(tasks, i, "IRegisteredTaskCollection.Item");
+                    // The item read inside the try (2026-10-23, the admin review's O3): a task deleted or unreadable between Count and
+                    // Item failed the whole walk, or dropped the rest of a folder.
+                    nint task = 0;
                     try
                     {
+                        task = TaskNative.Item(tasks, i, "IRegisteredTaskCollection.Item");
                         entries.Add(Entry(task));
                     }
                     catch (TaskException)
@@ -150,7 +155,10 @@ public sealed class WindowsTaskSystem : ITaskSystem
                     }
                     finally
                     {
-                        TaskNative.Release(task);
+                        if (task != 0)
+                        {
+                            TaskNative.Release(task);
+                        }
                     }
                 }
             }
@@ -173,7 +181,12 @@ public sealed class WindowsTaskSystem : ITaskSystem
                     nint child = TaskNative.Item(folders, i, "ITaskFolderCollection.Item");
                     try
                     {
-                        Walk(child, recursive, entries, depth + 1);
+                        if (skipMicrosoft && TaskAccess.IsMicrosoft(TaskNative.GetString(child, TaskNative.FolderPath, "ITaskFolder.Path") + "\\"))
+                        {
+                            continue;
+                        }
+
+                        Walk(child, recursive, skipMicrosoft, entries, depth + 1);
                     }
                     catch (TaskException)
                     {
@@ -212,7 +225,18 @@ public sealed class WindowsTaskSystem : ITaskSystem
                 int count = TaskNative.GetInt(instances, TaskNative.CollectionCount, "IRunningTaskCollection.Count");
                 for (int i = 1; i <= count && i <= 64; i++)
                 {
-                    nint instance = TaskNative.Item(instances, i, "IRunningTaskCollection.Item");
+                    // An instance that ended between Count and Item is skipped (2026-10-23, the admin review's O4: task_info failed for a
+                    // short-lived one).
+                    nint instance;
+                    try
+                    {
+                        instance = TaskNative.Item(instances, i, "IRunningTaskCollection.Item");
+                    }
+                    catch (TaskException)
+                    {
+                        continue;
+                    }
+
                     try
                     {
                         running.Add(new TaskInstance(
@@ -220,6 +244,10 @@ public sealed class WindowsTaskSystem : ITaskSystem
                             TaskNative.GetString(instance, TaskNative.RunningCurrentAction, "IRunningTask.CurrentAction"),
                             TaskNative.GetInt(instance, TaskNative.RunningEnginePid, "IRunningTask.EnginePID"),
                             (TaskRunState)TaskNative.GetInt(instance, TaskNative.RunningState, "IRunningTask.State")));
+                    }
+                    catch (TaskException)
+                    {
+                        // It ended while being read.
                     }
                     finally
                     {

@@ -11,6 +11,9 @@ namespace NeonSidekick.Tasks;
 /// </summary>
 public static class TaskText
 {
+    /// <summary>A change whose connect ran out of time before it began (2026-10-23, B2): nothing was changed. Pinned.</summary>
+    public static string NotChangedTimedOut(string path, string computer) => $"Error: {computer} did not answer in time, so {path} was not changed.";
+
     public const string Category = "Tasks";
 
     /// <summary>The group's glyph: a calendar (the toolbar's, <c>/tasks</c>' title).</summary>
@@ -46,14 +49,13 @@ public static class TaskText
 
     public static string Missing(string argument) => $"Error: {argument} is required.";
 
-    public static string NotBoolean(string argument, string raw) => $"Error: {argument} '{raw}' is not true or false.";
+    public static string NotBoolean(string argument, string raw) => Llm.Tools.ArgumentText.NotBoolean(argument, raw);
 
-    public static string OutOfRange(string argument, string given, int min, int max) =>
-        $"Error: {argument} '{given}' is out of range; it must be {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}.";
+    public static string OutOfRange(string argument, string given, int min, int max) => Llm.Tools.ArgumentText.OutOfRange(argument, given, min, max);
 
-    public static string BadState(string word) => $"Error: state '{word}' is not ready, running, disabled or queued.";
+    public static string BadState(string word) => $"Error: state '{Llm.Tools.ArgumentText.Echo(word)}' is not ready, running, disabled or queued.";
 
-    public static string BadAction(string word) => $"Error: action '{word}' is not run, end, enable or disable.";
+    public static string BadAction(string word) => $"Error: action '{Llm.Tools.ArgumentText.Echo(word)}' is not run, end, enable or disable.";
 
     /// <summary>
     /// A path no task can have (2026-10-20, a review: <c>\Backup\../Secret/Task</c> passed a folder pattern's star): holding a control
@@ -62,7 +64,9 @@ public static class TaskText
     public static string BadPath(string path) =>
         $"Error: '{UntrustedText.OneLine(UntrustedText.Cut(path, 120))}' is not a task path; a path is \\folder\\name with no slashes, control characters or . and .. parts.";
 
-    public static string BadFolder(string folder) => $"Error: folder '{folder}' must start with \\.";
+    /// <remarks>Since 2026-10-23 (the admin review's R3) the folder is judged as a path; a missing lead <c>\</c> is added before it is.</remarks>
+    public static string BadFolder(string folder) =>
+        $"Error: folder '{UntrustedText.Name(folder)}' is no task folder: write it as \\Backup or \\Backup\\Nightly, with no /, no control character and no empty, . or .. part.";
 
     public static string TimedOut(string computer) => $"Error: the read on {computer} took too long and was stopped.";
 
@@ -79,22 +83,37 @@ public static class TaskText
     /// computer opened every Windows task to a broader one). Pinned.
     /// </summary>
     public static string MicrosoftTask(string path) =>
-        $"Error: {path} is one of Windows' own tasks; it can be changed only when a \"control\" pattern on this computer that starts with \\Microsoft\\ matches it.";
+        $"Error: {path} is one of Windows' own tasks; only the user can allow such a task to be changed (/tools › Admin › Tasks).";
+
+    /// <summary>The pane's note after a copy (2026-10-23, the admin review's T19). Pinned.</summary>
+    public static string CopiedNotice(string path) => "(" + Glyph + " copied " + path + ")";
+
+    /// <summary>The pane's note when ask can draft nothing (T19). Pinned.</summary>
+    public const string AskOffNotice = "Task tools is off (/tools tasks): the model could not read the task, so nothing was drafted.";
+
+    /// <summary><c>/tasks</c>' printed header (T19). Pinned.</summary>
+    public static string CommandHeader(string where, string folder, int count) =>
+        "Tasks on " + where + " under " + folder + ": " + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A run, end or enable refused whose definition could not be read (2026-10-23, T12): who it runs as is not known. Pinned.</summary>
+    public static string PrivilegedUnknown(string path) =>
+        $"Error: {path}'s definition could not be read, so who it runs as is not known; running, ending or enabling it from here is for the user to allow (/tools › Admin › Tasks).";
 
     /// <summary>A privileged run, end or enable refused. Pinned.</summary>
     public static string Privileged(string path, string principal) =>
-        $"Error: {path} runs as {principal}, a privileged principal; running, ending or enabling it from here needs \"privileged\": true on this computer's entry in tasks.json.";
+        $"Error: {path} runs as {principal}, a privileged principal; running, ending or enabling it from here is for the user to allow (/tools › Admin › Tasks).";
 
     /// <summary>
     /// The approval question for a run: the path and the computer on its title row, then the principal, the run level and every command line
     /// under it, each on one line (2026-10-20, a review: a command padded with spaces hid its tail), since a run is a privilege boundary. Pinned.
     /// </summary>
     public static string ConfirmRun(string path, string computer, string principal, string runLevel, string commands) =>
-        $"Run {UntrustedText.OneLine(path)} on {computer} now?\nIt runs as {principal} ({runLevel}): {commands}";
+        $"Run {UntrustedText.Name(path)} on {UntrustedText.Name(computer)} now?\nIt runs as {UntrustedText.Name(principal)} ({runLevel}): {commands}";
 
     /// <summary>The approval question for end, enable or disable, the principal under its title row. Pinned.</summary>
-    public static string ConfirmChange(string action, string path, string computer, string principal) =>
-        $"{Act(action)} {UntrustedText.OneLine(path)} on {computer}?\nIt runs as {principal}.";
+    /// <remarks>An enable's question names the commands its triggers will run (2026-10-23, L2).</remarks>
+    public static string ConfirmChange(string action, string path, string computer, string principal, string? commands = null) =>
+        $"{Act(action)} {UntrustedText.Name(path)} on {UntrustedText.Name(computer)}?\nIt runs as {UntrustedText.Name(principal)}" + (commands is null ? "." : ": " + commands);
 
     /// <summary>What a run's question says of the commands when the definition could not be read (2026-10-20, a review: it said "(no actions)"). Pinned.</summary>
     public const string CommandsUnknown = "what it runs is not known (its definition could not be read)";
@@ -110,7 +129,7 @@ public static class TaskText
     /// <see cref="ComputerText.MaxShownInQuestion"/> characters. Pinned.
     /// </summary>
     public static string TooLongToAsk(string path, int length) =>
-        $"Error: {UntrustedText.OneLine(path)}'s command lines are {length.ToString(CultureInfo.InvariantCulture)} characters, too long to show whole in the question; run it yourself with /tasks.";
+        $"Error: {UntrustedText.Name(path)}'s command lines are {length.ToString(CultureInfo.InvariantCulture)} characters, too long to show whole in the question; run it yourself with /tasks.";
 
     /// <summary>A change made whose task could not be read after it (2026-10-20, a review: it was answered and audited as a failure). Pinned.</summary>
     public static string DoneUnread(string action, string path, string computer) =>

@@ -68,6 +68,21 @@ public static class LdapResultCodes
     /// locked, and on a Mac whose own KDC holds <c>localhost</c>'s port 88 this is what that KDC says of every domain account (seen that day).
     /// </summary>
     public const int UnknownAccount = 0x1006;
+
+    /// <summary>
+    /// The client's own: the KDC said the account is locked, disabled or expired (<c>KDC_ERR_CLIENT_REVOKED</c>) — never a password to hold
+    /// (2026-10-23, the admin review's B8: it was worded and held as a refused password, so an unlock took effect only at the next start).
+    /// </summary>
+    public const int AccountRevoked = 0x1007;
+
+    /// <summary>The client's own (2026-10-23, the admin review's J3): the session was not signed and sealed after the bind.</summary>
+    public const int NotSealed = 0x1008;
+
+    /// <summary>
+    /// The client's own (2026-10-23, the admin review's J4): wldap32's LDAPS connect said "server down", which it says for a refused certificate
+    /// too; the sentence names both.
+    /// </summary>
+    public const int TlsUnanswered = 0x1009;
 }
 
 /// <summary>Which reply a message is (RFC 4511's protocolOp tags).</summary>

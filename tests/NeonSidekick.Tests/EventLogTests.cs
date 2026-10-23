@@ -159,7 +159,7 @@ public sealed class EventLogTests : IDisposable
 
         var data = EventXml.Parse(xml);
 
-        Assert.Equal([new EventField("Data1", "app.exe"), new EventField("Data2", "1.0.0.0"), new EventField("Binary", "DEADBEEF")], data.Fields);
+        Assert.Equal([new EventField("Data1", "app.exe"), new EventField("Data2", "1.0.0.0"), new EventField("Binary", "DEADBEEF", Binary: true)], data.Fields);
         Assert.Equal("Application Error Source", data.SourceName);
     }
 
@@ -342,7 +342,7 @@ public sealed class EventLogTests : IDisposable
     [Theory]
     [InlineData("Microsoft-Windows-*/Operational", "Microsoft-Windows-PowerShell/Operational", true)]
     [InlineData("Microsoft-Windows-*/Operational", "Microsoft-Windows-PowerShell/Admin", false)]
-    [InlineData("*", "Microsoft-Windows-PowerShell/Operational", false)]
+    [InlineData("*", "Microsoft-Windows-PowerShell/Operational", true)]   // a lone star is every log (2026-10-23, the admin review's J12)
     [InlineData("*", "System", true)]
     [InlineData("*/*", "Microsoft-Windows-PowerShell/Operational", true)]
     [InlineData("system", "System", true)]
@@ -518,7 +518,7 @@ public sealed class EventLogTests : IDisposable
         SeedSystem(1);
         string answer = await Call(new EventLogSearchTool(Access(), () => _settings), ("log", "System"), ("level", "warning"), ("since", "1d"));
 
-        Assert.EndsWith("no warnings in System since yesterday.", answer, StringComparison.Ordinal);
+        Assert.EndsWith("no warnings in System since 24 hours ago.", answer, StringComparison.Ordinal);   // as near as it was (2026-10-23, S1)
     }
 
     [Fact]
@@ -533,7 +533,7 @@ public sealed class EventLogTests : IDisposable
         string answer = await Call(new EventLogSearchTool(Access(), () => _settings), ("log", "System"), ("level", "all"), ("text", "never there"));
 
         Assert.Contains("(searched 1,000 events back to 2026-09-11 13:48:51 -07:00 without reaching the end; the next call goes on from there)", answer, StringComparison.Ordinal);
-        Assert.EndsWith("next: log=System level=all text=\"never there\" before_record=4001", answer, StringComparison.Ordinal);
+        Assert.EndsWith("next: log=System level=all text=\"never there\" before_record=4001 limit=20", answer, StringComparison.Ordinal);   // the limit always (S5)
     }
 
     [Fact]
@@ -653,8 +653,9 @@ public sealed class EventLogTests : IDisposable
         string answer = await Call(new EventLogLogsTool(Access(), () => _settings));
 
         Assert.StartsWith("Computers offered: local (this PC; redacted)\nLogs on local: ", answer, StringComparison.Ordinal);
-        Assert.Contains("  System  2 records", answer, StringComparison.Ordinal);
-        Assert.Contains("  Security  no access", answer, StringComparison.Ordinal);
+        // The channel names fenced since 2026-10-23 (C10).
+        Assert.Contains("  ⟪System⟫  2 records", answer, StringComparison.Ordinal);
+        Assert.Contains("  ⟪Security⟫  no access", answer, StringComparison.Ordinal);
         Assert.DoesNotContain("Empty", answer, StringComparison.Ordinal);
         Assert.Contains("(8 more logs not checked; narrow with filter)", answer, StringComparison.Ordinal);
         Assert.EndsWith("Files (.evtx in the working directory):\n  old.evtx  2.0 KB", answer, StringComparison.Ordinal);
@@ -731,6 +732,28 @@ public sealed class EventLogTests : IDisposable
         Assert.Equal([(0, EventLogRedaction.Placeholder), (1, EventLogRedaction.Placeholder)], rewrites);
     }
 
+    /// <summary>
+    /// DP7 (the branch review, 2026-10-23): a null value is shown to the insert (so every value is counted) but never rewritten, and a classic
+    /// event's trailing Binary leaf may be missing from the values without the message being withheld.
+    /// </summary>
+    [Fact]
+    public void Variant_ANullValue_IsCounted_AndATrailingBinary_StillLinesUp()
+    {
+        var buffer = new byte[64];
+        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(12), EventLogVariant.TypeNull);
+        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(16 + 12), EventLogVariant.TypeNull);
+        var seen = new List<int>();
+        var rewrites = EventLogVariant.Rewrites(buffer, 0, 2, (i, value) => { seen.Add(i); return "changed"; });
+        Assert.Equal([0, 1], seen);
+        Assert.Empty(rewrites);
+
+        EventField[] classic = [new("Data1", "a"), new("Data2", "b"), new("Binary", "00", Binary: true)];
+        Assert.True(EventLogSearch.ValuesMatch(2, classic));
+        Assert.True(EventLogSearch.ValuesMatch(3, classic));
+        Assert.False(EventLogSearch.ValuesMatch(1, classic));
+        Assert.False(EventLogSearch.ValuesMatch(2, [new("A", ""), new("B", ""), new("C", "")]));
+    }
+
     [Fact]
     public async Task Redacted_AnEventsOwnText_HidesASecretFieldsValue_OrDropsTheTextForAShortOne()
     {
@@ -744,7 +767,8 @@ public sealed class EventLogTests : IDisposable
 
         Assert.Contains("⟪Sign-in for alice with <redacted> failed⟫", answer, StringComparison.Ordinal);
         Assert.DoesNotContain("Hunter22", answer, StringComparison.Ordinal);
-        Assert.Contains("⟪(no message; fields: User=alice, Password=<redacted>)⟫", answer, StringComparison.Ordinal);
+        // Said to be withheld by the redaction since 2026-10-23 (W13), not "no message".
+        Assert.Contains("⟪(" + EventLogText.MessageWithheld + "; fields: User=alice, Password=<redacted>)⟫", answer, StringComparison.Ordinal);
         Assert.DoesNotContain("abc failed", answer, StringComparison.Ordinal);
     }
 

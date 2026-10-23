@@ -123,6 +123,29 @@ public static class PlanTools
         Llm.Tools.AskUserTool.ToolName, Llm.Tools.CameraCaptureTool.ToolName, Llm.Tools.ScreenCaptureTool.ToolName,
     };
 
+    /// <summary>
+    /// The changing tools that stop a call on a confirm pane until the user answers (2026-10-23, the admin review's L3): a Ralph pass at
+    /// checkpoint 0 runs unattended, and one of these waited on its pane with no timeout — the loop hung, or a person coming back approved a
+    /// change nobody had reviewed. Withheld from such a pass beside <see cref="AskingTools"/>, never from a gap pass (whose wording follows
+    /// <see cref="AskingTools"/> alone). The same wait in other confirm-gated tools (Docker's changes, the <c>*_execute</c> tools,
+    /// <c>monitor_input</c>/<c>monitor_layout</c>) is noted for a later review; each joins with one line here.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ConfirmingTools = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Llm.Tools.ServiceControlTool.ToolName, Llm.Tools.ServiceStartTypeTool.ToolName, Llm.Tools.TaskControlTool.ToolName,
+        Llm.Tools.MonitorInputTool.ToolName, Llm.Tools.MonitorLayoutTool.ToolName,   // the monitors' changes ask too (2026-10-23)
+    };
+
+    /// <summary><paramref name="disabled"/> with <see cref="AskingTools"/> and <see cref="ConfirmingTools"/> added: what an unattended Ralph pass leaves out. Pure.</summary>
+    public static IReadOnlySet<string> WithoutAskingOrConfirming(IReadOnlySet<string> disabled)
+    {
+        ArgumentNullException.ThrowIfNull(disabled);
+        var union = new HashSet<string>(disabled, StringComparer.Ordinal);
+        union.UnionWith(AskingTools);
+        union.UnionWith(ConfirmingTools);
+        return union;
+    }
+
     /// <summary><paramref name="disabled"/> with every one of <see cref="AskingTools"/> added (2026-10-18): what a gap pass that may not wait on the user leaves out. Pure.</summary>
     public static IReadOnlySet<string> WithoutAsking(IReadOnlySet<string> disabled)
     {

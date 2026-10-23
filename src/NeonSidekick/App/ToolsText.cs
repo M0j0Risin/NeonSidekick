@@ -494,6 +494,9 @@ public static class ToolsText
     /// </summary>
     public const string NoEventLogsReason = "there are no event logs to read here";
 
+    /// <summary>No readwrite computer names a <c>control</c> pattern (2026-10-23, L8). Pinned.</summary>
+    public const string NoControlReason = "no readwrite computer names a service or task it may change (its control list is empty)";
+
     /// <summary>Why a family's changes are not offered (2026-10-15, the admin-tools plan's item 30). Pinned.</summary>
     public const string NoReadWriteComputerReason = "no ticked computer has \"access\": \"readwrite\"";
 

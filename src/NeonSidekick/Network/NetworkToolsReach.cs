@@ -27,6 +27,8 @@ public static class NetworkToolsReach
         _ => NetworkMode.Describe(name),
     };
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> s_warned = new(StringComparer.Ordinal);
+
     /// <summary>The reach in force for the network tools under <paramref name="effective"/>.</summary>
     public static NetworkReach Resolve(AppSettingsData effective)
     {
@@ -42,7 +44,12 @@ public static class NetworkToolsReach
             return reach;
         }
 
-        DiagnosticLog.Warn(NetworkText.Category, $"{nameof(AppSettingsData.NetworkToolsReach)}='{effective.NetworkToolsReach}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        // Once a run per word (U15).
+        if (s_warned.TryAdd(effective.NetworkToolsReach ?? "", 0))
+        {
+            DiagnosticLog.Warn(NetworkText.Category, $"{nameof(AppSettingsData.NetworkToolsReach)}='{effective.NetworkToolsReach}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        }
+
         return NetworkMode.Resolve(effective);
     }
 }

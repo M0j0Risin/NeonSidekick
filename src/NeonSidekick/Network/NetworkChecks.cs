@@ -65,25 +65,34 @@ public static class NetworkChecks
         bool system = string.IsNullOrWhiteSpace(server);
         if (system && (type is DnsWire.A or DnsWire.Aaaa) && reverse is null)
         {
+            // A LAN spelling refused before the system's resolvers are asked (2026-10-23, the admin review's M7).
+            if (budget is not null && access.SpelledLanRefusal(asked) is { } spelled)
+            {
+                return new NetworkAnswer(budget.Take(asked, [], [], access.MaxHosts, access.MaxPorts) ?? spelled);
+            }
+
             var resolved = await access.ResolveAsync(asked, cancellationToken).ConfigureAwait(false);
             if (resolved.Error is { } failed)
             {
-                return new NetworkAnswer(failed);
+                // An unresolved name spends the budget too (U5).
+                return new NetworkAnswer(budget?.Take(asked, [], [], access.MaxHosts, access.MaxPorts) ?? failed);
             }
 
-            var judged = await QuestionAsync(access, budget, asked, resolved.Value!, cancellationToken).ConfigureAwait(false);
+            // Only the asked family's addresses judged and counted (2026-10-23, the admin review's U7: a private A refused an AAAA question under
+            // internet, and under lan the AAAA read "no records").
+            var family = type == DnsWire.A ? AddressFamily.InterNetwork : AddressFamily.InterNetworkV6;
+            var judged = await QuestionAsync(access, budget, asked, resolved.Value!.Where(a => a.AddressFamily == family).ToList(), cancellationToken).ConfigureAwait(false);
             if (judged.Refusal is { } refusal)
             {
                 return new NetworkAnswer(refusal);
             }
 
-            var family = type == DnsWire.A ? AddressFamily.InterNetwork : AddressFamily.InterNetworkV6;
-            return new NetworkAnswer(NetworkRender.SystemLookup(asked, type, judged.Shown.Where(a => a.AddressFamily == family).ToList()), judged.Note);
+            return new NetworkAnswer(NetworkRender.SystemLookup(asked, type, judged.Shown.ToList()), judged.Note);
         }
 
-        // The question itself, before any server is asked: a PTR by its address, any other by its name; counted when the system's
-        // resolvers carry it (an explicit server is counted as the host it is).
-        var question = await QuestionAsync(access, budget, reverse?.ToString() ?? asked, reverse is null ? [] : [reverse], cancellationToken, count: system).ConfigureAwait(false);
+        // The question itself, before any server is asked: a PTR by its address, any other by its name; counted always (2026-10-23, the admin
+        // review's A1: through an explicit server the question was never counted, so one host's budget swept a /24's PTRs).
+        var question = await QuestionAsync(access, budget, reverse?.ToString() ?? asked, reverse is null ? [] : [reverse], cancellationToken).ConfigureAwait(false);
         if (question.Refusal is { } questionRefused)
         {
             return new NetworkAnswer(questionRefused);
@@ -107,7 +116,64 @@ public static class NetworkChecks
         }
 
         var outcome = await DnsClient.QueryAsync(servers, asked, type, cancellationToken).ConfigureAwait(false);
-        return new NetworkAnswer(NetworkRender.Lookup(asked, type, outcome, system), note);
+        var (shown, withheld) = await AnswersAsync(access, budget, outcome, cancellationToken).ConfigureAwait(false);
+        string text = NetworkRender.Lookup(asked, type, shown, system);
+        return new NetworkAnswer(withheld > 0 ? text + "\n" + NetworkText.AnswersWithheld(withheld) : text, note);
+    }
+
+    /// <summary>
+    /// A model's DNS answers judged (2026-10-23, the admin review's A1 and B9): an A or AAAA record by its address, as a host's are; a record
+    /// that names a host (CNAME, NS, PTR, MX, SRV, SOA) by that name's spelling and the lists, as a lookup's name is. A refused record is withheld
+    /// and counted. The user's hand (no budget) sees every record.
+    /// </summary>
+    private static async Task<(DnsOutcome Shown, int Withheld)> AnswersAsync(NetworkAccess access, NetworkBudget? budget, DnsOutcome outcome, CancellationToken cancellationToken)
+    {
+        if (budget is null || outcome.Reply is not { Rcode: 0 } reply || reply.Answers.Count == 0)
+        {
+            return (outcome, 0);
+        }
+
+        var aliases = await access.DeniedAddressesAsync(cancellationToken).ConfigureAwait(false);
+        var kept = new List<DnsRecord>(reply.Answers.Count);
+        int withheld = 0;
+        foreach (var record in reply.Answers)
+        {
+            string? refusal = null;
+            if (record.Type is DnsWire.A or DnsWire.Aaaa && IPAddress.TryParse(record.Data, out var address))
+            {
+                refusal = access.Judge(record.Name.TrimEnd('.'), [address], aliases).Refusal;
+            }
+            else if (TargetName(record) is { Length: > 0 } target)
+            {
+                refusal = (await access.JudgeLookupAsync(target, [], cancellationToken).ConfigureAwait(false)).Refusal;
+            }
+
+            if (refusal is null)
+            {
+                kept.Add(record);
+            }
+            else
+            {
+                withheld++;
+            }
+        }
+
+        return withheld == 0 ? (outcome, 0) : (outcome with { Reply = reply with { Answers = kept } }, withheld);
+    }
+
+    /// <summary>The host a record names: a CNAME's, NS's or PTR's data, an MX's or SRV's last word, an SOA's first; null for any other.</summary>
+    public static string? TargetName(DnsRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        string[] words = record.Data.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string? target = record.Type switch
+        {
+            DnsWire.Cname or DnsWire.Ns or DnsWire.Ptr => record.Data,
+            DnsWire.Mx or DnsWire.Srv => words.Length > 0 ? words[^1] : null,
+            DnsWire.Soa => words.Length > 0 ? words[0] : null,
+            _ => null,
+        };
+        return target?.Trim().TrimEnd('.');
     }
 
     /// <summary>
@@ -124,9 +190,10 @@ public static class NetworkChecks
             return new QuestionJudgement(addresses, null, refusal is null ? null : NetworkText.ModelWouldBeRefused(refusal));
         }
 
-        if (refusal is null && count)
+        if (count)
         {
-            refusal = budget.Take(host, kept, [], access.MaxHosts, access.MaxPorts);
+            // A refused question spends the budget too (2026-10-23, the admin review's U5), counted by its name alone.
+            refusal = refusal is null ? budget.Take(host, kept, [], access.MaxHosts, access.MaxPorts) : budget.Take(host, [], [], access.MaxHosts, access.MaxPorts) ?? refusal;
         }
 
         if (refusal is not null)
@@ -156,6 +223,12 @@ public static class NetworkChecks
         }
 
         var (address, first) = await ChooseAsync(target.Value!.Addresses, pinger, cancellationToken).ConfigureAwait(false);
+        if (HostRules.Canonical(address).AddressFamily == AddressFamily.InterNetworkV6 && !pinger.SupportsIPv6)
+        {
+            // Said, not echoed into 100% loss (2026-10-23, the admin review's I8).
+            return new NetworkAnswer(NetworkText.NoIpv6Host(target.Value.Host));
+        }
+
         var echoes = new List<PingHop>(count);
         if (first is { } sent)
         {
@@ -196,6 +269,11 @@ public static class NetworkChecks
         }
 
         var (address, _) = await ChooseAsync(target.Value!.Addresses, pinger, cancellationToken).ConfigureAwait(false);
+        if (HostRules.Canonical(address).AddressFamily == AddressFamily.InterNetworkV6 && !pinger.SupportsIPv6)
+        {
+            return new NetworkAnswer(NetworkText.NoIpv6Host(target.Value.Host));   // I8: never 30 hops of nothing
+        }
+
         var hops = await NetworkProbes.TraceAsync(pinger, address, maxHops, names, NetworkProbes.ReverseAsync, cancellationToken).ConfigureAwait(false);
         return new NetworkAnswer(NetworkRender.Trace(target.Value.Host, address, maxHops, hops), target.Value.ModelNote);
     }
@@ -212,13 +290,43 @@ public static class NetworkChecks
         }
 
         var results = await NetworkProbes.PortsAsync(target.Value!.Addresses, ports, access.Connect, cancellationToken).ConfigureAwait(false);
-        return new NetworkAnswer(NetworkRender.Ports(target.Value.Host, target.Value.Addresses, results), target.Value.ModelNote);
+        string text = NetworkRender.Ports(target.Value.Host, target.Value.Addresses, results);
+        return new NetworkAnswer(target.Value.LeftOut > 0 ? text + "\n" + NetworkText.AddressesLeftOut(target.Value.LeftOut) : text, target.Value.ModelNote);
     }
 
     /// <summary><c>net_tls</c>: the handshake on <paramref name="port"/>, the preamble given or guessed from the port.</summary>
     public static async Task<NetworkAnswer> TlsAsync(NetworkAccess access, NetworkBudget? budget, string host, int port, string? serverName, StartTls? preamble, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(access);
+
+        // The server name is a host too (2026-10-23, the admin review's U1): a denied virtual host's certificate could be read by naming it
+        // through an allowed shared front end. Judged by name before anything is spent: one host name, then the reach's LAN spelling and the
+        // denied and allowed lists, as a lookup of a name is. The user's own /net is told, not refused.
+        string? sniNote = null;
+        if (!string.IsNullOrWhiteSpace(serverName))
+        {
+            string sni = serverName.Trim();
+            if (NetworkAccess.OneHostProblem(sni) is not null || HostRules.TryParseAddress(sni.Trim('[', ']'), out _))
+            {
+                return new NetworkAnswer(NetworkText.BadServerName(sni));
+            }
+
+            if (!string.Equals(HostRules.NormalizeName(sni), HostRules.NormalizeName(host), StringComparison.OrdinalIgnoreCase))
+            {
+                var (_, sniRefusal) = await access.JudgeLookupAsync(HostRules.NormalizeName(sni), [], cancellationToken).ConfigureAwait(false);
+                if (sniRefusal is not null)
+                {
+                    if (budget is not null)
+                    {
+                        DiagnosticLog.Info(NetworkText.Category, "Refused the server name " + sni + ": " + sniRefusal);
+                        return new NetworkAnswer(sniRefusal);
+                    }
+
+                    sniNote = NetworkText.ModelWouldBeRefused(sniRefusal);
+                }
+            }
+        }
+
         var target = await access.TargetAsync(host, budget, [port], cancellationToken).ConfigureAwait(false);
         if (target.Error is { } refused)
         {
@@ -226,7 +334,12 @@ public static class NetworkChecks
         }
 
         var value = target.Value!;
-        string name = string.IsNullOrWhiteSpace(serverName) ? HostRules.NormalizeName(value.Host) : serverName.Trim();
+        if (sniNote is not null)
+        {
+            value = value with { ModelNote = value.ModelNote is null ? sniNote : value.ModelNote + " " + sniNote };
+        }
+
+        string name = string.IsNullOrWhiteSpace(serverName) ? HostRules.NormalizeName(value.Host) : HostRules.NormalizeName(serverName.Trim());
         var kind = preamble ?? TlsPreamble.Guess(port);
         try
         {
@@ -267,7 +380,7 @@ public static class NetworkChecks
 
     /// <summary>The address an echo goes to first: the first IPv4 for a pinger without IPv6, else the first.</summary>
     private static IPAddress Preferred(IReadOnlyList<IPAddress> addresses, IPinger pinger) =>
-        pinger is IcmpSocketPinger ? addresses.FirstOrDefault(a => HostRules.Canonical(a).AddressFamily == AddressFamily.InterNetwork) ?? addresses[0] : addresses[0];
+        !pinger.SupportsIPv6 ? addresses.FirstOrDefault(a => HostRules.Canonical(a).AddressFamily == AddressFamily.InterNetwork) ?? addresses[0] : addresses[0];
 
     /// <summary>
     /// The address the echoes go to (2026-10-19, the network review: a dual-stack host's first address was often IPv6 on a network that routes
@@ -280,7 +393,7 @@ public static class NetworkChecks
         var address = Preferred(addresses, pinger);
         var family = HostRules.Canonical(address).AddressFamily;
         var other = addresses.FirstOrDefault(a => HostRules.Canonical(a).AddressFamily != family);
-        if (other is null || pinger is IcmpSocketPinger)
+        if (other is null || !pinger.SupportsIPv6)
         {
             return (address, null);
         }

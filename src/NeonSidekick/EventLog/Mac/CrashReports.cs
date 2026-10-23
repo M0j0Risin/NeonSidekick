@@ -42,6 +42,12 @@ public static partial class CrashReports
     /// <summary>How much of a report a listing reads.</summary>
     public const int HeaderBytes = 64 * 1024;
 
+    /// <summary>How much of an <c>.ips</c> a listing reads: its first line, the metadata (2026-10-23, the admin review's X7).</summary>
+    public const int IpsHeaderBytes = 8 * 1024;
+
+    /// <summary>The most of one report a listing's line reads (2026-10-23, I7): a page holds up to a hundred.</summary>
+    public const int ListingBytes = 1024 * 1024;
+
     /// <summary>The faulting thread's frames shown.</summary>
     public const int Frames = 30;
 
@@ -117,6 +123,7 @@ public static partial class CrashReports
         ArgumentNullException.ThrowIfNull(folders);
         var reports = new List<CrashReportInfo>();
         var states = new List<(MacCrashFolder, string?)>();
+        var seen = new HashSet<(string Owner, string Name)>();
         foreach (var folder in folders)
         {
             string? refused = null;
@@ -124,7 +131,9 @@ public static partial class CrashReports
             {
                 try
                 {
-                    if (!IsPlainFolder(path))
+                    // The folder itself plain before its Retired is judged (2026-10-23, the admin review's X3: a linked-away DiagnosticReports'
+                    // target's Retired was listed and read, a link followed mid-path).
+                    if (!IsPlainFolder(folder.Path) || !IsPlainFolder(path))
                     {
                         continue;   // missing, or a link: never followed out of the folders
                     }
@@ -143,7 +152,9 @@ public static partial class CrashReports
                         }
 
                         var info = Info(file.FullName, file.Name, new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero), folder.Owner);
-                        if (info.Time >= since && (until is not { } end || info.Time <= end))
+
+                        // One report per owner and name (X15: a report and its Retired twin shared a handle; the folder's own comes first).
+                        if (info.Time >= since && (until is not { } end || info.Time <= end) && seen.Add((folder.Owner, file.Name)))
                         {
                             reports.Add(info);
                         }
@@ -187,7 +198,7 @@ public static partial class CrashReports
             foreach (string place in new[] { folder.Path, Path.Combine(folder.Path, Retired) })
             {
                 string path = Path.Combine(place, name);
-                if (!IsPlainFolder(place) || !IsPlainFile(path))
+                if (!IsPlainFolder(folder.Path) || !IsPlainFolder(place) || !IsPlainFile(path))   // X3
                 {
                     continue;
                 }
@@ -206,7 +217,7 @@ public static partial class CrashReports
         string head;
         try
         {
-            head = ReadText(fullPath, HeaderBytes, out _);
+            head = ReadText(fullPath, name.EndsWith(".ips", StringComparison.OrdinalIgnoreCase) ? IpsHeaderBytes : HeaderBytes, out _);   // X7
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
@@ -293,11 +304,12 @@ public static partial class CrashReports
     /// the termination, what the libraries said, the faulting thread's frames; a jetsam's killed and largest processes; a text report's
     /// first lines), with <paramref name="redact"/> applied to both.
     /// </summary>
-    public static CrashDetail Describe(CrashReportInfo report, Func<string, string> redact)
+    /// <remarks><paramref name="maxBytes"/> (2026-10-23, I7): a listing's line reads <see cref="ListingBytes"/>, a report's page <see cref="MaxBytes"/>.</remarks>
+    public static CrashDetail Describe(CrashReportInfo report, Func<string, string> redact, int maxBytes = MaxBytes)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(redact);
-        string whole = ReadText(report.FullPath, MaxBytes, out bool cut);
+        string whole = ReadText(report.FullPath, maxBytes, out bool cut);
         var (summary, text, pid) = DescribeText(whole, report);
         if (cut)
         {
@@ -313,6 +325,13 @@ public static partial class CrashReports
         ArgumentNullException.ThrowIfNull(whole);
         ArgumentNullException.ThrowIfNull(report);
         string[] parts = whole.Split('\n', 2);
+        if (parts[0].TrimStart().StartsWith('{') && (parts.Length < 2 || TryParse(parts[1]) is null))
+        {
+            // An .ips whose body was cut (past MaxBytes) or will not parse is said so (2026-10-23, the admin review's X8: the text reader ran over
+            // the raw JSON, a summary of "{" and 160 lines of it).
+            return (MacLogText.ReportOf(report.Kind), MacLogText.ReportBodyUnread, null);
+        }
+
         if (parts[0].TrimStart().StartsWith('{') && parts.Length == 2 && TryParse(parts[1]) is { } body)
         {
             using (body)

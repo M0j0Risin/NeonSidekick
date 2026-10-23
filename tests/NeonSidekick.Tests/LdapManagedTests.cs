@@ -369,14 +369,22 @@ public sealed class LdapManagedTests
 
     [Theory]
     [InlineData(new byte[] { 7, 0, 0x10, 0 }, false, true, true, SaslSecurity.Confidentiality)]
-    [InlineData(new byte[] { 7, 0, 0x10, 0 }, false, true, false, SaslSecurity.Integrity)]
-    [InlineData(new byte[] { 3, 0, 0x10, 0 }, false, true, true, SaslSecurity.Integrity)]
     [InlineData(new byte[] { 0x7F, 0, 0x10, 0 }, false, true, true, SaslSecurity.Confidentiality)]
     [InlineData(new byte[] { 7, 0, 0x10, 0 }, true, true, true, SaslSecurity.None)]
     public void TheLayerChoice_IsTheStrongestTheContextHas_OrNoneUnderTls(byte[] offer, bool tls, bool signed, bool encrypted, SaslSecurity expected)
     {
         var layer = new FakeLayer { Signed = signed, Encrypted = encrypted };
         Assert.Equal(expected, SaslGssapiExchange.Choose(offer, tls, layer).Security);
+    }
+
+    /// <summary>Integrity alone is refused on 389 (2026-10-23, the admin review's L7): sealed, as Windows binds, or nothing.</summary>
+    [Theory]
+    [InlineData(new byte[] { 7, 0, 0x10, 0 }, true, false)]
+    [InlineData(new byte[] { 3, 0, 0x10, 0 }, true, true)]
+    public void IntegrityAlone_IsRefusedOn389(byte[] offer, bool signed, bool encrypted)
+    {
+        var layer = new FakeLayer { Signed = signed, Encrypted = encrypted };
+        Assert.Equal(LdapResultCodes.AuthUnknown, Assert.Throws<DirectoryException>(() => SaslGssapiExchange.Choose(offer, false, layer)).Code);
     }
 
     [Theory]
@@ -548,7 +556,7 @@ public sealed class LdapManagedTests
     /// </summary>
     [Theory]
     [InlineData(KdcVerdict.KnowsTheAccount, LdapResultCodes.InvalidCredentials)]
-    [InlineData(KdcVerdict.Revoked, LdapResultCodes.InvalidCredentials)]
+    [InlineData(KdcVerdict.Revoked, LdapResultCodes.AccountRevoked)]   // its own code since 2026-10-23 (B8): never a password to hold
     [InlineData(KdcVerdict.UnknownAccount, LdapResultCodes.UnknownAccount)]
     [InlineData(KdcVerdict.ClockSkew, LdapResultCodes.ClockSkew)]
     [InlineData(KdcVerdict.Unreachable, LdapResultCodes.KdcUnreachable)]

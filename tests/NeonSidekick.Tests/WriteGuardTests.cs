@@ -95,12 +95,71 @@ public sealed class WriteGuardTests : IDisposable
         Assert.Equal(FileOutcome.Ok, Write("notes.md"));
     }
 
-    /// <summary>A root inside the home (the default <c>&lt;profile&gt;\files</c>) writes inside itself.</summary>
+    /// <summary>
+    /// A root inside the home's app-writable folders (the default <c>&lt;profile&gt;\files</c>, the images folder, a skill folder) writes inside
+    /// itself; any other root inside the home does not (2026-10-23, the admin review's M1: this test's root was the home's <c>work</c>, which
+    /// the own-root pass covered, as it covered the home and a profile folder themselves).
+    /// </summary>
     [Fact]
-    public void ARootInsideTheHome_WritesItsOwnFiles()
+    public void ARootInsideTheHome_WritesItsOwnFiles_OnlyInTheAppWritableFolders()
     {
         using var _ = WriteGuard.Configure(Facts(home: _dir));
-        Assert.Equal(FileOutcome.Ok, Write("notes.md"));
+        Assert.Equal(FileOutcome.AppFilesProtected, Write("notes.md"));
+        foreach (string writable in new[] { Path.Combine("profiles", "neon", "files"), Path.Combine("profiles", "neon", "images", "edited"), Path.Combine("skills", "x") })
+        {
+            string root = Path.Combine(_dir, writable);
+            Directory.CreateDirectory(root);
+            var files = new WorkingDirectory(() => root, new ManualTimeProvider());
+            Assert.Equal(FileOutcome.Ok, files.WriteText("notes.md", "x", overwrite: true).Outcome);
+        }
+    }
+
+    /// <summary>
+    /// With the working directory at the home or a profile folder, every app file is refused (2026-10-23, the admin review's M1:
+    /// <c>configs\services.json</c> with <c>control: ["*"]</c> was the model's to write); its <c>files</c> folder still writes.
+    /// </summary>
+    [Fact]
+    public void AWorkingDirectoryAtTheHomeOrAProfile_RefusesTheAppsFiles()
+    {
+        using var _ = WriteGuard.Configure(Facts(home: _dir));
+        string profile = Path.Combine(_dir, "profiles", "neon");
+        Directory.CreateDirectory(profile);
+        foreach (string root in new[] { _dir, profile })
+        {
+            var files = new WorkingDirectory(() => root, new ManualTimeProvider());
+            foreach (string name in new[] { Path.Combine("configs", "services.json"), "profile.json", "persona.md", "notes.md" })
+            {
+                Assert.Equal(FileOutcome.AppFilesProtected, files.WriteText(name, "{}", overwrite: true).Outcome);
+            }
+        }
+
+        var atProfile = new WorkingDirectory(() => profile, new ManualTimeProvider());
+        Assert.Equal(FileOutcome.Ok, atProfile.WriteText(Path.Combine("files", "notes.md"), "x", overwrite: true).Outcome);
+    }
+
+    /// <summary>
+    /// The home is known by a <c>.neonsidekick</c> part however the rest is spelled (2026-10-23, the admin review's M2: a share or a mapped
+    /// drive's spelling of the home passed), and by its identity: the folder itself found again walking up from a path.
+    /// </summary>
+    [Fact]
+    public void TheHome_IsKnownByItsFolderName_AndByItsIdentity()
+    {
+        using var _ = WriteGuard.Configure(Facts(home: Path.Combine(_dir, "elsewhere")));
+        Assert.Equal(FileOutcome.AppFilesProtected, Write(Path.Combine("share", ".NeonSidekick", "configs", "tasks.json")));
+        Assert.Equal(FileOutcome.Ok, Write(Path.Combine("share", "neonsidekick", "notes.md")));
+        Assert.True(WriteGuard.AppWritable(Path.Combine("profiles", "neon", "files", "sub")));
+        Assert.False(WriteGuard.AppWritable(Path.Combine("profiles", "neon", "configs", "mcp.json")));
+        Assert.False(WriteGuard.AppWritable(Path.Combine("profiles", "neon", "files")));
+        Assert.False(WriteGuard.AppWritable(""));
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            string deep = Path.Combine(_root, "a", "b");
+            Directory.CreateDirectory(deep);
+            var id = FileIdentity.Of(_root);
+            Assert.NotNull(id);
+            Assert.Equal(_root, FileIdentity.AncestorWith(Path.Combine(deep, "missing.txt"), id.Value));
+            Assert.Null(FileIdentity.AncestorWith(Path.Combine(_dir, "x.txt"), id.Value));
+        }
     }
 
     [Fact]

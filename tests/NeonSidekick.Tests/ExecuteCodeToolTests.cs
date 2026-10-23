@@ -106,7 +106,8 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.False(CodeLanguages.TryParse("ruby", out _));
         Assert.Equal([CodeLanguage.Python], CodeLanguages.Resolve(new AppSettingsData { ShellCodeLanguages = ["python", "ruby"] }));
         Assert.Equal([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node], CodeLanguages.Resolve(new AppSettingsData { ShellCodeLanguages = [] }));
-        Assert.Equal(["execute_code", "ask_user", "finish_step"], ExecuteCodeTool.Excluded);   // a Ralph pass's report is the model's own call (2026-10-18)
+        // a Ralph pass's report is the model's own call (2026-10-18); the admin changes never reach a script (2026-10-23, the admin review's E3)
+        Assert.Equal(["execute_code", "ask_user", "finish_step", "service_control", "service_start_type", "task_control"], ExecuteCodeTool.Excluded);
     }
 
     /// <summary>The leftovers (2026-10-12, the shell review): run folders older than a day go; a fresh one and anything not a run's stay.</summary>

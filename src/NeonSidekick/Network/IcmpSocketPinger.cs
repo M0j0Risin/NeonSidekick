@@ -21,6 +21,9 @@ public sealed class IcmpSocketPinger : IPinger
 
     public bool CanTrace => true;
 
+    /// <summary>IPv4 only in v1 (U17).</summary>
+    public bool SupportsIPv6 => false;
+
     public async Task<PingHop> PingAsync(IPAddress address, int ttl, TimeSpan timeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(address);
@@ -62,6 +65,13 @@ public sealed class IcmpSocketPinger : IPinger
                     switch (kind)
                     {
                         case IcmpReplyKind.EchoReply:
+                            // From the target, with our own payload back (2026-10-23, the admin review's C14: another host's reply, or a
+                            // concurrent ping's with the same id and sequence, read as the target up).
+                            if ((from is not null && !from.Equals(address)) || !IcmpPacket.SamePayload(buffer.AsSpan(0, received.ReceivedBytes), packet))
+                            {
+                                continue;
+                            }
+
                             return new PingHop(PingStatus.Reply, from ?? address, rtt);
                         case IcmpReplyKind.TimeExceeded:
                             return new PingHop(PingStatus.TtlExpired, from, rtt);

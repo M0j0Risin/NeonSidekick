@@ -52,12 +52,7 @@ public sealed class EventLogSummaryTool : EventLogTool
             return EventLogText.Missing(LogArgument);
         }
 
-        var (source, refused) = Access.Resolve(Optional(arguments, ComputerArgument), log, ForceRedacted);
-        if (source is null)
-        {
-            return refused;
-        }
-
+        // The arguments read before the computer is resolved (2026-10-23, the admin review's R6: its password was decrypted first).
         var now = Access.Time.GetUtcNow();
         var (since, sinceError) = Moment(arguments, EventLogSearchTool.SinceArgument);
         if (sinceError is not null)
@@ -77,10 +72,17 @@ public sealed class EventLogSummaryTool : EventLogTool
             levels = parsed;
         }
 
+        var (source, refused) = Access.Resolve(Optional(arguments, ComputerArgument), log, ForceRedacted);
+        if (source is null)
+        {
+            return refused;
+        }
+
         var scan = Access.Scan(source, ScanLimit);
         var result = await Access.RunAsync(source, (system, token) =>
         {
-            var (defaultLevels, audit) = EventLogQuery.DefaultFor(ChannelOf(system, source, token));
+            // The log's own default only when no level was given (2026-10-23, the admin review's M5: an .evtx was opened for it and then not used).
+            var (defaultLevels, audit) = levels is null ? EventLogQuery.DefaultFor(ChannelOf(system, source, token)) : (levels.Value, EventAudit.Any);
             var query = new EventLogQuery
             {
                 Log = source.Log,

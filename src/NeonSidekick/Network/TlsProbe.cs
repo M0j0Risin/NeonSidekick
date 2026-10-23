@@ -10,19 +10,30 @@ using NeonSidekick.Web;
 namespace NeonSidekick.Network;
 
 /// <summary>One certificate as an answer shows it.</summary>
-public sealed record CertificateView(string Subject, string Issuer, IReadOnlyList<string> Names, DateTimeOffset NotBefore, DateTimeOffset NotAfter, string Sha256, string SerialNumber, bool HasPrivateKey = false, string? KeyAlgorithm = null)
+/// <remarks><c>Sha1</c> (2026-10-23, the admin review's H10): the thumbprint Windows' own tools show, which a filter matches too.</remarks>
+public sealed record CertificateView(string Subject, string Issuer, IReadOnlyList<string> Names, DateTimeOffset NotBefore, DateTimeOffset NotAfter, string Sha256, string SerialNumber, bool HasPrivateKey = false, string? KeyAlgorithm = null, bool NamesUnreadable = false, string? Sha1 = null)
 {
     /// <summary>A certificate read into its view (nothing exported: the key's presence is a yes or no).</summary>
     public static CertificateView Of(X509Certificate2 certificate)
     {
         ArgumentNullException.ThrowIfNull(certificate);
         var names = new List<string>();
+        bool unreadable = false;
         foreach (var extension in certificate.Extensions)
         {
             if (extension is X509SubjectAlternativeNameExtension san)
             {
-                names.AddRange(san.EnumerateDnsNames());
-                names.AddRange(san.EnumerateIPAddresses().Select(a => a.ToString()));
+                // A malformed name list is said, not thrown (2026-10-23, the admin review's E5: it failed net_tls whole, and one such
+                // certificate made a whole store unreadable).
+                try
+                {
+                    names.AddRange(san.EnumerateDnsNames());
+                    names.AddRange(san.EnumerateIPAddresses().Select(a => a.ToString()));
+                }
+                catch (CryptographicException)
+                {
+                    unreadable = true;
+                }
             }
         }
 
@@ -45,7 +56,21 @@ public sealed record CertificateView(string Subject, string Issuer, IReadOnlyLis
             certificate.GetCertHashString(HashAlgorithmName.SHA256),
             certificate.SerialNumber,
             hasKey,
-            certificate.PublicKey.Oid.FriendlyName);
+            KeyAlgorithmOf(certificate),
+            unreadable,
+            certificate.Thumbprint);
+    }
+
+    private static string? KeyAlgorithmOf(X509Certificate2 certificate)
+    {
+        try
+        {
+            return certificate.PublicKey.Oid.FriendlyName;
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Whole days from <paramref name="now"/> to the end of its validity (negative once expired).</summary>
@@ -89,8 +114,10 @@ public static class TlsProbe
         // IPv4 would have answered, and an attempt cancelled by the budget or Esc was never disposed). Each attempt disposes its own socket
         // on a failure or a cancel; a loser that connects anyway is closed (HappyEyeballs).
         var socket = await HappyEyeballs.ConnectAsync(addresses, port, HappyEyeballs.AttemptDelay, HappyEyeballs.ConnectOneAsync, token).ConfigureAwait(false);
-        var reached = socket.RemoteEndPoint is IPEndPoint remote ? remote.Address : addresses[0];
+
+        // Owned at once (2026-10-23, the admin review's U12: a throw from RemoteEndPoint before the stream took it leaked the socket).
         await using var network = new NetworkStream(socket, ownsSocket: true);
+        var reached = socket.RemoteEndPoint is IPEndPoint remote ? remote.Address : addresses[0];
         await TlsPreamble.RunAsync(network, preamble, port, token).ConfigureAwait(false);
         var chain = new List<string>();
         var status = new List<string>();

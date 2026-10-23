@@ -76,6 +76,15 @@ public sealed record ServiceConfiguration(
 /// </summary>
 public sealed record ServiceDetail(ServiceConfiguration Config, ServiceStatus Status, IReadOnlyList<ServiceEntry> Dependents, bool DependentsKnown = true);
 
+/// <summary>How a wait for a service's state ended (2026-10-23, K3, T14).</summary>
+public enum ServiceWaitEnd
+{
+    Settled,
+    TimedOut,
+    Cancelled,
+    Unreadable,
+}
+
 /// <summary>What the native layer threw: the Win32 code and where.</summary>
 public sealed class ServiceException(int code, string message) : Exception(message)
 {
@@ -89,7 +98,11 @@ public sealed class ServiceException(int code, string message) : Exception(messa
 }
 
 /// <summary>Who a session signs in as on a remote computer: the account and its password (never logged).</summary>
-public sealed record ServiceLogin(string User, string Password);
+public sealed record ServiceLogin(string User, string Password)
+{
+    /// <summary>The account alone (2026-10-23, the admin review's K9: the generated ToString printed the password, into a log or an exception).</summary>
+    public override string ToString() => $"ServiceLogin {{ User = {User} }}";
+}
 
 /// <summary>Where a session goes: this PC (no host), or a remote computer, as the user or as <see cref="Login"/>.</summary>
 public sealed record ServiceTarget(string? Host, ServiceLogin? Login)
@@ -107,6 +120,18 @@ public interface IServiceSession
 
     /// <summary>One service's configuration, status and dependents; a missing one throws code 1060.</summary>
     ServiceDetail Detail(string name);
+
+    /// <summary>
+    /// <see cref="Detail(string)"/> without the dependents when <paramref name="dependents"/> is false (2026-10-23, the admin review's M6: a
+    /// start read them too, an extra remote call, and an account that may not list them got a "dependents unknown"); they then read as not known.
+    /// </summary>
+    ServiceDetail Detail(string name, bool dependents) => Detail(name);
+
+    /// <summary>
+    /// A shared-process service's DLL, <c>Parameters\ServiceDll</c> under its key (2026-10-23, the admin review's T10: for
+    /// <c>svchost.exe -k …</c> it is the code that runs, never shown); null when there is none or it cannot be read.
+    /// </summary>
+    string? ServiceDll(string name) => null;
 
     /// <summary>One service's status now.</summary>
     ServiceStatus Status(string name);

@@ -91,6 +91,18 @@ public static unsafe partial class MacFiles
         return status != 0 ? 1 : Math.Max(1, (int)*(ushort*)(buffer + 6));
     }
 
+    /// <summary>
+    /// The identity of what <paramref name="path"/> reaches (<c>stat</c>, links followed: 2026-10-23, <see cref="Files.FileIdentity"/>):
+    /// <c>st_dev</c> at offset 0 and <c>st_ino</c> at 8 in the 64-bit inode layout; null when it can't be read.
+    /// </summary>
+    public static Files.FileId? Identity(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        byte* buffer = stackalloc byte[256];
+        int status = RuntimeInformation.ProcessArchitecture == Architecture.X64 ? Stat64(path, buffer) : Stat(path, buffer);
+        return status != 0 ? null : new Files.FileId(*(uint*)buffer, *(ulong*)(buffer + 8));
+    }
+
     private static Kind KindOfMode(ushort mode) => (mode & TypeMask) switch
     {
         RegularType => Kind.Regular,
@@ -101,6 +113,12 @@ public static unsafe partial class MacFiles
 
     [LibraryImport(LibSystem, EntryPoint = "lstat", StringMarshalling = StringMarshalling.Utf8)]
     private static partial int LStat(string path, byte* buffer);
+
+    [LibraryImport(LibSystem, EntryPoint = "stat", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int Stat(string path, byte* buffer);
+
+    [LibraryImport(LibSystem, EntryPoint = "stat$INODE64", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int Stat64(string path, byte* buffer);
 
     [LibraryImport(LibSystem, EntryPoint = "fstat")]
     private static partial int FStat(int fd, byte* buffer);

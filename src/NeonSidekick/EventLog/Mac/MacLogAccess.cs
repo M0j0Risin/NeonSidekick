@@ -76,6 +76,7 @@ public sealed class MacLogAccess
 
     private readonly Func<bool> _localFull;
     private readonly Func<bool> _localTicked;
+    private readonly Func<IReadOnlyList<string>?> _localLogs;
     private readonly object _archivesGate = new();
     private (string Root, DateTimeOffset At, IReadOnlyList<string> List)? _archives;
     private int _archivesRefreshing;
@@ -86,8 +87,11 @@ public sealed class MacLogAccess
     /// <param name="time">The clock: the times a call names, the zone an answer shows, the scan's budget.</param>
     /// <param name="places">Where the crash reports and install.log are; this account's when null.</param>
     /// <param name="localTicked">Whether <c>local</c> is ticked in <c>Event log computers offered</c>, read at each call; always when null.</param>
-    public MacLogAccess(IUnifiedLog? log, Func<bool> localFull, WorkingDirectory files, TimeProvider time, MacLogPlaces? places = null, Func<bool>? localTicked = null)
+    /// <param name="localLogs">local's <c>logs</c> allow-list in eventlog.json, read at each call; none when null (N4).</param>
+    public MacLogAccess(IUnifiedLog? log, Func<bool> localFull, WorkingDirectory files, TimeProvider time, MacLogPlaces? places = null, Func<bool>? localTicked = null,
+        Func<IReadOnlyList<string>?>? localLogs = null)
     {
+        _localLogs = localLogs ?? (() => null);
         Places = places ?? MacLogPlaces.Default;
         Log = log;
         _localFull = localFull ?? throw new ArgumentNullException(nameof(localFull));
@@ -137,7 +141,15 @@ public sealed class MacLogAccess
             : null;
         if (local is not null)
         {
-            return LocalTicked ? (local, null) : (null, MacLogText.LocalNotTicked);
+            if (!LocalTicked)
+            {
+                return (null, MacLogText.LocalNotTicked);
+            }
+
+            // local's own logs allow-list holds on a Mac too (2026-10-23, the admin review's N4: the crashes and install.log were read whatever it said).
+            return _localLogs() is { Count: > 0 } logs && !EventLogCatalog.Allows(logs, local.Log)
+                ? (null, EventLogText.LogNotAllowed(local.Log, EventLogText.LocalName))
+                : (local, null);
         }
 
         if (EventLogQuery.IsFile(name))
@@ -154,9 +166,12 @@ public sealed class MacLogAccess
                 return (null, FileText.Error(outcome, relative, "read"));
             }
 
-            return Directory.Exists(full)
-                ? (new MacLogSource(relative, UnifiedLogTarget.Archive(full), redacted), null)
-                : (null, "Error: " + MacLogText.NoArchive(relative));
+            if (!Directory.Exists(full))
+            {
+                return (null, "Error: " + MacLogText.NoArchive(relative));
+            }
+
+            return HoldsLinks(full) ? (null, MacLogText.ArchiveHoldsLinks(relative)) : (new MacLogSource(relative, UnifiedLogTarget.Archive(full), redacted), null);   // X4
         }
 
         return (null, MacLogText.UnknownLog(name));
@@ -345,7 +360,8 @@ public sealed class MacLogAccess
                 return;
             }
 
-            bool atHome = homeFolder.Length > 1 && string.Equals(Path.TrimEndingDirectorySeparator(folder), homeFolder, StringComparison.Ordinal);
+            // The home by any spelling (2026-10-23, the admin review's X12): APFS ignores case, and /System/Volumes/Data is the same home.
+            bool atHome = homeFolder.Length > 1 && string.Equals(DataPath(Path.TrimEndingDirectorySeparator(folder)), DataPath(homeFolder), StringComparison.OrdinalIgnoreCase);
             try
             {
                 foreach (string child in children)
@@ -358,6 +374,8 @@ public sealed class MacLogAccess
                         continue;   // never into an archive
                     }
 
+                    // Two folders deep: an archive in root/x/y is found, none in root/x/y/z (the admin review's I14 read this as three levels;
+                    // the walk's test pins two folders, 2026-10-23).
                     if (depth >= 2 || name.StartsWith('.') || PackageExtensions.Contains(Path.GetExtension(name)) || (atHome && ProtectedHomeFolders.Contains(name)))
                     {
                         continue;
@@ -374,6 +392,44 @@ public sealed class MacLogAccess
 
         Visit(root, 0);
         return found.Order(StringComparer.OrdinalIgnoreCase).Take(50).ToList();
+    }
+
+    /// <summary>A path with the data volume's prefix taken off, so <c>/System/Volumes/Data/Users/ann</c> is <c>/Users/ann</c> (X12). Pure.</summary>
+    public static string DataPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        const string data = "/System/Volumes/Data";
+        return path.StartsWith(data + "/", StringComparison.OrdinalIgnoreCase) ? path[data.Length..] : path;
+    }
+
+    /// <summary>The most entries of an archive walked for links (X4).</summary>
+    public const int MaxArchiveEntries = 100_000;
+
+    /// <summary>
+    /// Whether the archive at <paramref name="full"/> holds a link anywhere inside it (2026-10-23, the admin review's X4: OSLogStore follows them,
+    /// so a .logarchive whose parts link to /private/var/db/diagnostics read the live store with local unticked); true past
+    /// <see cref="MaxArchiveEntries"/> too, so a bundle too big to check is refused rather than trusted.
+    /// </summary>
+    public static bool HoldsLinks(string full)
+    {
+        ArgumentNullException.ThrowIfNull(full);
+        int seen = 0;
+        try
+        {
+            foreach (var info in new DirectoryInfo(full).EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = false }))
+            {
+                if (++seen > MaxArchiveEntries || info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return true;   // a part that will not be listed is not trusted
+        }
+
+        return false;
     }
 }
 
@@ -451,7 +507,9 @@ public sealed record MacLogQuery(
         DateTimeOffset? until = Until;
         if (Before is { } before && (until is null || before.Time < until))
         {
-            until = before.Time + MacLogSearch.Microsecond;   // the cursor's whole microsecond: its ties after it are on the next page
+            // The cursor's whole microsecond and a few more (2026-10-23, the admin review's X6): a time through an NSDate double near a microsecond's
+            // edge fell outside `date <= until`, and the ties after it went missing; the walk passes over what is above the cursor anyway.
+            until = before.Time + 4 * MacLogSearch.Microsecond;
         }
 
         return new MacLogFilter(Since, Levels, until, Process, Pid, Subsystem, Category, redacted ? null : Text, Exclude);

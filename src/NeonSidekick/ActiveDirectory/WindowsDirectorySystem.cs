@@ -32,6 +32,11 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
         {
             Prepare(ld, target);
             Bind(ld, target.Login);
+            if (!target.Tls)
+            {
+                Sealed(ld);
+            }
+
             return work(new Session(ld));
         }
         finally
@@ -45,8 +50,18 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
     {
         Set(ld, LdapNative.OptProtocolVersion, 3, "LDAP_OPT_PROTOCOL_VERSION");
         Set(ld, LdapNative.OptReferrals, 0, "LDAP_OPT_REFERRALS");
-        Set(ld, LdapNative.OptArecExclusive, 1, "LDAP_OPT_AREC_EXCLUSIVE");
+        if (NamesHost(target))
+        {
+            // The name as given only when it names a host (2026-10-23, the admin review's J1): for the domain's own name (the default, and
+            // `current`) AREC_EXCLUSIVE asked for ldap/<domain>, an SPN no DC registers, and Negotiate fell back to NTLM without a word.
+            Set(ld, LdapNative.OptArecExclusive, 1, "LDAP_OPT_AREC_EXCLUSIVE");
+        }
+
         Set(ld, LdapNative.OptSizeLimit, DirectoryLimits.MaxEntries, "LDAP_OPT_SIZELIMIT");
+
+        // Set before the connect and the bind (2026-10-23, the admin review's O2, settled against ldap_bind's page): ldap_bind_s takes no timeout
+        // of its own and follows LDAP_OPT_TIMELIMIT (120 s by default), so the bind is held to the search time, inside the call's 40 s deadline
+        // with the connect's 10 s; the sign-in guard's cap bounds what is left.
         Set(ld, LdapNative.OptTimeLimit, (int)DirectoryLimits.SearchTime.TotalSeconds, "LDAP_OPT_TIMELIMIT");
         if (!target.Tls)
         {
@@ -58,7 +73,27 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
         int connected = LdapNative.Connect(ld, &timeout);
         if (connected != LdapNative.Success)
         {
-            throw new DirectoryException(connected, "ldap_connect failed (0x" + connected.ToString("X", System.Globalization.CultureInfo.InvariantCulture) + ")");
+            // Under TLS wldap32 says 0x51 for a certificate it refused as for a server that is down (2026-10-23, the admin review's J4): both said.
+            int code = target.Tls && connected == LdapNative.ServerDown ? Ldap.LdapResultCodes.TlsUnanswered : connected;
+            throw new DirectoryException(code, "ldap_connect failed (0x" + connected.ToString("X", System.Globalization.CultureInfo.InvariantCulture) + ")");
+        }
+    }
+
+    /// <summary>Whether the server is a host's name rather than the domain's own (J1).</summary>
+    internal static bool NamesHost(DirectoryTarget target) =>
+        target.Domain is not { } domain || !string.Equals(target.Server.Trim().TrimEnd('.'), domain.Trim().TrimEnd('.'), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Signing and sealing read back after the bind (2026-10-23, the admin review's J3, the Mac's check of its layer): a session the options say is
+    /// neither is closed, never taken as sealed.
+    /// </summary>
+    private static void Sealed(nint ld)
+    {
+        nint sign = 0, encrypt = 0;
+        if (LdapNative.GetOption(ld, LdapNative.OptSign, &sign) != LdapNative.Success || LdapNative.GetOption(ld, LdapNative.OptEncrypt, &encrypt) != LdapNative.Success
+            || (int)sign == 0 || (int)encrypt == 0)
+        {
+            throw new DirectoryException(Ldap.LdapResultCodes.NotSealed, DirectoryText.NotSealedAfterBind);
         }
     }
 
@@ -104,7 +139,30 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
 
         if (result != LdapNative.Success)
         {
-            throw new DirectoryException(result, "ldap_bind_s failed (0x" + result.ToString("X", System.Globalization.CultureInfo.InvariantCulture) + ")");
+            // The server's own text joins the code (2026-10-23, the admin review's J5): AD's "data 52e" (a wrong password) and the locked,
+            // disabled, expired and must-change sub-codes read apart only from it (B8), and an NTLM block names itself there.
+            string server = ServerError(ld);
+            throw new DirectoryException(result, "ldap_bind_s failed (0x" + result.ToString("X", System.Globalization.CultureInfo.InvariantCulture) + ")" + (server.Length > 0 ? ": " + server : ""));
+        }
+    }
+
+    /// <summary><c>LDAP_OPT_SERVER_ERROR</c>'s text, cut to 300 characters; empty when there is none.</summary>
+    private static string ServerError(nint ld)
+    {
+        char* text = null;
+        if (LdapNative.GetOption(ld, LdapNative.OptServerError, &text) != LdapNative.Success || text is null)
+        {
+            return "";
+        }
+
+        try
+        {
+            string value = new string(text).Trim();
+            return value.Length <= 300 ? value : value[..300];
+        }
+        finally
+        {
+            LdapNative.MemFree(text);
         }
     }
 
@@ -183,17 +241,35 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
                 throw new DirectoryException(failed, "ldap_search_init_page failed (0x" + failed.ToString("X", System.Globalization.CultureInfo.InvariantCulture) + ")");
             }
 
+            // The whole walk is bounded (2026-10-23, the admin review's N1, A6, D8): one clock for every page (each page used to get the whole
+            // limit again, so a slow server ran the call past its deadline into an abandoned thread), a page cap and a stop after a few empty
+            // pages in a row (a server answering empty pages with a cookie spun this for ever; RFC 2696 allows an empty page, so not the
+            // first), and "truncated" only when something was left unread (exactly sizeLimit entries with nothing after read as "500+").
             var entries = new List<DirectoryEntry>();
             bool truncated = false;
             bool timedOut = false;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            int maxPages = (sizeLimit / DirectoryLimits.PageSize) + DirectoryLimits.PageSlack;
+            int emptyInARow = 0;
             try
             {
-                while (entries.Count < sizeLimit)
+                for (int page = 0; ; page++)
                 {
-                    var timeout = new LdapNative.LTimeval { Seconds = seconds };
+                    int left = seconds - (int)clock.Elapsed.TotalSeconds;
+                    if (left <= 0 || page >= maxPages || emptyInARow >= DirectoryLimits.MaxEmptyPages)
+                    {
+                        truncated = true;
+                        timedOut = left <= 0;
+                        break;
+                    }
+
+                    bool full = entries.Count >= sizeLimit;
+                    var timeout = new LdapNative.LTimeval { Seconds = left };
                     uint total = 0;
                     nint result = 0;
-                    int code = LdapNative.GetNextPageS(ld, search, &timeout, (uint)DirectoryLimits.PageSize, &total, &result);
+
+                    // Once full, one more page of one entry says whether anything was left.
+                    int code = LdapNative.GetNextPageS(ld, search, &timeout, full ? 1u : (uint)DirectoryLimits.PageSize, &total, &result);
                     try
                     {
                         if (code == LdapNative.NoResultsReturned)
@@ -214,7 +290,21 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
                             throw new DirectoryException(code, "ldap_get_next_page_s failed (0x" + code.ToString("X", System.Globalization.CultureInfo.InvariantCulture) + ")");
                         }
 
-                        Read(result, entries, sizeLimit);
+                        int before = entries.Count;
+                        bool leftOver = Read(result, entries, sizeLimit);
+                        if (full)
+                        {
+                            truncated = result != 0 && LdapNative.FirstEntry(ld, result) != 0;
+                            break;
+                        }
+
+                        if (leftOver)
+                        {
+                            truncated = true;
+                            break;
+                        }
+
+                        emptyInARow = entries.Count == before ? emptyInARow + 1 : 0;
                     }
                     finally
                     {
@@ -225,7 +315,6 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
                     }
                 }
 
-                truncated |= entries.Count >= sizeLimit;
                 return new DirectoryResults(entries, truncated, timedOut);
             }
             finally
@@ -234,14 +323,16 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
             }
         }
 
-        private void Read(nint result, List<DirectoryEntry> entries, int sizeLimit)
+        /// <summary>A result's entries added up to <paramref name="sizeLimit"/>; whether some were left unread past it.</summary>
+        private bool Read(nint result, List<DirectoryEntry> entries, int sizeLimit)
         {
             if (result == 0)
             {
-                return;
+                return false;
             }
 
-            for (nint entry = LdapNative.FirstEntry(ld, result); entry != 0 && entries.Count < sizeLimit; entry = LdapNative.NextEntry(ld, entry))
+            nint entry = LdapNative.FirstEntry(ld, result);
+            for (; entry != 0 && entries.Count < sizeLimit; entry = LdapNative.NextEntry(ld, entry))
             {
                 char* dn = LdapNative.GetDn(ld, entry);
                 string name = dn is null ? "" : new string(dn);
@@ -284,6 +375,8 @@ public sealed unsafe class WindowsDirectorySystem : IDirectorySystem
 
                 entries.Add(new DirectoryEntry(name, attributes));
             }
+
+            return entry != 0;
         }
     }
 }

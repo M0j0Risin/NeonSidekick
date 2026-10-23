@@ -54,7 +54,8 @@ public static class DirectoryCsv
 
         bool sections = tables.Count > 1;
         var csv = new StringBuilder();
-        var header = columns.Select(c => c.Date ? c.Name + " (" + ZoneLabel(answer.Zone, answer.Now) + ")" : c.Name).ToList();
+        // The zone by name; each cell carries its own date's offset (K5).
+        var header = columns.Select(c => c.Date ? c.Name + " (" + ZoneName(answer.Zone) + ")" : c.Name).ToList();
         if (sections)
         {
             header.Add(DirectoryText.ColSection);
@@ -88,12 +89,11 @@ public static class DirectoryCsv
         return csv.ToString();
     }
 
-    /// <summary>The zone as a column's header names it: <c>UTC-05:00</c>.</summary>
-    public static string ZoneLabel(TimeZoneInfo zone, DateTimeOffset now)
+    /// <summary>A date column's zone in the header: <c>UTC</c>, or the zone's id (2026-10-23, K5: today's offset was the label).</summary>
+    public static string ZoneName(TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(zone);
-        var offset = zone.GetUtcOffset(now);
-        return "UTC" + (offset < TimeSpan.Zero ? "-" : "+") + offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+        return zone == TimeZoneInfo.Utc || zone.Id is "UTC" or "Etc/UTC" ? "UTC" : zone.Id;
     }
 
     /// <summary>One cell as RFC 4180 writes it, scrubbed and guarded against a spreadsheet reading it as a formula.</summary>

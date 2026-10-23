@@ -1317,7 +1317,8 @@ internal sealed partial class ChatScreen
         _eventLog = new EventLog.EventLogAccess(eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().EventLogComputersOffered, _files, time);
         // A Mac's unified log (2026-10-18, the Mac event-log plan): the same four tool names over it when a reader was given.
         _macLog = new EventLog.MacLogAccess(unifiedLog, () => LocalFull(_settings.ProfileDirectory, _settings.StorageDirectory), _files, time, macLogPlaces,
-            () => EventLog.MacLogAccess.Ticks(_effective().EventLogComputersOffered));   // local unticked: archives only, as Windows keeps .evtx files (2026-10-20)
+            () => EventLog.MacLogAccess.Ticks(_effective().EventLogComputersOffered),   // local unticked: archives only, as Windows keeps .evtx files (2026-10-20)
+            () => LocalLogs(_settings.ProfileDirectory, _settings.StorageDirectory));   // local's logs allow-list (2026-10-23, N4)
         _eventLogTools = unifiedLog is not null ? MacLogTools(_macLog, _effective) : EventLogTools(_eventLog, _effective);
         // The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory.
         InitAdmin(pinger, resolve, serviceSystem, taskSystem, directorySystem, joinedDomain);
@@ -7116,7 +7117,7 @@ internal sealed partial class ChatScreen
     /// (the setting <c>Shell prefer native tools</c>), the rules gain <see cref="Assistant.ShellNativeRule"/> after the shell sentence. <paramref name="sampling"/>
     /// (2026-09-28, the setting <c>LLM sampling</c>, resolved for the connected model) replaces the assistant's when given. Shared with headless.
     /// </summary>
-    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false, IReadOnlyList<AIFunction>? screenTools = null, bool screenEnabled = false, IReadOnlyList<AIFunction>? sqliteTools = null, bool sqliteEnabled = false, IReadOnlyList<AIFunction>? postgresTools = null, bool postgresEnabled = false, bool memorySave = true, IReadOnlyList<AIFunction>? youTubeTools = null, bool youTubeEnabled = false, IReadOnlyList<AIFunction>? imageTools = null, bool imagesEnabled = false, IReadOnlyList<AIFunction>? neonAdvisorTools = null, bool neonAdvisorEnabled = false, Action<TurnToolInputs>? composed = null, IReadOnlyList<AIFunction>? shoppingTools = null, bool shoppingEnabled = false, IReadOnlyList<AIFunction>? eventLogTools = null, bool eventLogEnabled = false, IReadOnlyList<AIFunction>? networkTools = null, bool networkEnabled = false, IReadOnlyList<AIFunction>? serviceTools = null, bool serviceEnabled = false, IReadOnlyList<AIFunction>? taskTools = null, bool taskEnabled = false, IReadOnlyList<AIFunction>? directoryTools = null, bool directoryEnabled = false, IReadOnlySet<string>? onlyTools = null, PlanTurn? pass = null)
+    public static void PrepareTurn(Assistant assistant, MemoryStore memory, IReadOnlyList<AIFunction> memoryTools, IReadOnlyList<AIFunction> standingTools, PersonaFile persona, OperataFile operata, VocaliaFile vocalia, bool memoryEnabled, bool speechOutput, int maxToolIterations = Assistant.DefaultMaxToolIterations, bool toolsEnabled = true, IReadOnlyList<AIFunction>? webTools = null, bool webEnabled = false, Assistant.TurnContextGuard? contextGuard = null, IReadOnlyList<AIFunction>? fileTools = null, bool filesEnabled = false, IReadOnlyList<AIFunction>? askTools = null, SkillsForTurn? skills = null, bool markdown = false, IReadOnlyList<AIFunction>? sessionTools = null, bool sessionsEnabled = false, IReadOnlySet<string>? disabledTools = null, IReadOnlyList<AIFunction>? mcpTools = null, bool mcpEnabled = false, IReadOnlyList<AIFunction>? gitTools = null, bool gitEnabled = false, IReadOnlyList<AIFunction>? shellTools = null, bool shellEnabled = false, ProcessRegistry? processes = null, bool shellBridge = false, bool shellPolice = true, IReadOnlyList<AIFunction>? obsidianTools = null, bool obsidianEnabled = false, IReadOnlyList<AIFunction>? sqlTools = null, bool sqlEnabled = false, IReadOnlyList<AIFunction>? comfyTools = null, bool comfyEnabled = false, bool shellNative = false, PlanTurn? plan = null, bool preserveThinking = false, LlmSampling? sampling = null, IReadOnlyList<AIFunction>? homeTools = null, bool homeEnabled = false, IReadOnlyList<AIFunction>? printTools = null, bool printEnabled = false, IReadOnlyList<AIFunction>? oracleTools = null, bool oracleEnabled = false, IReadOnlyList<AIFunction>? mysqlTools = null, bool mysqlEnabled = false, IReadOnlyList<AIFunction>? uncTools = null, bool uncEnabled = false, IReadOnlyList<AIFunction>? dockerTools = null, bool dockerEnabled = false, IReadOnlyList<AIFunction>? cameraTools = null, bool cameraEnabled = false, IReadOnlyList<AIFunction>? screenTools = null, bool screenEnabled = false, IReadOnlyList<AIFunction>? sqliteTools = null, bool sqliteEnabled = false, IReadOnlyList<AIFunction>? postgresTools = null, bool postgresEnabled = false, bool memorySave = true, IReadOnlyList<AIFunction>? youTubeTools = null, bool youTubeEnabled = false, IReadOnlyList<AIFunction>? imageTools = null, bool imagesEnabled = false, IReadOnlyList<AIFunction>? neonAdvisorTools = null, bool neonAdvisorEnabled = false, Action<TurnToolInputs>? composed = null, IReadOnlyList<AIFunction>? shoppingTools = null, bool shoppingEnabled = false, IReadOnlyList<AIFunction>? eventLogTools = null, bool eventLogEnabled = false, IReadOnlyList<AIFunction>? networkTools = null, bool networkEnabled = false, IReadOnlyList<AIFunction>? serviceTools = null, bool serviceEnabled = false, IReadOnlyList<AIFunction>? taskTools = null, bool taskEnabled = false, IReadOnlyList<AIFunction>? directoryTools = null, bool directoryEnabled = false, IReadOnlySet<string>? onlyTools = null, PlanTurn? pass = null, bool eventLogRemote = false)
     {
         ArgumentNullException.ThrowIfNull(memoryTools);
         ArgumentNullException.ThrowIfNull(standingTools);
@@ -7180,6 +7181,7 @@ internal sealed partial class ChatScreen
             ShoppingEnabled = shoppingEnabled,
             EventLog = eventLogTools,
             EventLogEnabled = eventLogEnabled,
+            EventLogRemote = eventLogRemote,
             Network = networkTools,
             NetworkEnabled = networkEnabled,
             Services = serviceTools,
@@ -7363,13 +7365,14 @@ internal sealed partial class ChatScreen
         DockerEnabled = DockerOffered(effective),
         EventLog = _eventLogTools,
         EventLogEnabled = EventLogOffered(effective, _eventLog, _macLog),
+        EventLogRemote = EventLogRemote(_eventLog),
         Camera = _cameraTools,
         CameraEnabled = CameraOffered(effective),
         Screen = _screenTools,
         ScreenEnabled = ScreenOffered(effective),
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost; so does a Ralph pass
         // with the checkpoint off (later that day: an unattended loop never stops on a question).
-        Disabled = GapAsksBarred(effective) || RalphAsksBarred() ? PlanTools.WithoutAsking(disabled) : disabled,
+        Disabled = RalphAsksBarred() ? PlanTools.WithoutAskingOrConfirming(disabled) : GapAsksBarred(effective) ? PlanTools.WithoutAsking(disabled) : disabled,
         Plan = _plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled),
         Pass = RalphPassTurn(),
         // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under Code audit web research; an advisor asked in it the same.
@@ -11047,7 +11050,18 @@ internal sealed partial class ChatScreen
                 {
                     // Watch mode spoke up (2026-10-02, Camera watch speaks up): the changed picture shown to the model unasked.
                     _transcript.Notice(CameraText.WatchNudgeNotice);
-                    if (await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken).ConfigureAwait(false))
+                    bool ended;
+                    _watchTurn = true;   // its own budget, the watch's (DP7)
+                    try
+                    {
+                        ended = await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _watchTurn = false;
+                    }
+
+                    if (ended)
                     {
                         return 0;
                     }
@@ -14828,6 +14842,8 @@ internal sealed partial class ChatScreen
             }
         }
 
+        // One network budget for the whole loop (2026-10-23, the admin review's L6, decision DA8).
+        using var budgetRun = BudgetRun();
         for (int n = 1; count is null || n <= count; n++)
         {
             if (n > 1 && delay is { } wait)
@@ -16964,8 +16980,9 @@ internal sealed partial class ChatScreen
             _cameraDeclined = false;
             _screenDeclined = false;
             ForgetBotCheckDeclines();
-            // A new turn, a fresh scan budget (2026-10-15, the admin-tools plan): every net_ call of it counts, a script's and an advisor's too.
-            _networkBudget.Reset();
+            // A new turn, a fresh scan budget (2026-10-15, the admin-tools plan): every net_ call of it counts, a script's and an advisor's too; an
+            // automation run's lasts the run (2026-10-23, DA8).
+            ResetNetworkBudget();
             _turnPictures = images;   // the directive names a picture sent with this message too (2026-10-18)
             PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: PlanReplyFloor(_plan, _files)), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
             _turnPictures = [];

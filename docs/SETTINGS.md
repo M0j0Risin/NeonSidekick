@@ -506,7 +506,7 @@ The tools most profiles use, and the pane's own options.
 | Web browser privacy | `keep-history` keeps the Browser window's visited pages for its history menu; `clear-history` clears them when it closes. Cookies and sign-ins stay either way (`/browser clear all` removes them). | `clear-history` |
 | Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* while *YouTube tools* is on. | `default-browser` |
 | Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so its history keeps no token) or `url-with-token` (the usual link, which it may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
-| Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN) or `both`. | `internet` |
+| Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN, its adapters' prefixes included) or `both`. | `internet` |
 | Web search method | `duckduckgo` (built in) or `searxng`. | `duckduckgo` |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. | empty |
 | Web search max results | Hits per search (1–20). | 20 |
@@ -718,8 +718,8 @@ See [Network](TOOLS.md#network).
 |---|---|---|
 | Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls` (and `net_certs` with *Network certificate stores*), one host a call, held to the reach, the host lists and the turn's budget. `/net` works either way. | off |
 | Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
-| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). | 8 |
-| Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256). | 32 |
+| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). A Ralph run, `/loop` or camera watch gets this many for the whole run. | 8 |
+| Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256); one budget for a whole automation run, as above. | 32 |
 | Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
 | Network tools denied hosts | Hosts never reached, in the same forms, a name by its addresses too; wins over the allowed list. | empty |
 | Network certificate stores | Also offers `net_certs`, which lists one of the certificate stores on the app's computer (nothing exported). On a Mac `my` is your login keychain and `root` the system's trust. | off |

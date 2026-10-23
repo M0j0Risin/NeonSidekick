@@ -57,6 +57,10 @@ public sealed class EventLogComputerConfig
     /// <summary><c>full</c> or <c>redacted</c> (the default): what the main chat's model reads of this computer's events.</summary>
     public string? Detail { get; set; }
 
+    /// <summary>Keys the file does not know (2026-10-23, the admin review's H5, DA1: <c>log</c> for <c>logs</c> read as "every log"); the loader refuses the entry.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+
     [JsonIgnore]
     public bool IsRunAs => string.Equals(Auth?.Trim(), RunAsAuth, StringComparison.OrdinalIgnoreCase);
 
@@ -123,6 +127,11 @@ public sealed class EventLogComputerConfig
         if (store.Length > 0 && !store.Equals(FileStore, StringComparison.OrdinalIgnoreCase) && !store.Equals(CredmanStore, StringComparison.OrdinalIgnoreCase))
         {
             return SqlText.BadPasswordStore(store);
+        }
+
+        if (Computers.ComputerConfig.CredentialProblem(Credential, CredentialPrefix) is { } credential)
+        {
+            return credential;
         }
 
         if (IsRunAs)

@@ -21,7 +21,8 @@ public sealed record EventSearchPage(IReadOnlyList<EventView> Events, int Scanne
     bool Tagged = false, bool CursorMissing = false, int Skipped = 0);
 
 /// <summary>One provider and id's share of a summary: how many, the newest one's time and record, and a sample message.</summary>
-public sealed record EventSummaryGroup(string Provider, int Id, int Level, ulong Keywords, int Count, DateTimeOffset? Newest, long NewestRecord, string? Sample, bool Unregistered);
+/// <remarks><c>NewestCursor</c> (2026-10-23, the admin review's S11): a forwarded log's newest by its tagged cursor, its record alone not unique there.</remarks>
+public sealed record EventSummaryGroup(string Provider, int Id, int Level, ulong Keywords, int Count, DateTimeOffset? Newest, long NewestRecord, string? Sample, bool Unregistered, EventCursor? NewestCursor = null);
 
 /// <summary>A summary: the groups by count (the top <see cref="EventLogSearch.SummaryGroups"/>), the events counted, the scan, whether the budget stopped it, and the events too large to read.</summary>
 public sealed record EventSummary(IReadOnlyList<EventSummaryGroup> Groups, int Total, int GroupCount, int Scanned, bool BudgetStop, DateTimeOffset? ReachedTime, int Skipped = 0);
@@ -56,23 +57,56 @@ public static class EventLogSearch
 
     /// <summary>The fields as the detail shows them: each redacted under <c>redacted</c>.</summary>
     private static IReadOnlyList<EventField> Shown(EventXmlData data, bool redacted) =>
-        redacted ? data.Fields.Select(f => new EventField(f.Name, EventLogRedaction.Field(f.Name, f.Value))).ToList() : data.Fields;
+        redacted ? data.Fields.Select(f => new EventField(f.Name, EventLogRedaction.Field(f), f.Binary)).ToList() : data.Fields;
 
     private static EventView View(RawEvent raw, bool redacted, EventXmlData data, IReadOnlyList<EventField> fields, bool withXml)
     {
-        var message = redacted ? raw.Format((i, value) => EventLogRedaction.Insert(data.Fields, i, value)) : raw.Format();
+        int values = 0;
+        var message = redacted
+            ? raw.Format((i, value) =>
+            {
+                values = Math.Max(values, i + 1);
+                return EventLogRedaction.Insert(data.Fields, i, value);
+            })
+            : raw.Format();
+
+        // The inserts are matched to the fields by position; when the event's values and its XML's leaves differ in number (an array or a
+        // structure is one value over several leaves, 1 in 4,669 events on the PC checked), a secret's name may not cover its value, so the
+        // redacted detail withholds the message (2026-10-23, the admin review's I1). A classic event's trailing <Binary> is one leaf the values
+        // may not carry, so the count without it matches too (the branch review of DP7: every such event's message was withheld).
+        var problem = message.Text is null ? message.Problem : EventMessageProblem.None;
+        string? formatted = message.Text;
+        if (redacted && formatted is not null && values > 0 && !ValuesMatch(values, data.Fields))
+        {
+            formatted = null;
+            problem = EventMessageProblem.Withheld;
+        }
 
         // The event's own rendered text (a forwarded event's, its provider not here) was formatted from the raw values, so under redacted
         // each secret field's value is taken out of it first (2026-10-20, a review: the fields hid a password the message still held).
-        string? text = message.Text ?? (redacted && data.Message is { } own ? EventLogRedaction.Rendered(own, data.Fields) : data.Message);
+        string? text = formatted;
+        if (text is null && problem != EventMessageProblem.Withheld && data.Message is { } own)
+        {
+            text = redacted ? EventLogRedaction.Rendered(own, data.Fields) : own;
+            if (redacted && text is null)
+            {
+                // Withheld by the redaction, said so (W13: the reader's own reason was given).
+                problem = EventMessageProblem.Withheld;
+            }
+        }
+
         if (redacted && text is not null)
         {
             text = EventLogRedaction.Text(text);
         }
 
-        return new EventView(raw.System, string.IsNullOrWhiteSpace(text) ? null : text.TrimEnd(), message.Text is null ? message.Problem : EventMessageProblem.None, fields, data.SourceName,
+        return new EventView(raw.System, string.IsNullOrWhiteSpace(text) ? null : text.TrimEnd(), text is null ? problem : EventMessageProblem.None, fields, data.SourceName,
             withXml && !redacted ? raw.Xml : null);
     }
+
+    /// <summary>Whether <paramref name="values"/> inserts line up with <paramref name="fields"/> by position: all of them, or all but a last Binary (DP7).</summary>
+    internal static bool ValuesMatch(int values, IReadOnlyList<EventField> fields) =>
+        values == fields.Count || (fields.Count > 0 && fields[^1].Binary && values == fields.Count - 1);
 
     /// <summary>One page of <paramref name="query"/>'s events from <paramref name="reader"/>, under <paramref name="scan"/>.</summary>
     public static EventSearchPage Search(IEventLogReader reader, EventLogQuery query, EventScan scan, CancellationToken cancellationToken)
@@ -95,6 +129,12 @@ public static class EventLogSearch
         (string Computer, string Channel)? first = null;
         while (reader.Next() is { } batch)
         {
+            // A round of oversized events only (D6): skipped ones count toward the scan limit, and the clock is read.
+            if (batch.Count == 0 && (scanned + reader.Skipped >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget))
+            {
+                return new EventSearchPage(kept, scanned, true, skipTo ?? (lastScanned is { } last ? EventCursor.Of(last, tagged) : null), true, reached, tagged, Skipped: reader.Skipped);
+            }
+
             foreach (var raw in batch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -114,7 +154,9 @@ public static class EventLogSearch
                     continue;
                 }
 
-                if (scanned >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+                // The clock only once an event was looked at (2026-10-23, the admin review's W1: a first batch whose read alone took past the
+                // budget was thrown away, the page empty with no cursor to go on from, and the next call did the same).
+                if (scanned + reader.Skipped >= scan.ScanLimit || (scanned > 0 && scan.Time.GetElapsedTime(started) >= scan.Budget))
                 {
                     return new EventSearchPage(kept, scanned, true, lastScanned is { } last ? EventCursor.Of(last, tagged) : null, true, reached, tagged, Skipped: reader.Skipped);
                 }
@@ -199,10 +241,16 @@ public static class EventLogSearch
         DateTimeOffset? reached = null;
         while (!stopped && reader.Next() is { } batch)
         {
+            if (batch.Count == 0 && (scanned + reader.Skipped >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget))
+            {
+                stopped = true;
+                break;
+            }
+
             foreach (var raw in batch)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (scanned >= scan.ScanLimit || scan.Time.GetElapsedTime(started) >= scan.Budget)
+                if (scanned + reader.Skipped >= scan.ScanLimit || (scanned > 0 && scan.Time.GetElapsedTime(started) >= scan.Budget))   // W1
                 {
                     stopped = true;
                     break;
@@ -225,7 +273,8 @@ public static class EventLogSearch
                 {
                     // The newest of the group is the first seen (newest first): its message is the sample, formatted once.
                     var view = View(raw, scan.Redacted);
-                    groups[key] = new EventSummaryGroup(system.Provider, system.Id, system.Level, system.Keywords, 1, system.Time, system.Record, view.FirstLine, view.Unregistered);
+                    groups[key] = new EventSummaryGroup(system.Provider, system.Id, system.Level, system.Keywords, 1, system.Time, system.Record, view.FirstLine, view.Unregistered,
+                        EventLogQuery.IsForwarded(query.Log) ? EventCursor.Of(system, tagged: true) : null);
                     order.Add(key);
                 }
 
@@ -241,7 +290,11 @@ public static class EventLogSearch
     /// The event <paramref name="cursor"/> names, its XML kept under the full detail; a tagged cursor's first match. A record alone reads on:
     /// when other events hold it too (a forwarded log's, from other computers or channels), <see cref="EventFound.Several"/> lists each.
     /// </summary>
-    public static EventFound Find(IEventLogReader reader, EventCursor cursor, bool redacted, CancellationToken cancellationToken)
+    /// <remarks>
+    /// <paramref name="mayRepeat"/> (2026-10-23, the admin review's B1): only a forwarded log or a file can hold a record twice, so elsewhere the
+    /// first match ends the read; it read on to the oldest event, and on a big Security log timed out and lost the match it had.
+    /// </remarks>
+    public static EventFound Find(IEventLogReader reader, EventCursor cursor, bool redacted, CancellationToken cancellationToken, bool mayRepeat = true)
     {
         ArgumentNullException.ThrowIfNull(reader);
         EventView? found = null;
@@ -256,7 +309,7 @@ public static class EventLogSearch
                     continue;
                 }
 
-                if (cursor.Tagged)
+                if (cursor.Tagged || !mayRepeat)
                 {
                     return new EventFound(View(raw, redacted, withXml: true), []);
                 }

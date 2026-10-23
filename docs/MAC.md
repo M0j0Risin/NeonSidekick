@@ -169,6 +169,7 @@ A connection with `"auth": "runas"` signs in as another account, its password in
 
 * **A bot check with the screen locked** hasn't been tried; covered or minimized works ([above](#the-browser-window-on-a-mac)).
 * **Event logs under a standard account, or from a terminal without Full Disk Access,** haven't been tried.
+* **A `.logarchive` with links inside** is refused; whether the unified log would follow them hasn't been tried. install.log's lines from a reset clock (2001) are passed over, a run of 50 older ones ending the read; that hasn't been tried on a real log.
 * **The Web UI's Tailscale tab** (a `utun` interface's address) and **the chat page's picture strip** haven't been tried.
 * **Deleting on a volume with no Trash** (a network or FAT volume) deletes directly; that path hasn't been tried.
 * **YouTube may ask for consent each run:** WebKit blocks the player's third-party cookies, so a consent given in it isn't kept.

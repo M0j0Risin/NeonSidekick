@@ -12,6 +12,9 @@ public sealed record TaskErrorContext(string Computer, string? Task, bool Remote
 /// </summary>
 public static class TaskErrors
 {
+    /// <summary>The app's own code (customer bit set) for a task whose definition changed between the question and the change (C2).</summary>
+    public const int ChangedSinceAsked = unchecked((int)0xA0D10001);
+
     public static string Sentence(int code, TaskErrorContext context, string detail)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -26,6 +29,12 @@ public static class TaskErrors
             0x8007052E => $"Error: {context.Computer} refused the sign-in as {context.Account}: the user name or password is wrong.",
             0x8004131F => $"Error: {task} is already running.",
             0x80041326 => $"Error: {task} is disabled; enable it before running it.",
+            // Run's own refusals (2026-10-23, the admin review's T18): opaque hex to the model and the audit before.
+            0x80041328 => $"Error: {task}'s settings do not allow it to be run on demand.",
+            0x80041320 => $"Error: {task} runs only while its user is signed in, and that user is not signed in on {context.Computer}.",
+            0x8004131E => $"Error: {task} is past its end boundary, so it will not run.",
+            0x80041324 => $"Error: Windows has already tried to run {task}.",
+            0xA0D10001 => $"Error: {task} on {context.Computer} changed after the question (its definition is not the one shown), so nothing was done; ask again.",
             _ => $"Error: the Task Scheduler on {context.Computer} failed (code 0x{unchecked((uint)code).ToString("X8", CultureInfo.InvariantCulture)})" + (detail.Length > 0 ? ": " + detail : "."),
         };
     }

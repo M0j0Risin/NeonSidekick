@@ -43,11 +43,14 @@ public static class NetworkProbes
     /// <summary>A TCP connect, the real one: the socket's error read into a <see cref="PortState"/>.</summary>
     public static async Task<PortState> ConnectAsync(IPAddress address, int port, CancellationToken cancellationToken)
     {
-        using var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PortTimeout);
+        Socket? socket = null;
         try
         {
+            // Made inside the try (2026-10-23, the admin review's U6): with IPv6 off, an AAAA address's socket threw
+            // AddressFamilyNotSupported out of net_port and /net port.
+            socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             await socket.ConnectAsync(address, port, budget.Token).ConfigureAwait(false);
             return PortState.Open;
         }
@@ -63,6 +66,10 @@ public static class NetworkProbes
                 SocketError.TimedOut => PortState.NoAnswer,
                 _ => PortState.Unreachable,
             };
+        }
+        finally
+        {
+            socket?.Dispose();
         }
     }
 
@@ -94,6 +101,11 @@ public static class NetworkProbes
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 return new PortResult(address, port, PortState.NoAnswer);
+            }
+            catch (SocketException)
+            {
+                // A connect that failed before it began (no IPv6 stack) is that address's answer, not the whole call's (U6).
+                return new PortResult(address, port, PortState.Unreachable);
             }
         }
     }
@@ -148,21 +160,15 @@ public static class NetworkProbes
         return hops;
     }
 
-    /// <summary>The reverse name of <paramref name="address"/> through the system resolver; null when it has none.</summary>
+    /// <summary>
+    /// The reverse name of <paramref name="address"/>: a PTR asked of the system's resolvers by the app's own client, which the hop's time limit
+    /// and Esc end (2026-10-23, the admin review's B3: Dns.GetHostEntryAsync took no cancel and looked the name up forward too); null when it has
+    /// none.
+    /// </summary>
     public static async Task<string?> ReverseAsync(IPAddress address, CancellationToken cancellationToken)
     {
-        try
-        {
-            var entry = await Dns.GetHostEntryAsync(address.ToString(), cancellationToken).ConfigureAwait(false);
-            return string.IsNullOrWhiteSpace(entry.HostName) || entry.HostName == address.ToString() ? null : entry.HostName;
-        }
-        catch (SocketException)
-        {
-            return null;
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
+        ArgumentNullException.ThrowIfNull(address);
+        var outcome = await DnsClient.QueryAsync(DnsClient.SystemServers(), DnsWire.ReverseName(address), DnsWire.Ptr, cancellationToken).ConfigureAwait(false);
+        return outcome.Reply?.Answers.FirstOrDefault(a => a.Type == DnsWire.Ptr)?.Data.TrimEnd('.') is { Length: > 0 } name ? name : null;
     }
 }

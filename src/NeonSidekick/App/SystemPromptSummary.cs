@@ -864,7 +864,7 @@ public static class SystemPromptSummary
         {
             // The admin families (2026-10-15, the admin-tools plan): network, services, tasks, the directory, after the event logs; each with its own
             // off reason and, when on, its note (no domain configured) and its tools' notes (a write not offered, net_certs off, no ping here).
-            string note = !spec.Enabled ? NotOffered(spec.OffReason) : spec.OnNote is { } on && toolsEnabled ? on : standing;
+            string note = !spec.Enabled ? NotOffered(spec.OffReason) : standing;
             groups.Add(Group(spec.Title, spec.Tools, note, spec.Enabled && toolsEnabled, spec.Switch, disabled, spec.ToolNotes is null ? null : new Dictionary<string, string>(spec.ToolNotes, StringComparer.Ordinal)));
         }
 

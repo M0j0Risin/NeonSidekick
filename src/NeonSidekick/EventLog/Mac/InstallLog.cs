@@ -56,8 +56,11 @@ public static partial class InstallLog
             && long.TryParse(parts[1], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out seconds);
     }
 
-    /// <summary>The entries ending before byte <paramref name="before"/> (the end when null or past it), newest first.</summary>
-    public static IEnumerable<InstallEntry> Backward(Stream stream, long? before = null)
+    /// <summary>
+    /// The entries ending before byte <paramref name="before"/> (the end when null or past it), newest first; each chunk checks
+    /// <paramref name="cancellationToken"/> (2026-10-23, the admin review's X10: 20 MB of continuation lines were walked with nothing able to stop it).
+    /// </summary>
+    public static IEnumerable<InstallEntry> Backward(Stream stream, long? before = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         long position = Math.Min(before ?? long.MaxValue, stream.Length);
@@ -65,6 +68,7 @@ public static partial class InstallLog
         var pending = new Pending();   // continuation lines met so far, the lowest first
         while (position > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int size = (int)Math.Min(Chunk, position);
             position -= size;
             var combined = new byte[size + carry.Length];
@@ -90,13 +94,9 @@ public static partial class InstallLog
             carry = combined[..end];
             if (carry.Length > MaxLineBytes)
             {
-                if (Line(carry.AsSpan(carry.Length - MaxLineBytes), position + carry.Length - MaxLineBytes, pending) is { } cut)
-                {
-                    yield return cut;
-                }
-
+                // A line past MaxLineBytes is dropped whole (2026-10-23, the admin review's X13): its tail was emitted, a phantom entry when it
+                // began like a log line, and the entry above lost its continuation lines; those met so far stay with it.
                 carry = [];
-                pending.Clear();   // the rest of that line is lost; never join its tail to the entry above
             }
         }
 

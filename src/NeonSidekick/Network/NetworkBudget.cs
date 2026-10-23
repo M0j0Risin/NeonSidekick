@@ -16,6 +16,19 @@ public sealed class NetworkBudget
     private readonly HashSet<string> _pairs = new(StringComparer.Ordinal);
     private int _nextTarget;
     private bool _noted;
+    private bool _run;
+
+    /// <summary>Whether this budget lasts an automation run, not a turn (DA8): its refusal says so.</summary>
+    public bool Run
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _run;
+            }
+        }
+    }
 
     /// <summary>The distinct targets counted so far this turn.</summary>
     public int Hosts
@@ -41,8 +54,12 @@ public sealed class NetworkBudget
         }
     }
 
-    /// <summary>A new turn: nothing counted, the refusal not yet noted.</summary>
-    public void Reset()
+    /// <summary>
+    /// A new turn, or with <paramref name="run"/> a new automation run (2026-10-23, the admin review's L6, decision DA8: a Ralph run, a
+    /// <c>/loop</c> or a camera watch reset the budget every turn and swept a /24 across them; such a run now holds one budget throughout):
+    /// nothing counted, the refusal not yet noted.
+    /// </summary>
+    public void Reset(bool run = false)
     {
         lock (_gate)
         {
@@ -50,6 +67,7 @@ public sealed class NetworkBudget
             _pairs.Clear();
             _nextTarget = 0;
             _noted = false;
+            _run = run;
         }
     }
 
@@ -75,27 +93,30 @@ public sealed class NetworkBudget
                 }
             }
 
-            if (known is null && _nextTarget >= maxHosts)
+            // A known name at an address not yet counted is a new target (2026-10-23, the admin review's E1: a name whose answer rotated swept the
+            // LAN across calls as one host, its ports one set of pairs).
+            bool fresh = known is null || addresses.Any(a => !_targets.ContainsKey(HostRules.Canonical(a).ToString()));
+            if (fresh && _nextTarget >= maxHosts)
             {
-                return NetworkText.HostBudgetSpent(_nextTarget);
+                return NetworkText.HostBudgetSpent(_nextTarget, _run);
             }
 
-            int target = known ?? _nextTarget;
+            int target = fresh ? _nextTarget : known!.Value;
             var newPairs = ports.Select(p => target.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + p.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 .Where(p => !_pairs.Contains(p)).Distinct(StringComparer.Ordinal).ToList();
             if (_pairs.Count + newPairs.Count > maxPorts)
             {
-                return NetworkText.PortBudgetSpent(_pairs.Count, newPairs.Count);
+                return NetworkText.PortBudgetSpent(_pairs.Count, newPairs.Count, _run);
             }
 
-            if (known is null)
+            if (fresh)
             {
                 _nextTarget++;
             }
 
             foreach (string key in keys)
             {
-                _targets.TryAdd(key, target);
+                _targets[key] = target;
             }
 
             foreach (string pair in newPairs)

@@ -72,7 +72,7 @@ public sealed class EventLogEventTool : EventLogTool
         {
             string xpath = "*[System[EventRecordID=" + number.ToString(CultureInfo.InvariantCulture) + "]]";
             using var reader = system.Query(source.Target, source.Log, xpath, token);
-            var found = EventLogSearch.Find(reader, cursor, source.Redacted, token);
+            var found = EventLogSearch.Find(reader, cursor, source.Redacted, token, mayRepeat: EventLogQuery.IsForwarded(source.Log));   // B1
             EventLogAccess.LogQuery(source, xpath, null, found.View is null ? 0 : 1, found.View is null ? 0 : 1);
             if (found.Several.Count > 0)
             {

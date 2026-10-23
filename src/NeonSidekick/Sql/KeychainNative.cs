@@ -41,4 +41,40 @@ internal static unsafe partial class KeychainNative
 
     [LibraryImport(CoreFoundation)]
     public static partial void CFRelease(IntPtr cf);
+
+    /// <summary><c>kSecAccountItemAttr</c>, 'acct' (2026-10-23, DA2).</summary>
+    public const uint AccountAttribute = 0x61636374;
+
+    /// <summary><c>CSSM_DB_ATTRIBUTE_FORMAT_STRING</c>.</summary>
+    public const uint FormatString = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SecKeychainAttributeInfo
+    {
+        public uint Count;
+        public uint* Tag;
+        public uint* Format;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SecKeychainAttribute
+    {
+        public uint Tag;
+        public uint Length;
+        public void* Data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SecKeychainAttributeList
+    {
+        public uint Count;
+        public SecKeychainAttribute* Attr;
+    }
+
+    [LibraryImport(Security)]
+    public static partial int SecKeychainItemCopyAttributesAndData(
+        IntPtr itemRef, SecKeychainAttributeInfo* info, uint* itemClass, SecKeychainAttributeList** attrList, uint* length, void** outData);
+
+    [LibraryImport(Security)]
+    public static partial int SecKeychainItemFreeAttributesAndData(SecKeychainAttributeList* attrList, void* data);
 }

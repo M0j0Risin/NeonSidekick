@@ -36,31 +36,14 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
 
     protected TimeZoneInfo Zone => Access.Time.LocalTimeZone;
 
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    // The shared readers (2026-10-23, the admin review's R18, E7, K6: AdminArguments).
+    protected static string? Optional(AIFunctionArguments arguments, string name) => AdminArguments.Optional(arguments, name);
 
-    protected static bool Given(AIFunctionArguments arguments, string name) => arguments.TryGetValue(name, out object? value) && value is not null;
+    protected static bool Given(AIFunctionArguments arguments, string name) => AdminArguments.Given(arguments, name);
 
-    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback)
-    {
-        if (!ToolArguments.TryReadBoolean(arguments, name, out bool? value, out string raw))
-        {
-            return (fallback, DirectoryText.NotBoolean(name, raw));
-        }
+    protected static (bool Value, string? Error) Flag(AIFunctionArguments arguments, string name, bool fallback) => AdminArguments.Flag(arguments, name, fallback);
 
-        return (value ?? fallback, null);
-    }
-
-    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback)
-    {
-        if (!ToolArguments.TryReadInt64(arguments, name, out long? value, out string raw) || value is { } n && (n < min || n > max))
-        {
-            string given = raw.Length > 0 ? raw : value?.ToString(CultureInfo.InvariantCulture) ?? "";
-            return (fallback, DirectoryText.OutOfRange(name, given, min, max));
-        }
-
-        return ((int)(value ?? fallback), null);
-    }
+    protected static (int Value, string? Error) Number(AIFunctionArguments arguments, string name, int min, int max, int fallback) => AdminArguments.Number(arguments, name, min, max, fallback);
 
     /// <summary>A choice argument read lower-cased: null when not given, the refusal when it is no choice.</summary>
     protected static (string? Value, string? Error) Choice(AIFunctionArguments arguments, string name, IReadOnlyList<string> choices)
@@ -127,7 +110,10 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
         var answer = result.Value!;
         if (target is not null && !answer.Failed)
         {
-            answer.Saved = DirectoryCsv.Save(target, answer, answer.Partial);
+            // The save root judged again as the rows are written (2026-10-23, the admin review's F7: File tools switched off, or plan mode on,
+            // during a 40 s search still wrote).
+            var now = SaveRoot?.Invoke() ?? DirectorySaveRoot.Refused(DirectoryText.SaveNotHere);
+            answer.Saved = now.Root is null ? DirectoryText.SaveClosedLate(now.Refusal ?? DirectoryText.SaveNotHere) : DirectoryCsv.Save(target, answer, answer.Partial);
         }
 
         return DirectoryRender.ForModel(answer);
@@ -268,6 +254,7 @@ public sealed class AdFindTool(DirectoryAccess access, bool forceRedacted = fals
     public const string TypeArgument = "type";
     public const string FieldArgument = "field";
     public const string OuArgument = "ou";
+    public const string ScanFromArgument = "scan_from";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
@@ -281,6 +268,7 @@ public sealed class AdFindTool(DirectoryAccess access, bool forceRedacted = fals
             "field": { "type": "string", "enum": ["department", "title", "company", "office", "description"], "description": "field: which one. A user or contact has all five; a group, computer, OU or service account only description." },
             "ou": { "type": "string", "description": "Only inside this OU (every kind but privileged): a path such as Neon/Engineering, a DN, or a name." },
             "limit": { "type": "integer", "description": "The most to list, 1 to 1000 (default 50)." },
+            "scan_from": { "type": "integer", "description": "name and field on a redacted domain: go on matching descriptions from this object (an answer's next: gives it)." },
             "to": { "type": "string", "description": "Save every result (up to 10,000) as a CSV: a .csv path in the working directory, or a folder there. Needs File tools; never over an existing file." },
             "domain": { "type": "string", "description": "Which domain, by its ticked name or its DNS name; leave out for this PC's (or the only one)." }
           },
@@ -308,21 +296,25 @@ public sealed class AdFindTool(DirectoryAccess access, bool forceRedacted = fals
         string? type = Optional(arguments, TypeArgument)?.ToLowerInvariant();
         string? field = Optional(arguments, FieldArgument)?.ToLowerInvariant();
         string? ou = Optional(arguments, OuArgument);
-        if (DirectoryQueries.FindProblem(kind, Given(arguments, DaysArgument), words, type, field, ou, ForceRedacted) is { } problem)
+        // The domain's own detail, not only the tool's (2026-10-23, the admin review's R5: office on a redacted domain bound and searched for the ou
+        // before it was refused); read from the catalog, no password resolved.
+        bool redacted = ForceRedacted || Access.Catalog().Find(Optional(arguments, DomainArgument)).Domain is not { Config.Full: true };
+        if (DirectoryQueries.FindProblem(kind, Given(arguments, DaysArgument), words, type, field, ou, redacted) is { } problem)
         {
             return problem;
         }
 
         var (days, daysError) = Number(arguments, DaysArgument, 1, 3650, DirectoryQueries.DefaultDays(kind));
         var (limit, limitError) = Number(arguments, LimitArgument, 1, DirectoryLimits.MaxEntries, 50);
-        if ((daysError ?? limitError) is { } error)
+        var (scanFrom, scanError) = Number(arguments, ScanFromArgument, 0, DirectoryLimits.MaxScanFrom, 0);
+        if ((daysError ?? limitError ?? scanError) is { } error)
         {
             return error;
         }
 
         string question = "find " + kind + (type is null ? "" : " " + type) + (field is null ? "" : " " + field) + (words is null ? "" : " " + words);
         return await AskListAsync(arguments, question, (session, source, deadline, cap, canSave) =>
-            DirectoryQueries.FindAnswer(session, source, new FindOptions(kind, days, words, limit, type, ou, field, cap, canSave), Access.Time.GetUtcNow(), Zone, deadline), cancellationToken).ConfigureAwait(false);
+            DirectoryQueries.FindAnswer(session, source, new FindOptions(kind, days, words, limit, type, ou, field, cap, canSave, scanFrom), Access.Time.GetUtcNow(), Zone, deadline), cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -391,5 +383,5 @@ public sealed class AdDomainTool(DirectoryAccess access, bool forceRedacted = fa
     public override AIFunction AsRedacted() => ForceRedacted ? this : new AdDomainTool(Access, forceRedacted: true);
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        await AskAsync(arguments, (session, source, deadline) => DirectoryQueries.Domain(session, source, deadline), cancellationToken).ConfigureAwait(false);
+        await AskAsync(arguments, (session, source, deadline) => DirectoryQueries.Domain(session, source, deadline, Zone), cancellationToken).ConfigureAwait(false);
 }

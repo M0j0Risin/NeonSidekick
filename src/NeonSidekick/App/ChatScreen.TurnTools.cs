@@ -82,6 +82,9 @@ internal sealed record TurnToolInputs
     public IReadOnlyList<AIFunction>? EventLog { get; init; }
     public bool EventLogEnabled { get; init; }
 
+    /// <summary>Whether a ticked event-log computer lies beyond this one, on Windows (2026-10-23, N3: the 4740 pointer's gate).</summary>
+    public bool EventLogRemote { get; init; }
+
     /// <summary>The network tools (2026-10-15, the admin-tools plan): offered while <see cref="NetworkEnabled"/> (<c>Network tools</c>); <c>net_certs</c> cut by the caller unless <c>Network certificate stores</c> is on.</summary>
     public IReadOnlyList<AIFunction>? Network { get; init; }
     public bool NetworkEnabled { get; init; }
@@ -296,6 +299,9 @@ internal sealed partial class ChatScreen
         bool dockerWrite = docker && dockerTools!.Any(t => DockerWriteToolNames.Contains(t.Name));
         // The event-log tools after the Docker tools (2026-10-15): Event log tools on (Windows) is the group's switch; their sentence after the Docker ones.
         bool eventLog = inputs.EventLogEnabled && eventLogTools is { Count: > 0 };
+
+        // The 4740 pointer only where it can be followed (N3): Windows' event logs, not a Mac's, with a ticked computer beyond this one.
+        bool lockoutSearch = eventLog && eventLogTools!.Any(t => t is EventLogSearchTool) && inputs.EventLogRemote;
         tools = eventLog ? [.. tools, .. eventLogTools!] : tools;
         // The admin families after the event logs (2026-10-15, the admin-tools plan): network, services, tasks, the directory, each its switch;
         // their sentences ride as one AdminRules value (the write sentences while a change tool is left, the certificate one with net_certs).
@@ -303,19 +309,26 @@ internal sealed partial class ChatScreen
         if (inputs.NetworkEnabled && networkTools is { Count: > 0 })
         {
             tools = [.. tools, .. networkTools];
-            admin |= AdminRules.Network | (networkTools.Any(t => t is NetCertsTool) ? AdminRules.NetworkCerts : AdminRules.None);
+            admin |= AdminRules.Network | (networkTools.Any(t => t is NetCertsTool) ? AdminRules.NetworkCerts : AdminRules.None)
+                | (networkTools.Any(t => t is NetPingTool) ? AdminRules.NetworkEcho : AdminRules.None);
         }
 
         if (inputs.ServicesEnabled && serviceTools is { Count: > 0 })
         {
             tools = [.. tools, .. serviceTools];
-            admin |= AdminRules.Services | (serviceTools.Any(t => t is ServiceControlTool or ServiceStartTypeTool) ? AdminRules.ServiceWrites : AdminRules.None);
+            admin |= AdminRules.Services | (serviceTools.Any(t => t is ServiceControlTool) ? AdminRules.ServiceWrites : AdminRules.None)
+                | (serviceTools.Any(t => t is ServiceStartTypeTool) ? AdminRules.ServiceStartTypes : AdminRules.None);   // I4
         }
 
         if (inputs.TasksEnabled && taskTools is { Count: > 0 })
         {
             tools = [.. tools, .. taskTools];
             admin |= AdminRules.Tasks | (taskTools.Any(t => t is TaskControlTool) ? AdminRules.TaskWrites : AdminRules.None);
+        }
+
+        if (lockoutSearch)
+        {
+            admin |= AdminRules.DirectoryLockout;
         }
 
         if (inputs.DirectoryEnabled && directoryTools is { Count: > 0 })
