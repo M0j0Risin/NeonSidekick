@@ -784,14 +784,14 @@ public sealed class ShellTests
         start.Environment["NEONSIDEKICK_TEST_UNC_PASSWORD"] = "secret";
         start.Environment["NEONSIDEKICK_WEBUI_TOKEN"] = "secret";
         start.Environment["NEONSIDEKICK_TEST_AD_DOMAIN"] = "Domain=x;User=y;Password=secret";
-        var launch = new ProcessLaunch("x.exe", [], null, ".", "x", "cmd", new Dictionary<string, string> { ["TERM"] = "xterm", ["NEONSIDEKICK_BRIDGE_TOKEN"] = "t" });
+        var launch = new ProcessLaunch("x.exe", [], null, ".", "x", "cmd", new Dictionary<string, string> { ["TERM"] = "xterm", ["NEONSIDEKICK_EXAMPLE_TOKEN"] = "t" });
 
         ChildEnvironment.Apply(start, launch);
 
         Assert.Equal("1", start.Environment["NO_COLOR"]);
         Assert.Equal("yes", start.Environment["KEEP"]);
         Assert.Equal("xterm", start.Environment["TERM"]);   // the launch's own last
-        Assert.Equal("t", start.Environment["NEONSIDEKICK_BRIDGE_TOKEN"]);
+        Assert.Equal("t", start.Environment["NEONSIDEKICK_EXAMPLE_TOKEN"]);
         Assert.Equal("utf-8", start.Environment["PYTHONIOENCODING"]);
         Assert.Equal("cat", start.Environment["GIT_PAGER"]);
         // The app's secrets are withheld (2026-10-12), and since 2026-10-19 every secret-named one, and later that day every test variable.

@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// What the four event-log tools share on a Mac (2026-10-18, the Mac event-log plan; <see cref="EventLogTool"/>'s shape): the
 /// <see cref="MacLogAccess"/> door, the settings in force at each call, the arguments' readers, and the redacted twin. They answer to
 /// the Windows tools' names (<see cref="EventLogLogsTool.ToolName"/>…) and argument names where they mean the same (<c>log</c>,
-/// <c>record</c>), so the rule, the advisors' and a script's twins and <c>AdvisorRecent</c>'s stand-ins work unchanged. A
+/// <c>record</c>), so the rule, the advisors' twins and <c>AdvisorRecent</c>'s stand-ins work unchanged. A
 /// tool built with <c>forceRedacted</c> reads redacted whatever <c>local</c>'s detail. Every tool reads; none changes anything. A refusal
 /// is an <c>Error:</c> sentence, never a throw.
 /// </summary>
@@ -26,7 +26,7 @@ public abstract class MacLogTool : AIFunction, IRedactedTwin
 
     protected Func<AppSettingsData> Effective { get; }
 
-    /// <summary>Whether this tool reads redacted whatever <c>local</c>'s detail (an advisor's, a script's).</summary>
+    /// <summary>Whether this tool reads redacted whatever <c>local</c>'s detail (an advisor's).</summary>
     public bool ForceRedacted { get; }
 
     /// <summary>The same tool reading redacted; itself when it already does.</summary>

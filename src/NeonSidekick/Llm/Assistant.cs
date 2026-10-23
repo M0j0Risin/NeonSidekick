@@ -394,25 +394,18 @@ public sealed class Assistant
     /// policy</c> not <c>off</c>, 2026-09-21): appended after <see cref="GitRule"/> by <see cref="DefaultRules"/>. It
     /// says what the tool is for, that the sandbox is only where a command starts, that the user stands between
     /// the call and the shell, that a denial is final, and (phase B) how a background job and the process tool
-    /// go together; a custom <c>operata.md</c> stands verbatim. Its last sentence, on <c>execute_code</c>, says the
-    /// script can call the tools through <c>neon_tools</c> — only while the setting <c>Shell tool bridge</c> is on;
-    /// off (later on 2026-09-21) the rules carry <see cref="ShellRuleWithoutBridge"/>, which does not, so the prompt
-    /// never promises a module the run does not write. Since 2026-09-22 (the user's ask) the head follows the setting
+    /// go together; a custom <c>operata.md</c> stands verbatim. Its last sentence says <c>execute_code</c> runs a script
+    /// that does everything itself (the tool bridge's <c>neon_tools</c> sentence went with the bridge on 2026-10-23, the user's
+    /// call; off, the default since later on 2026-09-21, the prompt read as it does now). Since 2026-09-22 (the user's ask) the head follows the setting
     /// <c>Shell police</c> too: on (the default), it says the shell may only name paths under the working
     /// directory (<see cref="ShellRuleHeadPoliced"/>); off, it says only that a command starts there (<see cref="ShellRuleHeadUnpoliced"/>,
-    /// the <c>…Unpoliced</c> variants) — until that day the head said a command "can reach the whole computer", and
+    /// <see cref="ShellRuleUnpoliced"/>) — until that day the head said a command "can reach the whole computer", and
     /// neither variant says so now, so the model does not try to leave unless asked. Pinned.
     /// </summary>
-    public const string ShellRule = ShellRuleHeadPoliced + ShellRuleBridgeTail;
-
-    /// <summary><see cref="ShellRule"/> with the bridge off: the same head, and <c>execute_code</c> runs a script that does everything itself. Pinned.</summary>
-    public const string ShellRuleWithoutBridge = ShellRuleHeadPoliced + ShellRulePlainTail;
+    public const string ShellRule = ShellRuleHeadPoliced + ShellRulePlainTail;
 
     /// <summary><see cref="ShellRule"/> with the setting <c>Shell police</c> off (2026-09-22): the head says a command starts in the working directory and no more. Pinned.</summary>
-    public const string ShellRuleUnpoliced = ShellRuleHeadUnpoliced + ShellRuleBridgeTail;
-
-    /// <summary><see cref="ShellRuleWithoutBridge"/> with the police off (2026-09-22): neither the bridge nor the confinement is named. Pinned.</summary>
-    public const string ShellRuleWithoutBridgeUnpoliced = ShellRuleHeadUnpoliced + ShellRulePlainTail;
+    public const string ShellRuleUnpoliced = ShellRuleHeadUnpoliced + ShellRulePlainTail;
 
     /// <summary>What every shell rule opens with: <c>run_command</c> and its two picks.</summary>
     private const string ShellRuleOpening =
@@ -450,27 +443,17 @@ public sealed class Assistant
         "For a server or a long job pass " + NeonSidekick.Llm.Tools.RunCommandTool.BackgroundArgument + " and use " + NeonSidekick.Llm.Tools.ProcessTool.ToolName + " to poll, read, wait for, write to or kill it; " +
         "with " + NeonSidekick.Llm.Tools.RunCommandTool.NotifyArgument + " you are told at your next turn when it exits. ";
 
-    /// <summary>The <c>execute_code</c> sentence with the bridge on.</summary>
-    private const string ShellRuleBridgeTail =
-        "For a task with several steps or many tool calls, " + NeonSidekick.Llm.Tools.ExecuteCodeTool.ToolName + " runs a python, node or powershell script that can call these same tools through its neon_tools module and returns what it printed.";
-
-    /// <summary>The <c>execute_code</c> sentence with the bridge off.</summary>
+    /// <summary>What every shell rule closes with: the <c>execute_code</c> sentence.</summary>
     private const string ShellRulePlainTail =
         "For a task with several steps, " + NeonSidekick.Llm.Tools.ExecuteCodeTool.ToolName + " runs a python, node or powershell script and returns what it printed.";
 
-    /// <summary>The shell rule for a turn: the bridge picks the <c>execute_code</c> sentence, the police (2026-09-22) the head; on a Mac its shells are the Mac's (<see cref="ForMac"/>).</summary>
-    public static string ShellRuleFor(bool bridge, bool police) => ShellRuleFor(bridge, police, OperatingSystem.IsMacOS());
+    /// <summary>The shell rule for a turn: the police (2026-09-22) picks the head; on a Mac its shells are the Mac's (<see cref="ForMac"/>).</summary>
+    public static string ShellRuleFor(bool police) => ShellRuleFor(police, OperatingSystem.IsMacOS());
 
-    /// <summary><see cref="ShellRuleFor(bool, bool)"/> with the platform given (tests).</summary>
-    public static string ShellRuleFor(bool bridge, bool police, bool mac)
+    /// <summary><see cref="ShellRuleFor(bool)"/> with the platform given (tests).</summary>
+    public static string ShellRuleFor(bool police, bool mac)
     {
-        string rule = (bridge, police) switch
-        {
-            (true, true) => ShellRule,
-            (false, true) => ShellRuleWithoutBridge,
-            (true, false) => ShellRuleUnpoliced,
-            (false, false) => ShellRuleWithoutBridgeUnpoliced,
-        };
+        string rule = police ? ShellRule : ShellRuleUnpoliced;
         return mac ? ForMac(rule) : rule;
     }
 
@@ -793,14 +776,13 @@ public sealed class Assistant
     /// Timers group emptied on <c>/tools</c>, 2026-09-20), and <see cref="ToolUseRule"/> without <see cref="ClockRule"/> with <paramref name="clock"/>
     /// false (no clock tool offered: <c>Clock tools</c> off, or the Clock group emptied, 2026-10-18); <see cref="ShellRule"/> rides after the git sentence with
     /// <paramref name="shell"/> (the shell tools offered: <c>Shell command policy</c> not off, 2026-09-21), as
-    /// <see cref="ShellRuleWithoutBridge"/> unless <paramref name="bridge"/> (the setting <c>Shell tool bridge</c>, off by
-    /// default, later that day), and as the <c>…Unpoliced</c> variant with <paramref name="police"/> false (the setting <c>Shell police</c> off, 2026-09-22; <see cref="ShellRuleFor"/>), followed by <see cref="ShellNativeRule"/> with <paramref name="native"/>
+    /// <see cref="ShellRuleUnpoliced"/> with <paramref name="police"/> false (the setting <c>Shell police</c> off, 2026-09-22; <see cref="ShellRuleFor(bool)"/>), followed by <see cref="ShellNativeRule"/> with <paramref name="native"/>
     /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
     /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="OracleRule"/> after it with <paramref name="oracle"/> (2026-09-30), <see cref="MySqlRule"/> after that with <paramref name="mysql"/> (the same day), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="DockerRule"/> after it with <paramref name="docker"/> and <see cref="DockerWriteRule"/> with <paramref name="dockerWrite"/> (2026-10-02), <see cref="NeonAdvisorRule"/> after that with <paramref name="advisors"/> (2026-10-10; the Claude Code advisor tool's sentence stood there from 2026-09-27 until it was retired the same day). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>
-    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true) =>
+    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true) =>
         tools
-            ? TextRule(markdown) + " " + ToolUseRule + (clock ? " " + ClockRule : "") + (timers ? " " + TimerRule : "") + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (images ? " " + ImageRule : "") + (shopping ? " " + ShoppingRule : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(bridge, police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule + WriteTail(serverWrites, ServerWrites.Oracle, OracleWriteRule) : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (eventLog ? " " + EventLogRuleHere : "") + AdminTail(admin, eventLog) + (advisors ? " " + NeonAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + ToolUseRule + (clock ? " " + ClockRule : "") + (timers ? " " + TimerRule : "") + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (images ? " " + ImageRule : "") + (shopping ? " " + ShoppingRule : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule + WriteTail(serverWrites, ServerWrites.Oracle, OracleWriteRule) : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (eventLog ? " " + EventLogRuleHere : "") + AdminTail(admin, eventLog) + (advisors ? " " + NeonAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary>A family's write sentence after a space while <paramref name="writes"/> holds <paramref name="family"/> (2026-10-05), else nothing.</summary>
@@ -850,11 +832,11 @@ public sealed class Assistant
     /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>). With <paramref name="globalSkills"/>
     /// false (2026-10-13, the profile's <c>Global skills</c> off) the skills block names no global scope (<see cref="Skills.SkillsPrompt.EditorSentenceProfileOnly"/>).
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool bridge = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
-        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, serverWrites, images, advisors, shopping, eventLog, admin, clock: clock);
+        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, police, obsidian, obsidianDelete, sql, native, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, serverWrites, images, advisors, shopping, eventLog, admin, clock: clock);
         var sb = new StringBuilder((customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));
         if (project is not null)
         {

@@ -9,7 +9,7 @@ namespace NeonSidekick.Shell;
 /// plus <see cref="Overrides"/> on top: no colour and no pager (the output is read, not shown;
 /// ANSI codes and a waiting <c>less</c> would only get in the way), UTF-8 and unbuffered Python,
 /// no git credential prompt (nothing could answer it on a hidden console), a quiet dotnet. A
-/// launch's own variables (<see cref="ProcessLaunch.Environment"/>: the bridge's address and token)
+/// launch's own variables (<see cref="ProcessLaunch.Environment"/>: the Claude Code server's <c>MCP_TOOL_TIMEOUT</c>)
 /// go on last. Pure over <see cref="ProcessStartInfo.Environment"/>, the child's own snapshot —
 /// nothing reads the process environment here.
 ///

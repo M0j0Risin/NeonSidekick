@@ -117,10 +117,4 @@ public sealed class ShellFixesTests : IDisposable
         Assert.Null(TrustedFilesPolice.Find("cat .gitignore .github/workflows/x.yml", guard));
         Assert.Equal("--git-dir=.git", TrustedFilesPolice.Find("hub --git-dir=.git x", guard));
     }
-
-    [Fact]
-    public void TheBridge_TakesTwoMegabytesALine()
-    {
-        Assert.Equal(2 * 1024 * 1024, NeonSidekick.Shell.Bridge.BridgeServer.MaxRequestBytes);
-    }
 }

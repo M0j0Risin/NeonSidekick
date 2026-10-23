@@ -248,11 +248,6 @@
     <!-- The icon a Mac's /shortcut gives its .command file (2026-10-08, MacShortcutWriter): ApplicationIcon is a Win32
          resource only, so a Mac build reads the same file from here. -->
     <EmbeddedResource Include="Assets\app.ico" LogicalName="app.ico" Visible="false" />
-    <!-- The execute_code bridge modules (2026-09-21): written beside a run's script so the interpreter finds them
-         (Shell/Bridge/CodeLaunch); one per language, plain text, no package to install on the user's side. -->
-    <EmbeddedResource Include="Shell\Bridge\neon_tools.py" LogicalName="bridge/neon_tools.py" />
-    <EmbeddedResource Include="Shell\Bridge\neon_tools.js" LogicalName="bridge/neon_tools.js" />
-    <EmbeddedResource Include="Shell\Bridge\NeonTools.psm1" LogicalName="bridge/NeonTools.psm1" />
     <!-- The TTS voice presets (2026-09-27): the TTS tab's TTS voice preset picker (Speech/VoicePresets). One file per
          built-in since 2026-10-02 (the user's call); a <home>\voices\<name>.json of the user's overrides the built-in of
          that name or adds a preset, as the themes folder does. -->

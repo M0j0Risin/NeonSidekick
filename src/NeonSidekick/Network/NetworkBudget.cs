@@ -4,7 +4,7 @@ namespace NeonSidekick.Network;
 
 /// <summary>
 /// The per-turn scan budget (2026-10-15, the admin-tools plan, the user's call): at most <c>Network tools max hosts per turn</c> distinct
-/// targets and <c>Network tools max ports per turn</c> distinct host:port pairs across every <c>net_*</c> call of a turn — a script's and an
+/// targets and <c>Network tools max ports per turn</c> distinct host:port pairs across every <c>net_*</c> call of a turn — an
 /// advisor's calls included, since they call the turn's own instances. A target is known by the name it was asked as and by each address it
 /// was admitted at, so two names for one address count once and a sweep of addresses counts each. Reset when the turn's tools are composed;
 /// a bot has its own, reset at each bot turn. <c>/net</c> (the user's hand) never counts. Thread-safe: parallel calls share it.

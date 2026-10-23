@@ -19,7 +19,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 - [OpenAI](#openai)
 - [Speech](#speech)
 - [Integrations](#integrations)
-- [Set by the app](#set-by-the-app)
+- [System variables it reads](#system-variables-it-reads)
 - [Test suite](#test-suite)
 
 ## Where and who
@@ -102,11 +102,9 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 
 On a Mac, with neither `NEONSIDEKICK_DOCKER_PIPE` nor the setting, the app finds the socket as the `docker` command does, from `DOCKER_HOST` (never a `tcp://` or `ssh://` one) or the CLI's current context (`DOCKER_CONTEXT`, `DOCKER_CONFIG`); see [the order](TOOLS.md#docker-on-a-mac).
 
-## Set by the app
+## System variables it reads
 
-Under *Shell tool bridge*, the app passes `NEONSIDEKICK_BRIDGE_ADDRESS` and `NEONSIDEKICK_BRIDGE_TOKEN` to `execute_code` scripts for the `neon_tools` modules; don't set them yourself.
-
-It also reads a few of the system's own variables:
+The app reads a few of the system's own variables:
 
 * `PATH` to find shells and interpreters, with `PATHEXT`, `ProgramFiles`, `ProgramW6432` and `LocalAppData` on Windows.
 * `USERPROFILE` (`HOME` on a Mac) to find Claude Code where its installer puts it.

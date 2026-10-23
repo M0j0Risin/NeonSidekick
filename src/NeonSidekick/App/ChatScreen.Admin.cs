@@ -25,7 +25,7 @@ internal sealed partial class ChatScreen
 {
     private NetworkAccess _network = null!;
 
-    /// <summary>The main chat's scan budget: reset as each turn's tools are composed; scripts' and advisors' calls count against it too.</summary>
+    /// <summary>The main chat's scan budget: reset as each turn's tools are composed; advisors' calls count against it too.</summary>
     private readonly NetworkBudget _networkBudget = new();
 
     /// <summary>The automation run the budget lasts for now (a <c>/loop</c>, a Ralph run), set by <see cref="BudgetRun"/>; DA8.</summary>
@@ -120,7 +120,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The services tools: the two reads and the two changes. Shared with headless (the changes never offered there). A redacted set is each
-    /// tool's twin (<see cref="RedactedTwins.Of"/>, the advisors' and <c>execute_code</c>'s); the <c>forceRedacted</c> parameter, which only the
+    /// tool's twin (<see cref="RedactedTwins.Of"/>, the advisors'); the <c>forceRedacted</c> parameter, which only the
     /// bots passed, went on 2026-10-23 (the admin review's R16).
     /// </summary>
     public static IReadOnlyList<AIFunction> ServiceTools(ServiceAccess access, Func<AppSettingsData> effective, Func<string, CancellationToken, Task<bool?>>? confirm) =>

@@ -250,7 +250,7 @@ public sealed class ForbiddenStringsTests
         var sent = Assert.Single(client.Requests[1][3].Contents.OfType<FunctionResultContent>());
         Assert.Equal(ShellText.Forbidden, sent.Result);
 
-        // The two-part form a side loop (and execute_code's bridge) calls answers the text alone.
+        // The two-part form a side loop calls answers the text alone.
         var (text, _) = await Assistant.InvokeToolAsync([new ShownTool()], new FunctionCallContent("c", "shown", null), CancellationToken.None);
         Assert.Equal(ShellText.Forbidden, text);
     }

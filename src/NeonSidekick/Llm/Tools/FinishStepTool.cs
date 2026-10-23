@@ -12,8 +12,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>done</c>, <c>substeps</c> missing, out of 2–6 or without <c>done_when</c> on a split (or given with another outcome), a split the loop will not
 /// take (a child step, one with children, one split before, the final fix, a by-hand step's split with no by-hand substep since 2026-10-21), a pass
 /// that reported already. Offered only in a pass (the turn's own
-/// slot, <c>TurnToolInputs.Pass</c>), quiet on the transcript (its <c>reported</c> seam writes the 🔁 line), in no <see cref="PlanTools"/> list, and
-/// never to a script (<see cref="ExecuteCodeTool.Excluded"/>).
+/// slot, <c>TurnToolInputs.Pass</c>), quiet on the transcript (its <c>reported</c> seam writes the 🔁 line), and in no <see cref="PlanTools"/> list.
 /// </summary>
 public sealed class FinishStepTool : AIFunction
 {

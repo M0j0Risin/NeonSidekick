@@ -94,7 +94,6 @@ public class AppSettingsTests : IDisposable
         LlmCompactShowSummary = true,
         GitLibEmail = "me@example.invalid",
         GitLibName = "Some User",
-        ShellToolBridge = true,
         ShellPolice = false,
         ShellPoliceForbiddenStrings = ["rm -rf", "Format"],
         ShellPreferNative = false,
@@ -251,7 +250,6 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmCompactShowSummary, actual.LlmCompactShowSummary);
         Assert.Equal(expected.GitLibEmail, actual.GitLibEmail);
         Assert.Equal(expected.GitLibName, actual.GitLibName);
-        Assert.Equal(expected.ShellToolBridge, actual.ShellToolBridge);
         Assert.Equal(expected.ShellPolice, actual.ShellPolice);
         Assert.Equal(expected.ShellPoliceForbiddenStrings, actual.ShellPoliceForbiddenStrings);
         Assert.Equal(expected.ShellPreferNative, actual.ShellPreferNative);
@@ -464,7 +462,6 @@ public class AppSettingsTests : IDisposable
             d.LlmCompactShowSummary = full.LlmCompactShowSummary;
             d.GitLibEmail = full.GitLibEmail;
             d.GitLibName = full.GitLibName;
-            d.ShellToolBridge = full.ShellToolBridge;
             d.ShellPolice = full.ShellPolice;
             d.ShellPoliceForbiddenStrings = [.. full.ShellPoliceForbiddenStrings];
             d.ShellPreferNative = full.ShellPreferNative;
@@ -626,7 +623,6 @@ public class AppSettingsTests : IDisposable
                 d.LlmCompactShowSummary = full.LlmCompactShowSummary;
                 d.GitLibEmail = full.GitLibEmail;
                 d.GitLibName = full.GitLibName;
-                d.ShellToolBridge = full.ShellToolBridge;
                 d.ShellPolice = full.ShellPolice;
                 d.ShellPoliceForbiddenStrings = [.. full.ShellPoliceForbiddenStrings];
                 d.ShellPreferNative = full.ShellPreferNative;
@@ -936,9 +932,10 @@ public class AppSettingsTests : IDisposable
         // On 2026-09-30 the five GitNative* keys became GitLib* (the rows' new labels): old spellings, skipped the same way.
         // On 2026-10-05 SqliteProtectionMode became SqliteMode and ShellPoliceOutsidePaths became ShellPolice (the user's calls, no migration).
         // On 2026-10-10 claude_code_advisor was retired with its six ClaudeCodeAdvisor* keys (the user's call): skipped the same way.
+        // On 2026-10-23 the tool bridge went with ShellToolBridge and ShellCodeMaxToolCalls (the user's call, no migration): skipped the same way.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\", \"SqliteProtectionMode\": \"read-write\", \"ShellPoliceOutsidePaths\": false, \"ClaudeCodeAdvisor\": true, \"ClaudeCodeAdvisorContext\": \"recent\", \"ClaudeCodeAdvisorCallsPerTurn\": 5, \"ClaudeCodeAdvisorModel\": \"opus\", \"ClaudeCodeAdvisorEffort\": \"high\", \"ClaudeCodeAdvisorConfirm\": true }");
+            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\", \"SqliteProtectionMode\": \"read-write\", \"ShellPoliceOutsidePaths\": false, \"ClaudeCodeAdvisor\": true, \"ClaudeCodeAdvisorContext\": \"recent\", \"ClaudeCodeAdvisorCallsPerTurn\": 5, \"ClaudeCodeAdvisorModel\": \"opus\", \"ClaudeCodeAdvisorEffort\": \"high\", \"ClaudeCodeAdvisorConfirm\": true, \"ShellToolBridge\": true, \"ShellCodeMaxToolCalls\": 7, \"ShellCodeTimeoutSeconds\": 42 }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -962,6 +959,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(AppSettingsData.DefaultGitLibLogMaxCommits, settings.Current.GitLibLogMaxCommits);
         Assert.Equal("read-only", settings.Current.SqliteMode);   // the old SqliteProtectionMode key, skipped (2026-10-05)
         Assert.True(settings.Current.ShellPolice);   // the old ShellPoliceOutsidePaths key, skipped: the police reads on (2026-10-05)
+        Assert.Equal(42, settings.Current.ShellCodeTimeoutSeconds);   // the retired bridge keys beside it skipped, their neighbour read (2026-10-23)
         Assert.Equal("brief", settings.Current.AdvisorContext);   // the retired ClaudeCodeAdvisorContext is not the profile advisors' (2026-10-10)
         Assert.False(settings.Current.AdvisorConfirm);   // nor ClaudeCodeAdvisorConfirm
         Assert.Equal("", settings.Current.ClaudeCodeModel);   // nor is ClaudeCodeAdvisorModel read as /claude's model
@@ -1678,13 +1676,9 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(300, s.ShellCodeTimeoutSeconds);
         Assert.Equal(1, AppSettingsData.MinShellCodeTimeoutSeconds);
         Assert.Equal(3600, AppSettingsData.MaxShellCodeTimeoutSeconds);
-        Assert.False(s.ShellToolBridge);   // later on 2026-09-21: a script does everything itself unless asked
         Assert.Equal(NeonSidekick.Shell.ForbiddenStrings.Defaults, s.ShellPoliceForbiddenStrings);   // 2026-10-08 (the user's call): the shared and this system's defaults; empty from 2026-10-03, nothing forbidden until the user typed it
         Assert.True(s.ShellPolice);   // 2026-09-22: a command, a script or text to a process stays under the working directory unless the user turns it off
         Assert.True(s.ShellPreferNative);   // 2026-09-26: a line a native tool covers goes back to that tool unless the user turns it off
-        Assert.Equal(50, s.ShellCodeMaxToolCalls);
-        Assert.Equal(1, AppSettingsData.MinShellCodeMaxToolCalls);
-        Assert.Equal(500, AppSettingsData.MaxShellCodeMaxToolCalls);
         // The MCP servers (2026-09-20): off by default since 2026-09-21, none switched off, 30 s to connect (5–300).
         Assert.False(s.McpServers);
         Assert.Empty(s.McpServersDisabled);

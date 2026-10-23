@@ -11,7 +11,7 @@ public sealed class ShellStartException(string message) : Exception(message);
 /// <summary>
 /// The one place the shell tools start a process (2026-09-21) — the fourth counted process-start
 /// site after <c>PersonaFile</c>, <c>HeadlessBrowser</c> and the MCP SDK's stdio transport; the code
-/// tool and its bridge build a <see cref="ProcessLaunch"/> and come through here too. The
+/// tool builds a <see cref="ProcessLaunch"/> and comes through here too. The
 /// <c>HeadlessBrowser.RunAsync</c> shape: no shell-execute, no window (the child gets a hidden
 /// console of its own, so the TUI's Ctrl+C — a key here — never reaches it and its own never
 /// reaches us), the three streams redirected as UTF-8, the environment from

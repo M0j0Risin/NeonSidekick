@@ -527,8 +527,6 @@ The tools most profiles use, and the pane's own options.
 | Shell output max chars | The output one result carries (2000–500000). Past that, the start and end are kept and the whole text goes to `.neon\shell\<id>.log` in the working directory. | 30000 |
 | Shell code languages | What `execute_code` may run: `powershell`, `python` and `node`, each when its interpreter is found. | all three |
 | Shell code default timeout (s) | How long a script without its own `timeout` may run (1–3600). | 300 |
-| Shell tool bridge | Lets an `execute_code` script call the app's other tools through its `neon_tools` module. | off |
-| Shell tool bridge max calls | Tool calls one script may make through the bridge (1–500). | 50 |
 
 ##### Shell guards
 
@@ -718,7 +716,7 @@ See [Network](TOOLS.md#network).
 |---|---|---|
 | Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls` (and `net_certs` with *Network certificate stores*), one host a call, held to the reach, the host lists and the turn's budget. `/net` works either way. | off |
 | Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
-| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, scripts' and advisors' included (1–64). A Ralph run, `/loop` or camera watch gets this many for the whole run. | 8 |
+| Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, advisors' included (1–64). A Ralph run, `/loop` or camera watch gets this many for the whole run. | 8 |
 | Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256); one budget for a whole automation run, as above. | 32 |
 | Network tools allowed hosts | When not empty, the only hosts the tools may reach: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type it. | empty (anything the reach admits) |
 | Network tools denied hosts | Hosts never reached, in the same forms, a name by its addresses too; wins over the allowed list. | empty |

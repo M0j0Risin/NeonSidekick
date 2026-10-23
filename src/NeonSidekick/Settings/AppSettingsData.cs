@@ -2939,28 +2939,8 @@ public sealed class AppSettingsData
     public const int MaxShellCodeTimeoutSeconds = 3600;
     public const int DefaultShellCodeTimeoutSeconds = 300;
 
-    /// <summary>
-    /// Whether an <c>execute_code</c> script may call this app's other tools through its <c>neon_tools</c>
-    /// module — the loopback bridge (later on 2026-09-21, the user's ask; off by default, the user's
-    /// call, as zip/unzip and the MCP servers start). Off hides the bridge whole: no server is started,
-    /// no address or token goes into the script's environment, no module is written beside it, and
-    /// neither the tool's description, its schema nor the operating rules say a script can call tools —
-    /// the script does everything itself. Read at each call and at each turn's prompt, no reconnect.
-    /// No variable.
-    /// </summary>
-    public bool ShellToolBridge { get; set; }
-
-    /// <summary>
-    /// The most tool calls one <c>execute_code</c> script may make through its bridge (2026-09-21):
-    /// <see cref="MinShellCodeMaxToolCalls"/> to <see cref="MaxShellCodeMaxToolCalls"/>; the one over the
-    /// cap is answered with an error the script sees. Matters only while <see cref="ShellToolBridge"/>
-    /// is on. No variable.
-    /// </summary>
-    public int ShellCodeMaxToolCalls { get; set; } = DefaultShellCodeMaxToolCalls;
-
-    public const int MinShellCodeMaxToolCalls = 1;
-    public const int MaxShellCodeMaxToolCalls = 500;
-    public const int DefaultShellCodeMaxToolCalls = 50;
+    // ShellToolBridge (Shell tool bridge: an execute_code script calling the app's other tools through its neon_tools module, 2026-09-21)
+    // and ShellCodeMaxToolCalls (Shell tool bridge max calls, its cap) were retired on 2026-10-23 with the bridge, no migration: a profile's key is skipped on read.
 
     // ─── Web ────────────────────────────────────────────────────────────────────
 

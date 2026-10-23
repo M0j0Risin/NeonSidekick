@@ -135,7 +135,7 @@ public sealed class PathPoliceTests
     [InlineData("for i in range(1, 10): x[a:b]")]
     [InlineData("y = ~x; z = ...")]
     [InlineData("1..10 | ForEach-Object { $_ }")]
-    [InlineData("Write-Output $env:NEONSIDEKICK_BRIDGE_ADDRESS $env:CI")]
+    [InlineData("Write-Output $env:NEONSIDEKICK_EXAMPLE_TOKEN $env:CI")]
     [InlineData("os.environ['PATH']")]
     [InlineData("route('/api')")]   // one rooted segment, nothing at the drive's root by that name
     [InlineData("x = 10/2")]

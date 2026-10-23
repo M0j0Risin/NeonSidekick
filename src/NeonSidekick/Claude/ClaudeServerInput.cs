@@ -122,7 +122,7 @@ public static class ClaudeServerInput
         };
     }
 
-    /// <summary>Whether a tool result reads as a failure: the app's tools answer <c>Error: …</c> (the bridge reads them the same way).</summary>
+    /// <summary>Whether a tool result reads as a failure: the app's tools answer <c>Error: …</c>.</summary>
     public static bool IsError(string text) => text.StartsWith("Error:", StringComparison.Ordinal);
 
     /// <summary>

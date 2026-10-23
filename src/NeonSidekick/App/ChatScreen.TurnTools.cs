@@ -39,7 +39,6 @@ internal sealed record TurnToolInputs
     public bool GitEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Shell { get; init; }
     public bool ShellEnabled { get; init; }
-    public bool ShellBridge { get; init; }
     public bool ShellPolice { get; init; } = true;
     public bool ShellNative { get; init; }
     public IReadOnlyList<AIFunction>? Obsidian { get; init; }
@@ -357,9 +356,7 @@ internal sealed partial class ChatScreen
         // advisor listed is the group's switch; its sentence after the Docker ones.
         bool advisors = inputs.NeonAdvisorEnabled && neonAdvisorTools is { Count: > 0 };
         tools = advisors ? [.. tools, .. neonAdvisorTools!] : tools;
-        // The shell rule's execute_code sentence promises neon_tools only while the setting Shell tool bridge is on (later on 2026-09-21).
-        bool bridge = shell && inputs.ShellBridge;
-        // … and its head says the shell stays under the working directory only while the setting Shell police is on (2026-09-22); off, it says a command starts there and no more.
+        // The shell rule's head says the shell stays under the working directory only while the setting Shell police is on (2026-09-22); off, it says a command starts there and no more.
         bool police = !shell || inputs.ShellPolice;
         tools = (web, memoryEnabled) switch
         {
@@ -391,7 +388,7 @@ internal sealed partial class ChatScreen
         tools = ask is not null ? [.. tools, .. askTools!] : tools;
         // … and the rules say so after the shell sentence, naming the groups offered.
         bool native = shell && inputs.ShellNative;
-        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, bridge, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog, admin, clock);
+        var rules = new TurnRules(web, files, ask, sessions, download, delete, mcp, timers, git, shell, police, obsidian, obsidianDelete, sql, native, home, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, ServerWritesOf(tools), images, advisors, shopping, eventLog, admin, clock);
         return new TurnToolSet(
             tools,
             offered,

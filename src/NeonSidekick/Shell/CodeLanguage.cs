@@ -57,16 +57,16 @@ public static class CodeLanguages
     public static string Describe(string name) => OperatingSystem.IsWindows()
         ? name switch
         {
-            "powershell" => "a .ps1 through pwsh or Windows PowerShell; Invoke-NeonTool calls a tool",
-            "python" => "a .py through python.exe; from neon_tools import …",
-            "node" => "a .js through node.exe; require('neon_tools')",
+            "powershell" => "a .ps1 through pwsh or Windows PowerShell",
+            "python" => "a .py through python.exe",
+            "node" => "a .js through node.exe",
             _ => "",
         }
         : name switch
         {
-            "powershell" => "a .ps1 through pwsh; Invoke-NeonTool calls a tool",
-            "python" => "a .py through python3; from neon_tools import …",
-            "node" => "a .js through node; require('neon_tools')",
+            "powershell" => "a .ps1 through pwsh",
+            "python" => "a .py through python3",
+            "node" => "a .js through node",
             _ => "",
         };
 

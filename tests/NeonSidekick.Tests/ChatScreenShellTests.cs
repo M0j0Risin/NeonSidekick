@@ -131,7 +131,7 @@ public partial class ChatScreenTests
         // The model: the tool after the git tools with its rule, the result under the call id.
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
         Assert.Equal(offered.IndexOf(GitDeleteTool.ToolName) + 1, offered.IndexOf(RunCommandTool.ToolName));
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true), _chat.Requests[1][0].Text);
         Assert.Equal("exit 0 in 0.0 s (cmd): echo hi\nhi", ToolResult(_chat.Requests[1], "c1"));
         Assert.Empty(_settings.Current.ShellCommandAllowed);
@@ -159,7 +159,7 @@ public partial class ChatScreenTests
         // The model: the tool after the git tools with its rule, the result under the call id.
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToList();
         Assert.Equal(offered.IndexOf(GitDeleteTool.ToolName) + 1, offered.IndexOf(RunCommandTool.ToolName));
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true), _chat.Requests[1][0].Text);
         Assert.Equal("exit 0 in 0.0 s (zsh): echo hi\nhi", ToolResult(_chat.Requests[1], "c1"));
         Assert.Empty(_settings.Current.ShellCommandAllowed);
@@ -207,7 +207,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);   // the pane never opened
         Assert.Contains("Staying inside.", output);
         Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
@@ -224,7 +224,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);   // the pane never opened
         Assert.Contains("Staying inside.", output);
         Assert.Equal(@"Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it", ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
@@ -275,7 +275,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(@"✗  Error: the command was denied by the user: type C:\Windows\win.ini; do not retry it or work around the refusal" + "\n", output);
         Assert.DoesNotContain("👮", output);
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: false), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.Contains(Assistant.ShellRuleFor(police: false), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("may only name paths under it", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
@@ -291,7 +291,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(@"✗  Error: the command was denied by the user: cat /etc/hosts; do not retry it or work around the refusal" + "\n", output);
         Assert.DoesNotContain("👮", output);
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: false), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.Contains(Assistant.ShellRuleFor(police: false), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("may only name paths under it", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
@@ -592,14 +592,14 @@ public partial class ChatScreenTests
         Assert.Equal(1, second.Count(m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId.StartsWith(Assistant.PendingCallIdPrefix, StringComparison.Ordinal))));   // seeded once
     }
 
-    /// <summary>A script (phase C, 2026-09-21): the pane titles it as one, its caption counts the lines, the session allow is the language's pseudo-prefix, and the note is the header with the tool-call count.</summary>
+    /// <summary>A script (phase C, 2026-09-21): the pane titles it as one, its caption counts the lines, the session allow is the language's pseudo-prefix, and the note is the header.</summary>
     [WindowsFact]
     public async Task ExecuteCode_ThePaneAsksForTheScript_AllowSession_RunsIt_AndTheNextScriptNeverAsks()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ShellToolBridge = true; });   // the bridge on (later on 2026-09-21 it starts off): the script calls a tool
+        _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
-        string code = "$d = Invoke-NeonTool get_working_directory\nWrite-Output \"seen: $($d.Length -gt 0)\"";
+        string code = "$d = 'here'\nWrite-Output \"seen: $($d.Length -gt 0)\"";
         _chat.Enqueue(FakeChatClient.Call("c1", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = code }));
         _chat.Enqueue(FakeChatClient.Call("c2", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = "Write-Output again" }));
         _chat.EnqueueText("Ran twice.");
@@ -625,17 +625,17 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npowershell · 2 lines · first line: $d = Invoke-NeonTool get_working_directory\n \n▸ Deny\n  Allow once\n  Allow powershell scripts for this session\n  Allow powershell scripts always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npowershell · 2 lines · first line: $d = 'here'\n \n▸ Deny\n  Allow once\n  Allow powershell scripts for this session\n  Allow powershell scripts always (saved to the profile)\n", output);
         Assert.Contains("(🔓 allowed for this session: code:powershell)\n", output);
         Assert.DoesNotContain("first line: Write-Output again", output);   // the second script rode the session's allow
         string first = ToolResult(_chat.Requests[1], "c1");
-        Assert.Equal("exit 0 in 0.0 s (powershell, 1 tool call): $d = Invoke-NeonTool get_working_directory\nseen: True", first);
-        Assert.Equal("exit 0 in 0.0 s (powershell, 0 tool calls): Write-Output again\nagain", ToolResult(_chat.Requests[2], "c2"));
-        Assert.Contains("🛠️ exit 0 in 0.0 s (powershell, 1 tool call): $d = Invoke-NeonTool get_working_directory\n", output);
+        Assert.Equal("exit 0 in 0.0 s (powershell): $d = 'here'\nseen: True", first);
+        Assert.Equal("exit 0 in 0.0 s (powershell): Write-Output again\nagain", ToolResult(_chat.Requests[2], "c2"));
+        Assert.Contains("🛠️ exit 0 in 0.0 s (powershell): $d = 'here'\n", output);
         Assert.DoesNotContain("seen: True\n", output);
         Assert.Contains(ExecuteCodeTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.Empty(_settings.Current.ShellCommandAllowed);
-        Assert.Contains(Assistant.ShellRuleFor(bridge: true, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge on: the rule promises neon_tools
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -645,10 +645,10 @@ public partial class ChatScreenTests
     [UnixFact]
     public async Task ExecuteCode_ThePaneAsksForTheScript_AllowSession_RunsIt_AndTheNextScriptNeverAsks_Unix()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.ShellToolBridge = true; });
+        _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
-        string code = "import neon_tools\nd = neon_tools.get_working_directory()\nprint('seen:', len(d) > 0)";
+        string code = "import os\nd = os.getcwd()\nprint('seen:', len(d) > 0)";
         _chat.Enqueue(FakeChatClient.Call("c1", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "python", ["code"] = code }));
         _chat.Enqueue(FakeChatClient.Call("c2", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "python", ["code"] = "print('again')" }));
         _chat.EnqueueText("Ran twice.");
@@ -674,50 +674,48 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npython · 3 lines · first line: import neon_tools\n \n▸ Deny\n  Allow once\n  Allow python scripts for this session\n  Allow python scripts always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npython · 3 lines · first line: import os\n \n▸ Deny\n  Allow once\n  Allow python scripts for this session\n  Allow python scripts always (saved to the profile)\n", output);
         Assert.Contains("(🔓 allowed for this session: code:python)\n", output);
         Assert.DoesNotContain("first line: print('again')", output);
-        Assert.Equal("exit 0 in 0.0 s (python, 1 tool call): import neon_tools\nseen: True", ToolResult(_chat.Requests[1], "c1"));
-        Assert.Equal("exit 0 in 0.0 s (python, 0 tool calls): print('again')\nagain", ToolResult(_chat.Requests[2], "c2"));
-        Assert.Contains("🛠️ exit 0 in 0.0 s (python, 1 tool call): import neon_tools\n", output);
+        Assert.Equal("exit 0 in 0.0 s (python): import os\nseen: True", ToolResult(_chat.Requests[1], "c1"));
+        Assert.Equal("exit 0 in 0.0 s (python): print('again')\nagain", ToolResult(_chat.Requests[2], "c2"));
+        Assert.Contains("🛠️ exit 0 in 0.0 s (python): import os\n", output);
         Assert.Empty(_settings.Current.ShellCommandAllowed);
     }
 
-    /// <summary>Shell tool bridge off (later on 2026-09-21, the default): the script runs on its own, the header has no tool-call clause, the rules and the tool never name neon_tools.</summary>
+    /// <summary>The script runs on its own under yolo: the header names the language and the first line, and the tool and the rules read as the police has them.</summary>
     [WindowsFact]
-    public async Task ExecuteCode_BridgeOff_RunsTheScriptAlone_AndNothingMentionsNeonTools()
+    public async Task ExecuteCode_RunsTheScriptAlone_UnderAPlainHeader()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
-        _chat.Enqueue(FakeChatClient.Call("c1", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = "Write-Output \"bridge: [$env:NEONSIDEKICK_BRIDGE_ADDRESS]\"" }));
+        _chat.Enqueue(FakeChatClient.Call("c1", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = "Write-Output 'alone'" }));
         _chat.EnqueueText("Ran.");
         StepsWhenIdle(Line("script it"), Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Equal("exit 0 in 0.0 s (powershell): Write-Output \"bridge: [$env:NEONSIDEKICK_BRIDGE_ADDRESS]\"\nbridge: []", ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains("🛠️ exit 0 in 0.0 s (powershell): Write-Output \"bridge: [$env:NEONSIDEKICK_BRIDGE_ADDRESS]\"\n", output);
+        Assert.Equal("exit 0 in 0.0 s (powershell): Write-Output 'alone'\nalone", ToolResult(_chat.Requests[1], "c1"));
+        Assert.Contains("🛠️ exit 0 in 0.0 s (powershell): Write-Output 'alone'\n", output);
         var code = _chat.Options[0]!.Tools!.Cast<AIFunction>().Single(t => t.Name == ExecuteCodeTool.ToolName);
-        Assert.Equal(ExecuteCodeTool.DescriptionWithoutBridge, code.Description);
-        Assert.DoesNotContain("neon_tools", code.JsonSchema.GetRawText());
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
-        Assert.DoesNotContain("neon_tools", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.Equal(ExecuteCodeTool.DescriptionPoliced, code.Description);
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
-    /// <summary>The Unix twin of <see cref="ExecuteCode_BridgeOff_RunsTheScriptAlone_AndNothingMentionsNeonTools"/> (2026-10-06): python3, no bridge variable.</summary>
+    /// <summary>The Unix twin of <see cref="ExecuteCode_RunsTheScriptAlone_UnderAPlainHeader"/> (2026-10-06): python3.</summary>
     [UnixFact]
-    public async Task ExecuteCode_BridgeOff_RunsTheScriptAlone_AndNothingMentionsNeonTools_Unix()
+    public async Task ExecuteCode_RunsTheScriptAlone_UnderAPlainHeader_Unix()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ShellCommandPolicy = "yolo"; });
-        _chat.Enqueue(FakeChatClient.Call("c1", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "python", ["code"] = "import os\nprint('bridge: [' + os.environ.get('NEONSIDEKICK_BRIDGE_ADDRESS', '') + ']')" }));
+        _chat.Enqueue(FakeChatClient.Call("c1", ExecuteCodeTool.ToolName, new Dictionary<string, object?> { ["language"] = "python", ["code"] = "print('alone')" }));
         _chat.EnqueueText("Ran.");
         StepsWhenIdle(Line("script it"), Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Equal("exit 0 in 0.0 s (python): import os\nbridge: []", ToolResult(_chat.Requests[1], "c1"));
-        Assert.Contains("🛠️ exit 0 in 0.0 s (python): import os\n", output);
+        Assert.Equal("exit 0 in 0.0 s (python): print('alone')\nalone", ToolResult(_chat.Requests[1], "c1"));
+        Assert.Contains("🛠️ exit 0 in 0.0 s (python): print('alone')\n", output);
         var code = _chat.Options[0]!.Tools!.Cast<AIFunction>().Single(t => t.Name == ExecuteCodeTool.ToolName);
-        Assert.Equal(ExecuteCodeTool.DescriptionWithoutBridge, code.Description);
+        Assert.Equal(ExecuteCodeTool.DescriptionPoliced, code.Description);
     }
 
     /// <summary>The policy off: no shell tool offered, the rule gone, the group noted on /sys and /tools (2026-09-21).</summary>
@@ -740,7 +738,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(RunCommandTool.ToolName, offered);
         Assert.Contains(GitStatusTool.ToolName, offered);
         Assert.Equal(SkilledPrompt(false, [], web: true, ask: AskLimits.Default, markdown: true, shell: false), _chat.Requests[0][0].Text);
-        Assert.DoesNotContain(Assistant.ShellRuleFor(bridge: true, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.DoesNotContain(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
         Assert.DoesNotContain("Shell tools — ", output);   // no Shell tools heading on the Prompt tab since 2026-09-26
         Assert.DoesNotMatch(GroupHeading("Shell"), output);   // not offered: left out of the Tools tab (2026-09-26)
     }
@@ -759,7 +757,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(RunCommandTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.DoesNotContain(ProcessTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.DoesNotContain(ExecuteCodeTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.DoesNotContain(Assistant.ShellRuleFor(bridge: true, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
+        Assert.DoesNotContain(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -774,7 +772,7 @@ public partial class ChatScreenTests
 
         Assert.DoesNotContain(RunCommandTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
         Assert.Contains(ProcessTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
-        Assert.Contains(Assistant.ShellRuleFor(bridge: false, police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the bridge off by default (later on 2026-09-21)
+        Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
 
     /// <summary>Without the pane nothing can ask: under ask the tool answers the no-screen sentence, the allow list still lets a prefix through.</summary>

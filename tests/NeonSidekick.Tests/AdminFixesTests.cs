@@ -106,7 +106,7 @@ public sealed partial class AdminFixesTests
 
     /// <summary>L3, E3: an unattended Ralph pass is offered none of the confirm-gated admin writes; a gap pass keeps them.</summary>
     [Fact]
-    public void L3_E3_TheConfirmingWrites_LeaveUnattendedPassesAndScripts()
+    public void L3_E3_TheConfirmingWrites_LeaveUnattendedPasses()
     {
         var withheld = PlanTools.WithoutAskingOrConfirming(new HashSet<string>(StringComparer.Ordinal) { "x" });
         foreach (string tool in new[] { "x", "ask_user", "service_control", "service_start_type", "task_control" })
@@ -115,7 +115,6 @@ public sealed partial class AdminFixesTests
         }
 
         Assert.DoesNotContain("service_control", PlanTools.WithoutAsking(new HashSet<string>(StringComparer.Ordinal)));
-        Assert.Contains("service_start_type", NeonSidekick.Llm.Tools.ExecuteCodeTool.Excluded);
     }
 
     /// <summary>D6: a reader that finds only oversized events hands back empty rounds, and the search stops at its scan limit counting them.</summary>

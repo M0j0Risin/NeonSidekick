@@ -896,8 +896,8 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.DraftEditor, SettingsField.FileViewImageMaxPerCall,
                 SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits,
                 SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars,
-                SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellCodeMaxToolCalls,
-                SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.ShellToolBridge, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPolice,
+                SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds,
+                SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPolice,
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
                 SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
@@ -1396,16 +1396,9 @@ public partial class SettingsMenuTests : IDisposable
         // The web rows (2026-09-15): the Web tab (titled Browser until later that day; /tools' last from 2026-09-19, third since later on 2026-09-21), in this order, none a reconnect — one toggle, three pickers (the network mode in the LAN switch's slot since 2026-09-18; the search method above the URL it governs), two typed rows that may be empty, a typed count.
         Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
-        // the languages, their timeout, the tool bridge (the tab's one toggle, later that day) above the tool-call cap it governs; none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
+        // the languages and their timeout (the tool bridge's toggle and its tool-call cap below them from later that day until 2026-10-23); none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
-        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls }, ToolsMenuTests.TabFields(ToolsText.ShellTabTitle));
-        Assert.Equal("Shell tool bridge", SettingsMenu.FieldName(SettingsField.ShellToolBridge));
-        Assert.True(SettingsMenu.IsToggle(SettingsField.ShellToolBridge));
-        Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellToolBridge));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShellToolBridge, data, _settings.ProfileDirectory));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellToolBridge, new AppSettingsData { ShellToolBridge = true }, _settings.ProfileDirectory));
-        Assert.Equal("a script may call this app's other tools through its neon_tools module", SettingsMenu.ToggleDescribe(SettingsField.ShellToolBridge, true));
-        Assert.Equal("a script does everything itself: no neon_tools module, no tool calls", SettingsMenu.ToggleDescribe(SettingsField.ShellToolBridge, false));
+        Assert.Equal(new[] { SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds }, ToolsMenuTests.TabFields(ToolsText.ShellTabTitle));
         Assert.Equal("Shell police", SettingsMenu.FieldName(SettingsField.ShellPolice));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ShellPolice));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.ShellPolice));
@@ -1415,17 +1408,13 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("shell police disabled", SettingsMenu.ToggleDescribe(SettingsField.ShellPolice, false));
         Assert.Equal("Shell code languages", SettingsMenu.FieldName(SettingsField.ShellCodeLanguages));
         Assert.Equal("Shell code default timeout (s)", SettingsMenu.FieldName(SettingsField.ShellCodeTimeoutSeconds));
-        Assert.Equal("Shell tool bridge max calls", SettingsMenu.FieldName(SettingsField.ShellCodeMaxToolCalls));
         Assert.Equal("powershell, python, node", SettingsMenu.FieldValue(SettingsField.ShellCodeLanguages, data, _settings.ProfileDirectory));
         Assert.Equal("python", SettingsMenu.FieldValue(SettingsField.ShellCodeLanguages, new AppSettingsData { ShellCodeLanguages = ["python", "ruby"] }, _settings.ProfileDirectory));
         Assert.Equal("300", SettingsMenu.FieldValue(SettingsField.ShellCodeTimeoutSeconds, data, _settings.ProfileDirectory));
-        Assert.Equal("50 tool calls", SettingsMenu.FieldValue(SettingsField.ShellCodeMaxToolCalls, data, _settings.ProfileDirectory));
         Assert.Equal("300", SettingsMenu.EditableValue(SettingsField.ShellCodeTimeoutSeconds, data));
-        Assert.Equal("50", SettingsMenu.EditableValue(SettingsField.ShellCodeMaxToolCalls, data));
         Assert.Equal("must be 1 to 3600 seconds", SettingsMenu.ShellCodeTimeoutSecondsRangeError);
-        Assert.Equal("must be 1 to 500 tool calls", SettingsMenu.ShellCodeMaxToolCallsRangeError);
-        Assert.Equal("[[x]] python     [#9A8BB8]a .py through python.exe; from neon_tools import …[/]", SettingsMenu.CodeLanguageLabel("python", enabled: true, installed: true));   // the marks escaped for markup
-        Assert.Equal("[[ ]] node       [#9A8BB8]a .js through node.exe; require('neon_tools') — not found[/]", SettingsMenu.CodeLanguageLabel("node", enabled: false, installed: false));
+        Assert.Equal("[[x]] python     [#9A8BB8]a .py through python.exe[/]", SettingsMenu.CodeLanguageLabel("python", enabled: true, installed: true));   // the marks escaped for markup
+        Assert.Equal("[[ ]] node       [#9A8BB8]a .js through node.exe — not found[/]", SettingsMenu.CodeLanguageLabel("node", enabled: false, installed: false));
         Assert.Equal("Shell command policy", SettingsMenu.FieldName(SettingsField.ShellCommandPolicy));
         Assert.Equal("Shell allowed commands", SettingsMenu.FieldName(SettingsField.ShellCommandAllowed));
         Assert.Equal("Shell default shell", SettingsMenu.FieldName(SettingsField.ShellDefault));
@@ -1435,7 +1424,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Shell prefer native tools", SettingsMenu.FieldName(SettingsField.ShellPreferNative));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ShellPreferNative, data, _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShellPreferNative, new AppSettingsData { ShellPreferNative = false }, _settings.ProfileDirectory));
-        Assert.Equal([SettingsField.ShellPolice, SettingsField.ShellPreferNative, SettingsField.ShellToolBridge], ToolsMenuTests.TabFields(ToolsText.ShellTabTitle).Where(SettingsMenu.IsToggle));
+        Assert.Equal([SettingsField.ShellPolice, SettingsField.ShellPreferNative], ToolsMenuTests.TabFields(ToolsText.ShellTabTitle).Where(SettingsMenu.IsToggle));
         Assert.All(ToolsMenuTests.TabFields(ToolsText.ShellTabTitle), f => Assert.False(SettingsMenu.RefusedMidTurn(f)));
         Assert.Equal("ask", SettingsMenu.FieldValue(SettingsField.ShellCommandPolicy, data, _settings.ProfileDirectory));
         Assert.Equal("none", SettingsMenu.FieldValue(SettingsField.ShellCommandAllowed, data, _settings.ProfileDirectory));
@@ -1866,8 +1855,8 @@ public partial class SettingsMenuTests : IDisposable
     public void Labels_TheShellsLanguagesAndBrowser_AreTheMacs()
     {
         var data = new AppSettingsData();
-        Assert.Equal("[[x]] python     [#9A8BB8]a .py through python3; from neon_tools import …[/]", SettingsMenu.CodeLanguageLabel("python", enabled: true, installed: true));
-        Assert.Equal("[[ ]] node       [#9A8BB8]a .js through node; require('neon_tools') — not found[/]", SettingsMenu.CodeLanguageLabel("node", enabled: false, installed: false));
+        Assert.Equal("[[x]] python     [#9A8BB8]a .py through python3[/]", SettingsMenu.CodeLanguageLabel("python", enabled: true, installed: true));
+        Assert.Equal("[[ ]] node       [#9A8BB8]a .js through node — not found[/]", SettingsMenu.CodeLanguageLabel("node", enabled: false, installed: false));
         Assert.Equal("bash       [#9A8BB8]bash from the PATH, else /bin/bash — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
         Assert.Equal("zsh        [#9A8BB8]the macOS shell[/]", SettingsMenu.ShellLabel("zsh", installed: true));
         Assert.Equal("(auto: Google Chrome)", SettingsMenu.FieldValue(SettingsField.WebBrowserPath, data, _settings.ProfileDirectory, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"));

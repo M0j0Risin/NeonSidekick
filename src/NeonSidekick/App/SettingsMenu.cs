@@ -291,9 +291,6 @@ public enum SettingsField
     /// <summary>Typed: the seconds an <c>execute_code</c> script without <c>timeout</c> may run, 1 to 3600 (<see cref="Settings.AppSettingsData.ShellCodeTimeoutSeconds"/>). The Shell tab's eighth row (2026-09-21); no reconnect (read at each call).</summary>
     ShellCodeTimeoutSeconds,
 
-    /// <summary>Typed: the most tool calls one <c>execute_code</c> script may make, 1 to 500 (<see cref="Settings.AppSettingsData.ShellCodeMaxToolCalls"/>). The Shell tab's last row (2026-09-21); no reconnect (read at each call).</summary>
-    ShellCodeMaxToolCalls,
-
     /// <summary>A toggle: whether a compact's summary, or its pruned results, follow the compact notice in the transcript (<see cref="Settings.AppSettingsData.LlmCompactShowSummary"/>). The Common tab, right under <see cref="LlmCompactKeepRecent"/> (2026-09-21; above <see cref="LlmToolCompactType"/> since 2026-10-01); no reconnect (read at each compact).</summary>
     LlmCompactShowSummary,
 
@@ -302,9 +299,6 @@ public enum SettingsField
 
     /// <summary>Typed: the <c>user.name</c> <c>/gituser</c> writes beside the email (<see cref="Settings.AppSettingsData.GitLibName"/>); empty = not set. The GitLib tab's last row (2026-09-21); no reconnect.</summary>
     GitLibName,
-
-    /// <summary>A toggle: whether an <c>execute_code</c> script may call the app's other tools through its <c>neon_tools</c> module (<see cref="Settings.AppSettingsData.ShellToolBridge"/>). The Shell tab, right above the tool-call cap it governs (later on 2026-09-21); no reconnect (read at each call and each turn).</summary>
-    ShellToolBridge,
 
     /// <summary>A picker over <see cref="Files.FileBrowserMode.Names"/>: what the <c>/cwd browse</c> tree and <c>/tree</c> (2026-09-23) list (<see cref="Settings.AppSettingsData.FileBrowserMode"/>). The Files tab's row under the @-mention folder mode (2026-09-21); no reconnect (read when the pane opens).</summary>
     FileBrowserMode,
@@ -1837,7 +1831,7 @@ internal sealed partial class SettingsMenu
     /// differed followed (<c>FileTreeMaxLength</c>, <c>FileTreeShowSizes</c>, <c>FileMentionFolderMode</c>, <c>FileViewImageMaxPerCall</c>, <c>WebSearxngUrl</c>) — no migration, the old key skipped on load.
     /// Git (2026-09-20; Git (native) from 2026-09-21, its rows <c>Git native …</c>; GitLib since 2026-09-30, the tab and its rows) is its switch, the diff cap, the log cap and the identity pair;
     /// Shell (2026-09-21) is the policy (its switch), the allowed list, the outside-paths police (2026-09-22), the default shell, the two timeouts and the output cap,
-    /// then the script rows: the languages, their timeout, the tool bridge switch (later that day) and the tool-call cap it governs.
+    /// then the script rows: the languages and their timeout (the tool bridge's switch and its tool-call cap followed from later that day until 2026-10-23).
     /// Claude (2026-09-27, the user's call: <c>/claude</c>'s four rows off <c>/settings</c>, named <c>Claude command …</c>) is those four, then
     /// the advisor's six (<c>claude_code_advisor</c>): its switch, the context, the per-turn cap, the model, the effort and the confirm switch;
     /// from 2026-09-29 (the user's call: one tab named <c>Claude</c>, <c>Claude (CLI)</c> until then) the Anthropic API's four rows and
@@ -1852,7 +1846,7 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
-        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds, SettingsField.ShellToolBridge, SettingsField.ShellCodeMaxToolCalls],
+        [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
@@ -2289,7 +2283,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
-            or SettingsField.LlmCompactShowSummary or SettingsField.ShellToolBridge or SettingsField.ShellPolice or SettingsField.ShellPreferNative
+            or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
             or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill
             or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCodeServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
@@ -2450,8 +2444,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ShellOutputMaxChars => "Shell output max chars",
         SettingsField.ShellCodeLanguages => "Shell code languages",
         SettingsField.ShellCodeTimeoutSeconds => "Shell code default timeout (s)",
-        SettingsField.ShellToolBridge => "Shell tool bridge",
-        SettingsField.ShellCodeMaxToolCalls => "Shell tool bridge max calls",   // the bridge's cap, named after the switch above it (later on 2026-09-21, the user's ask; "Shell code max tool calls" before)
         SettingsField.GitLibLogMaxCommits => "GitLib log max commits",
         SettingsField.GitLibEmail => "GitLib user email",
         SettingsField.GitLibName => "GitLib user name",
@@ -2880,8 +2872,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ShellOutputMaxChars => Chars(data.ShellOutputMaxChars),
             SettingsField.ShellCodeLanguages => string.Join(", ", Shell.CodeLanguages.Resolve(data).Select(Shell.CodeLanguages.Name)),
             SettingsField.ShellCodeTimeoutSeconds => Seconds(data.ShellCodeTimeoutSeconds),
-            SettingsField.ShellToolBridge => OnOff(data.ShellToolBridge),
-            SettingsField.ShellCodeMaxToolCalls => ToolCalls(data.ShellCodeMaxToolCalls),
             SettingsField.GitLibLogMaxCommits => Commits(data.GitLibLogMaxCommits),
             SettingsField.GitLibEmail => string.IsNullOrWhiteSpace(data.GitLibEmail) ? NoGitIdentityLabel : data.GitLibEmail,
             SettingsField.GitLibName => string.IsNullOrWhiteSpace(data.GitLibName) ? NoGitIdentityLabel : data.GitLibName,
@@ -3520,10 +3510,6 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ShellCodeTimeoutSeconds"/>. Pinned.</summary>
     public static readonly string ShellCodeTimeoutSecondsRangeError =
         "must be " + AppSettingsData.MinShellCodeTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxShellCodeTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
-
-    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ShellCodeMaxToolCalls"/>. Pinned.</summary>
-    public static readonly string ShellCodeMaxToolCallsRangeError =
-        "must be " + AppSettingsData.MinShellCodeMaxToolCalls.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxShellCodeMaxToolCalls.ToString(CultureInfo.InvariantCulture) + " tool calls";
 
     /// <summary>One row of the code-languages list: the mark, the language, its hint and <see cref="NotFoundSuffix"/> when its interpreter is not installed (padded to eleven). Pinned.</summary>
     public static string CodeLanguageLabel(string name, bool enabled, bool installed) =>
@@ -4235,7 +4221,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ShellForegroundCapSeconds => data.ShellForegroundCapSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellOutputMaxChars => data.ShellOutputMaxChars.ToString(CultureInfo.InvariantCulture),
         SettingsField.ShellCodeTimeoutSeconds => data.ShellCodeTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
-        SettingsField.ShellCodeMaxToolCalls => data.ShellCodeMaxToolCalls.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibLogMaxCommits => data.GitLibLogMaxCommits.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqlQueryMaxRows => data.SqlQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqlQueryTimeoutSeconds => data.SqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
@@ -6459,16 +6444,6 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.ShellCodeTimeoutSeconds = codeTimeout);
                 return true;
 
-            case SettingsField.ShellCodeMaxToolCalls:
-                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int codeCalls) || codeCalls < AppSettingsData.MinShellCodeMaxToolCalls || codeCalls > AppSettingsData.MaxShellCodeMaxToolCalls)
-                {
-                    Sink.Error($"{FieldName(field)} {ShellCodeMaxToolCallsRangeError}; keeping {EditableValue(field, saved)}.");
-                    return false;
-                }
-
-                Apply(field, d => d.ShellCodeMaxToolCalls = codeCalls);
-                return true;
-
             case SettingsField.FileViewImageMaxPerCall:
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int pictures) || pictures < AppSettingsData.MinViewImageMaxPerCall || pictures > AppSettingsData.MaxViewImageMaxPerCall)
                 {
@@ -8199,7 +8174,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ThemedBackground => data.ThemedBackground,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
-            SettingsField.ShellToolBridge => data.ShellToolBridge,
             SettingsField.ShellPolice => data.ShellPolice,
             SettingsField.ShellPreferNative => data.ShellPreferNative,
             _ => false,
@@ -8333,7 +8307,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.ThemedBackground: data.ThemedBackground = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
-            case SettingsField.ShellToolBridge: data.ShellToolBridge = on; break;
             case SettingsField.ShellPolice: data.ShellPolice = on; break;
             case SettingsField.ShellPreferNative: data.ShellPreferNative = on; break;
         }
@@ -8473,7 +8446,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
-        SettingsField.ShellToolBridge => on ? "a script may call this app's other tools through its neon_tools module" : "a script does everything itself: no neon_tools module, no tool calls",
         SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03
         SettingsField.ShellPreferNative => on ? "a command a native tool covers is sent back to that tool first" : "the shell runs whatever it is given",
         _ => "",

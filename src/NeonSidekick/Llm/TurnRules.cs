@@ -18,7 +18,6 @@ public sealed record TurnRules(
     bool Timers = false,
     bool Git = false,
     bool Shell = false,
-    bool Bridge = false,
     bool Police = true,
     bool Obsidian = false,
     bool ObsidianDelete = false,
@@ -46,5 +45,5 @@ public sealed record TurnRules(
 {
     /// <summary>The default operating rules for <paramref name="markdown"/>: <c>Assistant.DefaultRules</c> with these flags and tools on. Pure.</summary>
     public string DefaultRules(bool markdown) =>
-        Assistant.DefaultRules(markdown, tools: true, Files, Web, Ask, Sessions, Download, Delete, Mcp, Timers, Git, Shell, Bridge, Police, Obsidian, ObsidianDelete, Sql, Native, HomeAssistant, Oracle, MySql, Unc, UncFetch, UncWrite, Docker, DockerWrite, Help, Sqlite, Postgres, Sqlite && SqliteWrite, ServerWrites, Images, Advisors, Shopping, EventLog, Admin, clock: Clock);
+        Assistant.DefaultRules(markdown, tools: true, Files, Web, Ask, Sessions, Download, Delete, Mcp, Timers, Git, Shell, Police, Obsidian, ObsidianDelete, Sql, Native, HomeAssistant, Oracle, MySql, Unc, UncFetch, UncWrite, Docker, DockerWrite, Help, Sqlite, Postgres, Sqlite && SqliteWrite, ServerWrites, Images, Advisors, Shopping, EventLog, Admin, clock: Clock);
 }

@@ -15,7 +15,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The admin families on the screen (2026-10-15, the admin-tools plan): a model's service change asked on the pane — yes runs it, no is its
-/// answer —, a task's run the same way, what is offered without a pane and in plan mode, the scripts' and advisors' redacted twins, and the user's
+/// answer —, a task's run the same way, what is offered without a pane and in plan mode, the advisors' redacted twins, and the user's
 /// own <c>/services</c>, <c>/tasks</c>, <c>/ad</c> and <c>/net</c>.
 /// </summary>
 public partial class ChatScreenTests

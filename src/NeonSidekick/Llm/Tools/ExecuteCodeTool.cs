@@ -6,7 +6,6 @@ using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Settings;
 using NeonSidekick.Shell;
-using NeonSidekick.Shell.Bridge;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -14,19 +13,17 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>execute_code(language, code, timeout?)</c> (2026-09-21): a script in a fresh interpreter
 /// process — python, node or powershell, whichever the setting <c>Shell code languages</c> allows
 /// and the machine has (the enum the model sees is that intersection, rebuilt when it changes) —
-/// that can call the app's other tools while it runs, through a <see cref="BridgeServer"/> alive
-/// for the run and a small module written beside the script (<see cref="CodeLaunch"/>). The bridge
-/// dispatches by name to the same tool list the turn offers the model (<paramref name="tools"/>),
-/// less <c>execute_code</c> itself and <c>ask_user</c>; a nested <c>run_command</c> goes through
-/// the gate as usual (the approval pane pops while the script waits on its socket) but never in
-/// the background. The same gate judges the script first, under the pseudo-prefix
-/// <c>code:&lt;language&gt;</c>, so "allow python scripts for this session" is one pick. The result
-/// is the <c>run_command</c> shape with the tool-call count in the header; the run folder under
-/// the temp directory goes when the run does. No kernel: state lives in files the script writes.
+/// that does everything itself (<see cref="CodeLaunch"/> lays out the run). The gate judges the script
+/// under the pseudo-prefix <c>code:&lt;language&gt;</c>, so "allow python scripts for this session" is one
+/// pick. The result is the <c>run_command</c> shape; the run folder under the temp directory goes when
+/// the run does. No kernel: state lives in files the script writes.
 /// Since 2026-09-22 the police reads the script before the gate (<see cref="PathPolice"/>, the setting
 /// <c>Shell police</c>, on by default): a script whose text names a path outside the
 /// working directory is refused with <see cref="ShellText.OutsidePath"/>, and the description and the
 /// <c>code</c> property say the script stays under it (off, neither says a word about where it may reach).
+/// The tool bridge (<c>Shell tool bridge</c>: a <c>neon_tools</c> module through which a script called the app's other tools over a
+/// loopback socket, 2026-09-21) was retired on 2026-10-23 (the user's call: it earned little, and every review found another hole in it);
+/// scripts are on their own since.
 /// </summary>
 public sealed class ExecuteCodeTool : AIFunction
 {
@@ -41,22 +38,11 @@ public sealed class ExecuteCodeTool : AIFunction
     /// <summary>The folder every run's folder sits in, under the temp directory.</summary>
     public const string RunsFolderName = "neonsidekick-code";
 
-    /// <summary>
-    /// The tools a script's bridge never reaches: itself (a run inside a run), <c>ask_user</c> (the script has no screen), <c>finish_step</c> (2026-10-18: a script never ends a Ralph pass),
-    /// and the admin families' changes (2026-10-23, the admin review's E3: their redacted twin was the tool itself, so a script could loop
-    /// service restarts, each a confirm pane mid-script; leaving them out keeps <see cref="RedactedTwins.Of"/>'s never-null contract).
-    /// </summary>
-    public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal)
-    {
-        ToolName, AskUserTool.ToolName, FinishStepTool.ToolName, ServiceControlTool.ToolName, ServiceStartTypeTool.ToolName, TaskControlTool.ToolName,
-    };
-
     private readonly ShellRunner _runner;
     private readonly WorkingDirectory _files;
     private readonly CommandGate _gate;
     private readonly Interpreters _interpreters;
     private readonly Func<AppSettingsData> _effective;
-    private readonly Func<IReadOnlyList<AIFunction>> _tools;
     private readonly Random _random;
     private readonly string _runsFolder;
 
@@ -67,57 +53,34 @@ public sealed class ExecuteCodeTool : AIFunction
     /// <summary>How old a run folder left behind must be before <see cref="SweepLeftovers"/> takes it.</summary>
     public static readonly TimeSpan LeftoverAge = TimeSpan.FromDays(1);
 
-    /// <param name="tools">The tools the turn offers the model, read at each bridge call (the screen's assistant's list).</param>
     /// <param name="runsFolder">Where run folders are made; the temp directory's <see cref="RunsFolderName"/> by default, a temp folder in tests.</param>
-    public ExecuteCodeTool(ShellRunner runner, WorkingDirectory files, CommandGate gate, Interpreters interpreters, Func<AppSettingsData> effective, Func<IReadOnlyList<AIFunction>> tools, Random random, string? runsFolder = null)
+    public ExecuteCodeTool(ShellRunner runner, WorkingDirectory files, CommandGate gate, Interpreters interpreters, Func<AppSettingsData> effective, Random random, string? runsFolder = null)
     {
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _interpreters = interpreters ?? throw new ArgumentNullException(nameof(interpreters));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
-        _tools = tools ?? throw new ArgumentNullException(nameof(tools));
         _random = random ?? throw new ArgumentNullException(nameof(random));
         _runsFolder = runsFolder ?? Path.Combine(Path.GetTempPath(), RunsFolderName);
     }
 
     public override string Name => ToolName;
 
-    /// <summary>What the model reads with the bridge on and the police on (2026-09-22, the default): the script may call the other tools and stays under the working directory. Pinned.</summary>
-    public const string DescriptionWithBridge =
-        "Runs a script (python, node or powershell) in a fresh process and returns what it printed. " +
-        "The script can call this app's other tools by name through the neon_tools module, so several steps can be done in one call; " +
-        "it runs in the working directory and may only name paths under it, the same approval as run_command applies, and a denied or refused script must not be retried or worked around.";
-
-    /// <summary>What the model reads with the bridge off (<c>Shell tool bridge</c>, later on 2026-09-21) and the police on: not a word about calling tools, so it never tries. Pinned.</summary>
-    public const string DescriptionWithoutBridge =
+    /// <summary>What the model reads with the police on (2026-09-22, the default): the script stays under the working directory. Pinned.</summary>
+    public const string DescriptionPoliced =
         "Runs a script (python, node or powershell) in a fresh process and returns what it printed; " +
         "it runs in the working directory and may only name paths under it, the same approval as run_command applies, and a denied or refused script must not be retried or worked around.";
 
-    /// <summary><see cref="DescriptionWithBridge"/> with the police off (<c>Shell police</c>, 2026-09-22): the text until that day — not a word about where the script may reach. Pinned.</summary>
-    public const string DescriptionWithBridgeUnpoliced =
-        "Runs a script (python, node or powershell) in a fresh process and returns what it printed. " +
-        "The script can call this app's other tools by name through the neon_tools module, so several steps can be done in one call; " +
-        "the same approval as run_command applies, and a denied script must not be retried or worked around.";
-
-    /// <summary><see cref="DescriptionWithoutBridge"/> with the police off: neither the bridge nor the confinement is named. Pinned.</summary>
-    public const string DescriptionWithoutBridgeUnpoliced =
+    /// <summary><see cref="DescriptionPoliced"/> with the police off (<c>Shell police</c>, 2026-09-22): not a word about where the script may reach. Pinned.</summary>
+    public const string DescriptionUnpoliced =
         "Runs a script (python, node or powershell) in a fresh process and returns what it printed; " +
         "the same approval as run_command applies, and a denied script must not be retried or worked around.";
 
-    /// <summary>The four descriptions by the two settings.</summary>
-    public static string DescribeTool(bool bridge, bool police) => (bridge, police) switch
-    {
-        (true, true) => DescriptionWithBridge,
-        (false, true) => DescriptionWithoutBridge,
-        (true, false) => DescriptionWithBridgeUnpoliced,
-        (false, false) => DescriptionWithoutBridgeUnpoliced,
-    };
+    /// <summary>The description the police picks, read at each look.</summary>
+    public static string DescribeTool(bool police) => police ? DescriptionPoliced : DescriptionUnpoliced;
 
-    /// <summary>The bridge's on/off, read at each look — the description, the schema and the run all follow the setting.</summary>
-    private bool Bridge => _effective().ShellToolBridge;
-
-    public override string Description => DescribeTool(Bridge, _effective().ShellPolice);
+    public override string Description => DescribeTool(_effective().ShellPolice);
 
     /// <summary>The languages the model may name right now: the setting's, whose interpreter is found, in <see cref="CodeLanguages.Names"/> order.</summary>
     public IReadOnlyList<string> AvailableLanguages => _interpreters.AvailableLanguages(CodeLanguages.Resolve(_effective())).Select(CodeLanguages.Name).ToList();
@@ -129,12 +92,11 @@ public sealed class ExecuteCodeTool : AIFunction
             var languages = AvailableLanguages;
             var effective = _effective();
             int cap = Math.Clamp(effective.ShellCodeTimeoutSeconds, AppSettingsData.MinShellCodeTimeoutSeconds, AppSettingsData.MaxShellCodeTimeoutSeconds);
-            bool bridge = effective.ShellToolBridge;
             bool police = effective.ShellPolice;
-            string key = string.Join(",", languages) + "|" + cap.ToString(CultureInfo.InvariantCulture) + (bridge ? "|bridge" : "") + (police ? "|police" : "");
+            string key = string.Join(",", languages) + "|" + cap.ToString(CultureInfo.InvariantCulture) + (police ? "|police" : "");
             if (_schema.ValueKind == JsonValueKind.Undefined || !string.Equals(key, _schemaKey, StringComparison.Ordinal))
             {
-                _schema = SchemaFor(languages, cap, bridge, police);
+                _schema = SchemaFor(languages, cap, police);
                 _schemaKey = key;
             }
 
@@ -142,25 +104,18 @@ public sealed class ExecuteCodeTool : AIFunction
         }
     }
 
-    /// <summary>The <c>code</c> property's description with the bridge on: how each language calls a tool. Pinned.</summary>
-    public const string CodeDescriptionWithBridge = "The script. It can call this app's tools: Python `from neon_tools import call, read_file, run_command` (call('tool_name', arg=value) for any tool); Node `const neon = require('neon_tools'); await neon.call('tool_name', { arg: value })` inside neon.run(async () => { ... }); PowerShell `Invoke-NeonTool tool_name @{ arg = value }`. Every tool returns its text; print what you want back.";
-
-    /// <summary>… and with the bridge off: the script alone. Pinned.</summary>
-    public const string CodeDescriptionWithoutBridge = "The script; print what you want back.";
+    /// <summary>The <c>code</c> property's description: the script alone. Pinned.</summary>
+    public const string CodeDescription = "The script; print what you want back.";
 
     /// <summary>What the <c>code</c> property's description gains with the police on (2026-09-22): the one rule a script must keep. Pinned.</summary>
     public const string CodeDescriptionPolicedSuffix = " Every path in it must stay under the working directory.";
 
-    /// <summary>
-    /// The schema over the languages offered; with <paramref name="bridge"/> the <c>code</c> property says how a script
-    /// calls a tool, without it not a word (later on 2026-09-21); with <paramref name="police"/> it ends with
-    /// <see cref="CodeDescriptionPolicedSuffix"/> (2026-09-22). Pinned.
-    /// </summary>
-    public static JsonElement SchemaFor(IReadOnlyList<string> languages, int defaultTimeout, bool bridge = true, bool police = true)
+    /// <summary>The schema over the languages offered; with <paramref name="police"/> the <c>code</c> property ends with <see cref="CodeDescriptionPolicedSuffix"/> (2026-09-22). Pinned.</summary>
+    public static JsonElement SchemaFor(IReadOnlyList<string> languages, int defaultTimeout, bool police = true)
     {
         ArgumentNullException.ThrowIfNull(languages);
         string names = string.Join(", ", languages.Select(l => "\"" + l + "\""));
-        string code = (bridge ? CodeDescriptionWithBridge : CodeDescriptionWithoutBridge) + (police ? CodeDescriptionPolicedSuffix : "");
+        string code = CodeDescription + (police ? CodeDescriptionPolicedSuffix : "");
         return ToolSchema.Parse(
             $$"""
             {
@@ -209,7 +164,6 @@ public sealed class ExecuteCodeTool : AIFunction
 
         int seconds = timeoutSeconds ?? Math.Clamp(effective.ShellCodeTimeoutSeconds, AppSettingsData.MinShellCodeTimeoutSeconds, AppSettingsData.MaxShellCodeTimeoutSeconds);
         var timeout = TimeSpan.FromSeconds(seconds);
-        int maxCalls = Math.Clamp(effective.ShellCodeMaxToolCalls, AppSettingsData.MinShellCodeMaxToolCalls, AppSettingsData.MaxShellCodeMaxToolCalls);
         int maxChars = Math.Clamp(effective.ShellOutputMaxChars, AppSettingsData.MinShellOutputMaxChars, AppSettingsData.MaxShellOutputMaxChars);
         string name = CodeLanguages.Name(language);
         string firstLine = ShellText.FirstLine(code);
@@ -286,21 +240,12 @@ public sealed class ExecuteCodeTool : AIFunction
 
         string id = ShellRunner.NewId(_random, IdPrefix);
         string runFolder = Path.Combine(_runsFolder, id);
-        // The bridge (Shell tool bridge, later on 2026-09-21): off, no module is written, no server started and no address or token handed down — the script is on its own.
-        bool bridgeOn = effective.ShellToolBridge;
-        var files = CodeLaunch.Files(language, code, runFolder, bridgeOn);
+        var files = CodeLaunch.Files(language, code);
         try
         {
             Directory.CreateDirectory(runFolder);
             // A BOM for PowerShell alone: 5.1 reads a .ps1 without one as ANSI, and an é in the script would come out wrong; python and node take plain UTF-8.
             var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: language == CodeLanguage.PowerShell);
-            if (files.ModulePath is { } relative)
-            {
-                string modulePath = Path.Combine(runFolder, relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(modulePath)!);
-                File.WriteAllText(modulePath, files.ModuleText, encoding);
-            }
-
             File.WriteAllText(Path.Combine(runFolder, files.ScriptName), files.ScriptText, encoding);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
@@ -311,18 +256,12 @@ public sealed class ExecuteCodeTool : AIFunction
             return ShellText.CouldNotWriteScript(ex.Message);
         }
 
-        // The tools a bridge call may reach, built once for the run (2026-10-22, the shell-review fixes: DispatchAsync rebuilt this list,
-        // allocating a redacted twin per admin/event-log/directory tool, on every one of up to hundreds of calls). Every tool with a
-        // redacted twin is wrapped (2026-10-15, the event-log plan; the admin-tools plan, IRedactedTwin): the main chat reads full by
-        // calling them itself, a script reads them redacted.
-        var offered = bridgeOn ? _tools().Where(t => !Excluded.Contains(t.Name)).Select(RedactedTwins.Of).ToList() : null;
         try
         {
-            await using var bridge = bridgeOn ? BridgeServer.Start((tool, callArguments, callToken) => DispatchAsync(offered!, tool, callArguments, callToken), maxCalls) : null;
             ProcessSession session;
             try
             {
-                session = _runner.Start(CodeLaunch.For(language, executable, runFolder, files.ScriptName, workingDirectory, bridge?.Address, bridge?.Token, firstLine), id);
+                session = _runner.Start(CodeLaunch.For(language, executable, runFolder, files.ScriptName, workingDirectory, firstLine), id);
             }
             catch (ShellStartException ex)
             {
@@ -340,7 +279,7 @@ public sealed class ExecuteCodeTool : AIFunction
                 catch (OperationCanceledException)
                 {
                     session.Kill();
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, "canceled after " + ShellText.Elapsed(session.Elapsed), bridge?.Calls, session.Output.TotalChars));
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, "canceled after " + ShellText.Elapsed(session.Elapsed), session.Output.TotalChars));
                     throw;
                 }
 
@@ -350,14 +289,13 @@ public sealed class ExecuteCodeTool : AIFunction
                     await session.WaitAsync(RunCommandTool.KillGrace, CancellationToken.None).ConfigureAwait(false);
                 }
 
-                int? calls = bridge?.Calls;
                 string header = exited
-                    ? ShellText.ScriptExitHeader(name, session.ExitCode ?? -1, session.Elapsed, calls, firstLine)
-                    : ShellText.ScriptTimedOutHeader(name, timeout, calls, firstLine);
+                    ? ShellText.ScriptExitHeader(name, session.ExitCode ?? -1, session.Elapsed, firstLine)
+                    : ShellText.ScriptTimedOutHeader(name, timeout, firstLine);
                 var lines = session.Output.Snapshot(out long dropped);
                 string body = ShellText.Body(lines, dropped);
                 string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, id, body) : null;
-                DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), calls, body.Length));
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), body.Length));
                 return ShellText.Result(header, lines, maxChars, spill, dropped);
             }
         }
@@ -366,66 +304,6 @@ public sealed class ExecuteCodeTool : AIFunction
             TryDelete(runFolder);
         }
     }
-
-    /// <summary>One bridge call: the tool by exact name among the turn's, less <see cref="Excluded"/>; a nested <c>run_command</c> never in the background.</summary>
-    private async Task<string> DispatchAsync(IReadOnlyList<AIFunction> offered, string tool, IReadOnlyDictionary<string, object?> arguments, CancellationToken cancellationToken)
-    {
-        if (Excluded.Contains(tool))
-        {
-            return ShellText.UnknownTool(tool);
-        }
-
-        if (!offered.Any(t => string.Equals(t.Name, tool, StringComparison.Ordinal)))
-        {
-            return ShellText.UnknownTool(tool);
-        }
-
-        var own = new Dictionary<string, object?>(arguments, StringComparer.Ordinal);
-        if (string.Equals(tool, RunCommandTool.ToolName, StringComparison.Ordinal))
-        {
-            if (own.TryGetValue(RunCommandTool.BackgroundArgument, out var background) && IsTrue(background))
-            {
-                return ShellText.BackgroundNotFromScript;
-            }
-
-            // A timeout over the foreground cap would promote the call to the background (2026-10-22, review L3): refused as background is.
-            if (own.TryGetValue(RunCommandTool.TimeoutArgument, out var timeout) && TimeoutSeconds(timeout) is { } seconds && seconds > RunCommandTool.ForegroundCap(_effective()))
-            {
-                return ShellText.BackgroundNotFromScript;
-            }
-
-            own.Remove(RunCommandTool.BackgroundArgument);
-            own.Remove(RunCommandTool.NotifyArgument);
-        }
-
-        var call = new FunctionCallContent("bridge", tool, own);
-        // A script's reads never mark a file seen or viewed, nor find one marked (2026-10-22, review J2: a file a script read let a later
-        // write_file without a mode replace it unread, and satisfied present_audit's read check), as an advisor's and a bot's don't.
-        using var seenOff = WorkingDirectory.SeenOff();
-        var (text, _) = await Assistant.InvokeToolAsync(offered, call, cancellationToken).ConfigureAwait(false);
-        return text;
-    }
-
-    /// <summary>A <c>timeout</c> argument as seconds: a number or its text; null for anything else.</summary>
-    private static long? TimeoutSeconds(object? value) => value switch
-    {
-        int i => i,
-        long l => l,
-        double d => (long)Math.Ceiling(d),
-        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Number } e => e.TryGetInt64(out long n) ? n : (long)Math.Ceiling(e.GetDouble()),
-        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } e => long.TryParse(e.GetString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long n) ? n : null,
-        string s => long.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long n) ? n : null,
-        _ => null,
-    };
-
-    private static bool IsTrue(object? value) => value switch
-    {
-        bool b => b,
-        JsonElement { ValueKind: JsonValueKind.True } => true,
-        JsonElement { ValueKind: JsonValueKind.String } s => string.Equals(s.GetString()?.Trim(), "true", StringComparison.OrdinalIgnoreCase),
-        string text => string.Equals(text.Trim(), "true", StringComparison.OrdinalIgnoreCase),
-        _ => false,
-    };
 
     /// <summary>
     /// The run folders a crash, or a child still holding a file, left under <paramref name="runsFolder"/> (2026-10-12, the shell

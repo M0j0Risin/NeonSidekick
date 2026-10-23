@@ -35,7 +35,7 @@ public sealed class RunCommandUnixTests : IDisposable
         _gate = new CommandGate(() => _settings, list, (request, _) => { _asked.Add(request); return Task.FromResult(_answer); });
         var runner = new ShellRunner(_time);
         _registry = new ProcessRegistry(runner, new Random(1), () => { });
-        _tool = App.ChatScreen.ShellTools(runner, _registry, files, _gate, new Interpreters(_ => null), () => _settings, new Random(1), () => []).OfType<RunCommandTool>().Single();
+        _tool = App.ChatScreen.ShellTools(runner, _registry, files, _gate, new Interpreters(_ => null), () => _settings, new Random(1)).OfType<RunCommandTool>().Single();
     }
 
     public void Dispose()

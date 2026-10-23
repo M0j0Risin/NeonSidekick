@@ -30,7 +30,6 @@ public sealed class FinishStepToolTests
         Assert.Equal(FinishStepTool.ToolName, _tool.Name);
         Assert.Equal([FinishStepTool.OutcomeArgument, FinishStepTool.SummaryArgument, FinishStepTool.VerifiedArgument, FinishStepTool.NotesArgument, FinishStepTool.LearnedArgument, FinishStepTool.SubstepsArgument], properties.EnumerateObject().Select(p => p.Name));
         Assert.Equal(["outcome", "summary"], _tool.JsonSchema.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
-        Assert.Contains(FinishStepTool.ToolName, ExecuteCodeTool.Excluded);
     }
 
     [Fact]

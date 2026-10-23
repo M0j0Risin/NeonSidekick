@@ -73,7 +73,6 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script. It asks like `run_command`; allowing it for the session covers that language. |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
-* **The tool bridge:** with *Shell tool bridge* on, a script can call the app's other tools (Python `from neon_tools import call`, Node `neon.call(...)`, PowerShell `Invoke-NeonTool`) but not `execute_code` or `ask_user`. A `run_command` through it still asks, and can't run in the background (nor with a timeout past the foreground cap). A call is at most 2 MB.
 * **The shell police also** refuses a line, a script it runs, an `execute_code` script or a `process` write that names `.git`, `.neon`, the project file or the app's own folder (a bare `git` command excepted); a script the line runs before it exists; and a script holding a forbidden string. Like every police rule it reads the text, not what runs.
 * **A `cmd` line with an unclosed quote** always asks, whatever the allow list holds.
 
@@ -450,7 +449,7 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 * **What counts as the LAN:** the private ranges, this machine's own addresses and its adapters' prefixes (VPNs too), so public neighbors count. Under `internet` a one-label or `.local`-style name is refused before any lookup.
 * **Lookups too:** a `net_dns` question is judged like a host (a PTR by its address) and counts toward the budget.
 * **A denied name** also denies the addresses it resolves to, so another name or the bare address won't reach it.
-* **A budget per turn:** *Network tools max hosts per turn* and *Network tools max ports per turn*, spent by scripts, advisors and refused names too.
+* **A budget per turn:** *Network tools max hosts per turn* and *Network tools max ports per turn*, spent by advisors and refused names too.
 * **A budget per run:** a Ralph run, a `/loop` or a camera watch gets one budget for the whole run. At most 4 addresses of one host are checked.
 * **Nothing fetched, nothing sent:** a TLS check downloads no certificate and asks for no revocation list, and no credential is ever sent.
 * **Server text** (TXT records, certificate names, banners) is fenced as untrusted data (`⟪ ⟫`), an answer held to 16,000 characters.
@@ -509,7 +508,7 @@ Under *Event log tools*. **Read-only:** they read what Windows recorded (a crash
 * **`redacted`** hides secret-looking values: fields named like a password, secret, API, access, account or private key, token, credential, passphrase, PIN or connection string. An event's raw binary data shows as its length only.
 * **In free text** it hides URL passwords, password switches and arguments (`password=…`, `-Password x`, `--api_key=…`, `/pass:x`, `-p x`, `net user`/`net use` passwords, `schtasks /RP`), keys in JSON or XML (`"password": "…"`, `<Password>…</Password>`), token parameters (`access_token=…`), `ConvertTo-SecureString … -AsPlainText`, `PSCredential`, `$password = '…'`, `Authorization:` headers, JWTs and PEM blocks.
 * The message is built from the hidden values, and `text` and `field` match only those. When an event's values can't be matched to its fields, its message is withheld and said so. **It is best-effort:** no rule knows every secret in free text.
-* **`full`** is read only by the main chat. Advisors and `execute_code`'s bridge always read redacted; an advisor's recent lines name an event-log call, never its result. The same redaction covers service and task descriptions and command lines.
+* **`full`** is read only by the main chat. Advisors always read redacted; an advisor's recent lines name an event-log call, never its result. The same redaction covers service and task descriptions and command lines.
 * **A `.evtx` file takes `local`'s detail, and no `logs` list applies to it:** a log exported from a `redacted` computer and read as a file is read under `local`'s detail.
 * **Out of any rule's reach:** what the main model quotes, and saved sessions. Set `full` only where you are content to have the events anywhere the conversation goes.
 * **Event text is untrusted:** any program can write an event. Messages and values are fenced as quoted data (`⟪ ⟫`), never instructions, with control characters replaced.

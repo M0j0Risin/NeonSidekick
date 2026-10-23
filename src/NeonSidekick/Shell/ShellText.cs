@@ -120,9 +120,6 @@ public static class ShellText
     public static string ScriptMissingLogLine(CommandRequest request, string name) =>
         $"police: script not there yet ('{name}') — {request.Kind} {Quote(request.Command)}";
 
-    /// <summary>A bridge connection past every slot (2026-10-22, review F7). Prompt text.</summary>
-    public const string BridgeBusy = "Error: the tool bridge is busy with as many calls as it takes at once; try the call again";
-
     public static string Cut(string text, int maxChars, string? spill, bool whole = true)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -306,22 +303,16 @@ public static class ShellText
     public static string BadWait(int min, int max) => $"Error: timeout must be {N(min)} to {N(max)} for wait";
     public static string BadLimit(int min, int max) => $"Error: limit must be {N(min)} to {N(max)}";
     public const string BadOffset = "Error: offset must be 1 or more";
-    public const string BackgroundNotFromScript = "Error: background is not available from a script";
 
     // ── Scripts (phase C, 2026-09-21) ────────────────────────────────────────
 
-    /// <summary><c>exit 0 in 2.3 s (python, 3 tool calls): the first line</c>; <see cref="Result"/> adds the cut suffix. With <paramref name="toolCalls"/> null (the bridge off, later on 2026-09-21) the clause is left out: <c>exit 0 in 2.3 s (python): …</c>. Pinned.</summary>
-    public static string ScriptExitHeader(string language, int exitCode, TimeSpan elapsed, int? toolCalls, string firstLine) =>
-        $"exit {N(exitCode)} in {Elapsed(elapsed)} ({language}{ToolCallsClause(toolCalls)}): {firstLine}";
+    /// <summary><c>exit 0 in 2.3 s (python): the first line</c>; <see cref="Result"/> adds the cut suffix. Pinned.</summary>
+    public static string ScriptExitHeader(string language, int exitCode, TimeSpan elapsed, string firstLine) =>
+        $"exit {N(exitCode)} in {Elapsed(elapsed)} ({language}): {firstLine}";
 
-    /// <summary><c>timed out after 5 m 0 s (python, killed, 12 tool calls): …</c>; <c>(python, killed): …</c> with the bridge off. Pinned.</summary>
-    public static string ScriptTimedOutHeader(string language, TimeSpan timeout, int? toolCalls, string firstLine) =>
-        $"timed out after {Elapsed(timeout)} ({language}, killed{ToolCallsClause(toolCalls)}): {firstLine}";
-
-    public static string ToolCalls(int count) => $"{Count(count)} tool {(count == 1 ? "call" : "calls")}";
-
-    /// <summary><c>, 3 tool calls</c>, or nothing for null: the headers' and the log line's optional clause.</summary>
-    private static string ToolCallsClause(int? count) => count is { } n ? ", " + ToolCalls(n) : "";
+    /// <summary><c>timed out after 5 m 0 s (python, killed): …</c>. Pinned.</summary>
+    public static string ScriptTimedOutHeader(string language, TimeSpan timeout, string firstLine) =>
+        $"timed out after {Elapsed(timeout)} ({language}, killed): {firstLine}";
 
     /// <summary>The script's first non-blank line, trimmed, for the header and the log; <c>(empty)</c> for none.</summary>
     public static string FirstLine(string code)
@@ -345,23 +336,11 @@ public static class ShellText
     public const string CodeRequired = "Error: code is required";
     public static string LanguageNotInstalled(CodeLanguage language) => $"Error: {CodeLanguages.Name(language)} is not installed (no {CodeLanguages.FileName(language)} found)";
     public static string LanguageNotEnabled(string language) => $"Error: {language} is not enabled; the user can tick it in Shell code languages on the Shell tab of /tools";
-    public static string UnknownTool(string tool) => $"Error: unknown tool {tool}";
-    public static string ToolCallLimit(int max) => $"Error: this run's tool call limit ({N(max)}) is reached";
-    public const string BadToken = "Error: the bridge token did not match";
-
-    /// <summary><c>Error: the request is over 32 MB</c>: a bridge request past <see cref="Bridge.BridgeServer.MaxRequestBytes"/> (2026-10-12). Pinned.</summary>
-    public static string RequestTooLarge(int maxBytes) =>
-        maxBytes >= 1024 * 1024 ? $"Error: the request is over {N(maxBytes / (1024 * 1024))} MB" : $"Error: the request is over {N(maxBytes)} bytes";
-    public const string BadRequest = "Error: the request is not {\"token\", \"tool\", \"arguments\"} on one line";
     public static string CouldNotWriteScript(string detail) => $"Error: could not write the script ({detail})";
 
-    /// <summary><c>execute_code: python "import os" → exit 0 in 2.3 s, 3 tool calls (2,340 chars)</c>; no tool-call clause with the bridge off.</summary>
-    public static string ScriptLogLine(string language, string firstLine, string outcome, int? toolCalls, long chars) =>
-        $"execute_code: {language} {Quote(firstLine)} → {outcome}{ToolCallsClause(toolCalls)} ({Count(chars)} chars)";
-
-    /// <summary><c>bridge: read_file → 1,234 chars</c> / <c>bridge: nope → Error: unknown tool nope</c>.</summary>
-    public static string BridgeLogLine(string tool, string result) =>
-        $"bridge: {tool} → " + (result.StartsWith("Error:", StringComparison.Ordinal) ? result.ReplaceLineEndings(" ") : Count(result.Length) + " chars");
+    /// <summary><c>execute_code: python "import os" → exit 0 in 2.3 s (2,340 chars)</c>.</summary>
+    public static string ScriptLogLine(string language, string firstLine, string outcome, long chars) =>
+        $"execute_code: {language} {Quote(firstLine)} → {outcome} ({Count(chars)} chars)";
 
     // ── Errors (every one starts with Error:) ────────────────────────────────
 

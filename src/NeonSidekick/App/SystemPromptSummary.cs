@@ -38,8 +38,7 @@ namespace NeonSidekick.App;
 /// <param name="GitTools">How many git tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.GitRule"/> while any is.</param>
 /// <param name="ShellEnabled">Whether the setting <c>Shell command policy</c> is not <c>off</c> (2026-09-21, the Shell tab of <c>/tools</c>): the group's switch.</param>
 /// <param name="ShellTools">How many shell tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShellRule"/> while any is.</param>
-/// <param name="ShellBridge">The setting <c>Shell tool bridge</c> (later on 2026-09-21): off, the shell rule is <see cref="Assistant.ShellRuleWithoutBridge"/>, which never says a script can call tools.</param>
-/// <param name="ShellPolice">The setting <c>Shell police</c> (2026-09-22): off, the shell rule is an <c>…Unpoliced</c> variant, which says a command starts in the working directory and no more.</param>
+/// <param name="ShellPolice">The setting <c>Shell police</c> (2026-09-22): off, the shell rule is <see cref="Assistant.ShellRuleUnpoliced"/>, which says a command starts in the working directory and no more.</param>
 /// <param name="ObsidianEnabled">Whether the vault tools may be offered (2026-09-22): the setting <c>Obsidian tools</c> on and <c>Obsidian vault</c> naming a folder with <c>.obsidian</c> — the group's switch (<see cref="ChatScreen.ObsidianOffered"/>).</param>
 /// <param name="ObsidianTools">How many vault tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ObsidianRule"/> while any is.</param>
 /// <param name="ObsidianAllowDelete">The setting <c>Obsidian allow delete</c> (later on 2026-09-22; on by default since 2026-09-23, the parameter's false the bare facts' default): on, and <c>vault_delete</c> not switched off, the vault rule gains <see cref="Assistant.ObsidianDeleteRule"/>.</param>
@@ -100,7 +99,6 @@ public sealed record SystemPromptFacts(
     int GitTools = 0,
     bool ShellEnabled = true,
     int ShellTools = 0,
-    bool ShellBridge = false,
     bool ShellPolice = true,
     bool ObsidianEnabled = false,
     int ObsidianTools = 0,
@@ -179,10 +177,7 @@ public sealed record SystemPromptFacts(
     /// <summary>Whether the rules carry a shell rule: tools on, the policy not off and at least one shell tool offered (2026-09-21).</summary>
     public bool Shell => ToolsEnabled && ShellEnabled && ShellTools > 0;
 
-    /// <summary>Whether that rule is <see cref="Assistant.ShellRule"/> (the bridge on) rather than <see cref="Assistant.ShellRuleWithoutBridge"/>.</summary>
-    public bool Bridge => Shell && ShellBridge;
-
-    /// <summary>Whether that rule's head says the shell stays under the working directory (the police on, 2026-09-22); true without a shell rule, so the default holds (<see cref="Assistant.ShellRuleFor"/>).</summary>
+    /// <summary>Whether that rule's head says the shell stays under the working directory (the police on, 2026-09-22); true without a shell rule, so the default holds (<see cref="Assistant.ShellRuleFor(bool)"/>).</summary>
     public bool Police => !Shell || ShellPolice;
 
     /// <summary>Whether the shell rule is followed by <see cref="Assistant.ShellNativeRule"/> (2026-09-26): a shell rule, and the setting on.</summary>
@@ -469,7 +464,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, bridge: facts.Bridge, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog, clock: facts.Clock);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog, clock: facts.Clock);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -585,7 +580,6 @@ public static class SystemPromptSummary
             timers: facts.Timers,
             git: facts.Git,
             shell: facts.Shell,
-            bridge: facts.Bridge,
             police: facts.Police,
             obsidian: facts.Obsidian,
             obsidianDelete: facts.ObsidianDelete,

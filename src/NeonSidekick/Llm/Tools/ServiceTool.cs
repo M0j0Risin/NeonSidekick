@@ -9,8 +9,8 @@ namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
 /// What the four services tools share (2026-10-15, the admin-tools plan, <see cref="EventLogTool"/>'s shape): the <see cref="ServiceAccess"/>
-/// door, the settings in force, the arguments' readers, and the redacted twin (<see cref="IRedactedTwin"/>: the bots', the advisors', a
-/// script's read every computer redacted). The two reads are offered headless too; the two changes only with <c>Service writes</c>, a pane and
+/// door, the settings in force, the arguments' readers, and the redacted twin (<see cref="IRedactedTwin"/>: the advisors' read every
+/// computer redacted). The two reads are offered headless too; the two changes only with <c>Service writes</c>, a pane and
 /// a ticked <c>readwrite</c> computer whose <c>controlActions</c> allow them — never headless, never to a bot. A refusal is an <c>Error:</c>
 /// sentence, never a throw.
 /// </summary>
