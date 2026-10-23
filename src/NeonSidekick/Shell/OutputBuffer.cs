@@ -165,7 +165,8 @@ public sealed class OutputBuffer
     {
         if (text is { Length: > MaxLineChars })
         {
-            text = text[..(MaxLineChars - CutMark.Length)] + CutMark;
+            // Never inside a surrogate pair (2026-10-22, the shell-review fixes: Append was made surrogate-safe under review L6, this was not).
+            text = Files.TextCut.Safe(text, MaxLineChars - CutMark.Length) + CutMark;
         }
 
         text = string.IsNullOrEmpty(text) ? null : text;

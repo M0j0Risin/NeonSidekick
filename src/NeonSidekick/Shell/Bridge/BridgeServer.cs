@@ -65,16 +65,18 @@ public sealed class BridgeServer : IAsyncDisposable
 
     /// <summary>
     /// The longest request line read (2026-10-12, the shell review: a script that sent one line without its newline grew the
-    /// app's memory as long as it wrote); room for a large <c>write_file</c>. Past it the call is answered
+    /// app's memory as long as it wrote); 2 MB, enough for an ordinary <c>write_file</c>, cut from 32 MB so a floodful of connections
+    /// cannot each hold a large buffer (2026-10-19, the code review). Past it the call is answered
     /// <see cref="ShellText.RequestTooLarge"/> and the connection closed. Pinned.
     /// </summary>
     public const int MaxRequestBytes = 2 * 1024 * 1024;
 
     /// <summary>
     /// The most connections served at once (2026-10-19, the code review): the per-request <see cref="MaxRequestBytes"/> cap bounds one
-    /// connection, but nothing bounded how many a local process could open and hold during a run, so the app could keep N × 32 MB. The
-    /// slots are <c>maxCalls + 4</c>, clamped here, so legitimate parallel calls run unthrottled while a flood past the cap waits for a
-    /// slot and is dropped on <see cref="ReadTimeout"/>. Pinned.
+    /// connection, but nothing bounded how many a local process could open and hold during a run, so the app could keep N buffers. The
+    /// slots are <c>maxCalls + 4</c>, clamped here, so legitimate parallel calls run unthrottled while a connection past the cap is
+    /// answered <see cref="ShellText.BridgeBusy"/> and closed at once, never waited on (2026-10-22, the shell-review fixes: the comment
+    /// still described the pre-F7 wait-for-a-slot path that <c>_slots.Wait(0)</c> replaced). Pinned.
     /// </summary>
     public const int MaxConnections = 64;
 

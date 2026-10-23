@@ -298,12 +298,20 @@ public sealed class ExecuteCodeTool : AIFunction
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
+            // The run folder is created above, before the try/finally below that deletes it (2026-10-22, the shell-review fixes: a write
+            // failure returned here and left the folder for the day-later sweep).
+            TryDelete(runFolder);
             return ShellText.CouldNotWriteScript(ex.Message);
         }
 
+        // The tools a bridge call may reach, built once for the run (2026-10-22, the shell-review fixes: DispatchAsync rebuilt this list,
+        // allocating a redacted twin per admin/event-log/directory tool, on every one of up to hundreds of calls). Every tool with a
+        // redacted twin is wrapped (2026-10-15, the event-log plan; the admin-tools plan, IRedactedTwin): the main chat reads full by
+        // calling them itself, a script reads them redacted.
+        var offered = bridgeOn ? _tools().Where(t => !Excluded.Contains(t.Name)).Select(RedactedTwins.Of).ToList() : null;
         try
         {
-            await using var bridge = bridgeOn ? BridgeServer.Start(DispatchAsync, maxCalls) : null;
+            await using var bridge = bridgeOn ? BridgeServer.Start((tool, callArguments, callToken) => DispatchAsync(offered!, tool, callArguments, callToken), maxCalls) : null;
             ProcessSession session;
             try
             {
@@ -353,16 +361,13 @@ public sealed class ExecuteCodeTool : AIFunction
     }
 
     /// <summary>One bridge call: the tool by exact name among the turn's, less <see cref="Excluded"/>; a nested <c>run_command</c> never in the background.</summary>
-    private async Task<string> DispatchAsync(string tool, IReadOnlyDictionary<string, object?> arguments, CancellationToken cancellationToken)
+    private async Task<string> DispatchAsync(IReadOnlyList<AIFunction> offered, string tool, IReadOnlyDictionary<string, object?> arguments, CancellationToken cancellationToken)
     {
         if (Excluded.Contains(tool))
         {
             return ShellText.UnknownTool(tool);
         }
 
-        // The event-log tools read every computer redacted for a script (2026-10-15, the event-log plan): the main chat reads full by calling them itself.
-        // Every tool with a redacted twin since later that day (the admin-tools plan, IRedactedTwin): services, tasks and the directory too.
-        var offered = _tools().Where(t => !Excluded.Contains(t.Name)).Select(RedactedTwins.Of).ToList();
         if (!offered.Any(t => string.Equals(t.Name, tool, StringComparison.Ordinal)))
         {
             return ShellText.UnknownTool(tool);

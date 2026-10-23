@@ -37,7 +37,9 @@ public sealed class ShellRunner
     public static string NewId(Random random, string prefix)
     {
         ArgumentNullException.ThrowIfNull(random);
-        // Never one handed out before in this run (2026-10-22, review F5: two parallel runs could share an id and one spill log).
+        // Never one still remembered (2026-10-22, review F5: two parallel runs could share an id and one spill log). Only the most recent
+        // MaxRememberedIds are kept (the shell-review fixes, same day): the set was never pruned and grew for the life of the process; the
+        // cap is far above the ids ever live at once, so a live id is never forgotten and reissued.
         lock (s_issued)
         {
             while (true)
@@ -45,13 +47,23 @@ public sealed class ShellRunner
                 string id = prefix + random.Next(0, 0x1000000).ToString("x6", CultureInfo.InvariantCulture);
                 if (s_issued.Add(id))
                 {
+                    s_recent.Enqueue(id);
+                    while (s_recent.Count > MaxRememberedIds)
+                    {
+                        s_issued.Remove(s_recent.Dequeue());
+                    }
+
                     return id;
                 }
             }
         }
     }
 
+    /// <summary>How many recent ids <see cref="NewId"/> keeps to stop two live runs sharing one; well above any count ever live at once.</summary>
+    private const int MaxRememberedIds = 4096;
+
     private static readonly HashSet<string> s_issued = new(StringComparer.Ordinal);
+    private static readonly Queue<string> s_recent = new();
 
     /// <summary>
     /// Starts <paramref name="launch"/> as <paramref name="id"/>; the session is the caller's to wait on, kill and dispose. On Windows

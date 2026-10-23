@@ -141,7 +141,9 @@ public static partial class PathPolice
             }
 
             int firstArgument = FirstArgument(tokens, shell);
-            int cdIndex = cdArgument is null ? -1 : tokens.IndexOf(cdArgument, 1);
+            // The folder is cd's first argument, so search from there (2026-10-22, the shell-review fixes): starting at 1 could match the
+            // same text in an earlier option value and exempt (or fail to exempt) the wrong token.
+            int cdIndex = cdArgument is null ? -1 : tokens.IndexOf(cdArgument, firstArgument >= 1 ? firstArgument : 1);
             for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];

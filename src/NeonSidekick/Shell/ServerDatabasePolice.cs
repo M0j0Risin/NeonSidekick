@@ -115,9 +115,14 @@ public static partial class ServerDatabasePolice
         }
 
         int comma = text.IndexOf(',', StringComparison.Ordinal);
-        string host = (comma >= 0 ? text[..comma] : text).Split('\\')[0].Trim();
+        string[] parts = (comma >= 0 ? text[..comma] : text).Split('\\');
+        string host = parts[0].Trim();
         int port = comma >= 0 && int.TryParse(text[(comma + 1)..].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int p) ? p : 1433;
-        return Hosts(host, port);
+        var hosts = Hosts(host, port);
+        // A loopback named instance is reached as host\instance, which neither host:port nor host,port spells (2026-10-22, the shell-review
+        // fixes); a non-loopback host already matches as its bare name inside host\instance, so only the loopback form needs the extra spelling.
+        string instance = parts.Length > 1 ? parts[1].Trim() : "";
+        return instance.Length > 0 && Loopback.Contains(host) ? hosts.Append(host + "\\" + instance) : hosts;
     }
 
     /// <summary>An Oracle data source's hosts: EZConnect's <c>host[:port]/service</c>, or every <c>HOST=</c> of a descriptor (1521 when no port is given).</summary>
@@ -127,9 +132,23 @@ public static partial class ServerDatabasePolice
         if (text.StartsWith('('))
         {
             var found = new List<string>();
+            var ports = DescriptorPort().Matches(text);
             foreach (Match m in DescriptorHost().Matches(text))
             {
-                int port = DescriptorPort().Match(text, m.Index) is { Success: true } p ? int.Parse(p.Groups[1].Value, CultureInfo.InvariantCulture) : 1521;
+                // The PORT nearest this HOST, before or after it (2026-10-22, the shell-review fixes): a descriptor may write PORT before HOST,
+                // or omit it, and pairing with the first PORT at or after the HOST recorded the wrong (or the default) port.
+                int port = 1521;
+                int best = int.MaxValue;
+                foreach (Match pm in ports)
+                {
+                    int distance = Math.Abs(pm.Index - m.Index);
+                    if (distance < best)
+                    {
+                        best = distance;
+                        port = int.Parse(pm.Groups[1].Value, CultureInfo.InvariantCulture);
+                    }
+                }
+
                 found.AddRange(Hosts(m.Groups[1].Value, port));
             }
 

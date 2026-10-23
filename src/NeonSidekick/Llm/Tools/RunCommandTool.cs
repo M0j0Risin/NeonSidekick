@@ -297,6 +297,11 @@ public sealed class RunCommandTool : AIFunction
             {
                 return ex.Message;
             }
+            catch (ObjectDisposedException)
+            {
+                // The registry was disposed as the app shuts down (2026-10-22, the shell-review fixes): a clean refusal, not an unhandled throw into the turn loop.
+                return ShellText.CouldNotStart(executable, "the app is shutting down");
+            }
         }
 
         ProcessSession session;

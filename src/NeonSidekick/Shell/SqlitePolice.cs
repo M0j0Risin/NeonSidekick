@@ -136,7 +136,15 @@ public static partial class SqlitePolice
                 continue;
             }
 
-            if (afterInterpreter && !word.StartsWith('-') && !(word.StartsWith('/') && word.Length == 2))
+            if (afterInterpreter && (word.StartsWith('-') || (word.StartsWith('/') && word.Length == 2)))
+            {
+                // An interpreter option (-c, -e, -m, /x): the inline command or value after it is no script file (2026-10-22, the shell-review
+                // fixes: `bash -c echo hi` read `echo` as a script; MissingScripts already resets the flag here).
+                afterInterpreter = false;
+                continue;
+            }
+
+            if (afterInterpreter)
             {
                 afterInterpreter = false;
                 yield return word;

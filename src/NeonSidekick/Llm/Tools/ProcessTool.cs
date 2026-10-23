@@ -192,7 +192,9 @@ public sealed class ProcessTool : AIFunction
                 }
 
                 session.Kill();
-                await session.WaitAsync(KillGrace, cancellationToken).ConfigureAwait(false);
+                // The post-kill drain rides no turn token (2026-10-22, the shell-review fixes: an ESC in the grace would throw and lose the
+                // kill line), as run_command's and execute_code's do.
+                await session.WaitAsync(KillGrace, CancellationToken.None).ConfigureAwait(false);
                 return ShellText.KilledLine(session);
             }
 
@@ -220,35 +222,59 @@ public sealed class ProcessTool : AIFunction
                     return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
                 }
 
-                // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a process's stdin (a shell, a REPL) is read as a script.
-                if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(PackageCommands.Strip(data), script: true, databases) is { } sqlite)
+                // The script files the stdin runs, read once for every police and only if one needs them, as a run_command line's are
+                // (2026-10-22, the shell-review fixes: the SQLite/server/admin police read only the stdin text, so `bash reach.sh` reached a
+                // family a run_command line would have been refused for).
+                string workdir = session.Launch.WorkingDirectory;
+                var scripts = new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(data, workdir, _files.Root));
+
+                // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a process's stdin (a shell, a REPL) is read as a
+                // script, and so are the script files it runs.
+                if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases)
                 {
-                    var refused = new CommandRequest(session.Kind, data, []);
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(refused, sqlite, null));
-                    _gate?.NoteRefused(refused);
-                    return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, null));
+                    string? token = SqlitePolice.Find(PackageCommands.Strip(data), script: true, databases);
+                    string? file = null;
+                    if (token is null)
+                    {
+                        foreach (var (name, text) in scripts.Value)
+                        {
+                            if (SqlitePolice.Find(text, script: true, databases) is { } inScript)
+                            {
+                                (token, file) = (inScript, name);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (token is not null)
+                    {
+                        var refused = new CommandRequest(session.Kind, data, []);
+                        DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(refused, token, file));
+                        _gate?.NoteRefused(refused);
+                        return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(token, file));
+                    }
                 }
 
-                // The server-database police (2026-10-05): a process's stdin that reaches a server family whose tools are on.
-                if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Find(PackageCommands.Strip(data), servers) is { } server)
+                // The server-database police (2026-10-05): a process's stdin, or a script file it runs, that reaches a server family whose tools are on.
+                if (effective.ShellPolice && _files.ServerDatabases?.Invoke() is { } servers && ServerDatabasePolice.Judge(data, scripts, servers) is { } server)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(refused, server.Family, server.Token, null));
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(refused, server.Family, server.Token, server.File));
                     _gate?.NoteRefused(refused);
-                    return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, null));
+                    return new ToolShownResult(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, server.File));
                 }
 
-                // The admin police (2026-10-15, the admin-tools plan): a process's stdin that changes a service, a task or the directory.
-                if (effective.ShellPolice && _files.AdminFamilies?.Invoke() is { } admin && AdminPolice.Find(data, admin) is { } changed)
+                // The admin police (2026-10-15, the admin-tools plan): a process's stdin, or a script file it runs, that changes a service, a task or the directory.
+                if (effective.ShellPolice && _files.AdminFamilies?.Invoke() is { } admin && AdminPolice.Judge(data, scripts, admin) is { } changed)
                 {
                     var refused = new CommandRequest(session.Kind, data, []);
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(refused, changed.Family, changed.Token, null));
+                    DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(refused, changed.Family, changed.Token, changed.File));
                     _gate?.NoteRefused(refused);
-                    return new ToolShownResult(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, null));
+                    return new ToolShownResult(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, changed.File));
                 }
 
                 // The scripts it runs, and the trusted files (2026-10-22, review L4, the fix plan's D8): read as a command line's are.
-                if (ShellPoliceChecks.ScriptChecks(new CommandRequest(session.Kind, data, []), data, session.Launch.WorkingDirectory, _files, effective) is { } scripted)
+                if (ShellPoliceChecks.ScriptChecks(new CommandRequest(session.Kind, data, []), data, workdir, _files, effective, scripts) is { } scripted)
                 {
                     _gate?.NoteRefused(new CommandRequest(session.Kind, data, []));
                     return scripted.Shown is { } shown ? new ToolShownResult(scripted.ModelText, shown) : scripted.ModelText;
