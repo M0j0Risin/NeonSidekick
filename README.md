@@ -5,17 +5,20 @@
 ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)
 
-Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer hardware. It runs best on a graphics card with 16 GB of VRAM or more (it's tuned for 16–32 GB), or on an Apple Silicon Mac. On a 32 GB card such as an RTX 5090, it runs larger models with room for long context.
+Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer hardware. It runs best on a graphics card with 16 GB of VRAM or more, or on an Apple Silicon Mac. On a 32 GB card such as an RTX 5090, it runs larger models with room for long context.
 
 Point it at LM Studio, Ollama or any OpenAI-compatible server on your PC or your network, or let it download a model and run it itself. When you want a frontier model, or don't have the hardware for a local one, it connects to the OpenAI and Anthropic APIs with your own key, or to Claude Code through your subscription.
 
 It's one app for research, IT and admin work, your smart home and creative projects. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
 
 **What makes it different**
-* **Fully local:** it can run entirely on your machine, the model and the voice included, and it sends no telemetry.
-* **More than a terminal:** pictures in the transcript, its own windows for photos, video and the web, and your phone can join the same live session.
-* **Advisors:** pair a local model with a frontier one. Your model does the work; the advisor can review its plans and check its steps, or give a second opinion when asked.
-* **No black box:** `/sys` shows the exact system prompt and every tool the model is sent, and the persona and operating rules are files you can edit.
+* **Built for local models:** it runs a tested model on its own llama.cpp, tuned for 16–32 GB cards, and recovers when a local model fumbles a tool call or runs short of context.
+* **Long jobs on a small window:** `/plan` is reviewed until it's clean, then the Ralph loop runs each step in a fresh conversation and checks it before moving on.
+* **Frontier help when you want it:** pair your local model with a frontier advisor that reviews its plans and checks its steps, so you pay for frontier tokens only where they count.
+* **Safe on real systems:** databases are read-only through layers of checks, Active Directory is read-only by design, and the shell police holds even under `--yolo`.
+* **Set up without editing files:** Connect a model gets you running, and wizards add each database, share or remote computer, test it before saving, and warn when the account could change data.
+* **More than a coding agent:** Active Directory, event logs, services, databases, Home Assistant and ComfyUI, with voice in and out and your phone in the same live session.
+* **Fully local, no black box:** no telemetry; `/sys` shows the exact prompt and every tool, and the persona and operating rules are files you can edit.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
@@ -48,7 +51,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 
 ### The app
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, the mouse, and sixty color themes or your own.
-* **Its own windows:** pictures and thumbnails (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`) and a YouTube player (`/youtube play`).
+* **Its own windows:** pictures and thumbnails (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`), a container's live log (`/docker logs`) and a YouTube player (`/youtube play`).
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with voices you can mix, both in-process or through a Kokoro server.
 * **Web UI:** the chat, the model's questions, the shopping list, a Home tab (rooms, lights, scenes and the PC's meters) and a YouTube player on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 * **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`).
@@ -64,7 +67,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Model sizes:** builds for 8 GB cards and up, best at 16–32 GB, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
 * **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one running at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) examples).
 * **Cloud models:** the Anthropic and OpenAI APIs with your own key, or Claude Code as the chat's server (`/claude` sends it one message); all off until you turn them on.
-* **Advisors:** other profiles, local or frontier, that review plans and Ralph steps, or give a second opinion when the model (or you, with `/advisor`) asks; they answer with the chat's read-only tools.
+* **Advisors:** any other profile, local or frontier, can be one; ask it yourself with `/advisor`. Advisors use only read-only tools.
 * **Benchmarks & meters:** `/test` benchmarks the model, and the performance bar shows CPU, RAM, GPU and network while it works.
 
 ### Conversations, memory & skills
