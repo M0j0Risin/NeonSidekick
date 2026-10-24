@@ -1169,6 +1169,8 @@ internal sealed partial class ChatScreen
         Action<string>? showInViewer = null,
         Func<bool>? closeThumbs = null,
         Action<ProcessSession, Action<ProcessSession>>? openProcessWindow = null,
+        Action<Docker.DockerLogSource>? openDockerLogWindow = null,
+        Func<bool>? closeDockerLogWindow = null,
         Viewer.IVideoPlayer? videoPlayer = null,
         Viewer.IBrowserWindow? browserWindow = null,
         Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? webUiHost = null,
@@ -1193,6 +1195,8 @@ internal sealed partial class ChatScreen
         // The Browser window (2026-10-13): a web tool's bot check shown to the user, and /browser; none in headless or off Windows.
         _browserWindow = browserWindow;
         _openProcessWindow = openProcessWindow;
+        _openDockerLogWindow = openDockerLogWindow;
+        _closeDockerLogWindow = closeDockerLogWindow;
         _openTerminal = openTerminal;
         _openLogWindow = openLogWindow;
         _openLogWindowBehind = openLogWindowBehind;
@@ -11435,6 +11439,8 @@ internal sealed partial class ChatScreen
             _processes.Dispose();
             _comfy.Dispose();
             _ha.Dispose();
+            // The Docker log window before its session goes (2026-10-23): its feed's loop never outlives the door it reads through.
+            _closeDockerLogWindow?.Invoke();
             _docker.Dispose();
             _advisorHost.Dispose();
             StopLive();

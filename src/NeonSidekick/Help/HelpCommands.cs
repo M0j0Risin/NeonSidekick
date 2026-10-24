@@ -136,10 +136,11 @@ public static class HelpCommands
         ]),
         new("/docker",
         [
-            new("/docker", "Show the Docker engine's containers on a pane, running first, with their state, health and ports. Enter on one offers what fits its state: stop, restart or pause (each asks first), start or unpause, its last 50 log lines, open a published port in the browser, copy the id. `l` narrows the list to the LLM servers (by *Docker server match words*, plus those ticked in *Docker server containers*). Type to filter; Shift+letter starts a filter with `r` or `l`. Without the pane, it lists them."),
+            new("/docker", "Show the Docker engine's containers on a pane, running first, with their state, health and ports. Enter on one offers what fits its state: stop, restart or pause (each asks first), start or unpause, its log in the Docker log window, open a published port in the browser, copy the id. `l` narrows the list to the LLM servers (by *Docker server match words*, plus those ticked in *Docker server containers*). Type to filter; Shift+letter starts a filter with `r` or `l`. Without the pane, it lists them."),
             new("/docker ps [<filter>]", "List the containers, or those whose name or image holds the filter."),
             new("/docker status", "Show Docker Desktop's and the engine's versions, with the container counts."),
-            new("/docker logs <container> [<lines>]", "Show a container's last lines in a pane: 50 unless you give a number, up to 2000."),
+            new("/docker logs <container> [<lines>]", "Follow a container's log in the Docker log window: its last 200 lines unless you give a number (up to 2000), then each new one. It waits through a stop or a restart and goes on."),
+            new("/docker logs <container> [<lines>] --pane", "Show a container's last lines in a pane instead: 50 unless you give a number, up to 2000."),
             new("/docker stats [<container>]", "Show the CPU, memory, network and disk use of one running container or all of them."),
             new("/docker start|stop|restart|pause|unpause <container>", "Act on one container, named by its name, a unique part of its name, or its id (4 or more leading characters). As your own command, it skips *Docker writes*, asks nothing, and every change is logged. Works while a reply runs."),
         ]),

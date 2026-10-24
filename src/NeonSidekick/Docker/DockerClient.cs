@@ -239,11 +239,7 @@ public sealed class DockerClient : IDisposable
     public async Task<DockerLogs> LogsAsync(string container, int? tail, long? since, bool timestamps, DockerLogStreams streams, TimeSpan timeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(container);
-        string path = "/containers/" + Uri.EscapeDataString(container) + "/logs?stdout=" + (streams == DockerLogStreams.Stderr ? "0" : "1")
-            + "&stderr=" + (streams == DockerLogStreams.Stdout ? "0" : "1")
-            + "&tail=" + (tail is { } n ? n.ToString(CultureInfo.InvariantCulture) : "all")
-            + (since is { } s ? "&since=" + s.ToString(CultureInfo.InvariantCulture) : "")
-            + (timestamps ? "&timestamps=1" : "");
+        string path = LogsPath(container, tail, since?.ToString(CultureInfo.InvariantCulture), timestamps, streams, follow: false);
         try
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -278,6 +274,177 @@ public sealed class DockerClient : IDisposable
         {
             return new DockerLogs([], false, Explain(ex));
         }
+    }
+
+    /// <summary>
+    /// The logs path, one spelling for the read and the follow (2026-10-23): the streams, the tail (<c>all</c> for null), an
+    /// optional <c>since</c> (unix seconds, or <c>seconds.nanoseconds</c>), the timestamps and the follow flag. Pure.
+    /// </summary>
+    public static string LogsPath(string container, int? tail, string? since, bool timestamps, DockerLogStreams streams, bool follow)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        return "/containers/" + Uri.EscapeDataString(container) + "/logs?" + (follow ? "follow=1&" : "") + "stdout=" + (streams == DockerLogStreams.Stderr ? "0" : "1")
+            + "&stderr=" + (streams == DockerLogStreams.Stdout ? "0" : "1")
+            + "&tail=" + (tail is { } n ? n.ToString(CultureInfo.InvariantCulture) : "all")
+            + (since is { } s ? "&since=" + s : "")
+            + (timestamps ? "&timestamps=1" : "");
+    }
+
+    /// <summary>
+    /// <c>GET /containers/{id}/logs?follow=1&amp;timestamps=1</c> (2026-10-23, the Docker log window): the last
+    /// <paramref name="tail"/> lines (all for null) after <paramref name="since"/>, then every new one as it comes, each handed
+    /// to <paramref name="line"/> on the reading thread. The prefix and the response's headers come under
+    /// <paramref name="connectTimeout"/> (the engine sends its 200 before any line, so a quiet container never times out); the
+    /// body is then read with no budget until the engine ends it (the container stopped) or the caller cancels. Throws only on
+    /// the caller's own cancellation; a 404 is <see cref="DockerFollowOutcome.NotFound"/>, another refusal
+    /// <see cref="DockerFollowOutcome.Refused"/> with the engine's sentence, a transport failure (a disposed client among them:
+    /// a changed pipe setting disposes it under a live stream) <see cref="DockerFollowOutcome.Failed"/>.
+    /// </summary>
+    public async Task<DockerFollowEnd> FollowLogsAsync(string container, int? tail, DockerStamp? since, Action<DockerLogLine> line, TimeSpan connectTimeout, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        ArgumentNullException.ThrowIfNull(line);
+        string path = LogsPath(container, tail, since?.Since, timestamps: true, DockerLogStreams.Both, follow: true);
+        var lines = new List<DockerLogLine>();
+        try
+        {
+            using var response = await OpenStreamAsync(path, connectTimeout, cancellationToken).ConfigureAwait(false);
+            if (response.Refusal is { } refusal)
+            {
+                return refusal;
+            }
+
+            var decoder = new DockerLogDecoder(response.Message!.Content.Headers.ContentType?.MediaType);
+            await using var stream = await response.Message.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            byte[] chunk = new byte[16 * 1024];
+            while (true)
+            {
+                int read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    decoder.Flush(lines);
+                    Hand(lines, line);
+                    return DockerFollowEnd.Ended;
+                }
+
+                decoder.Feed(chunk.AsSpan(0, read), lines);
+                Hand(lines, line);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return new DockerFollowEnd(DockerFollowOutcome.Failed, DockerText.NoAnswer(LlmTimeouts.Format(connectTimeout)));
+        }
+        catch (Exception ex) when (IsTransport(ex))
+        {
+            return new DockerFollowEnd(DockerFollowOutcome.Failed, Explain(ex));
+        }
+    }
+
+    /// <summary>
+    /// <c>GET /events?filters=…</c> (2026-10-23, the Docker log window's wait): each newline-ended event handed to
+    /// <paramref name="line"/> as it comes, until it answers false (<see cref="DockerFollowOutcome.Ended"/>), the engine closes
+    /// the stream (also <c>Ended</c>) or the caller cancels (thrown). The headers under <paramref name="connectTimeout"/>, as
+    /// <see cref="FollowLogsAsync"/>'s; <paramref name="filtersJson"/> is the filter object, escaped here.
+    /// </summary>
+    /// <param name="opened">Told once the engine's 200 is in, so the caller knows an event from now on reaches it (the Docker log window opens the stream before it inspects).</param>
+    public async Task<DockerFollowEnd> WatchEventsAsync(string filtersJson, Func<string, bool> line, TimeSpan connectTimeout, CancellationToken cancellationToken, Action? opened = null)
+    {
+        ArgumentNullException.ThrowIfNull(filtersJson);
+        ArgumentNullException.ThrowIfNull(line);
+        string path = "/events?filters=" + Uri.EscapeDataString(filtersJson);
+        try
+        {
+            using var response = await OpenStreamAsync(path, connectTimeout, cancellationToken).ConfigureAwait(false);
+            if (response.Refusal is { } refusal)
+            {
+                return refusal.Outcome == DockerFollowOutcome.NotFound ? new DockerFollowEnd(DockerFollowOutcome.Refused, DockerText.HttpError(404, "/events", "")) : refusal;
+            }
+
+            opened?.Invoke();
+
+            await using var stream = await response.Message!.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } text)
+            {
+                if (text.Length > 0 && !line(text))
+                {
+                    return DockerFollowEnd.Ended;
+                }
+            }
+
+            return DockerFollowEnd.Ended;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return new DockerFollowEnd(DockerFollowOutcome.Failed, DockerText.NoAnswer(LlmTimeouts.Format(connectTimeout)));
+        }
+        catch (Exception ex) when (IsTransport(ex))
+        {
+            return new DockerFollowEnd(DockerFollowOutcome.Failed, Explain(ex));
+        }
+    }
+
+    /// <summary>A streamed answer: the open response, or the refusal that stands for it.</summary>
+    private sealed class StreamAnswer(HttpResponseMessage? message, DockerFollowEnd? refusal) : IDisposable
+    {
+        public HttpResponseMessage? Message { get; } = message;
+
+        public DockerFollowEnd? Refusal { get; } = refusal;
+
+        public void Dispose() => Message?.Dispose();
+    }
+
+    /// <summary>
+    /// The prefix agreed and a versioned <c>GET</c> of <paramref name="path"/> sent, its headers read under
+    /// <paramref name="connectTimeout"/> only: the body that follows is the caller's, read under the caller's token alone.
+    /// </summary>
+    private async Task<StreamAnswer> OpenStreamAsync(string path, TimeSpan connectTimeout, CancellationToken cancellationToken)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(connectTimeout);
+        if (await PrefixAsync(connectTimeout, budget.Token).ConfigureAwait(false) is (_, { } refused))
+        {
+            return new StreamAnswer(null, new DockerFollowEnd(DockerFollowOutcome.Failed, refused));
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(Host + Prefix + path));
+        // With ResponseHeadersRead the send's token is watched only until the headers are in; the body's reads carry the
+        // caller's token alone, so the budget is a header wait and never cuts a quiet follow short.
+        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
+        if (response.IsSuccessStatusCode)
+        {
+            return new StreamAnswer(response, null);
+        }
+
+        using (response)
+        {
+            int status = (int)response.StatusCode;
+            string body = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
+            DiagnosticLog.Debug(Category, $"GET {PathOnly(path)} answered {status.ToString(CultureInfo.InvariantCulture)}.");
+            return new StreamAnswer(null, status == (int)HttpStatusCode.NotFound
+                ? DockerFollowEnd.NotFound
+                : new DockerFollowEnd(DockerFollowOutcome.Refused, Refusal(status, PathOnly(path), body)));
+        }
+    }
+
+    /// <summary>The decoded lines handed over in order, then let go.</summary>
+    private static void Hand(List<DockerLogLine> lines, Action<DockerLogLine> line)
+    {
+        foreach (var each in lines)
+        {
+            line(each);
+        }
+
+        lines.Clear();
     }
 
     /// <summary>
@@ -382,7 +549,9 @@ public sealed class DockerClient : IDisposable
     /// <summary>A non-2xx answer as a sentence: the engine's own message, a 404 named as such.</summary>
     private static string Refusal(int status, string path, string body) => DockerText.HttpError(status, path, DockerJson.ErrorMessage(body));
 
-    private static bool IsTransport(Exception ex) => ex is HttpRequestException or IOException or TimeoutException or UnauthorizedAccessException or System.Net.Sockets.SocketException;
+    // ObjectDisposedException since 2026-10-23: a changed pipe setting disposes the client under a live log follow, and that
+    // must read as a lost connection, not a crash.
+    private static bool IsTransport(Exception ex) => ex is HttpRequestException or IOException or TimeoutException or UnauthorizedAccessException or System.Net.Sockets.SocketException or ObjectDisposedException;
 
     /// <summary>
     /// A transport failure as a sentence: no pipe (a connect that timed out, a file not found) is Docker Desktop not

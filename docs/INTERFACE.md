@@ -82,7 +82,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 * **Under the list:** the row's description and default. A number after a tab's name (`Client³`) counts its settings changed from the default.
 * **Dim tabs** (`/tools`): a menu whose switch is off is dim and italic, and so is a group whose menus are all off.
 * **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first Esc clears it.
-* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back.
+* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs --pane`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back.
 * **Lettered buttons** (`/webui`, an `/ad` card, `/help`'s key check…): a letter presses its button, and Shift+letter starts the filter or the find.
 * **Pasting** into a filter or a find (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Asking first:** removing something asks first, with No highlighted; `y` or `n` answers.
@@ -256,7 +256,7 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 ## Commands typed during a reply
 
 * **Open their pane over the reply:** `/help`, `/settings`, `/tools`, `/comfy`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/ad`, `/youtube`, `/shopping`, `/prompts`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui`
-* **Run at once:** `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/view <path>`, `/view <path> --thumbs`
+* **Run at once:** `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/docker logs <container>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/view <path>`, `/view <path> --thumbs`
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/exit`
 * **Everything else:** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 
@@ -471,6 +471,15 @@ A right-click in the viewer or the thumbnail browser.
 * `/process <id>` (or Enter on `/process`'s list, ⚡) shows a background process's last 5,000 lines live, with the log window's keys, stderr in the warning color.
 * The title shows the id, command and state (`running`, `exited 0`, `stopped by you`).
 * **Ctrl+K** twice within 3 seconds stops it and everything it started, and the model hears of it.
+
+### The Docker log window
+
+* `/docker logs <container>` (or **logs** on a container in `/docker`'s pane, 🐳) follows a container's log live, with the log window's keys and stderr in the warning color.
+* It starts with the last 200 lines, or the number you give. Another container switches the window in place.
+* When the container stops, restarts or is made again under its name, a dim line marks it and the window follows on, with nothing shown twice.
+* The title shows the container and whether it is following, waiting for it to start, waiting for Docker, or unable to read the log.
+* What it shows stays in the window: none of it goes to the model, the session or the Web UI.
+* A very long line from a container started with a terminal (`-t`) may show a time in the middle.
 
 ### The camera window
 

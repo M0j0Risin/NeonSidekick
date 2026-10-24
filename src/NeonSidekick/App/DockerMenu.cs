@@ -73,6 +73,13 @@ internal sealed class DockerMenu
     private readonly bool _closeWhenDone;
     private readonly Func<string, bool?>? _chord;
 
+    /// <summary>
+    /// The Docker log window on a container (2026-10-23, the user's ask: the logs button follows the log there, as
+    /// <c>/docker logs</c> does): true when it opened (the notice written). Null where there is no window: the button reads the
+    /// last lines into the transcript as before.
+    /// </summary>
+    private readonly Func<DockerContainer, bool>? _openLogWindow;
+
     /// <param name="docker">The door: the list is read when the pane opens and again after every change.</param>
     /// <param name="transcript">Where the lines outside the pane go.</param>
     /// <param name="pane">The menu host in the bottom pane.</param>
@@ -87,7 +94,8 @@ internal sealed class DockerMenu
     /// lines are run here into the transcript and the host's pane is left up.
     /// </param>
     public DockerMenu(DockerSession docker, INoticeSink transcript, MenuPane pane, Action<string> openUrl, Func<string, bool> copy,
-        Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> llmRule, bool closeWhenDone = true, Func<string, bool?>? chord = null)
+        Func<(IReadOnlyList<string> Words, IReadOnlyList<string> Chosen)> llmRule, bool closeWhenDone = true, Func<string, bool?>? chord = null,
+        Func<DockerContainer, bool>? openLogWindow = null)
     {
         _docker = docker ?? throw new ArgumentNullException(nameof(docker));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -97,6 +105,7 @@ internal sealed class DockerMenu
         _llmRule = llmRule ?? throw new ArgumentNullException(nameof(llmRule));
         _closeWhenDone = closeWhenDone;
         _chord = chord;
+        _openLogWindow = openLogWindow;
     }
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
@@ -213,13 +222,17 @@ internal sealed class DockerMenu
     }
 
     /// <summary>A container page's row: the word padded, what it does dim after it.</summary>
-    public static string RowPageRow(string word) => Markup.Escape(word.PadRight(12)) + Theme.DimMarkup(word switch
+    public static string RowPageRow(string word) => RowPageRow(word, window: false);
+
+    /// <summary>A container page's row; with <paramref name="window"/> (2026-10-23) the logs row says it opens the Docker log window.</summary>
+    public static string RowPageRow(string word, bool window) => Markup.Escape(word.PadRight(12)) + Theme.DimMarkup(word switch
     {
         "stop" => "stop it (asks first)",
         "restart" => "stop and start it again (asks first)",
         "pause" => "freeze its processes (asks first)",
         "unpause" => "let its processes run again",
         "start" => "start it",
+        LogsWord when window => Viewer.DockerLogWindowText.MenuNote,
         LogsWord => "its last " + DockerCommand.DefaultLogLines.ToString(CultureInfo.InvariantCulture) + " log lines, into the transcript",
         CopyIdWord => "its full id, to the clipboard",
         _ => word.StartsWith(OpenWord + " ", StringComparison.Ordinal) ? "in the browser" : "",
@@ -372,7 +385,7 @@ internal sealed class DockerMenu
     private async Task<RowOutcome> PickRowAsync(DockerContainer container, CancellationToken cancellationToken)
     {
         var words = RowWords(container);
-        var page = new MenuPage(RowTitle(container), words.Select(RowPageRow).ToList(), RowKeys);
+        var page = new MenuPage(RowTitle(container), words.Select(w => RowPageRow(w, _openLogWindow is not null)).ToList(), RowKeys);
         var picked = await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
         if (picked is not { Row: var row })
         {
@@ -382,6 +395,17 @@ internal sealed class DockerMenu
         string word = words[Math.Clamp(row, 0, words.Count - 1)];
         switch (word)
         {
+            case LogsWord when _openLogWindow is { } openLogWindow:
+                // The Docker log window (2026-10-23): straight there, never the chord; the bare /docker's pane closes as before,
+                // the Docker tools page's stack stays.
+                if (_closeWhenDone)
+                {
+                    _pane.Close();
+                }
+
+                openLogWindow(container);
+                return _closeWhenDone ? RowOutcome.Close : RowOutcome.Stay;
+
             case LogsWord:
             {
                 string count = DockerCommand.DefaultLogLines.ToString(CultureInfo.InvariantCulture);

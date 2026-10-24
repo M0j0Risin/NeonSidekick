@@ -70,16 +70,23 @@ public sealed record DockerBinding(int Private, string? HostIp, int HostPort);
 /// <summary>
 /// What a Docker server's switch needs of <c>GET /containers/{id}/json</c> (2026-10-02): the state word and the exit code, the
 /// ports published while it runs (<c>NetworkSettings.Ports</c>) and the ones it asks for (<c>HostConfig.PortBindings</c>, there
-/// while it is stopped too), TCP only, and the network mode.
+/// while it is stopped too), TCP only, and the network mode. Since 2026-10-23 (the Docker log window) the engine's
+/// <c>State.StartedAt</c> as it wrote it, compared as text: a follow's end with the same value is no restart.
 /// </summary>
-public sealed record DockerInspected(string Id, string Name, string Status, int ExitCode, IReadOnlyList<DockerBinding> Published, IReadOnlyList<DockerBinding> Bound, string? NetworkMode)
+public sealed record DockerInspected(string Id, string Name, string Status, int ExitCode, IReadOnlyList<DockerBinding> Published, IReadOnlyList<DockerBinding> Bound, string? NetworkMode, string? StartedAt = null)
 {
+    /// <summary>Whether a log follow has something to read: running or paused (2026-10-23, the Docker log window).</summary>
+    public bool Running => Status is "running" or "paused";
+
     /// <summary>Whether it holds what a running container holds: running, paused or restarting (DockerLlmPicker's rule — each still has its memory).</summary>
     public bool Active => Status is "running" or "paused" or "restarting";
 
     /// <summary>Whether it has exited or died: a server that is never coming up.</summary>
     public bool Gone => Status is "exited" or "dead";
 }
+
+/// <summary>One container event of <c>GET /events</c> (2026-10-23): the action, the container's id and its name (blank when unsaid).</summary>
+public sealed record DockerEvent(string Action, string Id, string Name);
 
 /// <summary>An image as <c>GET /images/json</c> lists it.</summary>
 public sealed record DockerImage(string Id, IReadOnlyList<string> Tags, long Created, long Size)
@@ -203,7 +210,34 @@ public static class DockerJson
             Int(state, "ExitCode") ?? 0,
             Bindings(network.ValueKind == JsonValueKind.Object && network.TryGetProperty("Ports", out var published) ? published : default),
             Bindings(host.ValueKind == JsonValueKind.Object && host.TryGetProperty("PortBindings", out var bound) ? bound : default),
-            Str(host, "NetworkMode"));
+            Str(host, "NetworkMode"),
+            Str(state, "StartedAt"));
+    }
+
+    /// <summary>
+    /// One line of <c>GET /events</c> (2026-10-23, the Docker log window): the action (<c>start</c>, <c>destroy</c>…), the
+    /// container's id and its name; the legacy <c>status</c>/<c>id</c> fields when the newer ones are missing. Null for a line
+    /// that is not an event. Pure.
+    /// </summary>
+    public static DockerEvent? Event(string line)
+    {
+        using var doc = TryParse(line);
+        if (doc is null || doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var r = doc.RootElement;
+        var actor = r.TryGetProperty("Actor", out var a) ? a : default;
+        var attributes = actor.ValueKind == JsonValueKind.Object && actor.TryGetProperty("Attributes", out var at) ? at : default;
+        string? action = Str(r, "Action") ?? Str(r, "status");
+        string? id = Str(actor, "ID") ?? Str(r, "id");
+        if (action is null || id is null)
+        {
+            return null;
+        }
+
+        return new DockerEvent(action, id, Str(attributes, "name") ?? "");
     }
 
     /// <summary>A port map (<c>{"8000/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8000"}]}</c>) as its TCP bindings; a blank or unparsable host port is skipped.</summary>

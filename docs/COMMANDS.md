@@ -210,7 +210,8 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 |---|---|
 | `/docker` | The containers in a pane, to stop, restart or pause (each asks), start, read logs and more. On a Mac: Docker Desktop, OrbStack, Colima or Rancher Desktop. See [Docker](TOOLS.md#docker). |
 | `/docker ps [<filter>]`, `/docker status` | Lists the containers (or those whose name or image holds the filter), or the versions and container counts. |
-| `/docker logs <container> [<lines>]` | A container's last lines (50, up to 2000). |
+| `/docker logs <container> [<lines>]` | Follows a container's log in the [Docker log window](INTERFACE.md#the-docker-log-window): the last 200 lines (up to 2000), then each new one. |
+| `/docker logs <container> [<lines>] --pane` | The last lines in a pane instead (50, up to 2000). From the Web UI, the lines as a card. |
 | `/docker stats [<container>]` | CPU, memory, network and disk use of one or every running container. |
 | `/docker start\|stop\|restart\|pause\|unpause <container>` | Acts on one container without asking; *Docker writes* doesn't apply, and every change is logged. |
 | `/ha` | Home Assistant at a glance: lights on per room, the TV, temperatures, motion, low batteries, to-do lists. See [Home Assistant](TOOLS.md#home-assistant). |

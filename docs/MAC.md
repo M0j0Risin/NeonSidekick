@@ -34,7 +34,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Database tools: SQL Server, Oracle, MySQL, PostgreSQL, SQLite | Works | SQL Server's Windows sign-in is Kerberos only ([below](#sql-server-sign-in)); no named-pipe (`np:`) servers. |
 | Embedded model | Works (Metal) | The NVFP4 models, made for NVIDIA cards, aren't offered. |
 | Pictures: pasted, dropped, `image_info`, `image_edit` | Works | Also reads HEIC/HEIF, TIFF and AVIF; writes no JPEG XL, and `image_edit` refuses `chroma`, `colors` and `dither` ([Editing pictures](TOOLS.md#editing-pictures)). |
-| Picture viewer, thumbnail browser, picture menu, log and process windows | Works | On the Mac's desktop, not over SSH. |
+| Picture viewer, thumbnail browser, picture menu, log, process and Docker log windows | Works | On the Mac's desktop, not over SSH. |
 | Voice: Kokoro, Whisper, push-to-talk, wake word, interrupt | Works | Whisper runs on the GPU. |
 | Camera | Works (macOS 14+) | The built-in camera, a USB webcam, or an iPhone as Continuity Camera. |
 | Screen capture | Works (macOS 14+) | A minimized window, or one on another Space, isn't listed until brought up. Without Screen Recording, `screen_list` lists only the monitors. |

@@ -88,11 +88,21 @@ public static partial class DockerLogStream
         return SplitLines(text);
     }
 
+    /// <summary>
+    /// <paramref name="text"/> without its colour codes (CSI and OSC sequences): one line's cleaning, shared by
+    /// <see cref="SplitLines"/> and the Docker log window's decoder (2026-10-23, <see cref="DockerLogDecoder"/>). Pure.
+    /// </summary>
+    public static string Clean(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.Contains('\x1B', StringComparison.Ordinal) ? Ansi().Replace(text, "") : text;
+    }
+
     /// <summary><paramref name="text"/> cut into lines, colour codes and carriage returns gone, a final empty line dropped.</summary>
     public static IReadOnlyList<string> SplitLines(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        string clean = Ansi().Replace(text, "").Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+        string clean = Clean(text).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
         var lines = clean.Split('\n').ToList();
         if (lines.Count > 0 && lines[^1].Length == 0)
         {

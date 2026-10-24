@@ -22,7 +22,8 @@ public sealed record DockerCommandResult(IReadOnlyList<string> Lines, bool Faile
 /// <list type="bullet">
 /// <item><c>/docker</c>, <c>/docker ps</c> — the containers;</item>
 /// <item><c>/docker status</c> — Docker Desktop, the engine, the counts;</item>
-/// <item><c>/docker logs &lt;container&gt; [lines]</c> — the last lines (<see cref="DefaultLogLines"/>);</item>
+/// <item><c>/docker logs &lt;container&gt; [lines]</c> — the last lines (<see cref="DefaultLogLines"/>); since 2026-10-23 the screen
+/// tails them in the Docker log window instead (<see cref="LogsTargetAsync"/>) unless <c>--pane</c> asks for the pane;</item>
 /// <item><c>/docker stats [container]</c>;</item>
 /// <item><c>/docker start|stop|restart|pause|unpause &lt;container&gt;</c>.</item>
 /// </list>
@@ -64,7 +65,8 @@ public static class DockerCommand
 
             case "logs":
             {
-                var (target, count) = SplitCount(rest);
+                // The lines as a list: the pane at the PC (--pane, or no window there), the Web UI's card, headless (2026-10-23).
+                var (target, count, _) = ParseLogs(rest);
                 if (target.Length == 0 || count is < 1 or > DockerLogsTool.MaxTail)
                 {
                     return DockerCommandResult.Error(DockerText.Usage);
@@ -156,6 +158,42 @@ public static class DockerCommand
         return new DockerCommandResult(lines, false);
     }
 
+    /// <summary>
+    /// <c>/docker logs</c>' words (2026-10-23, the Docker log window): the container, the count and whether <c>--pane</c> asked for
+    /// today's pane, the word dropped wherever it stands (<c>x --pane 30</c>, <c>x 30 --pane</c>). Pure.
+    /// </summary>
+    public static (string Target, int? Count, bool Pane) ParseLogs(string rest)
+    {
+        ArgumentNullException.ThrowIfNull(rest);
+        var words = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        bool pane = words.RemoveAll(w => string.Equals(w, Viewer.DockerLogWindowText.PaneWord, StringComparison.OrdinalIgnoreCase)) > 0;
+        var (target, count) = SplitCount(string.Join(' ', words));
+        return (target, count, pane);
+    }
+
+    /// <summary>
+    /// The container and count for the Docker log window (2026-10-23): the same checks as the pane's, the count defaulting to
+    /// <see cref="Viewer.DockerLogWindowText.DefaultWindowLines"/>; the refusal's sentence otherwise.
+    /// </summary>
+    public static async Task<(DockerContainer? Container, int Tail, string? Error)> LogsTargetAsync(DockerSession docker, string rest, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(docker);
+        ArgumentNullException.ThrowIfNull(rest);
+        if (DockerSocket.Here == DockerTransport.None)
+        {
+            return (null, 0, DockerText.NotHere);
+        }
+
+        var (target, count, _) = ParseLogs(rest);
+        if (target.Length == 0 || count is < 1 or > DockerLogsTool.MaxTail)
+        {
+            return (null, 0, DockerText.Usage);
+        }
+
+        var (container, error) = await ResolveAsync(docker, target, cancellationToken).ConfigureAwait(false);
+        return container is null ? (null, 0, error) : (container, count ?? Viewer.DockerLogWindowText.DefaultWindowLines, null);
+    }
+
     /// <summary>The one container a name means, over a fresh list.</summary>
     private static async Task<(DockerContainer? Container, string? Error)> ResolveAsync(DockerSession docker, string target, CancellationToken cancellationToken)
     {
@@ -198,7 +236,19 @@ public static class DockerCommand
         }
 
         string verb = argText[..space].ToLowerInvariant();
-        if (last is null || argText[(space + 1)..].Contains(' ', StringComparison.Ordinal))
+        string after = argText[(space + 1)..];
+        if (verb == "logs" && after.IndexOf(' ', StringComparison.Ordinal) is var gap and > 0)
+        {
+            // After the container (and a count): --pane (2026-10-23), unless it is there already.
+            string tail = after[(gap + 1)..];
+            string lastWord = tail[(tail.LastIndexOf(' ') + 1)..];
+            string before = argText[..(argText.Length - lastWord.Length)];
+            return tail.Split(' ').Any(w => string.Equals(w, Viewer.DockerLogWindowText.PaneWord, StringComparison.OrdinalIgnoreCase))
+                ? []
+                : MentionCompleter.Matches([new CompletionItem(before + Viewer.DockerLogWindowText.PaneWord, DockerText.PaneNote)], argText);
+        }
+
+        if (last is null || after.Contains(' ', StringComparison.Ordinal))
         {
             return [];
         }

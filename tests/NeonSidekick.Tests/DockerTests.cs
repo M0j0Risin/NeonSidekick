@@ -19,7 +19,7 @@ namespace NeonSidekick.Tests;
 /// order, the words; the client and the session over a stub engine; the ten tools with the write gate; <c>/docker</c>'s
 /// engine and argument list; the turn's offer and rules; and one real round trip over a named pipe.
 /// </summary>
-public sealed class DockerTests : IDisposable
+public sealed partial class DockerTests : IDisposable
 {
     private const string Host = DockerClient.Host;
     private const string MysqlId = "2dc6d221ea8a008bfa4558be3d820e5e015273f0c3158005caefeaaca7f11177";

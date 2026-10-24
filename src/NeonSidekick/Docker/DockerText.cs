@@ -459,14 +459,17 @@ public static class DockerText
     public static readonly IReadOnlyList<string> ActionVerbs = ["start", "stop", "restart", "pause", "unpause"];
 
     /// <summary>What a line <c>/docker</c> cannot read gets. Pinned.</summary>
-    public const string Usage = "Usage: /docker [ps | status | logs <container> [lines] | stats [container] | start|stop|restart|pause|unpause <container>]";
+    public const string Usage = "Usage: /docker [ps | status | logs <container> [lines] [--pane] | stats [container] | start|stop|restart|pause|unpause <container>]";
+
+    /// <summary>The note beside <c>--pane</c> on <c>/docker logs</c>' argument list (2026-10-23).</summary>
+    public const string PaneNote = "the last lines in a pane, not the Docker log window";
 
     /// <summary>A verb's note in <c>/docker</c>'s list.</summary>
     public static string VerbNote(string verb) => verb switch
     {
         "ps" => "list the containers",
         "status" => "Docker Desktop, the engine and the counts",
-        "logs" => "a container's last log lines",
+        "logs" => "follow a container's log in the Docker log window",
         "stats" => "CPU, memory, network and disk of the running containers",
         "start" => "start a stopped container",
         "stop" => "stop a running container",

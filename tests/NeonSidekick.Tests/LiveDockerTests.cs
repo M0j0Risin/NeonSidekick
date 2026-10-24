@@ -106,6 +106,27 @@ public sealed class LiveDockerTests : IDisposable
         Assert.True(log.Split('\n').Length <= 6, log);
     }
 
+    /// <summary>
+    /// The Docker log window's follow against the real engine (2026-10-23): at most the tail, each line stamped, and a cancel two
+    /// seconds in that lets go of the real pipe (or a Mac's socket) within a second, which no stub can show.
+    /// </summary>
+    [LiveDockerFact]
+    public async Task FollowLogs_StreamsAndCancelsOverThePipe()
+    {
+        var (all, error) = await _docker.ContainersAsync(CancellationToken.None);
+        Assert.Null(error);
+        var container = all!.Single(c => c.Name == LiveDocker.Container);
+        var lines = new List<DockerLogLine>();
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _docker.Client().FollowLogsAsync(container.Id, 5, null, l => { lock (lines) { lines.Add(l); } }, DockerSession.ReadTimeout, cancel.Token));
+
+        Assert.True(started.Elapsed < TimeSpan.FromSeconds(3), $"the cancel took {started.Elapsed}");
+        Assert.True(lines.Count <= 5, lines.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.All(lines, l => Assert.NotNull(l.Stamp));
+    }
+
     [LiveDockerFact]
     public async Task TheStats_HaveAMemoryLimit()
     {

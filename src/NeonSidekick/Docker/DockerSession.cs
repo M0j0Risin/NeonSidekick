@@ -40,6 +40,7 @@ public sealed class DockerSession : IDisposable
     private DockerClient? _client;
     private IReadOnlyList<DockerContainer>? _last;
     private DateTimeOffset _lastTaken;
+    private bool _disposed;
 
     /// <param name="effective">The settings, read at every call.</param>
     /// <param name="clientFactory">
@@ -84,15 +85,47 @@ public sealed class DockerSession : IDisposable
         string setting = _effective().DockerEnginePipe;
         lock (_gate)
         {
-            if (_client is null || !string.Equals(_client.Pipe, DockerClient.AddressOf(setting, _client.Transport), StringComparison.OrdinalIgnoreCase))
-            {
-                _client?.Dispose();
-                _client = _clientFactory(setting);
-                _last = null;
-            }
-
-            return _client;
+            return ClientLocked(setting);
         }
+    }
+
+    /// <summary>
+    /// <see cref="Client"/>, or false once the session is disposed (2026-10-23, the Docker log window: its retry loop must never
+    /// make a client after the screen's teardown). Under the same lock, so there is no check-then-use race; <see cref="Client"/>
+    /// itself is unchanged for every other caller.
+    /// </summary>
+    public bool TryClient([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out DockerClient? client)
+    {
+        string setting = _effective().DockerEnginePipe;
+        lock (_gate)
+        {
+            client = _disposed ? null : ClientLocked(setting);
+            return client is not null;
+        }
+    }
+
+    /// <summary>Whether <see cref="Dispose"/> has run.</summary>
+    public bool IsDisposed
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _disposed;
+            }
+        }
+    }
+
+    private DockerClient ClientLocked(string setting)
+    {
+        if (_client is null || !string.Equals(_client.Pipe, DockerClient.AddressOf(setting, _client.Transport), StringComparison.OrdinalIgnoreCase))
+        {
+            _client?.Dispose();
+            _client = _clientFactory(setting);
+            _last = null;
+        }
+
+        return _client;
     }
 
     /// <summary>The last container list read, however old; null before the first. For completion, which never waits on the engine.</summary>
@@ -209,6 +242,7 @@ public sealed class DockerSession : IDisposable
     {
         lock (_gate)
         {
+            _disposed = true;
             _client?.Dispose();
             _client = null;
         }

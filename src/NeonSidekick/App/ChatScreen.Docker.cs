@@ -14,6 +14,16 @@ internal sealed partial class ChatScreen
     /// <summary>The Docker door the tools, <c>/docker</c> and its pane share: the client for the pipe in force, the last list.</summary>
     private readonly DockerSession _docker;
 
+    /// <summary>
+    /// The Docker log window on a container (2026-10-23, the user's ask: <c>/docker logs &lt;container&gt;</c> and the <c>/docker</c>
+    /// pane's logs button tail the log in a window; <c>Viewer.DockerLogWindow.Show</c>). Null = no window here: <c>/docker logs</c>
+    /// shows the pane as before.
+    /// </summary>
+    private readonly Action<DockerLogSource>? _openDockerLogWindow;
+
+    /// <summary>The Docker log window closed (the screen's teardown, before <see cref="_docker"/> goes); null = none here.</summary>
+    private readonly Func<bool>? _closeDockerLogWindow;
+
     /// <summary>The ten Docker tools, built once over <see cref="_docker"/>; offered while <see cref="DockerOffered"/> says so, the changes under <c>Docker writes</c> (<see cref="DockerToolsFor"/>).</summary>
     private readonly IReadOnlyList<AIFunction> _dockerTools;
 
@@ -124,9 +134,75 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        if (TakesDockerLogWindow(args))
+        {
+            var target = await _transcript.WithSpinnerAsync(DockerText.Working, () => DockerCommand.LogsTargetAsync(_docker, LogsRest(args), cancellationToken)).ConfigureAwait(false);
+            OpenDockerLogWindow(target, _transcript);
+            return;
+        }
+
         var confirm = WebConfirmHook;
         var result = await _transcript.WithSpinnerAsync(DockerText.Working, () => DockerCommand.RunAsync(_docker, args, cancellationToken, confirm)).ConfigureAwait(false);
         await ShowDockerResultAsync(result, args, _transcript, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Whether a <c>/docker</c> line goes to the Docker log window (2026-10-23, the user's ask): <c>logs</c> without <c>--pane</c>,
+    /// typed at the app's computer (a Web UI page keeps the list card), with a window here.
+    /// </summary>
+    private bool TakesDockerLogWindow(string args)
+    {
+        string text = args.Trim();
+        string verb = text.Split(' ', 2)[0];
+        return _openDockerLogWindow is not null && !FromWebNow
+            && string.Equals(verb, "logs", StringComparison.OrdinalIgnoreCase)
+            && !DockerCommand.ParseLogs(LogsRest(text)).Pane;
+    }
+
+    /// <summary>A <c>logs</c> line's words after the verb.</summary>
+    private static string LogsRest(string args)
+    {
+        string text = args.Trim();
+        int space = text.IndexOf(' ', StringComparison.Ordinal);
+        return space < 0 ? "" : text[(space + 1)..].Trim();
+    }
+
+    /// <summary>
+    /// <paramref name="target"/> (<see cref="DockerCommand.LogsTargetAsync"/>'s) in the Docker log window, how it went through
+    /// <paramref name="sink"/>: the refusal's sentence, the opened notice, or the window's failure. True when the window shows it.
+    /// <see cref="OpenProcessWindow"/>'s shape.
+    /// </summary>
+    private bool OpenDockerLogWindow((DockerContainer? Container, int Tail, string? Error) target, INoticeSink sink)
+    {
+        if (target.Container is not { } container)
+        {
+            sink.Error(target.Error ?? DockerText.Usage);
+            return false;
+        }
+
+        return OpenDockerLogWindow(container, target.Tail, sink);
+    }
+
+    /// <summary>The window on <paramref name="container"/> with <paramref name="tail"/> earlier lines (the typed line's, or the <c>/docker</c> pane's button).</summary>
+    private bool OpenDockerLogWindow(DockerContainer container, int tail, INoticeSink sink)
+    {
+        if (_openDockerLogWindow is null)
+        {
+            sink.Error(Viewer.DockerLogWindowText.UnavailableHere);
+            return false;
+        }
+
+        try
+        {
+            _openDockerLogWindow(new DockerLogSource(_docker, container.Id, container.Name, tail));
+            sink.Notice(Viewer.DockerLogWindowText.OpenedNotice(container.Name));
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException)
+        {
+            sink.Error(Viewer.DockerLogWindowText.WindowFailedError(ex.Message));
+            return false;
+        }
     }
 
     /// <summary>
@@ -137,7 +213,9 @@ internal sealed partial class ChatScreen
     private DockerMenu DockerMenuFor(bool closeWhenDone) =>
         new(_docker, _flow, _menuPane, _web.OpenUrl, _copy,
             () => (_effective().DockerServerMatchWords ?? [], _effective().DockerServerContainers ?? []),
-            closeWhenDone, closeWhenDone ? null : line => _pane.ChordsOff ? null : _pane.Chord(line));
+            closeWhenDone, closeWhenDone ? null : line => _pane.ChordsOff ? null : _pane.Chord(line),
+            // Its logs button opens the Docker log window (2026-10-23, the user's ask), where there is one.
+            _openDockerLogWindow is null ? null : container => OpenDockerLogWindow(container, Viewer.DockerLogWindowText.DefaultWindowLines, _transcript));
 
     /// <summary>
     /// <c>/docker</c> under a reply (2026-10-02, <c>/ha</c>'s way, <see cref="MidTurnPolicy(SlashCommand, bool)"/>): on the watcher, no
@@ -148,6 +226,13 @@ internal sealed partial class ChatScreen
         DockerCommandResult result;
         try
         {
+            if (TakesDockerLogWindow(args))
+            {
+                // The window on the watcher too (2026-10-23): its own thread, so the reply streams on.
+                OpenDockerLogWindow(await DockerCommand.LogsTargetAsync(_docker, LogsRest(args), cancellationToken).ConfigureAwait(false), _flow);
+                return;
+            }
+
             result = await DockerCommand.RunAsync(_docker, args, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

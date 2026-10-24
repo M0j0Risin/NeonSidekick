@@ -714,6 +714,8 @@ public sealed class AppSettings : IDisposable
         LogWindowTop = source.LogWindowTop,
         ProcessWindowLeft = source.ProcessWindowLeft,
         ProcessWindowTop = source.ProcessWindowTop,
+        DockerLogWindowLeft = source.DockerLogWindowLeft,
+        DockerLogWindowTop = source.DockerLogWindowTop,
         VideoWindowLeft = source.VideoWindowLeft,
         VideoWindowTop = source.VideoWindowTop,
         BrowserWindowLeft = source.BrowserWindowLeft,

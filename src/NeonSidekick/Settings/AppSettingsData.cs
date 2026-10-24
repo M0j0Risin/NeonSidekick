@@ -187,6 +187,16 @@ public sealed class AppSettingsData
     public int? ProcessWindowTop { get; set; }
 
     /// <summary>
+    /// The Docker log window's top-left corner as it last closed (2026-10-23, <c>/docker logs &lt;container&gt;</c>'s window): the
+    /// <see cref="ProcessWindowLeft"/> pair's twin, set by the window itself (<see cref="Viewer.DockerLogWindow.Placed"/>). No menu
+    /// row; null opens it where the system puts it. Switching the window to another container keeps the place.
+    /// </summary>
+    public int? DockerLogWindowLeft { get; set; }
+
+    /// <summary>The top of that corner; see <see cref="DockerLogWindowLeft"/>.</summary>
+    public int? DockerLogWindowTop { get; set; }
+
+    /// <summary>
     /// The video window's top-left corner as it last closed (2026-10-05, the YouTube plan's window): the <see cref="CameraWindowLeft"/>
     /// pair's twin, set by the window itself (<see cref="Viewer.VideoWindow.Placed"/>). No menu row, so no help line; null opens it
     /// where Windows puts it. Switching the window to another video keeps the place.

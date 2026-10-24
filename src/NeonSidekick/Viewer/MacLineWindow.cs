@@ -16,6 +16,8 @@ internal static class MacLineWindows
     private static volatile MacLineWindow? s_log;       // set on the main thread; read elsewhere only to choose a post over a wait
     private static volatile MacLineWindow? s_process;
     private static ProcessSession? s_session;           // main thread
+    private static volatile MacLineWindow? s_docker;    // the Docker log window (2026-10-23)
+    private static DockerLogFeed? s_dockerFeed;         // main thread
     private static int s_registered;
 
     /// <summary>
@@ -87,6 +89,61 @@ internal static class MacLineWindows
         return true;
     }
 
+    /// <summary>The Docker log window on <paramref name="source"/> (2026-10-23): brought forward, swapped onto it, or opened, as <see cref="DockerLogWindow.Decide"/> says.</summary>
+    public static void ShowDockerLog(Docker.DockerLogSource source)
+    {
+        RegisterEnd();
+        if (s_docker is { Alive: true } && AppKitHost.Post(() => ShowDockerLogOnMain(source)))
+        {
+            return;
+        }
+
+        if (!AppKitHost.Invoke(() => ShowDockerLogOnMain(source), out _))
+        {
+            throw new InvalidOperationException("the window did not start");
+        }
+    }
+
+    private static bool ShowDockerLogOnMain(Docker.DockerLogSource source)
+    {
+        var open = s_docker;
+        var shown = s_dockerFeed;
+        switch (DockerLogWindow.Decide(open is { Alive: true }, shown?.Name, shown?.Tail ?? 0, shown?.Refused ?? false, source))
+        {
+            case DockerLogWindowMove.Raise:
+                open!.Raise();
+                return true;
+            case DockerLogWindowMove.Swap:
+            {
+                var swapped = new DockerLogFeed(source, TimeProvider.System);
+                open!.Swap(swapped);
+                s_dockerFeed = swapped;
+                open.Raise();
+                return true;
+            }
+        }
+
+        var feed = new DockerLogFeed(source, TimeProvider.System);
+        var window = new MacLineWindow(feed, DockerLogWindowText.WindowName, DockerLogWindow.Position, DockerLogWindow.Placed);
+        window.Start();
+        s_docker = window;
+        s_dockerFeed = feed;
+        return true;
+    }
+
+    /// <summary>The Docker log window closed; true when one was open.</summary>
+    public static bool CloseDockerLog() => AppKitHost.IsRunning && AppKitHost.Invoke(CloseDockerLogOnMain, out bool closed) && closed;
+
+    private static bool CloseDockerLogOnMain()
+    {
+        var open = s_docker;
+        s_docker = null;
+        s_dockerFeed = null;
+        bool alive = open is { Alive: true };
+        open?.Close();
+        return alive;
+    }
+
     /// <summary>The log window closed; true when one was open.</summary>
     public static bool CloseLog() => AppKitHost.IsRunning && AppKitHost.Invoke(CloseLogOnMain, out bool closed) && closed;
 
@@ -139,6 +196,7 @@ internal static class MacLineWindows
             {
                 CloseLogOnMain();
                 CloseProcessOnMain();
+                CloseDockerLogOnMain();
             });
         }
     }
