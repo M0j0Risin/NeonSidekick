@@ -208,19 +208,27 @@ public sealed partial class AdminFixesTests : IDisposable
     {
         int running = 0, most = 0;
         var call = SignInGuard.ForHost("services", "app03", @"CORP\ops", "pw", WrongPassword);
-        int Work()
+        int Work(bool awaitCompany)
         {
             int now = Interlocked.Increment(ref running);
             InterlockedMax(ref most, now);
+            if (awaitCompany)
+            {
+                // Proven, the calls may overlap: each waits (5 s at most) for a second to be running, so a busy 2-core pool injects a
+                // thread rather than the 30 ms sleep racing it (2026-10-23, a CiLike whole-suite run saw most == 1). A gate still in
+                // force would keep the second out and fail the wait.
+                SpinWait.SpinUntil(() => Volatile.Read(ref most) > 1, TimeSpan.FromSeconds(5));
+            }
+
             Thread.Sleep(30);
             Interlocked.Decrement(ref running);
             return now;
         }
 
-        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => SignInGuard.RunAsync(call, _ => Work(), TimeSpan.FromSeconds(30), TimeProvider.System, CancellationToken.None)));
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => SignInGuard.RunAsync(call, _ => Work(awaitCompany: false), TimeSpan.FromSeconds(30), TimeProvider.System, CancellationToken.None)));
         Assert.Equal(1, most);
         most = 0;
-        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => SignInGuard.RunAsync(call, _ => Work(), TimeSpan.FromSeconds(30), TimeProvider.System, CancellationToken.None)));
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => SignInGuard.RunAsync(call, _ => Work(awaitCompany: true), TimeSpan.FromSeconds(30), TimeProvider.System, CancellationToken.None)));
         Assert.True(most > 1);
     }
 

@@ -34,7 +34,7 @@ public class VoiceCheckTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    private Task<int> RunAsync() => VoiceCheck.RunAsync(_console, _voice, new AppSettingsData(), Quick);   // the saved switch is off; the check forces it on
+    private Task<int> RunAsync(VoicePipelineOptions? options = null) => VoiceCheck.RunAsync(_console, _voice, new AppSettingsData(), options ?? Quick);   // the saved switch is off; the check forces it on
 
     [Fact]
     public async Task Heard_PrintsTheTranscript_AndExitsZero()
@@ -58,7 +58,9 @@ public class VoiceCheckTests : IDisposable
         _vad.SpeakingFromBuffer = 0;
         _capture.OnStart = async (c, ct) => { while (!ct.IsCancellationRequested) { c.Deliver(c.Silence(50), 1600); await Task.Delay(45, CancellationToken.None); } };
 
-        int code = await RunAsync();
+        // Only the no-speech timer may end it: Quick's 400 ms cap (eight buffers) won a CiLike whole-suite run when the 200 ms timer
+        // fired late, and the fake recognizer's "hello" made it exit 0 (2026-10-23). The watchdog is widened for the same reason.
+        int code = await RunAsync(Quick with { MaxUtterance = TimeSpan.FromSeconds(30), DeliveryWatchdog = TimeSpan.FromSeconds(30) });
 
         Assert.Equal(1, code);
         Assert.Contains(VoiceCheck.HeardNothingLine(ListenEnd.NoSpeech), _console.Output);
