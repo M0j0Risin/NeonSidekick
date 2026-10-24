@@ -38,6 +38,53 @@ public static class MarkOfTheWeb
         }
     }
 
+    /// <summary>The app that marks what it downloads, as the Mac's quarantine names its agent.</summary>
+    public const string Agent = "NeonSidekick";
+
+    /// <summary>
+    /// The mark for a file the app downloaded from <paramref name="url"/> at <paramref name="now"/> (2026-10-23, the Mac pass, the user's
+    /// call: <c>download_file</c> wrote none, so what the model fetched and unzipped opened as the user's own): Windows' <c>Zone.Identifier</c>
+    /// for the Internet zone with the address (any user name and password taken out), as Edge writes it; a Mac's quarantine as a browser
+    /// writes it (<c>0081</c>, a web download, the time in hex seconds, the agent). Null elsewhere.
+    /// </summary>
+    public static byte[]? ForDownload(string url, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (OperatingSystem.IsWindows())
+        {
+            string host = Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length > 0
+                ? new UriBuilder(parsed) { UserName = "", Password = "" }.Uri.AbsoluteUri
+                : url;
+            host = host.Replace("\r", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal);
+            return System.Text.Encoding.UTF8.GetBytes("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=" + host + "\r\n");
+        }
+
+        return OperatingSystem.IsMacOS()
+            ? System.Text.Encoding.ASCII.GetBytes("0081;" + now.ToUnixTimeSeconds().ToString("x8", System.Globalization.CultureInfo.InvariantCulture) + ";" + Agent + ";")
+            : null;
+    }
+
+    /// <summary>Puts <paramref name="mark"/> on <paramref name="target"/>; false when the volume took none (no streams, no extended attributes).</summary>
+    public static bool Put(byte[] mark, string target)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        ArgumentNullException.ThrowIfNull(target);
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                File.WriteAllBytes(target + ZoneStream, mark);
+                return true;
+            }
+
+            return !OperatingSystem.IsMacOS() || MacQuarantine.Write(target, QuarantineAttribute, mark);
+        }
+        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
+        {
+            return false;
+        }
+    }
+
     /// <summary>Puts <paramref name="mark"/> on each of <paramref name="targets"/>; a target that takes none is counted in the log.</summary>
     public static void Carry(byte[]? mark, IEnumerable<string> targets)
     {
@@ -47,25 +94,7 @@ public static class MarkOfTheWeb
             return;
         }
 
-        int failed = 0;
-        foreach (string target in targets)
-        {
-            try
-            {
-                if (OperatingSystem.IsWindows())
-                {
-                    File.WriteAllBytes(target + ZoneStream, mark);
-                }
-                else if (OperatingSystem.IsMacOS() && !MacQuarantine.Write(target, QuarantineAttribute, mark))
-                {
-                    failed++;
-                }
-            }
-            catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
-            {
-                failed++;
-            }
-        }
+        int failed = targets.Count(target => !Put(mark, target));
 
         if (failed > 0)
         {

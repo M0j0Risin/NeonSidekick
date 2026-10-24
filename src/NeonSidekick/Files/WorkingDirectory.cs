@@ -325,9 +325,11 @@ public sealed class PendingWrite : IDisposable
     /// <summary>
     /// The written file in the target's place: <see cref="FileOutcome.Ok"/> with its length (<c>Replaced</c> when a file was
     /// there), <see cref="FileOutcome.Exists"/> when one appeared meanwhile and <c>overwrite</c> was not given, or
-    /// <see cref="FileOutcome.Failed"/> with the file system's message. The temporary file goes either way.
+    /// <see cref="FileOutcome.Failed"/> with the file system's message. The temporary file goes either way. A <paramref name="mark"/>
+    /// (<see cref="MarkOfTheWeb.ForDownload"/>) goes on the file once it is in place (2026-10-23, the Mac pass: a download came unmarked);
+    /// a volume that takes none leaves it unmarked, said in the log.
     /// </summary>
-    public WriteResult Commit()
+    public WriteResult Commit(byte[]? mark = null)
     {
         ObjectDisposedException.ThrowIf(_done, this);
         _done = true;
@@ -344,12 +346,21 @@ public sealed class PendingWrite : IDisposable
             // A new file only where nothing appeared since the write began (2026-10-22, review J3).
             if (!existed)
             {
-                return WorkingDirectory.MoveTempNew(_temp, _full)
-                    ? new WriteResult(FileOutcome.Ok, Relative, length, false)
-                    : new WriteResult(FileOutcome.Exists, Relative, 0, false);
+                if (!WorkingDirectory.MoveTempNew(_temp, _full))
+                {
+                    return new WriteResult(FileOutcome.Exists, Relative, 0, false);
+                }
+            }
+            else
+            {
+                WorkingDirectory.MoveIntoPlace(_temp, _full, _preserve);
             }
 
-            WorkingDirectory.MoveIntoPlace(_temp, _full, _preserve);
+            if (mark is not null && !MarkOfTheWeb.Put(mark, _full))
+            {
+                DiagnosticLog.Warn("Files", Relative + " took no internet mark (the volume keeps none)");
+            }
+
             return new WriteResult(FileOutcome.Ok, Relative, length, existed);
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))

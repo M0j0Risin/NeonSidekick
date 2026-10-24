@@ -55,4 +55,34 @@ public sealed class MarkOfTheWebTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_root, "out", "tool", "run.bat") + MarkOfTheWeb.ZoneStream));
         Assert.Null(MarkOfTheWeb.Read(Path.Combine(_root, "made.zip")));
     }
+
+    /// <summary>The Mac's twins (2026-10-23, the Mac pass): an archive's quarantine on every file unzipped from it; none from an unmarked one.</summary>
+    [MacFact]
+    public void Unzip_CarriesTheArchivesQuarantine_OnAMac()
+    {
+        string archive = Archive("download.zip");
+        byte[] mark = "0083;6719a2b0;Safari;"u8.ToArray();
+        Assert.True(MarkOfTheWeb.Put(mark, archive));
+
+        Assert.Equal(FileOutcome.Ok, _files.Unzip("download.zip", "out", overwrite: false).Outcome);
+        Assert.Equal(mark, MarkOfTheWeb.Read(Path.Combine(_root, "out", "tool", "run.bat")));
+        Assert.Equal(FileOutcome.Ok, _files.Unzip(Path.GetFileName(Archive("made.zip")), "out2", overwrite: false).Outcome);
+        Assert.Null(MarkOfTheWeb.Read(Path.Combine(_root, "out2", "tool", "run.bat")));
+    }
+
+    /// <summary>
+    /// A download's mark (2026-10-23, the Mac pass): the Internet zone and the address without its user name or password on Windows, a
+    /// browser's quarantine on a Mac (a web download, the time in hex seconds, the app), none elsewhere.
+    /// </summary>
+    [Fact]
+    public void ForDownload_IsTheInternetZone_OrABrowsersQuarantine()
+    {
+        var at = new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
+        string? mark = MarkOfTheWeb.ForDownload("https://me:secret@example.com/a.zip", at) is { } bytes ? System.Text.Encoding.UTF8.GetString(bytes) : null;
+
+        string? expected = OperatingSystem.IsWindows() ? "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://example.com/a.zip\r\n"
+            : OperatingSystem.IsMacOS() ? "0081;" + at.ToUnixTimeSeconds().ToString("x8", System.Globalization.CultureInfo.InvariantCulture) + ";NeonSidekick;"
+            : null;
+        Assert.Equal(expected, mark);
+    }
 }

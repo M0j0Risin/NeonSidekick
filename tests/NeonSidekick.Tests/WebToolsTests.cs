@@ -541,6 +541,22 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
     }
 
+    /// <summary>
+    /// A download is marked as from the internet, as a browser marks its own (2026-10-23, the Mac pass, the user's call): Windows' Internet
+    /// zone with the address, a Mac's quarantine naming the app; so unzip carries the mark on, and Gatekeeper or SmartScreen sees the file.
+    /// </summary>
+    [Fact]
+    public async Task Download_IsMarkedAsFromTheInternet()
+    {
+        _http.Map("https://example.com/tool.zip", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, [1, 2, 3], "application/zip")));
+
+        await _download.InvokeAsync(Args(("url", "https://example.com/tool.zip")), CancellationToken.None);
+
+        byte[]? mark = MarkOfTheWeb.Read(Path.Combine(_root, "tool.zip"));
+        Assert.Equal(MarkOfTheWeb.ForDownload("https://example.com/tool.zip", _time.GetUtcNow()), mark);
+        Assert.Equal(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), mark is not null);
+    }
+
     [WindowsFact]
     public async Task Download_APath_IsTheFile_AFolder_TakesTheFilesName_WithTheHeadersNameFirst()
     {

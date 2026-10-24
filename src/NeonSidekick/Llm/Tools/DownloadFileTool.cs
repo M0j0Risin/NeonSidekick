@@ -214,7 +214,11 @@ public sealed class DownloadFileTool : AIFunction
         using (pending)
         {
             var saved = await _web.Fetcher.SaveAsync(opened, pending.Stream, maxBytes, cancellationToken).ConfigureAwait(false);
-            return saved.Ok ? WebText.Downloaded(pending.Commit(), opened.Url, opened.MediaType) : saved.Error;
+            // Marked as from the internet, as a browser marks its downloads (2026-10-23, the Mac pass, the user's call): Gatekeeper, SmartScreen
+            // and Office's Protected View look at what the model fetched, and unzip carries the mark to what is inside.
+            return saved.Ok
+                ? WebText.Downloaded(pending.Commit(MarkOfTheWeb.ForDownload(opened.FinalUrl.Length > 0 ? opened.FinalUrl : opened.Url, _web.Time.GetUtcNow())), opened.Url, opened.MediaType)
+                : saved.Error;
         }
     }
 

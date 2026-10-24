@@ -41,7 +41,7 @@ Under *Web tools*.
 | `open_url` | `url?, urls?` | Opens up to five links in your browser, or one in the [Browser window](#the-browser-window) under *Web open links in*. A YouTube link goes where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link; `url` may be its `web_links` number, or `current` for the Browser window's page. |
-| `download_file` | `url, path?, overwrite?` | Downloads into the working directory, up to *Web download max (MB)*. Needs *File tools*. |
+| `download_file` | `url, path?, overwrite?` | Downloads into the working directory, up to *Web download max (MB)*, marked as from the internet as a browser marks its downloads (Windows' Mark of the Web, a Mac's quarantine), so SmartScreen, Gatekeeper and Office's Protected View check it and `unzip` passes the mark on. Needs *File tools*. |
 
 * **A page that refuses a plain fetch**, or needs scripts, is tried again in a headless Edge, Chrome or Brave (Chromium on a Mac), per *Web browser mode*. Its cookies stay in `%TEMP%\NeonSidekick\browser` (`$TMPDIR/NeonSidekick/browser` on a Mac).
 * **Bot checks:** one that clears by itself is waited on up to 15 seconds; one that wants a click goes to the Browser window, or is reported blocked.
