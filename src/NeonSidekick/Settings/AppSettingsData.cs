@@ -2025,7 +2025,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// Whether a turn offers the model the monitors' tools (2026-10-23, the monitors plan): <c>monitor_list</c>, <c>monitor_input</c> (switch a
     /// monitor's input over DDC/CI) and <c>monitor_layout</c> (extend, duplicate, only one monitor, make one primary); both changes ask first.
-    /// Windows only, and only with a pane to ask on (never headless). The first row of <c>/tools</c> › Home › Monitors. Read at each turn.
+    /// Windows only, and only with a pane to ask on (never headless). The first row of <c>/tools</c> › Devices › Monitors (Home › Monitors until
+    /// later on 2026-10-23, the user's ask: between Screen and Print). Read at each turn.
     /// Off by default, as every tool group. No variable.
     /// </summary>
     public bool MonitorTools { get; set; }
@@ -2044,6 +2045,15 @@ public sealed class AppSettingsData
     /// <c>/profile reset</c>. Null or empty is none. No settings row, no variable.
     /// </summary>
     public List<string>? MonitorInputsHidden { get; set; }
+
+    /// <summary>
+    /// Which input of each monitor is this PC's (later on 2026-10-23, the user's ask: a choice rather than typing "This PC" as a name), as
+    /// <see cref="MonitorInputNames"/> keys them, at most one entry a monitor (<c>ausaa34-uid4355/0f</c>). It decides whether a monitor "shows
+    /// another input" (<see cref="Monitors.MonitorShowing"/>) and so when a change asks first; without one the cable's kind guesses. Set from a
+    /// monitor's <c>This PC's input…</c> on the 🖥️ pane or <c>/monitor &lt;n&gt; pc</c>, never by the model. Kept by a plain <c>/profile reset</c>.
+    /// Null or empty is none. No settings row, no variable.
+    /// </summary>
+    public List<string>? MonitorPcInputs { get; set; }
 
     /// <summary>
     /// The quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none (2026-10-04, the user's pick, with the

@@ -26,6 +26,9 @@ public enum MonitorVerb
 
     /// <summary><c>/monitor duplicate</c>.</summary>
     Duplicate,
+
+    /// <summary><c>/monitor &lt;n|name&gt; pc [&lt;input&gt;|now|auto]</c> (later on 2026-10-23): which input is this PC's; bare, what is set.</summary>
+    Pc,
 }
 
 /// <summary>A parsed <c>/monitor</c> line: the verb, the monitor as typed (a number or a name), and the input as typed (the rest of the line after <c>input</c>).</summary>
@@ -37,8 +40,10 @@ public sealed record MonitorArgs(MonitorVerb Verb, string? Monitor = null, strin
 
 /// <summary>
 /// <c>/monitor</c> (2026-10-23, the monitors plan): bare the pane, <c>list</c> the lines, <c>&lt;n|name&gt;</c> the pane on that monitor's tab,
-/// <c>&lt;n|name&gt; input &lt;input&gt;</c>, <c>&lt;n|name&gt; only|primary</c>, <c>extend</c>, <c>duplicate</c>. The verbs win over a monitor of
-/// that name, which is reached by its number or quoted (<c>/monitor "list"</c>); after <c>input</c> the rest of the line is the input, so a given
+/// <c>&lt;n|name&gt; input &lt;input&gt;</c>, <c>&lt;n|name&gt; pc [&lt;input&gt;|now|auto]</c> (later that day: which input is this PC's; <c>now</c> the
+/// one it shows now, <c>auto</c> no pick — the words win over an input given that name, which its standard name or code still reaches),
+/// <c>&lt;n|name&gt; only|primary</c>, <c>extend</c>, <c>duplicate</c>. The verbs win over a monitor of
+/// that name, which is reached by its number or quoted (<c>/monitor "list"</c>); after <c>input</c> or <c>pc</c> the rest of the line is the input, so a given
 /// name with spaces needs no quotes (<c>/monitor 2 input Work laptop</c>); a monitor name with spaces is quoted (<c>/monitor "LG ULTRAWIDE" only</c>)
 /// or given by number. A name matches whole or by prefix, any case (<see cref="Find"/>). Pure.
 /// </summary>
@@ -51,12 +56,15 @@ public static class MonitorCommand
     public const string InputWord = "input";
     public const string OnlyWord = "only";
     public const string PrimaryWord = "primary";
+    public const string PcWord = "pc";
+    public const string NowWord = "now";
+    public const string AutoWord = "auto";
 
     /// <summary>The verbs completion offers first.</summary>
     public static readonly IReadOnlyList<string> Verbs = [ListWord, ExtendWord, DuplicateWord];
 
     /// <summary>The words after a monitor.</summary>
-    public static readonly IReadOnlyList<string> MonitorVerbs = [InputWord, OnlyWord, PrimaryWord];
+    public static readonly IReadOnlyList<string> MonitorVerbs = [InputWord, PcWord, OnlyWord, PrimaryWord];
 
     /// <summary>The line parsed, or null for a form <c>/monitor</c> doesn't take (<see cref="MonitorText.Usage"/>).</summary>
     public static MonitorArgs? Parse(string args)
@@ -128,6 +136,11 @@ public static class MonitorCommand
             return new MonitorArgs(MonitorVerb.Input, monitor, after.Length > 0 ? after : null);
         }
 
+        if (Is(verb, PcWord))
+        {
+            return new MonitorArgs(MonitorVerb.Pc, monitor, after.Length > 0 ? after : null);
+        }
+
         if (after.Length > 0)
         {
             return null;
@@ -180,8 +193,8 @@ public static class MonitorCommand
 
     /// <summary>
     /// <c>/monitor</c>'s completion (2026-10-23): whole lines, one word further than <paramref name="argText"/> — the verbs, each monitor's
-    /// number and name (quoted when it holds a space), then a monitor's <c>input</c>, <c>only</c> and <c>primary</c>, then its inputs as the
-    /// tab shows them — all from <paramref name="state"/>, the board's snapshot, never a DDC/CI read while typing. Pure.
+    /// number and name (quoted when it holds a space), then a monitor's <c>input</c>, <c>pc</c>, <c>only</c> and <c>primary</c>, then its inputs as the
+    /// tab shows them (and, after <c>pc</c>, <c>now</c> and <c>auto</c>) — all from <paramref name="state"/>, the board's snapshot, never a DDC/CI read while typing. Pure.
     /// </summary>
     public static IReadOnlyList<UI.CompletionItem> Complete(string argText, MonitorState state, MonitorWords words)
     {
@@ -198,7 +211,10 @@ public static class MonitorCommand
             {
                 all.Add(new UI.CompletionItem(spelled, m.Label));
                 all.AddRange(MonitorVerbs.Select(v => new UI.CompletionItem(spelled + " " + v, MonitorText.VerbHint(v))));
-                all.AddRange(rows.Select(r => new UI.CompletionItem(spelled + " " + InputWord + " " + (r.Given ?? r.Standard ?? Mccs.Hex(r.Code)), r.Words)));
+                all.AddRange(rows.Select(r => new UI.CompletionItem(spelled + " " + InputWord + " " + (r.Given ?? r.Standard ?? Mccs.Hex(r.Code)), Described(r))));
+                all.AddRange(rows.Select(r => new UI.CompletionItem(spelled + " " + PcWord + " " + (r.Given ?? r.Standard ?? Mccs.Hex(r.Code)), Described(r))));
+                all.Add(new UI.CompletionItem(spelled + " " + PcWord + " " + NowWord, MonitorText.VerbHint(NowWord)));
+                all.Add(new UI.CompletionItem(spelled + " " + PcWord + " " + AutoWord, MonitorText.VerbHint(AutoWord)));
             }
         }
 
@@ -206,11 +222,14 @@ public static class MonitorCommand
         return UI.MentionCompleter.Matches(next, argText);
     }
 
+    // An input's completion note: its words, and "· this PC" on the picked one.
+    private static string Described(MonitorInputRow row) => row.Words + (row.ThisPc ? " · " + MonitorText.ThisPcTag : "");
+
     // Whether the candidate is at most one word past what is typed (a space inside quotes, or in an input's given name, not counted).
     private static bool OneWordOn(string candidate, string typed)
     {
-        // After "input " the rest of the line is the input, spaces and all.
-        if (typed.Contains(" " + InputWord + " ", StringComparison.OrdinalIgnoreCase))
+        // After "input " or "pc " the rest of the line is the input, spaces and all.
+        if (typed.Contains(" " + InputWord + " ", StringComparison.OrdinalIgnoreCase) || typed.Contains(" " + PcWord + " ", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

@@ -289,8 +289,9 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/homebar tap <item>`, `/homebar show <item>` | Does what a double-click or a right-click on a chip does; unlocking and opening ask first. |
 | `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip your own name or emoji (nothing after `=` shows the emoji alone); `default` puts its own back. |
 | `/monitor`, `/monitor <monitor>` | Opens the [monitors pane](INTERFACE.md#the-monitors-pane), on its Layout tab or that monitor's. Without the pane, prints the list. Windows only ([MAC.md](MAC.md#what-works)). |
-| `/monitor list` | Prints the monitors: number, name, connector, mode, primary, the current input and the inputs. |
+| `/monitor list` | Prints the monitors: number, name, connector, mode, primary, the current input and the inputs; the first line names any monitor showing another input. |
 | `/monitor <monitor> input <input>` | Switches the monitor's input: a name you gave it, a standard name (`hdmi-1`) or a code in hex (`0x1B`). |
+| `/monitor <monitor> pc <input>\|now\|auto` | Says which input is this PC's: an input, `now` (the one it shows now) or `auto` (no pick: the cable guesses). Bare, says what is set. Nothing switches. |
 | `/monitor <monitor> only\|primary`, `/monitor extend\|duplicate` | Changes the layout as Win+P does: one monitor alone, the primary, every monitor extended, or all showing the same. |
 | `/log` | Opens the [log window](INTERFACE.md#the-log-window). |
 | `/log file`, `/log path` | Opens the `--log` file in your editor, or copies its path (only when started with `--log`). |

@@ -69,7 +69,10 @@ internal static class MonitorCheck
                     checks.Add(new SmokeCheck("monitor:caps " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: no capabilities ({e.Message}); the common four would be offered"));
                 }
 
-                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: {Mccs.StandardName(input) ?? "vendor"} {Mccs.Hex(input)} in {read} ms"));
+                // The cable's view alone (later on 2026-10-23): the check reads no settings, so no pick.
+                string guess = MonitorShowing.Judge(m, input, null, null) is { Kind: MonitorShowingKind.Elsewhere, Basis: MonitorShowingBasis.Cable }
+                    ? " · " + MonitorText.CheckElsewhere(m.Connector) : "";
+                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: {Mccs.StandardName(input) ?? "vendor"} {Mccs.Hex(input)} in {read} ms{guess}"));
             }
             catch (MonitorException e) when (e.Message is MonitorText.NoDdc or MonitorText.NoInputSwitch)
             {

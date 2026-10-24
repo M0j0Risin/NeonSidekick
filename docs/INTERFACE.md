@@ -155,6 +155,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | **Monitors** | |
 | The monitors pane (`/monitor`, the 🖥️ chip) | ←/→ a monitor's tab · Enter switches an input or applies a layout row · Esc closes |
 | A monitor's *Input names…* | Enter renames · `h` hides or shows · Delete clears the name · Esc back to the monitor's tab |
+| A monitor's *This PC's input…* | Enter picks · Esc back to the monitor's tab |
 
 ### The event log pane
 
@@ -179,10 +180,11 @@ Windows only.
 
 Windows only. `/monitor` or a right-click on the home bar's 🖥️.
 
-* **Layout tab:** Extend all, Duplicate, Only *n* and Make *n* primary; a row that would change nothing is left out. With one monitor there's no Layout tab.
-* **A tab per monitor:** its inputs (● current, ↩ the one the app switched it away from), then Only this monitor, Make primary, *Enter a code…* and *Input names…*.
+* **Layout tab:** Extend all, Duplicate, Only *n* and Make *n* primary; a row that would change nothing is left out. Its caption names a monitor showing another input. With one monitor there's no Layout tab.
+* **A tab per monitor:** its inputs (● current, ↩ the one the app switched it away from, `this PC` your pick), then Only this monitor, Make primary, *This PC's input…*, *Enter a code…* and *Input names…*.
+* **This PC's input…** picks which input this PC is on: the one it shows now, one by name, or none (the cable guesses: an HDMI input on a DisplayPort cable, or the reverse, is another input). An adapter cable can fool the guess; a pick fixes it.
 * **Numbers** are the screen capture's (`monitor:2`). A monitor off the desktop is dim and offers only the rows that bring it back.
-* **Asks first** when a switch would leave no monitor showing this PC, or a layout row affects one the app switched away. Name this PC's input ("This PC") to spot it later.
+* **Asks first** when a switch would leave no monitor showing this PC, or a layout row affects one on another input: your pick, else the cable, else the app's own switch.
 * **No inputs?** Many monitors ship with DDC/CI off in their own on-screen menu (look for "DDC/CI"); a duplicated monitor's inputs can't be told apart until Extend.
 
 ### Folder picker

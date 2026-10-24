@@ -9,14 +9,15 @@ namespace NeonSidekick.App;
 /// The monitors pane (2026-10-23, the monitors plan): the 🖥️ chip's right-click, <c>/monitor</c> and <c>/monitor &lt;n&gt;</c>. A tabbed page over
 /// the menu pane — a Layout tab (Extend all · Duplicate · Only <i>n</i> · Make <i>n</i> primary, a row that would change nothing left out,
 /// the layout in force its caption) then a tab per monitor: its inputs (● current, ↩ the one the app switched it away from, given names
-/// beside the standard ones, hidden ones left out unless current), a rule, Only this monitor · Make primary · Enter a code… · Input names….
+/// beside the standard ones, hidden ones left out unless current, the one picked as this PC's tagged), a rule, Only this monitor · Make primary ·
+/// This PC's input… (later on 2026-10-23: the pick list, <c>Monitor PC inputs</c>) · Enter a code… · Input names….
 /// A tab's note (off the desktop, duplicated, not reported, no DDC/CI) is its caption; each row's footer says what it does. With one monitor
 /// there is no Layout tab; with one monitor and no DDC/CI nothing can be done (<see cref="MonitorText.NothingToDo"/>). It opens at once from
 /// the board's snapshot and is built again at the same tab and row as each read lands (<see cref="MenuPane.PickAsync"/>'s <c>stale</c>, a
 /// watcher on <see cref="MonitorBoard.Changed"/>), the topology clock leased for its life. A pick that changes something closes the pane, asks
-/// first where <see cref="MonitorActions.WarningAsync"/> says to (the last screen showing this PC, a layout around a monitor the app switched
-/// away), then runs on the board's worker in the background, its outcome flashed on the hint row; Input names… and a cancelled prompt come
-/// back to the tab.
+/// first where <see cref="MonitorActions.WarningAsync"/> says to (the last screen showing this PC, a layout around a monitor on another
+/// input), then runs on the board's worker in the background, its outcome flashed on the hint row; This PC's input…, Input names… and a
+/// cancelled prompt come back to the tab.
 /// </summary>
 internal sealed class MonitorsMenu
 {
@@ -43,12 +44,11 @@ internal sealed class MonitorsMenu
     /// <summary>The change a pick started, when the caller wants to wait for it (the tests); null when nothing ran.</summary>
     public Task? Running { get; private set; }
 
-    /// <summary>The input names in force (the settings in force, so a profile switch follows at once).</summary>
-    public static MonitorWords WordsFor(AppSettingsData effective, MonitorSnapshot snapshot) =>
-        new(effective.MonitorInputNames, effective.MonitorInputsHidden, snapshot.Monitors);
+    /// <summary>The input names and this PC's inputs in force (the settings in force, so a profile switch follows at once).</summary>
+    public static MonitorWords WordsFor(AppSettingsData effective, MonitorSnapshot snapshot) => MonitorWords.For(effective, snapshot.Monitors);
 
     // One row as drawn and what Enter on it does.
-    private sealed record Row(string Markup, string? Footer, MonitorChange? Change = null, MonitorInfo? Code = null, MonitorInfo? Names = null);
+    private sealed record Row(string Markup, string? Footer, MonitorChange? Change = null, MonitorInfo? Code = null, MonitorInfo? Names = null, MonitorInfo? Pc = null);
 
     // One tab: its strip title, rows, caption, and whether it is dim (a monitor off the desktop).
     private sealed record Tab(string Title, List<Row> Rows, string? Caption, bool Off, HashSet<int> Headings);
@@ -72,7 +72,7 @@ internal sealed class MonitorsMenu
             var snapshot = state.Topology;
             var words = WordsFor(_effective(), snapshot);
             var tabs = Tabs(state, words);
-            if (tabs.All(t => t.Rows.All(r => r.Change is null && r.Code is null && r.Names is null)))
+            if (tabs.All(t => t.Rows.All(r => r.Change is null && r.Code is null && r.Names is null && r.Pc is null)))
             {
                 if (snapshot.Monitors.Count > 0 && !reading.IsCompleted)
                 {
@@ -161,6 +161,12 @@ internal sealed class MonitorsMenu
                 continue;
             }
 
+            if (row.Pc is { } forPc)
+            {
+                await PcInputAsync(forPc, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
             var change = row.Change;
             if (row.Code is { } coded)
             {
@@ -232,7 +238,8 @@ internal sealed class MonitorsMenu
             }
         }
 
-        var away = snapshot.Active.FirstOrDefault(m => state.AwayOf(m) is not null);
+        var elsewhere = state.Elsewhere(words);
+        var away = elsewhere.FirstOrDefault(m => m.Active);
         Add(MonitorChange.Arrange(MonitorLayout.Extend), MonitorText.ExtendRow, MonitorText.ExtendFooter, snapshot.Layout == MonitorArrangement.Extended);
         Add(MonitorChange.Arrange(MonitorLayout.Duplicate), MonitorText.DuplicateRow, away is null ? MonitorText.DuplicateFooter : MonitorText.DuplicateAwayFooter, snapshot.Layout == MonitorArrangement.Duplicated);
         foreach (var m in snapshot.Monitors)
@@ -245,11 +252,12 @@ internal sealed class MonitorsMenu
             Add(MonitorChange.Arrange(MonitorLayout.Primary, m), MonitorText.PrimaryRow(m.Label), AwayFooter(state, words, m, MonitorText.PrimaryFooter), current: false);
         }
 
-        return new Tab(MonitorText.LayoutTab, rows, MonitorText.LayoutNow(snapshot.Layout), Off: false, []);
+        return new Tab(MonitorText.LayoutTab, rows, MonitorText.LayoutNow(snapshot.Layout, elsewhere.Select(m => m.Label).ToList()), Off: false, []);
     }
 
+    // A layout row's footer: a monitor on another input (any basis, later on 2026-10-23) asks first, and says why.
     private static string AwayFooter(MonitorState state, MonitorWords words, MonitorInfo m, string footer) =>
-        state.AwayOf(m) is { } left ? MonitorText.AwayRowFooter(footer, words.Describe(m, left)) : footer;
+        state.ShowingOf(m, words) is { IsElsewhere: true } showing ? MonitorText.AwayRowFooter(footer, MonitorText.Why(showing, words, m)) : footer;
 
     private static Tab MonitorTab(MonitorState state, MonitorWords words, MonitorInfo m)
     {
@@ -281,7 +289,8 @@ internal sealed class MonitorsMenu
             foreach (var input in words.Rows(m, inputs.Offered, inputs.Current, state.AwayOf(m)))
             {
                 string mark = input.Current ? MonitorText.CurrentMark : input.Away ? MonitorText.AwayMark : " ";
-                rows.Add(new Row(Markup.Escape(mark + " " + input.Words), MonitorText.InputFooter(input.Code, input.Away),
+                rows.Add(new Row(Markup.Escape(mark + " " + input.Words) + (input.ThisPc ? Theme.DimMarkup("  " + MonitorText.ThisPcTag) : ""),
+                    MonitorText.InputFooter(input.Code, input.Away, input.ThisPc),
                     input.Current ? null : MonitorChange.SwitchInput(m, input.Code, unlisted: !inputs.Offered.Contains(input.Code) && !Mccs.CommonInputs.Contains(input.Code))));
             }
 
@@ -310,6 +319,14 @@ internal sealed class MonitorsMenu
 
         if (!layoutOnly)
         {
+            if (words.SavedKey(m) is not null)
+            {
+                // This PC's input (later on 2026-10-23, the user's ask: a choice, not "This PC" typed as a name).
+                string? picked = words.PcInput(m) is { } pc ? words.Describe(m, pc) : null;
+                string? guessed = MonitorShowing.CableGuess(m, inputs.Current, inputs.Offered) is { } guess ? words.Describe(m, guess) : null;
+                rows.Add(new Row(Markup.Escape(MonitorText.PcRow(picked, guessed)), MonitorText.PcRowFooter, Pc: m));
+            }
+
             rows.Add(new Row(Markup.Escape(MonitorText.EnterCodeRow), MonitorText.EnterCodeFooter, Code: m));
             rows.Add(new Row(Markup.Escape(MonitorText.InputNamesRow), MonitorText.InputNamesFooter, Names: m));
         }
@@ -409,6 +426,112 @@ internal sealed class MonitorsMenu
         static string NameRow(MonitorInputRow r) =>
             Markup.Escape((r.Standard ?? Mccs.Hex(r.Code)).PadRight(14)) + (r.Given is { } g ? "  " + Markup.Escape(g) : "")
             + (r.Hidden ? Theme.DimMarkup("  " + MonitorText.HiddenWord) : "");
+    }
+
+    // This PC's input… (later on 2026-10-23): the input it shows now (read afresh on Enter, a failed read or 0x00 saving nothing), every
+    // input the names page lists, then no pick; ● on the choice in force, the current input and the cable's guess tagged. Enter saves and
+    // comes back to the tab, Esc comes back; nothing switches.
+    private async Task PcInputAsync(MonitorInfo m, CancellationToken cancellationToken)
+    {
+        var state = _board.State;
+        var monitor = state.Topology.ByTarget(m.Target) ?? m;
+        var words = WordsFor(_effective(), state.Topology);
+        if (words.SavedKey(monitor) is not { } key)
+        {
+            return;
+        }
+
+        var inputs = state.InputsOf(monitor);
+        byte? current = MonitorShowing.Usable(inputs.Current);
+        byte? picked = words.PcInput(monitor);
+        byte? guess = MonitorShowing.CableGuess(monitor, inputs.Current, inputs.Offered);
+        var inputRows = words.Rows(monitor, inputs.Offered, inputs.Current, null, all: true);
+        if (inputRows.Count == 0)
+        {
+            return;
+        }
+
+        // Each row: its markup, its footer, and the code it saves (null: no pick); the "now" row reads afresh.
+        var rows = new List<(string Markup, string Footer, byte? Code, bool Now)>();
+        if (current is { } now)
+        {
+            rows.Add((Markup.Escape("  " + MonitorText.PcNowRow(words.Describe(monitor, now))), MonitorText.PcNowFooter(Mccs.Hex(now)), now, true));
+        }
+
+        foreach (var r in inputRows)
+        {
+            var tags = new List<string>();
+            if (r.Current)
+            {
+                tags.Add(MonitorText.CurrentTag);
+            }
+
+            if (picked is null && r.Code == guess)
+            {
+                tags.Add(MonitorText.GuessedTag);
+            }
+
+            rows.Add((Markup.Escape((r.Code == picked ? MonitorText.CurrentMark : " ") + " " + r.Words) + (tags.Count > 0 ? Theme.DimMarkup("  " + string.Join(" · ", tags)) : ""),
+                Mccs.Hex(r.Code), r.Code, false));
+        }
+
+        bool cable = MonitorShowing.CableKnown(monitor.Connector);
+        rows.Add((Markup.Escape((picked is null ? MonitorText.CurrentMark : " ") + " " + (cable ? MonitorText.PcGuessRow : MonitorText.PcNotSetRow)),
+            cable ? MonitorText.PcGuessFooter(monitor.Connector) : MonitorText.PcNotSetFooter(monitor.Connector), null, false));
+
+        int cursor = Math.Max(0, rows.FindIndex(r => !r.Now && r.Code == picked));
+        var page = new MenuPage(MonitorText.PcTitle(monitor.Label), rows.Select(r => r.Markup).ToList(), MonitorText.PcKeys)
+        {
+            Footer = (_, r) => r >= 0 && r < rows.Count ? new MenuFooter(rows[r].Footer) : null,
+        };
+        if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick || pick.Row < 0 || pick.Row >= rows.Count)
+        {
+            return;
+        }
+
+        var chosen = rows[pick.Row];
+        MonitorPcResult result;
+        if (chosen.Now)
+        {
+            byte read;
+            try
+            {
+                read = await _board.Actions.ReadInputAsync(monitor, cancellationToken).ConfigureAwait(false);
+            }
+            catch (MonitorException)
+            {
+                _pane.Error(MonitorText.PcNoRead(monitor.Label));
+                return;
+            }
+
+            result = MonitorPc.Saved(monitor, words, key, read);
+        }
+        else if (chosen.Code is { } code)
+        {
+            result = MonitorPc.Saved(monitor, words, key, code, withCode: false);
+        }
+        else
+        {
+            string? guessed = guess is { } g ? words.Describe(monitor, g) : null;
+            result = new MonitorPcResult([MonitorText.PcCleared(monitor.Label, guessed, monitor.Connector)], false, list => MonitorWords.SetPc(list, key, null));
+        }
+
+        if (result.Save is { } save)
+        {
+            _settings.Update(d => d.MonitorPcInputs = save(d.MonitorPcInputs));
+        }
+
+        foreach (string said in result.Lines)
+        {
+            if (result.Failed)
+            {
+                _pane.Error(said);
+            }
+            else
+            {
+                _pane.Notice(said);
+            }
+        }
     }
 
     // A line typed on the input row under the page, the row marked; null for Esc or nothing typed.

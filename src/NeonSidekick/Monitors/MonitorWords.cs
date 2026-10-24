@@ -2,8 +2,11 @@ using NeonSidekick.Files;
 
 namespace NeonSidekick.Monitors;
 
-/// <summary>One input as a monitor's tab, <c>/monitor list</c> and <c>monitor_list</c> show it: its code, standard and given names, and its marks.</summary>
-public sealed record MonitorInputRow(byte Code, string? Standard, string? Given, bool Hidden, bool Current, bool Away)
+/// <summary>
+/// One input as a monitor's tab, <c>/monitor list</c> and <c>monitor_list</c> show it: its code, standard and given names, and its marks
+/// (<see cref="ThisPc"/>, later on 2026-10-23: the user's pick of this PC's input).
+/// </summary>
+public sealed record MonitorInputRow(byte Code, string? Standard, string? Given, bool Hidden, bool Current, bool Away, bool ThisPc = false)
 {
     /// <summary>The words for the input: <c>Work laptop (HDMI-1)</c> with a given name, else <c>HDMI-1</c>, else <c>0x1B</c>.</summary>
     public string Words => Given is { } g ? g + " (" + (Standard ?? Mccs.Hex(Code)) + ")" : Standard ?? Mccs.Hex(Code);
@@ -13,7 +16,8 @@ public sealed record MonitorInputRow(byte Code, string? Standard, string? Given,
 /// The input names in force (2026-10-23, the monitors plan, <c>Monitor input names</c> and <c>Monitor inputs hidden</c>): saved per profile as
 /// <c>&lt;key&gt;/&lt;hex&gt;</c> (<see cref="MonitorKey"/>, two lower-case digits), read from the settings each time the pane, <c>/monitor</c> or a
 /// tool builds its words, so a profile switch follows at once. A key not saved falls back to the one saved key of the same model when exactly
-/// one connected monitor has it (a cable moved, <see cref="MonitorKey.Saved"/>). Pure.
+/// one connected monitor has it (a cable moved, <see cref="MonitorKey.Saved"/>). Later on 2026-10-23, <c>Monitor PC inputs</c> too: which input of
+/// each monitor is this PC's (<see cref="PcInput"/>, <see cref="SetPc"/>), saved the same way, at most one a monitor. Pure.
 /// </summary>
 public sealed class MonitorWords
 {
@@ -22,18 +26,64 @@ public sealed class MonitorWords
 
     private readonly IReadOnlyDictionary<string, string> _names;
     private readonly IReadOnlySet<string> _hidden;
+    private readonly IReadOnlyDictionary<string, byte> _pc;
     private readonly IReadOnlyList<string?> _connected;
 
-    public MonitorWords(IReadOnlyDictionary<string, string>? names, IReadOnlyList<string>? hidden, IReadOnlyList<MonitorInfo> connected)
+    public MonitorWords(IReadOnlyDictionary<string, string>? names, IReadOnlyList<string>? hidden, IReadOnlyList<MonitorInfo> connected, IReadOnlyList<string>? pcInputs = null)
     {
         ArgumentNullException.ThrowIfNull(connected);
         _names = names ?? new Dictionary<string, string>(StringComparer.Ordinal);
         _hidden = (hidden ?? []).ToHashSet(StringComparer.Ordinal);
+        _pc = ParsePc(pcInputs);
         _connected = connected.Select(m => m.Key).ToList();
     }
 
-    /// <summary>No names, nothing hidden.</summary>
+    /// <summary>No names, nothing hidden, no picks.</summary>
     public static MonitorWords None(IReadOnlyList<MonitorInfo> connected) => new(null, null, connected);
+
+    /// <summary>The words in force for <paramref name="connected"/>: the settings' input names, hidden inputs and this PC's inputs. The one builder every front end uses.</summary>
+    public static MonitorWords For(Settings.AppSettingsData effective, IReadOnlyList<MonitorInfo> connected)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return new(effective.MonitorInputNames, effective.MonitorInputsHidden, connected, effective.MonitorPcInputs);
+    }
+
+    /// <summary>The input the user picked as this PC's on <paramref name="monitor"/>, or null.</summary>
+    public byte? PcInput(MonitorInfo monitor) => SavedKey(monitor) is { } key && _pc.TryGetValue(key, out byte code) ? code : null;
+
+    /// <summary>
+    /// <paramref name="pcInputs"/> with <paramref name="key"/>'s pick set to <paramref name="code"/> (null clears it): every other entry for that
+    /// key goes, so a hand-edited file comes back to one; null when none is left.
+    /// </summary>
+    public static List<string>? SetPc(IReadOnlyList<string>? pcInputs, string key, byte? code)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        var next = (pcInputs ?? []).Where(e => !string.Equals(KeyOf(e), key, StringComparison.Ordinal)).ToList();
+        if (code is { } c)
+        {
+            next.Add(Entry(key, c));
+        }
+
+        return next.Count > 0 ? next : null;
+    }
+
+    // The saved picks by key: an entry with no '/' or a code that doesn't parse is skipped; the first of two for one key wins.
+    private static Dictionary<string, byte> ParsePc(IReadOnlyList<string>? entries)
+    {
+        var picks = new Dictionary<string, byte>(StringComparer.Ordinal);
+        foreach (string entry in entries ?? [])
+        {
+            int slash = entry.IndexOf('/', StringComparison.Ordinal);
+            if (slash > 0 && Mccs.TryParseCode(entry[(slash + 1)..], out byte code))
+            {
+                picks.TryAdd(entry[..slash], code);
+            }
+        }
+
+        return picks;
+    }
+
+    private static string KeyOf(string entry) => entry.IndexOf('/', StringComparison.Ordinal) is int slash and > 0 ? entry[..slash] : entry;
 
     /// <summary>The saved entry for <paramref name="key"/>'s <paramref name="code"/>: <c>ausaa34-uid4355/0f</c>.</summary>
     public static string Entry(string key, byte code) => key + "/" + code.ToString("x2", System.Globalization.CultureInfo.InvariantCulture);
@@ -47,7 +97,7 @@ public sealed class MonitorWords
             return null;
         }
 
-        var saved = _names.Keys.Concat(_hidden).Select(e => e.Split('/')[0]);
+        var saved = _names.Keys.Concat(_hidden).Select(e => e.Split('/')[0]).Concat(_pc.Keys);
         return MonitorKey.Saved(key, saved, _connected) ?? key;
     }
 
@@ -85,11 +135,14 @@ public sealed class MonitorWords
     /// <summary>
     /// The inputs a monitor's tab offers: <paramref name="offered"/> (the reported ones or the common four), every code given a name, and
     /// <paramref name="current"/> whatever its code; hidden ones left out unless current, or kept with <paramref name="all"/> (the
-    /// Input names… page); <paramref name="away"/> the input the app switched it away from, marked ↩.
+    /// Input names… page); <paramref name="away"/> the input the app switched it away from, marked ↩; the picked one <see cref="MonitorInputRow.ThisPc"/>.
+    /// A current of 0x00 is none (no input has it: some monitors answer a read they don't support with zeros), so no <c>0x00</c> row to switch to.
     /// </summary>
     public IReadOnlyList<MonitorInputRow> Rows(MonitorInfo monitor, IReadOnlyList<byte> offered, byte? current, byte? away, bool all = false)
     {
         ArgumentNullException.ThrowIfNull(offered);
+        current = MonitorShowing.Usable(current);
+        byte? pc = PcInput(monitor);
         var codes = offered.ToList();
         foreach (byte named in Named(monitor).Where(c => !codes.Contains(c)))
         {
@@ -102,7 +155,7 @@ public sealed class MonitorWords
         }
 
         return codes
-            .Select(c => new MonitorInputRow(c, Mccs.StandardName(c), Given(monitor, c), Hidden(monitor, c), c == current, c == away))
+            .Select(c => new MonitorInputRow(c, Mccs.StandardName(c), Given(monitor, c), Hidden(monitor, c), c == current, c == away, c == pc))
             .Where(r => all || !r.Hidden || r.Current)
             .ToList();
     }

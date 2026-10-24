@@ -47,6 +47,7 @@ public class ConsistencyPassTests
         .. new[] { PlanPickMode.Open, PlanPickMode.Talk, PlanPickMode.Ralph, PlanPickMode.Edit }.SelectMany(mode => new[] { PlanText.PickerKeys(mode, false), PlanText.PickerKeys(mode, true) }),   // the plans picker (2026-10-18)
         PlanText.ApprovalKeys, RalphText.CheckpointKeys, RalphText.ByHandKeys, RalphText.Hint,   // the approval pane with its Ralph row, the loop's checkpoint and its hint (later on 2026-10-18)
         NeonSidekick.Monitors.MonitorText.Keys, NeonSidekick.Monitors.MonitorText.NamesKeys, NeonSidekick.Monitors.MonitorText.EditKeys,   // the monitors pane (2026-10-23)
+        NeonSidekick.Monitors.MonitorText.PcKeys,   // its This PC's input… list (later on 2026-10-23)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)
     ];

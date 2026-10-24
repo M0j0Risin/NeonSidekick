@@ -25,11 +25,11 @@ public partial class ToolsMenuTests
     public void TheSubStrips_ArePinned()
     {
         Assert.Equal("         │ ↳ SQL · MySQL · SQLite · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
-        Assert.Equal("         │ ↳ Camera · Screen · Print ", SubStrip(ToolsText.DevicesTabTitle));   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
+        Assert.Equal(OperatingSystem.IsWindows() ? "         │ ↳ Camera · Screen · Monitors · Print " : "         │ ↳ Camera · Screen · Print ", SubStrip(ToolsText.DevicesTabTitle));   // Monitors later on 2026-10-23 (Windows only);   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day; Obsidian to Apps on 2026-10-17
         Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube · Obsidian ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15 until later that day (Admin); 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
         Assert.Equal("         │ ↳ Web · Shell · Clock · Timers · Ask · Help · Options ", SubStrip(ToolsText.CoreTabTitle));   // Clock and Help since 2026-10-18; the user's order since 2026-10-16
-        Assert.Equal(OperatingSystem.IsWindows() ? "         │ ↳ HomeAssistant · Shopping · Monitors " : "         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // Monitors 2026-10-23 (Windows only); 2026-10-11 (the user's ask)
+        Assert.Equal("         │ ↳ HomeAssistant · Shopping ", SubStrip(ToolsText.HomeTabTitle));   // Monitors here on 2026-10-23 until later that day (Devices); 2026-10-11 (the user's ask)
     }
 
     /// <summary>Admin's strip on Windows: every admin menu (later still on 2026-10-15, the admin-tools plan; Network first since 2026-10-16, the user's order).</summary>
@@ -210,7 +210,7 @@ public partial class ToolsMenuTests
         var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);
 
         Assert.Equal(["SQL", "MySQL", "SQLite", "PostgreSQL", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
-        Assert.Equal(["Camera", "Screen", "Print"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
+        Assert.Equal(OperatingSystem.IsWindows() ? ["Camera", "Screen", "Monitors", "Print"] : ["Camera", "Screen", "Print"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // Monitors later on 2026-10-23;   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal(4, page.Sub);
         Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count + SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.OracleTabTitle)].Count, page.Rows.Count);   // its headings too (2026-10-10)
         Assert.Null(page.Tabs[database].Shown.Footer!(0));   // the first heading says nothing

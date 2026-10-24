@@ -60,9 +60,9 @@ public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLay
 /// The one path every monitor change takes (2026-10-23, the monitors plan) — the pane, <c>/monitor</c> (the screen's and headless's) and the
 /// tools: the topology read afresh, the change checked against it, applied through <see cref="MonitorCalls"/> (cap and retry), a settle of
 /// <see cref="Settle"/>, the topology and the input read again, and a <see cref="MonitorOutcome"/>. <see cref="WarningAsync"/> is the question a
-/// change asks first — the last screen showing this PC switched away, or a layout around a monitor the app switched away
-/// (<see cref="MonitorAway"/>) — after the marked monitors' inputs are read again, so one switched back by its own buttons asks nothing; the
-/// caller asks it (headless never does). Every read is heard by <see cref="TopologyRead"/> and <see cref="InputRead"/>, the board's feed.
+/// change asks first — the last screen showing this PC switched away, or a layout around a monitor on another input — after every active
+/// monitor's input is read again and judged (<see cref="MonitorShowing"/>: the user's pick, the app's own marks in <see cref="MonitorAway"/>,
+/// the cable's kind; later on 2026-10-23), so one switched back by its own buttons asks nothing; the caller asks it (headless never does). Every read is heard by <see cref="TopologyRead"/> and <see cref="InputRead"/>, the board's feed.
 /// Failures come back as <see cref="MonitorOutcomeKind.Refused"/>, never a throw (a cancel is still one).
 /// </summary>
 public sealed class MonitorActions
@@ -101,11 +101,14 @@ public sealed class MonitorActions
         return snapshot;
     }
 
-    /// <summary><paramref name="monitor"/>'s input now (a mark cleared when it shows the input it left again).</summary>
-    public async Task<byte> ReadInputAsync(MonitorInfo monitor, CancellationToken cancellationToken)
+    /// <summary>
+    /// <paramref name="monitor"/>'s input now (a mark cleared when it shows the input it left again); <paramref name="retry"/> false for one
+    /// try only (the questions' reads, later on 2026-10-23: a monitor without DDC/CI costs one fast failure, not the retry's gap).
+    /// </summary>
+    public async Task<byte> ReadInputAsync(MonitorInfo monitor, CancellationToken cancellationToken, bool retry = true)
     {
         ArgumentNullException.ThrowIfNull(monitor);
-        byte current = await Calls.RunAsync("read input of " + monitor.Label, s => s.CurrentInput(monitor.Target), retry: true, cancellationToken).ConfigureAwait(false);
+        byte current = await Calls.RunAsync("read input of " + monitor.Label, s => s.CurrentInput(monitor.Target), retry, cancellationToken).ConfigureAwait(false);
         Away.Seen(monitor.Key, current);
         InputRead?.Invoke(monitor.Target, current);
         return current;
@@ -179,8 +182,10 @@ public sealed class MonitorActions
 
     /// <summary>
     /// The question <paramref name="change"/> asks before it runs, or null: switching away the last monitor still showing this PC
-    /// (<see cref="MonitorText.LastScreenQuestion"/>), Only or Make primary on a monitor the app switched away, Duplicate while one is
-    /// (<see cref="MonitorText.AwayLayoutQuestion"/>). The marked monitors' inputs are read again first; a read that fails keeps its mark.
+    /// (<see cref="MonitorText.LastScreenQuestion"/>), Only or Make primary on a monitor on another input, Duplicate while one is
+    /// (<see cref="MonitorText.AwayLayoutQuestion"/>). Since later on 2026-10-23 every active monitor's input is read first, once and with no
+    /// retry, and each is judged by <see cref="MonitorShowing"/> (the pick in <paramref name="words"/>, the read, the app's mark): a monitor
+    /// whose read fails can't be told, which counts as showing this PC unless the app's mark says otherwise (the count can only run high).
     /// A failure to read the topology asks nothing (the change itself then says why).
     /// </summary>
     public async Task<string?> WarningAsync(MonitorChange change, MonitorWords words, CancellationToken cancellationToken)
@@ -188,18 +193,19 @@ public sealed class MonitorActions
         ArgumentNullException.ThrowIfNull(change);
         ArgumentNullException.ThrowIfNull(words);
         MonitorSnapshot snapshot;
+        var reads = new Dictionary<string, byte>(StringComparer.Ordinal);
         try
         {
             snapshot = await QueryAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var marked in snapshot.Active.Where(m => Away.LeftFrom(m.Key) is not null && !m.Shared))
+            foreach (var active in snapshot.Active.Where(m => !m.Shared))
             {
                 try
                 {
-                    _ = await ReadInputAsync(marked, cancellationToken).ConfigureAwait(false);
+                    reads[active.Target] = await ReadInputAsync(active, cancellationToken, retry: false).ConfigureAwait(false);
                 }
                 catch (MonitorException)
                 {
-                    // The mark stands: the count can only run high.
+                    // Not known: Unknown, or Elsewhere by its mark.
                 }
             }
         }
@@ -208,31 +214,39 @@ public sealed class MonitorActions
             return null;
         }
 
+        MonitorShowing Showing(MonitorInfo monitor) =>
+            MonitorShowing.Judge(monitor, reads.TryGetValue(monitor.Target, out byte read) ? read : null, Away.LeftFrom(monitor.Key), words.PcInput(monitor));
+
         var m = change.Monitor is { } chosen ? snapshot.ByTarget(chosen.Target) : null;
+        string? question = null;
         if (change.Input is { } code)
         {
-            if (m is not { Active: true } || !Away.ShowsThisPc(m))
+            if (m is { Active: true } && Showing(m).Counts && !snapshot.Active.Any(o => o.Target != m.Target && Showing(o).Counts))
             {
-                return null;
+                question = MonitorText.LastScreenQuestion(m.Label, words.Describe(m, code));
             }
-
-            bool othersShow = snapshot.Active.Any(o => o.Target != m.Target && Away.ShowsThisPc(o));
-            return othersShow ? null : MonitorText.LastScreenQuestion(m.Label, words.Describe(m, code));
         }
-
-        if (change.Layout is MonitorLayout.Only or MonitorLayout.Primary && m is not null && Away.LeftFrom(m.Key) is { } left)
+        else if (change.Layout is MonitorLayout.Only or MonitorLayout.Primary && m is not null && Showing(m) is { IsElsewhere: true } away)
         {
-            return MonitorText.AwayLayoutQuestion(change.Describe(words), m.Label, words.Describe(m, left));
+            question = MonitorText.AwayLayoutQuestion(change.Describe(words), m.Label, MonitorText.Why(away, words, m));
         }
-
-        if (change.Layout == MonitorLayout.Duplicate
-            && snapshot.Active.FirstOrDefault(o => Away.LeftFrom(o.Key) is not null) is { } away && Away.LeftFrom(away.Key) is { } from)
+        else if (change.Layout == MonitorLayout.Duplicate && snapshot.Active.FirstOrDefault(o => Showing(o).IsElsewhere) is { } elsewhere)
         {
-            return MonitorText.DuplicateAwayQuestion(away.Label, words.Describe(away, from));
+            question = MonitorText.DuplicateAwayQuestion(elsewhere.Label, MonitorText.Why(Showing(elsewhere), words, elsewhere));
         }
 
-        return null;
+        DiagnosticLog.Debug("Monitors", change.Describe(words) + ": " + (question is null ? "no question" : "asks first") + " ("
+            + string.Join(", ", snapshot.Active.Select(o => o.Label + " " + ShowingLog(Showing(o)))) + ")");
+        return question;
     }
+
+    // A judgment as the log line names it: "this PC (picked)", "elsewhere (cable)", "unknown".
+    private static string ShowingLog(MonitorShowing showing) => showing.Kind switch
+    {
+        MonitorShowingKind.ThisPc => "this PC",
+        MonitorShowingKind.Elsewhere => "elsewhere",
+        _ => "unknown",
+    } + (showing.Basis is { } basis ? " (" + basis.ToString().ToLowerInvariant() + ")" : "");
 
     /// <summary>Applies <paramref name="change"/> (no question: the caller asked first) and says what came of it.</summary>
     public async Task<MonitorOutcome> ApplyAsync(MonitorChange change, MonitorWords words, CancellationToken cancellationToken)
@@ -276,7 +290,8 @@ public sealed class MonitorActions
         byte? from = null;
         try
         {
-            from = await ReadInputAsync(m, cancellationToken).ConfigureAwait(false);
+            // A 0x00 read is none (no input has it).
+            from = MonitorShowing.Usable(await ReadInputAsync(m, cancellationToken).ConfigureAwait(false));
         }
         catch (MonitorException e) when (e.Message is not (MonitorText.NoDdc or MonitorText.NoInputSwitch or MonitorText.NoMonitorControl))
         {
@@ -288,8 +303,12 @@ public sealed class MonitorActions
             return new MonitorOutcome(MonitorOutcomeKind.Unchanged, MonitorText.AlreadyOn(m.Label, input), before);
         }
 
+        // Both ends judged (later on 2026-10-23): a mark only when it was showing this PC, cleared by a switch to this PC's input.
+        byte? picked = words.PcInput(m);
+        bool fromCounts = MonitorShowing.Judge(m, from, Away.LeftFrom(m.Key), picked).Counts;
+        bool toIsPc = MonitorShowing.Judge(m, code, null, picked).Kind == MonitorShowingKind.ThisPc;
         await Calls.RunAsync("switch " + m.Label, s => s.SetInput(m.Target, code), retry: true, cancellationToken).ConfigureAwait(false);
-        Away.Switched(m.Key, from, code);
+        Away.Switched(m.Key, from, code, fromCounts, toIsPc);
         await Task.Delay(_settle, _time, cancellationToken).ConfigureAwait(false);
         var after = await QueryAsync(cancellationToken).ConfigureAwait(false);
         var now = after.ByTarget(m.Target);
@@ -304,6 +323,12 @@ public sealed class MonitorActions
             current = await ReadInputAsync(now, cancellationToken).ConfigureAwait(false);
         }
         catch (MonitorException)
+        {
+            return new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNoRead(now.Label, input), after);
+        }
+
+        // A 0x00 read says nothing (a monitor that answers zeros would report every switch ignored).
+        if (current == 0)
         {
             return new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNoRead(now.Label, input), after);
         }

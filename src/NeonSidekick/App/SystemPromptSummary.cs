@@ -914,7 +914,8 @@ public static class SystemPromptSummary
 
         if (monitors is { } screens)
         {
-            // The monitors (2026-10-23, the monitors plan): right after the shopping list, as on /tools › Home; offered while Monitor tools is on, on Windows, with a pane.
+            // The monitors (2026-10-23, the monitors plan): built after the shopping list (the groups are shown A to Z, SortedGroups, so the place
+            // here shows nowhere; /tools › Devices since later that day); offered while Monitor tools is on, on Windows, with a pane.
             string monitorsNote = !screens.Enabled ? NotOffered(screens.OffReason) : standing;
             groups.Add(Group(screens.Title, screens.Tools, monitorsNote, screens.Enabled && toolsEnabled, screens.Switch, disabled));
         }

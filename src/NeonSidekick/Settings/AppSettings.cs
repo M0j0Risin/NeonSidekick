@@ -891,6 +891,7 @@ public sealed class AppSettings : IDisposable
         MonitorTools = source.MonitorTools,
         MonitorInputNames = source.MonitorInputNames is null ? null : new Dictionary<string, string>(source.MonitorInputNames, StringComparer.Ordinal),
         MonitorInputsHidden = source.MonitorInputsHidden is null ? null : [.. source.MonitorInputsHidden],
+        MonitorPcInputs = source.MonitorPcInputs is null ? null : [.. source.MonitorPcInputs],
         ImageEditQuality = source.ImageEditQuality,
         ImageEditMetadata = source.ImageEditMetadata,
         ImageEditMode = source.ImageEditMode,

@@ -105,7 +105,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/monitor …</c> (2026-10-23): bare the pane, <c>&lt;n&gt;</c> on that monitor's tab, <c>list</c> the lines, the changes with their outcome
     /// as a notice line (an error line when refused); the last screen's question and the away rows' asked first (the pane, else a typed
-    /// <c>y</c>). The user's own hand: the tools' switch is not asked.
+    /// <c>y</c>). <c>&lt;n&gt; pc …</c> (later that day) sets this PC's input, asking nothing (<see cref="MonitorPc"/>). The user's own hand: the
+    /// tools' switch is not asked.
     /// </summary>
     private async Task HandleMonitorAsync(string args, INoticeSink sink, CancellationToken cancellationToken)
     {
@@ -150,6 +151,30 @@ internal sealed partial class ChatScreen
         }
 
         var words = MonitorWordsFor(snapshot);
+        if (line.Verb == MonitorVerb.Pc)
+        {
+            // This PC's input (later on 2026-10-23): a setting, nothing on the monitor changes, so nothing is asked.
+            var pc = await MonitorPc.RunAsync(board.Actions, board.State, monitor!, words, line.Input, cancellationToken).ConfigureAwait(false);
+            if (pc.Save is { } save)
+            {
+                _settings.Update(d => d.MonitorPcInputs = save(d.MonitorPcInputs));
+            }
+
+            foreach (string said in pc.Lines)
+            {
+                if (pc.Failed)
+                {
+                    sink.Error(said);
+                }
+                else
+                {
+                    sink.Notice(said);
+                }
+            }
+
+            return;
+        }
+
         MonitorChange change;
         if (line.Verb == MonitorVerb.Input)
         {

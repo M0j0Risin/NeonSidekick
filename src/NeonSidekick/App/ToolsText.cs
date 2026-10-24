@@ -280,7 +280,7 @@ public static class ToolsText
     /// <summary>The tab that holds the five database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then.</summary>
     public const string DatabaseTabTitle = "Databases";   // "Database" until later on 2026-10-10 (the user's ask)
 
-    /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Camera, Screen, Print since 2026-10-16 (the user's order). Pinned.</summary>
+    /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Camera, Screen, Print since 2026-10-16 (the user's order); Monitors between Screen and Print since later on 2026-10-23 (the user's ask, off Home; Windows only). Pinned.</summary>
     public const string DevicesTabTitle = "Devices";
 
     /// <summary>The tab that holds the menus of the apps and services the tools reach (2026-10-10, the user's pick): Docker, ComfyUI and YouTube, and Obsidian after them since 2026-10-17 (the user's order) — ClaudeCode first too until later that day, when the Claude Code
@@ -288,7 +288,7 @@ public static class ToolsText
     /// <see cref="HomeTabTitle"/>. "Integrations" until then (the user's pick: it no longer held every integration). Pinned.</summary>
     public const string AppsTabTitle = "Apps";
 
-    /// <summary>The tab that holds the household's menus, the strip's last after Devices (2026-10-11, the user's ask): HomeAssistant (off Integrations) and Shopping (off Core); Monitors after Shopping since 2026-10-23 (the monitors plan, Windows only). Pinned.</summary>
+    /// <summary>The tab that holds the household's menus, the strip's last after Devices (2026-10-11, the user's ask): HomeAssistant (off Integrations) and Shopping (off Core); Monitors after Shopping on 2026-10-23 (the monitors plan, Windows only) until later that day, when it went to Devices (the user's ask). Pinned.</summary>
     public const string HomeTabTitle = "Home";
 
     /// <summary>
@@ -312,7 +312,8 @@ public static class ToolsText
     /// plan) Admin after Apps holds EventLog (off Apps), Services, Tasks and Directory, and Core holds Network after Web. Since 2026-10-16 (the user's order) Core is Web, Shell, Timers, Ask, Options (Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18),
     /// Admin Network, EventLog, Services, Tasks, Directory, and Devices Camera, Screen, Print. Since 2026-10-17 (the user's order) Obsidian is
     /// Apps' last menu, after YouTube (Files' last until then): Files File, Image, UNC, GitLib; Apps Docker, ComfyUI, YouTube, Obsidian. Since
-    /// 2026-10-23 (the monitors plan) Home is HomeAssistant, Shopping, Monitors (Monitors Windows only).</summary>
+    /// 2026-10-23 (the monitors plan) Home is HomeAssistant, Shopping, Monitors (Monitors Windows only); later that day (the user's ask)
+    /// Monitors is on Devices between Screen and Print (Camera, Screen, Monitors, Print), Home back to HomeAssistant, Shopping.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, AdminTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
@@ -320,7 +321,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 6], [16, 21, 30]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 30, 6], [16, 21]];
 
     /// <summary>
     /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or

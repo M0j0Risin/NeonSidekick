@@ -212,7 +212,8 @@ public class NeonHelpTests
     {
         Assert.StartsWith("Tab /tools › Files › GitLib:", Invoke("/tools git"), StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Home › HomeAssistant:", Invoke("/tools home assistant"), StringComparison.Ordinal);   // on Home since 2026-10-11
-        Assert.StartsWith("Tab /tools › Home: " + HelpText.MenusTab(OperatingSystem.IsWindows() ? ["HomeAssistant", "Shopping", "Monitors"] : ["HomeAssistant", "Shopping"]), Invoke("/tools home"), StringComparison.Ordinal);   // Monitors 2026-10-23, Windows only   // the tab said whole wins over HomeAssistant
+        Assert.StartsWith("Tab /tools › Home: " + HelpText.MenusTab(["HomeAssistant", "Shopping"]), Invoke("/tools home"), StringComparison.Ordinal);   // Monitors here on 2026-10-23 until later that day (Devices)
+        Assert.StartsWith("Tab /tools › Devices: " + HelpText.MenusTab(OperatingSystem.IsWindows() ? ["Camera", "Screen", "Monitors", "Print"] : ["Camera", "Screen", "Print"]), Invoke("/tools devices"), StringComparison.Ordinal);   // Monitors between Screen and Print later on 2026-10-23, Windows only   // the tab said whole wins over HomeAssistant
         Assert.StartsWith("Tab /tools › Apps: " + HelpText.MenusTab(["Docker", "ComfyUI", "YouTube", "Obsidian"]), Invoke("/tools apps"), StringComparison.Ordinal);   // Obsidian last since 2026-10-17 (the user's order)
         Assert.StartsWith("Tab /tools › Admin: " + HelpText.MenusTab(OperatingSystem.IsWindows() ? ["Network", "EventLog", "Services", "Tasks", "Directory"] : ["Network", "EventLog", "Directory"]), Invoke("/tools admin"), StringComparison.Ordinal);   // a Mac's three since 2026-10-22   // Network first since 2026-10-16 (the user's order); later still on 2026-10-15 (the admin-tools plan)
         Assert.StartsWith("Tab /tools › Admin › EventLog:", Invoke("/tools eventlog"), StringComparison.Ordinal);

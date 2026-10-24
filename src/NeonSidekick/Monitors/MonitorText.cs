@@ -103,7 +103,7 @@ public static class MonitorText
 
     // ----- /monitor -----
 
-    public const string Usage = "/monitor takes nothing (the pane), list, extend, duplicate, or a monitor's number or name, then input <input>, only or primary; quote a name with spaces.";
+    public const string Usage = "/monitor takes nothing (the pane), list, extend, duplicate, or a monitor's number or name, then input <input>, pc <input>|now|auto, only or primary; quote a name with spaces.";
 
     public static string NoSuchMonitor(string typed, IReadOnlyList<int> numbers) =>
         "There is no monitor " + typed + (numbers.Count == 0 ? "." : "; the numbers are " + string.Join(", ", numbers.Select(n => n.ToString(CultureInfo.InvariantCulture))) + ".");
@@ -128,15 +128,44 @@ public static class MonitorText
         MonitorCommand.InputWord => "switch its input",
         MonitorCommand.OnlyWord => "turn off every other monitor",
         MonitorCommand.PrimaryWord => "make it the primary monitor",
+        MonitorCommand.PcWord => "set which of its inputs is this PC's",
+        MonitorCommand.NowWord => "this PC's input is the one it shows now",
+        MonitorCommand.AutoWord => "no pick: guess from the cable",
         _ => "",
     };
+
+    // ----- /monitor <n> pc (later on 2026-10-23: which input is this PC's) -----
+
+    public static string PcUsage(string monitor, IReadOnlyList<string> inputs) =>
+        "/monitor " + monitor + " pc takes an input (" + string.Join(", ", inputs) + "), now (the input it shows now) or auto (guess from the cable).";
+
+    /// <summary>Bare <c>pc</c>: the pick, else the cable's guess or none.</summary>
+    public static string PcNow(string monitor, string? picked, string? guessed, string connector) =>
+        picked is not null ? monitor + ": this PC's input is " + picked + " (picked)."
+            : monitor + ": this PC's input is not set; " + GuessWords(guessed, connector) + ".";
+
+    public static string PcSet(string monitor, string input) => monitor + ": this PC's input is " + input + ".";
+
+    public static string PcCleared(string monitor, string? guessed, string connector) => monitor + ": this PC's input is not set; " + GuessWords(guessed, connector) + ".";
+
+    private static string GuessWords(string? guessed, string connector) =>
+        guessed is not null ? "the " + connector + " cable guesses " + guessed
+            : MonitorShowing.CableKnown(connector) ? "the " + connector + " cable guesses from the input it shows"
+            : "nothing is guessed for a " + connector + " connection";
+
+    public static string PcNoRead(string monitor) => monitor + " didn't say which input it shows, so nothing was saved.";
+
+    public static string PcNoKey(string monitor) => monitor + " has no id to save a pick under (an indirect or virtual display).";
 
     /// <summary>Headless: the pane is the screen's.</summary>
     public const string NeedsScreen = "The monitors pane is part of the interactive screen; /monitor list prints them, and the changes run here too.";
 
     // ----- /monitor list and monitor_list -----
 
-    /// <summary>The lines <c>/monitor list</c> prints and <c>monitor_list</c> answers, from one place: the layout, then a line a monitor.</summary>
+    /// <summary>
+    /// The lines <c>/monitor list</c> prints and <c>monitor_list</c> answers, from one place: the layout (and, later on 2026-10-23, each monitor
+    /// on another input, <see cref="MonitorShowing"/>), then a line a monitor.
+    /// </summary>
     public static IReadOnlyList<string> ListLines(MonitorState state, MonitorWords words)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -147,7 +176,7 @@ public static class MonitorText
             return [NoMonitors];
         }
 
-        var lines = new List<string> { "Monitors: " + LayoutWord(snapshot.Layout) };
+        var lines = new List<string> { "Monitors: " + LayoutWord(snapshot.Layout) + ElsewhereTail(state.Elsewhere(words).Select(m => m.Label).ToList(), " · ") };
         foreach (var m in snapshot.Monitors)
         {
             var parts = new List<string> { m.Label, m.Connector };
@@ -169,6 +198,7 @@ public static class MonitorText
             }
 
             var inputs = state.InputsOf(m);
+            var showing = state.ShowingOf(m, words);
             if (m.Shared)
             {
                 parts.Add("duplicated: inputs can't be told apart");
@@ -179,8 +209,12 @@ public static class MonitorText
             }
             else if (inputs.Current is { } current)
             {
-                string away = state.AwayOf(m) is { } left ? ", left " + words.Describe(m, left) : "";
-                parts.Add("input " + words.Describe(m, current) + away + (inputs.Stale ? " (may be old)" : ""));
+                parts.Add(current == 0 ? ZeroRead : "input " + words.Describe(m, current) + (inputs.Stale ? " (may be old)" : ""));
+                if (ShowingWords(showing, words, m) is { } said)
+                {
+                    parts.Add(said);
+                }
+
                 var rows = words.Rows(m, inputs.Offered, current, state.AwayOf(m)).Where(r => !r.Hidden);
                 parts.Add("inputs " + string.Join(", ", rows.Select(r => (r.Given is { } g ? g + " " : "") + (r.Standard ?? Mccs.Hex(r.Code)) + " (" + Mccs.Hex(r.Code) + ")"))
                     + (inputs.Reported ? "" : " (not reported by the monitor)"));
@@ -188,12 +222,71 @@ public static class MonitorText
             else
             {
                 parts.Add("input not read");
+                if (ShowingWords(showing, words, m) is { } said)
+                {
+                    parts.Add(said);
+                }
             }
 
             lines.Add(string.Join(" · ", parts));
         }
 
         return lines;
+    }
+
+    /// <summary><c>--monitor-check</c>'s input line for a monitor the cable says is on another input.</summary>
+    public static string CheckElsewhere(string connector) => "another input (guessed from the " + connector + " cable)";
+
+    /// <summary>A monitor whose input read 0x00 (no input has it: some LG monitors answer a read they don't support with zeros).</summary>
+    public const string ZeroRead = "input not read (the monitor answered 0x00)";
+
+    /// <summary>A list line's judgment: <c>not this PC's (…)</c> by its basis, <c>this PC's input</c> for a picked match, else nothing.</summary>
+    public static string? ShowingWords(MonitorShowing showing, MonitorWords words, MonitorInfo monitor)
+    {
+        ArgumentNullException.ThrowIfNull(showing);
+        ArgumentNullException.ThrowIfNull(words);
+        ArgumentNullException.ThrowIfNull(monitor);
+        return showing switch
+        {
+            { Kind: MonitorShowingKind.ThisPc, Basis: MonitorShowingBasis.Picked } => "this PC's input",
+            { Kind: MonitorShowingKind.Elsewhere, Basis: MonitorShowingBasis.Picked, PcInput: { } pc } => "not this PC's (" + words.Describe(monitor, pc) + ")",
+            { Kind: MonitorShowingKind.Elsewhere, Basis: MonitorShowingBasis.Switched, Left: { } left } => "not this PC's (the app switched it from " + words.Describe(monitor, left) + ")",
+            { Kind: MonitorShowingKind.Elsewhere, Basis: MonitorShowingBasis.Cable } => "not this PC's (guessed from the " + monitor.Connector + " cable)",
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Why a monitor seems not to show this PC, as a predicate after its name: <c>shows HDMI-1, not this PC's DisplayPort-1</c>, <c>was switched
+    /// away from DisplayPort-1 by the app</c>, <c>seems to show another input (HDMI-1 on a DisplayPort cable)</c>. For the questions and footers.
+    /// </summary>
+    public static string Why(MonitorShowing showing, MonitorWords words, MonitorInfo monitor)
+    {
+        ArgumentNullException.ThrowIfNull(showing);
+        ArgumentNullException.ThrowIfNull(words);
+        ArgumentNullException.ThrowIfNull(monitor);
+        return showing switch
+        {
+            { Basis: MonitorShowingBasis.Picked, Current: { } now, PcInput: { } pc } => "shows " + words.Describe(monitor, now) + ", not this PC's " + words.Describe(monitor, pc),
+            { Basis: MonitorShowingBasis.Switched, Left: { } left } => "was switched away from " + words.Describe(monitor, left) + " by the app",
+            { Basis: MonitorShowingBasis.Cable, Current: { } now } => "seems to show another input (" + words.Describe(monitor, now) + " on a " + monitor.Connector + " cable)",
+            _ => "seems to show another input",
+        };
+    }
+
+    /// <summary>
+    /// The monitors on another input after a layout's word: <paramref name="lead"/> then <c>2 XG27UQDMS shows another input</c> or
+    /// <c>2 XG27UQDMS and 3 DELL show other inputs</c>; empty for none.
+    /// </summary>
+    public static string ElsewhereTail(IReadOnlyList<string> monitors, string lead)
+    {
+        ArgumentNullException.ThrowIfNull(monitors);
+        return monitors.Count switch
+        {
+            0 => "",
+            1 => lead + monitors[0] + " shows another input",
+            _ => lead + string.Join(", ", monitors.Take(monitors.Count - 1)) + " and " + monitors[^1] + " show other inputs",
+        };
     }
 
     /// <summary>A problem's few words on a list line.</summary>
@@ -245,10 +338,44 @@ public static class MonitorText
     /// <summary>The typed text's hint (a code, a rename).</summary>
     public const string EditKeys = "Enter = save · Esc = back";
 
-    /// <summary>The Layout tab's caption: the layout in force.</summary>
-    public static string LayoutNow(MonitorArrangement layout) => "Now " + LayoutWord(layout) + ".";
+    /// <summary>The Layout tab's caption: the layout in force, and (later on 2026-10-23) each monitor on another input.</summary>
+    public static string LayoutNow(MonitorArrangement layout, IReadOnlyList<string>? elsewhere = null) =>
+        "Now " + LayoutWord(layout) + ElsewhereTail(elsewhere ?? [], "; ") + ".";
 
     public static string NamesTitle(string monitor) => Title + " · " + monitor + " · Input names";
+
+    // ----- This PC's input (later on 2026-10-23, the user's ask: a choice, not a name to type) -----
+
+    public static string PcTitle(string monitor) => Title + " · " + monitor + " · This PC's input";
+
+    /// <summary>The pick list's hint.</summary>
+    public const string PcKeys = "Enter = pick · Esc = back";
+
+    /// <summary>A monitor tab's row: the pick, the cable's guess, or nothing set.</summary>
+    public static string PcRow(string? picked, string? guessed) =>
+        "This PC's input: " + (picked ?? (guessed is not null ? "guessed " + guessed : "not set")) + "…";
+
+    public const string PcRowFooter = "Which input is this PC's: it decides \"shows another input\" and when a change asks first. Nothing switches.";
+
+    /// <summary>The pick list's first row.</summary>
+    public static string PcNowRow(string input) => "The input it shows now: " + input;
+
+    public static string PcNowFooter(string code) => "Saves " + code + ", the code the monitor reports: pick it while the monitor shows this PC.";
+
+    public const string PcGuessRow = "Guess from the cable";
+
+    public const string PcNotSetRow = "Not set";
+
+    public static string PcGuessFooter(string connector) => "No pick: the " + connector + " cable guesses (HDMI on DisplayPort, or the reverse, is another input).";
+
+    public static string PcNotSetFooter(string connector) => "No pick: nothing is guessed for a " + connector + " connection.";
+
+    /// <summary>Dim tags on the pick list's rows and a tab's picked input.</summary>
+    public const string ThisPcTag = "this PC";
+
+    public const string CurrentTag = "current";
+
+    public const string GuessedTag = "guessed";
 
     public const string CurrentMark = "●";
 
@@ -269,16 +396,17 @@ public static class MonitorText
 
     public const string EnterCodeFooter = "Type a code in hex (0x1B, 1B) for an input the monitor doesn't list, such as USB-C.";
 
-    public const string InputNamesFooter = "Rename or hide this monitor's inputs (\"This PC\" for the one this PC is on).";
+    public const string InputNamesFooter = "Rename or hide this monitor's inputs.";
 
-    public static string InputFooter(byte code, bool away) => Mccs.Hex(code) + (away ? " · " + AwayFooter : "");
+    public static string InputFooter(byte code, bool away, bool thisPc = false) => Mccs.Hex(code) + (thisPc ? " · this PC's input" : "") + (away ? " · " + AwayFooter : "");
 
     /// <summary>The ↩'s meaning, on its row's footer.</summary>
-    public const string AwayFooter = "this PC's input before the app switched it";
+    public const string AwayFooter = "the input it showed before the app switched it";
 
-    public static string AwayRowFooter(string footer, string left) => footer + " Asks first: the app switched this monitor away from " + left + ".";
+    /// <summary>A layout row's footer for a monitor on another input: <paramref name="why"/> is <see cref="Why"/>'s.</summary>
+    public static string AwayRowFooter(string footer, string why) => footer + " Asks first: this monitor " + why + ".";
 
-    public const string DuplicateAwayFooter = DuplicateFooter + " Asks first: a monitor the app switched away can't be switched back while duplicated.";
+    public const string DuplicateAwayFooter = DuplicateFooter + " Asks first: a monitor on another input can't be switched back while duplicated.";
 
     public static string EnterCodePrompt(string monitor) => Title + " · " + monitor + " · Enter a code (hex)";
 
@@ -301,11 +429,13 @@ public static class MonitorText
     public static string LastScreenQuestion(string monitor, string input) =>
         "Switch " + monitor + " to " + input + "?\nNo other monitor would still show this PC; its own buttons or the other machine bring it back.";
 
-    public static string AwayLayoutQuestion(string change, string monitor, string left) =>
-        change + "?\n" + monitor + " was switched away from " + left + " by the app, so it may not show this PC.";
+    /// <summary>Only or Make primary on a monitor on another input; <paramref name="why"/> is <see cref="Why"/>'s.</summary>
+    public static string AwayLayoutQuestion(string change, string monitor, string why) =>
+        change + "?\n" + monitor + " " + why + ", so it may not show this PC.";
 
-    public static string DuplicateAwayQuestion(string monitor, string left) =>
-        "Duplicate?\n" + monitor + " was switched away from " + left + ", and while duplicated the app can't switch it back until Extend.";
+    /// <summary>Duplicate while a monitor is on another input; <paramref name="why"/> is <see cref="Why"/>'s.</summary>
+    public static string DuplicateAwayQuestion(string monitor, string why) =>
+        "Duplicate?\n" + monitor + " " + why + ", and while duplicated the app can't switch it back until Extend.";
 
     // ----- Layout words -----
 
@@ -316,15 +446,22 @@ public static class MonitorText
         _ => "extended",
     };
 
+    /// <summary>The connector words <see cref="MonitorShowing"/>'s cable guess knows.</summary>
+    public const string DisplayPortConnector = "DisplayPort";
+
+    public const string HdmiConnector = "HDMI";
+
+    public const string UsbCConnector = "USB-C";
+
     /// <summary>The connector's word for a CCD output technology (<c>DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY</c>).</summary>
     public static string Connector(uint technology) => technology switch
     {
         0 => "VGA",
         4 => "DVI",
-        5 => "HDMI",
-        10 => "DisplayPort",
+        5 => HdmiConnector,
+        10 => DisplayPortConnector,
         11 => "Internal",
-        18 => "USB-C",
+        18 => UsbCConnector,
         15 => "Miracast",
         16 or 17 => "Indirect",
         0x80000000 => "Internal",

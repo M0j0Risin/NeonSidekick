@@ -1409,7 +1409,7 @@ public sealed partial class SidekickApp
                 // /monitor (2026-10-23, the monitors plan): ahead of the server check too — no LLM needed; list and the changes, unasked.
                 if (SlashCommands.Parse(text) is (SlashCommand.Monitor, var monitorArgs))
                 {
-                    var (monitorLines, monitorFailed) = await MonitorLinesAsync(monitorActions, EffectiveSettings, monitorArgs, cancellationToken).ConfigureAwait(false);
+                    var (monitorLines, monitorFailed) = await MonitorLinesAsync(monitorActions, EffectiveSettings, monitorArgs, change => _settings.Update(change), cancellationToken).ConfigureAwait(false);
                     foreach (string monitorLine in monitorLines)
                     {
                         await HeadlessLineAsync((monitorFailed ? "[error] " : "") + monitorLine).ConfigureAwait(false);

@@ -28,7 +28,7 @@ public abstract class MonitorTool : AIFunction
 
     private protected MonitorToolHooks Hooks { get; }
 
-    private protected MonitorWords Words(MonitorSnapshot snapshot) => new(Hooks.Effective().MonitorInputNames, Hooks.Effective().MonitorInputsHidden, snapshot.Monitors);
+    private protected MonitorWords Words(MonitorSnapshot snapshot) => MonitorWords.For(Hooks.Effective(), snapshot.Monitors);
 
     /// <summary>The monitor <c>monitor</c> names (a number from <c>monitor_list</c> or a name, a JSON number or a string), or the refusal.</summary>
     private protected async Task<(MonitorInfo? Monitor, string? Error)> MonitorArgAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

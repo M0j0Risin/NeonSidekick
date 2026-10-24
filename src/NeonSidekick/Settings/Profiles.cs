@@ -465,7 +465,7 @@ public static class Profiles
     /// back to empty left the sidekick unable to answer (the LLM's API key joined them later that day,
     /// the user's call; the Home Assistant server and its token on 2026-09-28, beside ComfyUI's; the YouTube API key on 2026-10-05, the user's ask; whether the
     /// profile offered its shortcut on 2026-10-16; the monitors' input names and hidden inputs on 2026-10-23, the monitors plan: they describe
-    /// this PC's cabling). <c>--all</c> resets them too. The property
+    /// this PC's cabling; which input of each is this PC's later that day). <c>--all</c> resets them too. The property
     /// names, in <see cref="KeepOnReset"/>'s order.
     /// </summary>
     public static readonly string[] ResetKeptSettings =
@@ -491,6 +491,7 @@ public static class Profiles
         nameof(AppSettingsData.ShortcutOffered),
         nameof(AppSettingsData.MonitorInputNames),
         nameof(AppSettingsData.MonitorInputsHidden),
+        nameof(AppSettingsData.MonitorPcInputs),
     };
 
     /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
@@ -517,6 +518,7 @@ public static class Profiles
         to.ShortcutOffered = from.ShortcutOffered; // 2026-10-16: a profile asked once is not asked again after a plain reset
         to.MonitorInputNames = from.MonitorInputNames;     // 2026-10-23: this PC's cabling, not a taste
         to.MonitorInputsHidden = from.MonitorInputsHidden;
+        to.MonitorPcInputs = from.MonitorPcInputs;         // later on 2026-10-23: which input is this PC's, the same cabling
         // The embedded switch with a kept embedded URL (2026-10-22, a review: off by default since 2026-10-21, so a reset kept the URL and model and
         // took the switch away, and the saved URL then read as none — the failure the kept settings are for). Not one of ResetKeptSettings: it
         // follows the URL.

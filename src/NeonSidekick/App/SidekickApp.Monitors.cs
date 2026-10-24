@@ -10,9 +10,12 @@ public sealed partial class SidekickApp
     /// Headless's <c>/monitor</c>: <c>list</c> and every change (the user's own line), run over the bare system through <see cref="MonitorActions"/>
     /// (no board, no clock) and unasked — headless has no yes/no of its own, and its user is on a pipe or SSH, not looking at that screen. Bare
     /// <c>/monitor</c> and <c>/monitor &lt;n&gt;</c> answer <see cref="MonitorText.NeedsScreen"/>; no monitor system, <see cref="MonitorText.NoneHere"/>.
+    /// <c>&lt;n&gt; pc …</c> (later on 2026-10-23) saves this PC's input through <paramref name="update"/>, the settings' own <c>Update</c>.
     /// </summary>
-    internal static async Task<(IReadOnlyList<string> Lines, bool Failed)> MonitorLinesAsync(MonitorActions? actions, Settings.AppSettingsData effective, string args, CancellationToken cancellationToken)
+    internal static async Task<(IReadOnlyList<string> Lines, bool Failed)> MonitorLinesAsync(MonitorActions? actions, Settings.AppSettingsData effective, string args,
+        Action<Action<Settings.AppSettingsData>> update, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(update);
         if (actions is null)
         {
             return ([MonitorText.NoneHere], true);
@@ -43,6 +46,17 @@ public sealed partial class SidekickApp
             if (line.Monitor is { } typed && (monitor = MonitorCommand.Find(snapshot, typed, out string? error)) is null)
             {
                 return ([error!], true);
+            }
+
+            if (line.Verb == MonitorVerb.Pc)
+            {
+                var pc = await MonitorPc.RunAsync(actions, state, monitor!, words, line.Input, cancellationToken).ConfigureAwait(false);
+                if (pc.Save is { } save)
+                {
+                    update(d => d.MonitorPcInputs = save(d.MonitorPcInputs));
+                }
+
+                return (pc.Lines, pc.Failed);
             }
 
             MonitorChange change;

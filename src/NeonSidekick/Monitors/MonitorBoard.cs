@@ -36,6 +36,17 @@ public sealed record MonitorState(MonitorSnapshot Topology, IReadOnlyDictionary<
 
     /// <summary>The input the app switched <paramref name="monitor"/> away from, or null.</summary>
     public byte? AwayOf(MonitorInfo monitor) => monitor.Key is { } key && Away.TryGetValue(key, out byte left) ? left : null;
+
+    /// <summary>Whether <paramref name="monitor"/> shows this PC (later on 2026-10-23): its input as read, its away mark and the pick in <paramref name="words"/>.</summary>
+    public MonitorShowing ShowingOf(MonitorInfo monitor, MonitorWords words)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(words);
+        return MonitorShowing.Judge(monitor, InputsOf(monitor).Current, AwayOf(monitor), words.PcInput(monitor));
+    }
+
+    /// <summary>The monitors on another input, in number order.</summary>
+    public IReadOnlyList<MonitorInfo> Elsewhere(MonitorWords words) => Topology.Monitors.Where(m => ShowingOf(m, words).IsElsewhere).ToList();
 }
 
 /// <summary>

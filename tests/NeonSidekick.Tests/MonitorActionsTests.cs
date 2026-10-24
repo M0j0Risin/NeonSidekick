@@ -264,9 +264,11 @@ public sealed class MonitorActionsTests
     {
         await Switch(FakeMonitorSystem.Xg, 0x11);
         var xg = Monitor(FakeMonitorSystem.Xg);
-        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.OnlyRow("2 XG27UQDMS"), "2 XG27UQDMS", "DisplayPort-1"), await Warning(MonitorChange.Arrange(MonitorLayout.Only, xg)));
-        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.PrimaryRow("2 XG27UQDMS"), "2 XG27UQDMS", "DisplayPort-1"), await Warning(MonitorChange.Arrange(MonitorLayout.Primary, xg)));
-        Assert.Equal(MonitorText.DuplicateAwayQuestion("2 XG27UQDMS", "DisplayPort-1"), await Warning(MonitorChange.Arrange(MonitorLayout.Duplicate)));
+        string why = MonitorText.Why(MonitorShowing.Judge(xg, 0x11, 0x0F, null), Words, xg);   // "was switched away from DisplayPort-1 by the app"
+        Assert.Contains("DisplayPort-1", why, StringComparison.Ordinal);
+        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.OnlyRow("2 XG27UQDMS"), "2 XG27UQDMS", why), await Warning(MonitorChange.Arrange(MonitorLayout.Only, xg)));
+        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.PrimaryRow("2 XG27UQDMS"), "2 XG27UQDMS", why), await Warning(MonitorChange.Arrange(MonitorLayout.Primary, xg)));
+        Assert.Equal(MonitorText.DuplicateAwayQuestion("2 XG27UQDMS", why), await Warning(MonitorChange.Arrange(MonitorLayout.Duplicate)));
         Assert.Null(await Warning(MonitorChange.Arrange(MonitorLayout.Only, Monitor(FakeMonitorSystem.Lg))));
         Assert.Null(await Warning(MonitorChange.Arrange(MonitorLayout.Extend)));
     }
@@ -278,6 +280,74 @@ public sealed class MonitorActionsTests
         _fake.Of(FakeMonitorSystem.Xg).Gdi = @"\\.\DISPLAY0";   // now first in the screen capture's order
         var xg = Monitor(FakeMonitorSystem.Xg);
         Assert.Equal(1, xg.Number);
-        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.OnlyRow("1 XG27UQDMS"), "1 XG27UQDMS", "DisplayPort-1"), await Warning(MonitorChange.Arrange(MonitorLayout.Only, xg)));
+        string why = MonitorText.Why(MonitorShowing.Judge(xg, 0x11, 0x0F, null), Words, xg);
+        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.OnlyRow("1 XG27UQDMS"), "1 XG27UQDMS", why), await Warning(MonitorChange.Arrange(MonitorLayout.Only, xg)));
+    }
+
+    // ----- Later on 2026-10-23: the judgment (the user's pick, the cable) in the questions and the record -----
+
+    private MonitorWords Picked(byte xgPc) => new(null, null, _fake.Query().Monitors, [XgKey + "/" + xgPc.ToString("x2", System.Globalization.CultureInfo.InvariantCulture)]);
+
+    [Fact]
+    public async Task TheLastScreen_Asks_WhenTheOtherMonitorIsOnAnotherInput_ByItsButtons()
+    {
+        // The user's report: the XG27 on HDMI-1 by its own buttons (the app never knew). The cable says it's another input, so switching
+        // the LG away now asks; switching the XG27 itself asks nothing, it doesn't show this PC.
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x11;
+        Assert.Equal(MonitorText.LastScreenQuestion("1 LG ULTRAWIDE", "HDMI-1"), await Warning(MonitorChange.SwitchInput(Monitor(FakeMonitorSystem.Lg), 0x11)));
+        Assert.Null(await Warning(MonitorChange.SwitchInput(Monitor(FakeMonitorSystem.Xg), 0x12)));
+
+        // By the pick: the XG27's input is HDMI-1 (a laptop on this PC's own HDMI cable, say): it shows this PC, nothing asked.
+        Assert.Null(await _actions.WarningAsync(MonitorChange.SwitchInput(Monitor(FakeMonitorSystem.Lg), 0x11), Picked(0x11), CancellationToken.None));
+        // And a pick of DisplayPort-1 with the XG27 on HDMI-2: another input, asked.
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x12;
+        Assert.NotNull(await _actions.WarningAsync(MonitorChange.SwitchInput(Monitor(FakeMonitorSystem.Lg), 0x11), Picked(0x0F), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task OnlyAndDuplicate_AskForAGuessedOne_WithItsWhy()
+    {
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x11;
+        var xg = Monitor(FakeMonitorSystem.Xg);
+        string why = MonitorText.Why(MonitorShowing.Judge(xg, 0x11, null, null), Words, xg);
+        Assert.Contains("DisplayPort cable", why, StringComparison.Ordinal);
+        Assert.Equal(MonitorText.AwayLayoutQuestion(MonitorText.OnlyRow("2 XG27UQDMS"), "2 XG27UQDMS", why), await Warning(MonitorChange.Arrange(MonitorLayout.Only, xg)));
+        Assert.Equal(MonitorText.DuplicateAwayQuestion("2 XG27UQDMS", why), await Warning(MonitorChange.Arrange(MonitorLayout.Duplicate)));
+        Assert.Null(await Warning(MonitorChange.Arrange(MonitorLayout.Only, Monitor(FakeMonitorSystem.Lg))));
+    }
+
+    [Fact]
+    public async Task TheQuestionsReads_AreOneEach_NoRetry()
+    {
+        _fake.Of(FakeMonitorSystem.Lg).DdcFail = MonitorText.NoDdc;
+        Assert.Null(await Warning(MonitorChange.SwitchInput(Monitor(FakeMonitorSystem.Xg), 0x11)));   // the LG can't be told: it counts
+        Assert.Equal(1, _fake.Count("read " + FakeMonitorSystem.Lg));   // once, not retried
+        Assert.Equal(1, _fake.Count("read " + FakeMonitorSystem.Xg));
+    }
+
+    [Fact]
+    public async Task SwitchingBack_FromAnInputTheButtonsChose_LeavesNoMark()
+    {
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x11;   // its own buttons
+        await Switch(FakeMonitorSystem.Xg, 0x0F);      // the app brings it back to this PC
+        Assert.Null(_actions.Away.LeftFrom(XgKey));     // never "left HDMI-1"
+
+        await Switch(FakeMonitorSystem.Xg, 0x11);      // away from this PC: marked
+        Assert.Equal((byte)0x0F, _actions.Away.LeftFrom(XgKey));
+    }
+
+    [Fact]
+    public async Task A0x00Read_MarksNothing_AndASwitchThatReadsIt_SaysNoRead()
+    {
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x00;   // an LG-style all-zero reply
+        var outcome = await Switch(FakeMonitorSystem.Xg, 0x11);
+        Assert.Null(_actions.Away.LeftFrom(XgKey));
+
+        // The fake now reads 0x11 (it took it): a plain switch. A monitor that keeps answering zeros says it couldn't read back.
+        Assert.Equal(MonitorOutcomeKind.Switched, outcome.Kind);
+        _fake.Of(FakeMonitorSystem.Xg).Ignores.Add(0x12);
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x00;
+        var zero = await Switch(FakeMonitorSystem.Xg, 0x12);
+        Assert.Equal(MonitorText.SwitchedNoRead("2 XG27UQDMS", "HDMI-2"), zero.Text);
     }
 }

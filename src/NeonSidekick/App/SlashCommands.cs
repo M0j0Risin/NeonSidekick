@@ -298,8 +298,9 @@ public enum SlashCommand
 
     /// <summary>
     /// <c>/monitor</c> (2026-10-23, the monitors plan): bare the monitors pane (a Layout tab, a tab per monitor), <c>list</c> the lines,
-    /// <c>&lt;n|name&gt;</c> on that monitor's tab, <c>&lt;n|name&gt; input &lt;input&gt;</c>, <c>&lt;n|name&gt; only|primary</c>, <c>extend</c>,
-    /// <c>duplicate</c> (<see cref="Monitors.MonitorCommand"/>). The user's own hand, whatever <c>Monitor tools</c> says. Windows only.
+    /// <c>&lt;n|name&gt;</c> on that monitor's tab, <c>&lt;n|name&gt; input &lt;input&gt;</c>, <c>&lt;n|name&gt; pc &lt;input&gt;|now|auto</c> (later that day:
+    /// this PC's input), <c>&lt;n|name&gt; only|primary</c>, <c>extend</c>, <c>duplicate</c> (<see cref="Monitors.MonitorCommand"/>). The user's own
+    /// hand, whatever <c>Monitor tools</c> says. Windows only.
     /// </summary>
     Monitor,
 

@@ -78,11 +78,66 @@ public partial class ChatScreenTests
         Assert.Contains("1 LG ULTRAWIDE · DisplayPort · 3440×1440 at 159.96 Hz · primary · input DisplayPort-1", output);
         Assert.Contains(MonitorText.Switched("2 XG27UQDMS", "HDMI-1"), output);
         Assert.Equal(["input A:4355 11"], fake.Changes);
-        Assert.Contains("input HDMI-1, left DisplayPort-1", output);
+        Assert.Contains("Monitors: extended" + MonitorText.ElsewhereTail(["2 XG27UQDMS"], " · "), output);   // later on 2026-10-23
+        Assert.Contains("input HDMI-1 · not this PC's (the app switched it from DisplayPort-1)", output);
         Assert.Contains(MonitorText.NoSuchMonitor("3", [1, 2]), output);
         Assert.Contains(MonitorText.Usage, output);
         Assert.Contains(MonitorText.InputUsage("XG27UQDMS", ["DisplayPort-1", "HDMI-1", "HDMI-2"]), output);
         Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task Monitor_AnotherInputByItsButtons_TheListSaysSo_AndPcTypedSetsAndClears()
+    {
+        // The user's report (later on 2026-10-23): the XG27 on HDMI-1 by its own buttons read "extended" and nothing more.
+        var fake = MonitorsFixture(pane: false);
+        fake.Of(FakeMonitorSystem.Xg).Input = 0x11;
+        PushLine("/monitor list");
+        PushLine("/monitor 2 pc displayport-1");
+        PushLine("/monitor list");
+        PushLine("/monitor 2 pc");
+        PushLine("/monitor 2 pc now");
+        PushLine("/monitor 2 pc auto");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("Monitors: extended" + MonitorText.ElsewhereTail(["2 XG27UQDMS"], " · "), output);
+        Assert.Contains("input HDMI-1 · not this PC's (guessed from the DisplayPort cable)", output);
+        Assert.Contains(MonitorText.PcSet("2 XG27UQDMS", "DisplayPort-1"), output);
+        Assert.Contains("input HDMI-1 · not this PC's (DisplayPort-1)", output);
+        Assert.Contains(MonitorText.PcNow("2 XG27UQDMS", "DisplayPort-1", null, "DisplayPort"), output);
+        Assert.Contains(MonitorText.PcSet("2 XG27UQDMS", "HDMI-1 (0x11)"), output);   // now: the input it shows, read afresh
+        Assert.Contains(MonitorText.PcCleared("2 XG27UQDMS", "DisplayPort-1", "DisplayPort"), output);
+        Assert.Null(_settings.Current.MonitorPcInputs);
+        Assert.Empty(fake.Changes);   // a setting: nothing switched
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task MonitorsPane_ThisPcsInput_ThePickList_ReadsAfresh_SavesAndTags()
+    {
+        var fake = MonitorsFixture(pane: true);
+        GatedSteps(
+            Now(Line("/monitor 2")),
+            Shown("  HDMI-2", input => input.Push(Keys.End, Keys.Up, Keys.Up, Keys.Enter)),   // This PC's input… (above Enter a code…, Input names…)
+            Shown(MonitorText.PcTitle("2 XG27UQDMS"), input =>
+            {
+                fake.Of(FakeMonitorSystem.Xg).Input = 0x11;   // switched by its buttons after the pane read it
+                input.Push(Keys.Home, Keys.Enter);           // the input it shows now
+            }),
+            Shown(MonitorText.PcSet("2 XG27UQDMS", "HDMI-1 (0x11)"), input => input.Push(Keys.Escape)),
+            Now(Line("/exit")));
+
+        string output = await RunAsync();
+
+        Assert.Contains(MonitorText.PcRow(null, "DisplayPort-1"), output);   // before: the cable's guess
+        Assert.Contains(MonitorText.PcNowRow("DisplayPort-1"), output);      // the label the pane had read
+        Assert.Contains(MonitorText.PcGuessRow, output);
+        Assert.Equal(["ausaa34-uid4355/11"], _settings.Current.MonitorPcInputs);   // the fresh read, not the label's
+        Assert.Contains(MonitorText.PcRow("HDMI-1", null), output);           // back on the tab: the pick
+        Assert.Contains("HDMI-1  " + MonitorText.ThisPcTag, output);
+        Assert.Empty(fake.Changes);
     }
 
     [Fact]

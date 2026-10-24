@@ -870,7 +870,7 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `p
 
 ### Devices
 
-The camera, screen and printer tools.
+The camera, screen, monitor and printer tools.
 
 #### Camera
 
@@ -897,6 +897,16 @@ The camera, screen and printer tools.
 | Screen preview | The picture viewer opens on each screenshot, so you see what was sent. | on |
 | Screen output folder | Where screenshots are saved, under the profile's `images` folder. | `screen` |
 | Screen keep in sessions | Keeps screenshots in stored sessions. Off, a stored session keeps a line naming the screenshot instead. | off |
+
+#### Monitors
+
+Windows only.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Monitor tools | Offers the [monitor tools](TOOLS.md#monitors) (`monitor_list`, `monitor_input`, `monitor_layout`); the changes ask first, and only with the pane. `/monitor` works either way. | off |
+
+Each monitor's input names, hidden inputs and *This PC's input* are set on the [monitors pane](INTERFACE.md#the-monitors-pane) (*Input names…*, *This PC's input…*), per profile; a plain `/profile reset` keeps them.
 
 #### Print
 
@@ -933,16 +943,6 @@ The services that run unasked under `ask` can be changed in `profile.json` (`Hom
 | Shopping tools | Offers the shopping list's tools ([Shopping list](TOOLS.md#shopping-list)). The list and its stores live in the profile's `db\shopping\shopping.db`. | off |
 | Shopping list | Enter opens the shopping list, the same pane as `/shopping` and the toolbar's 🛒. | — |
 | Shopping stores | Enter opens the stores' manager: add, rename or remove a store, choose the store the list is ordered for, and edit its layout (`l`). | — |
-
-#### Monitors
-
-Windows only.
-
-| Setting | What it does | Default |
-|---|---|---|
-| Monitor tools | Offers the [monitor tools](TOOLS.md#monitors) (`monitor_list`, `monitor_input`, `monitor_layout`); the changes ask first, and only with the pane. `/monitor` works either way. | off |
-
-Each monitor's input names and hidden inputs are set from its *Input names…* on the [monitors pane](INTERFACE.md#the-monitors-pane), per profile; a plain `/profile reset` keeps them.
 
 ## MCP servers (`/mcp`)
 
