@@ -257,6 +257,14 @@ internal static class RalphJudge
                         SetBox(host, path, target, false);
                         checkFailed = true;
                         tail = result?.Tail;
+                        if (result is { Kind: RalphCheckKind.NotThereYet, Script: { } missing })
+                        {
+                            // Its script isn't there yet (2026-10-24): a failed check, the next pass told to write it rather than that the check failed.
+                            host.Notice(RalphText.CheckNotThereNotice(verify, missing));
+                            loop.PendingNotes = RalphText.CheckNotThereNote(verify, missing);
+                            break;
+                        }
+
                         host.Notice(result is { Kind: RalphCheckKind.TimedOut } ? RalphText.CheckTimedOutNotice(verify, snapshot.CheckTimeoutSeconds) : RalphText.CheckFailedNotice(verify));
                         host.Tail(tail ?? "");
                         loop.PendingNotes = RalphText.CheckFailedNote(verify, RalphLog.CleanTail(tail ?? ""));

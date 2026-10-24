@@ -385,6 +385,7 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * A plan with no `- [ ]` steps under `## Steps` is refused. A hand-edited plan's boxed headings, bare and bold boxes are saved as `- [ ]` steps first.
 * **The baseline:** the checks run once on the project as it is. If `verify:` fails you may start anyway; the steps then go unchecked and verify runs once at the end.
   * If only `final:` fails (say, a test of the work still to do), starting anyway keeps the steps checked.
+  * A check whose script isn't there yet (the plan writes it) is skipped, and the steps stay checked. After a step, it counts as failed until the script is there; the police still read the script before it runs.
 * **The log:** each pass is an entry in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, what it learned); the oldest entries go as it grows. A `ralph.lock` keeps a second Neon Sidekick off the plan: while the loop runs, the other can't run, open, revise or approve it. Mind that folder before you commit `.neon/`.
   * A lock another PC wrote (a shared or synced folder) is never taken over: the error names that PC and the file to delete if its run is gone.
 * **Checkpoint:** with *Ralph loop checkpoint* above 0, every N steps that stand ask **Keep**, **Redo with a note…**, **View the changes** or **Stop the loop**, at the PC and on the [Web UI](INTERFACE.md#web-ui).

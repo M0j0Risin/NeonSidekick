@@ -66,6 +66,12 @@ public sealed partial class SidekickApp
 
         public async Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken)
         {
+            // A script it runs isn't there yet (2026-10-24): not run, a failed check, asked before the police so one written in between is read.
+            if (RalphVerifier.NotThereYet(command, shell, Files, app.EffectiveSettings) is { } notThere)
+            {
+                return notThere;
+            }
+
             // The police, the policy and the allow list again before every run (2026-10-19, the review): a pass may rewrite what the command runs.
             string? refused = HeadlessCheckRefusal(command, shell, Files, app.EffectiveSettings, context, out bool off);
             if (refused is not null || off)
@@ -129,10 +135,17 @@ public sealed partial class SidekickApp
             }
         }
 
-        public string? Refusal(string command, ShellKind shell, out bool off) => HeadlessCheckRefusal(command, shell, files, effective, context, out off);
+        public string? Refusal(string command, ShellKind shell, out bool off) => HeadlessCheckRefusal(command, shell, files, effective, context, out off, missingScriptsPass: true);
+
+        public string? MissingScript(string command) => RalphVerifier.MissingScript(command, files);
 
         public async Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken)
         {
+            if (RalphVerifier.NotThereYet(command, shell, files, app.EffectiveSettings) is { } notThere)
+            {
+                return notThere;
+            }
+
             string? refused = HeadlessCheckRefusal(command, shell, files, app.EffectiveSettings, context, out bool off);
             if (refused is not null || off)
             {
@@ -659,10 +672,11 @@ public sealed partial class SidekickApp
     /// Why a check may not run headless now (2026-10-19, the review): the police's refusal, a shell not installed, or — under <c>Shell command
     /// policy</c> ask, where nobody can be asked — a command not on the allow list, as <c>run_command</c>'s would be; null when it may.
     /// <paramref name="off"/> says the policy is off (no refusal: the loop's start reads it as "the steps go unchecked").
+    /// <paramref name="missingScriptsPass"/> is the start's pre-check alone (<see cref="RalphVerifier.Refusal"/>).
     /// </summary>
-    private static string? HeadlessCheckRefusal(string command, ShellKind shell, WorkingDirectory files, AppSettingsData effective, HeadlessRalphContext context, out bool off)
+    private static string? HeadlessCheckRefusal(string command, ShellKind shell, WorkingDirectory files, AppSettingsData effective, HeadlessRalphContext context, out bool off, bool missingScriptsPass = false)
     {
-        if (RalphVerifier.Refusal(command, shell, files.Root, files, effective, context.Interpreters.Locate, out off) is { } police)
+        if (RalphVerifier.Refusal(command, shell, files.Root, files, effective, context.Interpreters.Locate, out off, missingScriptsPass) is { } police)
         {
             return police;
         }

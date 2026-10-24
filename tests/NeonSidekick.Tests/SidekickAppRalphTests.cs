@@ -104,6 +104,36 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanRalph_ACheckWhoseScriptIsNotThereYet_StartsChecked()
+    {
+        // 2026-10-24, the user's report: a plan whose first step writes the script its check runs was refused by the police before it started.
+        const string check = "python hello.py --test";
+        ServerOn1234("llama");
+        HeadlessRalphPlan(verify: check);
+        AllowHeadlessCheck(check);
+        string script = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "hello.py");
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                File.WriteAllText(script, "print('hi')");
+            }
+
+            return Task.CompletedTask;
+        };
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Contains("[notice] " + RalphText.BaselineNotThereNotice(check, "hello.py"), output);
+        Assert.DoesNotContain(RalphText.BaselineRefusedHeadless(check), output);
+        Assert.Equal([check, check], _ralphVerifier.Commands);   // no baseline run, then each step's check
+        Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 6, finalOnly: false), output);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
+    [Fact]
     public async Task Headless_PlanRalph_AFailedTurn_IsTriedOnceMore_ThenStalls()
     {
         ServerOn1234("llama");

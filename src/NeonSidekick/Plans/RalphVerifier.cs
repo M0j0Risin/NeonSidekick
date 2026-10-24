@@ -24,10 +24,19 @@ public enum RalphCheckKind
     /// list. It came back as <see cref="Cancelled"/> before, so the loop stopped as if the user had stopped it, and the stop tone stayed silent.
     /// </summary>
     Refused,
+
+    /// <summary>
+    /// A script the line runs isn't there yet, so the line wasn't run (2026-10-24, the user's report: a plan whose step writes the script its check
+    /// runs). A failed check in the loop, skipped at the baseline (<see cref="RalphVerifier.NotThereYet"/>).
+    /// </summary>
+    NotThereYet,
 }
 
-/// <summary>A check's result: how it ended, its exit code, the last lines of its output (at most <see cref="RalphLog.TailLines"/>) and how long it ran.</summary>
-public sealed record RalphCheckResult(RalphCheckKind Kind, int? ExitCode, string Tail, TimeSpan Elapsed)
+/// <summary>
+/// A check's result: how it ended, its exit code, the last lines of its output (at most <see cref="RalphLog.TailLines"/>), how long it ran, and for
+/// <see cref="RalphCheckKind.NotThereYet"/> the missing script's name.
+/// </summary>
+public sealed record RalphCheckResult(RalphCheckKind Kind, int? ExitCode, string Tail, TimeSpan Elapsed, string? Script = null)
 {
     public bool Passed => Kind == RalphCheckKind.Passed;
 
@@ -71,8 +80,9 @@ public sealed class RalphVerifier : IRalphVerifier
     /// <summary>
     /// Why <paramref name="command"/> may not run as a check: <c>Shell command policy</c> off (null result in <paramref name="off"/>: no check, the
     /// steps unchecked), the police's refusal, a shell that is not installed, or a PowerShell command too long to pass; null when it may.
+    /// <paramref name="missingScriptsPass"/> is the start's pre-check alone (<see cref="ShellPoliceChecks.ScriptChecks"/>): nothing runs there.
     /// </summary>
-    public static string? Refusal(string command, ShellKind shell, string workdir, WorkingDirectory files, AppSettingsData effective, Func<ShellKind, string?> locate, out bool off)
+    public static string? Refusal(string command, ShellKind shell, string workdir, WorkingDirectory files, AppSettingsData effective, Func<ShellKind, string?> locate, out bool off, bool missingScriptsPass = false)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(files);
@@ -97,7 +107,35 @@ public sealed class RalphVerifier : IRalphVerifier
         }
 
         var request = new CommandRequest(ShellKinds.Name(shell), command, CommandPrefix.All(command, shell));
-        return ShellPoliceChecks.Judge(request, command, workdir, files, effective) is { } policed ? policed.Shown ?? ShellText.Note(policed.ModelText) : null;
+        return ShellPoliceChecks.Judge(request, command, workdir, files, effective, missingScriptsPass) is { } policed ? policed.Shown ?? ShellText.Note(policed.ModelText) : null;
+    }
+
+    /// <summary>The first script <paramref name="command"/> runs that isn't in the working directory yet (<see cref="SqlitePolice.MissingScripts"/>), whatever the police; null when none.</summary>
+    public static string? MissingScript(string command, WorkingDirectory files)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(files);
+        return SqlitePolice.MissingScripts(command, files.Root, files.Root) is [var name, ..] ? name : null;
+    }
+
+    /// <summary>
+    /// A check that isn't run because a script it runs isn't there yet (2026-10-24): under the police, which would refuse the line (review L4), a
+    /// <see cref="RalphCheckKind.NotThereYet"/> result, logged, so the loop counts it as failed rather than stopping. Null with the police off (the line
+    /// runs and fails as it does), with the policy off (the caller's refusal says so), or when every script is there. Asked before the full refusal,
+    /// so a script written between the two is read by the police before it runs.
+    /// </summary>
+    public static RalphCheckResult? NotThereYet(string command, ShellKind shell, WorkingDirectory files, AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(effective);
+        if (!effective.ShellPolice || CommandPolicy.Resolve(effective) == CommandPolicyMode.Off || MissingScript(command, files) is not { } name)
+        {
+            return null;
+        }
+
+        DiagnosticLog.Info(ShellKinds.Category, $"ralph check: script not there yet ('{name}') — {ShellKinds.Name(shell)} {command}");
+        return new RalphCheckResult(RalphCheckKind.NotThereYet, null, RalphText.ScriptNotThereTail(name), TimeSpan.Zero, name);
     }
 
     /// <summary>The log line a check's start writes (the approval it rides on).</summary>

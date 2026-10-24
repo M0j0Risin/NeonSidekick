@@ -232,6 +232,18 @@ public sealed class RalphTextTests
     }
 
     [Fact]
+    public void AScriptNotThereYet_ItsWords_ArePinned()
+    {
+        // 2026-10-24, the user's report: a plan whose step writes the script its check runs.
+        Assert.Equal("script not there yet", RalphText.CheckWord(RalphCheckKind.NotThereYet, null));
+        Assert.Equal("hello.py isn't there yet, so the check wasn't run.", RalphText.ScriptNotThereTail("hello.py"));
+        Assert.Equal("🔁 The check `python hello.py` runs hello.py, which isn't there yet: it first runs after a step, and the steps stay checked.",
+            RalphText.BaselineNotThereNotice("python hello.py", "hello.py"));
+        Assert.Equal("🔁 The check `python hello.py` wasn't run: hello.py isn't there yet. The step is unticked.", RalphText.CheckNotThereNotice("python hello.py", "hello.py"));
+        Assert.Equal("The last pass's check `python hello.py` wasn't run: hello.py isn't there yet. This step must write it.", RalphText.CheckNotThereNote("python hello.py", "hello.py"));
+    }
+
+    [Fact]
     public void TheReviewRequest_FencesWhatTheModelReported()
     {
         // 2026-10-20, a review: the reviewed pass's summary and checks reached the reviewer unmarked, so a pass could write its own verdict there.

@@ -58,6 +58,20 @@ public sealed class ShellFixesTests : IDisposable
     }
 
     [Fact]
+    public void AMissingScript_PassesOnlyWhenAsked_AndEveryOtherCheckStillRuns()
+    {
+        var effective = new AppSettingsData { ShellPolice = true, ShellPoliceForbiddenStrings = ["neon-forbidden-marker"] };
+        CommandRequest Request(string line) => new("powershell", line, []);
+        Assert.Equal(ShellText.ScriptMissing("missing.py"), ShellPoliceChecks.Judge(Request("python missing.py"), "python missing.py", _root, _files, effective)!.ModelText);
+        Assert.Null(ShellPoliceChecks.Judge(Request("python missing.py"), "python missing.py", _root, _files, effective, missingScriptsPass: true));
+
+        // The line's own forbidden string, and a script that is there and too big, are refused all the same.
+        Assert.Equal(ShellText.Forbidden, ShellPoliceChecks.Judge(Request("python missing.py neon-forbidden-marker"), "python missing.py neon-forbidden-marker", _root, _files, effective, missingScriptsPass: true)!.ModelText);
+        File.WriteAllText(Path.Combine(_root, "big.py"), new string('#', (int)SqlitePolice.MaxScriptBytes + 1));
+        Assert.Equal(ShellText.ScriptTooLarge(SqlitePolice.MaxScriptBytes), ShellPoliceChecks.Judge(Request("python big.py && python missing.py"), "python big.py && python missing.py", _root, _files, effective, missingScriptsPass: true)!.ModelText);
+    }
+
+    [Fact]
     public void TheForbiddenStrings_AreReadInAScriptTheLineRuns()
     {
         File.WriteAllText(Path.Combine(_root, "run.ps1"), "Write-Host hi\nformat c:");

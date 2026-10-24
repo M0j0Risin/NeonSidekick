@@ -1,3 +1,4 @@
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Plans;
 using NeonSidekick.Sessions;
@@ -21,6 +22,9 @@ internal interface IRalphStartHost
 
     /// <summary>Why <paramref name="command"/> may not run now (the police, a shell not installed, headless's allow list); <paramref name="off"/> for <c>Shell command policy</c> off.</summary>
     string? Refusal(string command, ShellKind shell, out bool off);
+
+    /// <summary>The first script <paramref name="command"/> runs that isn't there yet (<see cref="RalphVerifier.MissingScript"/>); null when none.</summary>
+    string? MissingScript(string command);
 
     /// <summary>A baseline check run (the refusal asked again: <see cref="RalphCheckKind.Refused"/>, said already); null when it could not run.</summary>
     Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken);
@@ -93,7 +97,9 @@ internal static class RalphStart
     /// baseline: the verify command (skipped under <paramref name="finalOnly"/>) and the final one, in that order. A failing verify asks "start anyway?"
     /// (yes: final-only checking, the final baseline not run); a failing final one asks too, but a yes keeps the steps checked (2026-10-19, the fourth
     /// review: it set final-only, dropping the per-step verify that had just passed, though a final check that tests the work still to do fails before
-    /// the loop by design).
+    /// the loop by design). A check whose script isn't there yet (2026-10-24, the user's report: a plan whose step writes the script its check runs
+    /// was refused, and with the police off its failing baseline would have dropped the step checks) is skipped with a notice, police on or off, no
+    /// question asked and the steps still checked; the pre-check lets it past the police (<c>missingScriptsPass</c>), and each run asks them again.
     /// </summary>
     public static async Task<RalphBaseline> BaselineAsync(IRalphStartHost host, string? verify, string? final, bool finalOnly, ShellKind shell, CancellationToken cancellationToken)
     {
@@ -117,6 +123,13 @@ internal static class RalphStart
         string? stepCheck = finalOnly ? null : verify;
         foreach (string command in new[] { stepCheck, final }.OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
         {
+            // A check whose script isn't there yet is skipped, whatever the police: the plan writes it, so it can't pass before a step.
+            if (host.MissingScript(command) is { } missing)
+            {
+                await NotThereAsync(host, command, missing, shell).ConfigureAwait(false);
+                continue;
+            }
+
             var baseline = await host.CheckAsync(command, shell, RalphText.BaselineLabel, cancellationToken).ConfigureAwait(false);
             if (baseline is null or { Kind: RalphCheckKind.Cancelled })
             {
@@ -130,6 +143,13 @@ internal static class RalphStart
 
             if (baseline.Passed)
             {
+                continue;
+            }
+
+            // The script went missing between the two asks (a race): skipped the same way.
+            if (baseline is { Kind: RalphCheckKind.NotThereYet, Script: { } gone })
+            {
+                await NotThereAsync(host, command, gone, shell).ConfigureAwait(false);
                 continue;
             }
 
@@ -149,6 +169,13 @@ internal static class RalphStart
         }
 
         return new RalphBaseline(RalphBaselineOutcome.Go, finalOnly, false);
+    }
+
+    /// <summary>A baseline check skipped because <paramref name="script"/> isn't there yet: said and logged.</summary>
+    private static async Task NotThereAsync(IRalphStartHost host, string command, string script, ShellKind shell)
+    {
+        DiagnosticLog.Info(ShellKinds.Category, $"ralph baseline: skipped, script not there yet ('{script}') — {ShellKinds.Name(shell)} {command}");
+        await host.NoticeAsync(RalphText.BaselineNotThereNotice(command, script)).ConfigureAwait(false);
     }
 
     /// <summary>

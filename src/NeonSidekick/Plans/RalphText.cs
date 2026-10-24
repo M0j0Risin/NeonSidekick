@@ -183,6 +183,13 @@ public static class RalphText
     /// A failed check's tail as the next pass's note: its last <see cref="NoteTailChars"/> (2026-10-20, a review: a long tail was cut from its end by
     /// the directive's budget, losing the error and leaving its fence open). Pinned.
     /// </summary>
+    /// <summary>The next pass's note after a check whose script wasn't there (2026-10-24): told to write it, not that the check failed. Pinned.</summary>
+    public static string CheckNotThereNote(string command, string script) =>
+        $"The last pass's check {Cmd(command)} wasn't run: {Flatten(script)} isn't there yet. This step must write it.";
+
+    /// <summary>The tail a <see cref="RalphCheckKind.NotThereYet"/> result carries, for the log and the final check's fix pass. Pinned.</summary>
+    public static string ScriptNotThereTail(string script) => $"{Flatten(script)} isn't there yet, so the check wasn't run.";
+
     public static string CheckFailedNote(string command, string tail) => $"The last pass's check {Cmd(command)} failed; its output ends:\n" + Fence(KeepEnd(tail, NoteTailChars));
 
     /// <summary>A checkpoint's Redo as the next pass's note. Pinned.</summary>
@@ -272,6 +279,13 @@ public static class RalphText
     /// <summary>Only the final command failed headless (2026-10-19, the fourth review: it refused every plan whose final check tests the new work): said, and the loop goes on. Pinned.</summary>
     public static string FinalBaselineFailedNotice(string command) =>
         $"{Glyph} The final check {Cmd(command)} fails before the loop starts: it runs once every step is done.";
+
+    /// <summary>
+    /// A check whose script isn't there yet (2026-10-24, the user's report: the plan writes it): the baseline skips it, no question asked, and the
+    /// steps stay checked. Pinned.
+    /// </summary>
+    public static string BaselineNotThereNotice(string command, string script) =>
+        $"{Glyph} The check {Cmd(command)} runs {Flatten(script)}, which isn't there yet: it first runs after a step, and the steps stay checked.";
 
     /// <summary>The baseline failed headless, where nobody can be asked. Pinned.</summary>
     public static string BaselineRefusedHeadless(string command) =>
@@ -477,6 +491,10 @@ public static class RalphText
     public static string CheckFailedNotice(string command) => $"{Glyph} The check {Cmd(command)} failed: the step is unticked, and the next pass gets its output.";
     public static string CheckTimedOutNotice(string command, int seconds) => $"{Glyph} The check {Cmd(command)} ran past {N(seconds)} s and was stopped: the step is unticked.";
     public const string CheckStoppedNotice = Glyph + " The check was stopped: the step is unticked.";
+
+    /// <summary>A step's check not run because its script isn't there yet (2026-10-24, <see cref="RalphCheckKind.NotThereYet"/>): a failed check. Pinned.</summary>
+    public static string CheckNotThereNotice(string command, string script) =>
+        $"{Glyph} The check {Cmd(command)} wasn't run: {Flatten(script)} isn't there yet. The step is unticked.";
     public static string ReviewFailedNotice(string reason) => $"{Glyph} The review found the step not done: {Flatten(reason)}";
     public const string ReviewUnclearNotice = Glyph + " The review gave no clear verdict: the step stands, unchecked.";
 
@@ -952,7 +970,7 @@ public static class RalphText
 
     /// <summary>
     /// What the log and the notices say of a check's end: <c>passed</c>, <c>failed (exit 1)</c>, <c>timed out</c>, <c>stopped</c>, <c>refused</c>,
-    /// <c>not run</c> (2026-10-20, a review: inline on <see cref="RalphCheckResult"/>). Pinned.
+    /// <c>not run</c> (2026-10-20, a review: inline on <see cref="RalphCheckResult"/>), <c>script not there yet</c> (2026-10-24). Pinned.
     /// </summary>
     public static string CheckWord(RalphCheckKind kind, int? exitCode) => kind switch
     {
@@ -961,6 +979,7 @@ public static class RalphText
         RalphCheckKind.TimedOut => "timed out",
         RalphCheckKind.Cancelled => "stopped",
         RalphCheckKind.Refused => "refused",
+        RalphCheckKind.NotThereYet => "script not there yet",
         _ => "not run",
     };
 

@@ -20,8 +20,11 @@ public sealed record ShellPoliceRefusal(string ModelText, string? Shown);
 /// </summary>
 public static partial class ShellPoliceChecks
 {
-    /// <summary>The first check <paramref name="command"/> fails, run from <paramref name="workdir"/>; null when it passes them all, or the police are off.</summary>
-    public static ShellPoliceRefusal? Judge(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective)
+    /// <summary>
+    /// The first check <paramref name="command"/> fails, run from <paramref name="workdir"/>; null when it passes them all, or the police are off.
+    /// <paramref name="missingScriptsPass"/> lets a script that isn't there yet through (<see cref="ScriptChecks"/>).
+    /// </summary>
+    public static ShellPoliceRefusal? Judge(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective, bool missingScriptsPass = false)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(command);
@@ -45,7 +48,7 @@ public static partial class ShellPoliceChecks
         var databases = files.Databases?.Invoke();
         var servers = files.ServerDatabases?.Invoke();
         var admin = files.AdminFamilies?.Invoke();
-        if (ScriptChecks(request, command, workdir, files, effective, scripts) is { } scripted)
+        if (ScriptChecks(request, command, workdir, files, effective, scripts, missingScriptsPass) is { } scripted)
         {
             return scripted;
         }
@@ -89,8 +92,13 @@ public static partial class ShellPoliceChecks
     /// it, then runs it), one too big to read — refused under the police whatever else is on, since the forbidden strings and the trusted
     /// files read scripts too — the forbidden strings in a script, and the trusted files in the line and its scripts (the fix plan's D8).
     /// Shared with <c>process</c>'s writes. Null when they all pass.
+    /// <para>
+    /// <paramref name="missingScriptsPass"/> (2026-10-24, the user's report: a Ralph plan whose Step 1 writes <c>hello_world.py</c> and whose
+    /// <c>verify:</c> runs it was refused before it started) skips only the missing-script refusal, every other check still read. Only the Ralph
+    /// start's pre-check passes true, where nothing runs: each check run asks again without it, after <c>RalphVerifier.NotThereYet</c>.
+    /// </para>
     /// </summary>
-    public static ShellPoliceRefusal? ScriptChecks(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective, Lazy<IReadOnlyList<(string Name, string Text)>>? scripts = null)
+    public static ShellPoliceRefusal? ScriptChecks(CommandRequest request, string command, string workdir, WorkingDirectory files, AppSettingsData effective, Lazy<IReadOnlyList<(string Name, string Text)>>? scripts = null, bool missingScriptsPass = false)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(command);
@@ -102,7 +110,7 @@ public static partial class ShellPoliceChecks
         }
 
         scripts ??= new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(command, workdir, files.Root));
-        if (SqlitePolice.MissingScripts(command, workdir, files.Root) is [var missing, ..])
+        if (!missingScriptsPass && SqlitePolice.MissingScripts(command, workdir, files.Root) is [var missing, ..])
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptMissingLogLine(request, missing));
             return new ShellPoliceRefusal(ShellText.ScriptMissing(missing), null);

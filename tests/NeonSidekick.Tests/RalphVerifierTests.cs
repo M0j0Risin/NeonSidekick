@@ -115,6 +115,29 @@ public sealed class RalphVerifierTests : IDisposable
     }
 
     [Fact]
+    public void AScriptNotThereYet_IsNotRun_UnderThePolice_AndPassesTheStartsPreCheck()
+    {
+        // 2026-10-24, the user's report: a plan whose step writes the script its check runs was refused before it started.
+        var files = new WorkingDirectory(() => _dir, new ManualTimeProvider());
+        var settings = new AppSettingsData { ShellCommandPolicy = "yolo", ShellPolice = true };
+        Assert.Equal("hello.py", RalphVerifier.MissingScript("python hello.py --test", files));
+        Assert.NotNull(RalphVerifier.Refusal("python hello.py --test", Shell, _dir, files, settings, _interpreters.Locate, out _));
+        Assert.Null(RalphVerifier.Refusal("python hello.py --test", Shell, _dir, files, settings, _interpreters.Locate, out _, missingScriptsPass: true));
+
+        var notThere = RalphVerifier.NotThereYet("python hello.py --test", Shell, files, settings);
+        Assert.Equal((RalphCheckKind.NotThereYet, "hello.py", "script not there yet"), (notThere!.Kind, notThere.Script, notThere.Word));
+        Assert.Equal(RalphText.ScriptNotThereTail("hello.py"), notThere.Tail);
+
+        // The police off: the line runs (and fails) as before; the policy off: the caller's refusal says so; the script there: nothing to say.
+        Assert.Null(RalphVerifier.NotThereYet("python hello.py --test", Shell, files, new AppSettingsData { ShellCommandPolicy = "yolo", ShellPolice = false }));
+        Assert.Null(RalphVerifier.NotThereYet("python hello.py --test", Shell, files, new AppSettingsData { ShellCommandPolicy = "off", ShellPolice = true }));
+        Assert.Equal("hello.py", RalphVerifier.MissingScript("python hello.py --test", files));
+        File.WriteAllText(Path.Combine(_dir, "hello.py"), "print('hi')");
+        Assert.Null(RalphVerifier.MissingScript("python hello.py --test", files));
+        Assert.Null(RalphVerifier.NotThereYet("python hello.py --test", Shell, files, settings));
+    }
+
+    [Fact]
     public void Refusal_APowerShellCommandTooLongToPass_IsRefused()
     {
         // 2026-10-20, a review: run_command and /cmd refused it; a check failed to start and read as a failed check.

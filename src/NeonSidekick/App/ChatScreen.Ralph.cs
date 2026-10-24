@@ -811,7 +811,9 @@ internal sealed partial class ChatScreen
         }
 
         public string? Refusal(string command, ShellKind shell, out bool off) =>
-            RalphVerifier.Refusal(command, shell, files.Root, files, effective, screen._interpreters.Locate, out off);
+            RalphVerifier.Refusal(command, shell, files.Root, files, effective, screen._interpreters.Locate, out off, missingScriptsPass: true);
+
+        public string? MissingScript(string command) => RalphVerifier.MissingScript(command, files);
 
         public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken) =>
             screen.RunRalphCheckAsync(files, command, shell, effective, label, cancellationToken);
@@ -864,6 +866,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<RalphCheckResult?> RunRalphCheckAsync(WorkingDirectory files, string command, ShellKind shell, AppSettingsData effective, string label, CancellationToken cancellationToken)
     {
+        // A script it runs isn't there yet (2026-10-24): not run, a failed check, asked before the police so one written in between is read.
+        if (RalphVerifier.NotThereYet(command, shell, files, effective) is { } notThere)
+        {
+            return notThere;
+        }
+
         string? refused = RalphVerifier.Refusal(command, shell, files.Root, files, effective, _interpreters.Locate, out bool off);
         if (refused is not null || off)
         {

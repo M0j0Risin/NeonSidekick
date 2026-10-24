@@ -225,6 +225,96 @@ public partial class ChatScreenTests
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 
+    private const string RalphScriptCheck = "python hello.py --test";
+
+    private string RalphScriptFile => Path.Combine(_settings.ProfileDirectory, Files.WorkingDirectory.DefaultFolderName, "hello.py");
+
+    /// <summary><c>hello.py</c> written with <paramref name="text"/> as request <paramref name="request"/>'s reply begins, as a pass's <c>write_file</c> would.</summary>
+    private void RalphWriteScriptDuring(int request, string text = "print('hi')") =>
+        _chat.BeforeUpdateOf = (at, update, _) =>
+        {
+            if (at == request && update == 0)
+            {
+                File.WriteAllText(RalphScriptFile, text);
+            }
+
+            return Task.CompletedTask;
+        };
+
+    [Fact]
+    public async Task Ralph_ACheckWhoseScriptIsNotThereYet_SkipsTheBaseline_AndKeepsTheStepsChecked()
+    {
+        // 2026-10-24, the user's report: a plan whose first step writes the script its check runs was refused by the police before it started.
+        RalphPlan(verify: RalphScriptCheck);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphWriteScriptDuring(0);
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.BaselineNotThereNotice(RalphScriptCheck, "hello.py"), output);
+        Assert.Equal([RalphScriptCheck, RalphScriptCheck], _ralphVerifier.Commands);   // no baseline run, then each step's check
+        Assert.Contains(RalphText.StartedNotice(PlanPath, 2, 6, finalOnly: false), output);
+        Assert.Contains(RalphText.StepDoneNotice(1, 2, "One"), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_AStepThatLeavesTheScriptMissing_FailsItsCheck_AndTheNextPassIsTold()
+    {
+        RalphPlan(verify: RalphScriptCheck);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        RalphWriteScriptDuring(2);   // the second pass writes it
+        RalphPass("1");
+        RalphPass("2");
+        RalphPass("3");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.CheckNotThereNotice(RalphScriptCheck, "hello.py"), output);
+        Assert.DoesNotContain("was refused", output);   // no refusal, no CheckRefused stop
+        Assert.Equal([RalphScriptCheck, RalphScriptCheck], _ralphVerifier.Commands);   // the first pass's check never ran
+        Assert.Contains("One", LastUserText(_chat.Requests[2]));
+        Assert.Contains(RalphText.CheckNotThereNote(RalphScriptCheck, "hello.py"), _chat.Requests[2][0].Text);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_OnceTheScriptIsThere_ThePoliceReadIt()
+    {
+        RalphPlan(verify: RalphScriptCheck);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _settings.Update(d => d.ShellPoliceForbiddenStrings = ["neon-forbidden-marker"]);
+        RalphWriteScriptDuring(0, "print('neon-forbidden-marker')");
+        RalphPass("1");
+
+        string output = await RunAsync();
+
+        Assert.Empty(_ralphVerifier.Commands);
+        Assert.Contains(RalphText.CheckRefusedError(RalphScriptCheck, Shell.ShellText.ForbiddenShown("neon-forbidden-marker")), output);
+        Assert.Contains(RalphText.StopNotice(RalphStop.CheckRefused, PlanPath, 0, 2), output);
+        Assert.Contains("- [ ] One", RalphPlanText);
+    }
+
+    [Fact]
+    public async Task Ralph_ThePoliceOff_TheBaselineStillSkipsAMissingScript_AndTheStepChecksRun()
+    {
+        // With the police off a failing baseline would have asked "start anyway?", and a yes dropped the step checks.
+        RalphPlan(verify: RalphScriptCheck);
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _settings.Update(d => d.ShellPolice = false);
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Contains(RalphText.BaselineNotThereNotice(RalphScriptCheck, "hello.py"), output);
+        Assert.DoesNotContain(RalphText.BaselineQuestion(RalphScriptCheck), output);
+        Assert.Equal([RalphScriptCheck, RalphScriptCheck], _ralphVerifier.Commands);   // the step checks run as the line would, police or not
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
     [Fact]
     public async Task Ralph_EscDuringTheCheck_UnticksAndStops_PlanShowSaysPaused_AndPlanRalphResumes()
     {
