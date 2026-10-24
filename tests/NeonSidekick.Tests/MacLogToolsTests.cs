@@ -34,14 +34,15 @@ public sealed class MacLogToolsTests : IDisposable
         }
     }
 
-    private MacLogAccess Access(IUnifiedLog? log = null, bool none = false) =>
+    private MacLogAccess Access(IUnifiedLog? log = null, bool none = false, IReadOnlyList<string>? localLogs = null) =>
         new(none ? null : log ?? _log, () => _full, new WorkingDirectory(() => _root, _time), _time,
-            new MacLogPlaces([new MacCrashFolder(Path.Combine(_root, "reports"), "user")], Path.Combine(_root, "install.log"), _root));
+            new MacLogPlaces([new MacCrashFolder(Path.Combine(_root, "reports"), "user")], Path.Combine(_root, "install.log"), _root), localLogs: () => localLogs);
 
-    private IReadOnlyList<AIFunction> Tools(bool forceRedacted = false, bool none = false) =>
-        ChatScreen.MacLogTools(Access(none: none), () => _settings, forceRedacted);
+    private IReadOnlyList<AIFunction> Tools(bool forceRedacted = false, bool none = false, IReadOnlyList<string>? localLogs = null) =>
+        ChatScreen.MacLogTools(Access(none: none, localLogs: localLogs), () => _settings, forceRedacted);
 
-    private AIFunction Tool(string name, bool forceRedacted = false, bool none = false) => Tools(forceRedacted, none).Single(t => t.Name == name);
+    private AIFunction Tool(string name, bool forceRedacted = false, bool none = false, IReadOnlyList<string>? localLogs = null) =>
+        Tools(forceRedacted, none, localLogs).Single(t => t.Name == name);
 
     private static async Task<string> Call(AIFunction tool, params (string Name, object? Value)[] arguments)
     {
@@ -301,6 +302,26 @@ public sealed class MacLogToolsTests : IDisposable
 
         Assert.Equal("Error: " + MacLogText.NeedsAdmin, search);
         Assert.StartsWith(MacLogText.LogsHeader + "\nsystem  " + MacLogText.SystemRefused(MacLogText.NeedsAdmin), logs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A log local's own <c>logs</c> list leaves out is not offered by <c>eventlog_logs</c>, as the reads refuse it (2026-10-23, the Mac pass:
+    /// the listing offered the crashes and install.log while a search of them was refused, the refusal pointing back at the listing).
+    /// </summary>
+    [Fact]
+    public async Task LocalsLogsList_LeavesItsLogsOutOfTheListing_AsTheReadsRefuseThem()
+    {
+        string onlySystem = await Call(Tool(EventLogLogsTool.ToolName, localLogs: ["system"]));
+        string crashes = await Call(Tool(EventLogSearchTool.ToolName, localLogs: ["system"]), ("log", "crashes"));
+        string onlyCrashes = await Call(Tool(EventLogLogsTool.ToolName, localLogs: ["crashes"]));
+
+        var lines = onlySystem.Split('\n');
+        Assert.Equal("system  " + MacLogText.SystemReadable, lines[1]);
+        Assert.Equal("crashes  " + MacLogText.NotInLocalLogsLine, lines[2]);
+        Assert.Equal("install  " + MacLogText.NotInLocalLogsLine, lines[3]);
+        Assert.Equal(EventLogText.LogNotAllowed(MacLogAccess.CrashNames[0], EventLogText.LocalName), crashes);
+        Assert.Equal("system  " + MacLogText.NotInLocalLogsLine, onlyCrashes.Split('\n')[1]);
+        Assert.Equal("crashes  " + MacLogText.CrashesLine(0, [("user", null)]), onlyCrashes.Split('\n')[2]);
     }
 
     [Fact]

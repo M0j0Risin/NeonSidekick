@@ -469,6 +469,12 @@ public static class ImageIOCodecs
                     // ImageIO adds metadata nobody asked for (an EXIF block of the size and colour space, an empty Photoshop/IPTC
                     // block in a JPEG, eXIf in a PNG); WIC writes none. With no names asked, MetadataStripper takes it out
                     // losslessly, so "none" means none on both. A format it cannot walk (HEIC, TIFF, BMP) is written as it came.
+                    // A JPEG's DPI then stands in its JFIF header alone, in inches (2026-10-23, the Mac pass: the inch was in the EXIF taken out).
+                    if (options.Dpi > 0 && clean.Container == StripContainer.Jpeg)
+                    {
+                        MetadataStripper.JfifInches(clean.Bytes, options.Dpi);
+                    }
+
                     stream.Write(clean.Bytes);
                 }
                 else

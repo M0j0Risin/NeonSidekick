@@ -529,7 +529,7 @@ public sealed class UncMacTests : IDisposable
     {
         var mounts = Mounts();
         string specs = Path.Combine(_system.Volumes, "eng", "specs");
-        _system.Existing("eng", "//me@fs01/eng", readOnly: true);
+        _system.Existing("eng", "//" + Environment.UserName + "@fs01/eng", readOnly: true);   // as this user (review H20 refuses another's)
         _system.ExistsAnyway = true;   // the files are in the mount made here
         Directory.CreateDirectory(specs);
         File.WriteAllText(Path.Combine(specs, "a.txt"), "alpha needle");

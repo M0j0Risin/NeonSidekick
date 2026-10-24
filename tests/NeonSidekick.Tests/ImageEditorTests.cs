@@ -524,6 +524,26 @@ public sealed class ImageEditorTests
         Assert.Equal(11811, BinaryPrimitives.ReadInt32BigEndian(interlaced.AsSpan(phys + 4)));   // 300 DPI in pixels a metre
     }
 
+    /// <summary>
+    /// A JPEG keeps its DPI under the default metadata (none) on a Mac, the source's and one asked alike (2026-10-23, the Mac pass: ImageIO
+    /// wrote the JFIF header's units as 0 and the inch in its EXIF, so the strip left a 300-dpi edit reading as 72). Read back through ImageIO.
+    /// </summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void AJpeg_KeepsItsDpi_WithNoMetadata_OnAMac()
+    {
+        var (_, source) = Edit(ImageFixtures.Noise(64, 64), new ImageEditRequest { Dpi = 300, Metadata = ImageMetadataPolicy.All }, ImageFormats.Jpeg);
+        Assert.Equal(300, ImageIOCodecs.Dpi(source));
+
+        var (_, kept) = Edit(source, new ImageEditRequest { Width = 32 }, ImageFormats.Jpeg);
+        var (_, asked) = Edit(ImageFixtures.Noise(64, 64), new ImageEditRequest { Dpi = 150 }, ImageFormats.Jpeg);
+
+        Assert.Equal(300, ImageIOCodecs.Dpi(kept));
+        Assert.Equal(150, ImageIOCodecs.Dpi(asked));
+        Assert.Equal(1, asked[13]);   // the JFIF header's units: dots per inch
+        Assert.Equal(-1, asked.AsSpan().IndexOf("Exif\0\0"u8));   // still no EXIF: "none" means none
+    }
+
     /// <summary>The options ImageIO has no setting for are refused on a Mac (2026-10-07), after the format's own mismatches.</summary>
     [MacTheory]
     [InlineData("jpeg", "chroma")]
@@ -614,8 +634,8 @@ public sealed class ImageEditorTests
         Assert.True(result.Width < 128);
         Assert.Null(none);
         Assert.StartsWith("Error: could not get under 1 KB, so nothing was written; the smallest tried was ", error);
-        // A Mac's ImageIO takes no palette (2026-10-07), so the hint names only the lossy format there.
-        Assert.EndsWith(OperatingSystem.IsMacOS() ? ". Try a lossy format such as jpeg" : ". Try \"colors\" (fewer colors) or a lossy format such as jpeg", error);
+        // A Mac's ImageIO takes no palette (2026-10-07), so the hint there is the one for a format "colors" can't serve (2026-10-22, review R10).
+        Assert.EndsWith(OperatingSystem.IsMacOS() ? ". Try a smaller size, or a lossy format such as jpeg" : ". Try \"colors\" (fewer colors) or a lossy format such as jpeg", error);
     }
 
     // ---- the rest ----

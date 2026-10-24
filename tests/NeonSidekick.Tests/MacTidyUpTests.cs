@@ -263,7 +263,11 @@ public sealed class MacTidyUpTests : IDisposable
         }
     }
 
-    /// <summary>On a Mac no setting's help names a Windows password store or folder, and the Mac layer's forms are the ones <c>/help</c> shows.</summary>
+    /// <summary>
+    /// On a Mac no setting's help names a Windows password store or folder, and the Mac layer's forms are the ones <c>/help</c> shows. Every
+    /// row a Mac shows (<see cref="HelpLocation.Rows"/>, what <c>neon_help</c> and <c>/settings</c> read): the Services and Tasks menus' rows are
+    /// not on a Mac since 2026-10-22, and their Windows text with them.
+    /// </summary>
     [UnixFact]
     public void OnMacOS_TheHelp_NamesNoWindowsStoreOrFolder()
     {
@@ -272,7 +276,7 @@ public sealed class MacTidyUpTests : IDisposable
             return;
         }
 
-        foreach (var field in Enum.GetValues<SettingsField>())
+        foreach (var field in HelpLocation.Rows.Select(r => r.Field).Distinct())
         {
             string text = HelpSettings.Describe(field);
             Assert.DoesNotContain("DPAPI", text);

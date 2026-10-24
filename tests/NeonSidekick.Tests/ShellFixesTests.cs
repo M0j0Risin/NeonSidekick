@@ -53,7 +53,7 @@ public sealed class ShellFixesTests : IDisposable
         File.WriteAllText(Path.Combine(_root, "job"), "print('x')");
         Assert.Equal(["job"], SqlitePolice.ScriptFiles("python job --fast", _root, _root).Select(s => s.Name));
         Assert.Equal(["a.sh"], SqlitePolice.MissingScripts("echo rm -rf x > a.sh && bash a.sh", _root, _root));
-        Assert.Equal(["b.ps1"], SqlitePolice.MissingScripts(".\\b.ps1 -Force", _root, _root));
+        Assert.Equal(["b.ps1"], SqlitePolice.MissingScripts((OperatingSystem.IsWindows() ? ".\\" : "./") + "b.ps1 -Force", _root, _root));   // off Windows "\" is no separator
         Assert.Empty(SqlitePolice.MissingScripts("python job && touch c.sh", _root, _root));
     }
 

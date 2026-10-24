@@ -234,9 +234,13 @@ public sealed class MacLogLogsTool : MacLogTool
         }
 
         // The four reads side by side, each under the token (2026-10-23, the admin review's R14: one after another, 30 s each, about two minutes
-        // at worst, and the probe's and the install read's lambdas left the token out).
+        // at worst, and the probe's and the install read's lambdas left the token out). A log local's own logs list leaves out is neither read
+        // nor offered (2026-10-23, the Mac pass: listed here while the reads refused it, the refusal pointing the model back at this list).
+        bool systemAllowed = Access.LocalAllows(MacLogAccess.SystemNames[0]);
+        bool crashesAllowed = Access.LocalAllows(MacLogAccess.CrashNames[0]);
+        bool installAllowed = Access.LocalAllows(MacLogAccess.InstallNames[0]);
         var source = new MacLogSource(MacLogAccess.SystemNames[0], UnifiedLogTarget.Local, Redacted: true);
-        var probedRead = Access.RunAsync(source, (unified, token) =>
+        var probedRead = !systemAllowed ? Task.FromResult(new EventLogResult<bool>(true, null)) : Access.RunAsync(source, (unified, token) =>
         {
             token.ThrowIfCancellationRequested();
             unified.Probe(UnifiedLogTarget.Local);
@@ -244,13 +248,13 @@ public sealed class MacLogLogsTool : MacLogTool
         }, cancellationToken);
         var now = Access.Time.GetUtcNow();
         var crashSource = new MacLogSource(MacLogAccess.CrashNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Crashes);
-        var crashesRead = Access.RunFilesAsync(crashSource, token =>
+        var crashesRead = !crashesAllowed ? Task.FromResult(new EventLogResult<string>(MacLogText.NotInLocalLogsLine, null)) : Access.RunFilesAsync(crashSource, token =>
         {
             var (reports, folders) = CrashReports.List(Access.Places.CrashFolders, now - MacFileLogs.CrashWindow, null, token);
             return MacLogText.CrashesLine(reports.Count, folders.Select(f => (f.Folder.Owner, f.Refused)).ToList());
         }, cancellationToken);
         var installSource = new MacLogSource(MacLogAccess.InstallNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Install);
-        var installRead = Access.RunFilesAsync(installSource, token =>
+        var installRead = !installAllowed ? Task.FromResult(new EventLogResult<string>(MacLogText.NotInLocalLogsLine, null)) : Access.RunFilesAsync(installSource, token =>
         {
             using var stream = Access.OpenInstallLog();
             return MacLogText.InstallLine(InstallLog.Backward(stream, null, token).FirstOrDefault() is { } newest ? EventLogText.Time(newest.Time, Zone) : null);
@@ -261,7 +265,7 @@ public sealed class MacLogLogsTool : MacLogTool
         var crashes = await crashesRead.ConfigureAwait(false);
         var install = await installRead.ConfigureAwait(false);
         return MacLogRender.Logs(why, crashes.Error is { } crashError ? Bare(crashError)! : crashes.Value!, install.Error is { } installError ? MacLogText.InstallRefused(Bare(installError)!) : install.Value!,
-            archives.Value ?? [], filter);
+            archives.Value ?? [], filter, systemAllowed: systemAllowed);
     }
 
     private static string? Bare(string? error) => error is null ? null : error.StartsWith("Error: ", StringComparison.Ordinal) ? error["Error: ".Length..] : error;

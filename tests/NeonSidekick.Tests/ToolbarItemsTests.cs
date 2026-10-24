@@ -96,6 +96,31 @@ public sealed class ToolbarItemsTests
         Assert.Equal("/browser list", ChatScreen.ToolbarWord(ChatScreen.BrowserLinksToolGlyph));
     }
 
+    /// <summary>
+    /// On a terminal that draws a selector sequence one cell wide (Terminal.app, iTerm2's alternate screen) a row with ⚙️ 🛠️ 🛢️ 🖨️ takes a
+    /// space more, so every row's title and command start in the same cell (2026-10-23, the user's iTerm2 screenshot: those four rows began a
+    /// cell left of the rest).
+    /// </summary>
+    [Fact]
+    public void Labels_LineUp_WhereASelectorSequenceIsOneCell()
+    {
+        bool was = TextCells.NarrowSelectorSequences;
+        try
+        {
+            TextCells.NarrowSelectorSequences = true;
+            Assert.Equal("[[x]] ⚙️   Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
+            int cells = TextCells.Width(Spectre.Console.Markup.Remove(ToolbarItems.Label("memory", true)));
+            foreach (string id in new[] { "settings", "tools", "sql", "print" })
+            {
+                Assert.Equal(cells - "/memory".Length + ToolbarItems.Describe(id).Length, TextCells.Width(Spectre.Console.Markup.Remove(ToolbarItems.Label(id, true))));
+            }
+        }
+        finally
+        {
+            TextCells.NarrowSelectorSequences = was;
+        }
+    }
+
     [Fact]
     public void Value_AndLabels_ArePinned()
     {

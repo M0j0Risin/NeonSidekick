@@ -126,8 +126,12 @@ public sealed class VaultFixesTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_root, "Call Dr.Smith.md")));
     }
 
+    /// <summary>
+    /// Two spellings are two notes on a case-sensitive volume, and vault_search counts them as two (2026-10-23, the Mac pass: "4 matches in
+    /// 1 note"; proven by hand on a case-sensitive APFS image).
+    /// </summary>
     [Fact]
-    public void OnACaseSensitiveVolume_TwoSpellingsAreTwoNotes()
+    public async Task OnACaseSensitiveVolume_TwoSpellingsAreTwoNotes()
     {
         using var rule = CaseRule.Override(_ => true);
         if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
@@ -142,6 +146,7 @@ public sealed class VaultFixesTests : IDisposable
         Put("Plan.md", "a");
         Put("plan.md", "b");
         Assert.Equal(2, Index().Notes.Count);
+        Assert.Contains(" in 2 notes for \"plan\"", await Invoke<VaultSearchTool>(("query", "plan")), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -527,6 +527,7 @@ The same four tools read the Mac's own logs: the unified log and the report file
 
 * **The unified log is vast,** so a read keeps to its window and *Event log scan limit*, says how far back it got, and names a process that filled most of it (with the `exclude_process` to drop it). With `until` and no `since`, the window is the hour (day, week) before `until`.
 * **`local` unticked** in *Event log computers offered*: `system`, `crashes` and `install` are refused, and only `.logarchive` folders are read.
+* **`local`'s `logs`** in `eventlog.json` (`"logs": ["system"]`) limits these three the same way: the others are refused, and `eventlog_logs` lists them as not offered.
 * **Detail:** only the `local` entry applies; `redacted` (the default) also writes your home folder as `~` and hides other accounts' names in `/Users/…` paths. `crashes` and `install` ignore `level`, `subsystem` and `category`, and say so.
 * **Permissions:** the unified log needs an administrator account, the system's report folder the `_analyticsusers` group (administrators are in it). A folder you can't read is named. `--eventlog-check local` tests them.
 

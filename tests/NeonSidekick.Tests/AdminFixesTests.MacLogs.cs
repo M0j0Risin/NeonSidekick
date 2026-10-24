@@ -51,6 +51,10 @@ public sealed partial class AdminFixesTests
         var access = new MacLogAccess(null, () => false, new WorkingDirectory(() => _dir, _time), _time, localLogs: () => ["system"]);
         Assert.NotNull(access.Resolve("system", forceRedacted: true).Source);
         Assert.Equal(EventLogText.LogNotAllowed(MacLogAccess.CrashNames[0], EventLogText.LocalName), access.Resolve("crashes", forceRedacted: true).Error);
+        // The one check the listing reads too (2026-10-23, the Mac pass); no list allows all.
+        Assert.True(access.LocalAllows("system"));
+        Assert.False(access.LocalAllows("install"));
+        Assert.True(new MacLogAccess(null, () => false, new WorkingDirectory(() => _dir, _time), _time).LocalAllows("install"));
     }
 
     /// <summary>X8: an .ips whose body was cut is said so, never read as text.</summary>

@@ -321,6 +321,27 @@ public static class MetadataStripper
         0x00, 0x00, 0x00, 0x00,
     ];
 
+    /// <summary>
+    /// <paramref name="jpeg"/> with its leading JFIF APP0 in dots per inch at <paramref name="dpi"/> (2026-10-23, the Mac pass: ImageIO writes
+    /// the APP0's units as 0, a bare aspect ratio, and the inch in its EXIF, so a strip of that EXIF left a 300-dpi edit reading as 72). In place;
+    /// anything but a JPEG opening on a JFIF APP0, or a DPI outside 1–65,535, is left as it is.
+    /// </summary>
+    public static void JfifInches(byte[] jpeg, double dpi)
+    {
+        ArgumentNullException.ThrowIfNull(jpeg);
+        int density = (int)Math.Round(dpi);
+        // FFD8, FFE0, the length (16 or more), "JFIF\0", the version (2), then units, X density and Y density.
+        if (density is < 1 or > 65535 || jpeg.Length < 18 || jpeg[0] != 0xFF || jpeg[1] != 0xD8 || jpeg[2] != 0xFF || jpeg[3] != 0xE0
+            || ((jpeg[4] << 8) | jpeg[5]) < 16 || !jpeg.AsSpan(6, 5).SequenceEqual("JFIF\0"u8))
+        {
+            return;
+        }
+
+        jpeg[13] = 1;
+        jpeg[14] = jpeg[16] = (byte)(density >> 8);
+        jpeg[15] = jpeg[17] = (byte)density;
+    }
+
     private readonly record struct WalkResult(MetadataKinds Found, long Trailer, bool OrientationWritten, string? Error);
 
     private static WalkResult Walk(StripContainer container, byte[] s, MemoryStream? o, byte[]? exif) => container switch
