@@ -2781,6 +2781,21 @@ public sealed partial class SidekickApp
     public static string DockerServerClosingLine(string name) => Docker.DockerText.Glyph + " the window closed: asking Docker to stop " + name;
 
     /// <summary>
+    /// The log line as the console window closes on Windows (2026-10-24, the leftover process: an X close left nothing in the log,
+    /// so a run that never ended could not be told from one closed by hand). Written before the close's work, so a stall in it
+    /// still leaves the close on record.
+    /// </summary>
+    public const string WindowClosedLogLine = "Console window closed";
+
+    /// <summary>
+    /// How long the window's close on Windows waits for its work (<see cref="ConsoleClosing"/> under <see cref="CloseBudget"/>,
+    /// the UNC unmounts, the settings' flush) before it ends the process all the same (2026-10-24, the leftover process): the 5 s
+    /// Windows gives after <c>CTRL_CLOSE_EVENT</c> is the classic console's, and nothing confirms it under ConPTY or Windows
+    /// Terminal, so the app no longer counts on it.
+    /// </summary>
+    public static readonly TimeSpan CloseDeadline = TimeSpan.FromSeconds(4);
+
+    /// <summary>
     /// The console window closing (2026-10-02, the user's report: its X button never stopped the container): Program's
     /// <c>SIGHUP</c> registration, which is <c>CTRL_CLOSE_EVENT</c> on Windows, calls this on the console's control thread,
     /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker server stop on exit</c> on

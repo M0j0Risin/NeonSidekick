@@ -502,6 +502,29 @@ public class PerfBarTests
     }
 
     [Fact]
+    public void TheSampler_AfterDispose_OpensNoSourceAgain()
+    {
+        // 2026-10-24, the leftover process: the screen's teardown disposed the sampler and its last draws started it again.
+        var time = new ManualTimeProvider();
+        var sources = new List<FakePerfSource>();
+        var sampler = new PerfSampler(() => { var s = new FakePerfSource(); sources.Add(s); return s; }, time);
+        sampler.Ensure(PerfReads.All);
+        Assert.Single(sources);
+
+        sampler.Dispose();
+        Assert.True(sources[0].Disposed);
+        Assert.False(sampler.Running);
+
+        sampler.Ensure(PerfReads.All);
+        sampler.Ensure(true);
+        time.Advance(PerfSampler.Interval * 3);
+        Assert.Single(sources);
+        Assert.False(sampler.Running);
+        Assert.Equal(PerfSnapshot.None, sampler.Read().Latest);
+        sampler.Dispose();   // a second time does nothing
+    }
+
+    [Fact]
     public void TheSampler_SurvivesASourceThatThrows_OrDoesNotOpen()
     {
         var time = new ManualTimeProvider();

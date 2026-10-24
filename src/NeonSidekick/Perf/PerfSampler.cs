@@ -27,6 +27,7 @@ public sealed class PerfSampler : IDisposable
     private PerfSnapshot _latest;
     private long _version;
     private bool _warned;
+    private bool _disposed;
     private PerfReads _reads = PerfReads.All;
 
     public PerfSampler(Func<IPerfSource> factory, TimeProvider time)
@@ -55,13 +56,17 @@ public sealed class PerfSampler : IDisposable
         Ensure(reads != PerfReads.None);
     }
 
-    /// <summary>Starts the sampling (the first reading at once) or stops it; the same state again does nothing.</summary>
+    /// <summary>
+    /// Starts the sampling (the first reading at once) or stops it; the same state again does nothing. After <see cref="Dispose"/>
+    /// a start does nothing (2026-10-24, the leftover process: the screen's teardown disposed the sampler and its last draws
+    /// started it again, so <c>/exit</c> ended with NVML open and its timer sampling, the state an exit can hang in).
+    /// </summary>
     public void Ensure(bool on)
     {
         IPerfSource? stopped = null;
         lock (_gate)
         {
-            if (on && _timer is null)
+            if (on && _timer is null && !_disposed)
             {
                 try
                 {
@@ -154,5 +159,14 @@ public sealed class PerfSampler : IDisposable
         }
     }
 
-    public void Dispose() => Ensure(false);
+    /// <summary>Stops the sampling for good: a later <see cref="Ensure(bool)"/> opens no source (as <c>HaLive</c> refuses after its own).</summary>
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            _disposed = true;
+        }
+
+        Ensure(false);
+    }
 }

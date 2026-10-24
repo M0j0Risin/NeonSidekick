@@ -263,10 +263,29 @@ var recycleBin = NeonSidekick.Files.RecycleBin.Platform();
 var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: readClipboard, copyToClipboard: copyToClipboard, clipboardImage: readClipboardImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : OperatingSystem.IsMacOS() ? new NeonSidekick.Printing.MacPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Camera.MacCameraSystem() : null, liveView: OperatingSystem.IsWindows() || NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openLogWindowBehind: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer, activate: false) : null, openViewerBehind: NeonSidekick.Viewer.PictureWindow.IsAvailable ? folder => NeonSidekick.Viewer.PictureWindow.Open(folder, activate: false) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, openDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Show : null, closeDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Close : null,closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Screen.MacScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : OperatingSystem.IsMacOS() ? new NeonSidekick.Hotkeys.MacHotkeyProbe(environment.TerminalProgram, environment.ItermProfile) : null, shortcutWriter: OperatingSystem.IsWindows() ? new NeonSidekick.Shortcuts.WindowsShortcutWriter() : OperatingSystem.IsMacOS() ? new NeonSidekick.Shortcuts.MacShortcutWriter() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null, videoPlayer: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.VideoWindow.Player : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacVideoWindows.IsAvailable ? NeonSidekick.Viewer.MacVideoWindows.Player : null, browserWindow: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.BrowserWindow.Window : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacBrowserWindows.IsAvailable ? NeonSidekick.Viewer.MacBrowserWindows.Window : null, webUiHost: backend => new NeonSidekick.WebUi.WebUiHost(backend, settings.StorageDirectory), eventLogSystem: OperatingSystem.IsWindows() ? new NeonSidekick.EventLog.WindowsEventLogSystem() : null, unifiedLog: OperatingSystem.IsMacOS() ? new NeonSidekick.EventLog.MacUnifiedLog() : null, recycleBin: recycleBin, pinger: OperatingSystem.IsWindows() ? new NeonSidekick.Network.WindowsPinger() : new NeonSidekick.Network.IcmpSocketPinger(), serviceSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Services.WindowsServiceSystem() : null, taskSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Tasks.WindowsTaskSystem() : null, directorySystem: OperatingSystem.IsWindows() ? new NeonSidekick.ActiveDirectory.WindowsDirectorySystem() : OperatingSystem.IsMacOS() ? new NeonSidekick.ActiveDirectory.Ldap.ManagedDirectorySystem() : null, monitorSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Monitors.WindowsMonitorSystem() : null, headlessNarrow: NeonSidekick.UI.TextCells.NarrowOnMainScreen(environment.TerminalProgram) && !Console.IsOutputRedirected);
 
 // The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
-// SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, and Windows ends the
-// process about 5 s on, so the handler does the exit's work itself, on the console's control thread, the process alive
-// until it returns. Cancel stays unset: the window still closes. Ctrl+C, Ctrl+Break and /exit take the usual way out.
+// SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, so the handler does the
+// exit's work itself, on the console's control thread. On Windows (2026-10-24, the leftover process) it then ends the process
+// itself through ProcessEnd: returning let the default handler call ExitProcess, whose DLL detaches can hang for good, and the
+// 5 s kill Windows promises after the close is the classic console's, unconfirmed under ConPTY. The work runs on a thread of its
+// own under CloseDeadline, so a stall in it ends no later. Elsewhere it returns as before. Ctrl+C, Ctrl+Break and /exit take
+// the usual way out.
 void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
+{
+    if (OperatingSystem.IsWindows())
+    {
+        DiagnosticLog.Info(ChatScreen.AppCategory, SidekickApp.WindowClosedLogLine);
+        var work = new Thread(CloseWork) { IsBackground = true, Name = "Window close" };
+        work.Start();
+        work.Join(SidekickApp.CloseDeadline);
+        logSink?.Dispose();   // "--- log closed ---"; a line another thread logs after this is dropped
+        ProcessEnd.Now(ProcessEnd.ControlCExit);
+        return;   // only if the call failed: the default handler ends it as before
+    }
+
+    CloseWork();
+}
+
+void CloseWork()
 {
     app.ConsoleClosing();
     NeonSidekick.Unc.UncAccess.Mounts?.UnmountAll();
@@ -561,6 +580,21 @@ await settings.FlushAsync().ConfigureAwait(false);
 if (!OperatingSystem.IsWindows() && Microsoft.ML.OnnxRuntime.OrtEnv.IsCreated)
 {
     Microsoft.ML.OnnxRuntime.OrtEnv.Instance().Dispose();
+}
+
+// Windows ends here by ProcessEnd (2026-10-24, the leftover process; see OnClosing and ProcessEnd): what the using declarations
+// would dispose as Main returns goes first, in their reverse order — the console's input mode back for the shell the app was
+// started from, the log's last line written last — and stdout's held frames go out, so headless and smoke output is whole.
+// The signal registrations stay: one of them may be running this exit. The exit code is kept for scripts and the smoke.
+if (OperatingSystem.IsWindows())
+{
+    windowsInput?.Dispose();
+    shutdown.Dispose();
+    settings.Dispose();
+    logBuffer?.Dispose();
+    logSink?.Dispose();
+    frames.Settle();
+    ProcessEnd.Now(unchecked((uint)exitCode));
 }
 
 return exitCode;
