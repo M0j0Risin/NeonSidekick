@@ -18,7 +18,7 @@ It's one app for research, IT and admin work, your smart home and creative proje
 * **Safe on real systems:** databases are read-only through layers of checks, Active Directory is read-only by design, and the shell police holds even under `--yolo`.
 * **Set up without editing files:** Connect a model gets you running, and wizards add each database, share or remote computer, test it before saving, and warn when the account could change data.
 * **More than a coding agent:** Active Directory, event logs, services, databases, Home Assistant and ComfyUI, with voice in and out and your phone in the same live session.
-* **Fully local, no black box:** no telemetry; `/sys` shows the exact prompt and every tool, and the persona and operating rules are files you can edit.
+* **Fully local, no black box:** `/sys` shows the exact prompt and every tool, and the persona and operating rules are files you can edit.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
@@ -256,6 +256,6 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
 
-**Privacy:** no telemetry. Nothing of yours leaves your machine except what you send to a cloud model, the web tools or an integration you switch on.
+**Privacy:** no telemetry. Nothing of yours leaves your machine except what you send to a cloud model, the web tools or an integration you switch on. Model and voice downloads come from Hugging Face, GitHub and alphacephei.com and send nothing of yours; the Web UI stays off until you turn it on, then serves only the network you pick.
 
 **License:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).
