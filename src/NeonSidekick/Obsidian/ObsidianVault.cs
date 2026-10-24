@@ -477,7 +477,8 @@ public sealed class ObsidianVault
 
             int cap = Math.Clamp(limit ?? DefaultSearchLimit, 1, MaxSearchLimit);
             var hits = new List<string>();
-            var notes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Counted as the volume compares paths (2026-10-23, the Mac pass: on a case-sensitive volume Plan.md and plan.md were "1 note").
+            var notes = new HashSet<string>(_index.PathComparer);
             int total = 0;
             int unread = 0;
             foreach (var entry in Filter(folder, tag))

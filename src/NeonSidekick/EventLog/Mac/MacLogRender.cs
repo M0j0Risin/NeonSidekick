@@ -172,12 +172,15 @@ public static class MacLogRender
     /// 3), and each <c>.logarchive</c> in the working directory; <paramref name="filter"/> narrows the archives by name. Not
     /// <paramref name="offered"/> (<c>local</c> unticked, 2026-10-20), <paramref name="systemError"/> is the system line's whole text.
     /// </summary>
-    public static string Logs(string? systemError, string crashesLine, string installLine, IReadOnlyList<string> archives, string? filter, bool offered = true)
+    public static string Logs(string? systemError, string crashesLine, string installLine, IReadOnlyList<string> archives, string? filter, bool offered = true,
+        bool systemAllowed = true)
     {
         ArgumentNullException.ThrowIfNull(archives);
         var shown = archives.Where(a => filter is not { Length: > 0 } f || a.Contains(f, StringComparison.OrdinalIgnoreCase)).ToList();
         var answer = new StringBuilder(MacLogText.LogsHeader);
-        string systemLine = !offered ? systemError ?? "" : systemError is null ? MacLogText.SystemReadable : MacLogText.SystemRefused(systemError);
+        // The unified log left out by local's logs list (2026-10-23, the Mac pass) says so, as the crashes' and install.log's lines do.
+        string systemLine = !offered ? systemError ?? "" : !systemAllowed ? MacLogText.NotInLocalLogsLine
+            : systemError is null ? MacLogText.SystemReadable : MacLogText.SystemRefused(systemError);
         answer.Append('\n').Append(MacLogAccess.SystemNames[0]).Append("  ").Append(systemLine);
         answer.Append('\n').Append(MacLogAccess.CrashNames[0]).Append("  ").Append(crashesLine);
         answer.Append('\n').Append(MacLogAccess.InstallNames[0]).Append("  ").Append(installLine);

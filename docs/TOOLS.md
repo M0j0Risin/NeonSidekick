@@ -41,7 +41,7 @@ Under *Web tools*.
 | `open_url` | `url?, urls?` | Opens up to five links in your browser, or one in the [Browser window](#the-browser-window) under *Web open links in*. A YouTube link goes where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link; `url` may be its `web_links` number, or `current` for the Browser window's page. |
-| `download_file` | `url, path?, overwrite?` | Downloads into the working directory, up to *Web download max (MB)*. Needs *File tools*. |
+| `download_file` | `url, path?, overwrite?` | Downloads into the working directory, up to *Web download max (MB)*, marked as from the internet as a browser marks its downloads (Windows' Mark of the Web, a Mac's quarantine), so SmartScreen, Gatekeeper and Office's Protected View check it and `unzip` passes the mark on. Needs *File tools*. |
 
 * **A page that refuses a plain fetch**, or needs scripts, is tried again in a headless Edge, Chrome or Brave (Chromium on a Mac), per *Web browser mode*. Its cookies stay in `%TEMP%\NeonSidekick\browser` (`$TMPDIR/NeonSidekick/browser` on a Mac).
 * **Bot checks:** one that clears by itself is waited on up to 15 seconds; one that wants a click goes to the Browser window, or is reported blocked.
@@ -527,6 +527,7 @@ The same four tools read the Mac's own logs: the unified log and the report file
 
 * **The unified log is vast,** so a read keeps to its window and *Event log scan limit*, says how far back it got, and names a process that filled most of it (with the `exclude_process` to drop it). With `until` and no `since`, the window is the hour (day, week) before `until`.
 * **`local` unticked** in *Event log computers offered*: `system`, `crashes` and `install` are refused, and only `.logarchive` folders are read.
+* **`local`'s `logs`** in `eventlog.json` (`"logs": ["system"]`) limits these three the same way: the others are refused, and `eventlog_logs` lists them as not offered.
 * **Detail:** only the `local` entry applies; `redacted` (the default) also writes your home folder as `~` and hides other accounts' names in `/Users/…` paths. `crashes` and `install` ignore `level`, `subsystem` and `category`, and say so.
 * **Permissions:** the unified log needs an administrator account, the system's report folder the `_analyticsusers` group (administrators are in it). A folder you can't read is named. `--eventlog-check local` tests them.
 

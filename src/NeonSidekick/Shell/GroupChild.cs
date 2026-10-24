@@ -34,7 +34,9 @@ namespace NeonSidekick.Shell;
 /// <item><b>A background command's leftovers</b> (<c>tiedToApp</c>, the user's call): the dispose kills the group even after the leader
 /// exited, as Windows' kill-on-close job does at its close — the registry's close, its eviction and the app's exit all come here. A
 /// foreground command's leftovers are left alone at its dispose, as there, and stay tracked while they run (2026-10-22, review F2: the
-/// reap untracked the group, so the exit kill missed a <c>nohup server &amp;</c> it left). Every group is tracked (<see cref="ShellGroups"/>) for the exit
+/// reap untracked the group, so the exit kill missed a <c>nohup server &amp;</c> it left), their zombie kept until the last of them ends
+/// (2026-10-23, the Mac pass's shell review #4: reaped at the dispose, the group stayed tracked with nothing holding its id, and the exit's
+/// kill could reach a stranger's group that took it). Every group is tracked (<see cref="ShellGroups"/>) for the exit
 /// signals' kill, since a session of its own no longer gets the terminal's hangup; a background one is recorded for the crash watcher too
 /// (<see cref="ShellGuard"/>, the same day), at the start, and unrecorded before the reap.</item>
 /// <item><b>The rest as <c>Process.Start</c> does it:</b> three CLOEXEC pipes (.NET's own anonymous pipes) put on 0/1/2, every other
@@ -324,10 +326,13 @@ internal sealed unsafe class GroupChild : ShellChild
         }
     }
 
-    /// <summary>Reaps the leader unless its group still has a live member to kill; under the lock. Whether it is reaped (or never will be by us).</summary>
+    /// <summary>
+    /// Reaps the leader unless its group still has a live member to kill; under the lock. Whether it is reaped (or never will be by us).
+    /// A dispose no longer reaps it early (2026-10-23, the Mac pass's shell review #4): the zombie pins the tracked group's id until it empties.
+    /// </summary>
     private bool ReapUnlessMembers()
     {
-        if (_disposed || _reapedElsewhere || PosixSpawnNative.KillPg(_pid, 0) != 0)
+        if (_reapedElsewhere || PosixSpawnNative.KillPg(_pid, 0) != 0)
         {
             Reap();
             return true;
@@ -380,14 +385,15 @@ internal sealed unsafe class GroupChild : ShellChild
         }
     }
 
-    /// <summary>Reaps the zombie; under the lock, after the exit is known. The group's record goes first, while its id is still ours.</summary>
+    /// <summary>Reaps the zombie; under the lock, after the exit is known. The group's tracking goes first, while its id is still ours.</summary>
     private void Reap()
     {
-        // A background group's record goes before the reap, while its id is certainly ours. A foreground one has no record, and stays
-        // tracked after the reap while anything in its group still runs (2026-10-22, review F2, the fix plan's D9: a nohup server &
-        // it left behind ends with the app, as Windows' kept job's does); a group with a member alive keeps its id, so no other
-        // process takes it while it is tracked. ShellGroups forgets it once it has emptied.
-        if (_tiedToApp)
+        // The tracking (and a background group's record) goes before the reap, while the zombie holds the id. A foreground group is
+        // reaped only once it has emptied (2026-10-23, the Mac pass's shell review #4: the dispose reaped it with a member alive, it stayed
+        // tracked with nothing holding its id, and the exit's kill reached that id after a stranger could have taken it); its leftovers
+        // are still killed at the app's exit (2026-10-22, review F2). Reaped elsewhere (SIGCHLD ignored), nothing holds the id: a group
+        // still running stays tracked, as before.
+        if (_tiedToApp || !ShellGuard.GroupAlive(_pid))
         {
             _groups?.Untrack(_pid);
         }
@@ -400,11 +406,6 @@ internal sealed unsafe class GroupChild : ShellChild
             }
 
             _reaped = true;
-        }
-
-        if (!_tiedToApp && !ShellGuard.GroupAlive(_pid))
-        {
-            _groups?.Untrack(_pid);
         }
     }
 
@@ -426,7 +427,16 @@ internal sealed unsafe class GroupChild : ShellChild
 
             if (_exitSeen)
             {
-                Reap();
+                // A foreground command's leftovers keep their zombie (2026-10-23, the Mac pass's shell review #4): the waiter reaps it
+                // as the last of them goes, so the tracked group's id is never a stranger's.
+                if (_tiedToApp)
+                {
+                    Reap();
+                }
+                else
+                {
+                    ReapUnlessMembers();
+                }
             }
         }
 

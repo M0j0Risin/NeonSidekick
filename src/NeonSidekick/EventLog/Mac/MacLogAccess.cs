@@ -119,6 +119,13 @@ public sealed class MacLogAccess
     public static bool Ticks(IReadOnlyList<string>? offered) =>
         EventLogCatalog.OfferedNames(offered).Any(n => string.Equals(n.Trim(), EventLogText.LocalName, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Whether local's own <c>logs</c> allow-list (<c>eventlog.json</c>) lets <paramref name="log"/> (<c>system</c>, <c>crashes</c> or <c>install</c>)
+    /// be read; no list allows all. The one check for the reads (<see cref="Resolve"/>) and <c>eventlog_logs</c>' listing (2026-10-23, the Mac
+    /// pass: the listing offered what the reads refused).
+    /// </summary>
+    public bool LocalAllows(string log) => _localLogs() is not { Count: > 0 } logs || EventLogCatalog.Allows(logs, log);
+
     /// <summary>Whether <paramref name="log"/> names the unified log.</summary>
     public static bool IsSystem(string log) => SystemNames.Contains(log.Trim().ToLowerInvariant(), StringComparer.Ordinal);
 
@@ -147,7 +154,7 @@ public sealed class MacLogAccess
             }
 
             // local's own logs allow-list holds on a Mac too (2026-10-23, the admin review's N4: the crashes and install.log were read whatever it said).
-            return _localLogs() is { Count: > 0 } logs && !EventLogCatalog.Allows(logs, local.Log)
+            return !LocalAllows(local.Log)
                 ? (null, EventLogText.LogNotAllowed(local.Log, EventLogText.LocalName))
                 : (local, null);
         }

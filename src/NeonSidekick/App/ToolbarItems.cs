@@ -294,8 +294,9 @@ public static class ToolbarItems
             return Markup.Escape("    " + ItemOrder.DividerGlyph + "   " + DividerTitle.PadRight(TitleWidth)) + Theme.DimMarkup(DividerNote);
         }
 
+        // Spaced (2026-10-23, the user's iTerm2 screenshot): on a Mac terminal ⚙️ 🛠️ 🛢️ 🖨️ are one cell, so their rows began a cell left.
         string glyph = Glyph(id);
-        return Markup.Escape((on ? "[x] " : "[ ] ") + (glyph.Length == 0 ? "  " : glyph) + "  " + Title(id).PadRight(TitleWidth)) + Theme.DimMarkup(Describe(id));
+        return Markup.Escape(TextCells.Spaced((on ? "[x] " : "[ ] ") + (glyph.Length == 0 ? "  " : glyph) + "  " + Title(id).PadRight(TitleWidth))) + Theme.DimMarkup(Describe(id));
     }
 
     /// <summary>

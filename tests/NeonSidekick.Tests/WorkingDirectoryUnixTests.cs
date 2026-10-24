@@ -96,13 +96,13 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         {
             pending!.Stream.Write([1, 2, 3]);
             Assert.False(File.Exists(Full(@"deep/new/a.bin")));   // not yet: only the sibling
-            Assert.Single(Directory.GetFiles(Full(@"deep/new"), "*.tmp"));
+            Assert.Single(Directory.GetFiles(Full(@"deep/new"), "*" + WorkingDirectory.TempSuffix));
             var done = pending.Commit();
             Assert.Equal(new WriteResult(FileOutcome.Ok, @"deep/new/a.bin", 3, false), done);
         }
 
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(Full(@"deep/new/a.bin")));
-        Assert.Empty(Directory.GetFiles(Full(@"deep/new"), "*.tmp"));
+        Assert.Empty(Directory.GetFiles(Full(@"deep/new"), "*" + WorkingDirectory.TempSuffix));
 
         // A file there: refused without overwrite; with it, replaced at the commit.
         Assert.Equal(FileOutcome.Exists, _files.BeginWrite(@"deep/new/a.bin", false, out none).Outcome);
@@ -121,7 +121,7 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         }
 
         Assert.Equal(new byte[] { 9 }, File.ReadAllBytes(Full(@"deep/new/a.bin")));
-        Assert.Empty(Directory.GetFiles(Full(@"deep/new"), "*.tmp"));
+        Assert.Empty(Directory.GetFiles(Full(@"deep/new"), "*" + WorkingDirectory.TempSuffix));
 
         // A file that appeared meanwhile is not clobbered without overwrite.
         using (var raced = Begin("late.bin", overwrite: false))
@@ -132,7 +132,7 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         }
 
         Assert.Equal(new byte[] { 5 }, File.ReadAllBytes(Full("late.bin")));
-        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+        Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
     }
 
     [UnixFact]
@@ -199,7 +199,8 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
 
     /// <summary>
     /// A dot-name is walked like any other name, as on Windows (2026-10-06, the macOS build): .NET reads every dot-name as Hidden on
-    /// Unix, and the walks' Windows skip left <c>.gitignore</c> out of a listing and a folder's copy. The macOS hidden flag is still skipped.
+    /// Unix, and the walks' Windows skip left <c>.gitignore</c> out of a listing and a folder's copy. The macOS hidden flag is still skipped
+    /// by the listings; a folder's copy keeps a flagged file since 2026-10-22 (the fix plan's D14: a copy then delete lost what the walk had skipped).
     /// </summary>
     [UnixFact]
     public void DotNames_AreListedAndCopied_TheHiddenFlagIsNot()
@@ -215,7 +216,7 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         Assert.Equal(FileOutcome.Ok, _files.Copy("src", "dst", false).Outcome);
         Assert.Equal("bin/", File.ReadAllText(Full("dst/.gitignore")));
         Assert.True(File.Exists(Full("dst/.github/workflows/ci.yml")));
-        Assert.False(File.Exists(Full("dst/flagged.txt")));
+        Assert.True(File.Exists(Full("dst/flagged.txt")));
         Assert.Equal(3, _files.Info("src").Files);
         Assert.Contains(_files.FileTree("", WorkingDirectory.DefaultTreeLength).Entries, e => e.Name == ".gitignore");
     }
@@ -991,8 +992,12 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         Assert.Empty(_files.Search("absent", "", null, false, CancellationToken.None).Hits);
         Assert.Equal(FileOutcome.Empty, _files.Search("  ", "", null, false, CancellationToken.None).Outcome);
         Assert.Equal(FileOutcome.Missing, _files.Search("word", "nope", null, false, CancellationToken.None).Outcome);
-        // One file as the path (2026-09-18): searched alone, the files pattern ignored, the display its own path.
-        var single = _files.Search("word", @"sub/b.txt", "*.md", false, CancellationToken.None);
+        // One file as the path (2026-09-18): searched alone, the display its own path. A files pattern it misses leaves it unsearched and
+        // says so (2026-10-22, review V10: the pattern was ignored).
+        var missed = _files.Search("word", @"sub/b.txt", "*.md", false, CancellationToken.None);
+        Assert.Equal((FileOutcome.Ok, true, 0), (missed.Outcome, missed.SingleFile, missed.FilesSearched));
+        Assert.Equal(FileText.SearchFilterMissesFile(@"sub/b.txt", "*.md"), missed.Unsearched);
+        var single = _files.Search("word", @"sub/b.txt", "*.txt", false, CancellationToken.None);
         Assert.Equal(FileOutcome.Ok, single.Outcome);
         Assert.True(single.SingleFile);
         Assert.Equal(@"sub/b.txt", single.Relative);
@@ -1116,7 +1121,7 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         Assert.True(replaced.Replaced);
         Assert.Equal(new byte[] { 1, 2 }, File.ReadAllBytes(Full(@"img/cat.png")));
         Assert.False(Directory.Exists(Full(".trash")));   // nothing kept (File safe edits went 2026-10-01)
-        Assert.Empty(Directory.GetFiles(Full("img"), "*.tmp"));
+        Assert.Empty(Directory.GetFiles(Full("img"), "*" + WorkingDirectory.TempSuffix));
 
         Directory.CreateDirectory(Full("dir"));
         Assert.Equal(FileOutcome.IsDirectory, _files.WriteBytes("dir", [1], true).Outcome);
@@ -1149,7 +1154,7 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
         Assert.Equal(FileOutcome.Ok, replaced.Outcome);
         Assert.True(replaced.Replaced);
         Assert.Equal("bye", File.ReadAllText(Full(@"docs/notes.txt")));
-        Assert.Empty(Directory.GetFiles(Full("docs"), "*.tmp"));
+        Assert.Empty(Directory.GetFiles(Full("docs"), "*" + WorkingDirectory.TempSuffix));
     }
 
     [UnixFact]
@@ -1195,9 +1200,12 @@ public sealed class WorkingDirectoryUnixTests : IDisposable
             Assert.Equal(new[] { "docs/a.txt", "docs/sub/b.txt" }, archive.Entries.Select(e => e.FullName).Order());
         }
 
-        Assert.Equal(FileOutcome.Exists, _files.Zip("docs", null, false).Outcome);
-        Assert.Equal(FileOutcome.Ok, _files.Zip("docs", null, true).Outcome);
-        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+        // An unnamed archive takes the first free name since 2026-10-22 (review R12): it was refused, and overwrite then replaced the user's zip.
+        Assert.Equal("docs-2.zip", _files.Zip("docs", null, false).Archive);
+        Assert.Equal("docs-3.zip", _files.Zip("docs", null, true).Archive);
+        Assert.Equal(FileOutcome.Exists, _files.Zip("docs", "docs.zip", false).Outcome);
+        Assert.True(_files.Zip("docs", "docs.zip", true).Replaced);
+        Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
 
         var unzipped = _files.Unzip("docs.zip", "restore", false);
         Assert.Equal(FileOutcome.Ok, unzipped.Outcome);

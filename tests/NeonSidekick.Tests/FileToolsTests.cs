@@ -317,8 +317,9 @@ public sealed class FileToolsTests : IDisposable
         Assert.Contains("2 matches for 'needle' in 1 file", await Invoke(search, ("text", "needle"), ("files", "docs/**/*.txt")));
         Assert.Contains("0 matches for 'needle'", await Invoke(search, ("text", "needle"), ("files", "docs/**/*.md")));
         Assert.Equal(ClockText.BadInteger("context", "lots"), await Invoke(search, ("text", "x"), ("context", "lots")));
-        // One file as the path (2026-09-18): searched alone, the header naming it.
-        string one = await Invoke(search, ("text", "needle"), ("path", @"docs/c.txt"), ("files", "*.md"));
+        // One file as the path (2026-09-18): searched alone, the header naming it. A files pattern it misses says so (2026-10-22, review V10).
+        Assert.Contains(FileText.SearchFilterMissesFile(@"docs/c.txt", "*.md"), await Invoke(search, ("text", "needle"), ("path", @"docs/c.txt"), ("files", "*.md")));
+        string one = await Invoke(search, ("text", "needle"), ("path", @"docs/c.txt"), ("files", "*.txt"));
         Assert.StartsWith("2 matches for 'needle' in docs/c.txt (", one, StringComparison.Ordinal);
         Assert.EndsWith(" s):\ndocs/c.txt:1: Needle again\ndocs/c.txt:2: and needle", one);
         // limit cuts the hits; output files counts per file (2026-09-19).

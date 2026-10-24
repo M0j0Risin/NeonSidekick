@@ -127,7 +127,7 @@ public sealed class UncFixesTests : IDisposable
     {
         for (int i = 0; i < 20; i++)
         {
-            Put($@"pack\f{i:D2}.txt", "x");
+            Put(Path.Combine("pack", $"f{i:D2}.txt"), "x");   // Path.Combine: on a Mac a "\" spelling made 20 root files named pack\f…
         }
 
         // Cancelled before the first file: nothing of the folder is left in the working directory.

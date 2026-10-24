@@ -50,6 +50,9 @@ public static class MacLogText
     /// <summary><c>eventlog_logs</c>' line for the Mac's own logs while <c>local</c> is unticked.</summary>
     public const string LocalNotTickedLine = "not offered: local is not ticked in Event log computers offered";
 
+    /// <summary><c>eventlog_logs</c>' line for one of the Mac's own logs local's <c>logs</c> list leaves out (2026-10-23, the Mac pass). Pinned.</summary>
+    public const string NotInLocalLogsLine = "not offered: local's logs in eventlog.json leave it out";
+
     /// <summary>A report that is a link, a FIFO or a device, never opened (2026-10-20).</summary>
     public const string NotARegularFile = "not a regular file";
 

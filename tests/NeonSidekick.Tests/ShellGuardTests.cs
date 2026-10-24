@@ -195,6 +195,34 @@ public sealed class ShellGuardTests : IDisposable
         Assert.Equal(137, await ExitAsync(foreground));
     }
 
+    /// <summary>
+    /// A foreground command's leftover keeps its group tracked past the dispose (2026-10-22, review F2), and the group is forgotten as the
+    /// leftover ends, its zombie reaped only then (2026-10-23, the Mac pass's shell review #4: the dispose reaped it, the group stayed tracked
+    /// with nothing holding its id until some later command's start, and the exit's kill could reach a stranger's group that took it).
+    /// </summary>
+    [MacFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public async Task AForegroundCommandsLeftover_StaysTrackedPastTheDispose_AndIsForgottenAsItEnds()
+    {
+        var groups = new ShellGroups(_folder, guardExecutable: null);
+        ShellGroups.Current = groups;
+        var foreground = new ShellRunner(_time).Start(Zsh("sleep 2 </dev/null >/dev/null 2>&1 & exit 0"), "run_000004");
+        await ExitAsync(foreground);
+        foreground.Dispose();
+        Assert.Equal([foreground.Pid], groups.Tracked);   // the sleep runs: its group is still killed at the app's exit
+        Assert.Equal(0, PosixSpawnNative.KillPg(foreground.Pid, 0));
+
+        var until = DateTime.UtcNow.AddSeconds(15);
+        while (groups.Tracked.Count > 0 && DateTime.UtcNow < until)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.Empty(groups.Tracked);   // forgotten with no later Track to sweep it
+        Assert.Equal(0, groups.KillTracked());
+        Assert.False(Directory.Exists(_folder) && Directory.GetFiles(_folder).Length > 0);
+    }
+
     /// <summary>A group whose record cannot be written is still tracked (the code review): the exit signals find it.</summary>
     [MacFact]
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]

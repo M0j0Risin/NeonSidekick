@@ -58,7 +58,7 @@ public class WindowsOnlyMenusTests
     [MacFact]
     public void OnAMac_TheSlashListSaysThereAreNone()
     {
-        Assert.Equal("Windows services (a Mac has none)", SlashCommands.HelpEntries.Single(e => e.Command == "/services").Summary);
-        Assert.Equal("Windows' scheduled tasks (a Mac has none)", SlashCommands.HelpEntries.Single(e => e.Command == "/tasks").Summary);
+        Assert.Equal("none on a Mac (Windows services)", SlashCommands.HelpEntries.Single(e => e.Command == "/services").Summary);
+        Assert.Equal("none on a Mac (Windows' scheduled tasks)", SlashCommands.HelpEntries.Single(e => e.Command == "/tasks").Summary);
     }
 }
