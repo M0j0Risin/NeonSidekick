@@ -12518,8 +12518,8 @@ internal sealed partial class ChatScreen
     /// The embedded model's connect (2026-09-29): a model named but not installed is offered for install first (a yes
     /// downloads it behind the input line — later that day — and this connect waits for it; no, or no menus, and the session's
     /// connect says it is missing), then the server
-    /// is started under a spinner whose label follows the runtime's download, the start and the model's load — Ctrl+C
-    /// cancels it and the app stays. A start that failed has drained its error; only a connected one is reported.
+    /// is started under a spinner whose label follows the runtime's download, the start and the model's load — Esc or Ctrl+C
+    /// (Esc since 2026-10-24) cancels it and the app stays. A start that failed has drained its error; only a connected one is reported.
     /// Since 2026-10-01 (the user's asks) a double-click on that spinner — <c>🦙 starting …</c>, <c>🦙 loading …</c> — cancels it
     /// too, and the screen lives under it as under a reply (<see cref="LoadUnderWatchAsync"/>): the row, the toolbar, the chords.
     /// Under its own watch (the review's findings, the same day) the load then ends as a reply does, in a reply's order: the
@@ -12568,7 +12568,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A connect that loads a model (the embedded server, 2026-09-29; a chosen Docker container, 2026-10-02, which shares it):
     /// <see cref="LlmSession.ConnectAsync(AppSettingsData, Action{string}, CancellationToken)"/> under a spinner whose label
-    /// follows the load's steps, the screen living under it as under a reply (<see cref="LoadUnderWatchAsync"/>) — Ctrl+C or a
+    /// follows the load's steps, the screen living under it as under a reply (<see cref="LoadUnderWatchAsync"/>) — Esc, Ctrl+C or a
     /// double-click on the spinner cancels it and the app stays. Then, in a reply's order, the cancelled notice or the report,
     /// a cancel's <c>Queue cancel mode</c>, and the reconnects owed meanwhile (never the LLM's after a cancel, which would start
     /// the load again).
@@ -12827,31 +12827,35 @@ internal sealed partial class ChatScreen
     /// pointer, a line or a chord through <see cref="OnMidTurnLineAsync"/>, so the mid-turn policy holds as under a reply (the
     /// user's pick): a pane opens over the spinner, <c>/clear</c>, <c>/new</c> or <c>/exit</c> cancels the load and runs at the idle
     /// line after, <c>/server</c> or <c>/profile</c> waits for it — with the acts run as they come, as
-    /// <see cref="WaitForBotSpeechAsync"/> runs them, so Ctrl+E or <c>/tts off</c> lands while the model still loads. Ctrl+C alone
-    /// is the cancel key, as for every connect; a double-click on the spinner and its label (<see cref="LoadClickLine"/>) is the
-    /// other way. True when either cancelled it (the caller prints the notice); the app token still propagates. Under another
-    /// watch already (<c>_turnRunning</c>) it is <see cref="WaitUnderWatchAsync"/>'s plain Ctrl+C wait, so the outer watch's
-    /// state is never taken from it.
+    /// <see cref="WaitForBotSpeechAsync"/> runs them, so Ctrl+E or <c>/tts off</c> lands while the model still loads. Esc or Ctrl+C
+    /// cancels it, as under a reply; a double-click on the spinner and its label is the other way. True when any of them cancelled
+    /// it (the caller prints the notice); the app token still propagates. Under another watch already (<c>_turnRunning</c>) it is
+    /// <see cref="WaitUnderWatchAsync"/>'s plain wait on the same two keys, so the outer watch's state is never taken from it.
     ///
     /// <para>The review's findings, the same day: the watch is <see cref="StartReplyWatch"/>'s, shared with the reply's other
     /// waits; the double-click is <see cref="HintClickLine"/>'s, on the spinner and label alone (<see cref="_loadCancel"/>, the
     /// pane's <c>LabelZone</c>) so the tally beside them still opens <c>/usage</c>; <c>/sampling</c> waits for the load's end
-    /// (<see cref="MidTurnPolicyUnderLoad"/>), and the deferred notices say "the load". A bare ESC is spent
-    /// (<see cref="SpendLoadEscape"/>). The watch ends with <see cref="EndWatchAsync"/> alone: the caller applies the owed
-    /// reconnects after its own line (<see cref="ConnectEmbeddedAsync"/>).</para>
+    /// (<see cref="MidTurnPolicyUnderLoad"/>), and the deferred notices say "the load". The watch ends with <see cref="EndWatchAsync"/>
+    /// alone: the caller applies the owed reconnects after its own line (<see cref="ConnectEmbeddedAsync"/>).</para>
+    ///
+    /// <para>Esc (2026-10-24, the user's report: the row said <c>Esc to stop</c> under a Docker container's load and the embedded model's,
+    /// and Esc did nothing). From 2026-10-01 Ctrl+C alone cancelled and a bare Esc was spent, so a press meant to get out of the load never
+    /// fired at the picker or the idle line after it; cancelling ends that as well. The watch's own order holds: an open completion list
+    /// on the live row takes the first Esc, the next one cancels. A Docker load's cancel ends the app's wait only; a stop or a start
+    /// already sent to the engine carries on.</para>
     /// </summary>
     private async Task<bool> LoadUnderWatchAsync(Func<CancellationToken, Task> load, CancellationToken cancellationToken)
     {
         if (_turnRunning)
         {
-            return await WaitUnderWatchAsync(load, Keys.IsInterrupt, cancellationToken, kind: KillScopeKind.Load).ConfigureAwait(false);
+            return await WaitUnderWatchAsync(load, KeySource.IsTurnCancel, cancellationToken, kind: KillScopeKind.Load).ConfigureAwait(false);
         }
 
         using var workCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         using var killScope = BeginKillScope(workCts, KillScopeKind.Load);
         _loadCancel = workCts;
-        var watcher = StartReplyWatch(workCts, stop.Token, cancellationToken, cancel: Keys.IsInterrupt, spend: SpendLoadEscape);
+        var watcher = StartReplyWatch(workCts, stop.Token, cancellationToken);
         try
         {
             var loading = load(workCts.Token);
@@ -12872,22 +12876,6 @@ internal sealed partial class ChatScreen
         }
 
         return workCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
-    }
-
-    /// <summary>
-    /// The load's ESC (2026-10-01, the review's finding: ESC is no cancel there, so a press meant to get out of the load stayed
-    /// type-ahead and fired at the picker or the idle line after it), on the watcher task: spent — an open list on the live row
-    /// closes, as under a reply, and nothing else happens. Ctrl+C is the load's cancel.
-    /// </summary>
-    private bool SpendLoadEscape(InputEvent e)
-    {
-        if (e is not InputEvent.Key { Info: var key } || !Keys.IsCancel(key))
-        {
-            return false;
-        }
-
-        LiveEditor?.TryCloseList();
-        return true;
     }
 
     /// <summary>The spinner label over a discovery: <see cref="ScanningLabel"/> when the settings' scan mode reaches the network, else <paramref name="fallback"/>.</summary>

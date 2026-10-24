@@ -21,6 +21,9 @@ internal sealed class FakeDockerServers : IDockerServers
 
     public DockerStopAll Stopped { get; set; } = new(["sglang_a"], []);
 
+    /// <summary>Awaited by each switch after its phase, before it answers (2026-10-24): a test holds the load here, as <see cref="FakeEmbeddedLlm.StartGate"/> does.</summary>
+    public Func<CancellationToken, Task>? Gate { get; set; }
+
     /// <summary>A switch that came up on <see cref="LiveUrl"/> listing <paramref name="models"/>, each with a 32k window.</summary>
     public static DockerSwitch Ready(params string[] models) =>
         new(true, null, LiveUrl, 30000, new ProbeResult(true, models, models.Length + " chat models", "sglang",
@@ -32,11 +35,16 @@ internal sealed class FakeDockerServers : IDockerServers
         return Task.FromResult(List);
     }
 
-    public Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         Calls.Add("switch " + name);
         phase?.Invoke(DockerServerText.Starting(name));
-        return Task.FromResult(Answer(name));
+        if (Gate is { } gate)
+        {
+            await gate(cancellationToken);
+        }
+
+        return Answer(name);
     }
 
     /// <summary>The chosen names each <see cref="StopAllAsync"/> was asked with, in order: whose list the stop went by.</summary>

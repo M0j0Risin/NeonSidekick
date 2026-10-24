@@ -68,6 +68,34 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task Server_Docker_EscUnderTheLoad_CancelsIt()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // 2026-10-24, the user's report: "loading the model in <container> · Esc to stop", and Esc did nothing. The line and the
+        // picker's Esc go through the idle read, never ahead of the run: the load's watch would take a typed /exit, which cancels too.
+        var docker = UseDockerServers();
+        LoadOnThePane();
+        var input = WhenIdle(
+            i => { PushLine(i, "/server docker:vllm_b"); i.Push(Keys.Escape); },   // the Esc keeps the reasoning
+            i => PushLine(i, "/exit"));
+        docker.Gate = async ct =>
+        {
+            input.Push(Keys.Escape);
+            await Task.Delay(TimeSpan.FromSeconds(10), ct);   // the cancel ends it; without one the switch answers and the asserts fail, never a hang
+        };
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
+        Assert.Equal(["switch vllm_b"], docker.Calls);
+        Assert.Null(_session.Assistant);
+    }
+
+    [Fact]
     public async Task Server_Docker_TwoModelsListed_SavesNone()
     {
         if (!OperatingSystem.IsWindows())

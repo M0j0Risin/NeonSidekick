@@ -7,8 +7,8 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The embedded model's load under the reply's own watch (2026-10-01, the user's asks): a double-click on the spinner and its
-/// label — <c>🦙 starting …</c>, <c>🦙 loading …</c> — cancels it as Ctrl+C does, and the row, the toolbar and the chords live
-/// under it as under a reply. The startup connect is the load here: the fake's <see cref="FakeEmbeddedLlm.StartGate"/> holds it.
+/// label — <c>🦙 starting …</c>, <c>🦙 loading …</c> — cancels it as Esc and Ctrl+C do (Esc since 2026-10-24), and the row, the toolbar
+/// and the chords live under it as under a reply. The startup connect is the load here: the fake's <see cref="FakeEmbeddedLlm.StartGate"/> holds it.
 /// </summary>
 public partial class ChatScreenTests
 {
@@ -329,26 +329,63 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task UnderTheLoad_Esc_IsSpent_TheDraftOnTheRowSurvivesIt()
+    public async Task UnderTheLoad_Esc_CancelsTheLoad_TheDraftOnTheRowSurvivesIt()
     {
-        // The review's finding: ESC is no cancel under the load, and kept as type-ahead it fired at the idle line after it
-        // (here it would have cleared the draft, so the Enter sent nothing).
+        // 2026-10-24, the user's report: the row said "Esc to stop" under the load and Esc did nothing (it was spent since 2026-10-01,
+        // so it never fired at the idle line after the load). It cancels now, as under a reply, and the draft stays on the row as there.
         var embedded = OnTheEmbeddedE2b();
         LoadOnThePane();
-        _chat.EnqueueText("Hi.");
-        var input = WhenIdle(i => i.Push(Keys.Enter), i => PushLine(i, "/exit"));
+        var input = WhenIdle(i => i.Push(Keys.Ctrl(ConsoleKey.A), Keys.Backspace), i => PushLine(i, "/exit"));
         embedded.StartGate = async ct =>
         {
             input.Push(Keys.Char('a'), Keys.Char('b'), Keys.Char('c'), Keys.Escape);
-            await UntilAsync(() => !input.IsAvailable, ct);
-            await Task.Delay(60, ct);   // the watcher takes the keys
+            await Task.Delay(TimeSpan.FromSeconds(10), ct);   // the cancel ends it; without one the load lands and the asserts fail, never a hang
         };
 
         string output = await RunAsync(input);
 
-        Assert.NotNull(embedded.Running);
-        Assert.Single(_chat.Requests);
-        Assert.DoesNotContain(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
+        int cancelled = output.IndexOf(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), StringComparison.Ordinal);
+        Assert.True(cancelled > 0, output);
+        Assert.True(output.IndexOf("abc", cancelled, StringComparison.Ordinal) > cancelled, output);   // the idle row draws the draft again
+        Assert.Null(_session.Assistant);
+        Assert.Null(embedded.Running);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task UnderTheLoad_EscOverAnOpenList_ClosesIt_TheNextEscCancels()
+    {
+        // 2026-10-24: the watch's order, as under a reply — the open list takes the first Esc, the load the second.
+        var embedded = OnTheEmbeddedE2b();
+        LoadOnThePane();
+        var input = WhenIdle(i => i.Push(Keys.Ctrl(ConsoleKey.A), Keys.Backspace), i => PushLine(i, "/exit"));
+        string notice = ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm);
+        bool listDrawn = false;
+        bool cancelledByTheFirst = true;
+        embedded.StartGate = async ct =>
+        {
+            input.Push(Keys.Char('/'), Keys.Char('h'), Keys.Char('e'));
+            var drawn = DateTime.UtcNow.AddSeconds(10);
+            while (!Output.Contains(MentionCompleter.Hint, StringComparison.Ordinal) && DateTime.UtcNow < drawn)
+            {
+                await Task.Delay(5, ct);
+            }
+
+            listDrawn = Output.Contains(MentionCompleter.Hint, StringComparison.Ordinal);
+            input.Push(Keys.Escape);
+            await UntilAsync(() => !input.IsAvailable, ct);
+            await Task.Delay(60, ct);   // the watcher acts on the key
+            cancelledByTheFirst = ct.IsCancellationRequested || Output.Contains(notice, StringComparison.Ordinal);
+            input.Push(Keys.Escape);
+            await Task.Delay(TimeSpan.FromSeconds(10), ct);   // as above: a missing cancel fails, never hangs
+        };
+
+        string output = await RunAsync(input);
+
+        Assert.True(listDrawn);
+        Assert.False(cancelledByTheFirst);
+        Assert.Contains(notice, output);
+        Assert.Null(embedded.Running);
     }
 
     [Fact]

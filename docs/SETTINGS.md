@@ -206,7 +206,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, for whe
 * **Install:** *Install* on **Embedded models** downloads it in the background (📥 on the status bar; a double-click pauses it), then switches to it.
 * **Switch:** it needs *Embedded servers enabled*. Connect a model's *Download an embedded model* turns that on once the model you pick is ready.
 * **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
-* **Loading:** the status bar shows `🦙 loading <model>`; Ctrl+C or a double-click on the spinner cancels.
+* **Loading:** the status bar shows `🦙 loading <model>`; Esc, Ctrl+C or a double-click on the spinner cancels.
 * **Each row** shows the size, the state (`installed`, `download`, `partial · 42%`) and the quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls and ⛓️‍💥 an uncensored build.
 * **The buttons** filter by size (any, up to 8 GB, up to 16 GB), installed or not and drafter, and sort by name or size; the uncensored builds show only under **uncensored** (`x`). Keys: [Pane keys](INTERFACE.md#pane-keys).
 

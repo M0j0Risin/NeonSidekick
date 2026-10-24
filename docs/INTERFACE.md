@@ -589,7 +589,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **After a cancel** under *Queue cancel mode* `hold`, the waiting messages are held under a **Resume** banner; a new message runs first.
 * **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`; their text goes back to the page. `/queue clear` leaves them. At most 20 wait, up to 48 KB each.
 * **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech. Before the reply's first word it takes the message back.
-* Stop never stops a model loading (Ctrl+C at the PC) or your editor under `/draft`.
+* Stop never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
 
 #### What the page shows
 
@@ -694,7 +694,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.
 * **Refused when it runs:** `/model <id>` and `/reasoning`, when connecting would mean looking for a server or naming an embedded model not installed; those pickers and that download are the PC's. `/tts on` and `/stt on` likewise, when their voice models aren't downloaded yet.
-* **Stop:** the page's Stop ends `/claude` too, but not a model loading (Ctrl+C at the PC).
+* **Stop:** the page's Stop ends `/claude` too, but not a model loading (Esc or Ctrl+C at the PC).
 * **An unknown command:** the page offers *Send as a message*, and for `//tools` *Use /tools*.
 * **The log:** each command from the page is logged with its name, the address and the verdict, never the rest of the line.
 

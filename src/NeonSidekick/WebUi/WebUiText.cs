@@ -284,7 +284,7 @@ public static class WebUiText
     public const string NothingToStop = "Nothing is running.";
 
     /// <summary>Stop while only a model loads.</summary>
-    public const string LoadingNoStop = "The model is loading; that is stopped at the PC (Ctrl+C).";
+    public const string LoadingNoStop = "The model is loading; that is stopped at the PC (Esc or Ctrl+C).";
 
     /// <summary>An answer to an ask already answered or gone.</summary>
     public const string AskGone = "That question was answered or withdrawn.";
