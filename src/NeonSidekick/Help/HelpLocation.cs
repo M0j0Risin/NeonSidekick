@@ -58,6 +58,15 @@ internal static class HelpLocation
     /// <summary>The row <paramref name="field"/> is on.</summary>
     public static HelpRow Of(SettingsField field) => Rows.First(r => r.Field == field);
 
+    private static readonly Lazy<IReadOnlyList<HelpRow>> s_otherRows = new(() => RowsFor(!OperatingSystem.IsWindows()));
+
+    /// <summary>
+    /// The row <paramref name="field"/> is on in a system's panes (2026-10-25, <c>neon_help</c>'s tool answers built for either system in the
+    /// tests); null when that system leaves the row out (a Windows-only menu's on a Mac).
+    /// </summary>
+    public static HelpRow? Of(SettingsField field, bool windows) =>
+        (windows == OperatingSystem.IsWindows() ? Rows : s_otherRows.Value).FirstOrDefault(r => r.Field == field);
+
     /// <summary>The rows of one tab, in the order the tab shows them (a group tab's, every menu's in turn).</summary>
     public static IReadOnlyList<HelpRow> OnTab(string pane, string tab) =>
         Rows.Where(r => string.Equals(r.Pane, pane, StringComparison.Ordinal) && string.Equals(r.Tab, tab, StringComparison.Ordinal)).ToList();

@@ -79,6 +79,47 @@ public sealed class EnvironmentOverrides
         DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable, AdvisorsVariable,
     };
 
+    /// <summary>
+    /// The setting each overriding variable shadows (2026-10-25, the neon_help plan's Step 4: <c>neon_help</c> answers a variable with its setting's
+    /// sentence and place). The rows <c>SidekickApp.OverriddenBy</c> names, held to it by a test; the composite rows (the embedded switch, the voice
+    /// preset) and the four that set a setting with no override mark (Home Assistant's two, the embedded backend and context) are left out.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, App.SettingsField> Fields = new Dictionary<string, App.SettingsField>(StringComparer.Ordinal)
+    {
+        [LlmUrlVariable] = App.SettingsField.LlmUrl,
+        [LlmModelVariable] = App.SettingsField.LlmModel,
+        [LlmApiKeyVariable] = App.SettingsField.LlmApiKey,
+        [RequestTimeoutVariable] = App.SettingsField.LlmRequestTimeoutSeconds,
+        [TurnTimeoutVariable] = App.SettingsField.LlmTurnTimeoutSeconds,
+        [LlmContextVariable] = App.SettingsField.LlmContextLength,
+        [TtsUrlVariable] = App.SettingsField.TtsHttpUrl,
+        [TtsVoiceVariable] = App.SettingsField.TtsVoice,
+        [TtsSpeedVariable] = App.SettingsField.TtsSpeed,
+        [InterruptEchoVariable] = App.SettingsField.SttInterruptEchoGuard,
+        [InterruptConfirmVariable] = App.SettingsField.SttInterruptConfirmMs,
+        [TtsVoice2Variable] = App.SettingsField.TtsVoice2,
+        [TtsMixVariable] = App.SettingsField.TtsVoiceMix,
+        [WhisperModelVariable] = App.SettingsField.SttWhisperModel,
+        [LlmReasoningVariable] = App.SettingsField.LlmReasoning,
+        [LlmSamplingVariable] = App.SettingsField.LlmSampling,
+        [SearxngUrlVariable] = App.SettingsField.WebSearxngUrl,
+        [CommandPolicyVariable] = App.SettingsField.ShellCommandPolicy,
+        [ShellPoliceVariable] = App.SettingsField.ShellPolice,
+        [ShellNativeVariable] = App.SettingsField.ShellPreferNative,
+        [ObsidianVaultVariable] = App.SettingsField.ObsidianVault,
+        [ComfyUrlVariable] = App.SettingsField.ComfyUrl,
+        [ClaudeCodeExeVariable] = App.SettingsField.ClaudeCodeExecutable,
+        [ClaudeCodePermissionsVariable] = App.SettingsField.ClaudeCodePermissions,
+        [AdvisorsVariable] = App.SettingsField.Advisors,
+        [AnthropicApiVariable] = App.SettingsField.AnthropicApi,
+        [AnthropicApiKeyVariable] = App.SettingsField.AnthropicApiKey,
+        [ClaudeCodeServerVariable] = App.SettingsField.ClaudeCodeServer,
+        [OpenAIApiVariable] = App.SettingsField.OpenAIApi,
+        [OpenAIApiKeyVariable] = App.SettingsField.OpenAIApiKey,
+        [YouTubeApiKeyVariable] = App.SettingsField.YouTubeApiKey,
+        [DockerPipeVariable] = App.SettingsField.DockerEnginePipe,
+    };
+
     /// <summary>The log category of every environment line.</summary>
     public const string Category = "Environment";
     private readonly Func<string, string?> _read;

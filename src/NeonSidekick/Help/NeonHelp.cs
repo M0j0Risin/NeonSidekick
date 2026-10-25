@@ -10,7 +10,10 @@ namespace NeonSidekick.Help;
 /// (<c>/tools</c>, <c>/tools camera</c>, <c>camera tab</c>); a command (<c>/camera</c>, <c>camera</c>, <c>//</c>); a key
 /// (<c>ctrl+h</c>); a setting's name, whole or a part of it; and last as plain words, scored over every command form,
 /// setting and key, the best <see cref="HelpText.MaxMatches"/> listed. <c>kind</c> narrows each step to one sort. Every
-/// answer is capped at <see cref="HelpText.MaxChars"/>.
+/// answer is capped at <see cref="HelpText.MaxChars"/>. Since 2026-10-25 (the neon_help plan, the user's call) it also knows the tools
+/// (<see cref="HelpToolCatalog"/>, with a "Right now:" line from <see cref="HelpLive"/>, the one thing it reads from the running app),
+/// the bars and toolbar icons (<see cref="HelpInterface"/>), the flags and variables (<see cref="HelpStartup"/>) and the home's files
+/// (<see cref="HelpFiles"/>); the order is <see cref="Find"/>'s.
 /// </summary>
 internal static class NeonHelp
 {
@@ -23,48 +26,83 @@ internal static class NeonHelp
         "when", "why", "get", "want", "should", "about", "are", "at", "from",
     };
 
-    /// <summary>The answer for <paramref name="query"/> under <paramref name="kind"/> (one of <see cref="HelpText.Kinds"/>; empty is <c>any</c>).</summary>
-    public static string Answer(string? query, string? kind = null)
+    /// <summary>
+    /// The answer for <paramref name="query"/> under <paramref name="kind"/> (one of <see cref="HelpText.Kinds"/> or an alias of one,
+    /// <see cref="HelpText.KindAliases"/>; empty is <c>any</c>). <paramref name="live"/> (2026-10-25, the user's call) is the running
+    /// app's view of its tools, asked at most once and only by a tool answer, a group list or a group switch's answer; null (the advisors'
+    /// copy, the tests) leaves the "Right now:" line out.
+    /// </summary>
+    public static string Answer(string? query, string? kind = null, Func<HelpLive>? live = null) =>
+        Answer(query, kind, live, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS());
+
+    /// <summary>The answer as one system gives it (<paramref name="windows"/> decides what is left out, <paramref name="mac"/> picks the Mac lines), so both are tested on either machine.</summary>
+    internal static string Answer(string? query, string? kind, Func<HelpLive>? live, bool windows, bool mac)
     {
         string k = string.IsNullOrWhiteSpace(kind) ? "any" : kind.Trim().ToLowerInvariant();
+        k = HelpText.KindAliases.TryGetValue(k, out var alias) ? alias : k;
         if (!HelpText.Kinds.Contains(k))
         {
             return HelpText.BadKind(kind!.Trim());
         }
 
+        HelpLive? cached = null;
+        bool asked = false;
+        HelpLive? Live()
+        {
+            if (!asked)
+            {
+                asked = true;
+                cached = live?.Invoke();
+            }
+
+            return cached;
+        }
+
         string q = (query ?? "").Trim();
-        return HelpText.Cap(Find(q, k));
+        return HelpText.Cap(Find(q, k, Live, windows, mac));
     }
 
-    private static string Find(string q, string kind)
+    /// <summary>
+    /// The steps in order (2026-10-25, the neon_help plan's numbering; the deferred steps 3 and 7's window keys are left out), each only under
+    /// <c>any</c> or its own kind: no query; glyphs; pane; command (with its see-also line); keys; an exact setting name; tool names; a
+    /// bar or toolbar item by name; flags and variables; files; a setting name's part; a lone tool or flag token that matched nothing is
+    /// the miss; plain words, scored; the miss.
+    /// </summary>
+    private static string Find(string q, string kind, Func<HelpLive?> live, bool windows, bool mac)
     {
         bool any = kind == "any";
-        if (kind == "keys" && q.Length == 0)
-        {
-            return HelpText.Keys(KeyRows());
-        }
-
-        if (kind == "command" && q.Length == 0)
-        {
-            return HelpText.CommandList(SlashCommands.HelpEntries);
-        }
-
+        bool Is(string k) => any || kind == k;
         if (q.Length == 0)
         {
-            return Overview();
+            return kind switch
+            {
+                "keys" => HelpText.Keys(KeyRows()),
+                "command" => HelpText.CommandList(SlashCommands.HelpEntries),
+                "tool" => HelpToolCatalog.List(live(), windows),
+                "interface" => HelpInterface.List(windows),
+                "startup" => HelpStartup.List(windows),
+                "files" => HelpFiles.Tree(windows, mac),
+                _ => Overview(),
+            };
         }
 
-        if ((any || kind == "pane") && PaneAnswer(q) is { } pane)
+        var tokens = HelpToken.Read(q);
+        if (Is("interface") && HelpInterface.ByGlyphs(q, windows) is { Count: > 0 } glyphs)
+        {
+            return string.Join("\n\n", glyphs);
+        }
+
+        if (Is("pane") && PaneAnswer(q) is { } pane)
         {
             return pane;
         }
 
-        if ((any || kind == "command") && CommandOf(q) is { } command)
+        if (Is("command") && CommandOf(q) is { } command)
         {
-            return HelpText.Command(command);
+            return HelpText.Command(command) + SeeAlso(command.Command, windows);
         }
 
-        if (any || kind == "keys")
+        if (Is("keys"))
         {
             if (IsKeysWord(q))
             {
@@ -78,14 +116,109 @@ internal static class NeonHelp
             }
         }
 
-        if ((any || kind == "setting") && SettingsNamed(q) is { Count: > 0 } named)
+        // A setting's name never answers a `--flag` (`--profile` is the flag, not *Profile*), nor names a row this system leaves out.
+        bool flag = q.StartsWith('-');
+        if (Is("setting") && !flag && SettingsNamedExactly(q).Where(f => (!any || !HelpInterface.IsBarRow(f)) && HelpLocation.Of(f, windows) is not null).ToList() is { Count: > 0 } named)
         {
-            return string.Join("\n\n", named.Select(Setting));
+            return string.Join("\n\n", named.Select(f => SwitchSetting(f, live, windows)));
         }
 
-        return Scored(q, kind) is { Count: > 0 } best
+        if (Is("tool") && ToolItems(q, tokens, kind == "tool", live, windows, mac) is { Count: > 0 } tools)
+        {
+            return string.Join("\n\n", tools);
+        }
+
+        if (Is("interface") && HelpInterface.ByName(q, windows) is { } item)
+        {
+            return item;
+        }
+
+        if (Is("startup") && HelpStartup.Find(tokens, windows, mac, kind == "startup") is { Count: > 0 } startup)
+        {
+            return string.Join("\n\n", startup);
+        }
+
+        if (Is("files") && HelpFiles.Find(tokens, windows, mac) is { Count: > 0 } files)
+        {
+            return string.Join("\n\n", files);
+        }
+
+        if (Is("setting") && !flag && SettingsHolding(q).Where(f => HelpLocation.Of(f, windows) is not null).ToList() is { Count: > 0 } holding)
+        {
+            return string.Join("\n\n", holding.Select(Setting));
+        }
+
+        // A lone tool name or flag that matched nothing is the miss, never plain words (2026-10-25: on a Mac `service_control` and
+        // `--services-check` are unknown, and their words would score unrelated rows).
+        if (tokens.Count == 1 && (tokens[0].Text.Contains('_', StringComparison.Ordinal) || tokens[0].Text.StartsWith("--", StringComparison.Ordinal)))
+        {
+            return HelpText.NothingFound(q);
+        }
+
+        return Scored(q, kind, windows, mac) is { Count: > 0 } best
             ? HelpText.MatchesHeading(q) + "\n\n" + string.Join("\n\n", best)
             : HelpText.NothingFound(q);
+    }
+
+    /// <summary>
+    /// A setting, and for a group's switch (<c>Web tools</c>) its tools and the group's live line (2026-10-25): "web tools" is the setting,
+    /// so its answer says what the switch offers.
+    /// </summary>
+    private static string SwitchSetting(SettingsField field, Func<HelpLive?> live, bool windows) =>
+        HelpToolCatalog.GroupOfSwitch(field, windows) is null ? Setting(field) : Setting(field) + "\n" + HelpToolCatalog.SwitchTools(field, live(), windows);
+
+    /// <summary>
+    /// The tools a query names (2026-10-25, step 9), in its order, each once, at most <see cref="HelpText.MaxMatches"/>: an underscored name
+    /// anywhere (the Claude Code server's <c>mcp__neon__</c> taken off), a bare-word one (<c>copy</c>) only as the whole query, in
+    /// backticks, before "tool" or under <c>kind: tool</c>, an MCP tool by its whole name; else a group ("camera tools").
+    /// </summary>
+    private static List<string> ToolItems(string q, IReadOnlyList<HelpToken> tokens, bool kindTool, Func<HelpLive?> live, bool windows, bool mac)
+    {
+        var found = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var token in tokens)
+        {
+            string name = token.Text.StartsWith(Claude.ClaudeArguments.McpToolPrefix, StringComparison.OrdinalIgnoreCase) ? token.Text[Claude.ClaudeArguments.McpToolPrefix.Length..] : token.Text;
+            if (HelpToolCatalog.Find(name, windows) is { } entry)
+            {
+                bool plain = !HelpToolCatalog.BareWords.Contains(entry.Name) || tokens.Count == 1 || token.Ticked || kindTool || token.Next is "tool" or "tools";
+                if (plain && seen.Add(entry.Name))
+                {
+                    found.Add(HelpToolCatalog.Answer(entry, live(), windows, mac));
+                }
+            }
+            else if (HelpToolCatalog.LooksLikeMcpName(name) && seen.Add(name))
+            {
+                found.Add(HelpToolCatalog.McpAnswer(name, live()));
+            }
+
+            if (found.Count == HelpText.MaxMatches)
+            {
+                break;
+            }
+        }
+
+        if (found.Count == 0 && HelpToolCatalog.GroupNamed(Words(q), kindTool, windows) is { } group)
+        {
+            found.Add(HelpToolCatalog.GroupAnswer(group, live(), windows));
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The line after a command's answer when its word names something else too (2026-10-25): a tool (<c>/copy</c>, <c>/process</c>) or a
+    /// bar (<c>/toolbar</c>, <c>/perfbar</c>, <c>/homebar</c>), with the words that ask for it. Empty for none.
+    /// </summary>
+    private static string SeeAlso(string command, bool windows)
+    {
+        string word = command.TrimStart('/');
+        if (HelpToolCatalog.BareWords.Contains(word) && HelpToolCatalog.Find(word, windows) is not null)
+        {
+            return "\n\n" + HelpText.SeeAlsoTool(word);
+        }
+
+        return HelpInterface.SeeAlso(command) is { } bar ? "\n\n" + bar : "";
     }
 
     /// <summary>The overview: every pane and its tabs, every command (<c>/log</c> among them) and how to ask.</summary>
@@ -195,14 +328,20 @@ internal static class NeonHelp
 
     private static bool IsKeysWord(string q) => q.ToLowerInvariant() is "keys" or "key" or "keyboard" or "shortcuts" or "keyboard shortcuts" or "hotkeys" or "key bindings";
 
-    /// <summary>The settings whose name is <paramref name="q"/> (case aside, a unit suffix like <c>(s)</c> optional), else every one whose name holds it (three letters or more, at most <see cref="HelpText.MaxMatches"/>).</summary>
-    public static IReadOnlyList<SettingsField> SettingsNamed(string q)
+    /// <summary>The settings whose name is <paramref name="q"/> (case aside, a unit suffix like <c>(s)</c> optional): <see cref="Find"/>'s step 8.</summary>
+    private static List<SettingsField> SettingsNamedExactly(string q)
     {
         string wanted = Squash(q);
-        var exact = HelpLocation.Rows.Where(r => Squash(r.Label) == wanted || Squash(WithoutUnit(r.Label)) == wanted).Select(r => r.Field).ToList();
-        if (exact.Count > 0 || wanted.Length < 3)
+        return HelpLocation.Rows.Where(r => Squash(r.Label) == wanted || Squash(WithoutUnit(r.Label)) == wanted).Select(r => r.Field).ToList();
+    }
+
+    /// <summary>Every setting whose name holds <paramref name="q"/> (three letters or more, at most <see cref="HelpText.MaxMatches"/>, the shortest name first): step 13.</summary>
+    private static List<SettingsField> SettingsHolding(string q)
+    {
+        string wanted = Squash(q);
+        if (wanted.Length < 3)
         {
-            return exact;
+            return [];
         }
 
         // The shortest name first: "voice" is TTS voice before TTS voice preview.
@@ -241,7 +380,7 @@ internal static class NeonHelp
     /// is let go. Items that miss every word drop out; of two that tie the shorter name wins (TTS voice over TTS voice preview),
     /// then the catalog's order.
     /// </summary>
-    private static IReadOnlyList<string> Scored(string q, string kind)
+    private static IReadOnlyList<string> Scored(string q, string kind, bool windows, bool mac)
     {
         var words = Words(q).Where(w => !s_stopWords.Contains(w)).Distinct(StringComparer.Ordinal).ToList();
         if (words.Count == 0)
@@ -252,7 +391,7 @@ internal static class NeonHelp
         var items = new List<(int Score, int Length, string Text)>();
         if (kind is "any" or "setting")
         {
-            foreach (var row in HelpLocation.Rows)
+            foreach (var row in HelpLocation.RowsFor(windows))
             {
                 string description = HelpSettings.Describe(row.Field);
                 items.Add((Score(words, row.Label + " " + row.Place, description), row.Label.Length, Setting(row.Field)));
@@ -286,6 +425,22 @@ internal static class NeonHelp
             }
         }
 
+        // The new sorts (2026-10-25), after the first four so a tie keeps their order; never a live line here.
+        if (kind is "any" or "tool")
+        {
+            foreach (var entry in HelpToolCatalog.Entries(windows))
+            {
+                items.Add((Score(words, entry.Name + " " + entry.Group, entry.Does), entry.Name.Length, HelpToolCatalog.Answer(entry, null, windows, mac)));
+            }
+        }
+
+        foreach (var item in (kind is "any" or "interface" ? HelpInterface.Items(windows) : [])
+            .Concat(kind is "any" or "startup" ? HelpStartup.Items(windows, mac) : [])
+            .Concat(kind is "any" or "files" ? HelpFiles.Items(windows, mac) : []))
+        {
+            items.Add((Score(words, item.Name, item.Text), item.Name.Length, item.Answer()));
+        }
+
         return items
             .Select((item, index) => (item.Score, item.Length, item.Text, Index: index))
             .Where(i => i.Score > 0)
@@ -297,6 +452,10 @@ internal static class NeonHelp
             .ToList();
     }
 
+    /// <summary>
+    /// Three points for a word in the name, one for a word only in the text. A word with a synonym (2026-10-25, <see cref="HelpText.Synonyms"/>)
+    /// counts as itself or as the word it stands for, the better of the two, never their sum: "shortcut" still finds <c>/shortcut</c>.
+    /// </summary>
     private static int Score(IReadOnlyList<string> words, string name, string text)
     {
         var nameWords = Words(name);
@@ -304,11 +463,20 @@ internal static class NeonHelp
         int score = 0;
         foreach (string word in words)
         {
-            score += nameWords.Any(t => Matches(word, t)) ? 3 : textWords.Any(t => Matches(word, t)) ? 1 : 0;
+            int best = Points(word, nameWords, textWords);
+            if (best < 3 && HelpText.Synonyms.TryGetValue(word, out var synonym))
+            {
+                best = Math.Max(best, Points(synonym, nameWords, textWords));
+            }
+
+            score += best;
         }
 
         return score;
     }
+
+    private static int Points(string word, List<string> nameWords, List<string> textWords) =>
+        nameWords.Any(t => Matches(word, t)) ? 3 : textWords.Any(t => Matches(word, t)) ? 1 : 0;
 
     private static bool Matches(string word, string token) =>
         string.Equals(word, token, StringComparison.Ordinal)

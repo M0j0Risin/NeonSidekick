@@ -272,21 +272,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<AdminGroupSpec> AdminGroups(AppSettingsData effective)
     {
-        var networkNotes = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!effective.NetworkCertificateStores)
-        {
-            networkNotes[NetCertsTool.ToolName] = SystemPromptSummary.NotOffered(NetworkText.CertStoresOffReason);
-        }
-
-        if (_network.Pinger is null)
-        {
-            networkNotes[NetPingTool.ToolName] = SystemPromptSummary.NotOffered(ToolsText.NoPingReason);
-        }
-
-        if (_network.Pinger is not { CanTrace: true })
-        {
-            networkNotes[NetTraceTool.ToolName] = SystemPromptSummary.NotOffered(ToolsText.NoTraceReason);
-        }
+        var networkNotes = NetworkToolNotes(effective, _network.Pinger);
 
         // The files read only for a group that can be offered (2026-10-23, the admin review's R12).
         var serviceNotes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -323,6 +309,32 @@ internal sealed partial class ChatScreen
         // A family only Windows has is left out elsewhere (2026-10-22, the user's ask): no Services or Tasks group on a Mac's Offered tab,
         // /sys or the botchat checklist, as /tools shows no menu for them (ToolsText.WindowsOnlyMenus).
         return groups.Where(g => ToolsText.MenuHere(g.Title)).ToList();
+    }
+
+    /// <summary>
+    /// The network tools a turn leaves out and why, as notes (2026-10-25, out of <see cref="AdminGroups"/> so headless's <c>neon_help</c> live line
+    /// says the same): <c>net_certs</c> under <c>Network certificate stores</c> off, ping with no pinger, trace with none that traces. Pure.
+    /// </summary>
+    public static Dictionary<string, string> NetworkToolNotes(AppSettingsData effective, IPinger? pinger)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        var notes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!effective.NetworkCertificateStores)
+        {
+            notes[NetCertsTool.ToolName] = SystemPromptSummary.NotOffered(NetworkText.CertStoresOffReason);
+        }
+
+        if (pinger is null)
+        {
+            notes[NetPingTool.ToolName] = SystemPromptSummary.NotOffered(ToolsText.NoPingReason);
+        }
+
+        if (pinger is not { CanTrace: true })
+        {
+            notes[NetTraceTool.ToolName] = SystemPromptSummary.NotOffered(ToolsText.NoTraceReason);
+        }
+
+        return notes;
     }
 
     /// <summary>

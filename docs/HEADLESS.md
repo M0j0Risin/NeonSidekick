@@ -89,7 +89,7 @@ They need no server unless the row says so.
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos (bare `/youtube` lists the saved ones); `list --clear` empties the list without asking. Playing a video is an error. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows; other forms are errors. On a Mac they need macOS 14 or later. |
 | `/avatar …` | Prints or sets the *Model avatar* (`/avatar user …` your *User avatar*); a description picks the closest emoji. |
-| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or *Help tools* or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). |
+| `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or *Help tools* or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). A tool's answer says whether a headless run offers it, and why not. |
 | `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.

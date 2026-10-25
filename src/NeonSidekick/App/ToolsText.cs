@@ -368,14 +368,24 @@ public static class ToolsText
             return null;
         }
 
-        var first = SettingsMenu.ToolsTabFields[menu][0];
-        if (first == SettingsField.ShellCommandPolicy)
+        return SwitchOn(SettingsMenu.ToolsTabFields[menu][0], saved);
+    }
+
+    /// <summary>
+    /// Whether switch <paramref name="field"/> is on in <paramref name="saved"/>, read as its row draws it (2026-10-25, lifted out of
+    /// <see cref="MenuSwitchOn"/> for <c>neon_help</c>'s tool answers): <c>Shell command policy</c> on unless <c>off</c>, a toggle by
+    /// <see cref="SettingsMenu.IsOn"/>; null for a field that is no switch. Pure.
+    /// </summary>
+    public static bool? SwitchOn(SettingsField field, AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        if (field == SettingsField.ShellCommandPolicy)
         {
             NeonSidekick.Shell.CommandPolicy.TryParse(saved.ShellCommandPolicy, out var mode);
             return mode != NeonSidekick.Shell.CommandPolicyMode.Off;
         }
 
-        return SettingsMenu.IsToggle(first) ? SettingsMenu.IsOn(first, saved) : null;
+        return SettingsMenu.IsToggle(field) ? SettingsMenu.IsOn(field, saved) : null;
     }
 
     /// <summary>Whether tab <paramref name="tab"/> (a <see cref="TabTitles"/> index) holds menus rather than rows: Core, Files, Apps, Admin, Databases, Devices and Home.</summary>

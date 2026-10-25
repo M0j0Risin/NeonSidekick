@@ -110,7 +110,7 @@ Under *Help tools* (on by default).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes and keys, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`). It never reads your current settings. `/help <words>` asks the model to use it. |
+| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes, keys, tools, bars and toolbar icons, flags, variables and files, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`, `tool`, `interface`, `startup`, `files`). A tool's answer ends with whether it is offered right now, and why not; it reads no other setting's value. `/help <words>` asks the model to use it. |
 
 ## Files
 

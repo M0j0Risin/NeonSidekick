@@ -120,10 +120,12 @@ public sealed class Assistant
     /// <summary>
     /// The manual's sentence (2026-10-02): in the default rules after the clock, timer and file sentences (so <see cref="OperatingRules"/> stays their start) while <c>neon_help</c> is
     /// offered (<see cref="NeonSidekick.Llm.Tools.NeonHelpTool"/>), gone when <c>/tools</c> switches it off (by name, or <c>Help tools</c> off since 2026-10-18); a custom
-    /// <c>operata.md</c> stands verbatim either way. It names the app, since a model knows nothing of it. Pinned.
+    /// <c>operata.md</c> stands verbatim either way. It names the app, since a model knows nothing of it. Its list gained the tools, the bars and
+    /// toolbar icons, the flags, variables and files on 2026-10-25 (the neon_help plan). Pinned.
     /// </summary>
     public const string HelpRule =
         "You run inside NeonSidekick, a terminal chat app. When the user asks how to do something in it (a slash command, a setting, a key, a pane), " +
+        "whether you can use a tool, or about a bar, a toolbar icon, a command-line flag, a variable or a file, " +
         "call " + NeonSidekick.Llm.Tools.NeonHelpTool.ToolName + " and answer from what it returns; never invent a command or setting name, and give a setting's place as pane › tab › row.";
 
     /// <summary>

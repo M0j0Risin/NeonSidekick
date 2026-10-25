@@ -667,7 +667,7 @@ internal sealed partial class ChatScreen
     private long? _splashFeedSeq;
     private int _splashReserve;
     private readonly IReadOnlyList<AIFunction> _clockTools;
-    private readonly IReadOnlyList<AIFunction> _helpTools = HelpTools();
+    private readonly IReadOnlyList<AIFunction> _helpTools;
     private readonly WorkingDirectory _files;
 
     /// <summary>
@@ -1206,6 +1206,8 @@ internal sealed partial class ChatScreen
         Monitors.IMonitorSystem? monitorSystem = null,
         bool monitorsQuick = false)
     {
+        // The manual's live line (2026-10-25, the neon_help plan's Step 2): built first so it can capture the screen.
+        _helpTools = HelpTools(HelpLiveNow);
         _logFile = logFile;
         // The system's Recycle bin (later on 2026-10-15): RecycleBin.Platform() in the app, a fake in tests, none by default.
         _recycleBin = recycleBin;
@@ -2987,7 +2989,7 @@ internal sealed partial class ChatScreen
         }
 
         _transcript.BeginAssistant(StyledReply(effective.TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.HelpGlyph);
-        _transcript.AppendDelta(Help.NeonHelp.Answer(words));
+        _transcript.AppendDelta(Help.NeonHelp.Answer(words, live: HelpLiveNow));
         _transcript.EndAssistant();
         return false;
     }
@@ -6022,10 +6024,24 @@ internal sealed partial class ChatScreen
         return field switch
         {
             SettingsField.CameraTools => !effective.CameraTools ? ToolsText.SwitchOffReason(field) : !_camera.Available ? ToolsText.NoCameraReason : !_pane.Enabled ? ToolsText.NoPaneReason : blind ? ToolsText.BlindReason : null,
-            SettingsField.ImageTools => !effective.ImageTools ? ToolsText.SwitchOffReason(field) : null,
             // The monitors (2026-10-23): the switch, then a monitor system, then the pane to ask on.
             SettingsField.MonitorTools => !effective.MonitorTools ? ToolsText.SwitchOffReason(field) : _monitors is null ? ToolsText.NoMonitorReason : !_pane.Enabled ? ToolsText.NoPaneReason : null,
             SettingsField.ScreenTools => !effective.ScreenTools ? ToolsText.SwitchOffReason(field) : _screenSystem is null ? ToolsText.NoScreenReason : !_pane.Enabled ? ToolsText.NoPaneReason : blind ? ToolsText.BlindReason : null,
+            _ => GroupOffReasonFor(field, effective, EventLogsHere, _services.System is not null, _tasks.System is not null, DirectoryHere, () => _directory.Catalog().Domains.Count),
+        };
+    }
+
+    /// <summary>
+    /// <see cref="GroupOffReason"/>'s cases that read no screen (2026-10-25, the neon_help plan: lifted so headless's live line gives the same
+    /// reasons): every group but the camera, the screen and the monitors. <paramref name="domainCount"/> is read only for the directory.
+    /// </summary>
+    public static string? GroupOffReasonFor(SettingsField field, AppSettingsData effective, bool eventLogsHere, bool servicesHere, bool tasksHere, bool directoryHere, Func<int> domainCount)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(domainCount);
+        return field switch
+        {
+            SettingsField.ImageTools => !effective.ImageTools ? ToolsText.SwitchOffReason(field) : null,
             SettingsField.ObsidianTools => !effective.ObsidianTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoVaultReason,
             SettingsField.SqlTools => !effective.SqlTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "sql.json"),
             SettingsField.OracleTools => !effective.OracleTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoneOfferedReason("connection", "oracle.json"),
@@ -6036,12 +6052,12 @@ internal sealed partial class ChatScreen
             // Docker reaches a Mac's engine over its socket since 2026-10-11, so only a system with no transport would say it.
             SettingsField.DockerTools => Docker.DockerSocket.Here != Docker.DockerTransport.None ? null : !effective.DockerTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,
             // The event logs (2026-10-15): the switch first, then a reader; a Mac's unified log is one since 2026-10-18.
-            SettingsField.EventLogTools => !effective.EventLogTools ? ToolsText.SwitchOffReason(field) : !EventLogsHere ? ToolsText.NoEventLogsReason : null,
+            SettingsField.EventLogTools => !effective.EventLogTools ? ToolsText.SwitchOffReason(field) : !eventLogsHere ? ToolsText.NoEventLogsReason : null,
             // The admin families (2026-10-15, the admin-tools plan): the switch first; then what is missing here, a Mac's words never "needs Windows".
             SettingsField.NetworkTools => !effective.NetworkTools ? ToolsText.SwitchOffReason(field) : null,
-            SettingsField.ServiceTools => !effective.ServiceTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _services.System is null ? Services.ServiceText.NoneHereReason : null,
-            SettingsField.TaskTools => !effective.TaskTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || _tasks.System is null ? Tasks.TaskText.NoneHereReason : null,
-            SettingsField.DirectoryTools => !effective.DirectoryTools ? ToolsText.SwitchOffReason(field) : !DirectoryHere ? ActiveDirectory.DirectoryText.NoneHereReason : _directory.Catalog().Domains.Count == 0 ? ActiveDirectory.DirectoryText.NoDomainReason : null,
+            SettingsField.ServiceTools => !effective.ServiceTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || !servicesHere ? Services.ServiceText.NoneHereReason : null,
+            SettingsField.TaskTools => !effective.TaskTools ? ToolsText.SwitchOffReason(field) : !OperatingSystem.IsWindows() || !tasksHere ? Tasks.TaskText.NoneHereReason : null,
+            SettingsField.DirectoryTools => !effective.DirectoryTools ? ToolsText.SwitchOffReason(field) : !directoryHere ? ActiveDirectory.DirectoryText.NoneHereReason : domainCount() == 0 ? ActiveDirectory.DirectoryText.NoDomainReason : null,
             SettingsField.PrintTools => PrintText.Supported ? null : !effective.PrintTools ? ToolsText.SwitchOffReason(field) : ToolsText.NeedsWindowsReason,   // a Mac prints since 2026-10-08
             SettingsField.SqliteTools => !effective.SqliteTools ? ToolsText.SwitchOffReason(field) : ToolsText.NoSqliteDatabaseReason,
             SettingsField.ComfyTools => !effective.ComfyTools ? ToolsText.SwitchOffReason(field) : Comfy.ComfyStudio.ServerOf(effective) is null ? ToolsText.NoComfyUrlReason : ToolsText.NoWorkflowReason,
@@ -6052,9 +6068,10 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>Every tool group as <c>/tools</c> lists it, offered or not.</summary>
-    private IReadOnlyList<ToolGroup> ToolsGroups(AppSettingsData effective, IReadOnlySet<string> disabled)
+    /// <remarks><paramref name="skillInstalled"/> (2026-10-25): null scans the skill folders as before; the manual's live line passes the last scan's answer.</remarks>
+    private IReadOnlyList<ToolGroup> ToolsGroups(AppSettingsData effective, IReadOnlySet<string> disabled, bool? skillInstalled = null)
     {
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: skillInstalled ?? Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective));
         return groups;
     }
 
@@ -6322,8 +6339,36 @@ internal sealed partial class ChatScreen
     /// The app's own manual (2026-10-02, the user's ask: <see cref="NeonHelpTool"/>), standing beside the clock on every turn, headless
     /// too, while <c>Help tools</c> is on (2026-10-18, the user's ask: the Help tab on <c>/tools</c> › Core; no switch and no tab until then).
     /// It reads documentation only; <c>/tools</c>' Offered tab lists it under its own group and switches it off by name too. Shared with headless.
+    /// <paramref name="live"/> (2026-10-25, the neon_help plan, the user's call) gives a tool's answer its "Right now:" line; null leaves it out.
     /// </summary>
-    public static IReadOnlyList<AIFunction> HelpTools() => new AIFunction[] { new NeonHelpTool() };
+    public static IReadOnlyList<AIFunction> HelpTools(Func<Help.HelpLive>? live = null) => new AIFunction[] { new NeonHelpTool(live) };
+
+    /// <summary>
+    /// What the screen offers right now, for <c>neon_help</c>'s live line (2026-10-25, the neon_help plan's Step 2): the next turn's list
+    /// (<see cref="TurnInputs(AppSettingsData, IReadOnlySet{string})"/> with the skill tools of the last scan, never a new one) and the reasons
+    /// <c>/tools</c> gives, without its interpreter refresh or its toolbar write. Runs on a tool's thread mid-turn and writes nothing.
+    /// </summary>
+    private Help.HelpLive HelpLiveNow()
+    {
+        var effective = _effective();
+        var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
+        var inputs = TurnInputs(effective, disabled) with { Skills = SkillToolsUnscanned(SkillsFor(effective)) };
+        var offered = ComposeTurnTools(inputs).Tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        var groups = ToolsGroups(effective, disabled, skillInstalled: _catalog.Skills.Count > 0);
+        return new Help.HelpLive(
+            offered,
+            effective.LlmOfferTools,
+            Headless: false,
+            _plan.Active,
+            disabled,
+            name => Help.HelpLive.PassReasonFor(name, effective, _audit.InPass, RalphAsksBarred(), ralphHeadless: false, _plan.Reviewing),
+            Help.HelpLive.GroupReasons(groups, field => GroupOffReason(field, effective)),
+            Help.HelpLive.ToolNotes(groups))
+        {
+            Settings = effective,
+            Mcp = name => Help.HelpMcpLookup.Find(_mcp.Servers, name),
+        };
+    }
 
     /// <summary>
     /// Whether <c>/help &lt;words&gt;</c> may hand its words to the model (2026-10-14): the turn offers tools at all, <c>Help tools</c> is on
@@ -7248,7 +7293,7 @@ internal sealed partial class ChatScreen
             globalSkills = skills.Catalog.GlobalEnabled;
             project = skills.ProjectFile ? skills.Project.ReadNotes() : null;
             catalog = skills.Catalog.Skills;
-            skillTools = catalog.Count > 0 ? skills.Tools : skills.Tools.Where(t => !string.Equals(t.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)).ToList();
+            skillTools = SkillToolsUnscanned(skills);
         }
 
         ArgumentNullException.ThrowIfNull(persona);
@@ -7447,6 +7492,15 @@ internal sealed partial class ChatScreen
     /// (<c>Agent skills</c>, <c>Use external skills</c>, and <c>Project file</c> — whether the notes
     /// are read at all, later on 2026-09-19). Shared with headless.
     /// </summary>
+    /// <summary>
+    /// The skill tools a turn offers over the catalog's last scan (2026-10-25, out of <c>PrepareTurn</c> for the manual's live line): none while
+    /// skills are off, <c>load_skill</c> only with a skill installed. Scans nothing; <c>PrepareTurn</c> scans first.
+    /// </summary>
+    internal static IReadOnlyList<AIFunction> SkillToolsUnscanned(SkillsForTurn? skills) =>
+        skills is not { Enabled: true } ? []
+        : skills.Catalog.Skills.Count > 0 ? skills.Tools
+        : skills.Tools.Where(t => !string.Equals(t.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)).ToList();
+
     public sealed record SkillsForTurn(SkillCatalog Catalog, IReadOnlyList<AIFunction> Tools, ProjectFile Project, bool Enabled, bool External, bool ProjectFile = true);
 
     /// <summary>The skill tools (2026-09-16): <c>load_skill</c> over the catalog and <c>skill_editor</c> over the live roots and the live external switch (whether <c>.agents\skills</c> is read, so a skill there blocks its name); <paramref name="files"/> gives the editor its <c>write_file</c> / <c>edit_file</c> (2026-09-27). Shared with headless.</summary>

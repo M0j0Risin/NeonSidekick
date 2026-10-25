@@ -6,6 +6,7 @@ namespace NeonSidekick.Llm.Tools;
 /// A tool with a twin that reads everything redacted (2026-10-15, the admin-tools plan: the event logs' <c>AsRedacted</c> lifted out so
 /// the services, tasks and directory tools have one too). The advisors (<see cref="NeonAdvisorTool.ReadOnlyOf"/>, which never
 /// receives a write tool) swap every such tool for its twin, so a computer's or a domain's <c>full</c> detail stays the main chat's alone.
+/// Widened 2026-10-25 (the neon_help plan) to nothing the main chat alone may see: <c>neon_help</c>'s twin drops its live line.
 /// </summary>
 public interface IRedactedTwin
 {

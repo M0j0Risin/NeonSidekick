@@ -7,7 +7,9 @@ namespace NeonSidekick.Help;
 /// <summary>
 /// The words of <c>neon_help</c> (2026-10-02, the user's ask: a tool that answers how-to questions about the app itself): the
 /// <c>/tools</c> group's title, the result's headings and layout, the overview, the misses. The <see cref="ToolsText"/> shape —
-/// pure statics, the model reads every line, so the layout is plain text (no Markdown tables) and every heading is pinned.
+/// pure statics, the model reads every line, so the layout is plain text (no Markdown tables) and every heading is pinned. Since
+/// 2026-10-25 (the neon_help plan, the user's call) also the tool answers, the synonyms and the live "Right now:" lines (<c>Live*</c>),
+/// which say whether a tool is offered and why not, never a setting's value.
 /// </summary>
 public static class HelpText
 {
@@ -35,15 +37,25 @@ public static class HelpText
     /// <summary>A default the menu shows as nothing (<see cref="HelpLocation.Default"/>). Pinned.</summary>
     public const string EmptyDefault = "(empty)";
 
-    /// <summary>The <c>kind</c> words the tool takes.</summary>
-    public static readonly IReadOnlyList<string> Kinds = ["any", "command", "setting", "pane", "keys"];
+    /// <summary>The <c>kind</c> words the tool takes (2026-10-25: <c>tool</c>, <c>interface</c>, <c>startup</c> and <c>files</c> joined the first five).</summary>
+    public static readonly IReadOnlyList<string> Kinds = ["any", "command", "setting", "pane", "keys", "tool", "interface", "startup", "files"];
+
+    /// <summary>
+    /// Other words a model writes for a kind (2026-10-25: the Responses client sends tools with <c>strict: false</c>, so the enum is a hint):
+    /// <c>tools</c>, <c>file</c>, <c>bar(s)</c>, <c>flag(s)</c>, <c>variable(s)</c> and <c>env</c>.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> KindAliases = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["tools"] = "tool", ["file"] = "files", ["bar"] = "interface", ["bars"] = "interface",
+        ["flag"] = "startup", ["flags"] = "startup", ["variable"] = "startup", ["variables"] = "startup", ["env"] = "startup",
+    };
 
     /// <summary><c>Unknown kind 'x'; use any, command, setting, pane or keys.</c> Pinned.</summary>
     public static string BadKind(string kind) => $"Unknown kind '{kind}'; use {string.Join(", ", Kinds.Take(Kinds.Count - 1))} or {Kinds[^1]}.";
 
     /// <summary>A query nothing matched. Pinned.</summary>
     public static string NothingFound(string query) =>
-        $"Nothing in NeonSidekick's help matches '{query}'. Try other words, a command (/camera), a setting's name, a pane or tab (/tools camera), or no query at all for the overview.";
+        $"Nothing in NeonSidekick's help matches '{query}'. Try other words, a command (/camera), a setting's name, a pane or tab (/tools camera), a tool name, a toolbar icon, a `--flag`, a file (`sql.json`), or no query at all for the overview.";
 
     /// <summary>The line after an answer cut at <see cref="MaxChars"/>. Pinned.</summary>
     public const string CutNote = "… (cut short; ask about one command, setting or tab for the rest)";
@@ -52,7 +64,7 @@ public static class HelpText
     public const string OverviewHeading = "NeonSidekick help: the panes, their tabs, and every slash command.";
 
     /// <summary>The overview's last line: how to ask for more. Pinned.</summary>
-    public const string OverviewTail = "Ask neon_help about one command (/camera), a setting by name, a pane or tab (/tools camera), keys, or in plain words; kind command with no query lists every command, a line on each.";
+    public const string OverviewTail = "Ask neon_help about one command (/camera), a setting by name, a pane or tab (/tools camera), keys, a tool, a bar or toolbar icon, a `--flag`, a variable or a file, or in plain words; kind command, tool, interface, startup or files with no query lists them.";
 
     /// <summary>The command list's heading (<c>kind: command</c>, no query). Pinned.</summary>
     public const string CommandListHeading = "Slash commands (type / to list them; ask about one for every form):";
@@ -225,6 +237,131 @@ public static class HelpText
         ("/mcp", McpText.ServersTabTitle) => "the MCP servers from mcp.json (global and this profile's); add, edit, switch on or off and reconnect them here",
         ("/mcp", McpText.ToolsTabTitle) => "the tools each connected MCP server offers, switched on or off one by one; with two servers or more, all of them or one server's on its sub-tab",
         _ => "no settings rows",
+    };
+
+    /// <summary>The tool answer's heading: <c>Tool `web_fetch`: Fetches a web page …</c>. Pinned.</summary>
+    public static string ToolHeading(string name, string does) => $"Tool `{name}`: {does}";
+
+    /// <summary>
+    /// One tool in full (2026-10-25, the neon_help plan's Step 1): what it does, its group, its switch and where it is, plan mode, headless,
+    /// the pane, its needs and setup, the Mac's line, and the live line last (so a cut never leaves it without its tool). Pinned by heading.
+    /// </summary>
+    public static string Tool(string name, string does, string group, string? switchLine, bool planMode, bool headless, bool needsPane, string? needs, string? setup, string? mac, string? live)
+    {
+        var sb = new StringBuilder(ToolHeading(name, does)).Append("\n  Group: ").Append(group);
+        if (switchLine is not null)
+        {
+            sb.Append("\n  Switch: ").Append(switchLine);
+        }
+
+        sb.Append("\n  Plan mode: ").Append(planMode ? "offered (it only reads)" : "not offered");
+        sb.Append("\n  Headless: ").Append(headless ? "offered" : "not offered (it needs the screen)");
+        if (needsPane)
+        {
+            sb.Append("\n  Needs the pane: yes, it asks the user there");
+        }
+
+        if (needs is not null)
+        {
+            sb.Append("\n  Needs: ").Append(needs);
+        }
+
+        if (setup is not null)
+        {
+            sb.Append("\n  ").Append(switchLine is null ? "Offered: " : "Setup: ").Append(setup);
+        }
+
+        if (mac is not null)
+        {
+            sb.Append("\n  On a Mac: ").Append(mac);
+        }
+
+        if (live is not null)
+        {
+            sb.Append("\n  ").Append(live);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>A switch line: <c>Web tools at /tools › Core › Web › Web tools (on by default)</c>.</summary>
+    public static string SwitchLine(string label, string path, bool onByDefault, bool toolStartsOff) =>
+        $"{label} at {path} ({(onByDefault ? "on" : "off")} by default{(toolStartsOff ? "; this tool itself starts switched off on /tools › Offered" : "")})";
+
+    /// <summary>The tool list's heading (<c>kind: tool</c>, no query). Pinned.</summary>
+    public const string ToolListHeading = "Tools by group (ask about one by name for its switch, its needs and whether it is offered):";
+
+    /// <summary>The tool list's last line: the MCP servers' tools. Pinned.</summary>
+    public const string ToolListMcpLine = "- MCP: each connected server's tools, named `server__tool` (/mcp)";
+
+    /// <summary>A group answer's heading: <c>Tool group Camera:</c>. Pinned.</summary>
+    public static string ToolGroupHeading(string group) => $"Tool group {group}:";
+
+    /// <summary>What a group switch's setting answer adds: <c>Tools: `web_fetch`, `web_search`…</c>.</summary>
+    public static string ToolsLine(IEnumerable<string> names) => "  Tools: " + string.Join(", ", names.Select(n => $"`{n}`"));
+
+    /// <summary>The MCP tool answer's heading. Pinned.</summary>
+    public static string McpToolHeading(string name) => $"MCP tool `{name}`: a tool an MCP server offers, named after its server: the server's name, two underscores, then the tool's.";
+
+    /// <summary>An MCP tool (2026-10-25): the app's own facts only, never the server's description.</summary>
+    public static string McpTool(string name, string? server, string switchLine, string? live)
+    {
+        var sb = new StringBuilder(McpToolHeading(name));
+        if (server is not null)
+        {
+            sb.Append("\n  Server: `").Append(server).Append('`');
+        }
+
+        sb.Append("\n  Where: /mcp › Tools switches each tool on or off; /mcp › Servers lists the servers")
+            .Append("\n  Switch: ").Append(switchLine)
+            .Append("\n  Plan mode: not offered\n  Headless: offered");
+        if (live is not null)
+        {
+            sb.Append("\n  ").Append(live);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>The see-also line after a command whose word is a tool's too (<c>/copy</c>). Pinned.</summary>
+    public static string SeeAlsoTool(string tool) => $"See also: the tool `{tool}` (ask \"{tool} tool\").";
+
+    /// <summary>
+    /// Single words a question may use for the word the manual uses (2026-10-25, the neon_help plan's Step 5), nothing ambiguous. Left out:
+    /// password or key for api key, task, event, and "dark" ("dark background" is the help's own phrase for an off toolbar item).
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> Synonyms = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["mic"] = "stt", ["microphone"] = "stt", ["voice"] = "tts", ["speak"] = "tts",
+        ["color"] = "theme", ["colour"] = "theme", ["hotkey"] = "key", ["shortcut"] = "key",
+        ["llm"] = "model", ["model"] = "llm", ["glyph"] = "icon", ["ldap"] = "directory", ["traceroute"] = "trace",
+        ["dns"] = "network", ["ping"] = "network", ["certificate"] = "network",
+    };
+
+    // The live line (2026-10-25, the neon_help plan's Step 2), pinned: offered, or not offered and the one reason why.
+    public const string LiveOffered = "Right now: offered.";
+    public const string LiveToolsOff = SystemPromptSummary.ToolsOffSuffix;
+    public const string LiveNotHeadless = "a headless run never offers it";
+    public const string LivePlanMode = "plan mode offers only the tools that read";
+    public const string LiveOffByName = "switched off on /tools › Offered";
+    public const string LiveMcpOffByName = "switched off on /mcp › Tools";
+    public const string LiveNoMcpServer = "no MCP server here offers it";
+    public const string LiveAuditPass = "a code-audit pass offers only the tools that read";
+    public const string LiveAuditWeb = "a code-audit pass leaves the web tools out while Code audit web research is off";
+    public const string LiveAuditAsk = "a code-audit pass leaves out the tools that ask while Code audit ask user is off";
+    public const string LiveRalphAsk = "a Ralph loop pass leaves out the tools that ask the user while Ralph loop checkpoint is 0";
+    public const string LiveHeadlessRalphAsk = "a headless Ralph loop pass leaves out the tools that ask the user";
+    public const string LiveGapAsk = "a plan gap pass leaves out the tools that ask while Plan gap ask user is off";
+
+    /// <summary><c>Right now: not offered (Camera tool is off).</c>, or with no reason known <c>Right now: not offered.</c> Pinned.</summary>
+    public static string LiveNotOffered(string? why) => string.IsNullOrEmpty(why) ? "Right now: not offered." : $"Right now: not offered ({why}).";
+
+    /// <summary>An MCP server that is not connected, by its state alone.</summary>
+    public static string LiveMcpState(McpState state) => state switch
+    {
+        McpState.Connecting => "its server is still connecting",
+        McpState.Failed => "its server failed to connect",
+        _ => "its server is not connected",
     };
 
     /// <summary>The first sentence of <paramref name="text"/>, or all of it; at most 200 characters.</summary>

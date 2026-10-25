@@ -89,6 +89,27 @@ public static class HelpMac
     /// </summary>
     public const string PrintFileForm = "Print a file from the working directory: text and code as a listing, Markdown formatted, a picture fitted to one page, each page headed with the file's name, the time and *page N of M*, in Helvetica Neue and Menlo on the printer's own paper. A PDF goes to the printer as it is, with the printer, copies and pages but not landscape; anything else (a Word or Excel file) is refused: print it from the program that made it. `printer=` matches the queue name, the name System Settings shows, or part of either (`printer=brother`; quote a name with spaces); copies are 1–10; pages are `3`, `1-3`, `4-` or a list such as `1,3-5`. Options go anywhere. *Print action policy* never applies to this command.";
 
+    /// <summary>
+    /// The Mac's line on a tool <c>neon_help</c> describes (2026-10-25, the neon_help plan's Step 1), by the tool's name: only where the
+    /// catalog's one-liner (<see cref="HelpToolCatalog"/>) would not hold here. Every key is a catalog name (pinned).
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> Tools = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [Llm.Tools.EventLogLogsTool.ToolName] = MacEventLogs,
+        [Llm.Tools.EventLogSearchTool.ToolName] = MacEventLogs,
+        [Llm.Tools.EventLogSummaryTool.ToolName] = MacEventLogs,
+        [Llm.Tools.EventLogEventTool.ToolName] = MacEventLogs,
+        [Llm.Tools.AdUserTool.ToolName] = MacDirectory,
+        [Llm.Tools.AdGroupTool.ToolName] = MacDirectory,
+        [Llm.Tools.AdComputerTool.ToolName] = MacDirectory,
+        [Llm.Tools.AdFindTool.ToolName] = MacDirectory,
+        [Llm.Tools.AdOuTool.ToolName] = MacDirectory,
+        [Llm.Tools.AdDomainTool.ToolName] = MacDirectory,
+    };
+
+    private const string MacEventLogs = "reads this Mac's own logs: `system` (the unified log, which needs an administrator account), `crashes`, `install` (`install.log`) and any `.logarchive` folder in the working directory; no `.evtx` file and no other computer.";
+    private const string MacDirectory = "reads through the app's own LDAP client with your Kerberos ticket (or a runas account as name@REALM); there is no built-in `current` domain, so tick one from `ad.json`.";
+
     /// <summary>The command forms whose text differs on a Mac, by syntax as <see cref="HelpCommands"/> writes it.</summary>
     public static readonly IReadOnlyDictionary<string, string> Forms = new Dictionary<string, string>(StringComparer.Ordinal)
     {

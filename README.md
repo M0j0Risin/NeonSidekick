@@ -249,7 +249,7 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 ### Getting around
 * **Keyboard:** ←/→ switch tabs (and the sub-tabs on a second row), Tab skips to the next main tab, ↑/↓ move, Enter edits or toggles, Space flips an on/off row, Esc closes.
 * **Mouse:** a double-click picks a row or tab; the × at the top right closes the pane.
-* **Lost?** Ask the model where a setting is; its `neon_help` tool knows them all.
+* **Lost?** Ask the model where a setting is, or why it can't use a tool; its `neon_help` tool knows them all.
 
 ## About
 

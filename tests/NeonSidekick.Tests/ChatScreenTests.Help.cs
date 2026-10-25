@@ -180,6 +180,75 @@ public partial class ChatScreenTests
         Assert.Contains(TranscriptRenderer.HelpGlyph + "Command /claude:", output, StringComparison.Ordinal);
     }
 
+    // The live line (2026-10-25, the neon_help plan's Step 2): a tool's answer says whether the next turn offers it, and why not.
+
+    private async Task<string> ManualHelpAsync(string words, Action<NeonSidekick.Settings.AppSettingsData>? set = null)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; set?.Invoke(d); });
+        _console.Profile.Width = 400;
+        PushLine("/help " + words);
+        PushLine("/exit");
+        return await RunAsync();
+    }
+
+    [Fact]
+    public async Task HelpTool_CameraToolOff_SaysSo()
+    {
+        string output = await ManualHelpAsync(CameraCaptureTool.ToolName, d => d.CameraTools = false);
+        Assert.Contains(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.CameraTools)), output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpTool_Offered_SaysSo()
+    {
+        string output = await ManualHelpAsync(WebFetchTool.ToolName, d => d.WebTools = true);
+        Assert.Contains(HelpText.LiveOffered, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpTool_SwitchedOffByName_SaysWhere()
+    {
+        string output = await ManualHelpAsync(WebFetchTool.ToolName, d => { d.WebTools = true; d.ToolsDisabled = [WebFetchTool.ToolName]; });
+        Assert.Contains(HelpText.LiveNotOffered(HelpText.LiveOffByName), output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpTool_ToolsOff_SaysSo()
+    {
+        string output = await ManualHelpAsync(WebFetchTool.ToolName, d => { d.WebTools = true; d.LlmOfferTools = false; });
+        Assert.Contains(HelpText.LiveNotOffered(HelpText.LiveToolsOff), output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpTool_ClockToolsOff_GivesItsSwitch()
+    {
+        string output = await ManualHelpAsync(GetCurrentTimeTool.ToolName, d => d.ClockTools = false);
+        Assert.Contains(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.ClockTools)), output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpTool_FinishStep_OutsideAPass_SaysWhenItIsOffered()
+    {
+        string output = await ManualHelpAsync(FinishStepTool.ToolName);
+        Assert.Contains("Right now: not offered (only during a Ralph loop pass", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Turn_TheModelAsksNeonHelp_AboutATool_AndReadsWhetherItIsOffered()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.CameraTools = false; });
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonHelpTool.ToolName, new Dictionary<string, object?> { [NeonHelpTool.QueryArgument] = CameraCaptureTool.ToolName }));
+        _chat.EnqueueText("The camera tool is off.");
+        PushLine("can you take a photo?");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == "c1").Result!.ToString()!;
+        Assert.StartsWith("Tool `" + CameraCaptureTool.ToolName + "`:", result, StringComparison.Ordinal);
+        Assert.EndsWith(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.CameraTools)), result, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void HelpLookupOffered_NeedsTheToolsAndNeonHelp()
     {
