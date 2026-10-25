@@ -9,16 +9,17 @@ Neon Sidekick is an AI agent for your terminal, built for local LLMs on consumer
 
 Point it at LM Studio, Ollama or any OpenAI-compatible server on your PC or your network, or let it download a model and run it itself. When you want a frontier model, or don't have the hardware for a local one, it connects to the OpenAI and Anthropic APIs with your own key, or to Claude Code through your subscription.
 
-It's one app for research, IT and admin work, your smart home and creative projects. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
+It's one app for research, IT and admin work such as Active Directory, event logs and databases, your smart home through Home Assistant, and creative projects through ComfyUI. For developers, it's a coding agent and a stable C# and .NET 10 base for building and testing new agentic tools.
 
 **What makes it different**
-* **Built for local models:** it runs a tested model on its own llama.cpp, tuned for 16–32 GB cards, and recovers when a local model fumbles a tool call or runs short of context.
-* **Long jobs on a small window:** `/plan` is reviewed until it's clean, then the Ralph loop runs each step in a fresh conversation and checks it before moving on.
-* **Frontier help when you want it:** pair your local model with a frontier advisor that reviews its plans and checks its steps, so you pay for frontier tokens only where they count.
-* **Safe on real systems:** databases are read-only through layers of checks, Active Directory is read-only by design, and the shell police holds even under `--yolo`.
-* **Set up without editing files:** Connect a model gets you running, and wizards add each database, share or remote computer, test it before saving, and warn when the account could change data.
-* **More than a coding agent:** Active Directory, event logs, services, databases, Home Assistant and ComfyUI, with voice in and out and your phone in the same live session.
-* **Fully local, no black box:** `/sys` shows the exact prompt and every tool, and the persona and operating rules are files you can edit.
+* **Built for local models:** it recovers when a local model fumbles a tool call or runs short of context, and the models it downloads are ones tested with its tools.
+* **Long jobs on a small context window:** with `/plan` the model reviews its own plan until no gaps are left, then carries it out one step at a time (the Ralph loop), each step in a fresh conversation and checked before the next.
+* **Frontier help when you want it:** pair your local model with a frontier advisor it can ask whenever it's stuck, and that reviews its plans and checks its steps, so you pay for frontier tokens only where they count.
+* **Built in, not scripted:** the database, admin and smart-home tools are native code in the app and talk to each system directly, so a small model makes one simple call instead of writing a script, with nothing else to install.
+* **Guardrails in code, not in the prompt:** databases are read-only by default and Active Directory always, and the shell police blocks harmful commands and paths outside the working folder, even when you let the model run commands without asking.
+* **Set up without editing files:** on first launch it finds a server on your network, downloads a model or takes your API key, and wizards add each database, share or remote computer and warn when the account could change data.
+* **Talk to it, or use your phone:** voice in and out, and the Web UI puts your phone in the same live session as the terminal.
+* **No black box:** `/sys` shows the exact prompt and every tool, and the persona and operating rules are files you can edit.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
