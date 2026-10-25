@@ -35,7 +35,8 @@ public static class Profiles
     /// <summary>
     /// The sidekick's own files (the <c>.json</c> ones in <c>configs</c> since 2026-10-16, <see cref="SidekickFilePath"/>), in the order <see cref="CopySidekickFiles"/>
     /// takes them: the memories, the persona, the operating rules, the voice directive, the MCP servers
-    /// (2026-09-20), the saved prompts (2026-10-13). Literals; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>.
+    /// (2026-09-20), the saved prompts (2026-10-13). Literals; <c>ProfilesTests</c> pins each to its owner's <c>FileName</c>. <c>/profile add</c>
+    /// copies only <see cref="BasicSidekickFiles"/>; <c>/profile push|pull</c>'s sections move the rest (<c>mcp</c> since 2026-10-25).
     /// </summary>
     public static readonly string[] SidekickFiles = { "memory.json", "persona.md", "operata.md", "vocalia.md", "mcp.json", "prompts.json" };
 
@@ -50,12 +51,15 @@ public static class Profiles
     /// The <c>/profile</c> subcommand words (<c>edit</c> and <c>reload</c> since 2026-09-21, <c>push</c> and <c>pull</c> since 2026-09-28,
     /// and push and pull's section words since 2026-10-09, the prompt files' among them since 2026-10-10 and <c>memory</c> since 2026-10-13 — <c>ChatScreen.ProfileSectionWords</c> — so <c>/profile push keys work</c> never
     /// reads as a profile called keys); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and
-    /// <c>/profile reset</c> is always the loaded one.
+    /// <c>/profile reset</c> is always the loaded one. 2026-10-25 (the user's call): <c>links</c>, <c>mcp</c>, <c>monitors</c>, <c>skills</c> and
+    /// <c>videos</c> with their sections; <c>avatar</c>, the first word of the two-word avatar sections, never reserved until then; and
+    /// <c>overwrite</c>, the one word push and pull read where a name goes. A profile elsewhere with one of these names drops out of
+    /// <see cref="List"/>, as one did when <c>memory</c> and <c>prompts</c> came; no migration. A to Z.
     /// </summary>
-    public static readonly string[] ReservedNames = { "add", "allowed", "delete", "edit", "history", "keys", "memory", "operata", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "vocalia" };
+    public static readonly string[] ReservedNames = { "add", "allowed", "avatar", "delete", "edit", "history", "keys", "links", "mcp", "memory", "monitors", "operata", "overwrite", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "skills", "videos", "vocalia" };
 
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
-    public const string NameError = "must be 1 to 32 letters, digits, - or _ (and not add, delete, edit, pull, push, reload, rename or reset)";
+    public const string NameError = "must be 1 to 32 letters, digits, - or _, not starting with - (and not add, delete, edit, pull, push, reload, rename or reset)";
 
     /// <summary>Why <c>neon</c> cannot be deleted. Pinned.</summary>
     public const string DefaultUndeletable = "The default profile cannot be deleted.";
@@ -79,11 +83,12 @@ public static class Profiles
     /// ASCII letters, digits, hyphens or underscores, and not a <see cref="ReservedNames"/> word
     /// (<c>neon</c> was refused too from 2026-09-21 until it became <see cref="DefaultName"/> on 2026-10-09).
     /// Nothing that could be a path segment trick, a shell surprise or a non-ASCII directory
-    /// (the Vosk path rule is a reminder of what those cost).
+    /// (the Vosk path rule is a reminder of what those cost). Since 2026-10-25 (the user's call) never starting with <c>-</c>, so a
+    /// profile can't look like a flag (<c>/profile reset --all</c>, <c>/botchat --resume</c>, <c>/shortcut --log</c>).
     /// </summary>
     public static bool IsValidName(string? name)
     {
-        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
+        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength || name[0] == '-')
         {
             return false;
         }
@@ -410,8 +415,9 @@ public static class Profiles
     /// user's ask): <paramref name="from"/>'s <c>profile.json</c> written as <paramref name="to"/>'s, every setting but
     /// <see cref="AppSettingsData.WorkingDirectory"/> and <see cref="AppSettingsData.ModelAvatar"/> (2026-10-10), which the target keeps (the user's call: a sandbox is the
     /// sidekick's own, as <c>/profile add</c> already says by clearing it). The settings alone — the memories, the prompt
-    /// files and <c>mcp.json</c> stay as they are, <c>/profile push|pull memory</c> (<c>/memory copy</c> until 2026-10-13) and <c>persona</c>/<c>operata</c>/<c>vocalia</c> being the way to
-    /// move those. The keys go as stored, protected or not (<see cref="KeepOnReset"/>'s reasoning). A missing source is the
+    /// files and <c>mcp.json</c> stay as they are, <c>/profile push|pull memory</c> (<c>/memory copy</c> until 2026-10-13), <c>persona</c>/<c>operata</c>/<c>vocalia</c>
+    /// and <c>mcp</c> (2026-10-25) being the way to move those. The monitor settings go with the rest, replacing the target's; the
+    /// <c>monitors</c> section (2026-10-25) merges them instead. The keys go as stored, protected or not (<see cref="KeepOnReset"/>'s reasoning). A missing source is the
     /// compiled defaults, as loading it would give; a corrupt one <b>throws</b> <see cref="JsonException"/> before anything
     /// is written (<see cref="ReadProfileFile"/>). A corrupt target is what the copy cures: nothing kept from it, logged.
     /// The target's folder is created when it is only logical, as <c>neon</c>'s can be. No guard, like <see cref="Reset"/>:

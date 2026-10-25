@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Files;
 using NeonSidekick.Skills;
 
 namespace NeonSidekick.Tests;
@@ -323,6 +324,174 @@ public class SkillEditorTests : IDisposable
         Assert.Equal(SkillEditOutcome.Exists, SkillEditor.MoveToProfile(_roots, Scanned(SkillScope.Profile, "pdf"), work).Outcome);
         Assert.True(File.Exists(FileOf(SkillScope.Profile, "pdf")));
         Assert.Equal(SkillEditOutcome.Missing, SkillEditor.MoveToProfile(_roots, new Skill("gone", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "gone")), work).Outcome);
+    }
+
+    // ── The copy into another profile (2026-10-25, /profile push|pull skills and the pane's copy) ──────────
+
+    private string WorkSkills => Path.Combine(_dir, "profiles", "work", "skills");
+
+    // No temp folder left beside a profile's skills folder.
+    private void AssertNoCopyTemp(string root) =>
+        Assert.Empty(Directory.Exists(Path.GetDirectoryName(root)!) ? Directory.EnumerateDirectories(Path.GetDirectoryName(root)!, "skills.~*") : []);
+
+    [Fact]
+    public void CopyFolder_CopiesTheFolderAndItsMarkers_KeepsTheOriginal_AndRefusesATwin()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        string haiku = Path.Combine(_roots.Profile, "haiku");
+        Directory.CreateDirectory(Path.Combine(haiku, "scripts"));
+        File.WriteAllText(Path.Combine(haiku, "scripts", "run.py"), "p");
+        File.WriteAllText(Path.Combine(haiku, SkillLock.FileName), "");
+        File.WriteAllText(Path.Combine(haiku, SkillDisable.FileName), "");
+
+        var copied = SkillEditor.CopyFolder(haiku, WorkSkills);
+
+        Assert.Equal((SkillEditOutcome.Copied, "haiku", SkillScope.Profile), (copied.Outcome, copied.Name, copied.Scope));
+        Assert.Equal("p", File.ReadAllText(Path.Combine(WorkSkills, "haiku", "scripts", "run.py")));
+        Assert.True(File.Exists(Path.Combine(WorkSkills, "haiku", SkillLock.FileName)));
+        Assert.True(File.Exists(Path.Combine(WorkSkills, "haiku", SkillDisable.FileName)));
+        Assert.True(File.Exists(FileOf(SkillScope.Profile, "haiku")));   // the original stays
+        AssertNoCopyTemp(WorkSkills);
+
+        Assert.Equal(SkillEditOutcome.Exists, SkillEditor.CopyFolder(haiku, WorkSkills).Outcome);   // nothing is ever replaced
+        Assert.Equal(SkillEditOutcome.Missing, SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "gone"), WorkSkills).Outcome);
+        AssertNoCopyTemp(WorkSkills);
+    }
+
+    [Fact]
+    public void CopyToProfile_CopiesALockedSkill_AndRefusesAGlobalOneOrItsOwnRoot()
+    {
+        Put(SkillScope.Profile, "haiku");
+        File.WriteAllText(Path.Combine(_roots.Profile, "haiku", SkillLock.FileName), "");
+        Put(SkillScope.Global, "verse");
+        var haiku = Scanned(SkillScope.Profile, "haiku");
+
+        Assert.Equal(SkillEditOutcome.NothingToChange, SkillEditor.CopyToProfile(_roots, haiku, _roots.Profile).Outcome);
+        Assert.Equal(SkillEditOutcome.ExternalReadOnly, SkillEditor.CopyToProfile(_roots, Scanned(SkillScope.Global, "verse"), WorkSkills).Outcome);
+        Assert.Equal(SkillEditOutcome.Missing, SkillEditor.CopyToProfile(_roots, new Skill("gone", "d", SkillScope.Profile, Path.Combine(_roots.Profile, "gone")), WorkSkills).Outcome);
+        Assert.Equal(SkillEditOutcome.Copied, SkillEditor.CopyToProfile(_roots, haiku, WorkSkills).Outcome);
+        Assert.True(File.Exists(Path.Combine(WorkSkills, "haiku", SkillLock.FileName)));
+    }
+
+    [Fact]
+    public void CopyFolder_OverTheFileCap_IsRefused_LeavingNothing()
+    {
+        Put(SkillScope.Profile, "big");
+        string big = Path.Combine(_roots.Profile, "big", "data");
+        Directory.CreateDirectory(big);
+        for (int i = 0; i < WorkingDirectory.MaxTransferFiles; i++)
+        {
+            File.WriteAllBytes(Path.Combine(big, i.ToString(System.Globalization.CultureInfo.InvariantCulture)), []);
+        }
+
+        var result = SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "big"), WorkSkills);
+
+        Assert.Equal(SkillEditOutcome.Failed, result.Outcome);
+        Assert.Equal(WorkingDirectory.TransferCapDetail(WorkingDirectory.MaxTransferFiles + 1, ByteCount(Path.Combine(_roots.Profile, "big"))), result.Detail);
+        Assert.False(Directory.Exists(Path.Combine(WorkSkills, "big")));
+        AssertNoCopyTemp(WorkSkills);
+    }
+
+    private static long ByteCount(string folder) => new DirectoryInfo(folder).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+
+    [Fact]
+    public void CopyFolder_SweepsALeftoverTempFolder_AndACancelLeavesNothing()
+    {
+        Put(SkillScope.Profile, "haiku");
+        string leftover = Path.Combine(Path.GetDirectoryName(WorkSkills)!, "skills.~0123456789abcdef0123456789abcdef.neon-tmp", "half");
+        Directory.CreateDirectory(leftover);
+        File.WriteAllText(Path.Combine(leftover, "x.txt"), "x");
+        File.SetAttributes(Path.Combine(leftover, "x.txt"), FileAttributes.ReadOnly);
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        Assert.Throws<OperationCanceledException>(() => SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "haiku"), WorkSkills, cancelled.Token));
+
+        Assert.False(Directory.Exists(Path.Combine(WorkSkills, "haiku")));
+        AssertNoCopyTemp(WorkSkills);   // the crash's leftover swept (its read-only file too), the cancelled one's deleted
+    }
+
+    /// <summary>A copy that fails partway, with a read-only file already staged, still deletes its temp folder (File.Copy keeps the flag).</summary>
+    [WindowsFact]
+    public void CopyFolder_AFailurePartway_CleansUpAReadOnlyStagedFile()
+    {
+        Put(SkillScope.Profile, "haiku");
+        string haiku = Path.Combine(_roots.Profile, "haiku");
+        File.WriteAllText(Path.Combine(haiku, "a.txt"), "a");
+        File.SetAttributes(Path.Combine(haiku, "a.txt"), FileAttributes.ReadOnly);
+        File.WriteAllText(Path.Combine(haiku, "b.txt"), "b");
+        try
+        {
+            SkillEditResult result;
+            using (new FileStream(Path.Combine(haiku, "b.txt"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                result = SkillEditor.CopyFolder(haiku, WorkSkills);
+            }
+
+            Assert.Equal(SkillEditOutcome.Failed, result.Outcome);
+            Assert.False(Directory.Exists(Path.Combine(WorkSkills, "haiku")));
+            AssertNoCopyTemp(WorkSkills);
+        }
+        finally
+        {
+            File.SetAttributes(Path.Combine(haiku, "a.txt"), FileAttributes.Normal);
+        }
+    }
+
+    [WindowsFact]
+    public void CopyFolder_NeverFollowsAJunction_AndRefusesAJunctionedSkillFolder()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "secret.txt"), "s");
+        Put(SkillScope.Profile, "haiku");
+        try
+        {
+            Junction.Make(Path.Combine(_roots.Profile, "haiku", "link"), outside);
+            Junction.Make(Path.Combine(_roots.Profile, "linked"), Path.Combine(_roots.Profile, "haiku"));
+
+            Assert.Equal(SkillEditOutcome.Copied, SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "haiku"), WorkSkills).Outcome);
+            Assert.False(Directory.Exists(Path.Combine(WorkSkills, "haiku", "link")));
+            var linked = SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "linked"), WorkSkills);
+            Assert.Equal((SkillEditOutcome.Failed, SkillText.CopyLinkedFolder), (linked.Outcome, linked.Detail));
+        }
+        finally
+        {
+            // The junction to the skill first: DeleteTree's walk goes through it and would take haiku's own junction away twice.
+            if (Directory.Exists(Path.Combine(_roots.Profile, "linked"))) Directory.Delete(Path.Combine(_roots.Profile, "linked"));
+            Junction.DeleteTree(_dir);
+        }
+    }
+
+    [UnixFact]
+    public void CopyFolder_NeverFollowsASymlink_AndRefusesASymlinkedSkillFolder_Unix()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "secret.txt"), "s");
+        Put(SkillScope.Profile, "haiku");
+        Directory.CreateSymbolicLink(Path.Combine(_roots.Profile, "haiku", "link"), outside);
+        File.CreateSymbolicLink(Path.Combine(_roots.Profile, "haiku", "file-link"), Path.Combine(outside, "secret.txt"));
+        Directory.CreateSymbolicLink(Path.Combine(_roots.Profile, "linked"), Path.Combine(_roots.Profile, "haiku"));
+
+        Assert.Equal(SkillEditOutcome.Copied, SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "haiku"), WorkSkills).Outcome);
+        Assert.False(Directory.Exists(Path.Combine(WorkSkills, "haiku", "link")));
+        Assert.False(File.Exists(Path.Combine(WorkSkills, "haiku", "file-link")));
+        Assert.Equal(SkillEditOutcome.Failed, SkillEditor.CopyFolder(Path.Combine(_roots.Profile, "linked"), WorkSkills).Outcome);
+    }
+
+    [Fact]
+    public void ProfileSkillNames_ReadsFoldersAndFrontmatterNames_AnyCase()
+    {
+        Put(SkillScope.Profile, "haiku");
+        Directory.CreateDirectory(Path.Combine(_roots.Profile, "odd"));
+        File.WriteAllText(Path.Combine(_roots.Profile, "odd", SkillCatalog.FileName), "---\nname: Verse\ndescription: d\n---\nbody\n");
+
+        var (folders, names) = SkillEditor.ProfileSkillNames(_roots.Profile);
+
+        Assert.True(folders.Contains("HAIKU") && folders.Contains("odd"));
+        Assert.True(names.Contains("verse") && names.Contains("haiku"));
+        Assert.Empty(SkillEditor.ProfileSkillNames(Path.Combine(_dir, "none")).Folders);
     }
 
     /// <summary>The pane's rename (2026-09-21): the folder under its own root and the frontmatter's name line, the other lines and the files carried; the catalog follows.</summary>

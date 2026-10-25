@@ -95,6 +95,10 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history, the memories or the saved prompts; history is refused while the target has *Keep message history* off. |
 | `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
+| `/profile push\|pull mcp <name> [overwrite]` | Copies the profile's own MCP servers, keeping the target's comments; `overwrite` replaces same-named ones. Their env, headers and args go as written. |
+| `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull videos <name> [overwrite]` | Copies the Browser window's saved links or the saved YouTube videos (with where each was left). |
+| `/profile push\|pull monitors <name> [overwrite]` | Copies the monitor input names, hidden inputs and PC inputs, keeping the target's own. A bare push or pull replaces them. |
+| `/profile push\|pull skills <name>` | Copies the profile's own skills; one the target has (by folder or name) is skipped. A copy starts with no history. |
 | `/profile edit\|reload` | Opens `profile.json` in your editor, or reads it back and reconnects what changed. |
 | `/settings`, `//` | Opens the settings; a letter typed on a tab searches them all. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
@@ -102,7 +106,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
 | `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks` and `monitors` (Windows only), `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
-| `/skills` | Lists the skills, to move, rename, edit, revert, lock, disable or delete one, and their settings; its **loaded** tab shows the skills in this conversation. |
+| `/skills` | Lists the skills, to move, copy, rename, edit, revert, lock, disable or delete one, and their settings; its **loaded** tab shows the skills in this conversation. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/mcp` | Connects [MCP servers](INTERFACE.md#words-used-here) (outside programs that offer the model more tools) and switches their tools on or off. |
@@ -540,7 +544,7 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 
 ### Profiles
 
-* **Names:** 1 to 32 letters, digits, `-` or `_`, and not one of `/profile`'s words (`add`, `push`, `keys`…). A name starting with `_` is temporary, off the picker. The default profile is `neon`.
+* **Names:** 1 to 32 letters, digits, `-` or `_`, not starting with `-`, and not one of `/profile`'s words (`add`, `push`, `keys`…). A name starting with `_` is temporary, off the picker. The default profile is `neon`.
 * **Files:** each profile is a folder in the home's `profiles` folder: `profile.json`, `persona.md`, `operata.md` and `vocalia.md` at its top, its other settings files (memories, MCP servers, connections, saved prompts, videos and links) in `configs`.
 * **Starting:** every start opens `neon`, and a switch lasts until the app closes. A desktop shortcut, `--profile <name>` or `NEONSIDEKICK_PROFILE` opens another for a launch; an unknown name exits with code 2.
 * **Reset:** keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.

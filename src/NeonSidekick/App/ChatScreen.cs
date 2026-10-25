@@ -138,6 +138,27 @@ public enum ProfileSection
 
     /// <summary><c>avatar model</c> (2026-10-12, the user's ask): the <c>Model avatar</c>, the emoji that opens the profile's replies.</summary>
     AvatarModel,
+
+    /// <summary>
+    /// <c>mcp [overwrite]</c> (2026-10-25, the user's ask): the profile's own <c>configs/mcp.json</c> servers (never the home's, which every
+    /// profile reads), added to the target's file with its comments kept; a same-named one is kept, or replaced with overwrite.
+    /// </summary>
+    Mcp,
+
+    /// <summary><c>links [overwrite]</c> (2026-10-25, the user's ask): the Browser window's saved links, appended (an address there skipped) or replaced.</summary>
+    Links,
+
+    /// <summary><c>videos [overwrite]</c> (2026-10-25, the user's ask): the saved YouTube videos, appended (an id there skipped) or replaced.</summary>
+    Videos,
+
+    /// <summary>
+    /// <c>monitors [overwrite]</c> (2026-10-25, the user's ask): <c>Monitor input names</c>, <c>Monitor inputs hidden</c> and <c>Monitor PC
+    /// inputs</c>, merged (<c>MonitorWords.Merge</c>) or replaced. The bare push already carries them, replacing the target's.
+    /// </summary>
+    Monitors,
+
+    /// <summary><c>skills</c> (2026-10-25, the user's ask): every profile skill's folder copied; one the target holds (by folder or name) skipped. No overwrite.</summary>
+    Skills,
 }
 
 /// <summary>
@@ -417,7 +438,9 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/find</c> without the screen to scroll (2026-10-07). Pinned.</summary>
     public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [keys|servers|allowed|history|memory|prompts|policestrings|persona|operata|vocalia] <name> [overwrite], edit or reload.";
+    /// <summary><c>/profile</c>'s usage line. The section words were listed in it until 2026-10-25, when five more made it too long for one line;
+    /// the completion and <c>/help</c> name them (<see cref="ProfileSectionWords"/>).</summary>
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [section] <name> [overwrite], edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -5002,6 +5025,9 @@ internal sealed partial class ChatScreen
     /// <summary>The note on <c>overwrite</c> after a list section's name (2026-10-09; <c>/cmdcopy</c>'s overwrite note until then). Pinned.</summary>
     public const string ProfileSectionOverwriteNote = "replace the target's list instead of adding to it";
 
+    /// <summary>The note on <c>overwrite</c> after <c>mcp</c>'s name (2026-10-25): the target's other servers stay. Pinned.</summary>
+    public const string ProfileMcpOverwriteNote = "replace same-named servers with the source's";
+
     /// <summary>The note on <c>overwrite</c> after a prompt file's name (2026-10-10; <c>/sys persona copy &lt;profile&gt; force</c>'s note until then). Pinned.</summary>
     public const string ProfilePromptFileOverwriteNote = "replace the target's file if it has one";
 
@@ -5028,7 +5054,8 @@ internal sealed partial class ChatScreen
                 {
                     if (argText.StartsWith(sectionHead + name + " ", StringComparison.OrdinalIgnoreCase))
                     {
-                        return [new(sectionHead + name + " " + OverwriteWord, IsPromptFileSection(section) ? ProfilePromptFileOverwriteNote : ProfileSectionOverwriteNote)];
+                        string note = section == ProfileSection.Mcp ? ProfileMcpOverwriteNote : IsPromptFileSection(section) ? ProfilePromptFileOverwriteNote : ProfileSectionOverwriteNote;
+                        return [new(sectionHead + name + " " + OverwriteWord, note)];
                     }
                 }
             }
@@ -5075,6 +5102,11 @@ internal sealed partial class ChatScreen
         ProfileSection.PoliceStrings => "forbidden strings",
         ProfileSection.AvatarUser => "user avatar",
         ProfileSection.AvatarModel => "model avatar",
+        ProfileSection.Mcp => "MCP servers",
+        ProfileSection.Links => "saved links",
+        ProfileSection.Videos => "saved videos",
+        ProfileSection.Monitors => "monitor input settings",
+        ProfileSection.Skills => "skills",
         _ when IsPromptFileSection(section) => PromptFileOf(section),
         _ => ProfileSettingsSubject,
     };
@@ -8414,6 +8446,26 @@ internal sealed partial class ChatScreen
     public static string ProfilePoliceStringsCopiedNotice(int added, int duplicates, string profile, bool overwrite, bool pull = false) =>
         ListSectionNotice(ForbiddenStringCount(added), duplicates, "forbidden strings", profile, overwrite, pull);
 
+    // The monitor settings (2026-10-25): input names, hidden inputs and PC inputs, counted together as entries.
+    private static string MonitorSettingCount(int count) => count == 1 ? "1 monitor input setting" : $"{count.ToString(System.Globalization.CultureInfo.InvariantCulture)} monitor input settings";
+
+    /// <summary><c>monitors</c> with nothing to copy: <c>(nothing to copy: this profile has no monitor input settings)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileMonitorsNothingNotice(string profile, bool pull = false) => $"(nothing to copy: {SourceName(profile, pull)} has no monitor input settings)";
+
+    /// <summary>The question before a <c>monitors</c> copy (<see cref="ListSectionPrompt"/>).</summary>
+    public static string ProfileMonitorsPrompt(int count, string profile, bool overwrite, bool pull = false) =>
+        ListSectionPrompt(MonitorSettingCount(count), "monitor input settings", profile, overwrite, pull);
+
+    /// <summary>
+    /// A <c>monitors</c> copy done (<see cref="ListSectionNotice"/>), with <paramref name="kept"/> entries the target kept its own of (its name
+    /// for an input, its PC input, a name another input has): <c>(2 monitor input settings copied into "work", 1 kept as "work" has it)</c>.
+    /// </summary>
+    public static string ProfileMonitorsCopiedNotice(int added, int duplicates, int kept, string profile, bool overwrite, bool pull = false)
+    {
+        string notice = ListSectionNotice(MonitorSettingCount(added), duplicates, "monitor input settings", profile, overwrite, pull);
+        return kept == 0 ? notice : notice[..^1] + $", {kept.ToString(System.Globalization.CultureInfo.InvariantCulture)} kept as {(pull ? "this profile" : $"\"{profile}\"")} has {(kept == 1 ? "it" : "them")})";
+    }
+
     // The memories (/memcopy 2026-09-17, /memory copy from 2026-09-22, a section with a pull since 2026-10-13). The 💾 lead the
     // memory's lines carry.
 
@@ -8684,7 +8736,8 @@ internal sealed partial class ChatScreen
     /// <paramref name="section"/>'s copy from <paramref name="from"/> over <paramref name="to"/> (pure: the edit is only planned). Keys and
     /// servers are mirrored. The lists come out as their editors save them — <see cref="CommandAllowList.Merge"/> (lower case, sorted, no
     /// doubles) and <see cref="ForbiddenStrings.Sorted"/> (normalised, no doubles ignoring case) — added to the target's unless
-    /// <paramref name="overwrite"/>, what it already holds counted as already there.
+    /// <paramref name="overwrite"/>, what it already holds counted as already there. The monitor settings (2026-10-25) go through
+    /// <see cref="Monitors.MonitorWords.Merge"/>, by monitor key.
     /// </summary>
     private static SectionCopy PlanSectionCopy(ProfileSection section, AppSettingsData from, AppSettingsData to, string profile, bool overwrite, bool pull)
     {
@@ -8775,6 +8828,31 @@ internal sealed partial class ChatScreen
                     (_, _) => ProfileAvatarCopiedNotice(subject, avatar, profile, pull));
             }
 
+            case ProfileSection.Monitors:
+            {
+                // The three monitor settings (2026-10-25, the user's ask): merged by monitor key, or replaced. No SettingsField reads them, so
+                // a pull reconnects nothing: the words are read live (MonitorWords.For).
+                var source = new Monitors.MonitorSettings(from.MonitorInputNames, from.MonitorInputsHidden, from.MonitorPcInputs);
+                int count = Monitors.MonitorWords.Count(source);
+                if (count == 0)
+                {
+                    return new(ProfileMonitorsNothingNotice(profile, pull), "", _ => { }, (_, _) => "");
+                }
+
+                var merge = Monitors.MonitorWords.Merge(source, new(to.MonitorInputNames, to.MonitorInputsHidden, to.MonitorPcInputs), overwrite);
+                return new(
+                    null,
+                    ProfileMonitorsPrompt(count, profile, overwrite, pull),
+                    target =>
+                    {
+                        var made = Monitors.MonitorWords.Merge(source, new(target.MonitorInputNames, target.MonitorInputsHidden, target.MonitorPcInputs), overwrite).Settings;
+                        target.MonitorInputNames = made.Names;
+                        target.MonitorInputsHidden = made.Hidden;
+                        target.MonitorPcInputs = made.PcInputs;
+                    },
+                    (_, _) => ProfileMonitorsCopiedNotice(merge.Added, merge.Duplicates, merge.Kept, profile, overwrite, pull));
+            }
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(section), section, "Not a profile.json section.");
         }
@@ -8814,6 +8892,22 @@ internal sealed partial class ChatScreen
         {
             await CopySavedPromptsSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
+        else if (action.Section == ProfileSection.Mcp)
+        {
+            await CopyMcpSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
+        else if (action.Section == ProfileSection.Links)
+        {
+            await CopyLinksSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
+        else if (action.Section == ProfileSection.Videos)
+        {
+            await CopyVideosSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
+        else if (action.Section == ProfileSection.Skills)
+        {
+            await CopySkillsSectionAsync(home, other, pull, cancellationToken).ConfigureAwait(false);
+        }
         else if (IsPromptFileSection(action.Section))
         {
             var file = action.Section switch
@@ -8831,7 +8925,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A <c>profile.json</c> section (keys, servers, commands, policestrings) pushed into <paramref name="other"/> or pulled from it. The
+    /// A <c>profile.json</c> section (keys, servers, commands, policestrings, the avatars, monitors) pushed into <paramref name="other"/> or pulled from it. The
     /// other's file is read first (a corrupt one is an error and nothing is asked), the copy planned (<see cref="PlanSectionCopy"/>), the
     /// question asked, then a push writes the other's file back and a pull goes through <see cref="AppSettings.Update"/> and reconnects
     /// what changed (<see cref="ApplySettingsChangesAsync"/> over <see cref="ReloadChanges"/>, as <c>/profile reload</c> does).
@@ -10821,7 +10915,9 @@ internal sealed partial class ChatScreen
 
         if (ProfileSectionOf(rest[0]) is not { } section)
         {
-            return rest.Length == 1 ? new(kind, rest[0]) : new(ProfileActionKind.Invalid, "");
+            // The first word of a two-word section alone (2026-10-25: push avatar) is invalid, as push keys is, never a profile of that name.
+            bool sectionHead = ProfileSectionWords.Any(item => item.Word.StartsWith(rest[0] + " ", StringComparison.OrdinalIgnoreCase));
+            return rest.Length == 1 && !sectionHead ? new(kind, rest[0]) : new(ProfileActionKind.Invalid, "");
         }
 
         bool overwrite = rest.Length == 3 && rest[2].Equals(OverwriteWord, StringComparison.OrdinalIgnoreCase);
@@ -10839,6 +10935,12 @@ internal sealed partial class ChatScreen
         ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
         ("memory", ProfileSection.Memory, "the memories, added (or replaced with overwrite)"),   // 2026-10-13, /memory copy's
         ("prompts", ProfileSection.SavedPrompts, "the saved prompts, added (or replaced with overwrite)"),   // 2026-10-13, /prompts' list
+        // 2026-10-25 (the user's ask): the profile's other files and lists.
+        ("mcp", ProfileSection.Mcp, "the profile's own MCP servers, added (same-named ones replaced with overwrite)"),
+        ("links", ProfileSection.Links, "the Browser window's saved links, added (or replaced with overwrite)"),
+        ("videos", ProfileSection.Videos, "the saved YouTube videos, added (or replaced with overwrite)"),
+        ("monitors", ProfileSection.Monitors, "the monitor input names, hidden inputs and PC inputs, added (or replaced with overwrite)"),
+        ("skills", ProfileSection.Skills, "the profile's skills, copied (one the target has is skipped)"),
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
         ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
         ("operata", ProfileSection.Operata, "operata.md, the operating rules (overwrite replaces the target's)"),
@@ -10867,10 +10969,14 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether a section takes <see cref="OverwriteWord"/>: the lists, which are added to by default, and the prompt files (2026-10-10), whose
-    /// copy refuses to replace one already there without it. Keys and servers are mirrored, so replacing is all they do.
+    /// copy refuses to replace one already there without it. Keys and servers are mirrored, so replacing is all they do. The merges of
+    /// 2026-10-25 take it too: <c>mcp</c> (same-named servers replaced), <c>links</c>, <c>videos</c> and <c>monitors</c>; <c>skills</c> never
+    /// replaces a folder.
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
-        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings || IsPromptFileSection(section);
+        section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings
+            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.Videos or ProfileSection.Monitors
+        || IsPromptFileSection(section);
 
     /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>
     public static bool IsPromptFileSection(ProfileSection section) =>

@@ -180,6 +180,29 @@ internal sealed class SkillsMenu
     /// <summary>The move row, after the two roots on a profile skill's page alone (2026-10-13): the word padded to nine, what it does dim after it.</summary>
     public static string MoveRow => Markup.Escape(MoveWord.PadRight(9)) + Theme.DimMarkup("send it to another profile's skills");
 
+    /// <summary>The copy row's word (2026-10-25, the user's ask): a profile skill copied into another profile, the original kept. Pinned.</summary>
+    public const string CopyWord = "copy";
+
+    /// <summary>The copy row, right after move on a profile skill's page alone (2026-10-25).</summary>
+    public static string CopyRow => Markup.Escape(CopyWord.PadRight(9)) + Theme.DimMarkup("copy it into another profile's skills");
+
+    /// <summary>The copy's profile list's title: <c>Skills › haiku › copy</c> (2026-10-25).</summary>
+    public static string CopyToTitle(string name) => ScopeTitle(name) + " › " + CopyWord;
+
+    public static string CopyToPrompt(string name, string profile) => $"Copy skill '{name}' into profile '{profile}'? It starts there with no history.";
+
+    public static string CopiedToNotice(string name, string profile) => $"({NoticeGlyphs.Skill}copied: {name} → profile {profile})";
+
+    /// <summary>A copy refused because the other profile's skills hold the folder's name, or (<paramref name="byName"/>) a skill of that name (2026-10-25).</summary>
+    public static string CopyExistsError(string name, string folder, string profile, bool byName = false) => byName
+        ? $"Could not copy skill '{name}': profile '{profile}' already has a skill named '{name}'"
+        : $"Could not copy skill '{name}': the skills of profile '{profile}' already hold '{folder}'";
+
+    public static string CopyFailedError(string detail) => $"Could not copy the skill: {detail}";
+
+    /// <summary>The copy row with no other profile to copy into (2026-10-25).</summary>
+    public const string NoOtherProfileForCopyNotice = "(" + NoticeGlyphs.Skill + "no other profile to copy it to; /profile add makes one)";
+
     /// <summary>The profile list's title: <c>Skills › haiku › move</c> (2026-10-13).</summary>
     public static string MoveToTitle(string name) => ScopeTitle(name) + " › " + MoveWord;
 
@@ -672,6 +695,13 @@ internal sealed class SkillsMenu
             rows.Add(MoveRow);
         }
 
+        // The copy (2026-10-25, the user's ask): right after move, a profile skill's alone.
+        int copyRow = skill.Scope == SkillScope.Profile ? rows.Count : -1;
+        if (copyRow >= 0)
+        {
+            rows.Add(CopyRow);
+        }
+
         int renameRow = rows.Count;
         rows.Add(RenameRow);
         int editRow = rows.Count;
@@ -710,7 +740,7 @@ internal sealed class SkillsMenu
         }
 
         // A locked skill (2026-10-07): rename, move and delete refused before any question; edit (the user's own editor) and the
-        // revert list (its d and c) still open.
+        // revert list (its d and c) still open. A copy (2026-10-25) changes nothing here, so it copies a locked skill, the lock with it.
         bool changes = row == renameRow || row == moveRow || row == deleteRow || (row < scopeRows.Count && scopeRows[row] != skill.Scope);
         if (changes && skill.Locked)
         {
@@ -721,6 +751,11 @@ internal sealed class SkillsMenu
         if (row == moveRow)
         {
             return await MoveToProfileAsync(skill, roots, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (row == copyRow)
+        {
+            return await CopyToProfileAsync(skill, roots, cancellationToken).ConfigureAwait(false);
         }
 
         if (row == renameRow)
@@ -872,6 +907,72 @@ internal sealed class SkillsMenu
                 Sink.Error(MoveFailedError(moved.Detail));
                 return false;
         }
+    }
+
+    /// <summary>
+    /// The copy row's list and act (2026-10-25, the user's ask; the move's shape): every profile but the loaded one; the one picked checked
+    /// for the folder's name and the skill's name (a same-scope twin would be shadowed), then a yes (No on the cursor), then the folder copied
+    /// on the pool (<see cref="SkillEditor.CopyToProfile"/>). No records: the other profile reconciles its skills when it loads. False
+    /// always: nothing in this profile changed, so the list's facts stand.
+    /// </summary>
+    private async Task<bool> CopyToProfileAsync(Skill skill, SkillRoots roots, CancellationToken cancellationToken)
+    {
+        string home = _settings.StorageDirectory;
+        var others = Profiles.List(home).Where(name => !Profiles.NameEquals(name, _settings.ProfileName)).ToList();
+        if (others.Count == 0)
+        {
+            Sink.Notice(NoOtherProfileForCopyNotice);
+            return false;
+        }
+
+        int width = others.Max(name => name.Length);
+        var page = new MenuPage(CopyToTitle(skill.Name), others.Select(name => ProfileRow(name, ProfileSkillsRoot(home, name), width)).ToList(), ScopeKeys);
+        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row } || row >= others.Count)
+        {
+            return false;
+        }
+
+        string profile = others[row];
+        string root = ProfileSkillsRoot(home, profile);
+        // Refused ahead of the question, as the move is: the folder's name, or a skill of the same name there.
+        string destination = Path.Combine(root, skill.FolderName);
+        var (folders, names) = SkillEditor.ProfileSkillNames(root);
+        if (Directory.Exists(destination) || File.Exists(destination) || folders.Contains(skill.FolderName))
+        {
+            Sink.Error(CopyExistsError(skill.Name, skill.FolderName, profile));
+            return false;
+        }
+
+        if (names.Contains(skill.Name))
+        {
+            Sink.Error(CopyExistsError(skill.Name, skill.FolderName, profile, byName: true));
+            return false;
+        }
+
+        if (!await ConfirmAsync(CopyToPrompt(skill.Name, profile), cancellationToken).ConfigureAwait(false))
+        {
+            Sink.Notice(KeptNotice);
+            return false;
+        }
+
+        var copied = await Task.Run(() => SkillEditor.CopyToProfile(roots, skill, root, cancellationToken), cancellationToken).ConfigureAwait(false);
+        switch (copied.Outcome)
+        {
+            case SkillEditOutcome.Copied:
+                Sink.Notice(CopiedToNotice(skill.Name, profile));
+                break;
+            case SkillEditOutcome.Exists:
+                Sink.Error(CopyExistsError(skill.Name, skill.FolderName, profile));
+                break;
+            case SkillEditOutcome.Missing:
+                Sink.Error(MissingError(skill.Name));
+                break;
+            default:
+                Sink.Error(CopyFailedError(copied.Detail));
+                break;
+        }
+
+        return false;
     }
 
     /// <summary>

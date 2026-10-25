@@ -44,6 +44,21 @@ public enum YouTubeSaveOutcome
     Failed,
 }
 
+/// <summary>What <see cref="YouTubeLibrary.Import"/> did (2026-10-25).</summary>
+public enum YouTubeImportOutcome
+{
+    Done,
+
+    /// <summary>The target's file is there but could not be read or parsed: left alone, nothing written.</summary>
+    Unreadable,
+
+    /// <summary>The file could not be written (logged); nothing changed.</summary>
+    Failed,
+}
+
+/// <summary>What <see cref="YouTubeLibrary.Import"/> did: its outcome, the videos added and those skipped as saved already.</summary>
+public readonly record struct YouTubeImport(YouTubeImportOutcome Outcome, int Added, int Skipped);
+
 /// <summary>
 /// The profile's saved YouTube videos (2026-10-07, the user's ask: bookmarks, added and removed by the user's <c>/youtube save</c>,
 /// <c>unsave</c> and <c>list</c> pane or the model's <c>youtube_save</c>, each resuming where it was left — <see cref="YouTubeResume"/>
@@ -247,6 +262,56 @@ public sealed class YouTubeLibrary
         }
     }
 
+    /// <summary>
+    /// <c>/profile push|pull videos [overwrite]</c> (2026-10-25, the user's ask): <paramref name="videos"/> (another profile's list) appended in
+    /// their order, each record whole (where it was left, watched, added, last played); a video this list holds is skipped, taking only a
+    /// title, channel or length it lacked, as <see cref="Add"/> does. With <paramref name="overwrite"/>, in place of this list. An entry with
+    /// no video id is dropped. Unlike <see cref="Load"/>, a file that is there but cannot be read is refused, never written over: a whole
+    /// list the user built is at stake.
+    /// </summary>
+    public YouTubeImport Import(IReadOnlyList<YouTubeSaved> videos, bool overwrite)
+    {
+        ArgumentNullException.ThrowIfNull(videos);
+        lock (s_gate)
+        {
+            if (LoadStrict() is not { } current)
+            {
+                return new(YouTubeImportOutcome.Unreadable, 0, 0);
+            }
+
+            var kept = overwrite ? [] : current;
+            int added = 0, skipped = 0;
+            bool changed = overwrite;
+            foreach (var video in videos)
+            {
+                if (video is null || !Viewer.VideoRequest.IsVideoId(video.Id))
+                {
+                    continue;
+                }
+
+                int at = kept.FindIndex(v => v.Id == video.Id);
+                if (at < 0)
+                {
+                    kept.Add(video);
+                    added++;
+                    changed = true;
+                    continue;
+                }
+
+                skipped++;
+                var known = kept[at];
+                var filled = known with { Title = known.Title ?? Blank(video.Title), Author = known.Author ?? Blank(video.Author), Duration = known.Duration > 0 ? known.Duration : video.Duration };
+                if (filled != known)
+                {
+                    kept[at] = filled;
+                    changed = true;
+                }
+            }
+
+            return !changed || Save(kept) ? new(YouTubeImportOutcome.Done, added, skipped) : new(YouTubeImportOutcome.Failed, 0, 0);
+        }
+    }
+
     /// <summary>Where a row at <paramref name="at"/> of <paramref name="count"/> lands after a move of <paramref name="delta"/> (<see cref="int.MinValue"/> the top, <see cref="int.MaxValue"/> the bottom). Pure.</summary>
     public static int MovedTo(int at, int delta, int count) => delta switch
     {
@@ -274,6 +339,26 @@ public sealed class YouTubeLibrary
         {
             DiagnosticLog.Warn(Category, $"Could not read {FileName}; starting with no saved videos: {ex.Message}", ex);
             return [];
+        }
+    }
+
+    /// <summary>The list as the file has it for <see cref="Import"/>: missing is empty, and one that cannot be read or parsed is null (logged). Caller holds the lock.</summary>
+    private List<YouTubeSaved>? LoadStrict()
+    {
+        if (!File.Exists(_filePath))
+        {
+            return [];
+        }
+
+        try
+        {
+            var file = JsonSerializer.Deserialize(File.ReadAllText(_filePath), YouTubeJsonContext.Default.YouTubeLibraryFile);
+            return (file?.Videos ?? []).Where(v => v is not null && Viewer.VideoRequest.IsVideoId(v.Id)).ToList();
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(Category, $"Could not read {FileName}; nothing copied into it: {ex.Message}", ex);
+            return null;
         }
     }
 

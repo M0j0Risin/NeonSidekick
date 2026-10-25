@@ -416,4 +416,10 @@ public static class SkillText
             _ => CouldNot("write", result.Name, result.Detail),
         };
     }
+
+    /// <summary>A skill folder that is itself a junction or link (2026-10-25, <see cref="SkillEditor.CopyFolder"/>): never followed, so never copied. Pinned.</summary>
+    public const string CopyLinkedFolder = "the skill's folder is a link, which a copy never follows";
+
+    /// <summary>The <c>Skills</c> log line when a copy's temp folder would not go (2026-10-25): the next copy's sweep tries again.</summary>
+    public static string CopyTempLeftLogLine(string folder, string detail) => $"Could not delete the skill copy's temp folder {folder}; the next copy tries again: {detail}";
 }

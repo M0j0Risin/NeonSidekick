@@ -78,7 +78,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **Project notes:** reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md`, so a project's own rules come along.
 * **Context control:** compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand, and `/sys` shows what the model is sent.
 * **Skills:** the profile's own, global ones, and the read-only `~/.agents/skills` other agents use; `/skills add` installs more from [skills.sh](https://skills.sh) or GitHub.
-* **Managing skills:** edit, move, lock, disable or revert a skill (its last 10 versions) on `/skills`. The model's `skill_editor` never deletes one.
+* **Managing skills:** edit, move, copy, lock, disable or revert a skill (its last 10 versions) on `/skills`. The model's `skill_editor` never deletes one.
 * **Self-learning:** a background reflection writes new skills and improves existing ones from your work.
 
 ### Tools & guardrails

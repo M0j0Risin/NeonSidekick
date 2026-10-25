@@ -8,6 +8,9 @@ namespace NeonSidekick.Viewer;
 /// <summary>One saved link (2026-10-13, the user's ask): its address as it was saved, the user's name for it (null: none yet), and when.</summary>
 public sealed record BrowserLink(string Url, string? Name, DateTimeOffset Added);
 
+/// <summary>What <see cref="BrowserLinks.Import"/> did (2026-10-25): its outcome, the links added and those skipped as saved already.</summary>
+public readonly record struct BrowserLinkImport(BrowserLinkOutcome Outcome, int Added, int Skipped);
+
 /// <summary>The profile's <c>browser-links.json</c>: a version and the links in the user's order.</summary>
 public sealed class BrowserLinksFile
 {
@@ -305,6 +308,52 @@ public sealed class BrowserLinks
 
             cleared = count;
             return BrowserLinkOutcome.Done;
+        }
+    }
+
+    /// <summary>
+    /// <c>/profile push|pull links [overwrite]</c> (2026-10-25, the user's ask): <paramref name="links"/> (another profile's list) appended in
+    /// their order, an address this list holds skipped (<see cref="Key"/>), each record whole so its name and date travel; or, with
+    /// <paramref name="overwrite"/>, in place of this list. A link this list could never hold (<see cref="Refused"/>) is dropped. A newer
+    /// version's file or one that cannot be read is refused and left alone; a broken one is moved aside, as every write does.
+    /// </summary>
+    public BrowserLinkImport Import(IReadOnlyList<BrowserLink> links, bool overwrite)
+    {
+        ArgumentNullException.ThrowIfNull(links);
+        lock (s_gate)
+        {
+            var file = Load();
+            if (Blocked(file) is { } blocked)
+            {
+                return new(blocked, 0, 0);
+            }
+
+            var kept = overwrite ? [] : file.Links.ToList();
+            var keys = kept.Select(l => Key(l.Url)).ToHashSet(StringComparer.Ordinal);
+            int added = 0, skipped = 0;
+            foreach (var link in links)
+            {
+                if (link is null || Refused(link.Url) is not null)
+                {
+                    continue;
+                }
+
+                if (!keys.Add(Key(link.Url)))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                kept.Add(link with { Name = CleanName(link.Name) });
+                added++;
+            }
+
+            if (added == 0 && !overwrite)
+            {
+                return new(BrowserLinkOutcome.Done, 0, skipped);
+            }
+
+            return Save(file with { Links = kept }) ? new(BrowserLinkOutcome.Done, added, skipped) : new(BrowserLinkOutcome.Failed, 0, 0);
         }
     }
 

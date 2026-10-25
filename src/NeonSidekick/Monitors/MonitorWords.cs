@@ -13,6 +13,15 @@ public sealed record MonitorInputRow(byte Code, string? Standard, string? Given,
 }
 
 /// <summary>
+/// The three monitor settings as <see cref="MonitorWords.Merge"/> hands them back (2026-10-25, <c>/profile push|pull monitors</c>): new
+/// collections, each null when empty, as the settings keep them.
+/// </summary>
+public sealed record MonitorSettings(Dictionary<string, string>? Names, List<string>? Hidden, List<string>? PcInputs);
+
+/// <summary>What <see cref="MonitorWords.Merge"/> made: the target's new settings, the entries added, those it held already, and those it kept its own of (a name taken by another input, another PC input).</summary>
+public sealed record MonitorMerge(MonitorSettings Settings, int Added, int Duplicates, int Kept);
+
+/// <summary>
 /// The input names in force (2026-10-23, the monitors plan, <c>Monitor input names</c> and <c>Monitor inputs hidden</c>): saved per profile as
 /// <c>&lt;key&gt;/&lt;hex&gt;</c> (<see cref="MonitorKey"/>, two lower-case digits), read from the settings each time the pane, <c>/monitor</c> or a
 /// tool builds its words, so a profile switch follows at once. A key not saved falls back to the one saved key of the same model when exactly
@@ -81,6 +90,141 @@ public sealed class MonitorWords
         }
 
         return picks;
+    }
+
+    /// <summary>
+    /// <c>/profile push|pull monitors [overwrite]</c> (2026-10-25, the user's ask): the source's input names, hidden inputs and PC inputs
+    /// (<paramref name="from"/>) over the target's (<paramref name="to"/>), by monitor key. Every entry is read through the parser and
+    /// written back with <see cref="Entry"/>, so a hand-edited <c>/0F</c> is <c>/0f</c>, and one that does not parse is dropped. With
+    /// <paramref name="overwrite"/> the source's replace all three. Without it, an entry the target holds is a duplicate, and the target keeps
+    /// its own name for an input, its own PC input for a monitor, and a name another input of that monitor has (any case, as
+    /// <see cref="CleanName"/> holds) or that reads as another input's code. The standard input names need the monitor attached, so they
+    /// are not checked here. Pure: new collections every time, each null when empty.
+    /// </summary>
+    public static MonitorMerge Merge(MonitorSettings from, MonitorSettings to, bool overwrite)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        var (fromNames, fromHidden, fromPc) = Normalized(from);
+        var (toNames, toHidden, toPc) = Normalized(overwrite ? new MonitorSettings(null, null, null) : to);
+        int added = 0, duplicates = 0, kept = 0;
+
+        foreach (var (entry, name) in fromNames)
+        {
+            if (toNames.TryGetValue(entry, out string? held))
+            {
+                if (string.Equals(held, name, StringComparison.Ordinal))
+                {
+                    duplicates++;
+                }
+                else
+                {
+                    kept++;
+                }
+
+                continue;
+            }
+
+            string key = KeyOf(entry);
+            byte code = Mccs.TryParseCode(entry[(key.Length + 1)..], out byte c) ? c : (byte)0;
+            bool taken = toNames.Any(n => n.Key != entry && string.Equals(KeyOf(n.Key), key, StringComparison.Ordinal) && string.Equals(n.Value, name, StringComparison.OrdinalIgnoreCase))
+                || (Mccs.TryParseCode(name, out byte hex) && hex != code);
+            if (taken)
+            {
+                kept++;
+                continue;
+            }
+
+            toNames[entry] = name;
+            added++;
+        }
+
+        foreach (string entry in fromHidden)
+        {
+            if (toHidden.Contains(entry, StringComparer.Ordinal))
+            {
+                duplicates++;
+                continue;
+            }
+
+            toHidden.Add(entry);
+            added++;
+        }
+
+        foreach (string entry in fromPc)
+        {
+            string key = KeyOf(entry);
+            if (toPc.FirstOrDefault(e => string.Equals(KeyOf(e), key, StringComparison.Ordinal)) is { } held)
+            {
+                if (string.Equals(held, entry, StringComparison.Ordinal))
+                {
+                    duplicates++;
+                }
+                else
+                {
+                    kept++;
+                }
+
+                continue;
+            }
+
+            toPc.Add(entry);
+            added++;
+        }
+
+        var settings = new MonitorSettings(toNames.Count > 0 ? toNames : null, toHidden.Count > 0 ? toHidden : null, toPc.Count > 0 ? toPc : null);
+        return new(settings, added, duplicates, kept);
+    }
+
+    /// <summary>How many entries <paramref name="settings"/> holds once read through the parser (<see cref="Merge"/>'s count of a source).</summary>
+    public static int Count(MonitorSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var (names, hidden, pc) = Normalized(settings);
+        return names.Count + hidden.Count + pc.Count;
+    }
+
+    // Every entry read through the parser and written back with Entry: names trimmed and cut at MaxName (blank ones dropped), hidden
+    // entries once each, PC inputs one a monitor (the first wins, as ParsePc reads them).
+    private static (Dictionary<string, string> Names, List<string> Hidden, List<string> Pc) Normalized(MonitorSettings settings)
+    {
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (entry, name) in settings.Names ?? [])
+        {
+            string clean = (name ?? "").Trim();
+            clean = clean.Length > MaxName ? clean[..MaxName].TrimEnd() : clean;
+            if (clean.Length > 0 && Normal(entry) is { } normal)
+            {
+                names.TryAdd(normal, clean);
+            }
+        }
+
+        var hidden = new List<string>();
+        foreach (string entry in settings.Hidden ?? [])
+        {
+            if (Normal(entry) is { } normal && !hidden.Contains(normal, StringComparer.Ordinal))
+            {
+                hidden.Add(normal);
+            }
+        }
+
+        var pc = new List<string>();
+        foreach (string entry in settings.PcInputs ?? [])
+        {
+            if (Normal(entry) is { } normal && !pc.Any(e => string.Equals(KeyOf(e), KeyOf(normal), StringComparison.Ordinal)))
+            {
+                pc.Add(normal);
+            }
+        }
+
+        return (names, hidden, pc);
+    }
+
+    // An entry as Entry writes it, or null when it has no key or its code does not parse.
+    private static string? Normal(string? entry)
+    {
+        int slash = entry?.IndexOf('/', StringComparison.Ordinal) ?? -1;
+        return slash > 0 && Mccs.TryParseCode(entry![(slash + 1)..], out byte code) ? Entry(entry[..slash], code) : null;
     }
 
     private static string KeyOf(string entry) => entry.IndexOf('/', StringComparison.Ordinal) is int slash and > 0 ? entry[..slash] : entry;

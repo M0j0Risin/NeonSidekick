@@ -7129,7 +7129,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal("Profile name must be 1 to 32 letters, digits, - or _ (and not add, delete, edit, pull, push, reload, rename or reset).", ChatScreen.ProfileNameError);
+        Assert.Equal("Profile name must be 1 to 32 letters, digits, - or _, not starting with - (and not add, delete, edit, pull, push, reload, rename or reset).", ChatScreen.ProfileNameError);
         // /profile edit and /profile reload (2026-09-21).
         Assert.Equal("(🪪 opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditOpenedNotice("x"));
         Assert.Equal("(🪪 created and opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditCreatedNotice("x"));
@@ -7205,6 +7205,9 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("push a b", ProfileActionKind.Invalid, "")]
     [InlineData("keys", ProfileActionKind.Invalid, "")]   // a section word is reserved (2026-10-09): never a switch
     [InlineData("history", ProfileActionKind.Invalid, "")]
+    [InlineData("skills", ProfileActionKind.Invalid, "")]   // 2026-10-25: the new section words, and avatar, reserved
+    [InlineData("avatar", ProfileActionKind.Invalid, "")]
+    [InlineData("overwrite", ProfileActionKind.Invalid, "")]
     public void ParseProfileArgs_IsPinned(string args, ProfileActionKind kind, string name, string newName = "")
     {
         Assert.Equal(new ProfileAction(kind, name, newName), ChatScreen.ParseProfileArgs(args));
@@ -7241,6 +7244,20 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("push allowed work overwrite please", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push keys work --all", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push commands work", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // the word allowed's until 2026-10-13 (the user's ask)
+    [InlineData("push mcp work", ProfileActionKind.Push, "work", ProfileSection.Mcp, false)]   // 2026-10-25, the user's ask
+    [InlineData("PULL Mcp work Overwrite", ProfileActionKind.Pull, "work", ProfileSection.Mcp, true)]
+    [InlineData("push links work", ProfileActionKind.Push, "work", ProfileSection.Links, false)]
+    [InlineData("pull links work overwrite", ProfileActionKind.Pull, "work", ProfileSection.Links, true)]
+    [InlineData("push videos work", ProfileActionKind.Push, "work", ProfileSection.Videos, false)]
+    [InlineData("pull videos work overwrite", ProfileActionKind.Pull, "work", ProfileSection.Videos, true)]
+    [InlineData("push monitors work", ProfileActionKind.Push, "work", ProfileSection.Monitors, false)]
+    [InlineData("pull MONITORS work overwrite", ProfileActionKind.Pull, "work", ProfileSection.Monitors, true)]
+    [InlineData("push skills work", ProfileActionKind.Push, "work", ProfileSection.Skills, false)]
+    [InlineData("pull skills work", ProfileActionKind.Pull, "work", ProfileSection.Skills, false)]
+    [InlineData("push skills work overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // nothing is ever replaced
+    [InlineData("push mcp", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
+    [InlineData("push avatar", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // a two-word section's first word alone, never a profile
+    [InlineData("pull Avatar", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     public void ParseProfileArgs_Sections_ArePinned(string args, ProfileActionKind kind, string name, ProfileSection section, bool overwrite)
     {
         Assert.Equal(new ProfileAction(kind, name, Section: section, Overwrite: overwrite), ChatScreen.ParseProfileArgs(args));
@@ -8333,13 +8350,14 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();
         PushLine("/profile add bad.name");
+        PushLine("/profile add -x");   // 2026-10-25: never a name that reads as a flag
         PushLine("/profile add Neon");   // the default's own name since 2026-10-09 (refused as a bad name from 2026-09-21 until then)
         PushLine("/profile add WORK");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Equal(1, output.Split("  ✗ " + ChatScreen.ProfileNameError).Length - 1);
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileNameError).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.ProfileExistsError("neon"), output);
         Assert.Contains("  ✗ " + ChatScreen.ProfileExistsError("work"), output);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
@@ -23448,9 +23466,9 @@ public partial class ChatScreenTests : IDisposable
                         step++;
                         PushLine(input, "/skills");
                         input.Push(Keys.Enter);   // clock-check's page
-                        for (int i = 0; i < 5; i++)
+                        for (int i = 0; i < 6; i++)
                         {
-                            input.Push(Keys.Down);   // profile, global, move (2026-10-13), rename, edit, revert
+                            input.Push(Keys.Down);   // profile, global, move (2026-10-13), copy (2026-10-25), rename, edit, revert
                         }
 
                         input.Push(Keys.Enter);   // the version list
@@ -23465,9 +23483,9 @@ public partial class ChatScreenTests : IDisposable
                     {
                         step++;
                         input.Push(Keys.Enter);   // the page again
-                        for (int i = 0; i < 5; i++)
+                        for (int i = 0; i < 6; i++)
                         {
-                            input.Push(Keys.Down);
+                            input.Push(Keys.Down);   // the revert row again (past copy since 2026-10-25)
                         }
 
                         input.Push(Keys.Enter);   // the list: the model's text kept as a revert's version
@@ -24725,8 +24743,13 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push memory", "push prompts", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull memory", "pull prompts", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push videos", "push monitors", "push skills", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull videos", "pull monitors", "pull skills", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        // The sections of 2026-10-25: mcp's overwrite has its own note, the lists the list note, and skills takes none.
+        Assert.Equal([new CompletionItem("push mcp work overwrite", ChatScreen.ProfileMcpOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push mcp work ", sources));
+        Assert.Equal([new CompletionItem("pull videos chef overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "pull videos chef ", sources));
+        Assert.Equal([new CompletionItem("push skills chef", "skills: neon → chef")], ChatScreen.ArgumentItems("/profile", "push skills c", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "push skills work ", sources));
         // The avatars (2026-10-12, the user's ask): two words, then the profiles, nothing after the name.
         Assert.Equal(["push avatar user", "push avatar model"], Texts(ChatScreen.ArgumentItems("/profile", "push avatar ", sources)));
         Assert.Equal([new CompletionItem("push avatar user chef", "user avatar: neon → chef"), new CompletionItem("push avatar user work", "user avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "push avatar user ", sources));
@@ -24919,7 +24942,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
         Assert.Equal("settings: neon ← larry", ChatScreen.ProfilePullNote(ChatScreen.ProfileSettingsSubject, "larry", "neon"));   // 2026-10-16: a pull reads into the loaded profile
         Assert.Equal(
-            ["API keys", "server settings", "allowed commands", "message history", "memory", "saved prompts", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
+            ["API keys", "server settings", "allowed commands", "message history", "memory", "saved prompts", "MCP servers", "saved links", "saved videos", "monitor input settings", "skills", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
         Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
         Assert.Equal("rename it", ChatScreen.ProfileRenameNote);
@@ -24927,6 +24950,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("the loaded profile", ChatScreen.LoadedProfileNote);
         Assert.Equal("remove persona.md and go back to the default", ChatScreen.PromptFileResetNote("persona.md"));
         Assert.Equal("replace the target's file if it has one", ChatScreen.ProfilePromptFileOverwriteNote);   // 2026-10-10 (/sys persona copy's notes until then)
+        Assert.Equal("replace same-named servers with the source's", ChatScreen.ProfileMcpOverwriteNote);   // 2026-10-25
         Assert.Equal(["add", "delete", "edit", "pull", "push", "reload", "rename", "reset"], ChatScreen.ProfileVerbs.Select(v => v.Text));
         Assert.Equal("add a profile: /profile add <name>", ChatScreen.ProfileVerbs[0].Note);
         Assert.Equal("open this profile's profile.json in your editor: /profile edit", ChatScreen.ProfileVerbs[2].Note);

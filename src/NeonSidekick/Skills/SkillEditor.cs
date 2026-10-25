@@ -66,6 +66,12 @@ public enum SkillEditOutcome
     /// written there — a create, a move to or from it, a rename, delete or revert of a skill that lives there, an install into it.
     /// </summary>
     GlobalOff,
+
+    /// <summary>
+    /// The folder was copied into another profile's skills (2026-10-25, <see cref="SkillEditor.CopyFolder"/>: <c>/profile push|pull skills</c>
+    /// and the Skills pane's copy); the original stays where it was.
+    /// </summary>
+    Copied,
 }
 
 /// <summary>
@@ -674,6 +680,229 @@ public static class SkillEditor
         }
 
         return MoveInto(skill, root, SkillScope.Profile);
+    }
+
+    /// <summary>
+    /// The Skills pane's copy to another profile (2026-10-25, the user's ask): <see cref="MoveToProfile"/>'s refusals but the lock (a copy
+    /// changes nothing here, so a locked skill copies, its lock with it), then <see cref="CopyFolder"/>.
+    /// </summary>
+    public static SkillEditResult CopyToProfile(SkillRoots roots, Skill skill, string profileSkillsRoot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileSkillsRoot);
+        if (skill.Scope != SkillScope.Profile)
+        {
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, skill.Scope);
+        }
+
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileSkillsRoot));
+        if (string.Equals(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(roots.Profile)), StringComparison.OrdinalIgnoreCase))
+        {
+            return new SkillEditResult(SkillEditOutcome.NothingToChange, skill.Name, skill.Scope);
+        }
+
+        if (!IsUnderItsRoot(roots, skill))
+        {
+            return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
+        }
+
+        return CopyFolder(skill.Directory, root, cancellationToken) with { Name = skill.Name };
+    }
+
+    /// <summary>
+    /// The folder names and the frontmatter names of the profile skills under <paramref name="root"/>, any case (2026-10-25: a copy into it
+    /// refuses either twin, since a same-scope twin would be shadowed). Empty for a missing root; a <c>SKILL.md</c> that won't parse gives its folder alone.
+    /// </summary>
+    public static (IReadOnlySet<string> Folders, IReadOnlySet<string> Names) ProfileSkillNames(string root)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string folder in SkillCatalog.Folders(root))
+        {
+            folders.Add(Path.GetFileName(folder));
+            if (FrontmatterName(folder) is { } name)
+            {
+                names.Add(name);
+            }
+        }
+
+        return (folders, names);
+    }
+
+    /// <summary>The <c>name</c> in <paramref name="folder"/>'s <c>SKILL.md</c> frontmatter, or null when it can't be read or parsed.</summary>
+    public static string? FrontmatterName(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        try
+        {
+            return SkillFrontmatter.TryParse(File.ReadAllText(Path.Combine(folder, SkillCatalog.FileName)), out var frontmatter, out _, out _)
+                && frontmatter!.Name.Length > 0 ? frontmatter.Name : null;
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return null;
+        }
+    }
+
+    // The temp folder beside a profile's skills folder: skills.~<32hex>.neon-tmp (its infix and suffix, for the sweep too).
+    private const string CopyTempInfix = ".~";
+    private const string CopyTempSuffix = ".neon-tmp";
+
+    /// <summary>
+    /// A skill folder copied under <paramref name="profileSkillsRoot"/> (2026-10-25, the user's ask: <c>/profile push|pull skills</c> and the
+    /// Skills pane's copy), its marker files (<c>.neon-source.json</c>, the lock, the disable) with it. The folder, not a <see cref="Skill"/>: a
+    /// pull's source profile isn't loaded. Refused as <see cref="SkillEditOutcome.Missing"/> with no <c>SKILL.md</c>, as
+    /// <see cref="SkillEditOutcome.Exists"/> when the root holds the folder's name (nothing is ever replaced), and as
+    /// <see cref="SkillEditOutcome.Failed"/> for a folder that is itself a link, over the file tools' transfer caps
+    /// (<see cref="WorkingDirectory.TransferCapDetail"/>) or the volume's room (<see cref="WorkingDirectory.FreeSpaceRefusal"/>), or on a
+    /// file failure. Links inside are skipped, never followed. The copy is made in a temp folder beside the skills folder (inside it, a scan
+    /// would list a half-made skill) and moved into place, so a failure or a cancel (checked between files, then thrown) leaves nothing; a
+    /// crash's leftover temp folder is swept at the next copy. The copy starts with no history: the revisions and events are keyed by profile.
+    /// </summary>
+    public static SkillEditResult CopyFolder(string folder, string profileSkillsRoot, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileSkillsRoot);
+        string source = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        string name = Path.GetFileName(source);
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileSkillsRoot));
+        string destination = Path.Combine(root, name);
+        string? temp = null;
+        try
+        {
+            var info = new DirectoryInfo(source);
+            if (!info.Exists || !File.Exists(Path.Combine(source, SkillCatalog.FileName)))
+            {
+                return new SkillEditResult(SkillEditOutcome.Missing, name, SkillScope.Profile);
+            }
+
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: SkillText.CopyLinkedFolder);
+            }
+
+            if (Directory.Exists(destination) || File.Exists(destination))
+            {
+                return new SkillEditResult(SkillEditOutcome.Exists, name, SkillScope.Profile);
+            }
+
+            var folders = new List<string>();
+            var files = new List<string>();
+            long bytes = 0;
+            Collect(info, "", folders, files, ref bytes);
+            if (files.Count > WorkingDirectory.MaxTransferFiles || bytes > WorkingDirectory.MaxTransferBytes)
+            {
+                return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: WorkingDirectory.TransferCapDetail(files.Count, bytes));
+            }
+
+            string parent = Path.GetDirectoryName(root) ?? root;
+            if (WorkingDirectory.FreeSpaceRefusal(parent, bytes) is { } full)
+            {
+                return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: full);
+            }
+
+            SweepCopyTemps(root);
+            temp = Path.Combine(parent, Path.GetFileName(root) + CopyTempInfix + Guid.NewGuid().ToString("N") + CopyTempSuffix);
+            string staged = Path.Combine(temp, name);
+            Directory.CreateDirectory(staged);
+            foreach (string relative in folders)
+            {
+                Directory.CreateDirectory(Path.Combine(staged, relative));
+            }
+
+            foreach (string relative in files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                File.Copy(Path.Combine(source, relative), Path.Combine(staged, relative));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(root);
+            if (Directory.Exists(destination) || File.Exists(destination))
+            {
+                return new SkillEditResult(SkillEditOutcome.Exists, name, SkillScope.Profile);
+            }
+
+            try
+            {
+                // On Windows the move refuses any folder there; on a Mac rename(2) lands only on an empty one (ENOTEMPTY otherwise).
+                Directory.Move(staged, destination);
+            }
+            catch (IOException) when (Directory.Exists(destination))
+            {
+                return new SkillEditResult(SkillEditOutcome.Exists, name, SkillScope.Profile);
+            }
+
+            return new SkillEditResult(SkillEditOutcome.Copied, name, SkillScope.Profile, bytes);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: ex.Message);
+        }
+        finally
+        {
+            if (temp is not null)
+            {
+                DeleteCopyTemp(temp);
+            }
+        }
+    }
+
+    // The folders and files under directory, relative to the copy's top, links skipped and never followed; bytes summed.
+    private static void Collect(DirectoryInfo directory, string relative, List<string> folders, List<string> files, ref long bytes)
+    {
+        foreach (var entry in directory.EnumerateFileSystemInfos())
+        {
+            if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                continue;
+            }
+
+            string path = relative.Length == 0 ? entry.Name : Path.Combine(relative, entry.Name);
+            if (entry is DirectoryInfo sub)
+            {
+                folders.Add(path);
+                Collect(sub, path, folders, files, ref bytes);
+            }
+            else if (entry is FileInfo file)
+            {
+                files.Add(path);
+                bytes += file.Length;
+            }
+        }
+    }
+
+    // Any temp folder an earlier copy left beside root (a crash), deleted; one that won't go is logged and tried again next time.
+    private static void SweepCopyTemps(string root)
+    {
+        if (Path.GetDirectoryName(root) is not { } parent || !Directory.Exists(parent))
+        {
+            return;
+        }
+
+        foreach (string leftover in Directory.EnumerateDirectories(parent, Path.GetFileName(root) + CopyTempInfix + "*" + CopyTempSuffix))
+        {
+            DeleteCopyTemp(leftover);
+        }
+    }
+
+    // A copy's temp folder deleted, read-only flags cleared first (File.Copy keeps them, and a recursive delete fails on one on Windows).
+    private static void DeleteCopyTemp(string temp)
+    {
+        try
+        {
+            if (Directory.Exists(temp))
+            {
+                FileDeletes.ClearReadOnly(temp);
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            Diagnostics.DiagnosticLog.Warn(SkillCatalog.Category, SkillText.CopyTempLeftLogLine(temp, ex.Message));
+        }
     }
 
     // The folder renamed under root (made when missing): Exists when root holds the folder's name already, Failed on a file failure.

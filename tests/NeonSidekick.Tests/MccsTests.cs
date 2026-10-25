@@ -281,4 +281,38 @@ public sealed class MonitorWordsTests
         var words = new MonitorWords(names, null, [moved]);
         Assert.Equal("This PC", words.Given(moved, 0x0F));
     }
+    // ── Merge (2026-10-25, /profile push|pull monitors) ─────────────────────
+
+    [Fact]
+    public void Merge_KeepsTheTargetsOwn_AddsTheRest_AndNormalizesEveryEntry()
+    {
+        var from = new MonitorSettings(
+            new Dictionary<string, string> { ["key-a/0F"] = "Laptop", ["key-a/11"] = "desk", ["key-a/12"] = "1b", ["key-b/0f"] = "Other", ["bad"] = "x" },
+            ["key-a/12", "key-a/0x12", "key-c/zz"],
+            ["key-a/0f", "key-b/11"]);
+        var to = new MonitorSettings(new Dictionary<string, string> { ["key-a/0f"] = "Laptop", ["key-a/1b"] = "Desk" }, null, ["key-a/1b"]);
+
+        var merge = MonitorWords.Merge(from, to, overwrite: false);
+
+        // key-a/0f a duplicate; key-a/11's "desk" taken by 1b's "Desk"; key-a/12's "1b" reads as another input's code; key-a's PC input kept.
+        Assert.Equal((3, 1, 3), (merge.Added, merge.Duplicates, merge.Kept));
+        Assert.Equal(new Dictionary<string, string> { ["key-a/0f"] = "Laptop", ["key-a/1b"] = "Desk", ["key-b/0f"] = "Other" }, merge.Settings.Names);
+        Assert.Equal(["key-a/12"], merge.Settings.Hidden);
+        Assert.Equal(["key-a/1b", "key-b/11"], merge.Settings.PcInputs);
+        Assert.Equal(7, MonitorWords.Count(from));
+    }
+
+    [Fact]
+    public void Merge_WithOverwrite_ReplacesAllThree_AndEmptyIsNull()
+    {
+        var from = new MonitorSettings(null, ["key-a/0F"], null);
+        var to = new MonitorSettings(new Dictionary<string, string> { ["key-a/0f"] = "Laptop" }, null, ["key-a/1b"]);
+
+        var merge = MonitorWords.Merge(from, to, overwrite: true);
+
+        Assert.Equal((1, 0, 0), (merge.Added, merge.Duplicates, merge.Kept));
+        Assert.Null(merge.Settings.Names);
+        Assert.Equal(["key-a/0f"], merge.Settings.Hidden);
+        Assert.Null(merge.Settings.PcInputs);
+    }
 }

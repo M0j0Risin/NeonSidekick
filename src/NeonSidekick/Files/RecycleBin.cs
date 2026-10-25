@@ -233,7 +233,8 @@ public static class FileDeletes
         }
     }
 
-    private static void ClearReadOnly(string path)
+    // Every read-only flag under path cleared, links skipped (internal since 2026-10-25: a skill copy's temp folder clears its own before the delete).
+    internal static void ClearReadOnly(string path)
     {
         foreach (var info in new DirectoryInfo(path).EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
         {

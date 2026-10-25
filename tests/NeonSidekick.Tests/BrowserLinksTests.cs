@@ -372,4 +372,36 @@ public sealed class BrowserLinksTests : IDisposable
         Assert.Equal(["Error: " + Web.BotCheckText.BrowserNeedsScreen], BrowserCommand.Headless(links, "save"));
         Assert.Equal(["Error: " + Web.BotCheckText.ClearUsage], BrowserCommand.Headless(links, "clear"));
     }
+    // ── Import (2026-10-25, /profile push|pull links) ───────────────────────
+
+    [Fact]
+    public void Import_Appends_SkipsByKey_KeepsTheRecords_AndOverwriteReplaces()
+    {
+        var links = Links();
+        links.Add("https://b.example/", "Mine", out _);
+        var older = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        BrowserLink[] theirs = [new("https://a.example/", "A", older), new("https://B.example/", "Theirs", older), new("ftp://x.example/", "F", older)];
+
+        var result = links.Import(theirs, overwrite: false);
+
+        Assert.Equal(new BrowserLinkImport(BrowserLinkOutcome.Done, 1, 1), result);   // the ftp one dropped, never counted
+        Assert.Equal([new BrowserLink("https://b.example/", "Mine", Now), new BrowserLink("https://a.example/", "A", older)], links.List());
+
+        Assert.Equal(new BrowserLinkImport(BrowserLinkOutcome.Done, 2, 0), links.Import(theirs, overwrite: true));
+        Assert.Equal(["https://a.example/", "https://B.example/"], links.List().Select(l => l.Url));
+    }
+
+    [Fact]
+    public void Import_IntoANewerFile_IsRefused_AndABrokenOneIsMovedAside()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        File.WriteAllText(FilePath, """{ "version": 99, "links": [] }""");
+        BrowserLink[] theirs = [new("https://a.example/", "A", Now)];
+        Assert.Equal(BrowserLinkOutcome.Newer, Links().Import(theirs, overwrite: false).Outcome);
+        Assert.Contains("99", File.ReadAllText(FilePath));
+
+        File.WriteAllText(FilePath, "{ not json");
+        Assert.Equal(new BrowserLinkImport(BrowserLinkOutcome.Done, 1, 0), Links().Import(theirs, overwrite: false));
+        Assert.Equal("{ not json", File.ReadAllText(FilePath + ".bad"));
+    }
 }

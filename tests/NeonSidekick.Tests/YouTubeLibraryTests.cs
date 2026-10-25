@@ -302,4 +302,39 @@ public sealed class YouTubeLibraryTests : IDisposable
         _player.CloseByUser();
         Assert.Equal((0.0, (DateTimeOffset?)null), (library.Find(Bunny)!.Position, library.Find(Bunny)!.LastPlayed));
     }
+    // ── Import (2026-10-25, /profile push|pull videos) ──────────────────────
+
+    [Fact]
+    public void Import_AppendsWholeRecords_SkipsAnIdHeld_FillingItsBlanks_AndOverwriteReplaces()
+    {
+        var library = Library();
+        library.Add("aaaaaaaaaaa");
+        var when = new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero);
+        YouTubeSaved[] theirs =
+        [
+            new() { Id = "aaaaaaaaaaa", Title = "Filled", Author = "Them", Duration = 99, Position = 50 },
+            new() { Id = "bbbbbbbbbbb", Title = "B", Position = 42, Watched = true, Added = when, LastPlayed = when },
+            new() { Id = "not an id" },
+        ];
+
+        Assert.Equal(new YouTubeImport(YouTubeImportOutcome.Done, 1, 1), library.Import(theirs, overwrite: false));
+        var listed = library.List();
+        Assert.Equal(["aaaaaaaaaaa", "bbbbbbbbbbb"], listed.Select(v => v.Id));
+        Assert.Equal(("Filled", "Them", 99.0, 0.0), (listed[0].Title, listed[0].Author, listed[0].Duration, listed[0].Position));   // its place kept
+        Assert.Equal(theirs[1], listed[1]);
+
+        Assert.Equal(new YouTubeImport(YouTubeImportOutcome.Done, 2, 0), library.Import(theirs[1..2].Concat(theirs[..1]).ToList(), overwrite: true));
+        Assert.Equal(["bbbbbbbbbbb", "aaaaaaaaaaa"], library.List().Select(v => v.Id));
+    }
+
+    [Fact]
+    public void Import_IntoABrokenFile_IsRefused_AndLeftAlone()
+    {
+        string path = NeonSidekick.Settings.Profiles.ConfigPath(_dir, YouTubeLibrary.FileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{ not json");
+
+        Assert.Equal(YouTubeImportOutcome.Unreadable, Library().Import([new() { Id = "aaaaaaaaaaa" }], overwrite: true).Outcome);
+        Assert.Equal("{ not json", File.ReadAllText(path));
+    }
 }

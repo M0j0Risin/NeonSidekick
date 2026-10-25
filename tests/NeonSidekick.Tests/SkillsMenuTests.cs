@@ -256,7 +256,7 @@ public class SkillsMenuTests : IDisposable
         _versions = _ => [];
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);                                            // the scope page
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -283,7 +283,7 @@ public class SkillsMenuTests : IDisposable
         _versions = _ => kept;
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list
         Push(Keys.Enter, Keys.Enter);                                // the cursor's: the model's; No (asked since later on 2026-10-07): the list again
         Push(Keys.Enter, Keys.Down, Keys.Enter);                     // the model's again, Yes
         Push(Keys.Escape);
@@ -338,7 +338,7 @@ public class SkillsMenuTests : IDisposable
         var removing = kept[1];
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list, the cursor on v2 (the newest not current)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list, the cursor on v2 (the newest not current)
         Push(Keys.Char('d'), Keys.Enter);                            // No: kept
         Push(Keys.Char('d'), Keys.Down, Keys.Enter);                 // Yes
         Push(Keys.Escape, Keys.Escape);
@@ -368,7 +368,7 @@ public class SkillsMenuTests : IDisposable
         var kept = ForgettableVersions(File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)));
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list, the cursor on v2 (the newest not current)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // revert: the list, the cursor on v2 (the newest not current)
         Push(Keys.Delete, Keys.Enter);                               // No: kept
         Push(Keys.Delete, Keys.Down, Keys.Enter);                    // Yes
         Push(Keys.Escape, Keys.Escape);
@@ -391,7 +391,7 @@ public class SkillsMenuTests : IDisposable
         var kept = ForgettableVersions(File.ReadAllText(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)));
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         Push(Keys.Char('c'), Keys.Down, Keys.Enter);                 // Yes
         Push(Keys.Escape);
 
@@ -618,7 +618,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        HeldRows.AssertContains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  move     send it to another profile's skills\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
+        HeldRows.AssertContains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  move     send it to another profile's skills\n  copy     copy it into another profile's skills\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
         HeldRows.AssertContains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n", Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
         Assert.Contains("\n" + Titled(Strip) + "\n" + Scopes + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n" + SkillsHead(1) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.False(Exists(SkillScope.Profile, "haiku"));
@@ -716,6 +716,75 @@ public class SkillsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The copy row (2026-10-25, the user's ask): right after move, the same profile list; Yes → the folder in that profile's skills and still
+    /// in this one, its lock carried (a locked skill copies: a copy changes nothing here), the notice on the list's status line.
+    /// </summary>
+    [Fact]
+    public async Task CopyToAnotherProfile_Confirmed_CopiesTheFolder_AndKeepsTheOriginal()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        SkillLock.Set(Path.Combine(_roots.Profile, "haiku"), true, DateTimeOffset.UnixEpoch);
+        Directory.CreateDirectory(Profiles.Directory(_dir, "work"));
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter);                                       // the skill's page, the cursor on profile
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);      // copy (past global and move)
+        Push(Keys.Enter);                                       // work
+        Push(Keys.Down, Keys.Enter);                            // Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string work = SkillsMenu.ProfileSkillsRoot(_dir, "work");
+        HeldRows.AssertContains("\n" + Titled(SkillsMenu.CopyToTitle("haiku")) + "\n \n" + Fitted("▸ work  " + work) + "\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.CopyToPrompt("haiku", "work")) + "\n \n▸ No\n  Yes\n", Output);
+        Assert.Contains("\n  · " + SkillsMenu.CopiedToNotice("haiku", "work") + "\n", Output);
+        Assert.True(File.Exists(Path.Combine(work, "haiku", SkillCatalog.FileName)));
+        Assert.True(SkillLock.IsLocked(Path.Combine(work, "haiku")));
+        Assert.True(Exists(SkillScope.Profile, "haiku"));
+        pane.Dispose();
+    }
+
+    /// <summary>The copy row's refusals (2026-10-25): no other profile says so; a folder or a skill of that name there is the error line with no question; No keeps.</summary>
+    [Fact]
+    public async Task CopyToAnotherProfile_NoneToPick_ATwinThere_OrNo_CopiesNothing()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // copy: no other profile yet
+        Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Contains("\n  · " + SkillsMenu.NoOtherProfileForCopyNotice + "\n", Output);
+        Assert.DoesNotContain(SkillsMenu.CopyToTitle("haiku"), Output);
+
+        string work = SkillsMenu.ProfileSkillsRoot(_dir, "work");
+        Directory.CreateDirectory(Path.Combine(work, "haiku"));
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Enter);   // copy, work: the folder's there
+        Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Contains("\n  ✗ " + SkillsMenu.CopyExistsError("haiku", "haiku", "work") + "\n", Output);
+        Assert.DoesNotContain(SkillsMenu.CopyToPrompt("haiku", "work"), Output);
+
+        Directory.Delete(Path.Combine(work, "haiku"));
+        Directory.CreateDirectory(Path.Combine(work, "verse"));
+        File.WriteAllText(Path.Combine(work, "verse", SkillCatalog.FileName), "---\nname: haiku\ndescription: d\n---\n\ni\n");
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Enter);   // copy, work: a skill named haiku there
+        Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Contains("\n  ✗ " + SkillsMenu.CopyExistsError("haiku", "haiku", "work", byName: true) + "\n", Output);
+        Assert.DoesNotContain(SkillsMenu.CopyToPrompt("haiku", "work"), Output);
+
+        Directory.Delete(Path.Combine(work, "verse"), recursive: true);
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Enter, Keys.Enter);   // copy, work, No
+        Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Contains(SkillsMenu.CopyToPrompt("haiku", "work"), Output);
+        Assert.Contains("\n  · " + SkillsMenu.KeptNotice + "\n", Output);
+        Assert.False(Directory.Exists(Path.Combine(work, "haiku")));
+        Assert.True(Exists(SkillScope.Profile, "haiku"));
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task Move_No_OrEsc_Keeps()
     {
@@ -802,7 +871,7 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                                       // the scope page, the cursor on profile
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);      // edit (past global, move and rename)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);      // edit (past global, move, copy, 2026-10-25, and rename)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -822,7 +891,7 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         _openFile = _ => throw new System.ComponentModel.Win32Exception("no editor");
         var (menu, pane) = PaneMenu();
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // edit
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // edit
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -866,11 +935,11 @@ public class SkillsMenuTests : IDisposable
         string folder = Path.Combine(_roots.Profile, "haiku");
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);                                            // the page, on profile
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // lock (past global, move, rename, edit)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // lock (past global, move, copy, rename, edit)
         Push(Keys.Enter);                                            // the page again: now unlock
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                      // rename: refused
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                      // rename: refused
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete: refused (past disable, 2026-10-09)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // delete: refused (past disable, 2026-10-09)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -897,9 +966,9 @@ public class SkillsMenuTests : IDisposable
         string folder = Path.Combine(_roots.Profile, "haiku");
         var (menu, _) = PaneMenu();
         Push(Keys.Enter);                                                       // the page, on profile
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // disable (past global, move, rename, edit, lock)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // disable (past global, move, copy, rename, edit, lock)
         Push(Keys.Enter);                                                       // the page again: now enable
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // enable
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // enable
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -923,7 +992,7 @@ public class SkillsMenuTests : IDisposable
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
         Push(Keys.Enter);                                       // the scope page, the cursor on profile
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                 // rename: the slot with "haiku" in it
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);                 // rename: the slot with "haiku" in it
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace);
         _console.Input.PushText("My Haiku!!");
         Push(Keys.Enter, Keys.Escape);
@@ -947,17 +1016,17 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         Put(SkillScope.Global, "pdf", "Reads PDFs.");
         var (menu, pane) = PaneMenu();
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace);
         _console.Input.PushText("PDF");                         // a global skill's name, kebab-cased
         Push(Keys.Enter);
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename again
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename again
         Push(Keys.Enter);                                       // the name it has
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename again
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename again
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Backspace);
         _console.Input.PushText("!!!");                         // nothing survives
         Push(Keys.Enter);
-        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename again
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);     // rename again
         Push(Keys.Escape);                                      // ESC on the slot: nothing said
         Push(Keys.Escape);
 
@@ -1137,7 +1206,7 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Global, "pdf", "Reads PDFs.");
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                                                // the page, on profile
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);    // lock (past move, rename, edit; no global row)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);    // lock (past move, copy, rename, edit; no global row)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);

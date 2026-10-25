@@ -407,7 +407,7 @@ Skills are folders of instructions the model can load (see [Skills](TOOLS.md#ski
 
 The loaded skills with their scope (`profile`, `global` or `external`), version, last change and description, then shadowed duplicates and skipped folders with the reason. A second row of tabs narrows the list to one scope. Enter on a skill can:
 
-* move it between the profile and global folders (while *Global skills* is on) or to another profile, or rename it;
+* move it between the profile and global folders (while *Global skills* is on) or to another profile, copy it to another profile (the copy starts with no history), or rename it;
 * edit its `SKILL.md` in your editor, or revert it to a kept version ([Skill history](#skill-history));
 * lock it (`🔒 v4`; [Locking a skill](#locking-a-skill)) or disable it (`⛔ v4` on a dim row; [Disabling a skill](#disabling-a-skill));
 * delete it, after a yes.
@@ -470,7 +470,7 @@ The loaded skills with their scope (`profile`, `global` or `external`), version,
 Enter on a skill, then `lock`, keeps it as it is until you choose `unlock`. While it is locked:
 
 * The model and reflection can load it but not change it; a reflection writes a companion skill instead (unless *Reflection mode* is `update-only`).
-* Rename, move, delete and revert refuse with "unlock it first"; `edit` still opens it. `/skills add` won't update it, and `/skills purge` leaves it out.
+* Rename, move, delete and revert refuse with "unlock it first"; `edit` still opens it, and a copy arrives locked. `/skills add` won't update it, and `/skills purge` leaves it out.
 * The lock is a `.neon-lock` file in the skill's folder: the app's refusal, not a file-system guard, so a shell command can still reach the folder.
 
 ### Disabling a skill
@@ -478,7 +478,7 @@ Enter on a skill, then `lock`, keeps it as it is until you choose `unlock`. Whil
 Enter on a skill, then `disable`, switches it off without removing it; `enable` switches it back on. While it is disabled:
 
 * The model is never offered it: not in the prompt's list, not loadable, not in `#` mentions or to `/botchat` bots. Reflection sees it as off, so it writes no second skill for the topic.
-* Rename, move, delete and `edit` still work; revert refuses with "enable it first". `/skills purge` leaves it out.
+* Rename, move, copy, delete and `edit` still work (a copy arrives disabled); revert refuses with "enable it first". `/skills purge` leaves it out.
 * It keeps its name, so a global skill of the same name stays shadowed.
 * The switch is a `.neon-disabled` file in the skill's folder; a disabled global skill is off in every profile.
 

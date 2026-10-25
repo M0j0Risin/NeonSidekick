@@ -140,7 +140,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/process` | Enter opens the [window](#the-process-window) · `k` kills (asks) · `f` all, running, ended |
 | `/docker` | Enter opens · `r` refresh · `l` LLM servers only · type to filter |
 | **Skills** | |
-| `/skills` › a skill | Enter on a row: move (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
+| `/skills` › a skill | Enter on a row: move (asks), copy (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` or Delete removes it (asks) · `c` clear all (asks) |
 | **Shopping** | |
 | `/shopping` | Enter or Space ticks · `i` add · `p` place at an aisle or section · `n` rename · `r` or Delete remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |

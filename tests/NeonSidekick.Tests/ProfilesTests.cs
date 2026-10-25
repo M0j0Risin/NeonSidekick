@@ -71,6 +71,12 @@ public class ProfilesTests : IDisposable
         Assert.False(Profiles.IsValidName("push"));   // 2026-09-28
         Assert.All(new[] { "keys", "SERVERS", "allowed", "history", "memory", "prompts", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
         Assert.True(Profiles.IsValidName("keys2"));
+        // 2026-10-25 (the user's call): the new sections' words, avatar and overwrite reserved; nothing starting with -, so no name reads as a flag.
+        Assert.All(new[] { "mcp", "Links", "videos", "monitors", "skills", "avatar", "overwrite" }, word => Assert.False(Profiles.IsValidName(word)));
+        Assert.All(new[] { "-x", "--all", "-" }, word => Assert.False(Profiles.IsValidName(word)));
+        Assert.True(Profiles.IsValidName("x-y"));
+        Assert.True(Profiles.IsValidName("x-"));
+        Assert.Equal(Profiles.ReservedNames.Order(StringComparer.Ordinal), Profiles.ReservedNames);   // A to Z
         Assert.False(Profiles.IsValidName("PULL"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before deleting it.", Profiles.CurrentUndeletable("work"));
         Assert.Equal("\"work\" is the current profile; switch to another (/profile <name>) before renaming it.", Profiles.CurrentUnrenamable("work"));
