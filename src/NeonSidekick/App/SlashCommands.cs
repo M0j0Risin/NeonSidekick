@@ -529,14 +529,15 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
-    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
-        "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile", "/prompts",
-        "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
+        "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
+        "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
+        "/tools", "/tree", "/tts",
     };
 
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>

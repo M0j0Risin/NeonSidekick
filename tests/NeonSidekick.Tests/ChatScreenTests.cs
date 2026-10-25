@@ -12154,7 +12154,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(33, basicEntries.Length);   // /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(35, basicEntries.Length);   // /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -12162,8 +12162,9 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(
         [
-            "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
-            "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/toolbar", "/tools", "/tree", "/tts",
+            "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar",
+            "/profile", "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme",
+            "/toolbar", "/tools", "/tree", "/tts",
         ], basicEntries.Select(e => e.Command));
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
         Assert.DoesNotContain(advanced, string.IsNullOrWhiteSpace);
