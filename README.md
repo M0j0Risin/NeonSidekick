@@ -257,6 +257,4 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
 
-**Privacy:** no telemetry. Nothing of yours leaves your machine except what you send to a cloud model, the web tools or an integration you switch on.
-
 **License:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).
