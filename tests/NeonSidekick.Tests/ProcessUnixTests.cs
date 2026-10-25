@@ -58,7 +58,7 @@ public sealed class ProcessUnixTests : IDisposable
     private static async Task Exit(ProcessSession session)
     {
         await session.Exited.WaitAsync(TimeSpan.FromSeconds(60));
-        await Task.Delay(50);   // the registry's watcher runs after the exit
+        await session.Watched.WaitAsync(TimeSpan.FromSeconds(60));   // the registry's watcher, done
     }
 
     // ── ShellRunner ─────────────────────────────────────────────────────────

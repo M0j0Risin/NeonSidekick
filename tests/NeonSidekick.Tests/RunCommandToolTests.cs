@@ -413,7 +413,7 @@ public sealed class RunCommandToolTests : IDisposable
         var second = _registry.List().Single(s => s.Label == "echo done");
         Assert.True(second.Notify);
         await second.Exited.WaitAsync(TimeSpan.FromSeconds(60));
-        await Task.Delay(50);   // the registry's watcher runs after the exit
+        await second.Watched.WaitAsync(TimeSpan.FromSeconds(60));   // the registry's watcher, done
         Assert.True(_registry.TryTakeAlert(out var alert));
         Assert.Equal((second.Id, "echo done", "cmd", 0, false), (alert.Id, alert.Label, alert.Kind, alert.ExitCode, alert.Killed));
         Assert.Equal([second.Id], _registry.TakeNotes());

@@ -98,6 +98,12 @@ public sealed class ProcessSession : IDisposable, IAsyncDisposable
     /// <summary>Completes with the exit code once the process is gone and both pumps have drained.</summary>
     public Task<int> Exited => _exited.Task;
 
+    /// <summary>
+    /// The registry's watch of this session (<c>ProcessRegistry.WatchAsync</c>): done once its exit is noted, alerted and evicted as it will be
+    /// (2026-10-24, the CI-like run: a test waited a fixed 50 ms after the exit for it, and on two busy cores the alert was not there yet).
+    /// </summary>
+    internal Task Watched { get; set; } = Task.CompletedTask;
+
     public bool HasExited => _exited.Task.IsCompleted;
 
     /// <summary>The exit code, or null while running.</summary>

@@ -124,7 +124,7 @@ public sealed class ProcessMenuTests : IDisposable
     {
         var done = Start("exit 0");
         await done.Exited.WaitAsync(TimeSpan.FromSeconds(60));
-        await Task.Delay(50);   // the registry's watcher runs after the exit
+        await done.Watched.WaitAsync(TimeSpan.FromSeconds(60));   // the registry's watcher, done
         var running = Start("ping -n 30 127.0.0.1 >nul");
         var (menu, pane, input) = PaneMenu();
         input.Push(Keys.Char('f'));
@@ -255,7 +255,7 @@ public sealed class ProcessMenuTests : IDisposable
     {
         var done = Start("exit 3");
         await done.Exited.WaitAsync(TimeSpan.FromSeconds(60));
-        await Task.Delay(50);   // the registry's watcher runs after the exit
+        await done.Watched.WaitAsync(TimeSpan.FromSeconds(60));   // the registry's watcher, done
         var (menu, pane, input) = PaneMenu();
         input.Push(Keys.Char('k'));
         input.Push(Keys.Escape);

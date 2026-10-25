@@ -142,7 +142,7 @@ public sealed class ProcessRegistry : IDisposable
             throw new ObjectDisposedException(nameof(ProcessRegistry));
         }
 
-        _ = WatchAsync(session);
+        session.Watched = WatchAsync(session);
         return session;
     }
 

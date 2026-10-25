@@ -114,10 +114,22 @@ public sealed class UncAccessTests : IDisposable
         }
 
         var seen = new ConcurrentBag<(int Thread, bool Impersonating)>();
+        // The first two items wait for each other (2026-10-24, the CI-like run: on two busy cores the pool ran all 64 on one thread, and the test
+        // was about scheduling rather than the token), so a second thread is taken and must carry the impersonation too.
+        using var together = new CountdownEvent(2);
+        var signaled = new ConcurrentDictionary<int, byte>();
+        int signals = 0;
         var result = await Access().RunAsync(_catalog.Shares[1], write: false, files =>
         {
             Parallel.For(0, 64, new ParallelOptions { MaxDegreeOfParallelism = 8 }, _ =>
             {
+                // Each thread signals once; every item waits until two threads have, so the pool must bring a second one in.
+                if (signaled.TryAdd(Environment.CurrentManagedThreadId, 0) && Interlocked.Increment(ref signals) <= 2)
+                {
+                    together.Signal();
+                }
+
+                together.Wait(TimeSpan.FromSeconds(10));
                 Thread.Sleep(2);
                 seen.Add((Environment.CurrentManagedThreadId, Impersonating()));
             });
