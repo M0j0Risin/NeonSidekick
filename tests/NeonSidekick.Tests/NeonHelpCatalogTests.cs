@@ -173,6 +173,23 @@ public class NeonHelpCatalogTests
         Assert.StartsWith("Best matches for", Win("how do I copy a file"), StringComparison.Ordinal);
     }
 
+    /// <summary>The user's report (2026-10-25): "camera" answered <c>/camera</c> alone, so the model never read that its camera tool was off.</summary>
+    [Fact]
+    public void ACommandsWord_ThatNamesAToolGroup_CarriesTheGroupAndItsLiveLine()
+    {
+        string camera = Win("camera", live: () => Live(group: f => f == SettingsField.CameraTools ? ToolsText.SwitchOffReason(f) : null));
+        Assert.StartsWith("Command /camera:", camera, StringComparison.Ordinal);
+        Assert.Contains("`" + CameraCaptureTool.ToolName + "`", camera, StringComparison.Ordinal);
+        Assert.Contains(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.CameraTools)), camera, StringComparison.Ordinal);
+
+        Assert.Contains(HelpText.LiveOffered, Win("camera", live: () => Live(offered: [CameraCaptureTool.ToolName])), StringComparison.Ordinal);
+        Assert.DoesNotContain(CameraCaptureTool.ToolName, Win("camera", "command"), StringComparison.Ordinal);
+
+        // A command whose word is not its group's name.
+        Assert.Contains("`" + NetPingTool.ToolName + "`", Win("/net"), StringComparison.Ordinal);
+        Assert.Contains("`" + AdUserTool.ToolName + "`", Win("/ad"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void SeveralNames_AreAnsweredInTheirOrder_ToolsBeforeFlags()
     {
@@ -285,7 +302,7 @@ public class NeonHelpCatalogTests
             return Live(offered: [WebFetchTool.ToolName], settings: new AppSettingsData { FileTools = false });
         }
 
-        Win("/camera", live: Count);
+        Win("/rename", live: Count);
         Assert.Equal(0, asked);
         string answer = Win("web_fetch or download_file", live: Count);
         Assert.Equal(1, asked);

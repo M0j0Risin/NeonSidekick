@@ -249,6 +249,23 @@ public partial class ChatScreenTests
         Assert.EndsWith(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.CameraTools)), result, StringComparison.Ordinal);
     }
 
+    /// <summary>The user's run (2026-10-25): the model asked for "camera", which is <c>/camera</c>; the answer carries the camera tool's live line too.</summary>
+    [Fact]
+    public async Task Turn_TheModelAsksNeonHelp_ForACommandsWord_ReadsTheGroupsLiveLineToo()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.CameraTools = false; });
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonHelpTool.ToolName, new Dictionary<string, object?> { [NeonHelpTool.QueryArgument] = "camera" }));
+        _chat.EnqueueText("The camera tool is off.");
+        PushLine("can you take a photo?");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string result = Assert.Single(_chat.Requests[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()), r => r.CallId == "c1").Result!.ToString()!;
+        Assert.StartsWith("Command /camera:", result, StringComparison.Ordinal);
+        Assert.Contains(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.CameraTools)), result, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void HelpLookupOffered_NeedsTheToolsAndNeonHelp()
     {

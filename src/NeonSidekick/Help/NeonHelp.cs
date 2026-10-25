@@ -29,8 +29,8 @@ internal static class NeonHelp
     /// <summary>
     /// The answer for <paramref name="query"/> under <paramref name="kind"/> (one of <see cref="HelpText.Kinds"/> or an alias of one,
     /// <see cref="HelpText.KindAliases"/>; empty is <c>any</c>). <paramref name="live"/> (2026-10-25, the user's call) is the running
-    /// app's view of its tools, asked at most once and only by a tool answer, a group list or a group switch's answer; null (the advisors'
-    /// copy, the tests) leaves the "Right now:" line out.
+    /// app's view of its tools, asked at most once and only by a tool answer, a group list, a group switch's answer or a command whose
+    /// word names a group; null (the advisors' copy, the tests) leaves the "Right now:" line out.
     /// </summary>
     public static string Answer(string? query, string? kind = null, Func<HelpLive>? live = null) =>
         Answer(query, kind, live, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS());
@@ -99,7 +99,7 @@ internal static class NeonHelp
 
         if (Is("command") && CommandOf(q) is { } command)
         {
-            return HelpText.Command(command) + SeeAlso(command.Command, windows);
+            return HelpText.Command(command) + SeeAlso(command.Command, windows) + (any ? CommandsGroup(command.Command, live, windows) : "");
         }
 
         if (Is("keys"))
@@ -220,6 +220,28 @@ internal static class NeonHelp
 
         return HelpInterface.SeeAlso(command) is { } bar ? "\n\n" + bar : "";
     }
+
+    /// <summary>
+    /// The tool group a command's word also names, after the command's answer (2026-10-25, the user's report: asked "can you take a photo?",
+    /// the model looked up "camera", got <c>/camera</c> alone and never read whether <c>camera_capture</c> was offered): the group's answer
+    /// with its live line (<c>/camera</c>, <c>/screen</c>, <c>/docker</c>, <c>/youtube</c>…). Empty for none, and under <c>kind: command</c>.
+    /// </summary>
+    private static string CommandsGroup(string command, Func<HelpLive?> live, bool windows) =>
+        (HelpToolCatalog.GroupNamed([command.TrimStart('/')], bare: true, windows)
+            ?? (s_commandGroups.TryGetValue(command, out var field) ? HelpToolCatalog.GroupOfSwitch(field, windows) : null)) is { } group
+            ? "\n\n" + HelpToolCatalog.GroupAnswer(group, live(), windows)
+            : "";
+
+    // The commands whose word is not their tool group's name (2026-10-25).
+    private static readonly Dictionary<string, SettingsField> s_commandGroups = new(StringComparer.Ordinal)
+    {
+        ["/net"] = SettingsField.NetworkTools,
+        ["/ha"] = SettingsField.HomeAssistantTools,
+        ["/comfy"] = SettingsField.ComfyTools,
+        ["/ad"] = SettingsField.DirectoryTools,
+        ["/vault"] = SettingsField.ObsidianTools,
+        ["/advisor"] = SettingsField.Advisors,
+    };
 
     /// <summary>The overview: every pane and its tabs, every command (<c>/log</c> among them) and how to ask.</summary>
     public static string Overview() => HelpText.Overview(HelpLocation.Panes, SlashCommands.HelpEntries);
