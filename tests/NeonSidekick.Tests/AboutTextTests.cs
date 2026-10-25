@@ -74,6 +74,7 @@ public class AboutTextTests
             ["Oracle.ManagedDataAccess.Core"] = "Oracle.ManagedDataAccess.Core",
             ["MySqlConnector"] = "MySqlConnector",
             ["Npgsql"] = "Npgsql",
+            ["DuckDB.NET.Data.Full"] = "DuckDB.NET.Data.Full",
             ["Microsoft.Web.WebView2"] = "Microsoft.Web.WebView2",
             ["System.Security.Cryptography.Pkcs"] = "System.Security.Cryptography.Pkcs",   // pinned past the drivers' audited 9.0.18 (2026-10-14)
         };
@@ -127,9 +128,9 @@ public class AboutTextTests
         Assert.DoesNotContain(AboutText.Components, c => c.Name.StartsWith("CLDR", StringComparison.Ordinal) || c.Name.Contains("Kokoro-FastAPI", StringComparison.Ordinal));
         Assert.Equal("MCP client", Assert.Single(AboutText.Components, c => c.Name == "ModelContextProtocol.Core").Role);
         Assert.Equal(
-            ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "Oracle.ManagedDataAccess.Core", "MySqlConnector", "Npgsql", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "Microsoft.Web.WebView2", "llama.cpp (llama-server)", "ASP.NET Core (Kestrel)", "System.Security.Cryptography.Pkcs"],
+            ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "Oracle.ManagedDataAccess.Core", "MySqlConnector", "Npgsql", "DuckDB.NET.Data.Full", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "Microsoft.Web.WebView2", "llama.cpp (llama-server)", "ASP.NET Core (Kestrel)", "System.Security.Cryptography.Pkcs"],
             AboutText.Components.Select(c => c.Name));
-        Assert.Equal(26, AboutText.Components.Count);   // ASP.NET Core and the Pkcs pin since 2026-10-14; WebView2 since 2026-10-05; Npgsql since 2026-10-04; the Gemma 4 row gone 2026-10-03; ODP.NET Core and MySqlConnector since 2026-09-30; llama.cpp and the Gemma 4 models since 2026-09-29; SqlClient and ScriptDom since 2026-09-23
+        Assert.Equal(27, AboutText.Components.Count);   // DuckDB.NET since 2026-10-25; ASP.NET Core and the Pkcs pin since 2026-10-14; WebView2 since 2026-10-05; Npgsql since 2026-10-04; the Gemma 4 row gone 2026-10-03; ODP.NET Core and MySqlConnector since 2026-09-30; llama.cpp and the Gemma 4 models since 2026-09-29; SqlClient and ScriptDom since 2026-09-23
         Assert.Equal("b11258", Assert.Single(AboutText.Components, c => c.Name == "llama.cpp (llama-server)").Version);
         Assert.All(AboutText.Components, c => Assert.False(string.IsNullOrWhiteSpace(c.License)));
     }
@@ -238,7 +239,7 @@ public class AboutTextTests
         Assert.Contains("License", lines[0]);
         Assert.EndsWith("Role", lines[0]);
         Assert.Matches(@"^Spectre\.Console\s+0\.57\.2\s+MIT\s+the terminal UI", lines[1]);
-        Assert.Matches(@"^Vosk\s+0\.3\.38\s+Apache-2\.0\s+the wake-word recognizer", lines[18]);   // the two LibGit2Sharp rows since 2026-09-20, the two SQL rows since 2026-09-23, the Oracle and MySQL rows since 2026-09-30, Npgsql since 2026-10-04
+        Assert.Matches(@"^Vosk\s+0\.3\.38\s+Apache-2\.0\s+the wake-word recognizer", lines[19]);   // DuckDB.NET since 2026-10-25; the two LibGit2Sharp rows since 2026-09-20, the two SQL rows since 2026-09-23, the Oracle and MySQL rows since 2026-09-30, Npgsql since 2026-10-04
     }
 
     [Fact]

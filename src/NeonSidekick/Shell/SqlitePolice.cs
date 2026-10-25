@@ -16,7 +16,9 @@ namespace NeonSidekick.Shell;
 /// <see cref="ForbiddenStrings"/>, not a sandbox: text built in pieces gets past it; only the <c>ask</c> policy shows the user every
 /// command. A package-manager command that only installs, removes, restores or lists packages is not judged (2026-10-10, the
 /// user's call, <see cref="PackageCommands"/>): <c>dotnet add package Microsoft.Data.Sqlite</c> declares a dependency, reaches no
-/// database. Pure but for <see cref="ScriptFiles"/>' reads.
+/// database. Pure but for <see cref="ScriptFiles"/>' reads. Since 2026-10-25 (the DuckDB tools) the words and file names follow the guard's
+/// families (<see cref="DatabaseGuard.Families"/>): DuckDB's word <c>duckdb</c> anywhere (the CLI, <c>import duckdb</c>, DuckDB.NET) and its
+/// <c>.duckdb</c>/<c>.ddb</c> names while the DuckDB tools are on. A data file on a line (<c>sales.parquet</c>) is never refused.
 /// </summary>
 public static partial class SqlitePolice
 {
@@ -28,6 +30,27 @@ public static partial class SqlitePolice
     /// <c>sqlite</c>.
     /// </summary>
     public static readonly IReadOnlyList<string> OtherWords = ["apsw"];
+
+    /// <summary>The word every DuckDB client's, module's and CLI's name holds (2026-10-25).</summary>
+    public const string DuckDbWord = "duckdb";
+
+    /// <summary>The words that reach the families <paramref name="guard"/> guards.</summary>
+    private static IEnumerable<string> WordsFor(DatabaseGuard guard)
+    {
+        if (guard.Has(DatabaseFamilies.Sqlite))
+        {
+            yield return Word;
+            foreach (string other in OtherWords)
+            {
+                yield return other;
+            }
+        }
+
+        if (guard.Has(DatabaseFamilies.DuckDb))
+        {
+            yield return DuckDbWord;
+        }
+    }
 
     /// <summary>
     /// The script files a line may run that <see cref="ScriptFiles"/> reads: the interpreters' and shells' own. Since 2026-10-24 (the database
@@ -58,10 +81,10 @@ public static partial class SqlitePolice
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(guard);
-        int at = text.IndexOf(Word, StringComparison.OrdinalIgnoreCase);
-        foreach (string other in OtherWords)
+        int at = -1;
+        foreach (string word in WordsFor(guard))
         {
-            int found = text.IndexOf(other, StringComparison.OrdinalIgnoreCase);
+            int found = text.IndexOf(word, StringComparison.OrdinalIgnoreCase);
             if (found >= 0 && (at < 0 || found < at))
             {
                 at = found;
@@ -100,7 +123,8 @@ public static partial class SqlitePolice
             }
         }
 
-        var match = (script ? ScriptFileName : LineFileName).Match(text);
+        var patterns = PatternsFor(guard.Families);
+        var match = (script ? patterns.Script : patterns.Line).Match(text);
         return match.Success ? match.Groups["name"].Value : null;
     }
 
@@ -446,9 +470,33 @@ public static partial class SqlitePolice
 
     /// <summary>
     /// <see cref="DatabaseGuard.Extensions"/> as a regex alternation (2026-10-24, the database review's A9: the police's own list lacked
-    /// <c>.s3db</c>, <c>.sl3</c>, <c>.sl2</c> and <c>.sqlitedb</c>).
+    /// <c>.s3db</c>, <c>.sl3</c>, <c>.sl2</c> and <c>.sqlitedb</c>); a family's own since 2026-10-25 (<see cref="PatternsFor"/>).
     /// </summary>
-    private static readonly string Extensions = string.Join("|", DatabaseGuard.Extensions.Select(e => Regex.Escape(e[1..])));
+    private static string Alternation(IEnumerable<string> extensions) => string.Join("|", extensions.Select(e => Regex.Escape(e[1..])));
+
+    /// <summary>The siblings' suffixes of <paramref name="families"/> as an optional regex group: SQLite's journals, DuckDB's <c>.wal</c>.</summary>
+    private static string SiblingGroup(DatabaseFamilies families) =>
+        "(?:" + string.Join("|", (families.HasFlag(DatabaseFamilies.Sqlite) ? DatabaseGuard.Siblings : []).Concat(families.HasFlag(DatabaseFamilies.DuckDb) ? DatabaseGuard.DuckDbSiblings : []).Select(Regex.Escape)) + ")?";
+
+    /// <summary>The line and script file-name patterns for each set of families, made once each (2026-10-25).</summary>
+    private static (Regex Line, Regex Script) PatternsFor(DatabaseFamilies families) => families switch
+    {
+        DatabaseFamilies.Sqlite => s_sqlitePatterns,
+        DatabaseFamilies.DuckDb => s_duckDbPatterns,
+        _ => s_bothPatterns,
+    };
+
+    private static readonly (Regex Line, Regex Script) s_sqlitePatterns = Patterns(DatabaseFamilies.Sqlite);
+    private static readonly (Regex Line, Regex Script) s_duckDbPatterns = Patterns(DatabaseFamilies.DuckDb);
+    private static readonly (Regex Line, Regex Script) s_bothPatterns = Patterns(DatabaseFamilies.Sqlite | DatabaseFamilies.DuckDb);
+
+    private static (Regex Line, Regex Script) Patterns(DatabaseFamilies families)
+    {
+        var guard = new DatabaseGuard([], families);
+        string extensions = Alternation(guard.GuardedExtensions);
+        string siblings = SiblingGroup(families);
+        return (LineFileName(extensions, siblings), ScriptFileName(extensions, siblings));
+    }
 
     /// <summary>
     /// The characters a file name may hold before its extension in a line: since 2026-10-24 the punctuation Windows allows (<c>a+b.db</c>,
@@ -463,13 +511,13 @@ public static partial class SqlitePolice
     /// In a line: any token ending a database extension, a journal's suffix allowed — and after it the trailing dots and spaces Windows drops
     /// and an alternate data stream's <c>:name</c> (Q1: <c>app.db.</c> and <c>app.db::$DATA</c> open <c>app.db</c>).
     /// </summary>
-    private static readonly Regex LineFileName = new(
-        @"(?<!" + LineBoundary + @")(?<name>" + LineNameChars + @"+\.(?:" + Extensions + @")(?:-journal|-wal|-shm)?)\.*(?::[^\s""'`]*)?(?!" + LineBoundary + ")",
+    private static Regex LineFileName(string extensions, string siblings) => new(
+        @"(?<!" + LineBoundary + @")(?<name>" + LineNameChars + @"+\.(?:" + extensions + @")" + siblings + @")\.*(?::[^\s""'`]*)?(?!" + LineBoundary + ")",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>In a script: a database file name only where a file name stands — just inside a quote, or just after a slash.</summary>
-    private static readonly Regex ScriptFileName = new(
-        @"(?<=[""'`/\\])(?<name>[\w.\-~ +!@#$%,()\[\]{}*?]*?\.(?:" + Extensions + @")(?:-journal|-wal|-shm)?)[. ]*(?::[^""'`\s]*)?(?=[""'`]|$|\s)",
+    private static Regex ScriptFileName(string extensions, string siblings) => new(
+        @"(?<=[""'`/\\])(?<name>[\w.\-~ +!@#$%,()\[\]{}*?]*?\.(?:" + extensions + @")" + siblings + @")[. ]*(?::[^""'`\s]*)?(?=[""'`]|$|\s)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Multiline);
 
     /// <summary>A script file a script names (Q2): a word ending one of the script extensions, quoted or standing alone.</summary>

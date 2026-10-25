@@ -135,7 +135,7 @@ public sealed class SqlitePoliceTests : IDisposable
         Assert.Equal("SQLite: 'sqlite3' in insert.py — not run", ShellText.SqliteShown("sqlite3", "insert.py"));
         Assert.True(ShellText.IsPoliced(ShellText.SqlitePoliced));
         Assert.Contains("sqlite_query to read", ShellText.SqlitePoliced);
-        Assert.StartsWith("Error: 'a.db' is or holds a SQLite database", FileText.DatabaseProtected("a.db"));
+        Assert.StartsWith("Error: 'a.db' is or holds a SQLite or DuckDB database", FileText.DatabaseProtected("a.db"));
     }
 
     // ── The file tools' guard ────────────────────────────────────────────

@@ -249,9 +249,9 @@ public sealed class ProcessTool : AIFunction
                     if (token is not null)
                     {
                         var refused = new CommandRequest(session.Kind, data, []);
-                        DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(refused, token, file));
+                        var (result, shown) = ShellText.FileDatabasePoliced(refused, databases, token, file);   // DuckDB's family too since 2026-10-25
                         _gate?.NoteRefused(refused);
-                        return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(token, file));
+                        return new ToolShownResult(result, shown);
                     }
                 }
 

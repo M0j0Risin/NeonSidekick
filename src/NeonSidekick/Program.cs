@@ -182,6 +182,10 @@ if (OperatingSystem.IsMacOS())
     _ = Task.Run(groups.Sweep);
 }
 
+// The DuckDB tools' spill folders (2026-10-25): a folder per process under the temp folder; those of processes that are gone are swept
+// off the start's path (DuckDB deletes its own files as it closes, but not a crashed run's).
+_ = Task.Run(() => NeonSidekick.DuckDb.DuckDbAccess.Sweep());
+
 // A crash lands in crash.log beside the profiles, stack and all: the terminal window closes with
 // the process, so the runtime's stderr print is never read, and --log carries no stack. The
 // domain handler sees a throw on any thread (an audio pump, a pool continuation); the catch

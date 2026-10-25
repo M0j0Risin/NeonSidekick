@@ -35,7 +35,7 @@ internal sealed partial class ChatScreen
     /// can catch a family's set unset.
     /// </summary>
     public static IReadOnlySet<string> DatabaseToolNames => s_databaseToolNames ??= new HashSet<string>(
-        SqlToolNames.Concat(OracleToolNames).Concat(MySqlToolNames).Concat(PostgresToolNames).Concat(SqliteToolNames).Concat(SqliteWriteToolNames), StringComparer.Ordinal);
+        SqlToolNames.Concat(OracleToolNames).Concat(MySqlToolNames).Concat(PostgresToolNames).Concat(SqliteToolNames).Concat(SqliteWriteToolNames).Concat(DuckDbToolNames), StringComparer.Ordinal);
 
     private static IReadOnlySet<string>? s_databaseToolNames;
 

@@ -2435,6 +2435,46 @@ public sealed class AppSettingsData
     /// <summary>Seconds a SQLite tool's statement may run before it is interrupted: <see cref="MinSqlQueryTimeoutSeconds"/>–<see cref="MaxSqlQueryTimeoutSeconds"/>.</summary>
     public int SqliteQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
 
+    // ─── DuckDB (2026-10-25) ────────────────────────────────────────────────────
+    // The DuckDB tools (the user's ask, the SQLite tools' mirror): read-only queries on DuckDB files — the named databases of duckdb.json
+    // (the profile's and the home's) and, with DuckDbSandboxFiles on, any DuckDB file and any CSV, Parquet or JSON file in the working
+    // directory by its path. The same settings as SQLite's, the same defaults and bounds; the memory and spill caps are fixed, not settings.
+
+    /// <summary>Whether a turn offers the DuckDB tools; read at each turn, no reconnect. Off by default. No variable.</summary>
+    public bool DuckDbTools { get; set; }
+
+    /// <summary>
+    /// What the DuckDB tools may do: <c>read-only</c> (the default) or <c>read-write</c>, which adds <c>duckdb_execute</c> — one change per call,
+    /// each allowed on the pane, and a new database file in the working directory with <c>create</c>. <c>duckdb_query</c> stays read-only
+    /// either way; read at each call. One of <see cref="DuckDb.DuckDbModes.Names"/>. No variable.
+    /// </summary>
+    public string DuckDbMode { get; set; } = DuckDb.DuckDbModes.Default;
+
+    /// <summary>
+    /// The kinds of statement <c>duckdb_execute</c> may run under <c>read-write</c>: words of <see cref="DuckDb.DuckDbStatementKinds.Names"/>.
+    /// Changing data, creating and reading by default; null is the default too, an empty list allows none (and <c>duckdb_execute</c> is then
+    /// not offered). <c>create: true</c> needs <c>create</c>. Unused while read-only. No variable.
+    /// </summary>
+    public List<string>? DuckDbStatementsAllowed { get; set; } = DuckDb.DuckDbStatementKinds.Default();
+
+    /// <summary>The names of <c>duckdb.json</c> this profile offers (the checklist on the DuckDB tab); null or empty offers none.</summary>
+    public List<string>? DuckDbDatabasesOffered { get; set; }
+
+    /// <summary>
+    /// Whether a DuckDB tool may also open any DuckDB file in the working directory by its path, and read the CSV, Parquet and JSON files
+    /// there (the user's call); the sandbox's own rule refuses a path outside it. On by default.
+    /// </summary>
+    public bool DuckDbSandboxFiles { get; set; } = true;
+
+    /// <summary>Whether <c>%</c> and part of a name lists the <c>duckdb.json</c> databases on the input line too; on by default.</summary>
+    public bool DuckDbPercentMention { get; set; } = true;
+
+    /// <summary>The rows a <c>duckdb_query</c> without <c>max_rows</c> returns: <see cref="MinSqlQueryMaxRows"/>–<see cref="MaxSqlQueryMaxRows"/>.</summary>
+    public int DuckDbQueryMaxRows { get; set; } = DefaultSqlQueryMaxRows;
+
+    /// <summary>Seconds a DuckDB tool's statement may run before it is interrupted: <see cref="MinSqlQueryTimeoutSeconds"/>–<see cref="MaxSqlQueryTimeoutSeconds"/>.</summary>
+    public int DuckDbQueryTimeoutSeconds { get; set; } = DefaultSqlQueryTimeoutSeconds;
+
     // ─── PostgreSQL (2026-10-04) ────────────────────────────────────────────────
     // The PostgreSQL tools (the user's pick of the integration ideas): read-only queries over the named connections of
     // postgres.json (the profile's and the home's), MySQL's shape over Npgsql.

@@ -180,6 +180,16 @@
     -->
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <!--
+      The DuckDB tools (DuckDb/, Llm/Tools/DuckDbTool.cs, `DuckDB tools`, 2026-10-25): read-only queries over the databases of
+      duckdb.json and the CSV, Parquet and JSON files of the working directory. DuckDB.NET.Data.Full (MIT) with its native duckdb
+      (duckdb.dll on Windows, libduckdb.dylib on a Mac, the platform's alone; MIT), and Apache.Arrow (Apache-2.0) riding along, never
+      called. Its ADO.NET layer is not marked AOT-compatible: the spike's NativeAOT publish ran open, lockdown, reads, parameters and
+      interrupts fine; native nested values (a STRUCT) fail under AOT, so every read is cast to text in the query
+      (DuckDbAccess.Wrapped). Its ILC warnings name DuckDB.NET only (third-party, tolerated). The smoke probe duckdb:readonly and the
+      check mode duckdb-check are the proof on the published binary.
+    -->
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.6.1" />
+    <!--
       The video window's WebView2 (Viewer/WebView*, 2026-10-05): only WebView2Loader.dll is taken from the package, copied
       beside the exe below. ExcludeAssets="all" keeps every managed assembly in it (Core, WinForms, WPF) out of the build:
       their COM interop is built-in RCWs, which NativeAOT does not support, so the app calls WebView2 through raw vtables

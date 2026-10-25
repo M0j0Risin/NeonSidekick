@@ -31,7 +31,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Area | On a Mac | Notes |
 |---|---|---|
 | Chat, tools, MCP, Git, sessions, skills, headless | Works | The shell is zsh unless you pick another ([below](#setup)). |
-| Database tools: SQL Server, Oracle, MySQL, PostgreSQL, SQLite | Works | SQL Server's Windows sign-in is Kerberos only ([below](#sql-server-sign-in)); no named-pipe (`np:`) servers. |
+| Database tools: SQL Server, Oracle, MySQL, PostgreSQL, SQLite, DuckDB | Works | SQL Server's Windows sign-in is Kerberos only ([below](#sql-server-sign-in)); no named-pipe (`np:`) servers. |
 | Embedded model | Works (Metal) | The NVFP4 models, made for NVIDIA cards, aren't offered. |
 | Pictures: pasted, dropped, `image_info`, `image_edit` | Works | Also reads HEIC/HEIF, TIFF and AVIF; writes no JPEG XL, and `image_edit` refuses `chroma`, `colors` and `dither` ([Editing pictures](TOOLS.md#editing-pictures)). |
 | Picture viewer, thumbnail browser, picture menu, log, process and Docker log windows | Works | On the Mac's desktop, not over SSH. |

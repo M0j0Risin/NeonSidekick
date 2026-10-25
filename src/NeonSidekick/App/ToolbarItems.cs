@@ -67,6 +67,7 @@ public static class ToolbarItems
     public const string Oracle = "oracle";
     public const string MySql = "mysql";
     public const string Sqlite = "sqlite";     // 2026-10-04
+    public const string DuckDb = "duckdb";     // 2026-10-25: 🦆, the DuckDB tools switch (/tools duckdb), after SQLite, off by default
     public const string Postgres = "postgres"; // 2026-10-04
     public const string Unc = "unc";
     public const string Ha = "ha";
@@ -99,7 +100,7 @@ public static class ToolbarItems
     public static readonly string[] Names =
     [
         Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
-        Shell, Files, Image, Web, Advisors, Docker, EventLog, Network, Services, Tasks, Directory, Obsidian, Sql, Oracle, MySql, Sqlite, Postgres, Unc, Ha, Comfy, Camera, Print,
+        Shell, Files, Image, Web, Advisors, Docker, EventLog, Network, Services, Tasks, Directory, Obsidian, Sql, Oracle, MySql, Sqlite, DuckDb, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
 
@@ -152,6 +153,7 @@ public static class ToolbarItems
         Oracle => ChatScreen.OracleToolGlyph,
         MySql => ChatScreen.MySqlToolGlyph,
         Sqlite => ChatScreen.SqliteToolGlyph,
+        DuckDb => ChatScreen.DuckDbToolGlyph,
         Postgres => ChatScreen.PostgresToolGlyph,
         Unc => ChatScreen.UncToolGlyph,
         Ha => ChatScreen.HaToolGlyph,
@@ -204,6 +206,7 @@ public static class ToolbarItems
         Oracle => "Oracle",
         MySql => "MySQL",
         Sqlite => "SQLite",
+        DuckDb => "DuckDB",
         Postgres => "PostgreSQL",
         Unc => "UNC",
         Ha => "Home",   // "HA" until 2026-10-09 (the user's ask, after /tools' tab became Home)

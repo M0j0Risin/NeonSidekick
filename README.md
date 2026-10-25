@@ -101,7 +101,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **Obsidian:** search, read, write and link notes in your vault.
 
 ### IT & admin
-* **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL and SQLite. Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
+* **Databases:** SQL Server, Oracle, MySQL/MariaDB, PostgreSQL, SQLite and DuckDB (with the CSV, Parquet and JSON files in your folder). Read-only by default; writes are opt-in per connection and ask first. Passwords are stored encrypted.
 * **Files elsewhere:** network shares (`\\server\share` or `//server/share`, and `smb://` on a Mac) and outside folders, as you or another account.
 * **Docker:** containers' logs, health and resource use. Starting, stopping and cleaning up are opt-in and ask first; `/docker` does it by hand.
 * **Network checks:** DNS lookups, ping, traceroute, open ports and TLS certificates, one host at a time; `/net` does it by hand.

@@ -2,6 +2,7 @@ using NeonSidekick.App;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
+using NeonSidekick.DuckDb;
 using NeonSidekick.Sql;
 using NeonSidekick.Sqlite;
 
@@ -151,6 +152,13 @@ internal static class HelpToolCatalog
         T(SqliteQueryTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Runs one read-only SELECT on a SQLite database and gives back the rows.", setup: SqliteSetup),
         T(SqliteExecuteTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Runs one statement that changes a SQLite database.", headless: false, pane: true, needs: [SettingsField.SqliteMode],
             setup: "only the statement kinds *SQLite statements allowed* ticks; each new database file asks on the pane"),
+        // DuckDB (2026-10-25)
+        T(DuckDbDatabasesTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Lists the DuckDB databases the user has named, and whether DuckDB and data files in the working directory may be named by their paths.", setup: DuckDbSetup),
+        T(DuckDbTablesTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Lists a DuckDB database's tables and views.", setup: DuckDbSetup),
+        T(DuckDbDescribeTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Describes a DuckDB table or view: columns, keys, indexes and its CREATE statement.", setup: DuckDbSetup),
+        T(DuckDbQueryTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Runs one read-only SELECT on a DuckDB database, or over CSV, Parquet and JSON files in the working directory, and gives back the rows.", setup: DuckDbSetup),
+        T(DuckDbExecuteTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Runs one statement that changes a DuckDB database.", headless: false, pane: true, needs: [SettingsField.DuckDbMode],
+            setup: "only the statement kinds *DuckDB statements allowed* ticks; each new database file asks on the pane"),
         // PostgreSQL
         T(PostgresConnectionsTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Lists the PostgreSQL connections the user has set up.", setup: Conn("postgres.json", "postgres")),
         T(PostgresSchemasTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Lists a PostgreSQL database's schemas with their table counts and owners.", setup: Conn("postgres.json", "postgres")),
@@ -283,6 +291,7 @@ internal static class HelpToolCatalog
     ];
 
     private const string SqliteSetup = "needs a database in `sqlite.json` ticked on `/tools sqlite`, or *SQLite sandbox files* on";
+    private const string DuckDbSetup = "needs a database in `duckdb.json` ticked on `/tools duckdb`, or *DuckDB sandbox files* on";
     private const string UncSetup = "needs a share in `unc.json`, ticked on `/tools unc`";
     private const string UncWriteSetup = "only on a share whose entry says `\"access\": \"readwrite\"`";
     private const string DockerWriteSetup = "each change asks on the pane; a headless run refuses every one";
@@ -483,7 +492,7 @@ internal static class HelpToolCatalog
         string label = SettingsMenu.FieldName(field);
         string state = field switch
         {
-            SettingsField.MemoryMode or SettingsField.SqlMode or SettingsField.OracleMode or SettingsField.MySqlMode or SettingsField.PostgresMode or SettingsField.SqliteMode => "read-write",
+            SettingsField.MemoryMode or SettingsField.SqlMode or SettingsField.OracleMode or SettingsField.MySqlMode or SettingsField.PostgresMode or SettingsField.SqliteMode or SettingsField.DuckDbMode => "read-write",
             _ => "on",
         };
         return HelpLocation.Of(field, windows) is { } row ? $"{label} {state} ({row.Path})" : $"{label} {state}";
@@ -504,6 +513,7 @@ internal static class HelpToolCatalog
             SettingsField.MySqlMode => DatabaseWriteModes.IsReadWrite(data.MySqlMode),
             SettingsField.PostgresMode => DatabaseWriteModes.IsReadWrite(data.PostgresMode),
             SettingsField.SqliteMode => SqliteModes.TryParse(data.SqliteMode, out var mode) && mode == SqliteMode.ReadWrite,
+            SettingsField.DuckDbMode => DuckDbModes.TryParse(data.DuckDbMode, out var duckMode) && duckMode == DuckDbMode.ReadWrite,
             _ => ToolsText.SwitchOn(field, data),
         };
     }
@@ -516,7 +526,7 @@ internal static class HelpToolCatalog
     public static string NeedReason(SettingsField field) => field switch
     {
         SettingsField.MemoryMode => SettingsMenu.FieldName(field) + " is not read-write",
-        SettingsField.SqlMode or SettingsField.OracleMode or SettingsField.MySqlMode or SettingsField.PostgresMode or SettingsField.SqliteMode => SettingsMenu.FieldName(field) + " is read-only",
+        SettingsField.SqlMode or SettingsField.OracleMode or SettingsField.MySqlMode or SettingsField.PostgresMode or SettingsField.SqliteMode or SettingsField.DuckDbMode => SettingsMenu.FieldName(field) + " is read-only",
         _ => ToolsText.SwitchOffReason(field),
     };
 

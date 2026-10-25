@@ -68,6 +68,7 @@ public sealed record SidekickOptions(
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
     public const string SqliteCheckFlag = "--sqlite-check";
+    public const string DuckDbCheckFlag = "--duckdb-check";
     public const string PostgresCheckFlag = "--postgres-check";
     public const string UncCheckFlag = "--unc-check";
     public const string EventLogCheckFlag = "--eventlog-check";
@@ -129,6 +130,9 @@ public sealed record SidekickOptions(
     /// <summary><c>--sqlite-check &lt;name|path&gt;</c> (2026-10-04): run <see cref="App.SqliteCheck"/> over that database of <c>sqlite.json</c> (or file of the working directory) and exit 0/1, <see cref="MySqlCheck"/>'s twin.</summary>
     public string? SqliteCheck { get; init; }
 
+    /// <summary><c>--duckdb-check &lt;name|path&gt;</c> (2026-10-25): run <see cref="App.DuckDbCheck"/> over that database of <c>duckdb.json</c> (or file of the working directory) and exit 0/1, <see cref="SqliteCheck"/>'s twin.</summary>
+    public string? DuckDbCheck { get; init; }
+
     /// <summary><c>--postgres-check &lt;connection&gt;</c> (2026-10-04): run <see cref="App.PostgresCheck"/> over that connection of <c>postgres.json</c> and exit 0/1, <see cref="MySqlCheck"/>'s twin.</summary>
     public string? PostgresCheck { get; init; }
 
@@ -152,7 +156,7 @@ public sealed record SidekickOptions(
     public const string DockerCheckSocketLine = "prove the Docker tools against the Docker engine's socket (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -163,6 +167,7 @@ public sealed record SidekickOptions(
         "  --oracle-check <connection>  prove the Oracle tools against that connection of oracle.json (reads only), exit 0/1\n" +
         "  --mysql-check <connection>   prove the MySQL tools against that connection of mysql.json (reads only), exit 0/1\n" +
         "  --sqlite-check <database>    prove the SQLite tools against that database of sqlite.json, or a file in the working directory (reads only), exit 0/1\n" +
+        "  --duckdb-check <database>    prove the DuckDB tools against that database of duckdb.json, or a file in the working directory (reads only), exit 0/1\n" +
         "  --postgres-check <connection>  prove the PostgreSQL tools against that connection of postgres.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1\n" +
@@ -297,6 +302,17 @@ public sealed record SidekickOptions(
                 }
 
                 result = result with { SqliteCheck = sqlite };
+                continue;
+            }
+
+            if (TryValueFlag(DuckDbCheckFlag, args, ref i, arg, lower, out var duckDb, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { DuckDbCheck = duckDb };
                 continue;
             }
 
@@ -483,6 +499,7 @@ public sealed record SidekickOptions(
         : OracleCheck is not null ? "oracle-check"
         : MySqlCheck is not null ? "mysql-check"
         : SqliteCheck is not null ? "sqlite-check"
+        : DuckDbCheck is not null ? "duckdb-check"
         : PostgresCheck is not null ? "postgres-check"
         : UncCheck is not null ? "unc-check"
         : EventLogCheck is not null ? "eventlog-check"
@@ -496,7 +513,7 @@ public sealed record SidekickOptions(
         : "interactive";
 
     /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--sqlite-check</c>, <c>--postgres-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck || MonitorCheck;
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || DuckDbCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck || MonitorCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

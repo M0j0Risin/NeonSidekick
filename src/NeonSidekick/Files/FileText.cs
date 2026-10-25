@@ -385,11 +385,12 @@ public static class FileText
 
     /// <summary>
     /// A file tool's change to a SQLite database file, or a delete or move of a folder holding one, while the SQLite tools are on
-    /// (2026-10-05, the user's call): what to use instead, and not to go around it. Pinned.
+    /// (2026-10-05, the user's call): what to use instead, and not to go around it. A DuckDB database's too since 2026-10-25, while the
+    /// DuckDB tools are on. Pinned.
     /// </summary>
     public static string DatabaseProtected(string path) =>
-        $"Error: '{path}' is or holds a SQLite database, which the file tools never change while the SQLite tools are on; " +
-        "change a database only through the sqlite_ tools (sqlite_execute, in SQLite read-write mode, when the user allows it), and do not try another way";
+        $"Error: '{path}' is or holds a SQLite or DuckDB database, which the file tools never change while that database's tools are on; " +
+        "change a database only through its own tools (sqlite_execute or duckdb_execute, in that one's read-write mode, when the user allows it), and do not try another way";
 
     /// <summary>A line as a refusal quotes it: trimmed, cut at <see cref="WorkingDirectory.MaxQuotedChars"/> with an ellipsis.</summary>
     public static string Quote(string line)

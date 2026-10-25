@@ -56,6 +56,8 @@ public static class PlanTools
         "screen_capture", "screen_list",
         // SQLite (2026-10-04): every call reads, on a file opened read-only
         "sqlite_databases", "sqlite_tables", "sqlite_describe", "sqlite_query",
+        // DuckDB (2026-10-25): every call reads, on a file opened read-only (or data files in memory), rolled back
+        "duckdb_databases", "duckdb_tables", "duckdb_describe", "duckdb_query",
         // PostgreSQL (2026-10-04): every call reads, in a read-only transaction rolled back
         "postgres_connections", "postgres_schemas", "postgres_tables", "postgres_columns", "postgres_describe",
         "postgres_relationships", "postgres_indexes", "postgres_query",
@@ -100,6 +102,8 @@ public static class PlanTools
         "service_control", "service_start_type", "task_control",
         // SQLite's changes (2026-10-05, SQLite mode read-write): a database changed or made
         "sqlite_execute",
+        // DuckDB's changes (2026-10-25, DuckDB mode read-write)
+        "duckdb_execute",
         // The server families' changes (2026-10-05, each family's mode read-write).
         "postgres_execute",
         "oracle_execute",
@@ -137,7 +141,7 @@ public static class PlanTools
         // The database changes ask on their pane too (2026-10-24, the database review's H2: an unattended pass kept them, so a session allow
         // committed with nobody watching, or the pane stalled the loop).
         Llm.Tools.SqlExecuteTool.ToolName, Llm.Tools.OracleExecuteTool.ToolName, Llm.Tools.MySqlExecuteTool.ToolName,
-        Llm.Tools.PostgresExecuteTool.ToolName, Llm.Tools.SqliteExecuteTool.ToolName,
+        Llm.Tools.PostgresExecuteTool.ToolName, Llm.Tools.SqliteExecuteTool.ToolName, Llm.Tools.DuckDbExecuteTool.ToolName,
     };
 
     /// <summary><paramref name="disabled"/> with <see cref="AskingTools"/> and <see cref="ConfirmingTools"/> added: what an unattended Ralph pass leaves out. Pure.</summary>

@@ -1282,8 +1282,41 @@ public enum SettingsField
     /// <summary>A picker over the timer tones: what a code audit ends with (<see cref="Settings.AppSettingsData.CodeAuditStopTone"/>, 2026-10-21), last in the Code audit section; the Timer tone picker's preview.</summary>
     CodeAuditStopTone,
 
-    /// <summary>A toggle: whether a turn offers the monitors' tools (<see cref="Settings.AppSettingsData.MonitorTools"/>, 2026-10-23, the monitors plan). The Monitors menu's one row on <c>/tools</c> › Home, after Shopping; Windows only. Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether a turn offers the monitors' tools (<see cref="Settings.AppSettingsData.MonitorTools"/>, 2026-10-23, the monitors plan). The Monitors menu's one row on <c>/tools</c> › Home, after Shopping; Windows only.</summary>
     MonitorTools,
+
+    /// <summary>A toggle: whether a turn offers the DuckDB tools (<see cref="Settings.AppSettingsData.DuckDbTools"/>, 2026-10-25). The DuckDB tab's first row; the eleven DuckDB fields last in the enum, as every newcomer.</summary>
+    DuckDbTools,
+
+    /// <summary>A picker: what the DuckDB tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.DuckDbMode"/>).</summary>
+    DuckDbMode,
+
+    /// <summary>A checklist: the kinds of statement <c>duckdb_execute</c> may run under read-write (<see cref="Settings.AppSettingsData.DuckDbStatementsAllowed"/>).</summary>
+    DuckDbStatementsAllowed,
+
+    /// <summary>A checklist: which databases of <c>duckdb.json</c> this profile offers (<see cref="Settings.AppSettingsData.DuckDbDatabasesOffered"/>).</summary>
+    DuckDbDatabasesOffered,
+
+    /// <summary>A toggle: whether DuckDB files and data files in the working directory may be named by their paths (<see cref="Settings.AppSettingsData.DuckDbSandboxFiles"/>).</summary>
+    DuckDbSandboxFiles,
+
+    /// <summary>An action row: Enter walks a database through its name, file and description, opens it and adds it to that <c>duckdb.json</c> (<c>SettingsMenu.DuckDb.cs</c>).</summary>
+    DuckDbAddDatabase,
+
+    /// <summary>A toggle: whether <c>%</c> and part of a name lists the DuckDB databases too (<see cref="Settings.AppSettingsData.DuckDbPercentMention"/>).</summary>
+    DuckDbPercentMention,
+
+    /// <summary>Typed: how many rows a <c>duckdb_query</c> without <c>max_rows</c> returns, 1 to 100,000 (<see cref="Settings.AppSettingsData.DuckDbQueryMaxRows"/>).</summary>
+    DuckDbQueryMaxRows,
+
+    /// <summary>Typed: seconds a DuckDB tool's statement may run, 1 to 600 (<see cref="Settings.AppSettingsData.DuckDbQueryTimeoutSeconds"/>).</summary>
+    DuckDbQueryTimeoutSeconds,
+
+    /// <summary>An edit row: Enter opens the profile's <c>duckdb.json</c> in the editor (made with <see cref="DuckDb.DuckDbConfigFile.EmptyText"/> when missing).</summary>
+    DuckDbDatabasesProfile,
+
+    /// <summary>An edit row: Enter opens the home's <c>duckdb.json</c>, every profile's. The DuckDB tab's last row.</summary>
+    DuckDbDatabasesGlobal,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1878,6 +1911,8 @@ internal sealed partial class SettingsMenu
         [SettingsField.HelpTools],
         // The monitors (2026-10-23, the monitors plan): on Home after Shopping, Windows only (ToolsText.WindowsOnlyMenus).
         [SettingsField.MonitorTools],
+        // DuckDB (2026-10-25, the DuckDB plan): on Databases after SQLite, SQLite's rows over duckdb.json.
+        [SettingsField.DuckDbTools, SettingsField.DuckDbMode, SettingsField.DuckDbStatementsAllowed, SettingsField.DuckDbDatabasesOffered, SettingsField.DuckDbSandboxFiles, SettingsField.DuckDbAddDatabase, SettingsField.DuckDbPercentMention, SettingsField.DuckDbQueryMaxRows, SettingsField.DuckDbQueryTimeoutSeconds, SettingsField.DuckDbDatabasesProfile, SettingsField.DuckDbDatabasesGlobal],
     ];
 
     /// <summary>
@@ -2293,6 +2328,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera or SettingsField.BotChatRecentContext
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions or SettingsField.ImageTools
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
+            or SettingsField.DuckDbTools or SettingsField.DuckDbSandboxFiles or SettingsField.DuckDbPercentMention
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
             or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
@@ -2544,6 +2580,17 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteQueryTimeoutSeconds => "SQLite query timeout (s)",
         SettingsField.SqliteDatabasesProfile => "SQLite databases (profile)",
         SettingsField.SqliteDatabasesGlobal => "SQLite databases (global)",
+        SettingsField.DuckDbTools => "DuckDB tools",
+        SettingsField.DuckDbMode => "DuckDB mode",
+        SettingsField.DuckDbStatementsAllowed => "DuckDB statements allowed",
+        SettingsField.DuckDbDatabasesOffered => "DuckDB databases offered",
+        SettingsField.DuckDbSandboxFiles => "DuckDB sandbox files",
+        SettingsField.DuckDbAddDatabase => "DuckDB add/edit database",
+        SettingsField.DuckDbPercentMention => "DuckDB %-mention enabled",
+        SettingsField.DuckDbQueryMaxRows => "DuckDB max rows",
+        SettingsField.DuckDbQueryTimeoutSeconds => "DuckDB query timeout (s)",
+        SettingsField.DuckDbDatabasesProfile => "DuckDB databases (profile)",
+        SettingsField.DuckDbDatabasesGlobal => "DuckDB databases (global)",
         SettingsField.PostgresTools => "PostgreSQL tools",
         SettingsField.PostgresMode => "PostgreSQL mode",
         SettingsField.PostgresStatementsAllowed => "PostgreSQL statements allowed",
@@ -2972,6 +3019,17 @@ internal sealed partial class SettingsMenu
             SettingsField.SqliteQueryTimeoutSeconds => Seconds(data.SqliteQueryTimeoutSeconds),
             SettingsField.SqliteDatabasesProfile => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.ProfilePath(profileDirectory)),
             SettingsField.SqliteDatabasesGlobal => SqliteDatabasesLabel(Sqlite.SqliteConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
+            SettingsField.DuckDbTools => OnOff(data.DuckDbTools),
+            SettingsField.DuckDbMode => data.DuckDbMode,
+            SettingsField.DuckDbStatementsAllowed => DuckDbStatementsValue(data.DuckDbStatementsAllowed, data.DuckDbMode),
+            SettingsField.DuckDbDatabasesOffered => DuckDbOfferedValue(data.DuckDbDatabasesOffered, DuckDb.DuckDbConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
+            SettingsField.DuckDbSandboxFiles => OnOff(data.DuckDbSandboxFiles),
+            SettingsField.DuckDbAddDatabase => DuckDbAddDatabaseLabel,
+            SettingsField.DuckDbPercentMention => OnOff(data.DuckDbPercentMention),
+            SettingsField.DuckDbQueryMaxRows => SqlRows(data.DuckDbQueryMaxRows),
+            SettingsField.DuckDbQueryTimeoutSeconds => Seconds(data.DuckDbQueryTimeoutSeconds),
+            SettingsField.DuckDbDatabasesProfile => DuckDbDatabasesLabel(DuckDb.DuckDbConfigFile.ProfilePath(profileDirectory)),
+            SettingsField.DuckDbDatabasesGlobal => DuckDbDatabasesLabel(DuckDb.DuckDbConfigFile.GlobalPath(Profiles.HomeOf(profileDirectory))),
             SettingsField.PostgresTools => OnOff(data.PostgresTools),
             SettingsField.PostgresMode => data.PostgresMode,
             SettingsField.PostgresStatementsAllowed => WriteStatementsValue(data.PostgresStatementsAllowed, data.PostgresMode),
@@ -3850,6 +3908,7 @@ internal sealed partial class SettingsMenu
         SettingsField.OracleTools => (SettingsField.OracleConnectionsOffered, EditOracleOfferedAsync),
         SettingsField.MySqlTools => (SettingsField.MySqlConnectionsOffered, EditMySqlOfferedAsync),
         SettingsField.SqliteTools => (SettingsField.SqliteDatabasesOffered, EditSqliteOfferedAsync),
+        SettingsField.DuckDbTools => (SettingsField.DuckDbDatabasesOffered, EditDuckDbOfferedAsync),
         SettingsField.PostgresTools => (SettingsField.PostgresConnectionsOffered, EditPostgresOfferedAsync),
         SettingsField.UncTools => (SettingsField.UncSharesOffered, EditUncOfferedAsync),
         SettingsField.EventLogTools => (SettingsField.EventLogComputersOffered, EditEventLogOfferedAsync),
@@ -4231,6 +4290,8 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlQueryTimeoutSeconds => data.MySqlQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqliteQueryMaxRows => data.SqliteQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.SqliteQueryTimeoutSeconds => data.SqliteQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+        SettingsField.DuckDbQueryMaxRows => data.DuckDbQueryMaxRows.ToString(CultureInfo.InvariantCulture),
+        SettingsField.DuckDbQueryTimeoutSeconds => data.DuckDbQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.PostgresQueryMaxRows => data.PostgresQueryMaxRows.ToString(CultureInfo.InvariantCulture),
         SettingsField.PostgresQueryTimeoutSeconds => data.PostgresQueryTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
         SettingsField.GitLibEmail => data.GitLibEmail,
@@ -5761,6 +5822,35 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        // The DuckDB tab's rows (2026-10-25), SQLite's twins.
+        if (field == SettingsField.DuckDbMode)
+        {
+            return await PickDuckDbModeAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.DuckDbStatementsAllowed)
+        {
+            return await EditDuckDbStatementsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.DuckDbDatabasesOffered)
+        {
+            return await EditDuckDbOfferedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.DuckDbAddDatabase)
+        {
+            return await AddDuckDbDatabaseAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field is SettingsField.DuckDbDatabasesProfile or SettingsField.DuckDbDatabasesGlobal)
+        {
+            OpenDuckDbFile(field == SettingsField.DuckDbDatabasesProfile
+                ? DuckDb.DuckDbConfigFile.ProfilePath(_settings.ProfileDirectory)
+                : DuckDb.DuckDbConfigFile.GlobalPath(_settings.StorageDirectory));
+            return false;
+        }
+
 
         if (field == SettingsField.OracleConnectionsOffered)
         {
@@ -6362,6 +6452,26 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.SqliteQueryTimeoutSeconds = sqliteTimeout);
+                return true;
+
+            case SettingsField.DuckDbQueryMaxRows:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int duckDbRows) || duckDbRows < AppSettingsData.MinSqlQueryMaxRows || duckDbRows > AppSettingsData.MaxSqlQueryMaxRows)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryMaxRowsRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DuckDbQueryMaxRows = duckDbRows);
+                return true;
+
+            case SettingsField.DuckDbQueryTimeoutSeconds:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int duckDbTimeout) || duckDbTimeout < AppSettingsData.MinSqlQueryTimeoutSeconds || duckDbTimeout > AppSettingsData.MaxSqlQueryTimeoutSeconds)
+                {
+                    Sink.Error($"{FieldName(field)} {SqlQueryTimeoutRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.DuckDbQueryTimeoutSeconds = duckDbTimeout);
                 return true;
 
             case SettingsField.PostgresQueryMaxRows:
@@ -8077,6 +8187,9 @@ internal sealed partial class SettingsMenu
             SettingsField.SqliteTools => data.SqliteTools,
             SettingsField.SqliteSandboxFiles => data.SqliteSandboxFiles,
             SettingsField.SqlitePercentMention => data.SqlitePercentMention,
+            SettingsField.DuckDbTools => data.DuckDbTools,
+            SettingsField.DuckDbSandboxFiles => data.DuckDbSandboxFiles,
+            SettingsField.DuckDbPercentMention => data.DuckDbPercentMention,
             SettingsField.PostgresTools => data.PostgresTools,
             SettingsField.PostgresPercentMention => data.PostgresPercentMention,
             SettingsField.UncTools => data.UncTools,
@@ -8210,6 +8323,9 @@ internal sealed partial class SettingsMenu
             case SettingsField.SqliteTools: data.SqliteTools = on; break;
             case SettingsField.SqliteSandboxFiles: data.SqliteSandboxFiles = on; break;
             case SettingsField.SqlitePercentMention: data.SqlitePercentMention = on; break;
+            case SettingsField.DuckDbTools: data.DuckDbTools = on; break;
+            case SettingsField.DuckDbSandboxFiles: data.DuckDbSandboxFiles = on; break;
+            case SettingsField.DuckDbPercentMention: data.DuckDbPercentMention = on; break;
             case SettingsField.PostgresTools: data.PostgresTools = on; break;
             case SettingsField.PostgresPercentMention: data.PostgresPercentMention = on; break;
             case SettingsField.UncTools: data.UncTools = on; break;
@@ -8368,6 +8484,9 @@ internal sealed partial class SettingsMenu
         SettingsField.SqliteTools => on ? "SQLite tools enabled" : "SQLite tools disabled",
         SettingsField.SqliteSandboxFiles => on ? "a SQLite file in the working directory can be named by its path" : "only the databases of sqlite.json",
         SettingsField.SqlitePercentMention => on ? "% and part of a name lists the SQLite databases on the line" : "% lists no SQLite database",
+        SettingsField.DuckDbTools => on ? "DuckDB tools enabled" : "DuckDB tools disabled",
+        SettingsField.DuckDbSandboxFiles => on ? "a DuckDB or data file in the working directory can be named by its path" : "only the databases of duckdb.json",
+        SettingsField.DuckDbPercentMention => on ? "% and part of a name lists the DuckDB databases on the line" : "% lists no DuckDB database",
         SettingsField.PostgresTools => on ? "PostgreSQL tools enabled" : "PostgreSQL tools disabled",
         SettingsField.PostgresPercentMention => on ? "% and part of a name lists the PostgreSQL connections on the line" : "% lists no PostgreSQL connection",
         SettingsField.UncTools => on ? "UNC tools enabled" : "UNC tools disabled",

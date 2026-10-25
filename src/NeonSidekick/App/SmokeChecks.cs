@@ -67,6 +67,7 @@ public static partial class SmokeChecks
         Git.GitAccess.NativeLibraryFileName,
         Sql.SqlAccess.NativeLibraryFileName,
         Viewer.VideoPage.LoaderFileName,
+        DuckDb.DuckDbAccess.NativeLibraryFileName,
     ];
 
     /// <summary>
@@ -86,6 +87,7 @@ public static partial class SmokeChecks
         "libvosk.dylib",
         Git.GitAccess.MacNativeLibraryFileName,
         "libe_sqlite3.dylib",
+        DuckDb.DuckDbAccess.MacNativeLibraryFileName,
     ];
 
     /// <summary>
@@ -167,6 +169,7 @@ public static partial class SmokeChecks
         results.Add(ProbeRecycleBin());   // later on 2026-10-15: File deletes to Recycle bin
         results.Add(ProbeQuarantine());   // 2026-10-22: unzip carries a Mac archive's quarantine
         results.Add(ProbeSqlite());
+        results.Add(ProbeDuckDb());   // 2026-10-25, the DuckDB tools
         results.Add(ProbeWebUi());
         results.Add(ProbePostgres());
         results.Add(ProbePrintSpooler());

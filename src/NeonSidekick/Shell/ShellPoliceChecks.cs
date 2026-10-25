@@ -57,8 +57,9 @@ public static partial class ShellPoliceChecks
         // file it runs, that reaches SQLite is refused whatever the policy, so a database is reached only through the sqlite_ tools.
         if (databases is not null && SqlitePolice.Judge(command, scripts, databases) is { } sqlite)
         {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite.Token, sqlite.File));
-            return new ShellPoliceRefusal(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite.Token, sqlite.File));
+            // DuckDB's family through the same rule since 2026-10-25: the words follow the guard.
+            var (result, shown) = ShellText.FileDatabasePoliced(request, databases, sqlite.Token, sqlite.File);
+            return new ShellPoliceRefusal(result, shown);
         }
 
         // The server-database police (2026-10-05, SQLite's rule mirrored): while a server family's tools are on, a line, or a script
@@ -181,8 +182,8 @@ public static partial class ShellPoliceChecks
         {
             if (databases is not null && SqlitePolice.Find(text, script: true, databases) is { } sqlite)
             {
-                DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite, name));
-                return new ShellPoliceRefusal(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, name));
+                var (result, shown) = ShellText.FileDatabasePoliced(request, databases, sqlite, name);
+                return new ShellPoliceRefusal(result, shown);
             }
 
             if (servers is not null && ServerDatabasePolice.Find(text, servers) is { } server)

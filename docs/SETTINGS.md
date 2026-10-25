@@ -553,6 +553,7 @@ The tools most profiles use, and the pane's own options.
   * **Stricter entries you can add:** `rm -rf`, `Remove-Item -Recurse -Force`, `git clean`, `taskkill /f`, upload sites (`pastebin.com`, `ngrok`), and on a Mac `osascript` or `.zshrc`.
 * **Databases:** while the police and a database family's tools are both on, a command or script that reaches that family is refused, even under `yolo`.
   * **SQLite:** the word `sqlite` (or `apsw`), a database file by any of its extensions (wildcards too), or a file `sqlite.json` names.
+  * **DuckDB:** the word `duckdb`, a `.duckdb` or `.ddb` file (its `.wal` too), or a file `duckdb.json` names.
   * **The server families:** their clients and drivers (`sqlcmd`, `sqlplus`, `mysql`, `psql`, ODBC and JDBC names…) and their connections' hosts. A one-word host (`db`) counts only where a host stands (`-h db`, `@db`, `db:5432`).
   * **Scripts:** the scripts a command runs are read too, past an interpreter's options, a `cmd` command's `.bat` or `.cmd`, and the scripts those name; so are the scripts an `execute_code` script names.
   * **Large scripts:** while a database or admin family's tools are on, a script file over 1 MB that a command runs is refused, being too big to check.
@@ -783,7 +784,7 @@ See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac: 
 
 The five database families. Each is read-only unless you choose `read-write` and the connection's entry allows it; see [How the database tools work](TOOLS.md#how-the-database-tools-work).
 
-* **Statement kinds** (the *… statements allowed* checklists): changing data, deleting, creating, changing structure, dropping, upkeep, procedures and triggers (for SQLite, settings), and reading.
+* **Statement kinds** (the *… statements allowed* checklists): changing data, deleting, creating, changing structure, dropping, upkeep, procedures and triggers (for SQLite and DuckDB, settings), and reading.
 * **A statement** needs the kind of every change in it; with none ticked, the `_execute` tool isn't offered.
 
 #### SQL
@@ -803,7 +804,7 @@ The five database families. Each is read-only unless you choose `read-write` and
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (created with commented examples). | — |
 | SQL connections (global) | The same for the home folder's `sql.json`, which every profile reads. The profile's entry wins on a name clash. | — |
 
-The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `postgres.json` and `oracle.json`.
+The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `duckdb.json`, `postgres.json` and `oracle.json`.
 
 #### MySQL
 
@@ -836,6 +837,22 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `p
 | SQLite query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
 | SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | — |
 | SQLite databases (global) | Opens the global `sqlite.json` in your editor. | — |
+
+#### DuckDB
+
+| Setting | What it does | Default |
+|---|---|---|
+| DuckDB tools | Offers the DuckDB tools (databases, tables, describe, query) over the databases `duckdb.json` names and the working directory's data files. While on, the shell and file tools keep out of DuckDB files ([DuckDB](TOOLS.md#duckdb)). | off |
+| DuckDB mode | `read-only`: the tools only read. `read-write`: `duckdb_execute` too, one change per call, each asking you first. | `read-only` |
+| DuckDB statements allowed | Under `read-write`, the kinds of statement `duckdb_execute` may run (a checklist). | changing data, creating, reading |
+| DuckDB databases offered | Which databases of `duckdb.json` the model sees; none until you tick it. | empty |
+| DuckDB sandbox files | The model may also read the working directory's DuckDB, CSV, Parquet and JSON files by their paths, and create a database there. | on |
+| DuckDB add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
+| DuckDB %-mention enabled | Lists the DuckDB databases in the `%` list too. | on |
+| DuckDB max rows | As *SQL max rows*, for `duckdb_query`. | 100 |
+| DuckDB query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
+| DuckDB databases (profile) | Opens this profile's `duckdb.json` in your editor. | — |
+| DuckDB databases (global) | Opens the global `duckdb.json` in your editor. | — |
 
 #### PostgreSQL
 

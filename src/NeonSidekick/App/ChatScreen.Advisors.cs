@@ -66,7 +66,7 @@ internal sealed partial class ChatScreen
         {
             PlanReadOnly = true, Plan = null, Ask = null, Camera = null, Screen = null, NeonAdvisor = null,
             Sql = null, SqlEnabled = false, Oracle = null, OracleEnabled = false, MySql = null, MySqlEnabled = false,
-            Postgres = null, PostgresEnabled = false, Sqlite = null, SqliteEnabled = false,
+            Postgres = null, PostgresEnabled = false, Sqlite = null, SqliteEnabled = false, DuckDb = null, DuckDbEnabled = false,
         });
         return set.Tools.Count == 0 ? ([], "") : (set.Tools, set.Rules.DefaultRules(markdown));
     }

@@ -154,7 +154,7 @@ public static class PdfView
         return gone;
     }
 
-    private static bool IsRunning(int pid)
+    internal static bool IsRunning(int pid)
     {
         try
         {

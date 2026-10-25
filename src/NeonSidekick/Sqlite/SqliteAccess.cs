@@ -132,13 +132,13 @@ public sealed class SqliteAccess
             }
 
             var only = catalog.Databases[0];
-            return new SqliteTarget(only.Name, only.FullPath);
+            return NotDuckDb(new SqliteTarget(only.Name, only.FullPath), out refused);
         }
 
         string wanted = database.Trim().Trim('"');
         if (catalog.Named(wanted) is { } named)
         {
-            return new SqliteTarget(named.Name, named.FullPath);
+            return NotDuckDb(new SqliteTarget(named.Name, named.FullPath), out refused);
         }
 
         if (sandbox is not null)
@@ -152,7 +152,7 @@ public sealed class SqliteAccess
 
             if (outcome == FileOutcome.Ok && File.Exists(full))
             {
-                return new SqliteTarget(wanted.Replace('\\', '/'), full);
+                return NotDuckDb(new SqliteTarget(wanted.Replace('\\', '/'), full), out refused);
             }
 
             if (outcome is FileOutcome.OutsideRoot or FileOutcome.InImagesFolder or FileOutcome.InSkillFolder)
@@ -186,6 +186,22 @@ public sealed class SqliteAccess
         }
 
         refused = SqlRun.Refused(SqlOutcome.UnknownConnection, SqliteText.UnknownDatabase(wanted, string.Join(", ", catalog.Databases.Select(d => d.Name)), sandbox is not null), wanted);
+        return null;
+    }
+
+    /// <summary>
+    /// <paramref name="target"/>, unless its file is a DuckDB database (2026-10-25, the DuckDB tools): SQLite would call it "not a database",
+    /// so the refusal names the tools that read it.
+    /// </summary>
+    private static SqliteTarget? NotDuckDb(SqliteTarget target, out SqlRun? refused)
+    {
+        refused = null;
+        if (!DuckDb.DuckDbAccess.HasDuckDbHeader(target.FullPath))
+        {
+            return target;
+        }
+
+        refused = SqlRun.Refused(SqlOutcome.ConnectFailed, SqliteText.IsDuckDbFile(target.Name), target.Name);
         return null;
     }
 

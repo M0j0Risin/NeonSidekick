@@ -3503,7 +3503,7 @@ public sealed class WorkingDirectory
             }
 
             // By content too since 2026-10-24 (the database review's B6: a database whose name says nothing went with its folder).
-            if (databases is not null && !isDirectory && (databases.IsDatabaseFile(path) || (sniff && DatabaseGuard.HasSqliteHeader(path))))
+            if (databases is not null && !isDirectory && (databases.IsDatabaseFile(path) || (sniff && databases.HasDatabaseHeader(path))))
             {
                 return FileOutcome.DatabaseProtected;
             }

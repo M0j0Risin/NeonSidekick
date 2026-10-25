@@ -13,6 +13,7 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
 * `Oracle.ManagedDataAccess.Core`
 * `MySqlConnector`
 * `Npgsql`
+* `DuckDB.NET.Data.Full` (with DuckDB's native engine, MIT: the DuckDB tools)
 * `Microsoft.ML.OnnxRuntime`
 * `KokoroSharp` (with `espeak-ng`, for the voices' pronunciation)
 * `Whisper.net` (with its native `whisper.cpp` runtimes)

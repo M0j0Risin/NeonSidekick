@@ -24,6 +24,7 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | `--oracle-check <connection>` | The same for a connection in `oracle.json`. |
 | `--mysql-check <connection>` | The same for a connection in `mysql.json`. |
 | `--sqlite-check <database>` | The same for a database in `sqlite.json`, or a SQLite file in the working directory. |
+| `--duckdb-check <database>` | The same for a database in `duckdb.json`, or a DuckDB file in the working directory; it also checks that data files outside the working directory are refused. |
 | `--postgres-check <connection>` | The same for a connection in `postgres.json`. |
 | `--unc-check <share>` | The same for a share in `unc.json`. On a Mac it mounts the network share and unmounts it on exit. |
 | `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: the sign-in, the newest System event, and whether the Security log is readable. On a Mac only `local`: the unified log, the crash reports and install.log. |

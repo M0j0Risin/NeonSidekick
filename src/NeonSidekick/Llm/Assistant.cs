@@ -317,6 +317,30 @@ public sealed class Assistant
         "Change only what the user asks for, describe a table before changing it, say what you changed, and do not retry one they decline.";
 
     /// <summary>
+    /// The sentence the default rules gain while the DuckDB tools are offered (the setting <c>DuckDB tools</c> on and a database named in
+    /// <c>duckdb.json</c> or the sandbox's files allowed, 2026-10-25): appended after <see cref="SqliteRule"/> (and its write sentence) by
+    /// <see cref="DefaultRules"/>, its twin, adding the data files: named by their path in the working directory, <c>database</c> left out
+    /// to query files alone, and the built-in readers. Pinned.
+    /// </summary>
+    public const string DuckDbRule =
+        "The DuckDB tools read DuckDB database files (DuckDB SQL, close to PostgreSQL: LIMIT n; \"double quotes\" for names) — the user's named databases, or a file in the working directory by its path — " +
+        "and the working directory's CSV, Parquet and JSON files by their paths (FROM 'data/orders.csv', or read_csv, read_parquet and read_json with a quoted path or a list of them; leave database out to query files alone), and never change data: " +
+        NeonSidekick.Llm.Tools.DuckDbDatabasesTool.ToolName + " lists the databases and " + NeonSidekick.Llm.Tools.DuckDbTablesTool.ToolName + " a file's tables; " +
+        NeonSidekick.Llm.Tools.DuckDbDescribeTool.ToolName + " shows a table's columns, keys and indexes — look before you query, never guess a column; " +
+        NeonSidekick.Llm.Tools.DuckDbQueryTool.ToolName + " runs one SELECT per call, kept small with WHERE and LIMIT, values bound as $name through params. " +
+        "Reach DuckDB only through these tools — never the shell, a script or the file tools, which are refused.";
+
+    /// <summary>
+    /// The sentence after <see cref="DuckDbRule"/> while <c>duckdb_execute</c> is offered (2026-10-25, <c>DuckDB mode</c> <c>read-write</c>),
+    /// <see cref="SqliteWriteRule"/>'s twin plus how a data file is loaded into a table, COPY being refused both ways. Pinned.
+    /// </summary>
+    public const string DuckDbWriteRule =
+        "The user has allowed changes too: " + NeonSidekick.Llm.Tools.DuckDbExecuteTool.ToolName + " runs one statement per call, only of the kinds its description lists " +
+        "(with creating among them, create makes a new database file in the working directory); each change waits for the user's allow and is permanent once run. " +
+        "Load a data file with CREATE TABLE t AS SELECT * FROM 'data/x.csv' or INSERT INTO t SELECT … (COPY is refused). " +
+        "Change only what the user asks for, describe a table before changing it, say what you changed, and do not retry one they decline.";
+
+    /// <summary>
     /// The sentence after <see cref="MySqlRule"/> while <c>mysql_execute</c> is offered (2026-10-05, <c>MySQL mode</c> <c>read-write</c> and a
     /// <c>readwrite</c> connection), <see cref="PostgresWriteRule"/>'s twin. Pinned.
     /// </summary>
@@ -467,7 +491,7 @@ public sealed class Assistant
     /// words it replaces, since a small model follows a named word better than a principle; empty when none is, so a
     /// shell-only turn gains nothing. <c>run_command</c> backs it at the call (<see cref="Shell.NativeRedirect"/>). Pinned.
     /// </summary>
-    public static string ShellNativeRule(bool files, bool git, bool web, bool sql, bool oracle = false, bool mysql = false, bool unc = false, bool sqlite = false, bool postgres = false)
+    public static string ShellNativeRule(bool files, bool git, bool web, bool sql, bool oracle = false, bool mysql = false, bool unc = false, bool sqlite = false, bool postgres = false, bool duckDb = false)
     {
         var parts = new List<string>(6);
         if (files)
@@ -503,6 +527,11 @@ public sealed class Assistant
         if (sqlite)
         {
             parts.Add(NeonSidekick.Llm.Tools.SqliteQueryTool.ToolName + " reads the SQLite files (not sqlite3)");
+        }
+
+        if (duckDb)
+        {
+            parts.Add(NeonSidekick.Llm.Tools.DuckDbQueryTool.ToolName + " reads the DuckDB files and data files (not the duckdb CLI)");   // 2026-10-25
         }
 
         if (postgres)
@@ -782,17 +811,17 @@ public sealed class Assistant
     /// (the setting <c>Shell prefer native tools</c>, 2026-09-26) when it names a group. <see cref="ObsidianDeleteRule"/> follows <see cref="ObsidianRule"/>
     /// with <paramref name="obsidianDelete"/> (<c>vault_delete</c> offered, later on 2026-09-22); <see cref="SqlRule"/> after them with <paramref name="sql"/> (2026-09-23), <see cref="OracleRule"/> after it with <paramref name="oracle"/> (2026-09-30), <see cref="MySqlRule"/> after that with <paramref name="mysql"/> (the same day), <see cref="HomeAssistantRule"/> after it with <paramref name="homeAssistant"/> (2026-09-28), <see cref="DockerRule"/> after it with <paramref name="docker"/> and <see cref="DockerWriteRule"/> with <paramref name="dockerWrite"/> (2026-10-02), <see cref="NeonAdvisorRule"/> after that with <paramref name="advisors"/> (2026-10-10; the Claude Code advisor tool's sentence stood there from 2026-09-27 until it was retired the same day). With <paramref name="markdown"/> false it is <see cref="OperatingRules"/> and its variants byte for byte.
     /// </summary>
-    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true) =>
+    public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false) =>
         tools
-            ? TextRule(markdown) + " " + ToolUseRule + (clock ? " " + ClockRule : "") + (timers ? " " + TimerRule : "") + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (images ? " " + ImageRule : "") + (shopping ? " " + ShoppingRule : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule + WriteTail(serverWrites, ServerWrites.Oracle, OracleWriteRule) : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (eventLog ? " " + EventLogRuleHere : "") + AdminTail(admin, eventLog) + (advisors ? " " + NeonAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + ToolUseRule + (clock ? " " + ClockRule : "") + (timers ? " " + TimerRule : "") + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (images ? " " + ImageRule : "") + (shopping ? " " + ShoppingRule : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres, duckDb) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule + WriteTail(serverWrites, ServerWrites.Oracle, OracleWriteRule) : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (duckDb ? " " + DuckDbRule + (duckDbWrite ? " " + DuckDbWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (eventLog ? " " + EventLogRuleHere : "") + AdminTail(admin, eventLog) + (advisors ? " " + NeonAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary>A family's write sentence after a space while <paramref name="writes"/> holds <paramref name="family"/> (2026-10-05), else nothing.</summary>
     private static string WriteTail(ServerWrites writes, ServerWrites family, string rule) => (writes & family) != 0 ? " " + rule : "";
 
     /// <summary><see cref="ShellNativeRule"/> after a space, or nothing: off, or no group to name.</summary>
-    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql, bool oracle, bool mysql, bool unc, bool sqlite, bool postgres) =>
-        native && ShellNativeRule(files, git, web, sql, oracle, mysql, unc, sqlite, postgres) is { Length: > 0 } rule ? " " + rule : "";
+    private static string NativeTail(bool native, bool files, bool git, bool web, bool sql, bool oracle, bool mysql, bool unc, bool sqlite, bool postgres, bool duckDb) =>
+        native && ShellNativeRule(files, git, web, sql, oracle, mysql, unc, sqlite, postgres, duckDb) is { Length: > 0 } rule ? " " + rule : "";
 
     /// <summary>
     /// The system prompt for a turn, in this order: the persona (<paramref name="persona"/> from
@@ -834,11 +863,11 @@ public sealed class Assistant
     /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>). With <paramref name="globalSkills"/>
     /// false (2026-10-13, the profile's <c>Global skills</c> off) the skills block names no global scope (<see cref="Skills.SkillsPrompt.EditorSentenceProfileOnly"/>).
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
-        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, police, obsidian, obsidianDelete, sql, native, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, serverWrites, images, advisors, shopping, eventLog, admin, clock: clock);
+        string defaultRules = DefaultRules(markdown, tools, files, web, ask, sessions, download, delete, mcp, timers, git, shell, police, obsidian, obsidianDelete, sql, native, homeAssistant, oracle, mysql, unc, uncFetch, uncWrite, docker, dockerWrite, help, sqlite, postgres, sqliteWrite, serverWrites, images, advisors, shopping, eventLog, admin, clock: clock, duckDb: duckDb, duckDbWrite: duckDbWrite);
         var sb = new StringBuilder((customPersona ? persona!.Trim() : DefaultPersona) + "\n\n" + (customRules ? operatingRules!.Trim() : defaultRules));
         if (project is not null)
         {

@@ -485,7 +485,7 @@ public sealed partial class SidekickApp
         Home: () => _settings.StorageDirectory,
         WorkingDirectory: () => Files.WorkingDirectory.Resolve(EffectiveSettings.WorkingDirectory, _settings.ProfileDirectory),
         SkillRoots: () => { var roots = SkillRoots.For(_settings, _externalSkills); return [roots.Profile, roots.Global, roots.External]; },
-        Databases: () => EffectiveSettings.SqliteTools ? ChatScreen.SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null,
+        Databases: () => ChatScreen.DatabaseGuardFor(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory),
         ShoppingGuarded: () => ChatScreen.ShoppingListGuarded(EffectiveSettings),
         RecycleBin: () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null);
 
@@ -592,6 +592,14 @@ public sealed partial class SidekickApp
             var sqliteFiles = BuildWorkingDirectory();
             var sqliteAccess = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => sqliteFiles);
             return await SqliteCheck.RunAsync(_console, sqliteAccess, sqliteDatabase, EffectiveSettings.SqliteQueryTimeoutSeconds, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (options.DuckDbCheck is { } duckDbDatabase)
+        {
+            // The DuckDB tools' live proof (2026-10-25), SQLite's way: the catalog unfiltered and the working directory's files on.
+            var duckDbFiles = BuildWorkingDirectory();
+            var duckDbAccess = new DuckDb.DuckDbAccess(() => DuckDb.DuckDbConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => duckDbFiles);
+            return await DuckDbCheck.RunAsync(_console, duckDbAccess, duckDbDatabase, EffectiveSettings.DuckDbQueryTimeoutSeconds, cancellationToken).ConfigureAwait(false);
         }
 
         if (options.DockerCheck)
@@ -851,8 +859,8 @@ public sealed partial class SidekickApp
         // The file tools need no console, so headless has them; the editor opener is the real one.
         // The setting File tools decides per turn, like Web tools; the clock alone is standing.
         var files = BuildWorkingDirectory();
-        // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05).
-        files.Databases = () => EffectiveSettings.SqliteTools ? ChatScreen.SqliteDatabaseGuard(_settings.ProfileDirectory, _settings.StorageDirectory) : null;
+        // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05); DuckDB's while its are (2026-10-25).
+        files.Databases = () => ChatScreen.DatabaseGuardFor(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
         files.ServerDatabases = () => Shell.ServerDatabasePolice.For(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
         files.AdminFamilies = () => Shell.AdminPolice.For(EffectiveSettings);
         // The shopping list's tripwire (2026-10-17): the write tools refuse a list's name while the shopping tools are offered.
@@ -898,6 +906,9 @@ public sealed partial class SidekickApp
         var sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqliteDatabasesOffered), () => EffectiveSettings.SqliteSandboxFiles ? files : null, () => ChatScreen.UntickedSqliteFiles(_settings.ProfileDirectory, _settings.StorageDirectory, EffectiveSettings.SqliteDatabasesOffered));
         // sqlite_execute (2026-10-05) never: every change waits for the user's allow on a pane, and headless has none.
         var sqliteTools = ChatScreen.SqliteToolsFor(ChatScreen.SqliteTools(sqlite, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false);
+        // The DuckDB tools (2026-10-25), SQLite's way: the reads headless too, duckdb_execute never (no pane to allow a change on).
+        var duckDb = new DuckDb.DuckDbAccess(() => DuckDb.DuckDbConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.DuckDbDatabasesOffered), () => EffectiveSettings.DuckDbSandboxFiles ? files : null, () => ChatScreen.UntickedDuckDbFiles(_settings.ProfileDirectory, _settings.StorageDirectory, EffectiveSettings.DuckDbDatabasesOffered));
+        var duckDbTools = ChatScreen.DuckDbToolsFor(ChatScreen.DuckDbTools(duckDb, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false);
         // The PostgreSQL tools (2026-10-04): no console needed, so headless has them too.
         var postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.PostgresConnectionsOffered));
         // postgres_execute never headless (2026-10-05): no pane to allow a change on, so the cut drops it whatever the mode.
@@ -1046,6 +1057,8 @@ public sealed partial class SidekickApp
                 DockerEnabled = ChatScreen.DockerOffered(effective),
                 Sqlite = sqliteTools,
                 SqliteEnabled = ChatScreen.SqliteOffered(effective, sqlite),
+                DuckDb = duckDbTools,
+                DuckDbEnabled = ChatScreen.DuckDbOffered(effective, duckDb),
                 Postgres = postgresTools,
                 PostgresEnabled = ChatScreen.PostgresOffered(effective, postgres),
                 YouTube = ChatScreen.YouTubeToolsFor(youTubeTools, effective),

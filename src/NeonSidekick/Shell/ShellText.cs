@@ -450,6 +450,43 @@ public static class ShellText
         return $"police: sqlite ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
     }
 
+    /// <summary>What a result the DuckDB police refused opens with (<see cref="SqlitePolice"/>'s DuckDB family, 2026-10-25).</summary>
+    public const string DuckDbHead = "Error: refused by the shell police — DuckDB";
+
+    /// <summary>What the model is told when the DuckDB police tripped (2026-10-25), <see cref="SqlitePoliced"/>'s twin. Pinned.</summary>
+    public const string DuckDbPoliced = DuckDbHead + ": while the DuckDB tools are on, a DuckDB database is reached only through them — " +
+        "duckdb_query to read (data files too), and duckdb_execute to change one when DuckDB mode allows it. Do not try another way (a script, the duckdb CLI, " +
+        "the file tools); tell the user if a change is needed that the tools refuse. Installing or removing a package is allowed: run the package command on its own.";
+
+    /// <summary>The 👮 line for <see cref="DuckDbPoliced"/>: <c>DuckDB: 'duckdb' in load.py — not run</c>. Pinned.</summary>
+    public static string DuckDbShown(string token, string? file) =>
+        file is null ? $"DuckDB: '{token}' — not run" : $"DuckDB: '{token}' in {file} — not run";
+
+    /// <summary><c>police: duckdb ('duckdb' in load.py) — powershell "python load.py"</c>: the DuckDB police's line (2026-10-25).</summary>
+    public static string DuckDbLogLine(CommandRequest request, string token, string? file)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return $"police: duckdb ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";
+    }
+
+    /// <summary>
+    /// The refusal for a token the file-database police found (2026-10-25): SQLite's or DuckDB's words by <see cref="DatabaseGuard.FamilyOf"/>,
+    /// its log line written here. The one place <see cref="ShellPoliceChecks"/>, <c>execute_code</c> and <c>process</c> turn a find into words.
+    /// </summary>
+    public static (string Result, string Shown) FileDatabasePoliced(CommandRequest request, Files.DatabaseGuard guard, string token, string? file)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(guard);
+        if (guard.FamilyOf(token) == Files.DatabaseFamilies.DuckDb)
+        {
+            Diagnostics.DiagnosticLog.Info(ShellKinds.Category, DuckDbLogLine(request, token, file));
+            return (DuckDbPoliced, DuckDbShown(token, file));
+        }
+
+        Diagnostics.DiagnosticLog.Info(ShellKinds.Category, SqliteLogLine(request, token, file));
+        return (SqlitePoliced, SqliteShown(token, file));
+    }
+
     /// <summary>What a result the server-database police refused opens with (<see cref="ServerDatabasePolice"/>, 2026-10-05).</summary>
     public const string ServerDatabaseHead = "Error: refused by the shell police — database";
 
@@ -637,7 +674,7 @@ public static class ShellText
     public static bool IsPoliced(string result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal) || result.StartsWith(ServerDatabaseHead, StringComparison.Ordinal)
+        return IsOutside(result) || result.StartsWith(ForbiddenHead, StringComparison.Ordinal) || result.StartsWith(SqliteHead, StringComparison.Ordinal) || result.StartsWith(DuckDbHead, StringComparison.Ordinal) || result.StartsWith(ServerDatabaseHead, StringComparison.Ordinal)
             || result.StartsWith(AdminHead, StringComparison.Ordinal);
     }
 

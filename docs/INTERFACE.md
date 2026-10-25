@@ -320,7 +320,7 @@ Icons under the status bar (*Tool bar*), each shown while it is checked there. A
 | 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* on / off (none while the policy is `off`) | `/tools shell police` |
 | 🐚 | dark under `off` | `/tools shell` |
-| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🐘 🔗 🏠 🎨 📸 🖨️ | dark while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
+| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ | dark while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
 | 🪵 | dark while off, and always where there are no event logs to read | `/tools eventlog` |
 | 📡 | dark while off | `/tools network` |
 | 🧩 📅 | dark while off; Windows only ([MAC.md](MAC.md#what-works)) | `/tools services`, `tasks` |

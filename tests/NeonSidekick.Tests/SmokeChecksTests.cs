@@ -268,6 +268,7 @@ public class SmokeChecksTests
         Assert.Contains("libstdc++-6.dll", SmokeChecks.WindowsNativeLibraries);
         Assert.Contains("libgcc_s_seh-1.dll", SmokeChecks.WindowsNativeLibraries);
         Assert.Contains("libwinpthread-1.dll", SmokeChecks.WindowsNativeLibraries);
+        Assert.Contains("duckdb.dll", SmokeChecks.WindowsNativeLibraries);   // the DuckDB tools, 2026-10-25
         Assert.Equal(OperatingSystem.IsWindows() ? SmokeChecks.WindowsNativeLibraries : SmokeChecks.MacNativeLibraries, SmokeChecks.RequiredNativeLibraries);
     }
 
@@ -286,6 +287,7 @@ public class SmokeChecksTests
                 "libvosk.dylib",
                 "libgit2-5853918.dylib",
                 "libe_sqlite3.dylib",
+                "libduckdb.dylib",
             },
             SmokeChecks.MacNativeLibraries);
     }

@@ -145,7 +145,10 @@ public sealed record SystemPromptFacts(
     int EventLogTools = 0,
     bool TimersEnabled = true,
     AdminRules Admin = AdminRules.None,
-    bool ClockEnabled = true)
+    bool ClockEnabled = true,
+    bool DuckDbEnabled = false,
+    int DuckDbTools = 0,
+    bool DuckDbWrite = false)
 {
     /// <summary>Whether the rules carry <see cref="Assistant.EventLogRuleHere"/> (Windows' sentence, or the Mac's since 2026-10-18): tools on, the switch on with a reader (wevtapi, or the unified log on a Mac) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
@@ -203,6 +206,12 @@ public sealed record SystemPromptFacts(
 
     /// <summary>Whether that rule is followed by <see cref="Assistant.SqliteWriteRule"/>: <c>sqlite_execute</c> offered (2026-10-05, <c>SQLite mode</c> read-write, a pane, not switched off).</summary>
     public bool SqliteWriting => Sqlite && SqliteWrite;
+
+    /// <summary>Whether the rules carry <see cref="Assistant.DuckDbRule"/>: tools on, something to open with the switch on, and at least one DuckDB tool offered (2026-10-25).</summary>
+    public bool DuckDb => ToolsEnabled && DuckDbEnabled && DuckDbTools > 0;
+
+    /// <summary>Whether that rule is followed by <see cref="Assistant.DuckDbWriteRule"/>: <c>duckdb_execute</c> offered (<c>DuckDB mode</c> read-write, a pane, not switched off).</summary>
+    public bool DuckDbWriting => DuckDb && DuckDbWrite;
 
     /// <summary>Whether the rules carry <see cref="Assistant.PostgresRule"/>: tools on, a connection defined with the switch on, and at least one PostgreSQL tool offered (2026-10-04).</summary>
     public bool Postgres => ToolsEnabled && PostgresEnabled && PostgresTools > 0;
@@ -363,6 +372,9 @@ public static class SystemPromptSummary
     /// <summary>After the SQLite heading while the group is not offered (2026-10-04). Pinned.</summary>
     public const string SqliteOffSuffix = "SQLite tools is off, or no database in sqlite.json is offered and SQLite sandbox files is off";
 
+    /// <summary>After the DuckDB heading while the group is not offered (2026-10-25). Pinned.</summary>
+    public const string DuckDbOffSuffix = "DuckDB tools is off, or no database in duckdb.json is offered and DuckDB sandbox files is off";
+
     /// <summary>After the Postgres heading while the group is not offered (2026-10-04). Pinned.</summary>
     public const string PostgresOffSuffix = "PostgreSQL tools is off or no connection in postgres.json is offered";
 
@@ -464,7 +476,7 @@ public static class SystemPromptSummary
 
         bool customRules = !string.IsNullOrWhiteSpace(facts.OperatingRules);
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
-        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog, clock: facts.Clock);
+        string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog, clock: facts.Clock, duckDb: facts.DuckDb, duckDbWrite: facts.DuckDbWriting);
         sections.Add(new(
             "Operating rules",
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
@@ -605,7 +617,9 @@ public static class SystemPromptSummary
             globalSkills: facts.GlobalSkills,
             eventLog: facts.EventLog,
             admin: facts.ToolsEnabled ? facts.Admin : AdminRules.None,
-            clock: facts.Clock);
+            clock: facts.Clock,
+            duckDb: facts.DuckDb,
+            duckDbWrite: facts.DuckDbWriting);
     }
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
@@ -743,7 +757,9 @@ public static class SystemPromptSummary
         IReadOnlyList<AdminGroupSpec>? admin = null,
         bool clockEnabled = true,
         bool helpEnabled = true,
-        AdminGroupSpec? monitors = null)
+        AdminGroupSpec? monitors = null,
+        IReadOnlyList<AIFunction>? duckDb = null,
+        bool duckDbEnabled = true)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -824,6 +840,13 @@ public static class SystemPromptSummary
             // The SQLite tools (2026-10-04): after MySQL; offered while SQLite tools is on with a database to open.
             string sqliteNote = !sqliteEnabled ? NotOffered(SqliteOffSuffix) : standing;
             groups.Add(Group(ToolsText.SqliteTabTitle, sqlite, sqliteNote, sqliteEnabled && toolsEnabled, SettingsField.SqliteTools, disabled));
+        }
+
+        if (duckDb is not null)
+        {
+            // The DuckDB tools (2026-10-25): after SQLite; offered while DuckDB tools is on with a database or the sandbox's files to open.
+            string duckDbNote = !duckDbEnabled ? NotOffered(DuckDbOffSuffix) : standing;
+            groups.Add(Group(ToolsText.DuckDbTabTitle, duckDb, duckDbNote, duckDbEnabled && toolsEnabled, SettingsField.DuckDbTools, disabled));
         }
 
         if (postgres is not null)

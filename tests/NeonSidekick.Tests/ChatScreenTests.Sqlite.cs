@@ -173,7 +173,7 @@ public partial class ChatScreenTests
 
         await RunAsync();
 
-        Assert.StartsWith("Error: 'app.db' is or holds a SQLite database", (string)Assert.Single(Results(_chat.Requests[^1])).Result!);
+        Assert.StartsWith("Error: 'app.db' is or holds a SQLite or DuckDB database", (string)Assert.Single(Results(_chat.Requests[^1])).Result!);
         Assert.Equal("pretend", File.ReadAllText(db));
     }
 

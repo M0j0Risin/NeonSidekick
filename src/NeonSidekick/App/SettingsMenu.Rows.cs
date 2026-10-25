@@ -158,6 +158,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.ClockTools, "Clock")],
         [(SettingsField.HelpTools, "Help")],
         [(SettingsField.MonitorTools, "Monitors")],
+        [(SettingsField.DuckDbTools, "Access"), (SettingsField.DuckDbDatabasesOffered, "Databases"), (SettingsField.DuckDbQueryMaxRows, "Queries"), (SettingsField.DuckDbDatabasesProfile, "Files")],
     ];
 
     /// <summary>

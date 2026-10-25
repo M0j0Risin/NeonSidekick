@@ -198,9 +198,9 @@ public sealed class ExecuteCodeTool : AIFunction
         // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a script that reaches SQLite is refused whatever the policy.
         if (effective.ShellPolice && _files.Databases?.Invoke() is { } databases && SqlitePolice.Find(code, script: true, databases) is { } sqlite)
         {
-            DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite, null));
+            var (result, shown) = ShellText.FileDatabasePoliced(request, databases, sqlite, null);   // DuckDB's family too since 2026-10-25
             _gate.NoteRefused(request);
-            return new ToolShownResult(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, null));
+            return new ToolShownResult(result, shown);
         }
 
         // The server-database police (2026-10-05): a script that reaches a server family whose tools are on is refused whatever the policy.

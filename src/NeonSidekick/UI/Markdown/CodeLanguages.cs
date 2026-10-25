@@ -239,7 +239,7 @@ public static class CodeLanguages
         ["json"] = Json, ["jsonc"] = Json, ["json5"] = Json,
         ["yaml"] = Yaml, ["yml"] = Yaml,
         ["toml"] = Toml, ["ini"] = Toml, ["cfg"] = Toml,
-        ["sql"] = Sql, ["sqlite"] = Sql, ["postgres"] = Sql, ["postgresql"] = Sql, ["mysql"] = Sql, ["tsql"] = Sql,
+        ["sql"] = Sql, ["sqlite"] = Sql, ["duckdb"] = Sql, ["postgres"] = Sql, ["postgresql"] = Sql, ["mysql"] = Sql, ["tsql"] = Sql,
         ["c"] = C, ["h"] = C, ["cpp"] = C, ["c++"] = C, ["cc"] = C, ["hpp"] = C, ["cxx"] = C,
         ["java"] = Java,
         ["kotlin"] = Kotlin, ["kt"] = Kotlin, ["kts"] = Kotlin,

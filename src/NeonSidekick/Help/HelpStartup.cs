@@ -43,6 +43,7 @@ internal static partial class HelpStartup
         new("--oracle-check", [], null),
         new("--mysql-check", [], null),
         new("--sqlite-check", [], null),
+        new("--duckdb-check", [], null),
         new("--postgres-check", [], null),
         new("--unc-check", [], null),
         new("--eventlog-check", [], null),

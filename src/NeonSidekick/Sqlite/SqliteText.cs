@@ -199,6 +199,9 @@ public static class SqliteText
         "Error: name the SQLite database in \"database\"" + (sandbox ? " (or a file's path in the working directory)" : "") + $"; the databases are {names}";
     public static string NoFile(string path) => $"no database file at {path}";
     public static string OutsideSandbox(string path) => $"'{path}' is outside the working directory";
+
+    /// <summary>A DuckDB file named as a SQLite database (2026-10-25): the DuckDB tools read it. Pinned.</summary>
+    public static string IsDuckDbFile(string path) => $"'{path}' is a DuckDB database, not a SQLite one; read it with the duckdb_ tools (duckdb_query)";
     public static string ConnectFailed(string database, string detail) => $"Error: could not open {database}: {detail}";
     public static string Timeout(string database, string seconds) => $"Error: the query on {database} ran past {seconds} s and was stopped; narrow it (WHERE, LIMIT, fewer joins)";
     public static string Failed(string database, string detail) => $"Error: SQLite refused it ({database}): {detail}";

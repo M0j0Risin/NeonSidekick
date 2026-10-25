@@ -39,7 +39,7 @@ public static class ToolsText
     [
         ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.EventLog,
         ToolbarItems.Network, ToolbarItems.Services, ToolbarItems.Tasks, ToolbarItems.Directory, ToolbarItems.Obsidian,
-        ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
+        ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.DuckDb, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
         ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord, TimersSwitchWord, ClockSwitchWord, HelpSwitchWord, MonitorsSwitchWord,
     ];
 
@@ -95,6 +95,7 @@ public static class ToolsText
         ToolbarItems.Oracle => SettingsField.OracleTools,
         ToolbarItems.MySql => SettingsField.MySqlTools,
         ToolbarItems.Sqlite => SettingsField.SqliteTools,
+        ToolbarItems.DuckDb => SettingsField.DuckDbTools,   // 2026-10-25, the DuckDB tools
         ToolbarItems.Postgres => SettingsField.PostgresTools,
         ToolbarItems.Unc => SettingsField.UncTools,
         ToolbarItems.Ha => SettingsField.HomeAssistantTools,
@@ -223,6 +224,9 @@ public static class ToolsText
     /// <summary>The SQLite tools' tab and group (2026-10-04), after MySQL, before Oracle.</summary>
     public const string SqliteTabTitle = "SQLite";
 
+    /// <summary>The DuckDB tools' menu and group (2026-10-25), after SQLite on Databases. Pinned.</summary>
+    public const string DuckDbTabTitle = "DuckDB";
+
     /// <summary>The PostgreSQL tools' tab and group (2026-10-04), after SQLite, before Oracle; "Postgres" on the strip from then until 2026-10-10, "PostgreSQL" since (the user's ask: the product's name, as its rows say it).</summary>
     public const string PostgresTabTitle = "PostgreSQL";
 
@@ -277,7 +281,7 @@ public static class ToolsText
     /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). "Standard" until later that day (the user's call). Web, Shell, Timers, Ask, Options since 2026-10-16 (the user's order; Network to Admin); Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18 (the user's asks: the standing groups' switches). Pinned.</summary>
     public const string CoreTabTitle = "Core";
 
-    /// <summary>The tab that holds the five database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then.</summary>
+    /// <summary>The tab that holds the database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then; DuckDB after SQLite since 2026-10-25.</summary>
     public const string DatabaseTabTitle = "Databases";   // "Database" until later on 2026-10-10 (the user's ask)
 
     /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Camera, Screen, Print since 2026-10-16 (the user's order); Monitors between Screen and Print since later on 2026-10-23 (the user's ask, off Home; Windows only). Pinned.</summary>
@@ -295,7 +299,7 @@ public static class ToolsText
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle, DuckDbTabTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -321,7 +325,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 13, 14], [7, 8, 30, 6], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 31, 13, 14], [7, 8, 30, 6], [16, 21]];
 
     /// <summary>
     /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or
@@ -435,6 +439,9 @@ public static class ToolsText
     /// <summary>After the SQLite heading while the group is not offered: the switch is off, or no database of <c>sqlite.json</c> is offered and the sandbox's files are not allowed (2026-10-04). Pinned.</summary>
     public const string SqliteOffSuffix = "(off: SQLite tools is off, or no database in sqlite.json is offered and SQLite sandbox files is off)";
 
+    /// <summary>After the DuckDB heading while the group is not offered: SQLite's shape over <c>duckdb.json</c> (2026-10-25). Pinned.</summary>
+    public const string DuckDbOffSuffix = "(off: DuckDB tools is off, or no database in duckdb.json is offered and DuckDB sandbox files is off)";
+
     /// <summary>After the Postgres heading while the group is not offered: the switch is off or no connection of <c>postgres.json</c> is offered (2026-10-04). Pinned.</summary>
     public const string PostgresOffSuffix = "(off: PostgreSQL tools is off or no connection in postgres.json is offered)";
 
@@ -523,6 +530,9 @@ public static class ToolsText
     /// <summary>The YouTube group off with its switch on (2026-10-05): no key to search with and no video window to play in.</summary>
     public const string NoYouTubeReason = "no YouTube API key is set and there is no video window";
     public const string NoSqliteDatabaseReason = "no database in sqlite.json is offered and SQLite sandbox files is off";
+
+    /// <summary>The DuckDB group off with its switch on (2026-10-25): nothing to open. Pinned.</summary>
+    public const string NoDuckDbDatabaseReason = "no database in duckdb.json is offered and DuckDB sandbox files is off";
 
     /// <summary>A connections file that offers nothing: <c>no connection in sql.json is offered</c>. Pinned.</summary>
     public static string NoneOfferedReason(string what, string file) => $"no {what} in {file} is offered";
@@ -643,6 +653,12 @@ public static class ToolsText
         {
             // The SQL shape (2026-10-04): the switch, or nothing to open.
             return SqliteOffSuffix;
+        }
+
+        if (group.Switch == SettingsField.DuckDbTools)
+        {
+            // SQLite's shape (2026-10-25).
+            return DuckDbOffSuffix;
         }
 
         if (group.Switch == SettingsField.UncTools)

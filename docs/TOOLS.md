@@ -13,7 +13,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
 - [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube), [Obsidian](#obsidian)
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
-- [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [PostgreSQL](#postgresql), [Oracle](#oracle)
+- [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [DuckDB](#duckdb), [PostgreSQL](#postgresql), [Oracle](#oracle)
 - [Devices](#devices): [Camera](#camera), [Screen](#screen), [Monitors](#monitors), [Printing](#printing)
 - [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
 - [Set elsewhere](#set-elsewhere): [Memory](#memory), [Skills](#skills), [Sessions](#sessions), [Advisors](#advisors), [Plan](#plan), [Ralph loop](#ralph-loop)
@@ -139,7 +139,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 
 * A deletion with no bin says so. In the `images` folder, `open` opens only pictures and folders; a `runas` UNC share can't be opened.
 * **Keeping a file's form:** a write in the file's own encoding that can't hold a character is refused, never written as `?`. A read-only file is never written over; a hard-linked one is written in place so its other names see it; a replace keeps the file's permissions.
-* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git` and `.neon`, the app's home and profiles, skill folders (`skill_editor` changes a skill), and a SQLite database while the SQLite tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
+* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git` and `.neon`, the app's home and profiles, skill folders (`skill_editor` changes a skill), and a SQLite or DuckDB database while that one's tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
 * **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md` in the working directory) changes only after you allow it on the pane; with nobody to ask (headless, an advisor, a script, a pass that may not ask) it is refused.
 * **Paths:** a `~/` or `file:` path, a device name (`NUL`, `COM1`), a pipe or socket, and a working directory deleted during the session are refused; the last is never made again.
 * **Names with hidden characters** (right-to-left marks, zero-width or control characters) show them as escapes in results and the log, so a name can't disguise itself.
@@ -682,14 +682,14 @@ While *Service tools*, *Task tools*, *Directory tools* or *Event log tools* is o
 
 ### How the database tools work
 
-Five families: SQL Server, MySQL/MariaDB, SQLite, PostgreSQL and Oracle. Each has its tab under `/tools` › Databases and its switch (*SQL tools*, *MySQL tools*, *SQLite tools*, *PostgreSQL tools*, *Oracle tools*).
+Six families: SQL Server, MySQL/MariaDB, SQLite, DuckDB, PostgreSQL and Oracle. Each has its tab under `/tools` › Databases and its switch (*SQL tools*, *MySQL tools*, *SQLite tools*, *DuckDB tools*, *PostgreSQL tools*, *Oracle tools*).
 
 They only read unless you turn on [read-write mode](#read-write-mode).
 
 **Reading** runs one statement behind three layers:
 
 1. **The gate** passes only a single read statement (`SELECT`, or a `WITH` ending in one). A second statement, changes, locking reads and the engine's ways out (files, links to other servers, dynamic SQL) are refused before the server sees anything.
-2. **The transaction** is read-only and always rolled back; for PostgreSQL, MySQL, SQLite and Oracle 23ai the whole session is read-only too. SQL Server's is an ordinary transaction, held only by the rollback.
+2. **The transaction** is read-only and always rolled back; for PostgreSQL, MySQL, SQLite, DuckDB and Oracle 23ai the whole session is read-only too. SQL Server's is an ordinary transaction, held only by the rollback.
 3. **The account is the real guard.** Give the login read-only grants.
 
 **One place per connection:** each connection reaches **one database** (Oracle: one schema), nothing else on the server.
@@ -703,9 +703,9 @@ Values go in as `params`. Results are cut at *SQL query result max chars*; `max_
 
 #### Managing connections
 
-* **The file:** `sql.json`, `mysql.json`, `sqlite.json`, `postgres.json` or `oracle.json`. The home's (`%USERPROFILE%\.neonsidekick\configs\`, `~/.neonsidekick/configs/` on a Mac) serves every profile; the profile's (`…\profiles\<profile>\configs\`) wins a name clash. Comments and trailing commas are allowed.
-* **The wizard:** *… add/edit connection* (*SQLite add/edit database*). Its test writes nothing: it signs in, warns when the account could change data, and names what else it could reach.
-* ***… connections offered*** (*SQLite databases offered*) picks what the model sees: **nothing is offered until you tick it**. *… set password* changes a password.
+* **The file:** `sql.json`, `mysql.json`, `sqlite.json`, `duckdb.json`, `postgres.json` or `oracle.json`. The home's (`%USERPROFILE%\.neonsidekick\configs\`, `~/.neonsidekick/configs/` on a Mac) serves every profile; the profile's (`…\profiles\<profile>\configs\`) wins a name clash. Comments and trailing commas are allowed.
+* **The wizard:** *… add/edit connection* (*SQLite/DuckDB add/edit database*). Its test writes nothing: it signs in, warns when the account could change data, and names what else it could reach.
+* ***… connections offered*** (*SQLite/DuckDB databases offered*) picks what the model sees: **nothing is offered until you tick it**. *… set password* changes a password.
 * **Passwords:** `passwordStore` `file` (default) encrypts a password typed into the file in place (DPAPI) at the next read; `credman` keeps it in Windows Credential Manager as `NeonSidekick/<family>/<connection_name>` (`sql`, `mysql`, `postgres`, `oracle`). On a Mac both use the Keychain ([What differs](MAC.md#what-differs)).
   * A stored password saved by the app goes only to the host it was saved for. Change the host by hand and the connection is refused until you *… set password* again. A custom `credential`, which several entries may share, isn't tied to one host.
   * A custom `credential` name must start `NeonSidekick/<family>/`; one elsewhere is a problem the menu lists, and the entry isn't offered.
@@ -714,7 +714,7 @@ Values go in as `params`. Results are cut at *SQL query result max chars*; `max_
 
 #### Read-write mode
 
-Changes go through each family's `_execute` tool, which needs **two keys**: the family's *… mode* `read-write` **and** the connection's `"access": "readwrite"` (SQLite has only the first), checked on every call. It is **never offered headless or in plan mode**.
+Changes go through each family's `_execute` tool, which needs **two keys**: the family's *… mode* `read-write` **and** the connection's `"access": "readwrite"` (SQLite and DuckDB have only the first), checked on every call. It is **never offered headless or in plan mode**.
 
 1. **The kinds:** *… statements allowed* ticks which kinds may run; a statement needs every kind it does (a `WITH` that deletes and inserts needs both).
 
@@ -722,12 +722,12 @@ Changes go through each family's `_execute` tool, which needs **two keys**: the 
    |---|---|
    | `data` | `INSERT`, `UPDATE`, `MERGE` (`REPLACE` in MySQL and SQLite), upserts, and `RETURNING`/`OUTPUT` (`OUTPUT … INTO` too) |
    | `delete` | `DELETE`, `TRUNCATE`, a `MERGE` that deletes; `REPLACE` in any form, which deletes the row it replaces; `ALTER TABLE … TRUNCATE` or `SWITCH` of a partition |
-   | `create` | `CREATE TABLE`, `INDEX`, `VIEW`, `SEQUENCE` and the like; `SELECT … INTO` (SQL Server, PostgreSQL); SQLite's `TRIGGER` and `VIRTUAL TABLE` |
+   | `create` | `CREATE TABLE`, `INDEX`, `VIEW`, `SEQUENCE` and the like; `SELECT … INTO` (SQL Server, PostgreSQL); SQLite's `TRIGGER` and `VIRTUAL TABLE`; DuckDB's `MACRO`, `TYPE` and `SCHEMA` |
    | `alter` | `ALTER`, `RENAME`, `COMMENT ON`; `CREATE OR REPLACE VIEW` needs `create` too |
    | `drop` | `DROP` of those, and of routines and triggers; an `ALTER` that drops a column, constraint or partition; SQL Server's `ALTER INDEX … DISABLE` and `DROP_EXISTING` |
-   | `upkeep` | statistics and index upkeep (`UPDATE STATISTICS`, `ANALYZE`, `OPTIMIZE`, `VACUUM`, `REINDEX`…) |
+   | `upkeep` | statistics and index upkeep (`UPDATE STATISTICS`, `ANALYZE`, `OPTIMIZE`, `VACUUM`, `REINDEX`, DuckDB's `CHECKPOINT`…) |
    | `procedures` | server databases: running code (`EXEC`, `CALL`, PostgreSQL's `DO`, an Oracle PL/SQL block), making or changing a procedure, function or trigger, and enabling or disabling one |
-   | `pragma` | SQLite only: `PRAGMA` |
+   | `pragma` | SQLite and DuckDB only: `PRAGMA` |
    | `read` | `SELECT` (and `VALUES`, `TABLE`, `EXPLAIN` where the engine has them): never asks, runs on the read-only path |
 
    In SQL Server a batch's lone first word reads as `EXEC` of it, so a typo there is a procedure call. A SQLite trigger also needs its body's kinds, and MariaDB's `ANALYZE UPDATE …` the kinds of the statement it runs.
@@ -738,25 +738,26 @@ Changes go through each family's `_execute` tool, which needs **two keys**: the 
 4. **The run** commits on its own; a failed, timed-out or canceled one changes nothing. Every change attempted is logged whatever its end, with the connection, its outcome, rows changed and the statement (secrets masked).
 5. **The account is still the real guard.** Give a `readwrite` connection only the permissions you want used.
 
-`--sql-check`, `--mysql-check`, `--sqlite-check`, `--postgres-check` and `--oracle-check` test a family against a real server or file ([COMMANDLINE.md](COMMANDLINE.md)).
+`--sql-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check` and `--oracle-check` test a family against a real server or file ([COMMANDLINE.md](COMMANDLINE.md)).
 
 #### The tools
 
-Server families take a connection in `connection`, SQLite a database in `database` (a name or a file's path); either may be left out when there is only one.
+Server families take a connection in `connection`, SQLite and DuckDB a database in `database` (a name or a file's path); either may be left out when there is only one.
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `sql_connections` / `mysql_connections` / `postgres_connections` / `oracle_connections` | — | The named connections and what each holds, touching no server. |
 | `sqlite_databases` | — | The named databases, and whether working-directory files may be named; opens nothing. |
+| `duckdb_databases` | — | The same for DuckDB, and how to read the working directory's data files. |
 | `postgres_schemas` | `connection?` | The schemas the account may use, with table counts and owners. |
 | `sql_tables` / `postgres_tables` | `connection?, schema?, pattern?` | Tables and views as `schema.name`, with kind, rows and description; `pattern` may be a `LIKE` pattern. |
 | `mysql_tables` / `oracle_tables` | `connection?, pattern?` | The same, as `database.name` (Oracle: `SCHEMA.NAME`). |
-| `sqlite_tables` | `database?, pattern?` | Tables and views with their kind. |
+| `sqlite_tables` / `duckdb_tables` | `database?, pattern?` | Tables and views with their kind. |
 | `sql_columns` / `postgres_columns` | `pattern, connection?, schema?` | Every column whose name matches (`%CustomerID`), with table, type and description. |
 | `mysql_columns` / `oracle_columns` | `pattern, connection?` | The same. |
 | `sql_describe` / `mysql_describe` / `oracle_describe` | `table, connection?` | One table or view: columns, keys, foreign keys both ways, indexes, CHECK constraints and triggers. |
 | `postgres_describe` | `table, connection?, schema?` | The same, without triggers. |
-| `sqlite_describe` | `table, database?` | Columns, foreign keys both ways, indexes and the `CREATE` statement. |
+| `sqlite_describe` / `duckdb_describe` | `table, database?` | Columns, foreign keys both ways, indexes and the `CREATE` statement. |
 | `sql_relationships` / `mysql_relationships` / `oracle_relationships` | `connection?, table?` | Foreign-key join paths, all or touching one table. |
 | `postgres_relationships` | `connection?, schema?, table?` | The same, for a schema or a table. |
 | `sql_indexes` | `connection?, table?, schema?, missing?` | Indexes with columns, size and use (needs `VIEW SERVER STATE`); `missing` adds the optimizer's suggestions. |
@@ -764,8 +765,9 @@ Server families take a connection in `connection`, SQLite a database in `databas
 | `postgres_indexes` | `connection?, schema?, table?` | Indexes with their definition and scans. |
 | `sql_query` / `mysql_query` / `postgres_query` / `oracle_query` | `sql, connection?, params?, max_rows?` | One read-only `SELECT`; `params` is an object of values (`{"id": 43659}`). |
 | `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT`, `WITH` or `VALUES`. |
+| `duckdb_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (or `FROM`, `DESCRIBE`, `SUMMARIZE`, `PIVOT`…), over a database, data files, or both. |
 | `sql_execute` / `mysql_execute` / `postgres_execute` / `oracle_execute` | `sql, connection?, params?, max_rows?` | [Read-write mode](#read-write-mode) only: one changing statement; answers with the rows changed and returned. |
-| `sqlite_execute` | `sql, database?, params?, max_rows?, create?` | The same; `create: true` makes a new database file. |
+| `sqlite_execute` / `duckdb_execute` | `sql, database?, params?, max_rows?, create?` | The same; `create: true` makes a new database file. |
 
 ### SQL Server
 
@@ -831,6 +833,29 @@ The SQLite tools read database **files**: no server, no password. Changes need o
   * The shell police refuses a command or script that reaches SQLite.
   * The file tools never change a database file: one ending `.db`, `.db3`, `.sqlite`, `.sqlite3`, `.s3db`, `.sl3`, `.sl2` or `.sqlitedb`, any file that starts as a SQLite database, their journals, or one `sqlite.json` names. Nor do they delete or move a folder holding one. Reading and copying one still work.
 * **Creating a database:** `create: true` needs `create` ticked and *SQLite sandbox files* on; the file ends `.db`, `.sqlite`, `.sqlite3` or `.db3`, in an existing folder of the working directory. If the statement fails, the file is removed.
+
+### DuckDB
+
+The DuckDB tools read DuckDB database **files** and the CSV, Parquet and JSON files of the working directory: no server, no password. Changes need only *DuckDB mode*.
+
+* **A database** is a name from `duckdb.json` (a relative `path` counts from that file's `configs` folder) or, with *DuckDB sandbox files* on, any DuckDB file in the working directory. Leave `database` out to query data files alone.
+* *DuckDB add/edit database* tests one by opening it read-only.
+
+```json
+{ "databases": { "lake": { "path": "D:\data\lake.duckdb", "description": "Sales history" } } }
+```
+
+* **Data files** are read by path (`FROM 'data/sales.csv'`) or with a reader (`read_csv`, `read_parquet`, `read_json`, `read_text`, `read_blob`). A pattern works inside a reader and within one folder (`read_csv('data/*.csv')`); `**` is refused.
+* **Only the working directory's files**, and only while *DuckDB sandbox files* is on. A path outside it, or a link leading out, is refused; so is a quoted table name that reads like a file and names none.
+* `params` binds `$name`; positional `?` and `$1` are refused.
+* **Reading** opens the file read-only, whatever the mode; a statement past *DuckDB query timeout (s)*, or stopped with Esc, is interrupted.
+* **DuckDB's own folder rule** holds every file it opens to the working directory. That covers a view or macro stored in a database file, which the app's own path check never sees.
+* **Nothing is ever installed or loaded**: no extension, no secret, no setting changed. A query may use up to a quarter of the computer's memory, and up to 10 GB of temporary disk space.
+* **Always refused:** `ATTACH`/`DETACH`, `COPY`, `EXPORT`/`IMPORT`, `INSTALL`/`LOAD`, `SET`, SQL handed over as text (`query()`, `PREPARE`), `glob()`, and moving a sequence in a read.
+* **The rest of the app keeps out** while *DuckDB tools* is on:
+  * The shell police refuses a command or script that reaches DuckDB.
+  * The file tools never change a DuckDB file: one ending `.duckdb` or `.ddb`, any file that starts as a DuckDB database, its `.wal`, or one `duckdb.json` names. Reading and copying one still work.
+* **Creating a database:** `create: true` needs `create` ticked and *DuckDB sandbox files* on; the file ends `.duckdb` or `.ddb`, in an existing folder of the working directory. If the statement fails, the file is removed. Load a data file with `CREATE TABLE t AS SELECT * FROM 'data.csv'`.
 
 ### PostgreSQL
 

@@ -41,9 +41,11 @@ public sealed record TurnRules(
     bool Shopping = false,
     bool EventLog = false,
     AdminRules Admin = AdminRules.None,
-    bool Clock = true)
+    bool Clock = true,
+    bool DuckDb = false,
+    bool DuckDbWrite = false)
 {
     /// <summary>The default operating rules for <paramref name="markdown"/>: <c>Assistant.DefaultRules</c> with these flags and tools on. Pure.</summary>
     public string DefaultRules(bool markdown) =>
-        Assistant.DefaultRules(markdown, tools: true, Files, Web, Ask, Sessions, Download, Delete, Mcp, Timers, Git, Shell, Police, Obsidian, ObsidianDelete, Sql, Native, HomeAssistant, Oracle, MySql, Unc, UncFetch, UncWrite, Docker, DockerWrite, Help, Sqlite, Postgres, Sqlite && SqliteWrite, ServerWrites, Images, Advisors, Shopping, EventLog, Admin, clock: Clock);
+        Assistant.DefaultRules(markdown, tools: true, Files, Web, Ask, Sessions, Download, Delete, Mcp, Timers, Git, Shell, Police, Obsidian, ObsidianDelete, Sql, Native, HomeAssistant, Oracle, MySql, Unc, UncFetch, UncWrite, Docker, DockerWrite, Help, Sqlite, Postgres, Sqlite && SqliteWrite, ServerWrites, Images, Advisors, Shopping, EventLog, Admin, clock: Clock, duckDb: DuckDb, duckDbWrite: DuckDb && DuckDbWrite);
 }

@@ -28,10 +28,10 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set it up first in the TUI (`/settings`, `/tools`) or `profile.json`: a server (or `--url`) and the tool groups the job needs.
-- **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`; SQLite files in the working directory need no ticking.
-- **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
+- **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`; SQLite and DuckDB files, and DuckDB's data files, in the working directory need no ticking.
+- **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `DuckDbDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
 - **`delete` follows *File deletes to Recycle bin*** (on by default): the `delete` tool moves files to the Recycle bin (the Trash on a Mac), as in the TUI.
-- **Tools that need the screen are left out.** The database write tools (`sqlite_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list`, `ask_user`, the timer tools, the YouTube playing tools and the monitor tools are never offered.
+- **Tools that need the screen are left out.** The database write tools (`sqlite_execute`, `duckdb_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list`, `ask_user`, the timer tools, the YouTube playing tools and the monitor tools are never offered.
 - **Calls that would ask you first are refused:** the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*, and `shopping_clear` with `all`.
   - So are Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`. The service and task changes aren't offered.
 - **No Browser window:** a web tool that meets a bot check reports it.
@@ -256,6 +256,6 @@ Flags beat variables, and variables beat the profile's saved values. [ENVIRONMEN
 
 ## Flags that don't combine with `--headless`
 
-`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check` and `--monitor-check` are separate modes; with `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit first.
+`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check` and `--monitor-check` are separate modes; with `--headless`, headless wins and they are ignored. `--help` and `--version` print and exit first.
 
 `--mcp-relay`, `--llama-guard` and `--shell-guard` are the app's own internal modes, not for you to run.

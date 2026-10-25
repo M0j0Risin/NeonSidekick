@@ -183,7 +183,7 @@ public static class WriteGuard
 
         // By name, or by content — the file, or the database its journal sibling's name points at (2026-10-24, review J3), and never through a
         // link being removed (Q7).
-        if ((databases ?? facts?.Databases)?.Invoke() is { } guard && (guard.IsDatabaseFile(full) || DatabaseGuard.HoldsSqlite(full, throughLinks: role != WriteRole.Remove)))
+        if ((databases ?? facts?.Databases)?.Invoke() is { } guard && (guard.IsDatabaseFile(full) || guard.Holds(full, throughLinks: role != WriteRole.Remove)))
         {
             return FileOutcome.DatabaseProtected;
         }
