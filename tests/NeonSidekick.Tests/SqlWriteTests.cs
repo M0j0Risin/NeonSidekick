@@ -90,7 +90,7 @@ public sealed class SqlWriteGateTests
     [InlineData("WITH c AS (SELECT 1 AS a) SELECT * FROM c", new[] { ServerStatementKind.Read })]
     [InlineData("CREATE FUNCTION dbo.f() RETURNS int AS BEGIN RETURN 1; END", new[] { ServerStatementKind.Procedures })]
     [InlineData("DROP PROCEDURE dbo.p", new[] { ServerStatementKind.Drop })]
-    [InlineData("ALTER TABLE t DROP COLUMN a", new[] { ServerStatementKind.Alter })]
+    [InlineData("ALTER TABLE t DROP COLUMN a", new[] { ServerStatementKind.Alter, ServerStatementKind.Drop })]   // a column lost: dropping too since 2026-10-24 (review B4)
     [InlineData("SELEC 1", new[] { ServerStatementKind.Procedures })]   // a batch's first word alone is EXEC of that procedure (T-SQL's rule): a typo is a procedure call
     public void Kinds_EveryChangeInTheStatement(string sql, ServerStatementKind[] kinds) => Assert.Equal(kinds, SqlWriteGate.Kinds(sql));
 
@@ -131,11 +131,14 @@ public sealed class SqlWriteGateTests
     [InlineData("SELECT * FROM t WHERE x = other.dbo.t.c", "other")]
     [InlineData("SELECT OBJECT_ID('other.dbo.t')", "other")]
     [InlineData("SELECT OBJECT_ID('dbo.t'), OBJECT_ID('scratch.dbo.t')", null)]
-    [InlineData("not sql at all (", null)]
     public void TheBoundary_RefusesAnotherDatabase(string sql, string? other)
     {
         Assert.Equal(other is null ? null : SqlText.OtherDatabase(other, "scratch"), SqlBoundary.Check(sql, "scratch"));
     }
+
+    /// <summary>A text the boundary cannot parse is refused since 2026-10-24 (the database review's mechanism 7); it passed "because the gate refused it".</summary>
+    [Fact]
+    public void TheBoundary_RefusesWhatItCannotRead() => Assert.Equal(SqlText.BoundaryUnread, SqlBoundary.Check("not sql at all (", "scratch"));
 
     /// <summary>What describes the whole server rather than the database (2026-10-09, the user's pick): refused; the database's own catalog reads.</summary>
     [Theory]
@@ -218,9 +221,13 @@ public sealed class SqlExecuteTests
     public async Task TheTool_ChecksInOrder_ThenAsks_PerConnection()
     {
         var asked = new List<(string Connection, string Place, string Sql)>();
-        var tool = new SqlExecuteTool(Access(), () => _settings, (_, connection, place, sql, _) =>
+        // The connection's Sales written sales is settled by the server's names since 2026-10-24 (the database review's D4): the names say
+        // there is no twin, so it goes on to the pane.
+        var access = Access();
+        access.Names.Seed([["Sales"], ["Archive"], ["master"]]);
+        var tool = new SqlExecuteTool(access, () => _settings, (_, target, sql, _, _) =>
         {
-            asked.Add((connection, place, sql));
+            asked.Add((target.Connection, target.Place, sql));
             return Task.FromResult<bool?>(false);
         });
 
@@ -228,6 +235,11 @@ public sealed class SqlExecuteTests
         Assert.Equal(ServerWriteText.Declined, await tool.RunAsync(" DELETE FROM t WHERE id = @id; ", "shop", [new("id", 1L)], null, CancellationToken.None));
         Assert.Equal(ServerWriteText.Declined, await tool.RunAsync("DELETE FROM sales.dbo.t", "shop", [], null, CancellationToken.None));
         Assert.Equal([("shop", "Sales", "DELETE FROM t WHERE id = @id;"), ("shop", "Sales", "DELETE FROM sales.dbo.t")], asked);
+
+        // A case-sensitive server holding both: sales is another database, refused before the pane.
+        var twins = Access();
+        twins.Names.Seed([["Sales"], ["sales"]]);
+        Assert.Equal(SqlText.OtherDatabase("sales", "Sales"), await new SqlExecuteTool(twins, () => _settings, (_, _, _, _, _) => Task.FromResult<bool?>(true)).RunAsync("DELETE FROM sales.dbo.t", "shop", [], null, CancellationToken.None));
 
         // Another database is refused before the pane (2026-10-09), a read through the tool too.
         asked.Clear();
@@ -286,7 +298,7 @@ public sealed class LiveSqlWriteTests
         var c = LiveSql.Config!;
         var copy = new SqlConnectionConfig { Server = c.Server, Database = c.Database, Auth = c.Auth, User = c.User, Password = c.Password, TrustServerCertificate = c.TrustServerCertificate, Encrypt = c.Encrypt, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Access = access };
         var server = new SqlAccess(() => new SqlCatalog([new SqlNamedConnection("live", copy, "test")], []));
-        return (new SqlExecuteTool(server, () => _settings, (_, _, _, sql, _) =>
+        return (new SqlExecuteTool(server, () => _settings, (_, _, sql, _, _) =>
         {
             asked.Add(sql);
             return Task.FromResult<bool?>(true);
@@ -299,6 +311,7 @@ public sealed class LiveSqlWriteTests
         var (tool, asked) = Tool("readwrite");
         string id = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         string table = "dbo.ns_write_" + id, proc = "dbo.ns_bump_" + id;
+        string? droppedProc, droppedTable;
         try
         {
             Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id int PRIMARY KEY, a nvarchar(10))", null, [], null, CancellationToken.None));
@@ -314,9 +327,14 @@ public sealed class LiveSqlWriteTests
         }
         finally
         {
-            await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, [], null, CancellationToken.None);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None));
+            droppedProc = await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, [], null, CancellationToken.None);
+            droppedTable = await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None);
         }
+
+        // The cleanup's answers are asserted after the finally (2026-10-24, the database review's S17): an Assert inside it threw over the
+        // test's own failure and hid it, and the procedure's drop was never checked, which left ns_bump_<pid> behind.
+        Assert.StartsWith("Ran it", droppedProc);
+        Assert.StartsWith("Ran it", droppedTable);
 
         var (readOnly, roAsked) = Tool(null);
         Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE dbo.ns_never (a int)", null, [], null, CancellationToken.None));

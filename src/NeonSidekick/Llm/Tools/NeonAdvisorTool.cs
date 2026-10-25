@@ -37,10 +37,13 @@ public sealed class NeonAdvisorTool : AIFunction
     /// ones that put something to the user — the question pane, the camera's shutter, the screen's (the advisor answers the model,
     /// not the user). Pinned.
     /// </summary>
-    public static readonly IReadOnlySet<string> Excluded = new HashSet<string>(StringComparer.Ordinal)
-    {
-        ToolName, AskUserTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ScreenListTool.ToolName,
-    };
+    public static IReadOnlySet<string> Excluded => s_excluded ??= new HashSet<string>(
+        [ToolName, AskUserTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ScreenListTool.ToolName,
+         // Every database tool (2026-10-24, the database review's J1, decision DB4): its rows would go to the advisor's provider.
+         .. App.ChatScreen.DatabaseToolNames],
+        StringComparer.Ordinal);
+
+    private static IReadOnlySet<string>? s_excluded;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         $$"""

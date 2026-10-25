@@ -60,7 +60,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(SqliteText.AllowTitle, output);
         var results = Results(_chat.Requests[^1]).Select(r => (string)r.Result!).ToList();
-        Assert.StartsWith("Created app.db. Changed 0 rows in app.db", results[0]);
+        Assert.StartsWith("Created app.db. Ran it in app.db", results[0]);   // DDL counts no rows (2026-10-24, review G16; "Changed 0 rows" until then)
         Assert.StartsWith("Changed 2 rows in app.db", results[1]);
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = SqliteWorkFile("app.db"), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ConnectionString);
         connection.Open();
@@ -85,8 +85,61 @@ public partial class ChatScreenTests
         Assert.Contains(Shell.ShellText.ViewButton, output);
         Assert.Contains("1  CREATE TABLE t (\n", output);
         Assert.Contains("4  )\n", output);
+        // The question is drawn again after the view (2026-10-24, the database review's S10: an Esc that closed the pane as Deny gave the
+        // same Declined, so the answer alone could not tell Deny from back).
+        int view = output.LastIndexOf("4  )\n", StringComparison.Ordinal);
+        Assert.True(output.IndexOf(App.CameraMenu.AllowHintWithView, view, StringComparison.Ordinal) > view, "the question is not drawn after the view");
         Assert.Equal(SqliteText.Declined, Assert.Single(Results(_chat.Requests[^1])).Result);   // Enter on the question's Deny row after the view
         Assert.False(File.Exists(SqliteWorkFile("app.db")));
+    }
+
+    /// <summary>
+    /// The session allow is forgotten with the conversation (2026-10-24, the database review's S11 and D3): allowed in one, a change after
+    /// <paramref name="command"/> is asked again — and denied here; and another file is asked about of its own.
+    /// </summary>
+    [Theory]
+    [InlineData("/new")]
+    [InlineData("/clear")]
+    public async Task SqliteExecute_TheSessionAllow_IsForgottenWithTheConversation(string command)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = "read-write"; d.SqliteStatementsAllowed = ["data", "create"]; d.SqliteSandboxFiles = true; });
+        Directory.CreateDirectory(WorkingDirectory.Resolve("", _settings.ProfileDirectory));
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        _chat.Enqueue(FakeChatClient.Call("c0", SqliteExecuteTool.ToolName, new Dictionary<string, object?> { ["sql"] = "CREATE TABLE t (a)", ["database"] = "app.db", ["create"] = true }));
+        _chat.Enqueue(FakeChatClient.Call("c1", SqliteExecuteTool.ToolName, new Dictionary<string, object?> { ["sql"] = "CREATE TABLE u (a)", ["database"] = "two.db", ["create"] = true }));
+        _chat.EnqueueText("First.");
+        _chat.Enqueue(FakeChatClient.Call("c2", SqliteExecuteTool.ToolName, new Dictionary<string, object?> { ["sql"] = "INSERT INTO t VALUES (1)", ["database"] = "app.db" }));
+        _chat.EnqueueText("Second.");
+        var input = Scripted();
+        StepsWhenIdle(Line("make one"), Line(command), Line("change it"), Line("/exit"));
+        var idle = input.OnWait!;
+        var pending = new Queue<ConsoleKeyInfo[]>([[Keys.Char('s'), Keys.Enter], [Keys.Char('s'), Keys.Enter], [Keys.Enter]]);
+        int asked = 0;
+        input.OnWait = () =>
+        {
+            if (_keys is { PendingLine.IsCompleted: false })
+            {
+                int shown = CountOf(_console.Output, SqliteText.AllowTitle);
+                if (shown > asked && pending.Count > 0)
+                {
+                    asked = shown;
+                    input.Push(pending.Dequeue());
+                }
+
+                return;
+            }
+
+            idle();
+        };
+
+        await RunAsync();
+
+        var results = _chat.Requests.SelectMany(r => Results(r)).GroupBy(r => r.CallId).Select(g => (g.Key, (string)g.Last().Result!)).ToDictionary(p => p.Key, p => p.Item2);
+        Assert.StartsWith("Created app.db.", results["c0"]);
+        Assert.StartsWith("Created two.db.", results["c1"]);   // another file: asked of its own, allowed
+        Assert.Equal(SqliteText.Declined, results["c2"]);       // app.db again after the reset: asked again, denied
+        Assert.Empty(pending);
     }
 
     [Fact]
@@ -104,10 +157,12 @@ public partial class ChatScreenTests
     /// The file tools' guard (2026-10-05): while the SQLite tools are on, a model's write_file onto a database file is refused
     /// end to end, the file untouched, in either mode; sqlite_execute's create (SQLite making the file) is not a file tool's.
     /// </summary>
-    [Fact]
-    public async Task SqliteTools_On_TheFileToolsNeverWriteADatabase()
+    [Theory]
+    [InlineData("read-only")]
+    [InlineData("read-write")]   // both modes (2026-10-24, the database review's S15: the summary said either, the test ran one)
+    public async Task SqliteTools_On_TheFileToolsNeverWriteADatabase(string mode)
     {
-        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.FileTools = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.SqliteTools = true; d.SqliteMode = mode; d.FileTools = true; });
         string db = SqliteWorkFile("app.db");
         Directory.CreateDirectory(Path.GetDirectoryName(db)!);
         File.WriteAllText(db, "pretend");

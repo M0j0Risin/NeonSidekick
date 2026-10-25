@@ -11,6 +11,12 @@ namespace NeonSidekick.Files;
 public sealed record DatabaseGuard(IReadOnlyList<string> NamedFiles)
 {
     /// <summary>
+    /// <see cref="NamedFiles"/> as full paths, made once (2026-10-24, the database review's Q12: every check recomputed each one's full path,
+    /// for each file of a folder walk too).
+    /// </summary>
+    private readonly HashSet<string> _named = new(NamedFiles.Select(Full).Select(Canonical), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// A SQLite database's usual file extensions, compared case-blind; <c>.s3db</c>, <c>.sl3</c>, <c>.sl2</c> and <c>.sqlitedb</c> since
     /// 2026-10-22 (review I9: the SQLite tools open any file, so those were databases left open to the file and shell tools).
     /// </summary>
@@ -64,15 +70,21 @@ public sealed record DatabaseGuard(IReadOnlyList<string> NamedFiles)
         return name;
     }
 
-    /// <summary>Whether a file name (or a path's last part) ends a database extension, a sibling's suffix allowed after it.</summary>
+    /// <summary>
+    /// Whether a file name (or a path's last part) ends a database extension, a sibling's suffix allowed after it — read as Windows opens it
+    /// (2026-10-24, the database review's Q1: <c>app.db.</c> and <c>app.db </c> open <c>app.db</c>, and <c>app.db:x</c> is its stream).
+    /// </summary>
     public static bool HasDatabaseName(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        string bare = WithoutSibling(name);
+        string bare = WithoutSibling(Canonical(name));
         return Extensions.Any(e => bare.Length > e.Length && bare.EndsWith(e, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Whether <paramref name="fullPath"/> is a database file: by its name, or as one of <see cref="NamedFiles"/> (a sibling of one too).</summary>
+    /// <summary>
+    /// Whether <paramref name="fullPath"/> is a database file: by its name, or as one of <see cref="NamedFiles"/> (a sibling of one too).
+    /// Both read as the file system opens them since 2026-10-24 (<see cref="Canonical"/>; review Q1, Q8).
+    /// </summary>
     public bool IsDatabaseFile(string fullPath)
     {
         ArgumentNullException.ThrowIfNull(fullPath);
@@ -81,8 +93,56 @@ public sealed record DatabaseGuard(IReadOnlyList<string> NamedFiles)
             return true;
         }
 
-        string bare = WithoutSibling(fullPath);
-        return NamedFiles.Any(named => string.Equals(Full(named), bare, StringComparison.OrdinalIgnoreCase));
+        return _named.Contains(WithoutSibling(Canonical(fullPath)));
+    }
+
+    /// <summary>
+    /// A name or path as the file system opens it (2026-10-24, the database review's Q1, Q8): composed (NFC), so a Mac's decomposed spelling
+    /// of a named file is that file; its last part cut at a <c>:</c> (an alternate data stream's) and without trailing dots and spaces,
+    /// which Windows drops. Done on every system: a Mac file named so is only refused as well.
+    /// </summary>
+    public static string Canonical(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string text = path.IsNormalized(System.Text.NormalizationForm.FormC) ? path : path.Normalize(System.Text.NormalizationForm.FormC);
+        int last = text.LastIndexOfAny(['\\', '/']) + 1;
+        int stream = text.IndexOf(':', last);
+        if (stream >= 0)
+        {
+            text = text[..stream];
+        }
+
+        return text[..last] + text[last..].TrimEnd('.', ' ');
+    }
+
+    /// <summary>
+    /// Whether <paramref name="fullPath"/> is a database by its content: it, or the database a journal sibling's name points at, starts with
+    /// SQLite's header (2026-10-24, the database review's J3: a content-found database's <c>-journal</c>, <c>-wal</c> and <c>-shm</c> were left
+    /// open, and a hot journal changes the database). A link is read only when <paramref name="throughLinks"/> (Q7: removing a link leaves
+    /// what it points at alone).
+    /// </summary>
+    public static bool HoldsSqlite(string fullPath, bool throughLinks = true)
+    {
+        ArgumentNullException.ThrowIfNull(fullPath);
+        if (!throughLinks && IsLink(fullPath))
+        {
+            return false;
+        }
+
+        string database = WithoutSibling(fullPath);
+        return HasSqliteHeader(fullPath) || (database.Length != fullPath.Length && HasSqliteHeader(database));
+    }
+
+    private static bool IsLink(string fullPath)
+    {
+        try
+        {
+            return new FileInfo(fullPath).LinkTarget is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The file names of <see cref="NamedFiles"/>, for the shell police to find in a line.</summary>

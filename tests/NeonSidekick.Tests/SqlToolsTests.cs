@@ -329,7 +329,7 @@ public sealed class SqlToolsTests
         Assert.Null(SqlTablesTool.LikePattern(" "));
         Assert.Equal("%Order%", SqlTablesTool.LikePattern("Order"));
         Assert.Equal("Sales.%", SqlTablesTool.LikePattern("Sales.*"));
-        Assert.Equal("Sales_Order", SqlTablesTool.LikePattern("Sales_Order"));
+        Assert.Equal("%Sales_Order%", SqlTablesTool.LikePattern("Sales_Order"));   // an underscore alone is a name's, every family's way (2026-10-24, review C12; it was the pattern as written)
     }
 
     [Fact]

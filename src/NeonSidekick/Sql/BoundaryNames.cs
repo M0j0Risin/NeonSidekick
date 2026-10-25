@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace NeonSidekick.Sql;
 
@@ -15,11 +16,22 @@ public sealed class BoundaryNames
 
     private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, IReadOnlyList<string[]> Rows)> _rows = new(StringComparer.Ordinal);
+    private IReadOnlyList<string[]>? _seeded;
+
+    /// <summary>What a boundary built from one read's rows (a set, a pair of sets), kept beside them (2026-10-24, the database review's R14).</summary>
+    private readonly ConditionalWeakTable<IReadOnlyList<string[]>, object> _built = new();
 
     public BoundaryNames(TimeProvider? time = null)
     {
         _time = time ?? TimeProvider.System;
     }
+
+    /// <summary>
+    /// A test's names (2026-10-24, the database review's S2/S3/J6: with no server every names read failed, so a test could never reach the
+    /// branch where the names come back and the boundary refuses before the pane or the run): every key reads <paramref name="rows"/> from
+    /// now on, no server asked.
+    /// </summary>
+    public void Seed(IReadOnlyList<string[]> rows) => _seeded = rows ?? throw new ArgumentNullException(nameof(rows));
 
     /// <summary>The key of one connection: its name and the parts that say where it points, joined.</summary>
     public static string Key(params string?[] parts) => string.Join("\n", parts.Select(p => p?.Trim() ?? ""));
@@ -32,6 +44,11 @@ public sealed class BoundaryNames
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(read);
+        if (_seeded is { } seeded)
+        {
+            return (seeded, null);
+        }
+
         var now = _time.GetUtcNow();
         if (_rows.TryGetValue(key, out var hit) && now - hit.At < Lifetime)
         {
@@ -44,8 +61,32 @@ public sealed class BoundaryNames
             return (null, run);
         }
 
-        IReadOnlyList<string[]> rows = run.Grids.Count > 0 ? run.Grids[0].Rows : [];
+        // A list cut at its cap, or none at all, cannot settle a qualifier (2026-10-24, the database review's E8, mechanism 7: a name past
+        // the cap passed as an alias), so it is a failed read: the statement that needed it is refused, nothing kept.
+        if (run.Grids.Count == 0 || run.Grids[0].More || run.Grids[0].Rows.Count == 0)
+        {
+            return (null, run with { Outcome = SqlOutcome.Failed, Detail = SqlText.NamesUnread, Grids = [] });
+        }
+
+        IReadOnlyList<string[]> rows = run.Grids[0].Rows;
         _rows[key] = (now, rows);
         return (rows, null);
     }
+
+    /// <summary>
+    /// What <paramref name="build"/> makes of <paramref name="rows"/> (rows <see cref="GetAsync"/> gave), made once per read and kept while
+    /// the rows are (R14: each check rebuilt sets over up to 200,000 names).
+    /// </summary>
+    public T Built<T>(IReadOnlyList<string[]> rows, Func<IReadOnlyList<string[]>, T> build) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(build);
+        return (T)_built.GetValue(rows, r => build(r));
+    }
+
+    /// <summary>
+    /// Forgets every name read (2026-10-24, the database review's A11): after a committed change a schema or database made, renamed or
+    /// moved is seen by the next statement's check, not a minute later.
+    /// </summary>
+    public void Forget() => _rows.Clear();
 }

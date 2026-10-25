@@ -251,6 +251,26 @@ public sealed class SqliteToolsTests : IDisposable
         Assert.StartsWith("Error: could not open notes: no database file at ", SqliteText.Error(gone));
     }
 
+    /// <summary>
+    /// Each read layer alone keeps a write from landing (2026-10-24, the database review's S14: a DELETE was asserted to fail
+    /// <c>readonly</c>, which the read-only open and <c>query_only</c> both give, so either could be missing): the row count after says so.
+    /// </summary>
+    [Theory]
+    [InlineData(SqliteReadLayers.ReadOnlyOpen)]
+    [InlineData(SqliteReadLayers.QueryOnly)]
+    [InlineData(SqliteReadLayers.RolledBack)]
+    public void EachReadLayer_Alone_KeepsADeleteFromLanding(SqliteReadLayers layer)
+    {
+        var target = new SqliteTarget("shop", Path.Combine(_dir, "shop.db"));
+        var run = SqliteAccess.RunWithLayers(target, ["DELETE FROM customers"], layer);
+        Assert.Equal(layer == SqliteReadLayers.RolledBack ? SqlOutcome.Ok : SqlOutcome.Failed, run.Outcome);   // rolled back: it ran, then undone
+        Assert.Equal("3", SqliteAccess.RunWithLayers(target, ["SELECT count(*) FROM customers"], SqliteReadLayers.All).Grids[0].Rows[0][0]);
+
+        // With none of them the same DELETE lands: the seam leaves the layer out for real.
+        Assert.Equal(SqlOutcome.Ok, SqliteAccess.RunWithLayers(target, ["DELETE FROM orders WHERE id = 2"], SqliteReadLayers.None).Outcome);
+        Assert.Equal("2", SqliteAccess.RunWithLayers(target, ["SELECT count(*) FROM orders"], SqliteReadLayers.All).Grids[0].Rows[0][0]);
+    }
+
     [Fact]
     public async Task TheTools_ListDescribeAndQuery()
     {

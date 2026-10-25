@@ -55,11 +55,19 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The tools an advisor may call (2026-10-10): this chat's turn tools as plan mode narrows them, less the question pane, the
     /// camera, the screen and the advisors themselves, and their rules' text. The tool narrows again (<see cref="Llm.Tools.NeonAdvisorTool.ReadOnlyOf"/>).
+    /// No database tool since 2026-10-24 (the database review's J1, decision DB4: an advisor on a hosted API queried the chat's connections
+    /// and sent the rows to its provider; redacting arbitrary rows is not possible), and so no database rule in its prompt either: it is
+    /// never told of tools it does not have.
     /// </summary>
     public static (IReadOnlyList<AIFunction> Tools, string Rules) AdvisorTurnTools(TurnToolInputs inputs, bool markdown)
     {
         ArgumentNullException.ThrowIfNull(inputs);
-        var set = ComposeTurnTools(inputs with { PlanReadOnly = true, Plan = null, Ask = null, Camera = null, Screen = null, NeonAdvisor = null });
+        var set = ComposeTurnTools(inputs with
+        {
+            PlanReadOnly = true, Plan = null, Ask = null, Camera = null, Screen = null, NeonAdvisor = null,
+            Sql = null, SqlEnabled = false, Oracle = null, OracleEnabled = false, MySql = null, MySqlEnabled = false,
+            Postgres = null, PostgresEnabled = false, Sqlite = null, SqliteEnabled = false,
+        });
         return set.Tools.Count == 0 ? ([], "") : (set.Tools, set.Rules.DefaultRules(markdown));
     }
 

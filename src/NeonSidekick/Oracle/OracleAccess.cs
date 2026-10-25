@@ -54,9 +54,15 @@ public sealed class OracleAccess
     private readonly Func<OracleCatalog> _catalog;
 
     /// <param name="catalog">The connections in force; the app's reads the profile's and the home's <c>oracle.json</c> at every call.</param>
-    public OracleAccess(Func<OracleCatalog> catalog)
+    public OracleAccess(Func<OracleCatalog> catalog) : this(catalog, null)
+    {
+    }
+
+    /// <summary>An access over <paramref name="catalog"/> sharing <paramref name="names"/> (a pinned one's, <see cref="Pinned"/>), or a cache of its own.</summary>
+    public OracleAccess(Func<OracleCatalog> catalog, Sql.BoundaryNames? names)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        Names = names ?? new();
     }
 
     /// <summary>
@@ -73,7 +79,14 @@ public sealed class OracleAccess
     public OracleCatalog Catalog() => _catalog();
 
     /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
-    public Sql.BoundaryNames Names { get; } = new();
+    public Sql.BoundaryNames Names { get; }
+
+    /// <summary>
+    /// An access over <paramref name="target"/> alone, sharing this one's names cache (2026-10-24, the database review's H11): an <c>_execute</c>
+    /// call resolves its connection once and every step after — the boundary, the pane, the run — works on that entry, so a file edited in
+    /// between cannot send an allowed change to another server.
+    /// </summary>
+    public OracleAccess Pinned(OracleNamedConnection target) => new(() => new OracleCatalog([target], []), Names);
 
     /// <summary>
     /// The connection a call means (<see cref="OracleCatalog.Find"/>), or null with the refusal: none defined, none named among several, or a name that
@@ -97,6 +110,9 @@ public sealed class OracleAccess
 
         return found;
     }
+
+    /// <summary>Whether a failed open says the password is wrong (ORA-01017): the sign-in guard holds it (2026-10-24, review K1).</summary>
+    public static bool WrongPassword(Exception ex) => ex is OracleException { Number: 1017 };
 
     /// <summary>
     /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (or the only one
@@ -125,7 +141,10 @@ public sealed class OracleAccess
         await using var connection = new OracleConnection(target.Config.Builder(secret.Value).ConnectionString);
         try
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            if (await Sql.DatabaseSignIn.OpenAsync(Sql.DatabaseSignIn.Call("oracle", target.Config.DataSource ?? "", target.Config.User?.Trim(), secret.Value, WrongPassword), connection.OpenAsync, cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, Sql.SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.DataSource?.Trim() ?? "", OracleConfigFile.Family.Tab), target.Name);
+            }
         }
         catch (OracleException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -141,18 +160,28 @@ public sealed class OracleAccess
         var grids = new List<SqlGrid>();
         try
         {
-            await ProtectSessionAsync(connection, target.Name, workIn, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            if (await ProtectSessionAsync(connection, target.Name, workIn, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } unprotected)
+            {
+                return SqlRun.Refused(SqlOutcome.Failed, unprotected, target.Name);
+            }
+
             using var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
             try
             {
                 await ExecuteAsync(connection, transaction, "SET TRANSACTION READ ONLY", timeoutSeconds, cancellationToken).ConfigureAwait(false);
                 foreach (string sql in statements)
                 {
-                    await using var command = new OracleCommand(sql, connection)
+                    // One deadline for the whole call (2026-10-24, the database review's O13: each statement had the full timeout).
+                    if (SqlDeadline.Left(watch, timeoutSeconds) is not (> 0 and var left))
+                    {
+                        return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+                    }
+
+                    await using var command = new OracleCommand(OracleCatalogQueries.ForServer(sql, connection.ServerVersion), connection)
                     {
                         Transaction = transaction,
                         BindByName = true,
-                        CommandTimeout = timeoutSeconds,
+                        CommandTimeout = left,
                         InitialLONGFetchSize = LongFetchChars,
                     };
                     var named = OracleReadOnlyGate.Binds(sql);
@@ -226,7 +255,10 @@ public sealed class OracleAccess
         await using var connection = new OracleConnection(target.Config.Builder(secret.Value, pooling: false).ConnectionString);
         try
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            if (await Sql.DatabaseSignIn.OpenAsync(Sql.DatabaseSignIn.Call("oracle", target.Config.DataSource ?? "", target.Config.User?.Trim(), secret.Value, WrongPassword), connection.OpenAsync, cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, Sql.SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.DataSource?.Trim() ?? "", OracleConfigFile.Family.Tab), target.Name);
+            }
         }
         catch (OracleException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -242,9 +274,9 @@ public sealed class OracleAccess
         int? changes;
         try
         {
-            if (OracleIdentifier.Quote(workIn) is { } quoted)
+            if (await SetSchemaAsync(connection, workIn, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } unset)
             {
-                await ExecuteAsync(connection, null, "ALTER SESSION SET CURRENT_SCHEMA = " + quoted, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+                return SqlRun.Refused(SqlOutcome.Failed, unset, target.Name);
             }
 
             await using var command = new OracleCommand(sql, connection) { BindByName = true, CommandTimeout = timeoutSeconds };
@@ -281,10 +313,22 @@ public sealed class OracleAccess
     /// The session's layers, the app's own statements before any transaction: <c>READ_ONLY</c> on 23ai and later (skipped
     /// before, logged once per connection), then the schema this call works in.
     /// </summary>
-    private static async Task ProtectSessionAsync(OracleConnection connection, string name, string schema, int timeoutSeconds, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Since 2026-10-24 (the database review, mechanism 7) a layer that cannot be set refuses the call: a server version that does not read
+    /// (H10: it read as release 0 and the session layer was skipped with one log line), and a schema no quoted name holds (H6: the schema was
+    /// left unset, and a pooled session kept the one another entry had set — the lock failed open). The schema is set from its normalized
+    /// spelling as it stands (E2). Null when every layer held; else the refusal.
+    /// </remarks>
+    private static async Task<string?> ProtectSessionAsync(OracleConnection connection, string name, string schema, int timeoutSeconds, CancellationToken cancellationToken)
     {
         string version = connection.ServerVersion ?? "";
-        if (Release(version) >= SessionReadOnlyRelease)
+        int release = Release(version);
+        if (release == 0)
+        {
+            return OracleText.VersionUnread(version);
+        }
+
+        if (release >= SessionReadOnlyRelease)
         {
             await ExecuteAsync(connection, null, "ALTER SESSION SET READ_ONLY = TRUE", timeoutSeconds, cancellationToken).ConfigureAwait(false);
         }
@@ -293,11 +337,19 @@ public sealed class OracleAccess
             DiagnosticLog.Info(OracleConfigFile.Category, OracleText.SessionReadOnlySkippedLogLine(name, version));
         }
 
-        // A user name that is no plain identifier (it was quoted when made) leaves the session where it signed in.
-        if (OracleIdentifier.Quote(schema) is { } quoted)
+        return await SetSchemaAsync(connection, schema, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The session's <c>CURRENT_SCHEMA</c> set to <paramref name="schema"/> (as normalized, E2), or the refusal when no quoted name holds it (H6).</summary>
+    private static async Task<string?> SetSchemaAsync(OracleConnection connection, string schema, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        if (OracleIdentifier.QuoteNormal(schema) is not { } quoted)
         {
-            await ExecuteAsync(connection, null, "ALTER SESSION SET CURRENT_SCHEMA = " + quoted, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            return OracleText.SchemaUnset(schema);
         }
+
+        await ExecuteAsync(connection, null, "ALTER SESSION SET CURRENT_SCHEMA = " + quoted, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        return null;
     }
 
     /// <summary>The major release of a server version (<c>23.26.3.0.0</c> is 23); 0 when it does not read.</summary>
@@ -356,6 +408,17 @@ public sealed class OracleAccess
                         {
                             return BlobText(blob);
                         }
+
+                    // The time zone kept (2026-10-24, the database review's B9: through GetValue a TIMESTAMP WITH TIME ZONE lost its offset,
+                    // and one WITH LOCAL TIME ZONE read as a bare local time), and an INTERVAL YEAR TO MONTH as years and months, not a count.
+                    case "TimeStampTZ":
+                        return TimeZoned(oracle.GetOracleTimeStampTZ(ordinal));
+
+                    case "TimeStampLTZ":
+                        return TimeZoned(oracle.GetOracleTimeStampLTZ(ordinal).ToOracleTimeStampTZ());
+
+                    case "IntervalYM":
+                        return YearsMonths(oracle.GetOracleIntervalYM(ordinal));
                 }
             }
 
@@ -378,13 +441,27 @@ public sealed class OracleAccess
         }
     }
 
+    /// <summary>A CLOB's first <see cref="SqlText.MaxCellChars"/> characters, scrubbed as every cell is and never cut inside a pair (2026-10-24, review B10, F15).</summary>
     private static string ClobText(OracleClob clob)
     {
         long length = clob.Length;
-        var buffer = new char[(int)Math.Min(length, SqlText.MaxCellChars)];
+        var buffer = new char[(int)Math.Min(length, SqlText.MaxCellChars + 1)];
         int read = buffer.Length == 0 ? 0 : clob.Read(buffer, 0, buffer.Length);
-        string text = new(buffer, 0, read);
+        string text = Llm.Tools.UntrustedText.Scrub(Files.TextCut.Safe(new string(buffer, 0, read), SqlText.MaxCellChars));
         return length <= SqlText.MaxCellChars ? text : text + $"… ({length.ToString(CultureInfo.InvariantCulture)} chars)";
+    }
+
+    /// <summary>A time zone's timestamp with its offset, as <see cref="SqlText.Cell"/> writes a <see cref="DateTimeOffset"/> (B9).</summary>
+    private static string TimeZoned(OracleTimeStampTZ value) => SqlText.Cell(new DateTimeOffset(value.Value, value.GetTimeZoneOffset()));
+
+    /// <summary>An INTERVAL YEAR TO MONTH as Oracle writes it: <c>+1-06</c>, <c>-2-03</c> (B9).</summary>
+    public static string YearsMonths(OracleIntervalYM value) => YearsMonths(value.Years, value.Months);
+
+    /// <summary>Years and months as Oracle writes an INTERVAL YEAR TO MONTH. Pure.</summary>
+    public static string YearsMonths(int years, int months)
+    {
+        bool negative = years < 0 || months < 0;
+        return (negative ? "-" : "+") + Math.Abs(years).ToString(CultureInfo.InvariantCulture) + "-" + Math.Abs(months).ToString("00", CultureInfo.InvariantCulture);
     }
 
     private static string BlobText(OracleBlob blob)
@@ -422,9 +499,10 @@ public sealed class OracleAccess
         string.Join(" ", (message ?? "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("Help:", StringComparison.Ordinal) && !l.StartsWith("https://", StringComparison.Ordinal)));
 
     /// <summary>
-    /// A parameter typed by its value, bound by name (<c>:name</c>): text as <c>VARCHAR2</c> (a <c>CLOB</c> past 4000
-    /// characters), whole numbers as <c>NUMBER</c> through <see cref="long"/>, decimals exact, floats as
-    /// <c>BINARY_DOUBLE</c>, a boolean as 1 or 0 (what a <c>NUMBER(1)</c> flag holds, and 23ai's BOOLEAN takes).
+    /// A parameter typed by its value, bound by name (<c>:name</c>): text as <c>VARCHAR2</c> (a <c>CLOB</c> past 4000 bytes as UTF-8 — the
+    /// limit is in bytes, so 4,000 multibyte characters failed with ORA-01461; 2026-10-24, the database review's E10), whole numbers as
+    /// <c>NUMBER</c> through <see cref="long"/>, decimals exact, floats as <c>BINARY_DOUBLE</c>, a boolean as 1 or 0 (what a <c>NUMBER(1)</c>
+    /// flag holds, and 23ai's BOOLEAN takes).
     /// </summary>
     public static OracleParameter Bind(SqlParameterValue value)
     {
@@ -433,7 +511,7 @@ public sealed class OracleAccess
         return value.Value switch
         {
             null => new OracleParameter(name, OracleDbType.Varchar2) { Value = DBNull.Value },
-            string s => new OracleParameter(name, s.Length <= 4000 ? OracleDbType.Varchar2 : OracleDbType.Clob) { Value = s },
+            string s => new OracleParameter(name, System.Text.Encoding.UTF8.GetByteCount(s) <= 4000 ? OracleDbType.Varchar2 : OracleDbType.Clob) { Value = s },
             long l => new OracleParameter(name, OracleDbType.Int64) { Value = l },
             int i => new OracleParameter(name, OracleDbType.Int32) { Value = i },
             decimal d => new OracleParameter(name, OracleDbType.Decimal) { Value = d },

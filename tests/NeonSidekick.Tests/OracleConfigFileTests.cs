@@ -254,7 +254,11 @@ public sealed class OracleConfigFileTests : IDisposable
         Assert.Equal("plain", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = "plain" })).Value);
         Assert.Equal("kept", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.Protect("kept").Value })).Value);
         Assert.Equal(OracleText.NoPassword("prod"), OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u" })).Error);
-        Assert.Contains("/tools › Databases › Oracle", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.ProtectedPrefix + "bm90LWRwYXBp" })).Error);
+        // A value with the prefix but not a DPAPI blob's shape is a typed password (2026-10-24, the database review's D10: it read as protected
+        // and failed to decrypt for good); one with the shape that will not decrypt names the fix on Oracle's menu.
+        Assert.Equal("dpapi:bm90LWRwYXBp", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.ProtectedPrefix + "bm90LWRwYXBp" })).Value);
+        byte[] foreign = [0x01, 0x00, 0x00, 0x00, 0xD0, 0x8C, 0x9D, 0xDF, 0x01, 0x15, 0xD1, 0x11, 0x8C, 0x7A, 0x00, 0xC0, 0x4F, 0xC2, 0x97, 0xEB, 0x01, 0x02, 0x03, 0x04];
+        Assert.Contains("/tools › Databases › Oracle", OracleSecrets.Resolve(Named(new OracleConnectionConfig { DataSource = "x", User = "u", Password = WindowsCredentials.ProtectedPrefix + Convert.ToBase64String(foreign) })).Error);
 
         var credman = Named(new OracleConnectionConfig { DataSource = "x", User = "ledger_ro", PasswordStore = "credman", Credential = _target });
         Assert.Equal(OracleText.NoCredential(_target), OracleSecrets.Resolve(credman).Error);

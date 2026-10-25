@@ -98,7 +98,7 @@ public sealed class OracleQueryTool : OracleTool
         IReadOnlyList<SqlParameterValue> parameters = [];
         if (objects.Count == 1)
         {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
+            if (SqlQueryTool.ReadParameters(objects[0], out var error, SqlQueryTool.ReadColonName, OracleText.BadParamName) is not { } read)
             {
                 return error?.Replace("@name", ":name", StringComparison.Ordinal);
             }

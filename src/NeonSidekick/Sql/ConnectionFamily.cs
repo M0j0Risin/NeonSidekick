@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using NeonSidekick.Computers;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Sql;
@@ -22,11 +23,29 @@ public interface ISignInConfig
     /// <summary>Whether the password lives in Windows Credential Manager (<c>passwordStore: credman</c>).</summary>
     bool InCredentialManager { get; }
 
+    /// <summary>
+    /// Whether the entry signs in with a password at all (2026-10-24, the database review's Q11: <c>sql.json</c> joined the family, and its
+    /// <c>windows</c> entries take none); every other family's always does.
+    /// </summary>
+    bool NeedsPassword => true;
+
     /// <summary>Why the entry cannot connect as written, or null.</summary>
     string? Problem { get; }
 
     /// <summary>The Credential Manager entry the password is under for connection <paramref name="name"/>.</summary>
     string CredentialTarget(string name);
+
+    /// <summary>The entry's own <c>credential</c>, or null for the default target (DB10's prefix rule reads it).</summary>
+    string? Credential { get; }
+
+    /// <summary>
+    /// Where the password is sent: the host (and port, or a data source) as the entry names it (2026-10-24, decision DB9: a stored credential
+    /// records it, and a read for another is refused).
+    /// </summary>
+    string SignInHost { get; }
+
+    /// <summary>The entry's keys the family does not know (2026-10-24, the database review's K2): any one refuses the entry.</summary>
+    Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 /// <summary>A connection by its name and the file it came from, whatever its family.</summary>
@@ -51,14 +70,31 @@ public static class ConnectionCatalog
 {
     /// <summary>
     /// The connections whose name is in <paramref name="names"/> (case-insensitive), in file order; null offers none, as an
-    /// empty list does (2026-10-01, the user's call; it was "all" until then).
+    /// empty list does (2026-10-01, the user's call; it was "all" until then). A null or blank name in the list is skipped (2026-10-24, the
+    /// database review's N11: a null threw in every tool build).
     /// </summary>
     public static List<TNamed> Offered<TNamed>(IReadOnlyList<TNamed> connections, IReadOnlyList<string>? names)
         where TNamed : INamedConnection
     {
         ArgumentNullException.ThrowIfNull(connections);
-        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+        var wanted = Wanted(names);
         return connections.Where(c => wanted.Contains(c.Name)).ToList();
+    }
+
+    /// <summary>The ticked names, trimmed, case ignored; null and blank ones skipped (N11).</summary>
+    public static HashSet<string> Wanted(IReadOnlyList<string>? names) =>
+        new((names ?? []).Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The problems an offered catalog keeps (2026-10-24, the database review's J5: <c>*_connections</c> listed every entry's problem, so the
+    /// names, file paths and sign-in details of entries the user had not ticked reached the model): those of a ticked name, and those of a
+    /// whole file or of no entry. The menus read the whole catalog's.
+    /// </summary>
+    public static List<SqlConfigProblem> OfferedProblems(IReadOnlyList<SqlConfigProblem> problems, IReadOnlyList<string>? names)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        var wanted = Wanted(names);
+        return problems.Where(p => p.Name is null || wanted.Contains(p.Name)).ToList();
     }
 
     /// <summary>
@@ -80,18 +116,32 @@ public static class ConnectionCatalog
 }
 
 /// <summary>
-/// One connections-file family that signs in with a password — <c>oracle.json</c>, <c>mysql.json</c>, <c>postgres.json</c> — as one
+/// One connections-file family that signs in with a password — <c>oracle.json</c>, <c>mysql.json</c>, <c>postgres.json</c>, and since
+/// 2026-10-24 <c>sql.json</c> (the database review's Q11: its own loader and <c>SqlSecrets</c> were a fourth copy, already worded apart) — as one
 /// piece of code over the family's facts (2026-10-04, the review's call: the three were copies with the names changed, and a fix to
 /// the secrets or the loading had to be made three times). <c>{ "connections": { "&lt;name&gt;": { … } } }</c>, one in the profile's
 /// folder and one in the home's (configs since 2026-10-16), the profile's winning by name (<see cref="SqlConfigFile"/>'s pair). A missing file is empty; a corrupt
 /// or unreadable one is a problem and one warning, never a crash. A plain <c>password</c> is DPAPI-encrypted in place at the first read
-/// that sees it; the byte-level edits are <see cref="ConnectionsFileEdit"/>'s. <c>sql.json</c> (Windows sign-in, <c>runas</c>),
-/// <c>sqlite.json</c> (no password) and <c>unc.json</c> (shares) differ enough to keep their own.
+/// that sees it; the byte-level edits are <see cref="ConnectionsFileEdit"/>'s. <c>sql.json</c>'s Windows sign-in and <c>runas</c> stay in
+/// its entry's <c>Problem</c> and its access class; <c>sqlite.json</c> (no password) and <c>unc.json</c> (shares) differ enough to keep their own.
 /// </summary>
+/// <remarks>
+/// Since 2026-10-24 (the database review's mechanism 1, the admin families' <see cref="ComputerFamily{TConfig}"/> carried over): a file is
+/// read once per change (<see cref="ConfigCache"/>: K6, B15 — every catalog read parsed both files and ran the encryption again); an entry is
+/// refused for a key it does not know (K2: a misspelled <c>schema</c> dropped the lock silently), a name given twice (D2), a key given twice, or a
+/// <c>credential</c> outside <see cref="CredentialPrefix"/> under the <c>credman</c> store, the only one that reads it (D7, DB10); a file whose section is given twice is refused whole (N5); a profile's
+/// refused entry hides the home's of the same name (D1: a broken read-only lock-down fell back to the home's readwrite one); every plain
+/// password in the file is encrypted, an entry with a problem's or a windows/credman entry's leftover too (N1, N2), and only over the very
+/// value read (A16); a typed value that merely starts <c>dpapi:</c> is plain text (D10); the entry text is written from a copy (B14) and a
+/// sealed password rides the same write (B13).
+/// </remarks>
 public sealed class ConnectionFamily<TConfig, TNamed>
     where TConfig : class, ISignInConfig
     where TNamed : class, INamedConnection<TConfig>
 {
+    /// <summary>The key the connections sit under.</summary>
+    public const string Section = ConnectionsFileEdit.DefaultSection;
+
     /// <summary>The file's name in a profile's <c>configs</c> folder and in the home (<c>mysql.json</c>).</summary>
     public required string FileName { get; init; }
 
@@ -107,8 +157,11 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>Why a <c>null</c> entry cannot connect (<c>MySqlText.NoHost</c>).</summary>
     public required string NullEntry { get; init; }
 
-    /// <summary>The file's text as its connections by name, in file order; throws what <see cref="JsonSerializer"/> throws.</summary>
-    public required Func<string, IReadOnlyDictionary<string, TConfig?>?> Deserialize { get; init; }
+    /// <summary>
+    /// The file's UTF-8 text as its connections by name, in file order, and the keys beside <c>connections</c>; throws what
+    /// <see cref="JsonSerializer"/> throws.
+    /// </summary>
+    public required Func<byte[], (IReadOnlyDictionary<string, TConfig?>? Entries, IReadOnlyDictionary<string, JsonElement>? Extra)> Deserialize { get; init; }
 
     /// <summary>The source-generated metadata an added entry is written with.</summary>
     public required JsonTypeInfo<TConfig> EntryInfo { get; init; }
@@ -125,6 +178,9 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>The log line for a profiles folder that could not be listed (<c>MySqlText.ProfilesUnlistedLogLine</c>).</summary>
     public required Func<string, string, string> ProfilesUnlistedLogLine { get; init; }
 
+    /// <summary>Where every <c>credential</c> of the family sits (<c>NeonSidekick/mysql/</c>; DB10).</summary>
+    public required string CredentialPrefix { get; init; }
+
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\&lt;FileName&gt;</c> (<c>configs</c> since 2026-10-16).</summary>
     public string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
@@ -132,22 +188,37 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     public string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
-    /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot connect
-    /// (<see cref="ISignInConfig.Problem"/>) or has a blank name — for a file that is not JSON or cannot be read, one problem for
-    /// the file and one warning. A missing file is empty. Never throws.
+    /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot be used — for a file that is not
+    /// JSON or cannot be read, one problem for the file and one warning. A missing file is empty. Read again only once the file changes
+    /// (<see cref="ConfigCache"/>); the lists are the caller's own. Never throws.
     /// </summary>
     public (List<TNamed> Connections, List<SqlConfigProblem> Problems) Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var (connections, problems) = ConfigCache.Get(FileName, path, () => LoadUncached(path));
+        return ([.. connections], [.. problems]);
+    }
+
+    private (IReadOnlyList<TNamed> Connections, IReadOnlyList<SqlConfigProblem> Problems) LoadUncached(string path)
+    {
         if (!File.Exists(path))
         {
             return ([], []);
         }
 
         IReadOnlyDictionary<string, TConfig?>? entries;
+        IReadOnlyDictionary<string, JsonElement>? extra;
+        IReadOnlySet<string> repeated;
+        IReadOnlyDictionary<string, string> twice;
+        string? section;
         try
         {
-            entries = Deserialize(File.ReadAllText(path));
+            byte[] utf8 = ConnectionsFileEdit.ForEdit(File.ReadAllBytes(path), out _);
+            byte[] json = ConfigChecks.WithoutBom(utf8).ToArray();
+            repeated = ConnectionsFileEdit.RepeatedNames(json, Section);
+            twice = ConnectionsFileEdit.RepeatedKeys(json, Section);
+            section = ConnectionsFileEdit.RepeatedSection(json, Section);
+            (entries, extra) = section is null ? Deserialize(json) : (null, null);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -156,13 +227,18 @@ public sealed class ConnectionFamily<TConfig, TNamed>
             return ([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail), WholeFile: true)]);
         }
 
+        if (section is not null)
+        {
+            return ([], [new SqlConfigProblem(path, SqlText.SectionTwice(section), WholeFile: true)]);
+        }
+
+        var problems = ConfigChecks.UnknownFileKeys(extra, Section).Select(p => new SqlConfigProblem(path, p)).ToList();
         if (entries is null || entries.Count == 0)
         {
-            return ([], []);
+            return ([], problems);
         }
 
         var connections = new List<TNamed>(entries.Count);
-        var problems = new List<SqlConfigProblem>();
         foreach (var (name, config) in entries)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -171,55 +247,93 @@ public sealed class ConnectionFamily<TConfig, TNamed>
                 continue;
             }
 
-            string? reason = config is null ? NullEntry : config.Problem;
+            string trimmed = name.Trim();
+            bool named = repeated.Contains(trimmed);
+            string? key = twice.TryGetValue(trimmed, out string? k) ? k : null;
+            string? reason = config is null ? NullEntry
+                : named ? ComputerText.NamedTwice
+                : key is not null ? ComputerText.KeyTwice(key)
+                : ConfigChecks.UnknownKey(config.Extra, EntryInfo)
+                ?? config.Problem
+                ?? (config.InCredentialManager ? ComputerConfig.CredentialProblem(config.Credential, CredentialPrefix) : null);
+
+            // Every plain password is encrypted, a refused entry's too (N1, N2) — but not one given twice, whose splice could land in the twin.
+            if (config is not null && !named && key is null)
+            {
+                EncryptInPlace(path, trimmed, config);
+            }
+
             if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim(), Entry: config));
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, trimmed), reason, Name: trimmed, Entry: config));
                 continue;
             }
 
-            EncryptInPlace(path, name.Trim(), config!);
-            connections.Add(Named(name.Trim(), config!, path));
+            connections.Add(Named(trimmed, config!, path));
         }
 
         return (connections, problems);
     }
 
-    /// <summary>The profile's file over the home's (<paramref name="home"/> null = the profile's alone): a name in both is the profile's.</summary>
+    /// <summary>
+    /// The profile's file over the home's (<paramref name="home"/> null = the profile's alone): a name in both is the profile's, and a profile
+    /// entry that was refused still hides the home's of its name (D1: the profile meant its own).
+    /// </summary>
     public (List<TNamed> Connections, List<SqlConfigProblem> Problems) LoadCatalog(string profileDirectory, string? home)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileDirectory);
         var profile = Load(ProfilePath(profileDirectory));
-        if (home is null || string.Equals(Path.GetFullPath(ProfilePath(profileDirectory)), Path.GetFullPath(GlobalPath(home)), StringComparison.OrdinalIgnoreCase))
+        if (home is null || SamePath(profileDirectory, home))
         {
             return profile;
         }
 
         var global = Load(GlobalPath(home));
-        var names = new HashSet<string>(profile.Connections.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+        var names = new HashSet<string>(profile.Connections.Select(c => c.Name).Concat(profile.Problems.Where(p => p.Name is not null).Select(p => p.Name!)), StringComparer.OrdinalIgnoreCase);
         return ([.. profile.Connections, .. global.Connections.Where(c => !names.Contains(c.Name))], [.. profile.Problems, .. global.Problems]);
     }
 
     /// <summary>
-    /// The safety net under the tab's masked prompt, <see cref="SqlConfigFile"/>'s: a plain-text <c>password</c> under the <c>file</c>
-    /// store is DPAPI-encrypted and written back over that one value at the first read that sees it, the file's comments and layout
-    /// kept. A file that cannot be written keeps working with the plain value, and says so once per read in the log.
+    /// Every entry both files name, as read — usable, refused, and the home's a profile entry shadows alike (2026-10-24, the database review's
+    /// H9: the shell police and the SQLite guard built from <see cref="LoadCatalog"/>, which drops a shadowed home entry, so its host or file
+    /// went unguarded). The police's and the guard's, never a tool's.
+    /// </summary>
+    public IReadOnlyList<TConfig> Everything(string profileDirectory, string? home)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileDirectory);
+        var files = new List<(List<TNamed> Connections, List<SqlConfigProblem> Problems)> { Load(ProfilePath(profileDirectory)) };
+        if (home is not null && !SamePath(profileDirectory, home))
+        {
+            files.Add(Load(GlobalPath(home)));
+        }
+
+        return files.SelectMany(f => f.Connections.Select(c => c.Config).Concat(f.Problems.Select(p => p.Entry).OfType<TConfig>())).ToList();
+    }
+
+    private bool SamePath(string profileDirectory, string home) =>
+        string.Equals(Path.GetFullPath(ProfilePath(profileDirectory)), Path.GetFullPath(GlobalPath(home)), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The safety net under the tab's masked prompt, <see cref="SqlConfigFile"/>'s: a plain-text <c>password</c> is DPAPI-encrypted and written
+    /// back over that one value at the first read that sees it, the file's comments and layout kept — only while the file still holds that
+    /// value (A16). A file that cannot be written keeps working with the plain value, and says so once per change of the file in the log.
     /// </summary>
     private void EncryptInPlace(string path, string name, TConfig config)
     {
-        if (config.InCredentialManager || string.IsNullOrEmpty(config.Password) || WindowsCredentials.IsProtected(config.Password) || !WindowsCredentials.CanProtect)
+        string? plain = config.Password;
+        if (string.IsNullOrEmpty(plain) || WindowsCredentials.IsSealed(plain) || !WindowsCredentials.CanProtect)
         {
             return;
         }
 
-        var encrypted = WindowsCredentials.Protect(config.Password);
-        string? error = encrypted.Error ?? ConnectionsFileEdit.WritePassword(path, name, encrypted.Value!);
+        var encrypted = WindowsCredentials.Protect(plain);
+        string? error = encrypted.Error ?? ConnectionsFileEdit.WritePassword(path, name, encrypted.Value!, expected: plain);
         if (error is null)
         {
             config.Password = encrypted.Value;
             DiagnosticLog.Info(Category, SqlText.EncryptedLogLine(name, path));
         }
-        else
+        else if (error != ConnectionsFileEdit.PasswordChanged)
         {
             DiagnosticLog.Warn(Category, SqlText.EncryptFailedLogLine(name, path, error));
         }
@@ -228,50 +342,50 @@ public sealed class ConnectionFamily<TConfig, TNamed>
     /// <summary>
     /// Adds connection <paramref name="name"/> to <paramref name="path"/> (the tab's add-connection wizard), the file's comments and
     /// layout kept (<see cref="ConnectionsFileEdit.AddConnection"/>; a missing file is made with <see cref="EmptyText"/> first). The
-    /// entry is <paramref name="config"/> through <see cref="EntryInfo"/>, its <c>password</c> left out: the caller stores it after
-    /// (<see cref="Save"/>). Null on success, else why not.
+    /// entry is <paramref name="config"/> through <see cref="EntryInfo"/>, its <c>password</c> <paramref name="sealedPassword"/> (a <c>dpapi:</c>
+    /// value, B13: in the same write) or left out. Null on success, else why not.
     /// </summary>
-    public string? AddConnection(string path, string name, TConfig config)
+    public string? AddConnection(string path, string name, TConfig config, string? sealedPassword = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText);
+        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config, sealedPassword), EmptyText);
     }
 
     /// <summary>
     /// Replaces connection <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and
-    /// <paramref name="config"/> (2026-10-05, the tab's wizard editing an entry; <see cref="ConnectionsFileEdit.ReplaceConnection"/>),
-    /// the <c>password</c> left out as for an add. Null on success, else why not.
+    /// <paramref name="config"/> (2026-10-05, the tab's wizard editing an entry; <see cref="ConnectionsFileEdit.ReplaceConnection"/>), the
+    /// <c>password</c> <paramref name="sealedPassword"/> in the same write (B13: written after, a failed save left the entry with none) or left
+    /// out. Null on success, else why not.
     /// </summary>
-    public string? ReplaceConnection(string path, string oldName, string newName, TConfig config)
+    public string? ReplaceConnection(string path, string oldName, string newName, TConfig config, string? sealedPassword = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
         ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config));
+        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config, sealedPassword));
     }
 
-    /// <summary>One entry as the file holds it: <see cref="EntryInfo"/>'s keys, indented, no <c>password</c>, the relaxed escaping.</summary>
-    private string EntryText(TConfig config)
+    /// <summary>
+    /// One entry as the file holds it: <see cref="EntryInfo"/>'s keys, indented, the relaxed escaping, its unknown keys left out and its
+    /// <c>password</c> <paramref name="sealedPassword"/> or none. Written from a copy (2026-10-24, the database review's B14: the loaded entries
+    /// are shared through <see cref="ConfigCache"/>, and blanking then restoring the caller's <c>Password</c> raced a reader).
+    /// </summary>
+    public string EntryText(TConfig config, string? sealedPassword = null)
     {
-        string? password = config.Password;
-        config.Password = null;
-        try
+        ArgumentNullException.ThrowIfNull(config);
+        var copy = JsonSerializer.Deserialize(JsonSerializer.Serialize(config, EntryInfo), EntryInfo)!;
+        copy.Password = sealedPassword;
+        copy.Extra = null;
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-            {
-                JsonSerializer.Serialize(writer, config, EntryInfo);
-            }
+            JsonSerializer.Serialize(writer, copy, EntryInfo);
+        }
 
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
-        finally
-        {
-            config.Password = password;
-        }
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>
@@ -304,19 +418,40 @@ public sealed class ConnectionFamily<TConfig, TNamed>
 
     /// <summary>
     /// The password <paramref name="connection"/> signs in with: under <c>passwordStore: credman</c> the Windows Credential Manager
-    /// entry <see cref="ISignInConfig.CredentialTarget"/>; under <c>file</c> (the default) the <c>password</c> decrypted — or, while it
-    /// is still plain text (a file the app could not rewrite), as it stands. A missing or undecryptable password is the sentence that
-    /// names the fix, never a throw.
+    /// entry <see cref="ISignInConfig.CredentialTarget"/> — its stored user the entry's (I14), its recorded host the entry's (DB9); under
+    /// <c>file</c> (the default) the <c>password</c> decrypted — or, while it is still plain text (a file the app could not rewrite), as it
+    /// stands. A missing or undecryptable password is the sentence that names the fix, never a throw.
     /// </summary>
     public CredentialResult Resolve(TNamed connection)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
+        if (!config.NeedsPassword)
+        {
+            return CredentialResult.Ok("");
+        }
+
         if (config.InCredentialManager)
         {
             string target = config.CredentialTarget(connection.Name);
             var read = WindowsCredentials.ReadGeneric(target);
-            return read.NotFound ? CredentialResult.Failed(NoCredential(target)) : read;
+            if (read.NotFound)
+            {
+                return CredentialResult.Failed(NoCredential(target));
+            }
+
+            // The stored account must be the entry's (2026-10-24, review I14: a changed user signed in with the old account's password, the
+            // admin families' DA2 rule), and a password saved for one host is never sent to another (DB9).
+            read = ComputerConfig.CheckedUser(read, target, config.User);
+            // A custom credential several entries may share (two replicas' one service account) is tied to no host (2026-10-24, the review of
+            // these fixes: one save's mark refused every other entry using it); the app's own per-entry target is.
+            bool shared = !string.IsNullOrWhiteSpace(config.Credential);
+            if (!shared && read.Error is null && read.Host is { } recorded && !CredentialMark.SameHost(recorded, config.SignInHost))
+            {
+                return CredentialResult.Failed(SqlText.CredentialHostMismatch(target, recorded, config.SignInHost, Tab));
+            }
+
+            return read;
         }
 
         string password = config.Password ?? "";
@@ -325,7 +460,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
             return CredentialResult.Failed(NoPassword(connection.Name));
         }
 
-        if (!WindowsCredentials.IsProtected(password))
+        if (!WindowsCredentials.IsSealed(password))
         {
             return CredentialResult.Ok(password);
         }
@@ -337,8 +472,8 @@ public sealed class ConnectionFamily<TConfig, TNamed>
 
     /// <summary>
     /// Saves <paramref name="password"/> for <paramref name="connection"/> in its store (the tab's masked prompt and the wizard): under
-    /// <c>credman</c> the Credential Manager entry, written with the connection's user; under <c>file</c> DPAPI-encrypted into the file
-    /// the connection came from. The status line's sentence either way.
+    /// <c>credman</c> the Credential Manager entry, written with the connection's user and its host (DB9); under <c>file</c> DPAPI-encrypted
+    /// into the file the connection came from. The status line's sentence either way.
     /// </summary>
     public (bool Saved, string Notice) Save(TNamed connection, string password)
     {
@@ -348,7 +483,7 @@ public sealed class ConnectionFamily<TConfig, TNamed>
         if (config.InCredentialManager)
         {
             string target = config.CredentialTarget(connection.Name);
-            var written = WindowsCredentials.WriteGeneric(target, config.User?.Trim() ?? "", password);
+            var written = WindowsCredentials.WriteGeneric(target, config.User?.Trim() ?? "", password, string.IsNullOrWhiteSpace(config.Credential) ? config.SignInHost : null);
             return written.Error is { } refused ? (false, SqlText.PasswordSaveFailed(connection.Name, refused)) : (true, SqlText.PasswordSavedToCredman(connection.Name, target));
         }
 

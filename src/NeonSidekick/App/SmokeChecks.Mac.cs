@@ -219,14 +219,21 @@ public static partial class SmokeChecks
                 return new SmokeCheck(name, false, "the Keychain item's account did not read back (" + (read.User ?? "none") + ")");
             }
 
-            if (Sql.WindowsCredentials.WriteGeneric(target, "smoke", secret + "2").Error is { } replaceError
-                || Sql.WindowsCredentials.ReadGeneric(target).Value != secret + "2")
+            // Replaced in place with a host recorded in its comment (2026-10-24, the database review's I11 and decision DB9:
+            // SecKeychainItemModifyAttributesAndData), and the host read back.
+            if (Sql.WindowsCredentials.WriteGeneric(target, "smoke", secret + "2", "smoke-host:1") is { Error: { } replaceError }
+                || Sql.WindowsCredentials.ReadGeneric(target) is not { Value: secret + "2" } replaced)
             {
                 return new SmokeCheck(name, false, "the Keychain item was not replaced");
             }
 
+            if (replaced.Host != "smoke-host:1")
+            {
+                return new SmokeCheck(name, false, "the Keychain item's comment did not read back its host (" + (replaced.Host ?? "none") + ")");
+            }
+
             return Sql.WindowsCredentials.DeleteGeneric(target) && Sql.WindowsCredentials.ReadGeneric(target).NotFound
-                ? new SmokeCheck(name, true, "generic password written, read with its account, replaced and deleted")
+                ? new SmokeCheck(name, true, "generic password written, read with its account, replaced in place with its host, and deleted")
                 : new SmokeCheck(name, false, "the Keychain item was not deleted");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)

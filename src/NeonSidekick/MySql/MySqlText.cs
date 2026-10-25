@@ -30,7 +30,7 @@ public static class MySqlText
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = $" / {config.Database?.Trim()}";
-        string line = $"- {connection.Name}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(MySqlStatementKinds.Family, config.IsReadWrite, writes)}";
+        string line = $"- {connection.Name}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(MySqlStatementKinds.Family, config.IsReadWrite, writes)}{(config.TlsChecked ? "" : SqlText.TlsUnchecked)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -95,6 +95,9 @@ public static class MySqlText
     /// <summary>An entry with no <c>database</c>: a connection reaches that one database alone, so it must name it. Pinned.</summary>
     public const string NoDatabase = "no \"database\" is given; a connection reaches one database, so it must name it";
 
+    /// <summary>A text the boundary cannot lex (2026-10-24, mechanism 7). Pinned.</summary>
+    public const string BoundaryUnread = "Error: the app could not read the SQL to check it keeps to the connection's database, so nothing was run";
+
     /// <summary>A qualifier naming another database on the server (or an alias spelled like one, which a lexer cannot tell apart). Pinned.</summary>
     public static string OtherDatabase(string named, string database) =>
         $"Error: the SQL names '{named}', another database on this server (an alias spelled like it reads the same: rename it), but this connection reaches '{database}' alone; another database needs a connection of its own, which the user adds (mysql_connections lists them)";
@@ -102,6 +105,23 @@ public static class MySqlText
     /// <summary>A qualifier naming one of the server's own databases (information_schema, mysql, performance_schema, sys). Pinned.</summary>
     public static string ServerCatalog(string named) =>
         $"Error: the SQL reads {named}, which describes the whole server rather than this connection's database; the MySQL tools keep to the connection's database (mysql_tables, mysql_columns and mysql_describe read its catalog)";
+
+    /// <summary>An optimizer hint in the model's text (2026-10-24, review A12). Pinned.</summary>
+    public static string OptimizerHint(int line, int column) =>
+        $"Error: the SQL has an optimizer hint (/*+ … */) at line {line.ToString(CultureInfo.InvariantCulture)}, column {column.ToString(CultureInfo.InvariantCulture)}; hints can lift the time cap, so write the query without one";
+
+    /// <summary>The first of <paramref name="stripped"/> still in <paramref name="mode"/> (a comma list, case ignored), or null (2026-10-24, review E1). Pure.</summary>
+    public static string? ModeKept(string mode, IReadOnlyList<string> stripped)
+    {
+        ArgumentNullException.ThrowIfNull(mode);
+        ArgumentNullException.ThrowIfNull(stripped);
+        var words = mode.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return stripped.FirstOrDefault(words.Contains);
+    }
+
+    /// <summary>A session whose mode kept one the gate's lexing needs off (2026-10-24, review E1). Pinned.</summary>
+    public static string SessionModeKept(string mode) =>
+        $"the session kept sql_mode {mode} after the app turned it off, so the SQL could be read another way than the gate read it; nothing was run — the server's sql_mode or init_connect sets it again";
 
     /// <summary>A call that still sends <c>database</c>. Pinned.</summary>
     public const string NoDatabaseArgument =
@@ -443,8 +463,40 @@ public static class MySqlText
     /// <summary>The privileges that only read (or only connect); every other one in a <c>SHOW GRANTS</c> line can change something.</summary>
     public static readonly IReadOnlySet<string> ReadingPrivileges = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "USAGE", "SELECT", "SHOW VIEW", "SHOW DATABASES", "PROCESS", "REPLICATION CLIENT", "EXECUTE", "REFERENCES",
+        // EXECUTE is no reading power (2026-10-24, the database review's N6: a definer-rights procedure writes as its definer).
+        "USAGE", "SELECT", "SHOW VIEW", "SHOW DATABASES", "PROCESS", "REPLICATION CLIENT", "REFERENCES",
     };
+
+    /// <summary>
+    /// A grant's privileges, split at the commas outside a column list (2026-10-24, the database review's N14: <c>SELECT (id, name)</c> split
+    /// into <c>SELECT (id</c> and <c>name)</c>, the second read as a write power). Pure.
+    /// </summary>
+    public static IEnumerable<string> Privileges(string list)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        int depth = 0, start = 0;
+        for (int i = 0; i < list.Length; i++)
+        {
+            if (list[i] == '(')
+            {
+                depth++;
+            }
+            else if (list[i] == ')')
+            {
+                depth = Math.Max(0, depth - 1);
+            }
+            else if (list[i] == ',' && depth == 0)
+            {
+                yield return list[start..i].Trim();
+                start = i + 1;
+            }
+        }
+
+        yield return list[start..].Trim();
+    }
+
+    /// <summary>A privilege without its column list: <c>SELECT (id, name)</c> is <c>SELECT</c>.</summary>
+    private static string Bare(string privilege) => privilege.IndexOf('(') is int open and > 0 ? privilege[..open].Trim() : privilege;
 
     /// <summary>
     /// What <c>SHOW GRANTS</c>' lines say the account could change: each grant's writing privileges with what they are on
@@ -464,7 +516,7 @@ public static class MySqlText
                 continue;
             }
 
-            var writing = grant[6..on].Split(',').Select(p => p.Trim()).Where(p => p.Length > 0 && !ReadingPrivileges.Contains(p)).ToList();
+            var writing = Privileges(grant[6..on]).Where(p => p.Length > 0 && !ReadingPrivileges.Contains(Bare(p))).ToList();
             if (writing.Count > 0)
             {
                 powers.Add(string.Join(", ", writing) + " ON " + grant[(on + 4)..to].Trim());

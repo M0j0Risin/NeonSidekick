@@ -219,6 +219,13 @@ public sealed class ExecuteCodeTool : AIFunction
             return new ToolShownResult(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, null));
         }
 
+        // The script files the code runs, read as a line's are (2026-10-24, the database review's Q3).
+        if (ShellPoliceChecks.CodeScripts(request, code, workingDirectory, _files, effective) is { } scripted)
+        {
+            _gate.NoteRefused(request);
+            return scripted.Shown is { } shown ? new ToolShownResult(scripted.ModelText, shown) : (object)scripted.ModelText;
+        }
+
         // The police before the gate (Shell police, 2026-09-22): a script naming a path outside the working directory is refused, and the pane is never asked about it.
         if (effective.ShellPolice && PathPolice.Judge(code, _files, workingDirectory, isScript: true) is { } outside)
         {

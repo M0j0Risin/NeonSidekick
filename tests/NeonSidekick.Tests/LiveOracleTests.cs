@@ -222,6 +222,40 @@ public sealed class LiveOracleTests
         Assert.StartsWith("Error: the SELECT uses NEXTVAL", await Invoke<OracleQueryTool>(("sql", "SELECT ns_seq.NEXTVAL FROM dual")));
     }
 
+    /// <summary>
+    /// Each read-only layer alone (2026-10-24, the database review's S7: the run has both, and on 23ai the session layer answered first, so SET
+    /// TRANSACTION READ ONLY was never shown to hold alone): the 23ai session's READ_ONLY with no transaction statement (ORA-28193), and SET
+    /// TRANSACTION READ ONLY on a session without it (ORA-01456). Nothing is left changed.
+    /// </summary>
+    [LiveOracleFact]
+    public void EachReadOnlyLayer_RefusesAWriteAlone()
+    {
+        int audit = LiveOracle.Count("SELECT COUNT(*) FROM ns_audit");
+        var builder = new OracleConnectionStringBuilder(Environment.GetEnvironmentVariable(LiveOracle.Variable)!) { Pooling = false };
+        var cases = new List<(string Setup, string Sql, int Number)> { ("", "BEGIN SET TRANSACTION READ ONLY; INSERT INTO ns_audit VALUES ('x'); END;", 1456) };
+        if (LiveOracle.Release >= OracleAccess.SessionReadOnlyRelease)
+        {
+            cases.Add(("ALTER SESSION SET READ_ONLY = TRUE", "INSERT INTO ns_audit VALUES ('x')", 28193));
+        }
+
+        foreach (var (setup, sql, number) in cases)
+        {
+            using var connection = new OracleConnection(builder.ConnectionString);
+            connection.Open();
+            if (setup.Length > 0)
+            {
+                using var session = new OracleCommand(setup, connection);
+                session.ExecuteNonQuery();
+            }
+
+            using var command = new OracleCommand(sql, connection);
+            var ex = Assert.Throws<OracleException>(() => command.ExecuteNonQuery());
+            Assert.Equal(number, ex.Number);
+        }
+
+        Assert.Equal(audit, LiveOracle.Count("SELECT COUNT(*) FROM ns_audit"));
+    }
+
     [LiveOracleFact]
     public async Task Timeouts_AndCancels_AreOutcomes_NotCrashes()
     {

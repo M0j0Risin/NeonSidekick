@@ -39,10 +39,10 @@ internal sealed partial class SettingsMenu
     /// <summary>The TLS picks, <see cref="MySqlConnectionConfig.SslModeWords"/>' order. Pinned.</summary>
     public static readonly IReadOnlyList<string> MySqlWizardTlsRows =
     [
-        "preferred    encrypted when the server offers it (the default)",
+        "preferred    encrypted when the server offers it, the certificate not checked",
         "required     always encrypted, the certificate not checked",
         "verify-ca    encrypted, the certificate checked against a trusted authority",
-        "verify-full  encrypted, the certificate and the host name checked",
+        "verify-full  encrypted, the certificate and the host name checked (a new connection's)",
         "none         never encrypted",
     ];
 
@@ -85,7 +85,10 @@ internal sealed partial class SettingsMenu
         /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
         public bool PasswordKept { get; set; }
 
-        public MySqlConnectionConfig Config { get; init; } = new() { PasswordStore = MySqlConnectionConfig.FileStore };
+        /// <summary>An edit's host as read (2026-10-24, review E9): a move away from it lets go of the kept password.</summary>
+        public string? OriginalHost { get; init; }
+
+        public MySqlConnectionConfig Config { get; init; } = new() { PasswordStore = MySqlConnectionConfig.FileStore, SslMode = MySqlConnectionConfig.NewConnectionSslMode };
     }
 
     private string MySqlWizardPath(bool global) =>
@@ -174,7 +177,8 @@ internal sealed partial class SettingsMenu
             Global = global,
             Name = named.Name,
             Original = named.Name,
-            OriginalTarget = c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            OriginalHost = c.SignInHost,
+            OriginalTarget = c.InCredentialManager && string.IsNullOrWhiteSpace(c.Credential) ? c.CredentialTarget(named.Name) : null,   // a blank credential is the default too (2026-10-24, review N13)
             Config = CloneEntry(c, MySqlJsonContext.Default.MySqlConnectionConfig, x => x.Password = null),
         };
         draft.Password = StoredPassword(MySqlSecrets.Resolve(named));
@@ -217,6 +221,7 @@ internal sealed partial class SettingsMenu
 
             if (await MySqlWizardStepAsync(step, draft, cancellationToken).ConfigureAwait(false))
             {
+            ForgetKeptPasswordOnMove(draft.OriginalHost, draft.Config.SignInHost, draft.PasswordKept, () => { draft.Password = ""; draft.PasswordKept = false; });
                 step = fromSummary ? MySqlWizardMissing(draft) ?? MySqlWizardStep.Summary : step + 1;
                 fromSummary = fromSummary && step != MySqlWizardStep.Summary;
                 continue;
@@ -368,13 +373,13 @@ internal sealed partial class SettingsMenu
 
             case MySqlWizardStep.Tls:
             {
-                int current = Math.Max(0, MySqlConnectionConfig.SslModeWords.ToList().IndexOf(c.SslMode ?? ""));
+                int current = WordIndex(MySqlConnectionConfig.SslModeWords, c.SslMode);
                 if (await MySqlWizardPickAsync(MySqlWizardTlsQuestion, MySqlWizardTlsRows, current, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
                 }
 
-                c.SslMode = picked == 0 ? null : MySqlConnectionConfig.SslModeWords[picked];
+                c.SslMode = MySqlConnectionConfig.SslModeWords[picked];   // the key always written (2026-10-24, DB1: an absent one is preferred)
                 return true;
             }
 
@@ -546,6 +551,13 @@ internal sealed partial class SettingsMenu
         if (run.Outcome != Sql.SqlOutcome.Ok)
         {
             Sink.Error(MySqlText.Error(run));
+
+            // A certificate the computer does not trust (2026-10-24, decision DB1: a new connection checks it): what to do, never a dead end.
+            if (run.Detail.Contains("certificate", StringComparison.OrdinalIgnoreCase))
+            {
+                Sink.Notice(Sql.SqlText.CertificateNotTrusted);
+            }
+
             return;
         }
 
@@ -584,37 +596,20 @@ internal sealed partial class SettingsMenu
         var c = draft.Config;
         if (MySqlWizardMissing(draft) is { } missing)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, MySqlWizardLabels[(int)missing] + " is not set"));
+            Sink.Error(WizardSaveFailed(draft.Original, draft.Name, MySqlWizardLabels[(int)missing] + " is not set"));
             return null;
         }
 
         if (c.Problem is { } problem)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, problem));
+            Sink.Error(WizardSaveFailed(draft.Original, draft.Name, problem));
             return null;
         }
 
         string path = MySqlWizardPath(draft.Global);
-        if ((draft.Original is { } original ? MySqlConfigFile.ReplaceConnection(path, original, draft.Name, c) : MySqlConfigFile.AddConnection(path, draft.Name, c)) is { } error)
+        if (!SaveWizardEntry(MySqlConfigFile.Family, path, MySqlWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget))
         {
-            Sink.Error(draft.Original is null ? Sql.SqlText.ConnectionAddFailed(draft.Name, error) : Sql.SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
-        }
-
-        Sink.Notice(draft.Original is null ? Sql.SqlText.ConnectionAdded(draft.Name, path) : Sql.SqlText.ConnectionChanged(draft.Name, path));
-        var (saved, notice) = MySqlSecrets.Save(new MySqlNamedConnection(draft.Name, c, path), draft.Password);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        if (saved)
-        {
-            ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
         }
 
         return ApplyOfferedAfterSave(SettingsField.MySqlConnectionsOffered, _settings.Current.MySqlConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.MySqlConnectionsOffered = next);

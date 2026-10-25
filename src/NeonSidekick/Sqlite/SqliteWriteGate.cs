@@ -66,14 +66,16 @@ public static class SqliteWriteGate
             }
 
             var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
-            if (t.Kind is not (SqliteReadOnlyGate.TokenKind.Word or SqliteReadOnlyGate.TokenKind.Quoted))
+            if (t.Kind is not (SqliteReadOnlyGate.TokenKind.Word or SqliteReadOnlyGate.TokenKind.Quoted or SqliteReadOnlyGate.TokenKind.String))
             {
                 continue;
             }
 
-            // A quoted name is a name all the same ("sqlite_dbpage", [load_extension](…)); SQLite's names are case-blind.
-            string name = t.Kind == SqliteReadOnlyGate.TokenKind.Word ? t.Text : t.Text.ToUpperInvariant();
-            if (IsSymbol(next, "(") && SqliteReadOnlyGate.DeniedFunctions.Contains(name) && name != "SQLITE_DBPAGE")
+            // A quoted name is a name all the same ("sqlite_dbpage", [load_extension](…)); SQLite's names are case-blind. So is a string
+            // where a name fits (2026-10-24, the database review's I4: FROM 'sqlite_dbpage' and PRAGMA 'writable_schema' = 1 both work), so
+            // the two that corrupt are refused as strings too — a value spelled the same way among them, which no data needs.
+            string name = SqliteReadOnlyGate.NameOf(t);
+            if (t.Kind != SqliteReadOnlyGate.TokenKind.String && IsSymbol(next, "(") && SqliteReadOnlyGate.DeniedFunctions.Contains(name) && name != "SQLITE_DBPAGE")
             {
                 return SqliteText.WriteForbidden(name.ToLowerInvariant() + "()", SqliteText.OutsideCode);
             }
@@ -99,6 +101,11 @@ public static class SqliteWriteGate
             }
         }
 
+        if (PragmaRefusal(tokens, lead) is { } pragma)
+        {
+            return pragma;
+        }
+
         if (Kinds(tokens, lead) is not { } kinds)
         {
             return SqliteText.UnknownStatement(first.Kind == SqliteReadOnlyGate.TokenKind.Word ? first.Text : "'" + first.Text + "'");
@@ -113,6 +120,51 @@ public static class SqliteWriteGate
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The pragmas no statement kind covers (2026-10-24, the database review's C9, G9): setting <c>schema_version</c> (SQLite's own words:
+    /// misuse "can result in database corruption"), and the process-wide ones — <c>hard_heap_limit</c>, <c>soft_heap_limit</c>,
+    /// <c>temp_store_directory</c>, <c>data_store_directory</c> — which reach the app's own session and skill stores in the same process
+    /// and can put temporary files outside the sandbox. Each is refused when set (<c>= value</c> or <c>(value)</c>), and as a
+    /// <c>pragma_…</c> function too; reading one passes.
+    /// </summary>
+    public static readonly IReadOnlySet<string> RefusedPragmas = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "SCHEMA_VERSION", "HARD_HEAP_LIMIT", "SOFT_HEAP_LIMIT", "TEMP_STORE_DIRECTORY", "DATA_STORE_DIRECTORY",
+    };
+
+    /// <summary>The refusal for a <see cref="RefusedPragmas"/> one set by a PRAGMA (or called as a <c>pragma_</c> function anywhere); null for the rest.</summary>
+    private static string? PragmaRefusal(List<SqliteReadOnlyGate.Token> tokens, int lead)
+    {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Kind is SqliteReadOnlyGate.TokenKind.Word or SqliteReadOnlyGate.TokenKind.Quoted && i + 1 < tokens.Count && IsSymbol(tokens[i + 1], "(")
+                && SqliteReadOnlyGate.NameOf(tokens[i]) is { } function && function.StartsWith("PRAGMA_", StringComparison.Ordinal) && RefusedPragmas.Contains(function["PRAGMA_".Length..]))
+            {
+                return SqliteText.WriteForbidden(function.ToLowerInvariant() + "()", SqliteText.Corrupts);
+            }
+        }
+
+        if (!IsWord(tokens, lead, "PRAGMA"))
+        {
+            return null;
+        }
+
+        int at = lead + 1;
+        if (at + 2 < tokens.Count && IsSymbol(tokens[at + 1], "."))
+        {
+            at += 2;   // schema.name
+        }
+
+        if (at >= tokens.Count || tokens[at].Kind is not (SqliteReadOnlyGate.TokenKind.Word or SqliteReadOnlyGate.TokenKind.Quoted or SqliteReadOnlyGate.TokenKind.String))
+        {
+            return null;
+        }
+
+        string pragma = SqliteReadOnlyGate.NameOf(tokens[at]);
+        bool set = at + 1 < tokens.Count && (IsSymbol(tokens[at + 1], "=") || IsSymbol(tokens[at + 1], "("));
+        return set && RefusedPragmas.Contains(pragma) ? SqliteText.WriteForbidden("PRAGMA " + pragma.ToLowerInvariant(), SqliteText.Corrupts) : null;
     }
 
     /// <summary>The kind of the one statement <paramref name="sql"/> is; null when it does not lex or is none <c>sqlite_execute</c> knows.</summary>
@@ -143,24 +195,12 @@ public static class SqliteWriteGate
         string word = tokens[lead].Text;
         if (word == "WITH")
         {
-            int depth = 0;
-            for (int i = lead + 1; i < tokens.Count; i++)
+            if (AfterCommonTables(tokens, lead) is not { } statement || tokens[statement].Kind != SqliteReadOnlyGate.TokenKind.Word)
             {
-                var t = tokens[i];
-                if (IsSymbol(t, "("))
-                {
-                    depth++;
-                }
-                else if (IsSymbol(t, ")"))
-                {
-                    depth--;
-                }
-                else if (depth == 0 && t.Kind == SqliteReadOnlyGate.TokenKind.Word && t.Text is "SELECT" or "VALUES" or "INSERT" or "REPLACE" or "UPDATE" or "DELETE")
-                {
-                    word = t.Text;
-                    break;
-                }
+                return null;
             }
+
+            word = tokens[statement].Text;
         }
 
         return word switch
@@ -175,6 +215,81 @@ public static class SqliteWriteGate
             "SELECT" or "VALUES" or "EXPLAIN" => SqliteStatementKind.Read,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Where the statement after a <c>WITH</c>'s common table expressions starts, read by the grammar (2026-10-24, the database review's
+    /// C1: the first SELECT, INSERT, REPLACE, UPDATE or DELETE word outside every parenthesis was taken, so a CTE named <c>replace</c> made
+    /// <c>WITH replace AS (…) DELETE FROM users</c> changing data): <c>WITH [RECURSIVE] name [(columns)] AS [[NOT] MATERIALIZED] (…)</c>,
+    /// comma-separated. Null when the text does not follow it (refused as unknown).
+    /// </summary>
+    private static int? AfterCommonTables(List<SqliteReadOnlyGate.Token> tokens, int lead)
+    {
+        int i = lead + 1;
+        if (IsWord(tokens, i, "RECURSIVE"))
+        {
+            i++;
+        }
+
+        while (true)
+        {
+            if (i >= tokens.Count || tokens[i].Kind is not (SqliteReadOnlyGate.TokenKind.Word or SqliteReadOnlyGate.TokenKind.Quoted or SqliteReadOnlyGate.TokenKind.String))
+            {
+                return null;
+            }
+
+            i++;
+            if (i < tokens.Count && IsSymbol(tokens[i], "("))
+            {
+                i = Close(tokens, i);
+            }
+
+            if (!IsWord(tokens, i, "AS"))
+            {
+                return null;
+            }
+
+            i++;
+            if (IsWord(tokens, i, "NOT"))
+            {
+                i++;
+            }
+
+            if (IsWord(tokens, i, "MATERIALIZED"))
+            {
+                i++;
+            }
+
+            if (!(i < tokens.Count && IsSymbol(tokens[i], "(")))
+            {
+                return null;
+            }
+
+            i = Close(tokens, i);
+            if (i < tokens.Count && IsSymbol(tokens[i], ","))
+            {
+                i++;
+                continue;
+            }
+
+            return i < tokens.Count ? i : null;
+        }
+    }
+
+    /// <summary>The index after the <c>)</c> closing the <c>(</c> at <paramref name="open"/>; the end when none does.</summary>
+    private static int Close(List<SqliteReadOnlyGate.Token> tokens, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < tokens.Count; i++)
+        {
+            depth += IsSymbol(tokens[i], "(") ? 1 : IsSymbol(tokens[i], ")") ? -1 : 0;
+            if (depth == 0)
+            {
+                return i + 1;
+            }
+        }
+
+        return tokens.Count;
     }
 
     /// <summary>
@@ -236,6 +351,17 @@ public static class SqliteWriteGate
         }
 
         var kinds = new HashSet<SqliteStatementKind> { own };
+
+        // REPLACE in any form deletes the row it replaces (2026-10-24, the database review's A7): REPLACE INTO, INSERT OR REPLACE, UPDATE
+        // OR REPLACE, and a table or a trigger made with ON CONFLICT REPLACE, whose later inserts do. A REPLACE before ( is the function.
+        for (int i = lead; i < tokens.Count; i++)
+        {
+            if (IsWord(tokens, i, "REPLACE") && !(i + 1 < tokens.Count && IsSymbol(tokens[i + 1], "(")))
+            {
+                kinds.Add(SqliteStatementKind.Delete);
+            }
+        }
+
         if (IsTrigger(tokens, lead))
         {
             int begin = tokens.FindIndex(lead, t => t.Kind == SqliteReadOnlyGate.TokenKind.Word && t.Text == "BEGIN");

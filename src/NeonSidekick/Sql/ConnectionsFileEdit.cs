@@ -27,7 +27,16 @@ public static class ConnectionsFileEdit
     /// touching nothing else: the string token replaced, or — for a connection with no <c>password</c> yet — the key inserted
     /// after its <c>user</c> value (after the object's brace without one). Null on success, else why not.
     /// </summary>
-    public static string? WritePassword(string path, string name, string value, string section = DefaultSection, string noun = DefaultNoun)
+    public static string? WritePassword(string path, string name, string value, string section = DefaultSection, string noun = DefaultNoun) =>
+        WritePassword(path, name, value, expected: null, section, noun);
+
+    /// <summary>
+    /// <see cref="WritePassword(string, string, string, string, string)"/>, and with <paramref name="expected"/> only over that very value
+    /// (2026-10-24, the database review's A16: the encrypt-in-place read the plain password outside the lock, then wrote its encryption over
+    /// whatever the file held by then — a password the user had just set in between was replaced by the stale one). A token that no longer
+    /// holds <paramref name="expected"/> is left alone and <see cref="PasswordChanged"/> answered: the next read sees the new one.
+    /// </summary>
+    public static string? WritePassword(string path, string name, string value, string? expected, string section = DefaultSection, string noun = DefaultNoun)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -36,7 +45,14 @@ public static class ConnectionsFileEdit
         {
             try
             {
-                return WritePasswordLocked(path, name, value, section, noun);
+                // An encryption in place (expected given) waits for no other process (2026-10-24, the review of the fixes: it runs inside a
+                // catalog load, the screen's too, and a held lock stalled it 5 s); the password stays plain and the next read tries again.
+                using var _ = CrossProcess(path, expected is null ? null : TimeSpan.Zero);
+                return WritePasswordLocked(path, name, value, expected, section, noun);
+            }
+            catch (IOException ex)
+            {
+                return LogText.Excerpt(ex.Message);
             }
             finally
             {
@@ -45,11 +61,14 @@ public static class ConnectionsFileEdit
         }
     }
 
-    private static string? WritePasswordLocked(string path, string name, string value, string section, string noun)
+    /// <summary><see cref="WritePassword(string, string, string, string?, string, string)"/>'s answer when the token no longer held the value expected.</summary>
+    public const string PasswordChanged = "the password changed in the file meanwhile";
+
+    private static string? WritePasswordLocked(string path, string name, string value, string? expected, string section, string noun)
     {
         try
         {
-            byte[] bytes = File.ReadAllBytes(path);
+            byte[] bytes = ForEdit(File.ReadAllBytes(path), out var wide);
             int bom = Bom(bytes);
 
             // A key given twice in the entry is refused (2026-10-23, the admin review's C7): the reader keeps the last "password", the splice
@@ -64,8 +83,13 @@ public static class ConnectionsFileEdit
                 return SqlText.ConnectionNotInFile(name, noun);
             }
 
+            if (expected is not null && !string.Equals(spot.Current, expected, StringComparison.Ordinal))
+            {
+                return PasswordChanged;
+            }
+
             string quoted = "\"" + JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\"";
-            Splice(path, bytes, bom + spot.Start, bom + spot.End, spot.Replace ? quoted : spot.Prefix + "\"password\": " + quoted + spot.Suffix);
+            Splice(path, bytes, bom + spot.Start, bom + spot.End, spot.Replace ? quoted : spot.Prefix + "\"password\": " + quoted + spot.Suffix, wide);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -91,7 +115,12 @@ public static class ConnectionsFileEdit
         {
             try
             {
+                using var _ = CrossProcess(path);
                 return AddConnectionLocked(path, name.Trim(), entryJson, emptyText, section, noun);
+            }
+            catch (IOException ex)
+            {
+                return LogText.Excerpt(ex.Message);
             }
             finally
             {
@@ -104,10 +133,15 @@ public static class ConnectionsFileEdit
     {
         try
         {
-            EnsureExists(path, emptyText);
-            byte[] bytes = File.ReadAllBytes(path);
+            EnsureExistsLocked(path, emptyText);
+            byte[] bytes = ForEdit(File.ReadAllBytes(path), out var wide);
             int bom = Bom(bytes);
             var json = bytes.AsSpan(bom);
+            if (RepeatedSection(json, section) is { } twice)
+            {
+                return SqlText.SectionTwice(twice);
+            }
+
             var spot = LocateInsert(json, name, section, noun);
             if (spot.Error is { } refused)
             {
@@ -125,7 +159,7 @@ public static class ConnectionsFileEdit
                 _ => newline + "  \"" + section + "\": {" + newline + "    " + entry + newline + "  }" + (spot.RootHasKeys ? "," : ""),
             };
 
-            Splice(path, bytes, bom + spot.Start, bom + spot.End, insert);
+            Splice(path, bytes, bom + spot.Start, bom + spot.End, insert, wide);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -151,7 +185,12 @@ public static class ConnectionsFileEdit
         {
             try
             {
+                using var _ = CrossProcess(path);
                 return ReplaceConnectionLocked(path, oldName.Trim(), newName.Trim(), entryJson, section, noun);
+            }
+            catch (IOException ex)
+            {
+                return LogText.Excerpt(ex.Message);
             }
             finally
             {
@@ -169,9 +208,14 @@ public static class ConnectionsFileEdit
                 return SqlText.ConnectionNotInFile(oldName, noun);
             }
 
-            byte[] bytes = File.ReadAllBytes(path);
+            byte[] bytes = ForEdit(File.ReadAllBytes(path), out var wide);
             int bom = Bom(bytes);
             var json = bytes.AsSpan(bom);
+            if (RepeatedSection(json, section) is { } twice)
+            {
+                return SqlText.SectionTwice(twice);
+            }
+
             var spot = LocateEntry(json, oldName, newName, section, noun);
             if (spot.Error is { } refused)
             {
@@ -189,7 +233,7 @@ public static class ConnectionsFileEdit
             string pad = Encoding.UTF8.GetString(json.Slice(lineStart, indent));
             string entry = "\"" + JsonEncodedText.Encode(newName, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\": "
                 + string.Join(newline + pad, entryJson.ReplaceLineEndings("\n").Split('\n'));
-            Splice(path, bytes, bom + spot.Start, bom + spot.End, entry);
+            Splice(path, bytes, bom + spot.Start, bom + spot.End, entry, wide);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -246,6 +290,41 @@ public static class ConnectionsFileEdit
         return repeated;
     }
 
+    /// <summary>
+    /// The root key spelled <paramref name="section"/> when the root holds it more than once in any case (2026-10-24, the database review's
+    /// N5: the splices took the first <c>connections</c> and the deserializer the last, so an encryption went into the section never read and
+    /// a wizard's add never appeared); null when once or not at all, or for JSON it can't read.
+    /// </summary>
+    public static string? RepeatedSection(ReadOnlySpan<byte> json, string section)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return null;
+            }
+
+            int seen = 0;
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                if (reader.GetString()!.Equals(section, StringComparison.OrdinalIgnoreCase) && ++seen > 1)
+                {
+                    return section;
+                }
+
+                reader.Read();
+                reader.Skip();
+            }
+        }
+        catch (JsonException)
+        {
+            // The deserializer says what is wrong with the file.
+        }
+
+        return null;
+    }
+
     /// <summary>Where <see cref="ReplaceConnection"/> splices: the entry's name token to the end of its value, or why not.</summary>
     private readonly record struct EntrySpot(int Start, int End, string? Error);
 
@@ -299,50 +378,138 @@ public static class ConnectionsFileEdit
         return new EntrySpot(0, 0, SqlText.ConnectionNotInFile(oldName, noun));
     }
 
-    /// <summary>Writes <paramref name="emptyText"/> to <paramref name="path"/> when no file is there (the folder made first); true when it wrote. Throws on an IO failure — the caller's notice.</summary>
+    /// <summary>
+    /// Writes <paramref name="emptyText"/> to <paramref name="path"/> when no file is there (the folder made first), or when the file holds
+    /// only whitespace (2026-10-24, the database review's N15: an emptied file was never filled, so every add failed on it for good); true
+    /// when it wrote. Throws on an IO failure — the caller's notice.
+    /// </summary>
     public static bool EnsureExists(string path, string emptyText)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(emptyText);
         lock (LockFor(path))
         {
-            if (File.Exists(path))
-            {
-                return false;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, emptyText);
-            Computers.ConfigCache.Invalidate(path);
-            return true;
+            using var _ = CrossProcess(path);
+            return EnsureExistsLocked(path, emptyText);
         }
+    }
+
+    private static bool EnsureExistsLocked(string path, string emptyText)
+    {
+        if (File.Exists(path) && !string.IsNullOrWhiteSpace(Encoding.UTF8.GetString(ForEdit(File.ReadAllBytes(path), out _)).TrimStart('\uFEFF')))
+        {
+            return false;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Files.WorkingDirectory.WriteAtomically(path, Encoding.UTF8.GetBytes(emptyText));
+        Computers.ConfigCache.Invalidate(path);
+        return true;
     }
 
     private static int Bom(byte[] bytes) => bytes.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? 3 : 0;
 
-    /// <summary><paramref name="bytes"/> with <c>[start, end)</c> replaced by <paramref name="insert"/>, written to a temp file moved over <paramref name="path"/>.</summary>
-    private static void Splice(string path, byte[] bytes, int start, int end, string insert)
+    /// <summary>
+    /// A file's bytes as UTF-8 for the edits (2026-10-24, the database review's N3: the loads read a UTF-16 file through its byte-order mark,
+    /// but every splice ran a UTF-8 reader over its raw bytes and failed, so a plain password in it was never encrypted and a wizard could
+    /// not add to it): a UTF-16 or UTF-32 file transcoded, <paramref name="wide"/> its encoding for the write back; a UTF-8 file as it is.
+    /// </summary>
+    public static byte[] ForEdit(byte[] raw, out Encoding? wide)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        wide = null;
+        var span = raw.AsSpan();
+        if (span.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE, 0x00, 0x00]))
+        {
+            wide = new UTF32Encoding(bigEndian: false, byteOrderMark: true);
+        }
+        else if (span.StartsWith((ReadOnlySpan<byte>)[0x00, 0x00, 0xFE, 0xFF]))
+        {
+            wide = new UTF32Encoding(bigEndian: true, byteOrderMark: true);
+        }
+        else if (span.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]))
+        {
+            wide = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+        }
+        else if (span.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]))
+        {
+            wide = new UnicodeEncoding(bigEndian: true, byteOrderMark: true);
+        }
+
+        if (wide is null)
+        {
+            return raw;
+        }
+
+        int preamble = wide.GetPreamble().Length;
+        return Encoding.UTF8.GetBytes(wide.GetString(raw, preamble, raw.Length - preamble));
+    }
+
+    /// <summary>
+    /// <paramref name="bytes"/> with <c>[start, end)</c> replaced by <paramref name="insert"/>, written back whole through
+    /// <see cref="Files.WorkingDirectory.WriteAtomically"/> (2026-10-24, the database review's B16: a temp file and a move by hand gave the file
+    /// the folder's inherited ACL, broke a hard link and wrote over a read-only file; the shared replace keeps all three), in
+    /// <paramref name="wide"/> when the file was UTF-16 or UTF-32 (N3).
+    /// </summary>
+    private static void Splice(string path, byte[] bytes, int start, int end, string insert, Encoding? wide)
     {
         byte[] inserted = Encoding.UTF8.GetBytes(insert);
         var rewritten = new byte[bytes.Length - (end - start) + inserted.Length];
         bytes.AsSpan(0, start).CopyTo(rewritten);
         inserted.CopyTo(rewritten.AsSpan(start));
         bytes.AsSpan(end).CopyTo(rewritten.AsSpan(start + inserted.Length));
+        byte[] written = wide is null ? rewritten : [.. wide.GetPreamble(), .. wide.GetBytes(Encoding.UTF8.GetString(rewritten))];
+        Files.WorkingDirectory.WriteAtomically(path, written);
+    }
 
-        // A temp name of its own per write (2026-10-23, the admin review's F6: parallel loads' encryptions shared path + ".tmp" and collided),
-        // under the file's lock (LockFor), so a load's late move can no longer drop an entry the wizard just added.
-        string temp = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
-        try
+    /// <summary>How long an edit waits for another process's edit of the same file (a test shortens it).</summary>
+    internal static TimeSpan CrossProcessWait { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// The edit's hold on <paramref name="path"/> across processes (2026-10-24, the database review's N4: the lock below is this process's
+    /// alone, so two app instances sharing the home's <c>configs</c> each read, spliced and wrote, and one's write — a wizard's add, its
+    /// secret already saved — was lost): <c>&lt;file&gt;.lock</c> opened for this process alone and removed when the edit ends, waited for up to
+    /// <see cref="CrossProcessWait"/>; past it, an <see cref="IOException"/> naming the file.
+    /// </summary>
+    private static IDisposable CrossProcess(string path, TimeSpan? wait = null)
+    {
+        string folder = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        if (!Directory.Exists(folder))
         {
-            File.WriteAllBytes(temp, rewritten);
-            File.Move(temp, path, overwrite: true);
+            return Nothing.Instance;
         }
-        finally
+
+        string lockPath = path + ".lock";
+        var deadline = DateTime.UtcNow + (wait ?? CrossProcessWait);
+        while (true)
         {
-            if (File.Exists(temp))
+            try
             {
-                File.Delete(temp);
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
             }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(50);
+            }
+            catch (IOException ex)
+            {
+                throw new IOException(SqlText.FileBusy(path), ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                // A folder the app may read but not write (2026-10-24, the review of the fixes): an IO failure like any other, so the family's
+                // load, which never throws, keeps a plain password plain rather than failing.
+                throw new IOException(ex.Message, ex);
+            }
+        }
+    }
+
+    private sealed class Nothing : IDisposable
+    {
+        public static readonly Nothing Instance = new();
+
+        public void Dispose()
+        {
         }
     }
 
@@ -506,8 +673,8 @@ public static class ConnectionsFileEdit
         return new InsertSpot(rootBrace + 1, rootBrace + 1, InsertKind.NewConnections, rootHasKeys, null);
     }
 
-    /// <summary>Where <see cref="WritePassword"/> writes: the byte range to replace (empty for an insert) and, for an insert, what goes either side of the new key.</summary>
-    private readonly record struct PasswordSpot(int Start, int End, bool Replace, string Prefix, string Suffix);
+    /// <summary>Where <see cref="WritePassword(string, string, string, string, string)"/> writes: the byte range to replace (empty for an insert), for an insert what goes either side of the new key, and the value there now (null for none).</summary>
+    private readonly record struct PasswordSpot(int Start, int End, bool Replace, string Prefix, string Suffix, string? Current = null);
 
     /// <summary>
     /// The <c>password</c> string token of <c>connections.&lt;name&gt;</c> in <paramref name="json"/>, or where one goes.
@@ -540,7 +707,7 @@ public static class ConnectionsFileEdit
                     {
                         int start = (int)reader.TokenStartIndex;
                         int length = reader.TokenType == JsonTokenType.Null ? 4 : reader.ValueSpan.Length + 2;
-                        return new PasswordSpot(start, start + length, true, "", "");
+                        return new PasswordSpot(start, start + length, true, "", "", reader.TokenType == JsonTokenType.Null ? null : reader.GetString());
                     }
 
                     if (key.Equals("user", StringComparison.OrdinalIgnoreCase) && reader.TokenType == JsonTokenType.String)

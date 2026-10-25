@@ -36,11 +36,11 @@ public sealed class MySqlExecuteTool : MySqlTool
     public override string Name => ToolName;
 
     /// <summary>The description, read at each turn: it names the kinds <c>MySQL statements allowed</c> ticks.</summary>
-    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.MySqlStatementsAllowed));
+    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.MySqlStatementsAllowed), !Effective.ToolsDisabled.Contains(MySqlQueryTool.ToolName, StringComparer.Ordinal));
 
     /// <summary>The description for <paramref name="kinds"/>. Pinned.</summary>
-    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds) =>
-        ServerWriteText.Describe(MySqlStatementKinds.Family, kinds, MySqlQueryTool.ToolName, "MySQL SQL (`backticks` for names); bind values as @name through params.");
+    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds, bool readOffered = true) =>
+        ServerWriteText.Describe(MySqlStatementKinds.Family, kinds, MySqlQueryTool.ToolName, "MySQL SQL (`backticks` for names); bind values as @name through params.", readOffered);
 
     public override JsonElement JsonSchema => Schema;
 
@@ -56,23 +56,27 @@ public sealed class MySqlExecuteTool : MySqlTool
         }
 
         int timeout = TimeoutSeconds(effective);
+        // The connection resolved once (2026-10-24, the database review's H11): the boundary, the pane and the run below all work on the entry
+        // as read now, through an access pinned to it.
+        var resolved = Server.Resolve(connection, out var unresolved);
+        var pinned = resolved is null ? Server : Server.Pinned(resolved);
         var hooks = new ServerExecuteHooks(
             MySqlWriteGate.Check,
             MySqlWriteGate.Kinds,
             MySqlReadOnlyGate.Check,
             MySqlReadOnlyGate.Body,
-            () => Server.Resolve(connection, out var refused) is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
-                : (null, MySqlText.Error(refused!)),
+            () => resolved is { } target
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? "", target.Config.SignInHost), null)
+                : (null, MySqlText.Error(unresolved!)),
             async (body, token) =>
             {
-                var run = await Server.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? MySqlText.Query(run, rows, SqlTool.ResultChars(effective)) : MySqlText.Error(run);
             },
-            (body, token) => Server.ExecuteAsync(connection, body, parameters, rows, timeout, token),
+            (body, token) => pinned.ExecuteAsync(connection, body, parameters, rows, timeout, token),
             MySqlText.Error,
-            (body, token) => OutsideAsync(body, connection, token));
-        return ServerExecute.RunAsync(MySqlStatementKinds.Family, effective.MySqlMode, effective.MySqlStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
+            (body, token) => OutsideAsync(body, connection, token, pinned), Changed: pinned.Names.Forget);
+        return ServerExecute.RunAsync(MySqlStatementKinds.Family, effective.MySqlMode, effective.MySqlStatementsAllowed, sql, parameters, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

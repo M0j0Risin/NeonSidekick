@@ -1,7 +1,4 @@
-using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Sql;
 
@@ -33,9 +30,8 @@ public sealed record SqlCatalog(IReadOnlyList<SqlNamedConnection> Connections, I
     /// </summary>
     public SqlCatalog Offered(IReadOnlyList<string>? names)
     {
-        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
-        var kept = Connections.Where(c => wanted.Contains(c.Name)).ToList();
-        return this with { Connections = kept, Hidden = Hidden + Connections.Count - kept.Count };
+        var kept = ConnectionCatalog.Offered(Connections, names);
+        return this with { Connections = kept, Problems = ConnectionCatalog.OfferedProblems(Problems, names), Hidden = Hidden + Connections.Count - kept.Count };
     }
 
     /// <summary>
@@ -178,6 +174,31 @@ public sealed class SqlConfigFile
     /// <summary>The connections by name, in file order (the deserializer keeps it).</summary>
     public Dictionary<string, SqlConnectionConfig?> Connections { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>Keys beside <c>connections</c>: listed as problems, never used (2026-10-24, the database review's K2).</summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    /// <summary>
+    /// The family's code over this file's facts (2026-10-24, the database review's Q11: the load, the encrypt-in-place, the splices and the
+    /// secrets were a copy of <see cref="ConnectionFamily{TConfig, TNamed}"/>'s, and its credman wording had already drifted from the other
+    /// families'). The Windows sign-in kinds stay in <see cref="SqlConnectionConfig.Problem"/> and <see cref="SqlAccess"/>.
+    /// </summary>
+    public static readonly ConnectionFamily<SqlConnectionConfig, SqlNamedConnection> Family = new()
+    {
+        FileName = FileName,
+        Category = Category,
+        EmptyText = EmptyText,
+        Tab = SqlText.SqlMenuPath,
+        NullEntry = SqlText.NoServer,
+        Deserialize = json => JsonSerializer.Deserialize(json, SqlJsonContext.Default.SqlConfigFile) is { } file ? (file.Connections, file.Extra) : (null, null),
+        CredentialPrefix = SqlConnectionConfig.CredentialPrefix,
+        EntryInfo = SqlJsonContext.Default.SqlConnectionConfig,
+        Named = (name, config, source) => new SqlNamedConnection(name, config, source),
+        NoPassword = SqlText.NoPassword,
+        NoCredential = SqlText.NoCredential,
+        ProfilesUnlistedLogLine = SqlText.ProfilesUnlistedLogLine,
+    };
+
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\sql.json</c> (<c>configs</c> since 2026-10-16).</summary>
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
@@ -185,197 +206,44 @@ public sealed class SqlConfigFile
     public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
-    /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot
-    /// connect (<see cref="SqlConnectionConfig.Problem"/>) or has a blank name — for a file that is not JSON or
-    /// cannot be read, one problem for the file and one <c>Sql</c> warning. A missing file is empty. Never throws.
+    /// Reads <paramref name="path"/>: the usable connections in file order and a problem per entry that cannot connect
+    /// (<see cref="SqlConnectionConfig.Problem"/>) or has a blank name; a file that is not JSON or cannot be read is one problem and one
+    /// <c>Sql</c> warning. A missing file is empty. Never throws (<see cref="ConnectionFamily{TConfig, TNamed}.Load"/>).
     /// </summary>
     public static SqlCatalog Load(string path)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (!File.Exists(path))
-        {
-            return SqlCatalog.Empty;
-        }
-
-        SqlConfigFile? file;
-        try
-        {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), SqlJsonContext.Default.SqlConfigFile);
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            string detail = LogText.Excerpt(ex.Message);
-            DiagnosticLog.Warn(Category, SqlText.ConfigProblemLogLine(path, detail));
-            return new SqlCatalog([], [new SqlConfigProblem(path, SqlText.UnreadableFile(detail), WholeFile: true)]);
-        }
-
-        // "connections": null reads as null past the non-nullable type (2026-10-22, review K1: it threw here, and the
-        // startup encryption pass and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
-        if (file?.Connections is not { Count: > 0 })
-        {
-            return SqlCatalog.Empty;
-        }
-
-        var connections = new List<SqlNamedConnection>(file.Connections.Count);
-        var problems = new List<SqlConfigProblem>();
-        foreach (var (name, config) in file.Connections)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                problems.Add(new SqlConfigProblem(path, SqlText.BlankName));
-                continue;
-            }
-
-            string? reason = config is null ? SqlText.NoServer : config.Problem;
-            if (reason is not null)
-            {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim(), Entry: config));
-                continue;
-            }
-
-            EncryptInPlace(path, name.Trim(), config!);
-            connections.Add(new SqlNamedConnection(name.Trim(), config!, path));
-        }
-
-        return new SqlCatalog(connections, problems);
-    }
-
-    /// <summary>
-    /// The safety net under the SQL tab's masked prompt (later on 2026-09-23, the user's call): a plain-text
-    /// <c>password</c> under the <c>file</c> store is DPAPI-encrypted and written back over that one value
-    /// (<see cref="WritePassword"/>) at the first read that sees it, the file's comments and layout kept. A file that
-    /// cannot be written keeps working with the plain value, and says so once per read in the log.
-    /// </summary>
-    private static void EncryptInPlace(string path, string name, SqlConnectionConfig config)
-    {
-        if (!config.NeedsPassword || config.InCredentialManager || string.IsNullOrEmpty(config.Password)
-            || WindowsCredentials.IsProtected(config.Password) || !WindowsCredentials.CanProtect)
-        {
-            return;
-        }
-
-        var encrypted = WindowsCredentials.Protect(config.Password);
-        string? error = encrypted.Error ?? WritePassword(path, name, encrypted.Value!);
-        if (error is null)
-        {
-            config.Password = encrypted.Value;
-            DiagnosticLog.Info(Category, SqlText.EncryptedLogLine(name, path));
-        }
-        else
-        {
-            DiagnosticLog.Warn(Category, SqlText.EncryptFailedLogLine(name, path, error));
-        }
+        var (connections, problems) = Family.Load(path);
+        return connections.Count == 0 && problems.Count == 0 ? SqlCatalog.Empty : new SqlCatalog(connections, problems);
     }
 
     /// <summary>
     /// Writes <paramref name="value"/> as the <c>password</c> of connection <paramref name="name"/> in <paramref name="path"/>,
-    /// touching nothing else (<see cref="ConnectionsFileEdit.WritePassword"/>: the token replaced, or the key inserted after
-    /// the connection's <c>user</c>). Null on success, else why not.
+    /// touching nothing else (<see cref="ConnectionsFileEdit.WritePassword"/>). Null on success, else why not.
     /// </summary>
     public static string? WritePassword(string path, string name, string value) => ConnectionsFileEdit.WritePassword(path, name, value);
 
     /// <summary>
-    /// Adds connection <paramref name="name"/> to <paramref name="path"/> (2026-09-23, the SQL tab's <c>SQL add connection</c>
-    /// wizard, the user's ask: step through every choice rather than hand-write the entry), the file's comments and layout
-    /// kept (<see cref="ConnectionsFileEdit.AddConnection"/>; a missing file is made with <see cref="EmptyText"/> first). The
-    /// entry is <paramref name="config"/> through <see cref="SqlJsonContext"/>, its <c>password</c> left out: the caller stores
-    /// it after (<see cref="SqlSecrets.Save"/>), so a plain password never reaches the disk. A name already in the file is
-    /// refused. Null on success, else why not.
+    /// Adds connection <paramref name="name"/> to <paramref name="path"/> (2026-09-23, the SQL tab's <c>SQL add connection</c> wizard), the
+    /// file's comments and layout kept, its <c>password</c> left out: the caller stores it after (<see cref="SqlSecrets.Save"/>). A name
+    /// already in the file is refused. Null on success, else why not.
     /// </summary>
-    public static string? AddConnection(string path, string name, SqlConnectionConfig config)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.AddConnection(path, name, EntryText(config), EmptyText);
-    }
+    public static string? AddConnection(string path, string name, SqlConnectionConfig config) => Family.AddConnection(path, name, config);
+
+    /// <summary>Replaces connection <paramref name="oldName"/> with <paramref name="newName"/> and <paramref name="config"/> (2026-10-05, the wizard's edit), its <c>password</c> left out as for an add.</summary>
+    public static string? ReplaceConnection(string path, string oldName, string newName, SqlConnectionConfig config) => Family.ReplaceConnection(path, oldName, newName, config);
 
     /// <summary>
-    /// Replaces connection <paramref name="oldName"/> in <paramref name="path"/> with <paramref name="newName"/> and
-    /// <paramref name="config"/> (2026-10-05, the user's ask: <c>SQL add/edit connection</c> edits an entry too), comments and
-    /// layout kept (<see cref="ConnectionsFileEdit.ReplaceConnection"/>), its <c>password</c> left out as for an add. Null on
-    /// success, else why not.
+    /// Every <c>sql.json</c> under <paramref name="home"/> read once — the home's and each profile's (later on 2026-09-23, the user's ask: a
+    /// password typed into any of them is encrypted when the app starts). The interactive screen and headless mode call it at startup; the
+    /// check modes do not. The files read, in order. Never throws.
     /// </summary>
-    public static string? ReplaceConnection(string path, string oldName, string newName, SqlConnectionConfig config)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        ArgumentException.ThrowIfNullOrWhiteSpace(oldName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
-        ArgumentNullException.ThrowIfNull(config);
-        return ConnectionsFileEdit.ReplaceConnection(path, oldName, newName, EntryText(config));
-    }
-
-    /// <summary>
-    /// One connection object as <see cref="AddConnection"/> writes it: <see cref="SqlJsonContext"/>'s keys in its order,
-    /// indented two spaces a level, no <c>password</c>, the relaxed escaping (a <c>DOMAIN\name</c> reads as typed, the
-    /// backslash doubled); the splice indents it under the entry's name and puts in the file's line ends.
-    /// </summary>
-    private static string EntryText(SqlConnectionConfig config)
-    {
-        string? password = config.Password;
-        config.Password = null;
-        try
-        {
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-            {
-                JsonSerializer.Serialize(writer, config, SqlJsonContext.Default.SqlConnectionConfig);
-            }
-
-            return Encoding.UTF8.GetString(stream.ToArray());
-        }
-        finally
-        {
-            config.Password = password;
-        }
-    }
-
-    /// <summary>
-    /// Every <c>sql.json</c> under <paramref name="home"/> read once — the home's and each profile's, not only the
-    /// loaded one's (later on 2026-09-23, the user's ask: a password typed into any of them is encrypted when the app
-    /// starts, not at the first read that happens to need that file) — so <see cref="Load"/>'s encryption runs over
-    /// them all. The interactive screen and headless mode call it at startup; the check modes do not (a diagnostic
-    /// run leaves the user's files alone). The files read, in order; a profiles folder that cannot be listed is a
-    /// warning and the home's file alone. Never throws.
-    /// </summary>
-    public static IReadOnlyList<string> EncryptAll(string home)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(home);
-        var paths = new List<string> { GlobalPath(home) };
-        try
-        {
-            paths.AddRange(Settings.Profiles.List(home).Select(name => ProfilePath(Settings.Profiles.Directory(home, name))));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Warn(Category, SqlText.ProfilesUnlistedLogLine(Settings.Profiles.Root(home), LogText.Excerpt(ex.Message)));
-        }
-
-        var read = new List<string>();
-        foreach (string path in paths.Where(File.Exists))
-        {
-            Load(path);
-            read.Add(path);
-        }
-
-        return read;
-    }
+    public static IReadOnlyList<string> EncryptAll(string home) => Family.EncryptAll(home);
 
     /// <summary>The profile's file over the home's (<paramref name="home"/> null = the profile's alone): a name in both is the profile's.</summary>
     public static SqlCatalog LoadCatalog(string profileDirectory, string? home)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(profileDirectory);
-        var profile = Load(ProfilePath(profileDirectory));
-        if (home is null || string.Equals(Path.GetFullPath(ProfilePath(profileDirectory)), Path.GetFullPath(GlobalPath(home)), StringComparison.OrdinalIgnoreCase))
-        {
-            return profile;
-        }
-
-        var global = Load(GlobalPath(home));
-        var names = new HashSet<string>(profile.Connections.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
-        return new SqlCatalog(
-            [.. profile.Connections, .. global.Connections.Where(c => !names.Contains(c.Name))],
-            [.. profile.Problems, .. global.Problems]);
+        var (connections, problems) = Family.LoadCatalog(profileDirectory, home);
+        return new SqlCatalog(connections, problems);
     }
 
     /// <summary>Writes <see cref="EmptyText"/> to <paramref name="path"/> when no file is there (the folder made first); true when it wrote. Throws on an IO failure — the caller's notice.</summary>

@@ -24,7 +24,11 @@ public enum SignInStop
 /// <param name="HoldKey">A hash of where, the account and the password (<see cref="SignInGuard.HoldKey"/>), or null when no password is sent.</param>
 /// <param name="Server">The server (and port) the abandoned-call cap counts against.</param>
 /// <param name="WrongPassword">Whether a failure says the password is wrong — never locked, disabled, expired or must-change (B8).</param>
-public sealed record SignInCall(string? HoldKey, string Server, Func<Exception, bool> WrongPassword);
+/// <param name="Lapse">
+/// How long a hold lasts (2026-10-24, the review of the database fixes): null holds until the password changes (the admin families'); the database
+/// families' lapses, since their drivers' "login failed" also means a disabled login or one with no access yet, which a person may fix.
+/// </param>
+public sealed record SignInCall(string? HoldKey, string Server, Func<Exception, bool> WrongPassword, TimeSpan? Lapse = null);
 
 /// <summary>What <see cref="SignInGuard.RunAsync{T}"/> came to: the work's value, its failure (rethrown by the caller's own mapping), or a stop.</summary>
 public readonly record struct SignInRun<T>(T? Value, Exception? Failure, SignInStop Stop)
@@ -266,6 +270,61 @@ public static class SignInGuard
         }
     }
 
+    /// <summary>
+    /// A database family's sign-in under the guard's hold and its one-at-a-time rule (2026-10-24, the database review's K1: no database family
+    /// used the guard, so a refused stored password was tried again at every call — and by the boundary's names read, and by parallel calls —
+    /// until a lockout policy locked the account). <paramref name="open"/> runs on the caller's flow (the drivers own their timeouts and
+    /// cancel), so nothing is abandoned: a held password is <see cref="SignInStop.Held"/> before anything is sent, the open's exception is
+    /// <see cref="SignInRun{T}.Failure"/>, and a cancel is thrown.
+    /// </summary>
+    public static async Task<SignInRun<T>> OpenAsync<T>(SignInCall call, Func<CancellationToken, Task<T>> open, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        ArgumentNullException.ThrowIfNull(open);
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = s_state;
+        if (call.HoldKey is not { } key)
+        {
+            return new SignInRun<T>(await open(cancellationToken).ConfigureAwait(false), null, SignInStop.None);
+        }
+
+        if (IsHeldIn(state, key, call.Lapse))
+        {
+            return new SignInRun<T>(default, null, SignInStop.Held);
+        }
+
+        var gate = GateFor(state, key);
+        if (gate is not null)
+        {
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            if (gate is not null && IsHeldIn(state, key, call.Lapse))
+            {
+                return new SignInRun<T>(default, null, SignInStop.Held);
+            }
+
+            var value = await open(cancellationToken).ConfigureAwait(false);
+            Proven(state, key);
+            return new SignInRun<T>(value, null, SignInStop.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            if (call.WrongPassword(ex))
+            {
+                Hold(state, key);
+            }
+
+            return new SignInRun<T>(default, ex, SignInStop.None);
+        }
+        finally
+        {
+            gate?.Release();
+        }
+    }
+
     private static async Task<SignInRun<T>> Settle<T>(Task<T> running)
     {
         try
@@ -286,10 +345,17 @@ public static class SignInGuard
         return new Restore(previous);
     }
 
-    private static bool IsHeldIn(State state, string key)
+    private static bool IsHeldIn(State state, string key, TimeSpan? lapse = null)
     {
         lock (state)
         {
+            if (lapse is { } after && state.HeldAt.TryGetValue(key, out var since) && DateTime.UtcNow - since >= after)
+            {
+                state.Held.Remove(key);
+                state.HeldAt.Remove(key);
+                return false;
+            }
+
             return state.Held.Contains(key);
         }
     }
@@ -299,6 +365,7 @@ public static class SignInGuard
         lock (state)
         {
             state.Held.Add(key);
+            state.HeldAt[key] = DateTime.UtcNow;
             state.Proven.Remove(key);
         }
 
@@ -398,6 +465,7 @@ public static class SignInGuard
     private sealed class State
     {
         public readonly HashSet<string> Held = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, DateTime> HeldAt = new(StringComparer.Ordinal);
         public readonly HashSet<string> Proven = new(StringComparer.Ordinal);
         public readonly Dictionary<string, SemaphoreSlim> Gates = new(StringComparer.Ordinal);
         public readonly Dictionary<string, Counts> Servers = new(StringComparer.OrdinalIgnoreCase);

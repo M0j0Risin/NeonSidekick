@@ -43,8 +43,15 @@ internal static class SqlCheck
                CAST(NULL AS int) AS [null]
         """;
 
-    /// <summary>The global temporary table the rollback line makes inside the transaction and expects gone after it.</summary>
-    public const string ScratchTable = "##neonsidekick_check";
+    /// <summary>
+    /// The table the rollback line makes inside the transaction and expects gone after it: a permanent one in tempdb since 2026-10-24 (the
+    /// database review's I9: a <c>##</c> table ends with its session, and the pool's reset ended that, so the line passed whether or not the
+    /// rollback held). Named afresh each run (<see cref="ScratchName"/>); one a failed rollback leaves goes when the server restarts.
+    /// </summary>
+    public const string ScratchTable = "tempdb.dbo.neonsidekick_check";
+
+    /// <summary>This run's scratch table: <see cref="ScratchTable"/> and 12 hex digits.</summary>
+    public static string ScratchName() => ScratchTable + "_" + Guid.NewGuid().ToString("N")[..12];
 
     public static string IntroLine(string name) => $"SQL check: connection '{name}' — nothing is kept.";
 
@@ -95,8 +102,9 @@ internal static class SqlCheck
             ? SqlText.Reach(target.Config.Database?.Trim() ?? "", reach.Grids.FirstOrDefault()?.Rows.Select(r => r[0]).ToList() ?? [])
             : SqlText.Error(reach)));
 
-        var inside = await Run($"CREATE TABLE {ScratchTable} (x int); INSERT INTO {ScratchTable} VALUES (1); SELECT @@TRANCOUNT AS trancount, COUNT(*) AS n FROM {ScratchTable}", timeoutSeconds, cancellationToken).ConfigureAwait(false);
-        var after = await Run($"SELECT CASE WHEN OBJECT_ID('tempdb..{ScratchTable}') IS NULL THEN 'gone' ELSE 'kept' END AS state", timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        string scratch = ScratchName();
+        var inside = await Run($"CREATE TABLE {scratch} (x int); INSERT INTO {scratch} VALUES (1); SELECT @@TRANCOUNT AS trancount, COUNT(*) AS n FROM {scratch}", timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var after = await Run($"SELECT CASE WHEN OBJECT_ID('{scratch}') IS NULL THEN 'gone' ELSE 'kept' END AS state", timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(RollbackCheck(inside, after));
 
         using (var cancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))

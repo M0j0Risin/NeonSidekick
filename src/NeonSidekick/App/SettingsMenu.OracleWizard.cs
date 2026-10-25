@@ -69,6 +69,9 @@ internal sealed partial class SettingsMenu
         /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
         public bool PasswordKept { get; set; }
 
+        /// <summary>An edit's host as read (2026-10-24, review E9): a move away from it lets go of the kept password.</summary>
+        public string? OriginalHost { get; init; }
+
         public OracleConnectionConfig Config { get; init; } = new() { PasswordStore = OracleConnectionConfig.FileStore };
     }
 
@@ -172,7 +175,8 @@ internal sealed partial class SettingsMenu
             Global = global,
             Name = named.Name,
             Original = named.Name,
-            OriginalTarget = c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            OriginalHost = c.SignInHost,
+            OriginalTarget = c.InCredentialManager && string.IsNullOrWhiteSpace(c.Credential) ? c.CredentialTarget(named.Name) : null,   // a blank credential is the default too (2026-10-24, review N13)
             Config = CloneEntry(c, OracleJsonContext.Default.OracleConnectionConfig, x => x.Password = null),
         };
         draft.Password = StoredPassword(OracleSecrets.Resolve(named));
@@ -215,6 +219,7 @@ internal sealed partial class SettingsMenu
 
             if (await OracleWizardStepAsync(step, draft, cancellationToken).ConfigureAwait(false))
             {
+            ForgetKeptPasswordOnMove(draft.OriginalHost, draft.Config.SignInHost, draft.PasswordKept, () => { draft.Password = ""; draft.PasswordKept = false; });
                 step = fromSummary ? OracleWizardMissing(draft) ?? OracleWizardStep.Summary : step + 1;
                 fromSummary = fromSummary && step != OracleWizardStep.Summary;
                 continue;
@@ -578,37 +583,20 @@ internal sealed partial class SettingsMenu
         var c = draft.Config;
         if (OracleWizardMissing(draft) is { } missing)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, OracleWizardLabels[(int)missing] + " is not set"));
+            Sink.Error(WizardSaveFailed(draft.Original, draft.Name, OracleWizardLabels[(int)missing] + " is not set"));
             return null;
         }
 
         if (c.Problem is { } problem)
         {
-            Sink.Error(Sql.SqlText.ConnectionAddFailed(draft.Name, problem));
+            Sink.Error(WizardSaveFailed(draft.Original, draft.Name, problem));
             return null;
         }
 
         string path = OracleWizardPath(draft.Global);
-        if ((draft.Original is { } original ? OracleConfigFile.ReplaceConnection(path, original, draft.Name, c) : OracleConfigFile.AddConnection(path, draft.Name, c)) is { } error)
+        if (!SaveWizardEntry(OracleConfigFile.Family, path, OracleWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget))
         {
-            Sink.Error(draft.Original is null ? Sql.SqlText.ConnectionAddFailed(draft.Name, error) : Sql.SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
-        }
-
-        Sink.Notice(draft.Original is null ? Sql.SqlText.ConnectionAdded(draft.Name, path) : Sql.SqlText.ConnectionChanged(draft.Name, path));
-        var (saved, notice) = OracleSecrets.Save(new OracleNamedConnection(draft.Name, c, path), draft.Password);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        if (saved)
-        {
-            ForgetOldCredential(draft.OriginalTarget, c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
         }
 
         return ApplyOfferedAfterSave(SettingsField.OracleConnectionsOffered, _settings.Current.OracleConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.OracleConnectionsOffered = next);

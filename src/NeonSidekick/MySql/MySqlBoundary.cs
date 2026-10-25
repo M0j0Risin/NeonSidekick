@@ -9,7 +9,7 @@ namespace NeonSidekick.MySql;
 /// (<c>payroll.salaries</c>, <c>`payroll`.salaries</c>, <c>payroll.salaries.id</c>, <c>payroll.f()</c>): <c>USE</c> is refused by both
 /// gates, and the session never changes its database. A lexer cannot tell a qualifier from a table's alias (<c>t.col</c>), so the
 /// tools read the names of the databases on the server first (<see cref="Names"/>, what the account can see — what it cannot see it
-/// cannot reach) and a qualifier among them is refused (<see cref="ServerWriteGate.NamesAny"/>): another database, or an alias spelled
+/// cannot reach) and a qualifier among them is refused (<see cref="Check"/>): another database, or an alias spelled
 /// like one, which the refusal says to rename. The server's own databases (<see cref="SystemDatabases"/>: <c>information_schema</c>'s
 /// listing of every database's tables, <c>performance_schema</c>'s other sessions' statements, <c>mysql</c>'s accounts) are refused
 /// whether listed or not, the user's pick the same day: the catalog tools read the connection's own. What the text cannot show (a view
@@ -42,11 +42,11 @@ public static class MySqlBoundary
         ArgumentNullException.ThrowIfNull(database);
         if (MySqlWriteGate.Lex(sql, out _) is not { } tokens)
         {
-            return ([], null);
+            return ([], MySqlText.BoundaryUnread);   // refused, not passed (2026-10-24, mechanism 7)
         }
 
         string own = database.Trim();
-        var heads = ServerWriteGate.Qualifiers(tokens).Where(h => !h.Equals(own, StringComparison.Ordinal)).ToList();
+        var heads = Others(tokens, own).ToList();
         return heads.FirstOrDefault(SystemDatabases.Contains) is { } system
             ? (heads, MySqlText.ServerCatalog(system.ToLowerInvariant()))
             : (heads, null);
@@ -54,7 +54,7 @@ public static class MySqlBoundary
 
     /// <summary>
     /// Null when <paramref name="sql"/> keeps to <paramref name="database"/>, the other databases on the server being
-    /// <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex passes here: the gate has refused it.
+    /// <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex is refused (2026-10-24, mechanism 7).
     /// </summary>
     public static string? Check(string sql, string database, IEnumerable<string> visible)
     {
@@ -63,19 +63,21 @@ public static class MySqlBoundary
         ArgumentNullException.ThrowIfNull(visible);
         if (MySqlWriteGate.Lex(sql, out _) is not { } tokens)
         {
-            return null;
+            return MySqlText.BoundaryUnread;
         }
 
         // The connection's own as the server spells it, then every other name a qualifier could mean, whatever its case: a twin that
         // differs from the own only in case (a case-sensitive server's Shop beside shop) is another database, and is refused.
         string own = database.Trim();
         var names = visible.ToList();
-        string spelled = names.FirstOrDefault(v => v.Equals(own, StringComparison.Ordinal)) ?? names.FirstOrDefault(v => v.Equals(own, StringComparison.OrdinalIgnoreCase)) ?? own;
-        foreach (string head in ServerWriteGate.Qualifiers(tokens).Where(h => !h.Equals(own, StringComparison.Ordinal)))
+        string cellOwn = SqlText.Cell(own);   // as the names list writes it: a cell, scrubbed, NULL quoted (2026-10-24, the review of these fixes)
+        string spelled = names.FirstOrDefault(v => v.Equals(cellOwn, StringComparison.Ordinal)) ?? names.FirstOrDefault(v => v.Equals(cellOwn, StringComparison.OrdinalIgnoreCase)) ?? cellOwn;
+        foreach (string written in Others(tokens, own))
         {
-            if (SystemDatabases.Contains(head))
+            string head = SqlText.Cell(written);
+            if (SystemDatabases.Contains(written))
             {
-                return MySqlText.ServerCatalog(head.ToLowerInvariant());
+                return MySqlText.ServerCatalog(written.ToLowerInvariant());
             }
 
             if (names.FirstOrDefault(v => v.Equals(head, StringComparison.OrdinalIgnoreCase) && !v.Equals(spelled, StringComparison.Ordinal)) is { } named)
@@ -86,4 +88,13 @@ public static class MySqlBoundary
 
         return null;
     }
+
+    /// <summary>
+    /// The qualifiers that may name another database: all but a quoted one spelled exactly as the connection's own (2026-10-24, the
+    /// database review's R8: the lexer upper-cases a bare word, so with an own <c>SHOP</c> a bare <c>shop.t</c> — the database <c>shop</c> on a
+    /// case-sensitive server — compared equal and was never checked). A bare word is left to <see cref="Check"/>'s names, which pass it
+    /// when the only database it can mean is the connection's.
+    /// </summary>
+    private static IEnumerable<string> Others(IReadOnlyList<GateToken> tokens, string own) =>
+        ServerWriteGate.QualifierTokens(tokens).Where(t => !(t.Kind == GateTokenKind.Name && t.Text.Equals(own, StringComparison.Ordinal))).Select(t => t.Text);
 }

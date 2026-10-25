@@ -45,15 +45,28 @@ public sealed class PostgresAccess
 
     private readonly Func<PostgresCatalog> _catalog;
 
-    public PostgresAccess(Func<PostgresCatalog> catalog)
+    public PostgresAccess(Func<PostgresCatalog> catalog) : this(catalog, null)
+    {
+    }
+
+    /// <summary>An access over <paramref name="catalog"/> sharing <paramref name="names"/> (a pinned one's, <see cref="Pinned"/>), or a cache of its own.</summary>
+    public PostgresAccess(Func<PostgresCatalog> catalog, Sql.BoundaryNames? names)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        Names = names ?? new();
     }
 
     public PostgresCatalog Catalog() => _catalog();
 
     /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
-    public Sql.BoundaryNames Names { get; } = new();
+    public Sql.BoundaryNames Names { get; }
+
+    /// <summary>
+    /// An access over <paramref name="target"/> alone, sharing this one's names cache (2026-10-24, the database review's H11): an <c>_execute</c>
+    /// call resolves its connection once and every step after — the boundary, the pane, the run — works on that entry, so a file edited in
+    /// between cannot send an allowed change to another server.
+    /// </summary>
+    public PostgresAccess Pinned(PostgresNamedConnection target) => new(() => new PostgresCatalog([target], []), Names);
 
     public PostgresNamedConnection? Resolve(string? name, out SqlRun? refused)
     {
@@ -73,6 +86,50 @@ public sealed class PostgresAccess
 
         return found;
     }
+
+    /// <summary>
+    /// Why the session's settings did not hold, or null: the read-only default (for a read), <c>standard_conforming_strings</c>, a statement
+    /// timeout, and under a schema lock the search path being that schema alone (H1).
+    /// </summary>
+    private static async Task<string?> SessionRefusalAsync(NpgsqlConnection connection, PostgresConnectionConfig config, bool readOnly, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var command = new NpgsqlCommand(SessionCheck, connection);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return PostgresText.SessionNotSet("the settings");
+            }
+
+            string? schema = string.IsNullOrWhiteSpace(config.Schema) ? null : config.Schema.Trim();
+            return PostgresText.SessionProblem(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), readOnly, schema);
+        }
+        catch (NpgsqlException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // A read-back the server or a pooler refuses is a refusal, never a raw throw (2026-10-24, the review of these fixes: it ran outside the
+            // callers' catches, and postgres_execute's attempt then had no audit line).
+            return PostgresText.SessionNotSet("the settings") + " (" + Diagnostics.LogText.Excerpt(ex.Message) + ")";
+        }
+    }
+
+    /// <summary>The settings <see cref="SessionRefusalAsync"/> reads, in its order.</summary>
+    public const string SessionCheck =
+        "SELECT current_setting('default_transaction_read_only'), current_setting('standard_conforming_strings'), current_setting('statement_timeout'), array_to_string(current_schemas(false), ',')";
+
+    /// <summary>The connections whose unchecked TLS was noted this run (2026-10-24, decision DB1: once a run each, in the log).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> s_tlsNoted = new(StringComparer.OrdinalIgnoreCase);
+
+    private static void NoteUncheckedTls(string name, bool checkedTls)
+    {
+        if (!checkedTls && s_tlsNoted.TryAdd(name, 0))
+        {
+            DiagnosticLog.Warn(PostgresConfigFile.Category, Sql.SqlText.TlsUncheckedLogLine("PostgreSQL", name));
+        }
+    }
+
+    /// <summary>Whether a failed open says the password is wrong (28P01, invalid_password): the sign-in guard holds it (2026-10-24, review K1).</summary>
+    public static bool WrongPassword(Exception ex) => ex is PostgresException { SqlState: "28P01" };
 
     /// <summary>The data source for one connection string: slim, with the handlers a read meets (TLS, arrays, ranges, records, JSON as text, network and geometric types, full-text search; EnableUnmappedTypes is left out, being reflection — an enum or a domain the handlers do not know reads as <see cref="PostgresText.Unreadable"/>).</summary>
     public static NpgsqlDataSource Build(string connectionString) =>
@@ -105,6 +162,7 @@ public sealed class PostgresAccess
             return refused!;
         }
 
+        NoteUncheckedTls(target.Name, target.Config.TlsChecked);
         var secret = PostgresSecrets.Resolve(target);
         if (secret.Error is { } missing)
         {
@@ -116,11 +174,17 @@ public sealed class PostgresAccess
         NpgsqlConnection connection;
         try
         {
-            connection = await source.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+            NpgsqlConnection? opened = null;
+            if (await Sql.DatabaseSignIn.OpenAsync(Sql.DatabaseSignIn.Call("postgres", target.Config.Endpoint, target.Config.User?.Trim(), secret.Value, WrongPassword), async token => opened = await source.OpenConnectionAsync(token).ConfigureAwait(false), cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, Sql.SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.Endpoint, PostgresConfigFile.Family.Tab), target.Name);
+            }
+
+            connection = opened!;
         }
         catch (Exception ex) when (ex is NpgsqlException or InvalidOperationException or ArgumentException or TimeoutException && !cancellationToken.IsCancellationRequested)
         {
-            string detail = ex is PostgresException pg ? PostgresText.ServerError(pg.SqlState, pg.MessageText) : LogText.Excerpt(ex.Message.ReplaceLineEndings(" "));
+            string detail = PostgresText.WithCleartextHint(ex is PostgresException pg ? PostgresText.ServerError(pg.SqlState, pg.MessageText) : LogText.Excerpt(ex.Message.ReplaceLineEndings(" ")));
             DiagnosticLog.Warn(PostgresConfigFile.Category, PostgresText.ConnectFailedLogLine(target.Name, detail));
             return SqlRun.Refused(SqlOutcome.ConnectFailed, detail, target.Name);
         }
@@ -129,6 +193,15 @@ public sealed class PostgresAccess
         string workIn = connection.Database ?? builder.Database ?? "";
         var watch = Stopwatch.StartNew();
         var grids = new List<SqlGrid>();
+
+        // The session's settings read back before the model's text runs (2026-10-24, the database review's H1, mechanism 7): they ride the
+        // startup options, which a pooler such as PgBouncer can drop without a word — and then the read-only default, the string rule the
+        // gate reads by, the timeouts and the schema lock were all gone.
+        if (await SessionRefusalAsync(connection, target.Config, readOnly: true, cancellationToken).ConfigureAwait(false) is { } notSet)
+        {
+            return SqlRun.Refused(SqlOutcome.Failed, notSet, target.Name);
+        }
+
         try
         {
             await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken).ConfigureAwait(false);
@@ -141,7 +214,13 @@ public sealed class PostgresAccess
 
                 for (int i = 0; i < statements.Count; i++)
                 {
-                    grids.Add(await ReadAsync(connection, transaction, statements[i], parameters, maxRows, timeoutSeconds, last: i == statements.Count - 1, cancellationToken).ConfigureAwait(false));
+                    // One deadline for the whole call (2026-10-24, the database review's O13: each statement had the full timeout).
+                    if (SqlDeadline.Left(watch, timeoutSeconds) is not (> 0 and var left))
+                    {
+                        return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+                    }
+
+                    grids.Add(await ReadAsync(connection, transaction, statements[i], parameters, maxRows, left, last: i == statements.Count - 1, cancellationToken).ConfigureAwait(false));
                 }
             }
             finally
@@ -204,6 +283,7 @@ public sealed class PostgresAccess
             return SqlRun.Refused(SqlOutcome.ReadOnlyConnection, "", target.Name);
         }
 
+        NoteUncheckedTls(target.Name, target.Config.TlsChecked);
         var secret = PostgresSecrets.Resolve(target);
         if (secret.Error is { } missing)
         {
@@ -215,11 +295,17 @@ public sealed class PostgresAccess
         NpgsqlConnection connection;
         try
         {
-            connection = await source.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+            NpgsqlConnection? opened = null;
+            if (await Sql.DatabaseSignIn.OpenAsync(Sql.DatabaseSignIn.Call("postgres", target.Config.Endpoint, target.Config.User?.Trim(), secret.Value, WrongPassword), async token => opened = await source.OpenConnectionAsync(token).ConfigureAwait(false), cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, Sql.SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.Endpoint, PostgresConfigFile.Family.Tab), target.Name);
+            }
+
+            connection = opened!;
         }
         catch (Exception ex) when (ex is NpgsqlException or InvalidOperationException or ArgumentException or TimeoutException && !cancellationToken.IsCancellationRequested)
         {
-            string detail = ex is PostgresException pg ? PostgresText.ServerError(pg.SqlState, pg.MessageText) : LogText.Excerpt(ex.Message.ReplaceLineEndings(" "));
+            string detail = PostgresText.WithCleartextHint(ex is PostgresException pg ? PostgresText.ServerError(pg.SqlState, pg.MessageText) : LogText.Excerpt(ex.Message.ReplaceLineEndings(" ")));
             DiagnosticLog.Warn(PostgresConfigFile.Category, PostgresText.ConnectFailedLogLine(target.Name, detail));
             return SqlRun.Refused(SqlOutcome.ConnectFailed, detail, target.Name);
         }
@@ -228,6 +314,15 @@ public sealed class PostgresAccess
         string workIn = connection.Database ?? builder.Database ?? "";
         var watch = Stopwatch.StartNew();
         var grids = new List<SqlGrid>();
+
+        // The session's settings read back before the model's text runs (2026-10-24, the database review's H1, mechanism 7): they ride the
+        // startup options, which a pooler such as PgBouncer can drop without a word — and then the read-only default, the string rule the
+        // gate reads by, the timeouts and the schema lock were all gone.
+        if (await SessionRefusalAsync(connection, target.Config, readOnly: false, cancellationToken).ConfigureAwait(false) is { } notSet)
+        {
+            return SqlRun.Refused(SqlOutcome.Failed, notSet, target.Name);
+        }
+
         int? changes;
         try
         {
@@ -347,15 +442,57 @@ public sealed class PostgresAccess
         }
     }
 
-    private static string ArrayText(Array array)
+    /// <summary>
+    /// An array as PostgreSQL writes one: each dimension in its own braces (2026-10-24, the database review's O10: a two-dimensional array
+    /// was flattened), a timestamptz element said UTC as a cell is, and the whole clipped to <see cref="SqlText.MaxCellChars"/> — built no
+    /// further than twice that (B11: an array_agg of a big table gave a cell of megabytes, and no row fit the text cap).
+    /// </summary>
+    public static string ArrayText(Array array)
     {
-        var sb = new StringBuilder("{");
-        foreach (object? item in array)
+        ArgumentNullException.ThrowIfNull(array);
+        var sb = new StringBuilder();
+        bool cut = !AppendDimension(sb, array, 0, new int[array.Rank]);
+        string text = sb.ToString();
+        return cut ? SqlText.Cell(Files.TextCut.Safe(text, SqlText.MaxCellChars)) + SqlText.MoreChars(SqlText.MaxCellChars) : SqlText.Cell(text);
+    }
+
+    /// <summary>One dimension's elements into <paramref name="sb"/>; false when the text grew past the build limit and was stopped.</summary>
+    private static bool AppendDimension(StringBuilder sb, Array array, int dimension, int[] index)
+    {
+        sb.Append('{');
+        for (int k = array.GetLowerBound(dimension); k <= array.GetUpperBound(dimension); k++)
         {
-            sb.Append(sb.Length > 1 ? ", " : "").Append(item is null or DBNull ? SqlText.Null : SqlText.Cell(item));
+            if (sb.Length > SqlText.MaxCellChars * 2)
+            {
+                return false;
+            }
+
+            if (k > array.GetLowerBound(dimension))
+            {
+                sb.Append(", ");
+            }
+
+            index[dimension] = k;
+            if (dimension + 1 < array.Rank)
+            {
+                if (!AppendDimension(sb, array, dimension + 1, index))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                sb.Append(array.GetValue(index) switch
+                {
+                    null or DBNull => SqlText.Null,
+                    DateTime { Kind: DateTimeKind.Utc } utc => SqlText.Cell(utc) + " UTC",
+                    var item => SqlText.Cell(item),
+                });
+            }
         }
 
-        return sb.Append('}').ToString();
+        sb.Append('}');
+        return true;
     }
 
     /// <summary>The server's message with its SQLSTATE — <c>42P01: relation "x" does not exist</c> — and a sentence for the read-only refusal.</summary>
@@ -428,15 +565,22 @@ public sealed class PostgresAccess
                 continue;
             }
 
+            // Spaces count only inside the quotes (2026-10-24, the database review's O14: the parts were trimmed after unquoting, so a
+            // quoted name with a leading or trailing space lost it and named another object).
+            if (!quoted && char.IsWhiteSpace(c))
+            {
+                continue;
+            }
+
             current.Append(c);
         }
 
         parts.Add(current.ToString());
-        if (quoted || parts.Count > 2 || parts.Any(p => p.Trim().Length == 0))
+        if (quoted || parts.Count > 2 || parts.Any(p => p.Length == 0))
         {
             return null;
         }
 
-        return parts.Count == 1 ? (null, parts[0].Trim()) : (parts[0].Trim(), parts[1].Trim());
+        return parts.Count == 1 ? (null, parts[0]) : (parts[0], parts[1]);
     }
 }

@@ -15,6 +15,9 @@ public static class SqliteText
 
     public const string NoPath = "no \"path\" is given";
 
+    /// <summary>A path no file can have (2026-10-24, review D8). Pinned.</summary>
+    public static string BadPath(string path) => $"\"path\" is '{path}', which no file can have";
+
     /// <summary>One database as <c>sqlite_databases</c> lists it: the name, the file, the description. Pinned.</summary>
     public static string DatabaseLine(SqliteNamedDatabase database)
     {
@@ -117,21 +120,37 @@ public static class SqliteText
     public static string BadExtension(string path) => $"Error: '{path}' is not a valid database file name; a new database's file ends .db, .sqlite, .sqlite3 or .db3";
     public static string NoFolder(string path) => $"Error: the folder for '{path}' does not exist; make it first (create_directory)";
 
+    /// <summary>A working-directory path that is a database sqlite.json names and the user has not ticked (2026-10-24, review I5). Pinned.</summary>
+    public static string UntickedDatabase(string path) =>
+        $"Error: '{path}' is a database the user has named in sqlite.json but not ticked; it is not reached until the user ticks it in SQLite databases offered on /tools › Databases › SQLite";
+
+    /// <summary>A change the file guard refuses (2026-10-24, review A10), its own sentence after. Pinned.</summary>
+    public static string WriteGuarded(string database, string why) => $"Error: sqlite_execute may not change {database}: {why.Replace("Error: ", "", StringComparison.Ordinal)}";
+
     /// <summary>The allow pane's title. Pinned.</summary>
     public const string AllowTitle = "Change a SQLite database?";
 
-    /// <summary>The allow pane's caption: what would change (or be made), and the statement. Pinned.</summary>
-    public static string AllowCaption(SqliteTarget target, string sql, bool creating)
+    /// <summary>
+    /// The allow pane's caption: what would change (or be made), the statement and the values bound to it (2026-10-24, the database review's
+    /// B5; F16: the statement's hiding characters escaped and its line ends as SQLite reads them, <see cref="ServerWriteText.CaptionStatement"/>).
+    /// Pinned.
+    /// </summary>
+    public static string AllowCaption(SqliteTarget target, string sql, bool creating, IReadOnlyList<SqlParameterValue>? parameters = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(sql);
-        string where = creating ? $"The model wants to create the new database {target.FullPath} and run:" : $"The model wants to change {target.Name} ({target.FullPath}):";
-        return where + "\n" + Clip(sql.Trim(), 1200);
+        string file = NeonSidekick.Files.NameScrub.Display(target.FullPath);
+        string where = creating ? $"The model wants to create the new database {file} and run:" : $"The model wants to change {NeonSidekick.Files.NameScrub.Display(target.Name)} ({file}):";
+        return where + "\n" + ServerWriteText.CaptionStatement(sql) + ServerWriteText.Bound(parameters);
     }
 
     /// <summary>The audit line of a change (every one run): the database, the file, whether it was made, the rows changed, the statement. Pinned.</summary>
     public static string AuditLogLine(string database, string path, bool created, int changes, string sql) =>
-        $"{database} ({path}){(created ? " created" : "")}: {SqlText.Count(changes, "row")} changed by {sql}";
+        AuditLogLine(database, path, created, SqlText.Count(changes, "row") + " changed", sql);
+
+    /// <summary>The audit line with its verb already worded (<see cref="DatabaseAudit.Word"/>, 2026-10-24, decision DB7). Pinned.</summary>
+    public static string AuditLogLine(string database, string path, bool created, string word, string sql) =>
+        $"{database} ({path}){(created ? " created" : "")}: {word} by {sql}";
 
     /// <summary>
     /// <c>sqlite_execute</c>'s answer: <c>Changed N rows in database (T ms)</c>, the file's making when it was made, then the rows
@@ -140,7 +159,7 @@ public static class SqliteText
     public static string Executed(SqlRun run, bool created, int maxRows, int maxChars)
     {
         ArgumentNullException.ThrowIfNull(run);
-        string head = (created ? $"Created {run.Connection}. " : "") + $"Changed {SqlText.Count(run.Changes ?? 0, "row")} in {run.Connection} ({Millis(run.Elapsed)})";
+        string head = (created ? $"Created {run.Connection}. " : "") + (run.Changes is { } n ? $"Changed {SqlText.Count(n, "row")} in {run.Connection}" : $"Ran it in {run.Connection}") + $" ({Millis(run.Elapsed)})";
         if (run.Grids is not [{ Columns.Count: > 0 } grid, ..])
         {
             return head;

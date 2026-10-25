@@ -123,6 +123,8 @@ public static class AdvisorRecent
             _ => Llm.Tools.DirectoryTool.NameArgument,
         })));
         yield return (CertificateToolNames, call => "(" + call.Name + ": read it with your own network tools)");
+        // The database tools (2026-10-24, the database review's J2, decision DB4): a query's rows never reach an advisor's prompt.
+        yield return (App.ChatScreen.DatabaseToolNames, call => Sql.SqlText.WithheldFromAdvisor(call.Name, Argument(call, Llm.Tools.SqlTool.ConnectionArgument) ?? Argument(call, Llm.Tools.SqliteTool.DatabaseArgument)));
     }
 
     private static readonly IReadOnlySet<string> CertificateToolNames = new HashSet<string>(StringComparer.Ordinal) { Llm.Tools.NetCertsTool.ToolName };

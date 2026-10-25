@@ -87,8 +87,8 @@ public sealed class SqlQueryTool : SqlTool
                 case JsonValueKind.Number when property.Value.TryGetDecimal(out decimal exact):
                     value = exact;
                     break;
-                case JsonValueKind.Number:
-                    value = property.Value.GetDouble();
+                case JsonValueKind.Number when property.Value.TryGetDouble(out double real) && double.IsFinite(real):
+                    value = real;
                     break;
                 case JsonValueKind.True:
                     value = true;
@@ -109,6 +109,12 @@ public sealed class SqlQueryTool : SqlTool
 
         return list;
     }
+
+    /// <summary>
+    /// A params name as Oracle binds it (2026-10-24, the database review's P2: <c>{":id": 5}</c> was refused, and the refusal itself said to
+    /// write <c>:name</c>): a leading <c>:</c> dropped as <c>@</c> is, then <see cref="ReadName"/>'s rule.
+    /// </summary>
+    public static string? ReadColonName(string written) => ReadName(written.StartsWith(':') ? written[1..] : written);
 
     /// <summary>A params name as bound: letters, digits and <c>_</c>, not leading with a digit, a leading <c>@</c> dropped; null when it is not one.</summary>
     private static string? ReadName(string written)

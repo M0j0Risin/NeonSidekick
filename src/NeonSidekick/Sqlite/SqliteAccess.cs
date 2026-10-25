@@ -12,6 +12,28 @@ namespace NeonSidekick.Sqlite;
 public sealed record SqliteTarget(string Name, string FullPath);
 
 /// <summary>
+/// The layers under a SQLite read past the gate (2026-10-24, the database review's S14: a DELETE was asserted to fail <c>readonly</c>, which
+/// the read-only open and <c>query_only</c> both give, so either could be missing and the test still pass). Every read takes them all; a
+/// test leaves one in at a time to prove each alone.
+/// </summary>
+[Flags]
+public enum SqliteReadLayers
+{
+    None = 0,
+
+    /// <summary>The file opened <c>Mode=ReadOnly</c>.</summary>
+    ReadOnlyOpen = 1,
+
+    /// <summary><c>PRAGMA query_only = ON</c>.</summary>
+    QueryOnly = 2,
+
+    /// <summary>A deferred transaction, always rolled back.</summary>
+    RolledBack = 4,
+
+    All = ReadOnlyOpen | QueryOnly | RolledBack,
+}
+
+/// <summary>
 /// The SQLite tools' one door (2026-10-04), <c>MySqlAccess</c>'s shape over Microsoft.Data.Sqlite (already the session store's, so
 /// no new package and no new native library: the bundled e_sqlite3 is smoke-probed): the databases read afresh from <c>sqlite.json</c>
 /// at every call, and — with <c>SQLite sandbox files</c> on — any file in the working directory by its path, resolved through
@@ -33,16 +55,36 @@ public sealed class SqliteAccess
 
     private readonly Func<SqliteCatalog> _catalog;
     private readonly Func<WorkingDirectory?> _sandbox;
+    private readonly Func<IReadOnlyList<string>>? _unticked;
 
     /// <param name="catalog">The databases in force; the app's reads the profile's and the home's <c>sqlite.json</c> at every call.</param>
     /// <param name="sandbox">The working directory while <c>SQLite sandbox files</c> is on; null while it is off.</param>
-    public SqliteAccess(Func<SqliteCatalog> catalog, Func<WorkingDirectory?> sandbox)
+    /// <param name="unticked">
+    /// The files <c>sqlite.json</c> names that the user has not ticked (2026-10-24, the database review's I5): a path in the working directory
+    /// that is one of them is refused, as SETTINGS.md says (none is reached until ticked). Null names none (the tests').
+    /// </param>
+    public SqliteAccess(Func<SqliteCatalog> catalog, Func<WorkingDirectory?> sandbox, Func<IReadOnlyList<string>>? unticked = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
+        _unticked = unticked;
     }
 
     public SqliteCatalog Catalog() => _catalog();
+
+    /// <summary>
+    /// The file guard's refusal of a change to <paramref name="target"/>, or null (2026-10-24, the database review's A10): its rules but the
+    /// databases' own (a database is what this tool changes) — <c>.git</c>, <c>.neon</c>, the app's own files, the skill folders — judged from
+    /// the working directory for a file in it, else from the file's own folder.
+    /// </summary>
+    public string? WriteRefusal(SqliteTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        string root = _sandbox() is { } sandbox && WorkingDirectory.IsInside(sandbox.Root, target.FullPath) ? sandbox.Root : Path.GetDirectoryName(target.FullPath) ?? target.FullPath;
+        return WriteGuard.Judge(root, target.FullPath, WriteRole.Write, () => false, () => null) is { } outcome
+            ? SqliteText.WriteGuarded(target.Name, FileText.Error(outcome, target.Name, "change"))
+            : null;
+    }
 
     /// <summary>Whether a file in the working directory may be named by its path now.</summary>
     public bool SandboxOn => _sandbox() is not null;
@@ -102,6 +144,12 @@ public sealed class SqliteAccess
         if (sandbox is not null)
         {
             var outcome = sandbox.Resolve(wanted, forWrite: false, out string full);
+            if (outcome == FileOutcome.Ok && _unticked?.Invoke() is { Count: > 0 } unticked && unticked.Any(n => string.Equals(n, full, StringComparison.OrdinalIgnoreCase)))
+            {
+                refused = SqlRun.Refused(SqlOutcome.UnknownConnection, SqliteText.UntickedDatabase(wanted), wanted);
+                return null;
+            }
+
             if (outcome == FileOutcome.Ok && File.Exists(full))
             {
                 return new SqliteTarget(wanted.Replace('\\', '/'), full);
@@ -161,7 +209,11 @@ public sealed class SqliteAccess
 
     /// <summary>The run itself, on the calling thread: <see cref="RunAsync"/> puts it on the pool.</summary>
     public static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
-        Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, cancellationToken);
+        Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken);
+
+    /// <summary>A read with only <paramref name="layers"/> under it: a test's way to prove each layer alone (S14). Never the app's.</summary>
+    internal static SqlRun RunWithLayers(SqliteTarget target, IReadOnlyList<string> statements, SqliteReadLayers layers) =>
+        Run(target, statements, [], 100, 30, write: false, create: false, layers, CancellationToken.None);
 
     /// <summary><see cref="Execute"/> on the pool.</summary>
     public static Task<SqlRun> ExecuteAsync(SqliteTarget target, bool create, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
@@ -184,7 +236,7 @@ public sealed class SqliteAccess
         bool done = false;
         try
         {
-            var run = Run(target, [sql], parameters, maxRows, timeoutSeconds, write: true, create, cancellationToken);
+            var run = Run(target, [sql], parameters, maxRows, timeoutSeconds, write: true, create, SqliteReadLayers.None, cancellationToken);
             done = run.Outcome == SqlOutcome.Ok;
             return run;
         }
@@ -217,7 +269,7 @@ public sealed class SqliteAccess
     /// The run: <paramref name="write"/> false is <c>sqlite_query</c>'s four layers (read-only open, <c>query_only</c>, a deferred
     /// transaction rolled back); true is <see cref="Execute"/>'s read-write open with neither.
     /// </summary>
-    private static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, CancellationToken cancellationToken)
+    private static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, SqliteReadLayers layers, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
         if (!(write && create) && !File.Exists(target.FullPath))
@@ -225,7 +277,12 @@ public sealed class SqliteAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, SqliteText.NoFile(target.FullPath), target.Name);
         }
 
-        var mode = !write ? SqliteOpenMode.ReadOnly : create ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadWrite;
+        if (write)
+        {
+            layers = SqliteReadLayers.None;
+        }
+
+        var mode = layers.HasFlag(SqliteReadLayers.ReadOnlyOpen) ? SqliteOpenMode.ReadOnly : create ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadWrite;
         var builder = new SqliteConnectionStringBuilder { DataSource = target.FullPath, Mode = mode, Pooling = false };
         using var connection = new SqliteConnection(builder.ConnectionString);
         try
@@ -273,14 +330,14 @@ public sealed class SqliteAccess
         int? changes = null;
         try
         {
-            if (!write)
+            if (layers.HasFlag(SqliteReadLayers.QueryOnly))
             {
                 using var pragma = connection.CreateCommand();
                 pragma.CommandText = "PRAGMA query_only = ON";
                 pragma.ExecuteNonQuery();
             }
 
-            using var transaction = write ? null : connection.BeginTransaction(deferred: true);
+            using var transaction = layers.HasFlag(SqliteReadLayers.RolledBack) ? connection.BeginTransaction(deferred: true) : null;
             try
             {
                 foreach (string sql in statements)
@@ -310,7 +367,7 @@ public sealed class SqliteAccess
                         command.Parameters.Add(Bind(bind, value?.Value));
                     }
 
-                    using (var reader = command.ExecuteReader())
+                    using (var reader = ExecuteWaiting(command, watch, deadline, cancellationToken))
                     {
                         grids.Add(SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, ReadCell).GetAwaiter().GetResult());
                     }
@@ -346,6 +403,10 @@ public sealed class SqliteAccess
         {
             return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, "", grids, watch.Elapsed);
         }
+        catch (SqliteException ex) when (IsBusy(ex) && watch.Elapsed >= deadline)
+        {
+            return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, "", grids, watch.Elapsed);
+        }
         catch (SqliteException ex)
         {
             return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, "", grids, watch.Elapsed);
@@ -359,6 +420,34 @@ public sealed class SqliteAccess
         }
 
         return new SqlRun(SqlOutcome.Ok, "", target.Name, "", grids, watch.Elapsed) { Changes = changes };
+    }
+
+    /// <summary>SQLite's result codes for a file another connection holds: BUSY and LOCKED.</summary>
+    private const int Busy = 5, Locked = 6;
+
+    private static bool IsBusy(SqliteException ex) => (ex.SqliteErrorCode & 0xFF) is Busy or Locked;
+
+    /// <summary>
+    /// <paramref name="command"/>'s reader, waited for while the file is held by another connection — in steps of the driver's one-second busy
+    /// loop, the token and <paramref name="deadline"/> looked at between them (2026-10-24, the database review's O2: the driver's own loop
+    /// retried for its 30-second default, sleeping between steps, and the app's interrupt landing in a sleep was lost — so on a locked file
+    /// neither the timeout nor Esc ended the call, and a longer timeout was cut at 30 s). A statement SQLite answered BUSY did nothing, so
+    /// it is run again whole.
+    /// </summary>
+    private static SqliteDataReader ExecuteWaiting(SqliteCommand command, Stopwatch watch, TimeSpan deadline, CancellationToken cancellationToken)
+    {
+        command.CommandTimeout = 1;
+        while (true)
+        {
+            try
+            {
+                return command.ExecuteReader();
+            }
+            catch (SqliteException ex) when (IsBusy(ex) && watch.Elapsed < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+        }
     }
 
     /// <summary>How often the run's timer looks at the deadline and the token, and interrupts again once either is past.</summary>

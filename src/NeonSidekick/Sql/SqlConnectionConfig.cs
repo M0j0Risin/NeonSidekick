@@ -20,7 +20,7 @@ namespace NeonSidekick.Sql;
 /// morning). A password is never shown, logged or sent to the model (<see cref="SqlText.ConnectionLine"/> leaves
 /// it out). Entra sign-in is not offered: it would pull in Azure.Identity. Read through <see cref="SqlJsonContext"/> alone.
 /// </summary>
-public sealed class SqlConnectionConfig
+public sealed class SqlConnectionConfig : ISignInConfig
 {
     /// <summary>The <see cref="Auth"/> word for a SQL login (the default).</summary>
     public const string SqlAuth = "sql";
@@ -88,6 +88,15 @@ public sealed class SqlConnectionConfig
     public string? Access { get; set; }
 
     public string? Description { get; set; }
+
+
+    /// <summary>Keys the entry does not know (2026-10-24, the database review's K2): the load refuses the entry naming the first. Never written.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+
+    /// <summary>Where the password is sent (2026-10-24, decision DB9: a stored credential records it, and a read for another is refused).</summary>
+    [JsonIgnore]
+    public string SignInHost => Server?.Trim() ?? "";
 
     /// <summary>Whether the entry signs in as the app's Windows identity.</summary>
     [JsonIgnore]
@@ -241,6 +250,10 @@ public sealed class SqlConnectionConfig
             builder.IntegratedSecurity = true;
             builder.Pooling = false;
             builder.ApplicationName = "NeonSidekick (runas)";
+
+            // No silent reconnect (2026-10-24, the database review's O12): SqlClient's idle-connection resiliency signs in again on the pool
+            // under the caller's own identity, outside the runas token, so a dropped session came back as the user running the app.
+            builder.ConnectRetryCount = 0;
         }
         else
         {
@@ -253,4 +266,4 @@ public sealed class SqlConnectionConfig
 }
 
 /// <summary>A connection by its name, and the file it came from.</summary>
-public sealed record SqlNamedConnection(string Name, SqlConnectionConfig Config, string Source);
+public sealed record SqlNamedConnection(string Name, SqlConnectionConfig Config, string Source) : INamedConnection<SqlConnectionConfig>;

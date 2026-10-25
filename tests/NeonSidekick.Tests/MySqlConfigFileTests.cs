@@ -135,7 +135,9 @@ public sealed class MySqlConfigFileTests : IDisposable
         Assert.False(builder.AllowLoadLocalInfile);
         Assert.False(builder.AllowUserVariables);
         Assert.False(builder.AllowPublicKeyRetrieval);
-        Assert.True(builder.ConvertZeroDateTime);
+        Assert.False(builder.ConvertZeroDateTime);   // a zero date read as itself (2026-10-24, review N10; ConvertZeroDateTime until then)
+        Assert.True(builder.AllowZeroDateTime);
+        Assert.False(builder.TreatTinyAsBoolean);   // review N9
         Assert.Equal(MySqlSslMode.Preferred, new MySqlConnectionConfig { Host = "h", User = "u" }.Builder().SslMode);
         Assert.Equal(MySqlSslMode.None, new MySqlConnectionConfig { Host = "h", User = "u", SslMode = "None" }.Builder().SslMode);
         Assert.True(new MySqlConnectionConfig { Host = "h", User = "u", AllowPublicKeyRetrieval = true }.Builder().AllowPublicKeyRetrieval);
@@ -179,8 +181,13 @@ public sealed class MySqlConfigFileTests : IDisposable
     [Fact]
     public void TheSessionStatement_StripsTheRiskyModes_AndCapsInTheServersOwnWord()
     {
-        Assert.Equal("SET SESSION sql_mode = REPLACE(REPLACE(@@SESSION.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'ANSI_QUOTES', ''), SESSION max_execution_time = 30000", MySqlAccess.SessionStatement("8.4.11", 30));
-        Assert.EndsWith("SESSION max_statement_time = 30", MySqlAccess.SessionStatement("11.8.9-MariaDB-ubu2404", 30));
+        // Each mode taken out as a whole word, the combination modes that carry ANSI_QUOTES too (2026-10-24, review E1; two REPLACEs over the
+        // whole text until then), and the key lists' length raised (E12).
+        Assert.Equal("SET SESSION sql_mode = " + MySqlAccess.ModeStripped + ", SESSION max_execution_time = 30000, SESSION group_concat_max_len = 1048576", MySqlAccess.SessionStatement("8.4.11", 30));
+        Assert.StartsWith("TRIM(BOTH ',' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CONCAT(',', @@SESSION.sql_mode, ','), ',ANSI_QUOTES,', ','), ',NO_BACKSLASH_ESCAPES,', ','), ',ANSI,', ',')", MySqlAccess.ModeStripped);
+        Assert.Contains("SESSION max_statement_time = 30,", MySqlAccess.SessionStatement("11.8.9-MariaDB-ubu2404", 30));
+        Assert.Equal("ANSI", MySqlText.ModeKept("REAL_AS_FLOAT,PIPES_AS_CONCAT,IGNORE_SPACE,ANSI", MySqlAccess.StrippedModes));
+        Assert.Null(MySqlText.ModeKept("STRICT_TRANS_TABLES,ONLY_FULL_GROUP_BY", MySqlAccess.StrippedModes));
         Assert.True(MySqlAccess.IsMariaDb("10.11.6-MariaDB"));
         Assert.False(MySqlAccess.IsMariaDb("8.0.36"));
         Assert.Equal(MySqlDbType.Int64, MySqlAccess.Bind(new SqlParameterValue("id", 5L)).MySqlDbType);

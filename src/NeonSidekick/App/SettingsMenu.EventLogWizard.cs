@@ -211,7 +211,7 @@ internal sealed partial class SettingsMenu
             Global = global,
             Name = named.Name,
             Original = named.Name,
-            OriginalTarget = c.NeedsPassword && c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            OriginalTarget = c.NeedsPassword && c.InCredentialManager && string.IsNullOrWhiteSpace(c.Credential) ? c.CredentialTarget(named.Name) : null,   // a blank credential is the default too (2026-10-24, review N13)
             Config = CloneEntry(c, EventLogJsonContext.Default.EventLogComputerConfig, x => x.Password = null),
         };
         if (c.NeedsPassword)
@@ -410,7 +410,7 @@ internal sealed partial class SettingsMenu
             case EventLogWizardStep.Method:
             {
                 var methods = EventLogComputerConfig.AuthMethods;
-                int current = Math.Max(0, methods.ToList().IndexOf(c.AuthMethodWord));
+                int current = WordIndex(methods.ToList(), c.AuthMethodWord);
                 if (await EventLogWizardPickAsync(EventLogWizardMethodQuestion, methods, current, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;

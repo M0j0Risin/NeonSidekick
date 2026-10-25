@@ -46,7 +46,15 @@ public static class OracleIdentifier
     }
 
     /// <summary>The name <see cref="Normalize"/>d, in double quotes — safe to write into the app's own <c>ALTER SESSION</c>. Null when it is no name.</summary>
-    public static string? Quote(string? name) => Normalize(name) is { } normal ? "\"" + normal + "\"" : null;
+    public static string? Quote(string? name) => Normalize(name) is { } normal ? QuoteNormal(normal) : null;
+
+    /// <summary>
+    /// A name already <see cref="Normalize"/>d — the dictionary's spelling — in double quotes as it stands, or null when no quoted name can hold
+    /// it (2026-10-24, the database review's E2: <see cref="OracleAccess.Place"/> gives the inner text of a quoted schema, and quoting it again
+    /// through <see cref="Normalize"/> upper-cased <c>"Hr"</c> to <c>HR</c> — the session set to another schema, outside the lock).
+    /// </summary>
+    public static string? QuoteNormal(string? normal) =>
+        normal is { Length: > 0 and <= MaxLength } && !normal.Contains('"', StringComparison.Ordinal) && !normal.Contains('\0', StringComparison.Ordinal) ? "\"" + normal + "\"" : null;
 
     /// <summary>
     /// A table reference split into owner and name, each <see cref="Normalize"/>d: <c>hr.employees</c> is

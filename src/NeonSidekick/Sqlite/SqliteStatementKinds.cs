@@ -66,7 +66,7 @@ public static class SqliteStatementKinds
     public static string Statements(SqliteStatementKind kind) => kind switch
     {
         SqliteStatementKind.Data => "INSERT, UPDATE, REPLACE",
-        SqliteStatementKind.Delete => "DELETE",
+        SqliteStatementKind.Delete => "DELETE, REPLACE",
         SqliteStatementKind.Create => "CREATE TABLE, INDEX, VIEW, TRIGGER (and the kinds its body's changes need), VIRTUAL TABLE",
         SqliteStatementKind.Alter => "ALTER TABLE",
         SqliteStatementKind.Drop => "DROP TABLE, INDEX, VIEW, TRIGGER",

@@ -69,13 +69,66 @@ public sealed record SqlGrid(IReadOnlyList<string> Columns, IReadOnlyList<string
         return new SqlGrid(columns, rows, more);
     }
 
+    /// <summary>A text cell's first <see cref="SqlText.MaxCellChars"/> characters, and whether there were more (E6).</summary>
+    private static string BoundedChars(SqlDataReader reader, int ordinal)
+    {
+        var buffer = new char[SqlText.MaxCellChars + 1];
+        int read = (int)reader.GetChars(ordinal, 0, buffer, 0, buffer.Length);
+        return read <= SqlText.MaxCellChars
+            ? SqlText.Cell(new string(buffer, 0, read))
+            : SqlText.Cell(new string(buffer, 0, SqlText.MaxCellChars)) + SqlText.MoreChars(SqlText.MaxCellChars);
+    }
+
+    /// <summary>A binary cell's first <see cref="SqlText.MaxBinaryBytes"/> bytes, and whether there were more (E6).</summary>
+    private static string BoundedBytes(SqlDataReader reader, int ordinal)
+    {
+        var buffer = new byte[SqlText.MaxBinaryBytes + 1];
+        int read = (int)reader.GetBytes(ordinal, 0, buffer, 0, buffer.Length);
+        return read <= SqlText.MaxBinaryBytes
+            ? SqlText.Cell(buffer[..read])
+            : SqlText.Cell(buffer[..SqlText.MaxBinaryBytes]) + SqlText.MoreBytes(SqlText.MaxBinaryBytes);
+    }
+
     private static string ReadCell(DbDataReader reader, int ordinal)
     {
         try
         {
-            return reader.IsDBNull(ordinal) ? SqlText.Null : SqlText.Cell(reader.GetValue(ordinal));
+            if (reader.IsDBNull(ordinal))
+            {
+                return SqlText.Null;
+            }
+
+            // SQL Server's reader runs with SequentialAccess (2026-10-24, the database review's E6): a text or binary cell is read only as far
+            // as the answer shows it, never whole (REPLICATE or a varbinary(max) of gigabytes was loaded into memory before the 400-character
+            // clip), and a decimal through its provider value, which keeps every digit (a sequential column cannot be read again after a
+            // failed GetValue).
+            if (reader is SqlDataReader sql)
+            {
+                var type = sql.GetFieldType(ordinal);
+                if (type == typeof(string))
+                {
+                    return BoundedChars(sql, ordinal);
+                }
+
+                if (type == typeof(byte[]))
+                {
+                    return BoundedBytes(sql, ordinal);
+                }
+
+                if (type == typeof(decimal))
+                {
+                    return SqlText.Cell(sql.GetProviderSpecificValue(ordinal) switch
+                    {
+                        System.Data.SqlTypes.SqlDecimal d => d.ToString(),
+                        System.Data.SqlTypes.SqlMoney m => m.Value,
+                        var other => other,
+                    });
+                }
+            }
+
+            return SqlText.Cell(reader.GetValue(ordinal));
         }
-        catch (OverflowException)
+        catch (OverflowException) when (reader is not SqlDataReader)
         {
             // decimal(38, x) past System.Decimal: SqlDecimal keeps every digit, and its text is invariant.
             return SqlText.Cell(reader.GetProviderSpecificValue(ordinal)?.ToString() ?? "");
@@ -127,16 +180,29 @@ public sealed class SqlAccess
     private readonly Func<SqlCatalog> _catalog;
 
     /// <param name="catalog">The connections in force; the app's reads the profile's and the home's <c>sql.json</c> at every call.</param>
-    public SqlAccess(Func<SqlCatalog> catalog)
+    public SqlAccess(Func<SqlCatalog> catalog) : this(catalog, null)
+    {
+    }
+
+    /// <summary>An access over <paramref name="catalog"/> sharing <paramref name="names"/> (a pinned one's, <see cref="Pinned"/>), or a cache of its own.</summary>
+    public SqlAccess(Func<SqlCatalog> catalog, BoundaryNames? names)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        Names = names ?? new();
     }
 
     /// <summary>The connections as the files hold them now.</summary>
     public SqlCatalog Catalog() => _catalog();
 
     /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="BoundaryNames"/>).</summary>
-    public BoundaryNames Names { get; } = new();
+    public BoundaryNames Names { get; }
+
+    /// <summary>
+    /// An access over <paramref name="target"/> alone, sharing this one's names cache (2026-10-24, the database review's H11): an <c>_execute</c>
+    /// call resolves its connection once and every step after — the boundary, the pane, the run — works on that entry, so a file edited in
+    /// between cannot send an allowed change to another server.
+    /// </summary>
+    public SqlAccess Pinned(SqlNamedConnection target) => new(() => new SqlCatalog([target], []), Names);
 
     /// <summary>
     /// The connection a call means (<see cref="SqlCatalog.Find"/>), or null with the <c>Error:</c> sentence:
@@ -169,7 +235,13 @@ public sealed class SqlAccess
     /// more — so the server stops, and the reader never drains a million rows on dispose — and the transaction
     /// rolled back. A timeout, a failed connect and a server error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    /// <remarks>
+    /// <paramref name="keepLaterSets"/> (2026-10-24, the database review's O1) is the app's catalog batches': a result set past the cap moves
+    /// on to the next instead of cancelling the batch, so <c>sql_describe</c>'s indexes, checks, triggers and description are never lost
+    /// behind a table with more columns than the cap (they were reported as none). A model's query keeps the cancel. The reader runs with
+    /// SequentialAccess (E6).
+    /// </remarks>
+    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, bool keepLaterSets = false)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -189,22 +261,16 @@ public sealed class SqlAccess
         await using var connection = new SqlConnection(builder.ConnectionString);
         try
         {
-            if (target.Config.IsRunAs)
+            if (await OpenGuardedAsync(connection, target, secret.Value!, cancellationToken).ConfigureAwait(false) is { } refusedOpen)
             {
-                if (!OperatingSystem.IsWindows() && !KerberosSignIn.Offered)
-                {
-                    return SqlRun.Refused(SqlOutcome.ConnectFailed, WindowsCredentials.NotWindows, target.Name);
-                }
-
-                if (await OpenAsAsync(connection, target, secret.Value!, cancellationToken).ConfigureAwait(false) is { } refusedLogon)
-                {
-                    return refusedLogon;
-                }
+                return refusedOpen;
             }
-            else
-            {
-                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            }
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException && cancellationToken.IsCancellationRequested)
+        {
+            // A runas open runs to its end whatever Esc does (the token never reaches it); its failure after Esc is the cancel (2026-10-24, the
+            // database review's O11: it escaped both catches below, filtered on a token not cancelled, as a raw SqlException).
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
         }
         catch (SqlException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -235,7 +301,7 @@ public sealed class SqlAccess
                     command.Parameters.Add(Bind(parameter));
                 }
 
-                await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+                await using (var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false))
                 {
                     do
                     {
@@ -246,7 +312,7 @@ public sealed class SqlAccess
 
                         var grid = await SqlGrid.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
                         grids.Add(grid);
-                        if (grid.More)
+                        if (grid.More && !keepLaterSets)
                         {
                             command.Cancel();
                             break;
@@ -315,22 +381,16 @@ public sealed class SqlAccess
         await using var connection = new SqlConnection(builder.ConnectionString);
         try
         {
-            if (target.Config.IsRunAs)
+            if (await OpenGuardedAsync(connection, target, secret.Value!, cancellationToken).ConfigureAwait(false) is { } refusedOpen)
             {
-                if (!OperatingSystem.IsWindows() && !KerberosSignIn.Offered)
-                {
-                    return SqlRun.Refused(SqlOutcome.ConnectFailed, WindowsCredentials.NotWindows, target.Name);
-                }
-
-                if (await OpenAsAsync(connection, target, secret.Value!, cancellationToken).ConfigureAwait(false) is { } refusedLogon)
-                {
-                    return refusedLogon;
-                }
+                return refusedOpen;
             }
-            else
-            {
-                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            }
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException && cancellationToken.IsCancellationRequested)
+        {
+            // A runas open runs to its end whatever Esc does (the token never reaches it); its failure after Esc is the cancel (2026-10-24, the
+            // database review's O11: it escaped both catches below, filtered on a token not cancelled, as a raw SqlException).
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
         }
         catch (SqlException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -353,13 +413,25 @@ public sealed class SqlAccess
         int? changes;
         try
         {
+            // Implicit transactions off here, never the server's or the login's default trusted (2026-10-24, the database review's H4: under
+            // IMPLICIT_TRANSACTIONS ON the change said it was made and was audited, then the pool's reset rolled it back, its locks held meanwhile).
+            await using (var session = new SqlCommand(ImplicitTransactionsOff, connection) { CommandTimeout = timeoutSeconds })
+            {
+                await session.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await using var command = new SqlCommand(sql, connection) { CommandTimeout = timeoutSeconds };
             foreach (var parameter in parameters)
             {
                 command.Parameters.Add(Bind(parameter));
             }
 
-            await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            // The statement's own count is its last one (2026-10-24, review I13: RecordsAffected summed a trigger's rows too, where the trigger
+            // did not SET NOCOUNT ON, so the answer and the audit overstated the change): a trigger's counts come before its statement's.
+            int? last = null;
+            command.StatementCompleted += (_, e) => last = e.RecordCount;
+
+            await using (var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken).ConfigureAwait(false))
             {
                 do
                 {
@@ -371,7 +443,7 @@ public sealed class SqlAccess
                 while (await reader.NextResultAsync(cancellationToken).ConfigureAwait(false));
 
                 await reader.CloseAsync().ConfigureAwait(false);
-                changes = reader.RecordsAffected >= 0 ? reader.RecordsAffected : null;
+                changes = last ?? (reader.RecordsAffected >= 0 ? reader.RecordsAffected : null);
             }
         }
         catch (SqlException ex) when (cancellationToken.IsCancellationRequested)
@@ -388,6 +460,59 @@ public sealed class SqlAccess
         }
 
         return new SqlRun(SqlOutcome.Ok, "", target.Name, databaseName, grids, watch.Elapsed) { Changes = changes };
+    }
+
+    /// <summary>What a change's session runs before its statement, so the statement commits on its own (H4).</summary>
+    public const string ImplicitTransactionsOff = "SET IMPLICIT_TRANSACTIONS OFF";
+
+    /// <summary>
+    /// Opens <paramref name="connection"/> under the sign-in guard (2026-10-24, the database review's K1, <see cref="DatabaseSignIn"/>): a SQL
+    /// login's or a <c>runas</c> account's password refused before (18456, login failed) is not sent again until it changes. Null when open;
+    /// else the refusal. A Windows sign-in as the app's own account sends no password and is never held.
+    /// </summary>
+    private static async Task<SqlRun?> OpenGuardedAsync(SqlConnection connection, SqlNamedConnection target, string password, CancellationToken cancellationToken)
+    {
+        if (target.Config.IsRunAs && !OperatingSystem.IsWindows() && !KerberosSignIn.Offered)
+        {
+            return SqlRun.Refused(SqlOutcome.ConnectFailed, WindowsCredentials.NotWindows, target.Name);
+        }
+
+        // A runas sign-in the app refuses itself (the Windows logon, the Mac's Kerberos step) is a failed sign-in to the guard too (2026-10-24, the
+        // review of these fixes: answered as a run, it counted as proven, and the wrong password went to the KDC at every call).
+        var call = DatabaseSignIn.Call("sql", target.Config.Server ?? "", target.Config.IsWindows ? null : target.Config.User?.Trim(), password,
+            ex => ex is SqlException { Number: 18456 } or RefusedSignIn);
+        try
+        {
+            if (await DatabaseSignIn.OpenAsync(call, async token =>
+            {
+                if (target.Config.IsRunAs)
+                {
+                    if (await OpenAsAsync(connection, target, password, token).ConfigureAwait(false) is { } refused)
+                    {
+                        throw new RefusedSignIn(refused);
+                    }
+                }
+                else
+                {
+                    await connection.OpenAsync(token).ConfigureAwait(false);
+                }
+            }, cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.Server?.Trim() ?? "", SqlText.SqlMenuPath), target.Name);
+            }
+        }
+        catch (RefusedSignIn refused)
+        {
+            return refused.Run;
+        }
+
+        return null;
+    }
+
+    /// <summary>A runas sign-in the app refused, carried through the guard as a failure (<see cref="OpenGuardedAsync"/>).</summary>
+    private sealed class RefusedSignIn(SqlRun run) : Exception(run.Detail)
+    {
+        public SqlRun Run { get; } = run;
     }
 
     /// <summary>

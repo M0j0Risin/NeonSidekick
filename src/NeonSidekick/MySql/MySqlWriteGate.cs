@@ -53,7 +53,43 @@ public static class MySqlWriteGate
         },
         ServerWriteGate.Words("OR", "REPLACE", "TEMPORARY", "UNIQUE", "FULLTEXT", "SPATIAL", "ALGORITHM", "SQL", "SECURITY", "DEFINER", "INVOKER", "ONLINE", "OFFLINE", "AGGREGATE", "IGNORE"),
         Scan,
-        Separators);
+        Separators,
+        Also,
+        BodyRefusal);
+
+    /// <summary>
+    /// The kinds a statement needs beyond its verb's (2026-10-24, the database review's A7, G3): a <c>REPLACE</c> deletes the row it
+    /// replaces (and what cascades from it), so it needs deleting too; MariaDB's <c>ANALYZE UPDATE|DELETE|SELECT …</c> runs the statement
+    /// after it, so it needs that statement's kinds (an <c>ANALYZE TABLE</c> is upkeep alone).
+    /// </summary>
+    private static IEnumerable<ServerStatementKind> Also(IReadOnlyList<GateToken> tokens, int lead)
+    {
+        for (int i = lead; i < tokens.Count; i++)
+        {
+            if (tokens[i].IsWord("REPLACE") && !(i + 1 < tokens.Count && tokens[i + 1].IsSymbol("(")) && !(i > 0 && (tokens[i - 1].IsWord("OR") || tokens[i - 1].IsSymbol("."))))
+            {
+                yield return ServerStatementKind.Delete;
+            }
+        }
+
+        if (tokens[lead].IsWord("ANALYZE") && !(lead + 1 < tokens.Count && tokens[lead + 1].Kind == GateTokenKind.Word && tokens[lead + 1].Text is "TABLE" or "NO_WRITE_TO_BINLOG" or "LOCAL"))
+        {
+            for (int i = lead + 1; i < tokens.Count; i++)
+            {
+                if (tokens[i].Kind == GateTokenKind.Word && !(i + 1 < tokens.Count && tokens[i + 1].IsSymbol("(")))
+                {
+                    if (Rules.Dml.TryGetValue(tokens[i].Text, out var kind))
+                    {
+                        yield return kind;
+                    }
+                    else if (tokens[i].Text == "SELECT")
+                    {
+                        yield return ServerStatementKind.Read;
+                    }
+                }
+            }
+        }
+    }
 
     /// <summary>Null when <paramref name="sql"/> may run under <paramref name="allowed"/> (null allows every kind); else the <c>Error:</c> sentence.</summary>
     public static string? Check(string sql, IReadOnlyList<ServerStatementKind>? allowed = null)
@@ -98,10 +134,11 @@ public static class MySqlWriteGate
     {
         var t = tokens[i];
         var next = i + 1 < tokens.Count ? tokens[i + 1] : default;
+        var before = i > 0 ? tokens[i - 1] : default;
         if (t.Kind is GateTokenKind.Word or GateTokenKind.Name && next.IsSymbol("("))
         {
             string upper = t.Text.ToUpperInvariant();
-            if (upper is not ("NEXTVAL" or "SETVAL") && MySqlReadOnlyGate.DeniedFunctions.Contains(upper))
+            if (upper is not ("NEXTVAL" or "SETVAL") && MySqlReadOnlyGate.IsDeniedFunction(upper))
             {
                 return (t.Text.ToUpperInvariant() + "()", ServerWriteText.Denied);
             }
@@ -115,6 +152,223 @@ public static class MySqlWriteGate
         if (t.IsWord("DEFINER") && next.IsSymbol("="))
         {
             return ("DEFINER =", ServerWriteText.Accounts);
+        }
+
+        if (t.Kind != GateTokenKind.Word || before.IsSymbol("."))
+        {
+            return null;
+        }
+
+        // 2026-10-24, the database review's Phase 8. SQL SECURITY DEFINER (T5): an ALTER of a routine made by another account switched it
+        // to run as that account. SONAME (G5): CREATE FUNCTION … SONAME loads a native library, as INSTALL PLUGIN does. A FEDERATED,
+        // CONNECT or Spider table, or a CONNECTION string (A13), is another server's table. DATA DIRECTORY and INDEX DIRECTORY (F19) put
+        // a table's files where the server can write; IMPORT TABLESPACE reads a data-directory file and DISCARD TABLESPACE deletes one (R10).
+        var after = i + 2 < tokens.Count ? tokens[i + 2] : default;
+        switch (t.Text)
+        {
+            case "SECURITY" when before.IsWord("SQL") && next.IsWord("DEFINER"):
+                return ("SQL SECURITY DEFINER", ServerWriteText.RunsAs);
+            case "SONAME":
+                return ("SONAME (a native function library)", ServerWriteText.ForeignCode);
+            case "ENGINE" when (next.IsSymbol("=") ? after : next) is { Kind: GateTokenKind.Word or GateTokenKind.Name } engine
+                && engine.Text.ToUpperInvariant() is "FEDERATED" or "CONNECT" or "SPIDER":
+                return ("ENGINE = " + engine.Text.ToUpperInvariant(), ServerWriteText.Outside);
+            case "CONNECTION" when next.IsSymbol("=") || next.Kind == GateTokenKind.Other:
+                return ("CONNECTION = '…' (another server's table)", ServerWriteText.Outside);
+            case "DIRECTORY" when before.IsWord("DATA") || before.IsWord("INDEX"):
+                return (before.Text + " DIRECTORY", ServerWriteText.Outside);
+            case "TABLESPACE" when before.IsWord("IMPORT") || before.IsWord("DISCARD"):
+                return (before.Text + " TABLESPACE", ServerWriteText.Outside);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// What a routine's or trigger's body may not hold (2026-10-24, the database review's DB3, A6, G4): its statements meet the top level's
+    /// refusals — accounts and permissions, the server-wide statements, files, locks, dynamic SQL (<c>PREPARE</c>/<c>EXECUTE</c>), a
+    /// <c>CREATE</c>/<c>ALTER</c>/<c>DROP</c> of a database, user, role, server or event — bar a transaction's own words, which a
+    /// procedure may use. A <c>SET</c> may set only the routine's own variables: a parameter, a <c>DECLARE</c>d name, a user variable
+    /// (<c>@x</c>) or a trigger's <c>NEW.x</c>; any other name is a system variable (a bare <c>sql_mode</c> sets the session's), refused.
+    /// Null when the statement has no body or the body holds none of these.
+    /// </summary>
+    private static (string What, string Why)? BodyRefusal(IReadOnlyList<GateToken> tokens, int lead)
+    {
+        int body = RoutineBody(tokens, lead);
+        if (body < 0)
+        {
+            return null;
+        }
+
+        var starts = new List<int>();
+        if (Walk(tokens, lead, starts) < 0)
+        {
+            return null;   // the separators' count refuses it as unclear
+        }
+
+        // A handler's own statement (DECLARE EXIT HANDLER FOR SQLEXCEPTION <statement>) starts after its conditions.
+        foreach (int s in starts.ToList())
+        {
+            if (tokens[s].IsWord("DECLARE") && s + 4 < tokens.Count && tokens[s + 2].IsWord("HANDLER") && tokens[s + 3].IsWord("FOR"))
+            {
+                int k = s + 4;
+                while (k < tokens.Count)
+                {
+                    k += tokens[k].IsWord("NOT") ? 2 : tokens[k].IsWord("SQLSTATE") ? (k + 1 < tokens.Count && tokens[k + 1].IsWord("VALUE") ? 3 : 2) : 1;
+                    if (!(k < tokens.Count && tokens[k].IsSymbol(",")))
+                    {
+                        break;
+                    }
+
+                    k++;
+                }
+
+                if (k < tokens.Count)
+                {
+                    starts.Add(k);
+                }
+            }
+        }
+
+        var own = Parameters(tokens, lead, body);
+        foreach (int s in starts)
+        {
+            if (tokens[s].IsWord("DECLARE"))
+            {
+                for (int k = s + 1; k < tokens.Count && tokens[k].Kind is GateTokenKind.Word or GateTokenKind.Name; k += 2)
+                {
+                    own.Add(tokens[k].Text.ToUpperInvariant());
+                    if (!(k + 1 < tokens.Count && tokens[k + 1].IsSymbol(",")))
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        foreach (int s in starts)
+        {
+            var t = tokens[s];
+            if (t.Kind != GateTokenKind.Word || s <= body)
+            {
+                continue;
+            }
+
+            if (t.Text == "SET")
+            {
+                if (SetTarget(tokens, s, own) is { } target)
+                {
+                    return ("SET " + target + " in a routine's body", ServerWriteText.Session);
+                }
+
+                continue;
+            }
+
+            if (Rules.Refused.TryGetValue(t.Text, out var why) && why != ServerWriteText.OwnTransaction)
+            {
+                return (t.Text + " in a routine's body", why);
+            }
+
+            if (t.Text is "CREATE" or "ALTER" or "DROP" or "RENAME")
+            {
+                int at = s + 1;
+                while (at < tokens.Count && tokens[at].Kind == GateTokenKind.Word && Rules.Modifiers.Contains(tokens[at].Text))
+                {
+                    at++;
+                }
+
+                if (at < tokens.Count && tokens[at].Kind == GateTokenKind.Word && RefusedObjects.TryGetValue(tokens[at].Text, out var objectWhy))
+                {
+                    return (t.Text + " " + tokens[at].Text + " in a routine's body", objectWhy);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The names of a routine's parameter list (the first parenthesized list of its header), upper-cased; empty for a trigger.</summary>
+    private static HashSet<string> Parameters(IReadOnlyList<GateToken> tokens, int lead, int body)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        int open = -1;
+        for (int i = lead; i < body; i++)
+        {
+            if (tokens[i].IsSymbol("("))
+            {
+                open = i;
+                break;
+            }
+        }
+
+        if (open < 0)
+        {
+            return names;
+        }
+
+        int depth = 0;
+        for (int i = open; i < body; i++)
+        {
+            if (tokens[i].IsSymbol("("))
+            {
+                depth++;
+            }
+            else if (tokens[i].IsSymbol(")") && --depth == 0)
+            {
+                break;
+            }
+            else if (depth == 1 && (tokens[i - 1].IsSymbol("(") || tokens[i - 1].IsSymbol(",")))
+            {
+                int k = tokens[i].Kind == GateTokenKind.Word && tokens[i].Text is "IN" or "OUT" or "INOUT" ? i + 1 : i;
+                if (k < body && tokens[k].Kind is GateTokenKind.Word or GateTokenKind.Name)
+                {
+                    names.Add(tokens[k].Text.ToUpperInvariant());
+                }
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>The first target of the <c>SET</c> at <paramref name="s"/> that is not the routine's own, as written; null when every one is.</summary>
+    private static string? SetTarget(IReadOnlyList<GateToken> tokens, int s, HashSet<string> own)
+    {
+        int i = s + 1;
+        while (i < tokens.Count)
+        {
+            var t = tokens[i];
+            bool mine = t.Kind == GateTokenKind.Other                                                          // @x, a user variable
+                || (t.Kind is GateTokenKind.Word or GateTokenKind.Name && i + 1 < tokens.Count && tokens[i + 1].IsSymbol(".")
+                    && t.Text.ToUpperInvariant() is "NEW" or "OLD")                                             // a trigger's row
+                || (t.Kind is GateTokenKind.Word or GateTokenKind.Name && !t.Text.StartsWith('@') && own.Contains(t.Text.ToUpperInvariant()));
+            if (!mine)
+            {
+                return t.Text;
+            }
+
+            int depth = 0;
+            for (i++; i < tokens.Count; i++)
+            {
+                if (tokens[i].IsSymbol("("))
+                {
+                    depth++;
+                }
+                else if (tokens[i].IsSymbol(")"))
+                {
+                    depth--;
+                }
+                else if (depth == 0 && (tokens[i].IsSymbol(",") || tokens[i].IsSymbol(";")))
+                {
+                    break;
+                }
+            }
+
+            if (i >= tokens.Count || tokens[i].IsSymbol(";"))
+            {
+                return null;
+            }
+
+            i++;
         }
 
         return null;
@@ -140,6 +394,12 @@ public static class MySqlWriteGate
     public static int Separators(IReadOnlyList<GateToken> tokens, int lead)
     {
         ArgumentNullException.ThrowIfNull(tokens);
+        return Walk(tokens, lead, null);
+    }
+
+    /// <summary><see cref="Separators"/>' walk; <paramref name="starts"/>, when given, gets where each of the body's statements starts (2026-10-24, for <see cref="BodyRefusal"/>).</summary>
+    private static int Walk(IReadOnlyList<GateToken> tokens, int lead, List<int>? starts)
+    {
         int body = RoutineBody(tokens, lead);
         int count = 0;
         for (int i = lead; i < (body < 0 ? tokens.Count : body); i++)
@@ -172,6 +432,7 @@ public static class MySqlWriteGate
             if (atStart)
             {
                 start = i;
+                starts?.Add(i);
             }
 
             if (t.Kind != GateTokenKind.Word || tokens[i - 1].IsSymbol("."))
@@ -508,7 +769,7 @@ public static class MySqlStatementKinds
     public static string Statements(ServerStatementKind kind) => kind switch
     {
         ServerStatementKind.Data => "INSERT, UPDATE, REPLACE",
-        ServerStatementKind.Delete => "DELETE, TRUNCATE",
+        ServerStatementKind.Delete => "DELETE, TRUNCATE, REPLACE",
         ServerStatementKind.Create => "CREATE TABLE, INDEX, VIEW, SEQUENCE",
         ServerStatementKind.Alter => "ALTER TABLE, VIEW, SEQUENCE; RENAME TABLE; CREATE OR REPLACE VIEW, INDEX (with creating)",
         ServerStatementKind.Drop => "DROP TABLE, INDEX, VIEW, SEQUENCE, PROCEDURE, FUNCTION, TRIGGER; CREATE OR REPLACE TABLE, SEQUENCE (with creating)",

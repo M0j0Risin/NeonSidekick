@@ -689,13 +689,15 @@ They only read unless you turn on [read-write mode](#read-write-mode).
 **Reading** runs one statement behind three layers:
 
 1. **The gate** passes only a single read statement (`SELECT`, or a `WITH` ending in one). A second statement, changes, locking reads and the engine's ways out (files, links to other servers, dynamic SQL) are refused before the server sees anything.
-2. **The session or transaction** is read-only and always rolled back.
+2. **The transaction** is read-only and always rolled back; for PostgreSQL, MySQL, SQLite and Oracle 23ai the whole session is read-only too. SQL Server's is an ordinary transaction, held only by the rollback.
 3. **The account is the real guard.** Give the login read-only grants.
 
 **One place per connection:** each connection reaches **one database** (Oracle: one schema), nothing else on the server.
 
 * No tool takes a database or lists the server's; for another database, add a connection. A statement naming one (`payroll.dbo.salaries`), or the server's own catalog (logins, sessions), is refused before the server; rename an alias spelled like a database.
+* When the app can't be sure, it refuses: a statement it can't read, or one whose names it can't check against the server's list (cut short, or hidden from the login).
 * A view, synonym or routine that reads another database can't be seen in the text: that stays the account's to guard.
+* **Advisors** never get the database tools, and the main chat's database results are left out of what an advisor is shown.
 
 Values go in as `params`. Results are cut at *SQL query result max chars*; `max_rows` is 1–100,000, the family's *… max rows* when left out.
 
@@ -705,6 +707,10 @@ Values go in as `params`. Results are cut at *SQL query result max chars*; `max_
 * **The wizard:** *… add/edit connection* (*SQLite add/edit database*). Its test writes nothing: it signs in, warns when the account could change data, and names what else it could reach.
 * ***… connections offered*** (*SQLite databases offered*) picks what the model sees: **nothing is offered until you tick it**. *… set password* changes a password.
 * **Passwords:** `passwordStore` `file` (default) encrypts a password typed into the file in place (DPAPI) at the next read; `credman` keeps it in Windows Credential Manager as `NeonSidekick/<family>/<connection_name>` (`sql`, `mysql`, `postgres`, `oracle`). On a Mac both use the Keychain ([What differs](MAC.md#what-differs)).
+  * A stored password saved by the app goes only to the host it was saved for. Change the host by hand and the connection is refused until you *… set password* again. A custom `credential`, which several entries may share, isn't tied to one host.
+  * A custom `credential` name must start `NeonSidekick/<family>/`; one elsewhere is a problem the menu lists, and the entry isn't offered.
+  * After the server refuses a sign-in, that connection doesn't try again for 15 minutes, or until the password or the entry changes, so the account isn't locked out.
+* **Unknown keys** are refused, naming the nearest known one, and so is a name or section given twice; the entry is listed with its problem and not offered.
 
 #### Read-write mode
 
@@ -714,20 +720,22 @@ Changes go through each family's `_execute` tool, which needs **two keys**: the 
 
    | Kind | Statements |
    |---|---|
-   | `data` | `INSERT`, `UPDATE`, `MERGE` (`REPLACE` in MySQL and SQLite), upserts, and `RETURNING`/`OUTPUT` |
-   | `delete` | `DELETE`, `TRUNCATE`, a `MERGE` that deletes |
-   | `create` | `CREATE TABLE`, `INDEX`, `VIEW`, `SEQUENCE` and the like; SQL Server's `SELECT … INTO`; SQLite's `TRIGGER` and `VIRTUAL TABLE` |
+   | `data` | `INSERT`, `UPDATE`, `MERGE` (`REPLACE` in MySQL and SQLite), upserts, and `RETURNING`/`OUTPUT` (`OUTPUT … INTO` too) |
+   | `delete` | `DELETE`, `TRUNCATE`, a `MERGE` that deletes; `REPLACE` in any form, which deletes the row it replaces; `ALTER TABLE … TRUNCATE` or `SWITCH` of a partition |
+   | `create` | `CREATE TABLE`, `INDEX`, `VIEW`, `SEQUENCE` and the like; `SELECT … INTO` (SQL Server, PostgreSQL); SQLite's `TRIGGER` and `VIRTUAL TABLE` |
    | `alter` | `ALTER`, `RENAME`, `COMMENT ON`; `CREATE OR REPLACE VIEW` needs `create` too |
-   | `drop` | `DROP` of those, and of routines and triggers |
+   | `drop` | `DROP` of those, and of routines and triggers; an `ALTER` that drops a column, constraint or partition; SQL Server's `ALTER INDEX … DISABLE` and `DROP_EXISTING` |
    | `upkeep` | statistics and index upkeep (`UPDATE STATISTICS`, `ANALYZE`, `OPTIMIZE`, `VACUUM`, `REINDEX`…) |
-   | `procedures` | server databases: running code (`EXEC`, `CALL`, PostgreSQL's `DO`, an Oracle PL/SQL block) and making or changing a procedure, function or trigger |
+   | `procedures` | server databases: running code (`EXEC`, `CALL`, PostgreSQL's `DO`, an Oracle PL/SQL block), making or changing a procedure, function or trigger, and enabling or disabling one |
    | `pragma` | SQLite only: `PRAGMA` |
    | `read` | `SELECT` (and `VALUES`, `TABLE`, `EXPLAIN` where the engine has them): never asks, runs on the read-only path |
 
-   In SQL Server a batch's lone first word reads as `EXEC` of it, so a typo there is a procedure call. A SQLite trigger also needs its body's kinds.
+   In SQL Server a batch's lone first word reads as `EXEC` of it, so a typo there is a procedure call. A SQLite trigger also needs its body's kinds, and MariaDB's `ANALYZE UPDATE …` the kinds of the statement it runs.
 2. **The gate:** one statement per call (a routine's body counts as one). Always refused, for example: transaction words, `SET`/`USE`, `GRANT`/`REVOKE`, users and roles, creating or dropping databases, dynamic SQL, file access (`BULK INSERT`, `LOAD DATA`, `COPY`, `ATTACH`) and links to other servers.
-3. **Your yes:** every change asks first, showing the statement (`v` shows all of it): *Deny*, *Allow once*, or *Allow for this session* (that connection or file only, until `/new`, `/clear` or a profile switch).
-4. **The run** commits on its own; a failed, timed-out or canceled one changes nothing. Every change is logged with the connection, rows changed and statement.
+   * **Routines:** a body meets the same refusals as a statement. One the gate can't read is refused whatever is ticked: another language, a native library, a CLR assembly, a call spec or JavaScript (PostgreSQL bodies must be `sql` or `plpgsql`).
+   * **Never changed:** who a routine runs as (`EXECUTE AS`, `SECURITY DEFINER`, `SQL SECURITY DEFINER`), triggers for the whole server or database (`ON ALL SERVER`, Oracle's `AFTER LOGON`), and row-level security.
+3. **Your yes:** every change asks first, showing the statement and its parameters (`v` shows all of it): *Deny*, *Allow once*, or *Allow for this session* (that connection's server and database, or that file, only, until `/new`, `/clear` or a profile switch).
+4. **The run** commits on its own; a failed, timed-out or canceled one changes nothing. Every change attempted is logged whatever its end, with the connection, its outcome, rows changed and the statement (secrets masked).
 5. **The account is still the real guard.** Give a `readwrite` connection only the permissions you want used.
 
 `--sql-check`, `--mysql-check`, `--sqlite-check`, `--postgres-check` and `--oracle-check` test a family against a real server or file ([COMMANDLINE.md](COMMANDLINE.md)).
@@ -781,7 +789,7 @@ Server families take a connection in `connection`, SQLite a database in `databas
 }
 ```
 
-* `params` binds `@name`. The gate is SQL Server's own parser; refused, for example: batches, `EXEC`, `INTO`, linked servers, `OPENROWSET`.
+* `params` binds `@name`. The gate is SQL Server's own parser; refused, for example: batches, `EXEC`, `INTO`, linked servers, `OPENROWSET`, locking hints (`WITH (UPDLOCK)`).
 * Server-wide views and functions (`sys.databases`, `sys.dm_*`, logins) are refused; the database's own catalog (`sys.objects`, `INFORMATION_SCHEMA`) reads. CLR types (`geography`, `hierarchyid`) need `.ToString()`.
 
 ### MySQL and MariaDB
@@ -789,7 +797,8 @@ Server families take a connection in `connection`, SQLite a database in `databas
 `mysql.json`; MySQL 8.0.16+ and MariaDB 10.2+.
 
 * **`host`**, **`port`** (3306 by default), **`database`** (required), **`user`**, **`passwordStore`** `file` or `credman`, **`connectTimeoutSeconds`** (1–120, default 15), **`access`** (`read` or `readwrite`).
-* **`sslMode`**: `preferred` (default), `required`, `verify-ca`, `verify-full` or `none`. **`allowPublicKeyRetrieval`**: `true` only for a `caching_sha2_password` account without TLS (a man in the middle could supply its own key).
+* **`sslMode`**: `preferred` (when left out), `required`, `verify-ca`, `verify-full` or `none`. The wizard starts a new connection on `verify-full`. Only a checked certificate (`verify-ca`, `verify-full`) protects the password from a fake server: an unchecked one says so in `mysql_connections` and once a session.
+* **`allowPublicKeyRetrieval`**: `true` only for a `caching_sha2_password` account without TLS (a man in the middle could supply its own key).
 
 ```json
 {
@@ -801,7 +810,8 @@ Server families take a connection in `connection`, SQLite a database in `databas
 ```
 
 * Queries end with `LIMIT n`, and `params` binds `@name`.
-* Refused, for example: executable comments (`/*! … */`), `INTO`, `LOAD_FILE`, `USE`, and `information_schema`, `performance_schema`, `mysql` and `sys` as qualifiers.
+* Refused, for example: executable comments (`/*! … */`), optimizer hints (`/*+ … */`), `INTO`, `LOAD_FILE`, `USE`, and `information_schema`, `performance_schema`, `mysql` and `sys` as qualifiers.
+* A server whose own `sql_mode` reads strings differently is set back for the session; if that doesn't hold, nothing runs.
 * In a `CREATE PROCEDURE` or `TRIGGER` body, a column or label named `begin` or `end` must be in backticks.
 
 ### SQLite
@@ -816,10 +826,10 @@ The SQLite tools read database **files**: no server, no password. Changes need o
 ```
 
 * `params` binds `@name`, `:name`, `$name` or `#name`; positional `?` is refused.
-* **Reading** opens the file read-only, whatever the mode; a statement past *SQLite query timeout (s)*, or stopped with Esc, is interrupted. **Always refused:** `ATTACH`/`DETACH`, `VACUUM INTO`, `writable_schema` and `load_extension()`.
+* **Reading** opens the file read-only, whatever the mode; a statement past *SQLite query timeout (s)*, or stopped with Esc, is interrupted. **Always refused:** `ATTACH`/`DETACH`, `VACUUM INTO`, `writable_schema`, `sqlite_dbpage`, `load_extension()`, setting `schema_version`, and the pragmas that reach the whole app (`soft_heap_limit`, `hard_heap_limit`, `temp_store_directory`, `data_store_directory`).
 * **The rest of the app keeps out** while *SQLite tools* is on:
   * The shell police refuses a command or script that reaches SQLite.
-  * The file tools never change a database file (`.db`, `.db3`, `.sqlite`, `.sqlite3`, their journals, or one `sqlite.json` names); reading and copying one still work.
+  * The file tools never change a database file: one ending `.db`, `.db3`, `.sqlite`, `.sqlite3`, `.s3db`, `.sl3`, `.sl2` or `.sqlitedb`, any file that starts as a SQLite database, their journals, or one `sqlite.json` names. Nor do they delete or move a folder holding one. Reading and copying one still work.
 * **Creating a database:** `create: true` needs `create` ticked and *SQLite sandbox files* on; the file ends `.db`, `.sqlite`, `.sqlite3` or `.db3`, in an existing folder of the working directory. If the statement fails, the file is removed.
 
 ### PostgreSQL
@@ -828,7 +838,9 @@ The SQLite tools read database **files**: no server, no password. Changes need o
 
 * **`host`**, **`port`** (5432 by default), **`database`** (required), **`user`**, **`passwordStore`** `file` or `credman`, **`connectTimeoutSeconds`** (1–120, default 15), **`access`** (`read` or `readwrite`).
 * **`schema`** (optional): holds the connection to that schema; other schemas and `information_schema` are refused. Without it, every schema of the database is open.
-* **`sslMode`**: `prefer` (default), `require`, `verify-ca`, `verify-full` or `disable`.
+  * Under the lock the catalog is closed too: `pg_*` relations and functions, `regclass` and its kin, `to_reg*`, `has_*_privilege` and `obj_description`, but for a few that describe only a value or the session (`pg_typeof`, `pg_backend_pid`, `pg_size_pretty`…). A table of your own named `pg_notes` is written `schema.pg_notes`.
+  * Also refused under the lock: `CASCADE` (it reaches what depends on the object, anywhere), another schema named after `SCHEMA` (`DROP SCHEMA`, `SET SCHEMA`), a sequence of another schema named as text, and upkeep with no table named (`VACUUM`, `REINDEX DATABASE`).
+* **`sslMode`**: `prefer` (when left out), `require`, `verify-ca`, `verify-full` or `disable`. The wizard starts a new connection on `verify-full`; an unchecked certificate says so in `postgres_connections` and once a session. A server asking for the password in clear text is refused, whatever the mode.
 
 ```json
 {
@@ -863,7 +875,8 @@ The SQLite tools read database **files**: no server, no password. Changes need o
 
 * Queries end with `FETCH FIRST n ROWS ONLY` and no `;`, and `params` binds `:name`. `oracle_execute` answers with the rows changed only, refuses `RETURNING … INTO`, and counts a PL/SQL block as one statement.
 * On 23ai and later the session itself is read-only for reads, so the server refuses any write. Give the account `SELECT` grants (or `ALTER USER … READ ONLY` on 23ai).
-* Refused, for example: `FOR UPDATE`, database links, `UTL_HTTP`/`UTL_FILE`/`DBMS_SQL`, and whole-database views (`ALL_*`, `DBA_*`, `CDB_*`, `V$`); `USER_*` views work.
+* Refused, for example: `FOR UPDATE`, database links, `UTL_HTTP`/`UTL_FILE`/`DBMS_SQL`/`DBMS_METADATA`, `CONTAINERS()`, and whole-database views (`ALL_*`, `DBA_*`, `CDB_*`, `V$`, `UNIFIED_AUDIT_TRAIL`); `USER_*` views work.
+* A server version the app can't read is refused rather than read without the session layer.
 * A CLOB or BLOB shows its start and length; object types (`SDO_GEOMETRY`, `XMLTYPE`) need converting to text.
 
 ## Devices
@@ -1055,3 +1068,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **Bot-checked downloads:** a site that ties its clearance to the browser's connection may still refuse a download after the Browser window passed its check.
 * **The camera pane:** its "The camera is opening…" line stays until the next key after the camera is on.
 * **The Web UI's floating buttons** riding above a phone's keyboard can only be checked by hand on a phone; no test shows it.
+* **Oracle before 23ai:** a `SELECT` that calls a stored function declared `PRAGMA AUTONOMOUS_TRANSACTION` commits whatever that function writes; neither the read-only transaction nor the rollback covers it. Give the account no such function, or use 23ai.
+* **Large cells in MySQL and PostgreSQL** are read whole before they are cut to the answer's size; SQL Server and Oracle read only what they show.
+* **SQLite's `ON CONFLICT REPLACE`:** an `INSERT` into a table declared that way replaces rows with only changing data ticked; the gate sees the statement, not the table's definition.
+* **SQL Server `runas` on another machine:** a dropped session that SqlClient reconnects, and the sign-in hold against a real domain account, haven't been tried against a second machine.

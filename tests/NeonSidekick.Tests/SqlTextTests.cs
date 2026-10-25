@@ -30,8 +30,30 @@ public sealed class SqlTextTests
 
     private static SqlRun Run(params SqlGrid[] grids) => new(SqlOutcome.Ok, "", "aw", "AdventureWorks2022", grids, TimeSpan.FromMilliseconds(12.4));
 
-    [Fact]
-    public void Cells_AreInvariant_Exact_AndClipped()
+    /// <summary>
+    /// Under cultures that write numbers and dates otherwise (2026-10-24, the database review's S12: the test ran under the invariant pin
+    /// of <c>ModuleInit</c>, so a format that forgot <c>InvariantCulture</c> passed it).
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("de-DE")]
+    [InlineData("fr-FR")]
+    [InlineData("ar-SA")]
+    public void Cells_AreInvariant_Exact_AndClipped(string culture)
+    {
+        var (before, beforeUi) = (System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CultureInfo.CurrentUICulture);
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo(culture);
+        try
+        {
+            CellsAreInvariant();
+        }
+        finally
+        {
+            (System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CultureInfo.CurrentUICulture) = (before, beforeUi);
+        }
+    }
+
+    private static void CellsAreInvariant()
     {
         Assert.Equal("NULL", SqlText.Cell(null));
         Assert.Equal("NULL", SqlText.Cell(DBNull.Value));

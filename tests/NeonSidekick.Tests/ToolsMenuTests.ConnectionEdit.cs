@@ -41,7 +41,8 @@ public partial class ToolsMenuTests
     /// <summary>
     /// SQL: the first page lists the saved ones after <c>+ New connection</c>; the pick opens the summary prefilled (the password
     /// masked as stored); Name and Server changed from it; the save renames the entry in its place, comments and the other entry
-    /// kept, the password and the unasked <c>credential</c> carried, and the offered list keeps its order.
+    /// kept, the unasked <c>credential</c> carried, and the offered list keeps its order. The server moved, so the stored password is let
+    /// go and asked again (2026-10-24, the database review's E9: it was carried to the new server; this test pinned that until then).
     /// </summary>
     [Fact]
     public async Task OnThePane_TheSqlWizard_EditsASavedConnection_RenamesIt_KeepsItsPassword_AndItsPlaceInTheOfferedList()
@@ -67,11 +68,13 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the Server row
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
         Type("new");
+        Type("n3w-secret");                                           // the Password page: the server moved (E9)
         Push(Keys.Enter);                                             // Save, and offer it (the cursor's start: it was offered)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
+        Assert.Contains(SettingsMenu.SqlWizardHostMovedNotice, Output);
         Assert.Contains(SettingsMenu.ConnectionWizardPickQuestion, Output);
         Assert.Contains("+ New connection", Output);
         Assert.Contains(SettingsMenu.SqlWizardMaskedKept, Output);
@@ -85,7 +88,7 @@ public partial class ToolsMenuTests
         Assert.Equal(["adventure", "first"], loaded.Connections.Select(c => c.Name));
         var adventure = loaded.Connections[0].Config;
         Assert.Equal(("new", "reader", "Team/aw", "the sample"), (adventure.Server, adventure.User, adventure.Credential, adventure.Description));
-        Assert.Equal("s3cret", SqlSecrets.Resolve(loaded.Connections[0]).Value);
+        Assert.Equal("n3w-secret", SqlSecrets.Resolve(loaded.Connections[0]).Value);
         Assert.Equal(["adventure", "first"], _settings.Current.SqlConnectionsOffered);
     }
 

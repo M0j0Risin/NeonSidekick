@@ -45,11 +45,26 @@ public static class MySqlReadOnlyGate
     public readonly record struct Token(TokenKind Kind, string Text, int Line, int Column, int Start, int End);
 
     /// <summary>Functions a query may not call: a file on the server's disk, a lock no rollback releases, a door out of the database.</summary>
+    /// <remarks>
+    /// Swept against the servers' documentation on 2026-10-24 (the database review's F10; dev.mysql.com/doc/refman/8.0/en/locking-service.html,
+    /// version-tokens-reference.html, the loadable-function references, and mariadb.com/kb's MASTER_GTID_WAIT): MariaDB's
+    /// <c>MASTER_GTID_WAIT</c> (blocks on replication, forever with no timeout), the locking service's named locks no rollback releases, the
+    /// version tokens (a server-wide list) — and, as <see cref="DeniedPrefixes"/>, the loadable functions that change the server from a
+    /// SELECT: group replication, connection failover, the keyring, the audit log's filters, the firewall, data masking's dictionaries.
+    /// </remarks>
     public static readonly IReadOnlySet<string> DeniedFunctions = new HashSet<string>(StringComparer.Ordinal)
     {
         "LOAD_FILE", "GET_LOCK", "RELEASE_LOCK", "RELEASE_ALL_LOCKS", "NEXTVAL", "SETVAL", "SYS_EXEC", "SYS_EVAL", "SYS_GET", "SYS_SET",
-        "MASTER_POS_WAIT", "SOURCE_POS_WAIT", "WAIT_FOR_EXECUTED_GTID_SET",
+        "MASTER_POS_WAIT", "SOURCE_POS_WAIT", "WAIT_FOR_EXECUTED_GTID_SET", "WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS", "MASTER_GTID_WAIT",
+        "SERVICE_GET_READ_LOCKS", "SERVICE_GET_WRITE_LOCKS", "SERVICE_RELEASE_LOCKS", "LOAD_REWRITE_RULES",
     };
+
+    /// <summary>The loadable-function families that change the server from a SELECT (the remarks above), refused before a <c>(</c>.</summary>
+    public static readonly IReadOnlyList<string> DeniedPrefixes =
+    [
+        "VERSION_TOKENS_", "GROUP_REPLICATION_", "ASYNCHRONOUS_CONNECTION_FAILOVER_", "KEYRING_KEY_", "AUDIT_LOG_", "MYSQL_FIREWALL_",
+        "SET_FIREWALL_", "MASKING_DICTIONARY_",
+    ];
 
     /// <summary>The words that change data or the schema, and the statements that are not a query; refused wherever they stand.</summary>
     public static readonly IReadOnlySet<string> ChangingWords = new HashSet<string>(StringComparer.Ordinal)
@@ -103,7 +118,7 @@ public static class MySqlReadOnlyGate
             // SQLite gates' hole, found in the 2026-10-04 review and closed here as well). Function names are case-blind.
             if (t.Kind == TokenKind.Quoted)
             {
-                if (IsSymbol(next, "(") && DeniedFunctions.Contains(t.Text.ToUpperInvariant()))
+                if (IsSymbol(next, "(") && IsDeniedFunction(t.Text.ToUpperInvariant()))
                 {
                     return MySqlText.Forbidden(t.Text.ToUpperInvariant());
                 }
@@ -143,7 +158,7 @@ public static class MySqlReadOnlyGate
                 continue;
             }
 
-            if (ChangingWords.Contains(word) || DeniedFunctions.Contains(word))
+            if (ChangingWords.Contains(word) || DeniedFunctions.Contains(word) || (IsSymbol(next, "(") && DeniedPrefixes.Any(p => word.StartsWith(p, StringComparison.Ordinal))))
             {
                 return MySqlText.Forbidden(word);
             }
@@ -194,6 +209,9 @@ public static class MySqlReadOnlyGate
 
     private static bool IsSymbol(Token token, string symbol) => token.Kind == TokenKind.Symbol && token.Text == symbol;
 
+    /// <summary>Whether an upper-cased name is a denied function or of a denied family (the write gate reads it too).</summary>
+    internal static bool IsDeniedFunction(string upper) => DeniedFunctions.Contains(upper) || DeniedPrefixes.Any(p => upper.StartsWith(p, StringComparison.Ordinal));
+
     /// <summary>
     /// <paramref name="sql"/> as tokens, comments dropped; null with the <c>Error:</c> sentence for an executable comment, or a
     /// literal, a quoted name or a comment that never ends (a gate that guessed where it ends could be fooled).
@@ -224,14 +242,18 @@ public static class MySqlReadOnlyGate
             char c = sql[i];
             int startLine = line;
             int startColumn = i - lineStart + 1;
-            if (char.IsWhiteSpace(c))
+
+            // MySQL's whitespace alone (2026-10-24, the database review's F2): over utf8mb4, which MySqlConnector always speaks, every byte
+            // past ASCII is a letter to the server's lexer, so a no-break space is part of a name there, not a gap.
+            if (IsSpace(c))
             {
                 Advance(i + 1);
                 continue;
             }
 
-            // '#', and '--' followed by a space or a control character (or the end): MySQL's line comments.
-            if (c == '#' || (c == '-' && At(sql, i + 1) == '-' && (i + 2 >= sql.Length || char.IsWhiteSpace(sql[i + 2]) || char.IsControl(sql[i + 2]))))
+            // '#', and '--' followed by an ASCII space or control character (or the end): MySQL's line comments (F2: a '--' before a no-break
+            // space or a C1 control is no comment to the server, so the rest of the line ran unseen here).
+            if (c == '#' || (c == '-' && At(sql, i + 1) == '-' && (i + 2 >= sql.Length || sql[i + 2] <= ' ' || sql[i + 2] == '\x7F')))
             {
                 int end = sql.IndexOf('\n', i);
                 Advance(end < 0 ? sql.Length : end);
@@ -243,6 +265,14 @@ public static class MySqlReadOnlyGate
                 if (At(sql, i + 2) == '!' || (At(sql, i + 2) is 'M' or 'm' && At(sql, i + 3) == '!'))
                 {
                     error = MySqlText.ExecutableComment(startLine, startColumn);
+                    return null;
+                }
+
+                // An optimizer hint is read by the server (2026-10-24, the database review's A12): /*+ MAX_EXECUTION_TIME(…) */ and
+                // /*+ SET_VAR(max_execution_time = 0) */ lift the session's time cap (MySQL 8.0, MariaDB 12).
+                if (At(sql, i + 2) == '+')
+                {
+                    error = MySqlText.OptimizerHint(startLine, startColumn);
                     return null;
                 }
 
@@ -320,13 +350,11 @@ public static class MySqlReadOnlyGate
 
             if (char.IsAsciiDigit(c) || (c == '.' && char.IsAsciiDigit(At(sql, i + 1))))
             {
-                int end = i;
-                while (end < sql.Length && (char.IsAsciiLetterOrDigit(sql[end]) || sql[end] == '.' || (sql[end] is '+' or '-' && sql[end - 1] is 'e' or 'E')))
-                {
-                    end++;
-                }
-
-                tokens.Add(new Token(TokenKind.Number, sql[i..end], startLine, startColumn, i, end));
+                // A digit-led run is a name where the server's lexer makes it one (2026-10-24, the database review's A2, F6): 2024sales and
+                // 123abc are identifiers, so 2024sales.orders names a database the boundary must see; a number ends where a number does —
+                // its digits, a fraction, an exponent with a digit after it, or a 0x/0b literal — and what follows is the next token.
+                var (end, name) = DigitRun(sql, i);
+                tokens.Add(new Token(name ? TokenKind.Word : TokenKind.Number, name ? sql[i..end].ToUpperInvariant() : sql[i..end], startLine, startColumn, i, end));
                 Advance(end);
                 continue;
             }
@@ -340,9 +368,78 @@ public static class MySqlReadOnlyGate
 
     private static char At(string text, int index) => index < text.Length ? text[index] : '\0';
 
-    private static bool IsWordStart(char c) => char.IsLetter(c) || c is '_' or '$';
+    /// <summary>MySQL's whitespace over utf8mb4: the ASCII space and controls that my_isspace takes.</summary>
+    private static bool IsSpace(char c) => c is ' ' or '\t' or '\n' or '\r' or '\f' or '\v';
 
-    private static bool IsWordPart(char c) => char.IsLetterOrDigit(c) || c is '_' or '$';
+    /// <summary>A name's first character: an ASCII letter, <c>_</c>, <c>$</c>, or any character past ASCII (a letter to the server's lexer, F2).</summary>
+    private static bool IsWordStart(char c) => char.IsAsciiLetter(c) || c is '_' or '$' || c > 127;
+
+    private static bool IsWordPart(char c) => char.IsAsciiLetterOrDigit(c) || c is '_' or '$' || c > 127;
+
+    /// <summary>
+    /// Where a run that starts with a digit (or <c>.</c> and a digit) ends, and whether the server reads it as a name (A2, F6; sql_lex.cc's
+    /// MY_LEX_NUMBER_IDENT): <c>0x</c> or <c>0b</c> digits are a literal unless a name character follows; decimal digits, a fraction and an
+    /// exponent (<c>e</c>, a sign, then a digit) are a number; digits followed by any other name character are the start of a name, which
+    /// runs over every name character after.
+    /// </summary>
+    public static (int End, bool Name) DigitRun(string sql, int start)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        int Over(int from, Func<char, bool> keep)
+        {
+            int k = from;
+            while (k < sql.Length && keep(sql[k]))
+            {
+                k++;
+            }
+
+            return k;
+        }
+
+        int NameEnd(int from) => Over(from, IsWordPart);
+
+        if (sql[start] == '0' && At(sql, start + 1) is 'x' or 'X' or 'b' or 'B')
+        {
+            bool hex = At(sql, start + 1) is 'x' or 'X';
+            int end = Over(start + 2, ch => hex ? char.IsAsciiHexDigit(ch) : ch is '0' or '1');
+            return end > start + 2 && !(end < sql.Length && IsWordPart(sql[end])) ? (end, false) : (NameEnd(start), true);
+        }
+
+        int k = Over(start, char.IsAsciiDigit);
+        if (sql[start] != '.' && k < sql.Length && IsWordPart(sql[k]) && !IsExponent(k))
+        {
+            return (NameEnd(k), true);
+        }
+
+        if (k < sql.Length && sql[k] == '.')
+        {
+            k = Over(k + 1, char.IsAsciiDigit);
+        }
+
+        if (IsExponent(k))
+        {
+            int e = k + 1;
+            if (At(sql, e) is '+' or '-')
+            {
+                e++;
+            }
+
+            k = Over(e, char.IsAsciiDigit);
+        }
+
+        return (Math.Max(k, start + 1), false);
+
+        bool IsExponent(int at)
+        {
+            if (At(sql, at) is not ('e' or 'E'))
+            {
+                return false;
+            }
+
+            int digit = At(sql, at + 1) is '+' or '-' ? at + 2 : at + 1;
+            return char.IsAsciiDigit(At(sql, digit));
+        }
+    }
 
     /// <summary>The index past a literal or quoted name opened at <paramref name="open"/> with <paramref name="quote"/>: a doubled quote is one inside it, and with <paramref name="backslash"/> a backslash escapes the next character. -1 when it never ends.</summary>
     private static int QuotedEnd(string sql, int open, char quote, bool backslash)

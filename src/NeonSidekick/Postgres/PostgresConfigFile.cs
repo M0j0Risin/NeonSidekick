@@ -19,7 +19,7 @@ public sealed record PostgresCatalog(IReadOnlyList<PostgresNamedConnection> Conn
     public PostgresCatalog Offered(IReadOnlyList<string>? names)
     {
         var kept = ConnectionCatalog.Offered(Connections, names);
-        return this with { Connections = kept, Hidden = Hidden + Connections.Count - kept.Count };
+        return this with { Connections = kept, Problems = ConnectionCatalog.OfferedProblems(Problems, names), Hidden = Hidden + Connections.Count - kept.Count };
     }
 
     /// <summary>
@@ -95,6 +95,10 @@ public sealed class PostgresConfigFile
     /// <summary>The connections by name, in file order (the deserializer keeps it).</summary>
     public Dictionary<string, PostgresConnectionConfig?> Connections { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>Keys beside <c>connections</c>: listed as problems, never used (2026-10-24, the database review's K2).</summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
     /// <summary>The family's code over this file's facts.</summary>
     public static readonly ConnectionFamily<PostgresConnectionConfig, PostgresNamedConnection> Family = new()
     {
@@ -103,7 +107,8 @@ public sealed class PostgresConfigFile
         EmptyText = EmptyText,
         Tab = "/tools › Databases › PostgreSQL",
         NullEntry = PostgresText.NoHost,
-        Deserialize = json => JsonSerializer.Deserialize(json, PostgresJsonContext.Default.PostgresConfigFile)?.Connections,
+        Deserialize = json => JsonSerializer.Deserialize(json, PostgresJsonContext.Default.PostgresConfigFile) is { } file ? (file.Connections, file.Extra) : (null, null),
+        CredentialPrefix = PostgresConnectionConfig.CredentialPrefix,
         EntryInfo = PostgresJsonContext.Default.PostgresConnectionConfig,
         Named = (name, config, source) => new PostgresNamedConnection(name, config, source),
         NoPassword = PostgresText.NoPassword,

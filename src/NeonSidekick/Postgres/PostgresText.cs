@@ -28,7 +28,7 @@ public static class PostgresText
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
         string database = $" / {config.Database?.Trim()}" + (string.IsNullOrWhiteSpace(config.Schema) ? "" : $" (schema {config.Schema.Trim()} alone)");
-        string line = $"- {connection.Name}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(PostgresStatementKinds.Family, config.IsReadWrite, writes)}";
+        string line = $"- {connection.Name}: {config.Endpoint}{database}, user {config.User?.Trim()}{ServerWriteText.AccessNote(PostgresStatementKinds.Family, config.IsReadWrite, writes)}{(config.TlsChecked ? "" : SqlText.TlsUnchecked)}";
         return string.IsNullOrWhiteSpace(config.Description) ? line : line + " — " + config.Description.Trim();
     }
 
@@ -101,6 +101,69 @@ public static class PostgresText
     /// <summary>A view or function of the whole cluster rather than the database. Pinned.</summary>
     public static string ServerCatalog(string named) =>
         $"Error: the SQL reads {named}, which describes the whole server rather than this connection's database; the PostgreSQL tools keep to the connection's database (postgres_tables, postgres_columns and postgres_describe read its catalog)";
+
+    /// <summary>
+    /// A connect failure's detail, with what to do when the server asked for the password in clear text (2026-10-24, the review of these fixes:
+    /// an LDAP, RADIUS or PAM server does, and the app sends one only over a checked certificate, decision DB1). Pinned.
+    /// </summary>
+    public static string WithCleartextHint(string detail)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+        return detail.Contains("authentication", StringComparison.OrdinalIgnoreCase) && detail.Contains("not allowed", StringComparison.OrdinalIgnoreCase)
+            ? detail + "; " + CleartextRefused
+            : detail;
+    }
+
+    /// <summary>Why a clear-text password request is refused, and the way through. Pinned.</summary>
+    public const string CleartextRefused =
+        "the server asked for the password in clear text, which the app sends only over a checked certificate: set the connection's sslMode to verify-full (the server's CA trusted)";
+
+    /// <summary>A text the boundary cannot lex (2026-10-24, mechanism 7). Pinned.</summary>
+    public const string BoundaryUnread = "Error: the app could not read the SQL to check it keeps to the connection's database and schema, so nothing was run";
+
+    /// <summary>A catalog object or reader under a schema lock (2026-10-24, the database review's DB2). Pinned.</summary>
+    public static string CatalogUnderLock(string named, string schema) =>
+        $"Error: the SQL reads {named}, which can describe other schemas than {schema}, the one this connection is held to; postgres_tables, postgres_columns and postgres_describe read {schema}'s catalog — and a table of {schema} named {named} is written {schema}.{named}";
+
+    /// <summary>Upkeep over the whole database under a schema lock (2026-10-24, review H8). Pinned.</summary>
+    public static string WholeUnderLock(string what, string schema) =>
+        $"Error: the SQL runs {what}, which reaches every schema's tables, not {schema}'s alone, the one this connection is held to; name the table";
+
+    /// <summary>CASCADE under a schema lock (2026-10-24, review H8). Pinned.</summary>
+    public static string CascadeUnderLock(string schema) =>
+        $"Error: the SQL uses CASCADE, which drops or empties what depends on the object wherever it is, other schemas than {schema} among them; name each object to change instead";
+
+    /// <summary>A placeholder run straight into a $ or a dot (2026-10-24, review F1, G11). Pinned.</summary>
+    public static string PlaceholderRunOn(string text, int line, int column) =>
+        $"Error: '{text}' at line {line.ToString(System.Globalization.CultureInfo.InvariantCulture)}, column {column.ToString(System.Globalization.CultureInfo.InvariantCulture)} runs a placeholder straight into a $ or a dot, which the server and the driver read apart; put a space after the placeholder, or write the name without the @";
+
+    /// <summary>A session whose startup settings did not hold (2026-10-24, review H1). Pinned.</summary>
+    public static string SessionNotSet(string what) =>
+        $"the session did not keep {what} the app set at sign-in (a connection pooler may drop them), so nothing was run; connect to the server itself, or set them for the role on the server";
+
+    /// <summary>
+    /// Why the read-back settings fail (H1), or null: <paramref name="readOnly"/> wants the read-only default on, every session the string rule
+    /// on and a statement timeout, and a schema lock the search path being <paramref name="schema"/> alone. Pure.
+    /// </summary>
+    public static string? SessionProblem(string defaultReadOnly, string conformingStrings, string statementTimeout, string schemas, bool readOnly, string? schema)
+    {
+        if (readOnly && !string.Equals(defaultReadOnly, "on", StringComparison.OrdinalIgnoreCase))
+        {
+            return SessionNotSet("default_transaction_read_only");
+        }
+
+        if (!string.Equals(conformingStrings, "on", StringComparison.OrdinalIgnoreCase))
+        {
+            return SessionNotSet("standard_conforming_strings");
+        }
+
+        if (statementTimeout.Trim() == "0")
+        {
+            return SessionNotSet("statement_timeout");
+        }
+
+        return schema is not null && !string.Equals(schemas, schema, StringComparison.Ordinal) ? SessionNotSet("the search path") : null;
+    }
 
     /// <summary>A qualifier naming another schema under a schema lock (or an alias spelled like one). Pinned.</summary>
     public static string OtherSchema(string named, string schema) =>

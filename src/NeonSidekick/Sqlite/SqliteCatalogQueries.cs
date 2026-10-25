@@ -28,13 +28,19 @@ public static class SqliteCatalogQueries
     public static readonly IReadOnlyList<string> Describe =
     [
         "SELECT name, type, \"notnull\", dflt_value, pk, hidden FROM pragma_table_xinfo(@name) ORDER BY cid",
-        "SELECT \"table\", group_concat(\"from\", ', ' ORDER BY seq), group_concat(\"to\", ', ' ORDER BY seq), on_update, on_delete FROM pragma_foreign_key_list(@name) GROUP BY id ORDER BY id",
-        "SELECT m.name, group_concat(f.\"from\", ', ' ORDER BY f.seq), group_concat(f.\"to\", ', ' ORDER BY f.seq) FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f " +
+        "SELECT \"table\", group_concat(\"from\", ', ' ORDER BY seq), group_concat(coalesce(\"to\", '" + ParentKey + "'), ', ' ORDER BY seq), on_update, on_delete FROM pragma_foreign_key_list(@name) GROUP BY id ORDER BY id",
+        "SELECT m.name, group_concat(f.\"from\", ', ' ORDER BY f.seq), group_concat(coalesce(f.\"to\", '" + ParentKey + "'), ', ' ORDER BY f.seq) FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f " +
             "WHERE m.type = 'table' AND f.\"table\" = @name COLLATE NOCASE GROUP BY m.name, f.id ORDER BY m.name",
         "SELECT il.name, il.\"unique\", il.origin, il.partial, group_concat(coalesce(ii.name, CASE ii.cid WHEN -1 THEN 'rowid' ELSE '" + ExpressionColumn + "' END), ', ' ORDER BY ii.seqno) " +
             "FROM pragma_index_list(@name) il JOIN pragma_index_info(il.name) ii GROUP BY il.name ORDER BY il.name",
         "SELECT sql FROM sqlite_master WHERE name = @name",
     ];
+
+    /// <summary>
+    /// What a foreign key's target reads as when it names no column (2026-10-24, the database review's O9: <c>REFERENCES parent</c> points at
+    /// the parent's primary key, and pragma_foreign_key_list gives NULL for it, shown as a NULL target).
+    /// </summary>
+    public const string ParentKey = "(its primary key)";
 
     /// <summary>What an index column that is an expression (<c>lower(name)</c>) reads as in <see cref="Describe"/>: SQLite gives it no name.</summary>
     public const string ExpressionColumn = "(expression)";

@@ -42,6 +42,14 @@ public static class PostgresReadOnlyGate
     /// <c>ts_stat</c> and <c>ts_rewrite</c> (core), tablefunc's <c>connectby</c> and xml2's <c>xpath_table</c> (crosstab is a prefix)
     /// — <c>ts_stat('SELECT pg_terminate_backend(pid)::text::tsvector …')</c> walked past until the second 2026-10-04 review.
     /// </summary>
+    /// <remarks>
+    /// Swept against the server's documentation on 2026-10-24 (the database review's C10, F9, L1; postgresql.org/docs/current/functions-admin.html,
+    /// functions-info.html, and the extensions' own pages): the index maintenance functions that change pages no rollback undoes —
+    /// <c>brin_summarize_new_values</c>, <c>brin_summarize_range</c>, <c>brin_desummarize_range</c>, <c>gin_clean_pending_list</c> (brin.c and
+    /// ginfast.c check only for recovery, never read-only); <c>pg_background_launch</c> and its kin (an extension whose worker commits on its
+    /// own); <c>pg_log_backend_memory_contexts</c> and <c>pg_log_standby_snapshot</c> (write to the server log or the WAL); <c>pg_logdir_ls</c>
+    /// (adminpack, lists the log files); and pgsql-http's <c>http_*</c> (the server makes outbound HTTP requests).
+    /// </remarks>
     public static readonly IReadOnlySet<string> DeniedFunctions = new HashSet<string>(StringComparer.Ordinal)
     {
         "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_STAT_FILE", "NEXTVAL", "SETVAL", "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND",
@@ -49,6 +57,8 @@ public static class PostgresReadOnlyGate
         "PG_ROTATE_LOGFILE", "PG_START_BACKUP", "PG_STOP_BACKUP", "PG_IMPORT_SYSTEM_COLLATIONS",
         "QUERY_TO_XML", "QUERY_TO_XMLSCHEMA", "QUERY_TO_XML_AND_XMLSCHEMA", "CURSOR_TO_XML", "CURSOR_TO_XMLSCHEMA",
         "TS_STAT", "TS_REWRITE", "CONNECTBY", "XPATH_TABLE",
+        "BRIN_SUMMARIZE_NEW_VALUES", "BRIN_SUMMARIZE_RANGE", "BRIN_DESUMMARIZE_RANGE", "GIN_CLEAN_PENDING_LIST",
+        "PG_LOG_BACKEND_MEMORY_CONTEXTS", "PG_LOG_STANDBY_SNAPSHOT", "PG_LOGDIR_LS", "HTTP",
     };
 
     /// <summary>
@@ -66,6 +76,9 @@ public static class PostgresReadOnlyGate
         "LO_", "DBLINK", "PG_ADVISORY", "PG_TRY_ADVISORY", "PG_FILE_", "PG_REPLICATION_", "PG_PROMOTE", "PG_LS_",
         "PG_CREATE_", "PG_COPY_", "PG_DROP_", "PG_LOGICAL_SLOT_", "PG_SYNC_REPLICATION_SLOTS", "PG_STAT_RESET", "PG_STAT_STATEMENTS_RESET",
         "PG_RESTORE_", "PG_CLEAR_", "PG_BACKUP_", "PG_WAL_REPLAY_", "CROSSTAB",
+        // 2026-10-24 (review F9, L1): pg_background's launch/result/detach, and pgsql-http's http_get, http_post, http_put, http_patch,
+        // http_delete, http_head and its header and option helpers.
+        "PG_BACKGROUND_", "HTTP_",
     ];
 
     /// <summary>The words that change data or the schema, or are not a query; refused wherever they stand.</summary>
@@ -205,6 +218,100 @@ public static class PostgresReadOnlyGate
 
     private static bool IsSymbol(Token token, string symbol) => token.Kind == TokenKind.Symbol && token.Text == symbol;
 
+    /// <summary>
+    /// A word upper-cased as PostgreSQL folds it, A to Z alone (2026-10-24, the database review's B3: the server lowers only ASCII letters
+    /// in a UTF-8 database, so <c>Ärger</c> stays <c>Ärger</c>; upper-cased and lowered invariantly it came back <c>ärger</c>, a schema the
+    /// lock never matched). A bare word lowered by <see cref="AsciiLower"/> is then the server's name.
+    /// </summary>
+    internal static string AsciiUpper(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return string.Create(text.Length, text, static (span, source) =>
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                span[i] = source[i] is >= 'a' and <= 'z' ? (char)(source[i] - 32) : source[i];
+            }
+        });
+    }
+
+    /// <summary>A word lowered A to Z alone: <see cref="AsciiUpper"/>'s other half.</summary>
+    internal static string AsciiLower(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return string.Create(text.Length, text, static (span, source) =>
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                span[i] = source[i] is >= 'A' and <= 'Z' ? (char)(source[i] + 32) : source[i];
+            }
+        });
+    }
+
+    /// <summary>PostgreSQL's whitespace: space, tab, the line ends, form feed, and vertical tab (17 and later; an error before).</summary>
+    private static bool IsSpace(char c) => c is ' ' or '\t' or '\n' or '\r' or '\f' or '\v';
+
+    /// <summary>
+    /// The index past the number at <paramref name="start"/>, as PostgreSQL ends one (2026-10-24, the database review's A15: the scan ate the
+    /// letters after it, so on PG 12–14 <c>LIMIT 1FOR SHARE</c> and <c>1INTO</c> hid FOR SHARE and INTO, which those servers read as words):
+    /// decimal digits with <c>_</c> between them (16 and later), a fraction, an exponent with its sign, or a <c>0x</c>, <c>0o</c> or <c>0b</c>
+    /// integer — and nothing more. What follows is the next token.
+    /// </summary>
+    public static int NumberEnd(string sql, int start)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        static bool Digit(char ch, int radix) => radix switch
+        {
+            16 => char.IsAsciiHexDigit(ch),
+            8 => ch is >= '0' and <= '7',
+            2 => ch is '0' or '1',
+            _ => char.IsAsciiDigit(ch),
+        };
+
+        int Run(int from, int radix)
+        {
+            int k = from;
+            while (k < sql.Length && (Digit(sql[k], radix) || (sql[k] == '_' && k > from && k + 1 < sql.Length && Digit(sql[k + 1], radix))))
+            {
+                k++;
+            }
+
+            return k;
+        }
+
+        if (sql[start] == '0' && start + 2 < sql.Length && sql[start + 1] is 'x' or 'X' or 'o' or 'O' or 'b' or 'B')
+        {
+            int radix = sql[start + 1] is 'x' or 'X' ? 16 : sql[start + 1] is 'o' or 'O' ? 8 : 2;
+            int end = Run(start + 2, radix);
+            if (end > start + 2)
+            {
+                return end;
+            }
+        }
+
+        int k = Run(start, 10);
+        if (k < sql.Length && sql[k] == '.' && !(k + 1 < sql.Length && sql[k + 1] == '.'))
+        {
+            k = Run(k + 1, 10);
+        }
+
+        if (k < sql.Length && sql[k] is 'e' or 'E')
+        {
+            int e = k + 1;
+            if (e < sql.Length && sql[e] is '+' or '-')
+            {
+                e++;
+            }
+
+            if (e < sql.Length && char.IsAsciiDigit(sql[e]))
+            {
+                k = Run(e, 10);
+            }
+        }
+
+        return Math.Max(k, start + 1);
+    }
+
     /// <summary>PostgreSQL's operator characters (CREATE OPERATOR's list).</summary>
     private static bool IsOperatorChar(char c) => c is '+' or '-' or '*' or '/' or '<' or '>' or '=' or '~' or '!' or '@' or '#' or '%' or '^' or '&' or '|' or '`' or '?';
 
@@ -238,15 +345,21 @@ public static class PostgresReadOnlyGate
         {
             char c = sql[i];
             int column = i - lineStart + 1;
-            if (char.IsWhiteSpace(c))
+
+            // PostgreSQL's whitespace alone (2026-10-24, the database review's F1): every other character past ASCII is an identifier's to
+            // the server (ident_start takes each high byte), so a no-break space read as a space here let a $tag$ the server never opened
+            // hide what followed it.
+            if (IsSpace(c))
             {
                 Advance(i + 1);
                 continue;
             }
 
+            // A -- comment ends at a carriage return as well as a line feed (2026-10-24, review A1: scan.l's newline is [\n\r]; text after a
+            // bare CR ran unseen by this gate, the write gate and the boundary).
             if (c == '-' && i + 1 < sql.Length && sql[i + 1] == '-')
             {
-                int end = sql.IndexOf('\n', i);
+                int end = sql.IndexOfAny(['\n', '\r'], i);
                 Advance(end < 0 ? sql.Length : end);
                 continue;
             }
@@ -408,6 +521,15 @@ public static class PostgresReadOnlyGate
                     k++;
                 }
 
+                // A placeholder run straight into a $ or a dot is refused (2026-10-24, review F1, G11): Npgsql ends its name at the $ (and
+                // takes a dot into it), the server reads an unbound one as an identifier running on through both — so a $tag$ this gate
+                // opened was the name's tail to the server, and @a.b was a qualified name the boundary never saw.
+                if (k < sql.Length && sql[k] is '$' or '.')
+                {
+                    error = PostgresText.PlaceholderRunOn(sql[i..(k + 1)], line, column);
+                    return null;
+                }
+
                 // After an operator character the @ may be the operator's tail (<@tags, @@to_tsquery): ReadAsync bound every one to
                 // NULL, and ARRAY['x'] <@tags compared with NULL in place of the column (the second 2026-10-04 review).
                 var kind = i > 0 && IsOperatorChar(sql[i - 1]) ? TokenKind.OperatorBind : TokenKind.Bind;
@@ -422,14 +544,9 @@ public static class PostgresReadOnlyGate
                 continue;
             }
 
-            if (char.IsDigit(c) || (c == '.' && i + 1 < sql.Length && char.IsDigit(sql[i + 1])))
+            if (char.IsAsciiDigit(c) || (c == '.' && i + 1 < sql.Length && char.IsAsciiDigit(sql[i + 1])))
             {
-                int k = i + 1;
-                while (k < sql.Length && (char.IsLetterOrDigit(sql[k]) || sql[k] == '.'))
-                {
-                    k++;
-                }
-
+                int k = NumberEnd(sql, i);
                 tokens.Add(new Token(TokenKind.Number, sql[i..k], line, column));
                 Advance(k);
                 continue;
@@ -443,7 +560,7 @@ public static class PostgresReadOnlyGate
                     k++;
                 }
 
-                tokens.Add(new Token(TokenKind.Word, sql[i..k].ToUpperInvariant(), line, column));
+                tokens.Add(new Token(TokenKind.Word, AsciiUpper(sql[i..k]), line, column));
                 Advance(k);
                 continue;
             }

@@ -43,8 +43,8 @@ public static class DatabaseWriteModes
         ArgumentNullException.ThrowIfNull(family);
         return name switch
         {
-            "read-only" => $"the {family.Title} tools only read",
-            "read-write" => $"{family.ToolName} may change a readwrite connection's database, each change asking you first",
+            "read-only" => ServerWriteText.ReadOnlyModeHint(family),
+            "read-write" => ServerWriteText.ReadWriteModeHint(family),
             _ => "",
         };
     }
@@ -58,7 +58,7 @@ public static class DatabaseWriteModes
             return mode;
         }
 
-        DiagnosticLog.Warn(family.Category, $"{family.ModeKey}='{saved}' is not one of {string.Join(", ", Names)}. Using {Default}.");
+        DiagnosticLog.Warn(family.Category, ServerWriteText.BadModeLogLine(family, saved, Names, Default));
         return DatabaseWriteMode.ReadOnly;
     }
 

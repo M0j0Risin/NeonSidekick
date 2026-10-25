@@ -45,6 +45,9 @@ internal static unsafe partial class KeychainNative
     /// <summary><c>kSecAccountItemAttr</c>, 'acct' (2026-10-23, DA2).</summary>
     public const uint AccountAttribute = 0x61636374;
 
+    /// <summary><c>kSecCommentItemAttr</c>, 'icmt' (2026-10-24, decision DB9: the host a credential was saved for, <see cref="CredentialMark"/>).</summary>
+    public const uint CommentAttribute = 0x69636d74;
+
     /// <summary><c>CSSM_DB_ATTRIBUTE_FORMAT_STRING</c>.</summary>
     public const uint FormatString = 0;
 
@@ -77,4 +80,8 @@ internal static unsafe partial class KeychainNative
 
     [LibraryImport(Security)]
     public static partial int SecKeychainItemFreeAttributesAndData(SecKeychainAttributeList* attrList, void* data);
+
+    /// <summary>Changes an item's attributes and (with <paramref name="data"/>) its password in place (2026-10-24, review I11, DB9).</summary>
+    [LibraryImport(Security)]
+    public static partial int SecKeychainItemModifyAttributesAndData(IntPtr itemRef, SecKeychainAttributeList* attrList, uint length, void* data);
 }

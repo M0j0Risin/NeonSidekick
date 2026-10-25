@@ -44,16 +44,29 @@ public sealed class MySqlAccess
     private readonly Func<MySqlCatalog> _catalog;
 
     /// <param name="catalog">The connections in force; the app's reads the profile's and the home's <c>mysql.json</c> at every call.</param>
-    public MySqlAccess(Func<MySqlCatalog> catalog)
+    public MySqlAccess(Func<MySqlCatalog> catalog) : this(catalog, null)
+    {
+    }
+
+    /// <summary>An access over <paramref name="catalog"/> sharing <paramref name="names"/> (a pinned one's, <see cref="Pinned"/>), or a cache of its own.</summary>
+    public MySqlAccess(Func<MySqlCatalog> catalog, Sql.BoundaryNames? names)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        Names = names ?? new();
     }
 
     /// <summary>The connections as the files hold them now.</summary>
     public MySqlCatalog Catalog() => _catalog();
 
     /// <summary>The names the tools' boundary reads before a model's statement, kept a minute per connection (2026-10-09, <see cref="Sql.BoundaryNames"/>).</summary>
-    public Sql.BoundaryNames Names { get; } = new();
+    public Sql.BoundaryNames Names { get; }
+
+    /// <summary>
+    /// An access over <paramref name="target"/> alone, sharing this one's names cache (2026-10-24, the database review's H11): an <c>_execute</c>
+    /// call resolves its connection once and every step after — the boundary, the pane, the run — works on that entry, so a file edited in
+    /// between cannot send an allowed change to another server.
+    /// </summary>
+    public MySqlAccess Pinned(MySqlNamedConnection target) => new(() => new MySqlCatalog([target], []), Names);
 
     /// <summary>The connection a call means (<see cref="MySqlCatalog.Find"/>), or null with the refusal: none defined, none named among several, or a name that matches none (the names listed).</summary>
     public MySqlNamedConnection? Resolve(string? name, out SqlRun? refused)
@@ -78,6 +91,20 @@ public sealed class MySqlAccess
     /// <summary>Whether the server is MariaDB (its version says so), else MySQL.</summary>
     public static bool IsMariaDb(string? serverVersion) => serverVersion?.Contains("MariaDB", StringComparison.OrdinalIgnoreCase) == true;
 
+    /// <summary>The connections whose unchecked TLS was noted this run (2026-10-24, decision DB1: once a run each, in the log).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> s_tlsNoted = new(StringComparer.OrdinalIgnoreCase);
+
+    private static void NoteUncheckedTls(string name, bool checkedTls)
+    {
+        if (!checkedTls && s_tlsNoted.TryAdd(name, 0))
+        {
+            DiagnosticLog.Warn(MySqlConfigFile.Category, Sql.SqlText.TlsUncheckedLogLine("MySQL", name));
+        }
+    }
+
+    /// <summary>Whether a failed open says the password is wrong (1045, access denied): the sign-in guard holds it (2026-10-24, review K1).</summary>
+    public static bool WrongPassword(Exception ex) => ex is MySqlException { Number: 1045 };
+
     /// <summary>
     /// Runs <paramref name="statements"/> on the connection <paramref name="name"/> names (or the only one offered
     /// when blank), in the connection's own database (2026-10-09: the one it reaches; a session in any other runs nothing): each one's rows read to
@@ -94,6 +121,7 @@ public sealed class MySqlAccess
             return refused!;
         }
 
+        NoteUncheckedTls(target.Name, target.Config.TlsChecked);
         var secret = MySqlSecrets.Resolve(target);
         if (secret.Error is { } missing)
         {
@@ -103,7 +131,10 @@ public sealed class MySqlAccess
         await using var connection = new MySqlConnection(target.Config.Builder(secret.Value).ConnectionString);
         try
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            if (await Sql.DatabaseSignIn.OpenAsync(Sql.DatabaseSignIn.Call("mysql", target.Config.Endpoint, target.Config.User?.Trim(), secret.Value, WrongPassword), connection.OpenAsync, cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, Sql.SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.Endpoint, MySqlConfigFile.Family.Tab), target.Name);
+            }
         }
         catch (MySqlException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -126,12 +157,27 @@ public sealed class MySqlAccess
         try
         {
             await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds), timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            if (await ModeRefusalAsync(connection, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } kept)
+            {
+                return SqlRun.Refused(SqlOutcome.Failed, kept, target.Name);
+            }
+
+            // The session read-only as well as the transaction (2026-10-24, found live for the database review's S16: a CREATE TABLE commits the
+            // READ ONLY transaction it stands in and then runs, on MySQL 8.4 and MariaDB 11 alike; with the session's access mode read-only
+            // the server refuses it, ERROR 1792). A pooled session is reset before its next use.
+            await ExecuteAsync(connection, null, ReadOnlySessionStatement, timeoutSeconds, cancellationToken).ConfigureAwait(false);
             await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, isReadOnly: true, cancellationToken).ConfigureAwait(false);
             try
             {
                 foreach (string sql in statements)
                 {
-                    grids.Add(await ReadAsync(connection, transaction, sql, parameters, maxRows, timeoutSeconds, cancellationToken).ConfigureAwait(false));
+                    // One deadline for the whole call (2026-10-24, the database review's O13: each statement had the full timeout).
+                    if (SqlDeadline.Left(watch, timeoutSeconds) is not (> 0 and var left))
+                    {
+                        return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
+                    }
+
+                    grids.Add(await ReadAsync(connection, transaction, sql, parameters, maxRows, left, cancellationToken).ConfigureAwait(false));
                 }
             }
             finally
@@ -183,6 +229,7 @@ public sealed class MySqlAccess
             return SqlRun.Refused(SqlOutcome.ReadOnlyConnection, "", target.Name);
         }
 
+        NoteUncheckedTls(target.Name, target.Config.TlsChecked);
         var secret = MySqlSecrets.Resolve(target);
         if (secret.Error is { } missing)
         {
@@ -192,7 +239,10 @@ public sealed class MySqlAccess
         await using var connection = new MySqlConnection(target.Config.Builder(secret.Value).ConnectionString);
         try
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            if (await Sql.DatabaseSignIn.OpenAsync(Sql.DatabaseSignIn.Call("mysql", target.Config.Endpoint, target.Config.User?.Trim(), secret.Value, WrongPassword), connection.OpenAsync, cancellationToken).ConfigureAwait(false))
+            {
+                return SqlRun.Refused(SqlOutcome.ConnectFailed, Sql.SqlText.SignInHeld(target.Config.User?.Trim() ?? "", target.Config.Endpoint, MySqlConfigFile.Family.Tab), target.Name);
+            }
         }
         catch (MySqlException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -216,9 +266,16 @@ public sealed class MySqlAccess
         try
         {
             await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds), timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            if (await ModeRefusalAsync(connection, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } kept)
+            {
+                return SqlRun.Refused(SqlOutcome.Failed, kept, target.Name);
+            }
+
+            // Autocommit set here, never the server's default trusted (2026-10-24, the database review's H4: under autocommit=0 or an
+            // init_connect that turns it off, the change said it was made and was audited, then the pool's reset rolled it back).
+            await ExecuteAsync(connection, null, AutocommitStatement, timeoutSeconds, cancellationToken).ConfigureAwait(false);
             await using var command = new MySqlCommand(sql, connection) { CommandTimeout = timeoutSeconds };
-            var named = MySqlReadOnlyGate.Binds(sql);
-            foreach (var parameter in parameters.Where(p => named.Contains(p.Name, StringComparer.OrdinalIgnoreCase)))
+            foreach (var parameter in Bound(sql, parameters))
             {
                 command.Parameters.Add(Bind(parameter));
             }
@@ -254,6 +311,12 @@ public sealed class MySqlAccess
         return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, grids, watch.Elapsed) { Changes = changes };
     }
 
+    /// <summary>What a change's session runs before its statement, so the statement commits on its own (H4).</summary>
+    public const string AutocommitStatement = "SET SESSION autocommit = 1";
+
+    /// <summary>The read path's session access mode (S16): every transaction of the session read-only, the implicit ones DDL makes too.</summary>
+    public const string ReadOnlySessionStatement = "SET SESSION TRANSACTION READ ONLY";
+
     /// <summary>
     /// The session's own statement, before the transaction: <c>sql_mode</c> without <c>NO_BACKSLASH_ESCAPES</c> and
     /// <c>ANSI_QUOTES</c> (an empty slot the two leave is one the server accepts), and the statement time cap in the server's
@@ -264,7 +327,31 @@ public sealed class MySqlAccess
         string cap = IsMariaDb(serverVersion)
             ? "SESSION max_statement_time = " + timeoutSeconds.ToString(CultureInfo.InvariantCulture)
             : "SESSION max_execution_time = " + (timeoutSeconds * 1000L).ToString(CultureInfo.InvariantCulture);
-        return "SET SESSION sql_mode = REPLACE(REPLACE(@@SESSION.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'ANSI_QUOTES', ''), " + cap;
+        // group_concat_max_len raised (2026-10-24, the database review's E12): MySQL's 1,024 bytes cut an index's key list silently.
+        return "SET SESSION sql_mode = " + ModeStripped + ", " + cap + ", SESSION group_concat_max_len = 1048576";
+    }
+
+    /// <summary>
+    /// The modes the gate's lexing needs off: the two that change how a string or a name is read, and every combination mode that turns
+    /// one of them on (2026-10-24, the database review's E1: MySQL's <c>ANSI</c> and MariaDB's <c>ORACLE</c>, <c>MSSQL</c>, <c>DB2</c>,
+    /// <c>POSTGRESQL</c>, <c>MAXDB</c> each carry <c>ANSI_QUOTES</c>, and with the word left in <c>@@sql_mode</c> the SET turned it back on — the
+    /// gate then read <c>"…"</c> as a string where the server read a name).
+    /// </summary>
+    public static readonly IReadOnlyList<string> StrippedModes = ["ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "ANSI", "ORACLE", "MSSQL", "DB2", "POSTGRESQL", "MAXDB"];
+
+    /// <summary>The session's mode with every one of <see cref="StrippedModes"/> taken out as a whole word.</summary>
+    public static readonly string ModeStripped =
+        "TRIM(BOTH ',' FROM " + StrippedModes.Aggregate("CONCAT(',', @@SESSION.sql_mode, ',')", (expression, mode) => "REPLACE(" + expression + ", '," + mode + ",', ',')") + ")";
+
+    /// <summary>
+    /// The session's mode read back after the SET, the call refused unless every one of <see cref="StrippedModes"/> is gone (2026-10-24, review
+    /// E1, mechanism 7: a layer that did not hold refuses the call rather than run on a gate that reads the text another way). Null when it held.
+    /// </summary>
+    private static async Task<string?> ModeRefusalAsync(MySqlConnection connection, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        await using var command = new MySqlCommand("SELECT @@SESSION.sql_mode", connection) { CommandTimeout = timeoutSeconds };
+        string mode = Convert.ToString(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) ?? "";
+        return MySqlText.ModeKept(mode, StrippedModes) is { } kept ? MySqlText.SessionModeKept(kept) : null;
     }
 
     /// <summary>Whether <paramref name="ex"/> is a timeout: the driver's command timeout, or the server's statement cap.</summary>
@@ -278,8 +365,7 @@ public sealed class MySqlAccess
     private static async Task<SqlGrid> ReadAsync(MySqlConnection connection, MySqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
     {
         await using var command = new MySqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds };
-        var named = MySqlReadOnlyGate.Binds(sql);
-        foreach (var parameter in parameters.Where(p => named.Contains(p.Name, StringComparer.OrdinalIgnoreCase)))
+        foreach (var parameter in Bound(sql, parameters))
         {
             command.Parameters.Add(Bind(parameter));
         }
@@ -315,6 +401,22 @@ public sealed class MySqlAccess
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The parameters a statement takes: those it names (a model's <c>@@version</c> is no parameter), or every one when the gate's lexer cannot
+    /// read it (2026-10-24, found live: the app's own CHECK query carries MariaDB's <c>/*M!100310 … */</c>, which the gate refuses, and its
+    /// <c>@db</c> went unbound). A model's text that does not lex never gets here: its gate refused it first.
+    /// </summary>
+    private static IEnumerable<SqlParameterValue> Bound(string sql, IReadOnlyList<SqlParameterValue> parameters)
+    {
+        if (MySqlReadOnlyGate.Tokenize(sql, out _) is null)
+        {
+            return parameters;
+        }
+
+        var named = MySqlReadOnlyGate.Binds(sql);
+        return parameters.Where(p => named.Contains(p.Name, StringComparer.OrdinalIgnoreCase));
+    }
+
     /// <summary>Rolls back what is left of the transaction; a connection the server already dropped has nothing to roll back.</summary>
     private static async Task RollBackAsync(MySqlTransaction transaction)
     {
@@ -332,6 +434,14 @@ public sealed class MySqlAccess
     }
 
     /// <summary>
+    /// A MySQL date as it is (2026-10-24, the database review's N10): a real one as every date is written, a zero or partly zero one as MySQL
+    /// writes it (<c>0000-00-00</c>), never a real-looking <c>0001-01-01</c>.
+    /// </summary>
+    public static string DateCell(MySqlDateTime date) =>
+        date.IsValidDateTime ? SqlText.Cell(date.GetDateTime())
+            : string.Create(CultureInfo.InvariantCulture, $"{date.Year:0000}-{date.Month:00}-{date.Day:00}") + (date.Hour + date.Minute + date.Second + date.Microsecond == 0 ? "" : string.Create(CultureInfo.InvariantCulture, $" {date.Hour:00}:{date.Minute:00}:{date.Second:00}"));
+
+    /// <summary>
     /// One cell as text: <see cref="SqlText.Cell"/> for what .NET holds; a <c>DECIMAL</c> past <see cref="decimal"/> (up to 65
     /// digits) as its <see cref="MySqlDecimal"/> text, every digit kept; what the client cannot read as <see cref="MySqlText.Unreadable"/>.
     /// </summary>
@@ -339,7 +449,11 @@ public sealed class MySqlAccess
     {
         try
         {
-            return reader.IsDBNull(ordinal) ? SqlText.Null : SqlText.Cell(reader.GetValue(ordinal));
+            return reader.IsDBNull(ordinal) ? SqlText.Null : reader.GetValue(ordinal) switch
+            {
+                MySqlDateTime date => DateCell(date),
+                var value => SqlText.Cell(value),
+            };
         }
         catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
         {
@@ -423,15 +537,22 @@ public sealed class MySqlAccess
                 continue;
             }
 
+            // Spaces count only inside the quotes (2026-10-24, the database review's O14: the parts were trimmed after unquoting, so a
+            // quoted name with a leading or trailing space lost it and named another object).
+            if (!quoted && char.IsWhiteSpace(c))
+            {
+                continue;
+            }
+
             current.Append(c);
         }
 
         parts.Add(current.ToString());
-        if (quoted || parts.Count > 2 || parts.Any(p => p.Trim().Length == 0))
+        if (quoted || parts.Count > 2 || parts.Any(p => p.Length == 0))
         {
             return null;
         }
 
-        return parts.Count == 1 ? (null, parts[0].Trim()) : (parts[0].Trim(), parts[1].Trim());
+        return parts.Count == 1 ? (null, parts[0]) : (parts[0], parts[1]);
     }
 }

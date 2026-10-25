@@ -19,11 +19,13 @@ public sealed class OracleToolsTests
 {
     private readonly AppSettingsData _settings = new() { OracleTools = true };
     private OracleCatalog _catalog = OracleCatalog.Empty;
+    private readonly OracleAccess _access;
     private readonly IReadOnlyList<AIFunction> _tools;
 
     public OracleToolsTests()
     {
-        _tools = ChatScreen.OracleTools(new OracleAccess(() => _catalog), () => _settings);
+        _access = new OracleAccess(() => _catalog);
+        _tools = ChatScreen.OracleTools(_access, () => _settings);
     }
 
     private T Tool<T>() where T : AIFunction => _tools.OfType<T>().Single();
@@ -145,6 +147,12 @@ public sealed class OracleToolsTests
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.t")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.all_orders")));   // its own, written out
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM hr.employees")));   // the names read first
+
+        // The names come back (2026-10-24, the database review's S3): the refusal is the boundary's, by layer.
+        _access.Names.Seed([[OracleBoundary.UserKind, "READER"], [OracleBoundary.UserKind, "HR"], [OracleBoundary.ViewKind, "ALL_TABLES"]]);
+        Assert.Equal(OracleText.Dictionary("ALL_TABLES", "READER"), await Invoke<OracleQueryTool>(("sql", "SELECT table_name FROM all_tables")));
+        Assert.Equal(OracleText.OtherSchema("HR", "READER"), await Invoke<OracleQueryTool>(("sql", "SELECT * FROM hr.employees")));
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<OracleQueryTool>(("sql", "SELECT * FROM reader.all_orders")));   // its own: the run
     }
 
     [Theory]

@@ -49,12 +49,31 @@ public static class OracleReadOnlyGate
     /// The packages (and types) a query may not call: they reach the network, the server's files, other sessions or the
     /// scheduler — state no rollback undoes, or a door out — or run SQL text of their own past this gate.
     /// </summary>
+    /// <remarks>
+    /// Swept against Oracle's PL/SQL Packages and Types Reference on 2026-10-24 (the database review's A5, C5, F8, L2, C4): <c>DBMS_DDL</c> runs
+    /// DDL; <c>DBMS_XSLPROCESSOR</c> reads a server file through a directory; <c>URIFACTORY</c>, <c>XDBURITYPE</c> and <c>DBURITYPE</c> fetch
+    /// what a URI names (another schema's rows, the repository, the network); <c>DBMS_SQLHASH</c> runs the SQL text it is given;
+    /// <c>APEX_WEB_SERVICE</c>, <c>UTL_DBWS</c> and <c>DBMS_LDAP_UTL</c> reach the network as the denied <c>UTL_HTTP</c> and <c>DBMS_LDAP</c> do;
+    /// <c>DBMS_XMLSAVE</c> runs DML, <c>DBMS_PARALLEL_EXECUTE</c> runs SQL text in chunks, <c>DBMS_DATAPUMP</c> and <c>DBMS_FILE_TRANSFER</c>
+    /// move files, <c>DBMS_XDB</c> and <c>DBMS_XDB_REPOS</c> write the XML repository, <c>DBMS_AW</c> runs OLAP DML, and <c>DBMS_RLS</c>,
+    /// <c>DBMS_REDACT</c> and <c>DBMS_FGA</c> change security policies. <see cref="DeniedMembers"/> holds the one member of an otherwise
+    /// harmless package that runs DDL.
+    /// </remarks>
     public static readonly IReadOnlySet<string> DeniedPackages = new HashSet<string>(StringComparer.Ordinal)
     {
         "UTL_HTTP", "UTL_TCP", "UTL_SMTP", "UTL_MAIL", "UTL_FILE", "UTL_INADDR", "HTTPURITYPE",
         "DBMS_LDAP", "DBMS_PIPE", "DBMS_ALERT", "DBMS_AQ", "DBMS_AQADM", "DBMS_SCHEDULER", "DBMS_JOB", "DBMS_LOCK",
         "DBMS_SQL", "DBMS_XMLGEN", "DBMS_XMLQUERY", "DBMS_XMLSTORE", "DBMS_JAVA", "DBMS_CLOUD", "DBMS_DEBUG_JDWP",
         "DBMS_NETWORK_ACL_ADMIN", "DBMS_BACKUP_RESTORE", "DBMS_SESSION", "DBMS_SYSTEM", "DBMS_REPAIR",
+        "DBMS_DDL", "DBMS_XSLPROCESSOR", "URIFACTORY", "XDBURITYPE", "DBURITYPE", "DBMS_SQLHASH", "APEX_WEB_SERVICE", "UTL_DBWS",
+        "DBMS_LDAP_UTL", "DBMS_XMLSAVE", "DBMS_PARALLEL_EXECUTE", "DBMS_DATAPUMP", "DBMS_FILE_TRANSFER", "DBMS_XDB", "DBMS_XDB_REPOS",
+        "DBMS_AW", "DBMS_RLS", "DBMS_REDACT", "DBMS_FGA",
+    };
+
+    /// <summary>Members of an otherwise allowed package a query or block may not call: <c>package.member</c> (A5).</summary>
+    public static readonly IReadOnlySet<string> DeniedMembers = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "DBMS_UTILITY.EXEC_DDL_STATEMENT",
     };
 
     /// <summary>The words Oracle reserves for changing data or the schema: never an unquoted name, so a query never needs them bare.</summary>
@@ -131,6 +150,12 @@ public static class OracleReadOnlyGate
                     return OracleText.Forbidden(quoted);
                 }
 
+                // A denied member under a quoted package name too (2026-10-24, the review of these fixes: "DBMS_UTILITY".EXEC_DDL_STATEMENT).
+                if (DeniedMembers.Contains(MemberOf(tokens, i)))
+                {
+                    return OracleText.Forbidden(MemberOf(tokens, i));
+                }
+
                 if (quoted == "NEXTVAL")
                 {
                     return OracleText.Forbidden("NEXTVAL (a sequence moves on, and no rollback moves it back)");
@@ -165,9 +190,16 @@ public static class OracleReadOnlyGate
                 return OracleText.Forbidden("NEXTVAL (a sequence moves on, and no rollback moves it back)");
             }
 
-            if (word == "EXTERNAL" && IsSymbol(next, "("))
+            // EXTERNAL MODIFY (…) too (2026-10-24, the database review's I3: 12.2's override of an external table's DEFAULT DIRECTORY and
+            // LOCATION reads other server files, and its PREPROCESSOR runs a program).
+            if (word == "EXTERNAL" && (IsSymbol(next, "(") || next is { Kind: TokenKind.Word, Text: "MODIFY" }))
             {
                 return OracleText.Forbidden("EXTERNAL(…) (an inline external table: files on the server)");
+            }
+
+            if (DeniedMembers.Contains(MemberOf(tokens, i)))
+            {
+                return OracleText.Forbidden(MemberOf(tokens, i));
             }
 
             if (word == "BFILENAME")
@@ -279,11 +311,21 @@ public static class OracleReadOnlyGate
                 continue;
             }
 
+            // A -- comment ends at either line end (2026-10-24, the database review's G10: Oracle's documentation says only "a line break";
+            // ending at a lone CR too keeps whatever follows one in this gate's sight — the safe side whichever Oracle does).
             if (c == '-' && At(sql, i + 1) == '-')
             {
-                int end = sql.IndexOf('\n', i);
+                int end = sql.IndexOfAny(['\n', '\r'], i);
                 Advance(end < 0 ? sql.Length : end);
                 continue;
+            }
+
+            // A literal's n, q or nq straight after a digit is refused (2026-10-24, review F7): a number ends at the letter, so 1q'[it's]' is 1 and
+            // a q-literal to the server — read here as a word and a plain literal, its end fell elsewhere. Unknown in the docs; refused either way.
+            if (i > 0 && char.IsAsciiDigit(sql[i - 1]) && (char.ToUpperInvariant(c) is 'N' or 'Q') && (At(sql, i + 1) == '\'' || (char.ToUpperInvariant(c) == 'N' && char.ToUpperInvariant(At(sql, i + 1)) == 'Q' && At(sql, i + 2) == '\'')))
+            {
+                error = OracleText.LiteralAfterNumber(startLine, startColumn);
+                return null;
             }
 
             if (c == '/' && At(sql, i + 1) == '*')
@@ -372,6 +414,16 @@ public static class OracleReadOnlyGate
     }
 
     private static char At(string text, int index) => index < text.Length ? text[index] : '\0';
+
+    /// <summary>The <c>package.member</c> a word at <paramref name="i"/> starts (<c>DBMS_UTILITY.EXEC_DDL_STATEMENT</c>), quoted parts upper-cased; "" for none.</summary>
+    internal static string MemberOf(IReadOnlyList<Token> tokens, int i)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+        return i + 2 < tokens.Count && tokens[i].Kind is TokenKind.Word or TokenKind.Quoted && tokens[i + 1] is { Kind: TokenKind.Symbol, Text: "." }
+            && tokens[i + 2].Kind is TokenKind.Word or TokenKind.Quoted
+            ? tokens[i].Text.ToUpperInvariant() + "." + tokens[i + 2].Text.ToUpperInvariant()
+            : "";
+    }
 
     private static bool IsWordStart(char c) => char.IsLetter(c);
 

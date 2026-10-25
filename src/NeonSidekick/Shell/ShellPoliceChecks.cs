@@ -152,6 +152,55 @@ public static partial class ShellPoliceChecks
         return null;
     }
 
+    /// <summary>
+    /// What the police read past an <c>execute_code</c> script (2026-10-24, the database review's Q3: the script itself was judged, the files it
+    /// runs never read): the script files its code names, as a line's are (<see cref="ScriptChecks"/>, a missing one passing — the code may
+    /// write it first), and each one under the SQLite, server-database and admin police. Null when they all pass.
+    /// </summary>
+    public static ShellPoliceRefusal? CodeScripts(CommandRequest request, string code, string workdir, WorkingDirectory files, AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(code);
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(effective);
+        if (!effective.ShellPolice)
+        {
+            return null;
+        }
+
+        var scripts = new Lazy<IReadOnlyList<(string Name, string Text)>>(() => SqlitePolice.ScriptFiles(code, workdir, files.Root));
+        if (ScriptChecks(request, code, workdir, files, effective, scripts, missingScriptsPass: true) is { } scripted)
+        {
+            return scripted;
+        }
+
+        var databases = files.Databases?.Invoke();
+        var servers = files.ServerDatabases?.Invoke();
+        var admin = files.AdminFamilies?.Invoke();
+        foreach (var (name, text) in databases is null && servers is null && admin is null ? [] : scripts.Value)
+        {
+            if (databases is not null && SqlitePolice.Find(text, script: true, databases) is { } sqlite)
+            {
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.SqliteLogLine(request, sqlite, name));
+                return new ShellPoliceRefusal(ShellText.SqlitePoliced, ShellText.SqliteShown(sqlite, name));
+            }
+
+            if (servers is not null && ServerDatabasePolice.Find(text, servers) is { } server)
+            {
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.ServerDatabaseLogLine(request, server.Family, server.Token, name));
+                return new ShellPoliceRefusal(ShellText.ServerDatabasePoliced(ServerDatabasePolice.FamilyOf(servers, server.Family)), ShellText.ServerDatabaseShown(server.Family, server.Token, name));
+            }
+
+            if (admin is not null && AdminPolice.Find(text, admin) is { } changed)
+            {
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.AdminLogLine(request, changed.Family, changed.Token, name));
+                return new ShellPoliceRefusal(ShellText.AdminPoliced(changed.Family), ShellText.AdminShown(changed.Family, changed.Token, name));
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>How many spill files <see cref="Spill"/> keeps; the oldest beyond go when it writes one.</summary>
     public const int SpillKept = 50;
 

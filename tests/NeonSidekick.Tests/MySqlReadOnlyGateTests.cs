@@ -16,7 +16,6 @@ public sealed class MySqlReadOnlyGateTests
     [InlineData("WITH RECURSIVE n AS (SELECT 1 AS i UNION ALL SELECT i + 1 FROM n WHERE i < 5) SELECT * FROM n")]
     [InlineData("# the newest first\nSELECT order_id FROM orders ORDER BY ordered_at DESC")]
     [InlineData("-- a comment ; DELETE FROM t\nSELECT 1")]
-    [InlineData("SELECT /*+ MAX_EXECUTION_TIME(1000) */ * FROM orders")]
     [InlineData("SELECT 'a;b', \"DROP TABLE t\" FROM dual")]
     [InlineData("SELECT 'it\\'s; DELETE FROM t' AS s")]
     [InlineData("SELECT 'it''s' AS s")]
@@ -105,7 +104,9 @@ public sealed class MySqlReadOnlyGateTests
         Assert.Equal("SELECT 'a\\'b' , \"c\" , `my`col` , @id , @@VERSION FROM T", MySqlReadOnlyGate.Show(tokens));
         Assert.Equal(["id", "Name"], MySqlReadOnlyGate.Binds("SELECT @id, @Name, @ID, @@version, '@skip' -- @also"));
         Assert.Equal("SELECT 1", MySqlReadOnlyGate.Body("SELECT 1; # done"));
-        Assert.Equal("/*+ BKA(t) */ SELECT 1", MySqlReadOnlyGate.Body("/*+ BKA(t) */ SELECT 1 /* tail */"));
+        // An optimizer hint is refused since 2026-10-24 (the database review's A12: SET_VAR and MAX_EXECUTION_TIME(0) lift the session's
+        // limits), so the body keeps none; DatabaseReadGateTests.MySql_Refuses holds the refusal.
+        Assert.NotNull(MySqlReadOnlyGate.Check("SELECT /*+ MAX_EXECUTION_TIME(1000) */ * FROM orders"));
     }
 
     [Fact]

@@ -77,15 +77,119 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The old Credential Manager entry of an edit removed (<paramref name="oldTarget"/>, set only for an entry under its name's
-    /// default target) once the save has put the password elsewhere: another name, or the file store.
+    /// default target) once the save has put the password elsewhere: another name, or the file store — unless an entry still reads it
+    /// (<paramref name="inUse"/>, 2026-10-24, the database review's N12: renaming the profile's <c>prod</c> deleted the default target the home's
+    /// <c>prod</c> still signed in with, for every profile).
     /// </summary>
-    private static void ForgetOldCredential(string? oldTarget, string? newTarget)
+    private static void ForgetOldCredential(string? oldTarget, string? newTarget, Func<string, bool>? inUse = null)
     {
-        if (oldTarget is not null && !string.Equals(oldTarget, newTarget, StringComparison.OrdinalIgnoreCase))
+        if (oldTarget is not null && !string.Equals(oldTarget, newTarget, StringComparison.OrdinalIgnoreCase) && inUse?.Invoke(oldTarget) != true)
         {
             WindowsCredentials.DeleteGeneric(oldTarget);
         }
     }
+
+    /// <summary>
+    /// The row of a choice page the stored word names, case and spaces ignored as the entry's own check reads it; the first row for none
+    /// (2026-10-24, the database review's N7: an exact match opened a stored <c>Verify-Full</c> on the first row, and Enter wrote the default,
+    /// silently dropping the certificate check).
+    /// </summary>
+    internal static int WordIndex(IReadOnlyList<string> words, string? stored) =>
+        Math.Max(0, words.ToList().FindIndex(w => string.Equals(w, stored?.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>A wizard's save refusal: "could not add" for a new entry, "could not change" for an edit (2026-10-24, the database review's K9).</summary>
+    private static string WizardSaveFailed(string? original, string name, string why) =>
+        original is null ? SqlText.ConnectionAddFailed(name, why) : SqlText.ConnectionChangeFailed(name, why);
+
+    /// <summary>
+    /// The database wizards' one save (2026-10-24, the database review's B13): the entry and its password in one write — a <c>file</c> store's
+    /// password sealed first and spliced in with the entry, a <c>credman</c> one written to the store before the entry, so a failed step leaves
+    /// the old entry and its password as they were (an edit replaced the entry without its password, then a failed password save left it with
+    /// none). Then the old credential of a rename let go (unless another entry in either file still reads it, N12). False when nothing was
+    /// written; each step's notice or error said.
+    /// </summary>
+    private bool SaveWizardEntry<TConfig, TNamed>(ConnectionFamily<TConfig, TNamed> family, string path, string otherPath, string? original, string name, TConfig config, string password, string? originalTarget)
+        where TConfig : class, ISignInConfig
+        where TNamed : class, INamedConnection<TConfig>
+    {
+        string? sealedPassword = null;
+        string? storeNotice = null;
+        if (config.NeedsPassword)
+        {
+            if (config.InCredentialManager)
+            {
+                var (saved, notice) = family.Save(family.Named(name, config, path), password);
+                if (!saved)
+                {
+                    Sink.Error(notice);
+                    return false;
+                }
+
+                storeNotice = notice;
+            }
+            else
+            {
+                var encrypted = WindowsCredentials.Protect(password);
+                if (encrypted.Error is { } failed)
+                {
+                    Sink.Error(SqlText.PasswordSaveFailed(name, failed));
+                    return false;
+                }
+
+                sealedPassword = encrypted.Value;
+                storeNotice = SqlText.PasswordSavedToFile(name, path);
+            }
+        }
+
+        if ((original is { } old ? family.ReplaceConnection(path, old, name, config, sealedPassword) : family.AddConnection(path, name, config, sealedPassword)) is { } error)
+        {
+            Sink.Error(WizardSaveFailed(original, name, error));
+            return false;
+        }
+
+        Sink.Notice(original is null ? SqlText.ConnectionAdded(name, path) : SqlText.ConnectionChanged(name, path));
+        if (storeNotice is not null)
+        {
+            Sink.Notice(storeNotice);
+        }
+
+        ForgetOldCredential(originalTarget, config.NeedsPassword && config.InCredentialManager ? config.CredentialTarget(name) : null, target => CredentialInUse(family, target, path, otherPath));
+        return true;
+    }
+
+    /// <summary>Whether an entry of either file (usable or refused) still reads its password from <paramref name="target"/> (N12).</summary>
+    internal static bool CredentialInUse<TConfig, TNamed>(ConnectionFamily<TConfig, TNamed> family, string target, params string[] paths)
+        where TConfig : class, ISignInConfig
+        where TNamed : class, INamedConnection<TConfig>
+    {
+        foreach (string file in paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var (connections, problems) = family.Load(file);
+            var entries = connections.Select(c => (c.Name, c.Config)).Concat(problems.Where(p => p.Name is not null && p.Entry is TConfig).Select(p => (p.Name!, (TConfig)p.Entry!)));
+            if (entries.Any(e => e.Item2.InCredentialManager && string.Equals(e.Item2.CredentialTarget(e.Item1), target, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// An edit whose host moved (2026-10-24, the database review's E9, decision DB9): the stored password it read is let go, so the Password page
+    /// asks again and the save records the new host; the old one was sent to whatever host the entry now named, on Test and on save.
+    /// </summary>
+    private void ForgetKeptPasswordOnMove(string? originalHost, string host, bool kept, Action forget)
+    {
+        if (kept && originalHost is not null && !CredentialMark.SameHost(originalHost, host))
+        {
+            forget();
+            Sink.Notice(SqlWizardHostMovedNotice);
+        }
+    }
+
+    /// <summary>What an edit says when its host moved and the kept password was let go (E9). Pinned.</summary>
+    public const string SqlWizardHostMovedNotice = "The connection points at another server now, so its stored password is not sent there; type the password for it.";
 
     /// <summary>A copy of an entry through its serialiser, its <c>password</c> dropped (the draft holds the plain one).</summary>
     private static T CloneEntry<T>(T config, JsonTypeInfo<T> info, Action<T> dropPassword)

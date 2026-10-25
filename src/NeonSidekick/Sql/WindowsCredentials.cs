@@ -7,11 +7,13 @@ namespace NeonSidekick.Sql;
 /// <summary>
 /// What a credential call gave: the value, or why there is none (<see cref="Error"/> set, <see cref="Value"/> null). <see cref="User"/> is a
 /// stored credential's own account name when the store keeps one (2026-10-23, the admin review's N2/V1, decision DA2: the admin families
-/// check it against the entry's user before a password is sent); the SQL and UNC callers ignore it.
+/// check it against the entry's user before a password is sent); the SQL and UNC callers ignore it. <see cref="Host"/> (2026-10-24, the
+/// database review's H5, decision DB9) is the host a credential the app saved was saved for, read back from its comment; null for one written
+/// by <c>cmdkey</c>, <c>security</c> or before then.
 /// </summary>
-public readonly record struct CredentialResult(string? Value, string? Error, bool NotFound = false, string? User = null)
+public readonly record struct CredentialResult(string? Value, string? Error, bool NotFound = false, string? User = null, string? Host = null)
 {
-    public static CredentialResult Ok(string value, string? user = null) => new(value, null, User: user);
+    public static CredentialResult Ok(string value, string? user = null, string? host = null) => new(value, null, User: user, Host: host);
 
     public static CredentialResult Failed(string error, bool notFound = false) => new(null, error, notFound);
 }
@@ -54,9 +56,39 @@ public static unsafe partial class WindowsCredentials
     /// <summary>Whether <see cref="Protect"/> can encrypt here: Windows (DPAPI) and macOS (the Keychain, 2026-10-06).</summary>
     public static bool CanProtect => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
 
-    /// <summary>Whether <paramref name="value"/> is a value this layer wrote: DPAPI's, or the Keychain's on macOS.</summary>
+    /// <summary>Whether <paramref name="value"/> starts as a value this layer writes: DPAPI's, or the Keychain's on macOS.</summary>
     public static bool IsProtected(string? value) =>
         value is not null && (value.StartsWith(ProtectedPrefix, StringComparison.Ordinal) || value.StartsWith(KeychainPrefix, StringComparison.Ordinal));
+
+    /// <summary>The fixed start of every DPAPI blob: its version and the default provider's GUID.</summary>
+    private static ReadOnlySpan<byte> DpapiHeader => [0x01, 0x00, 0x00, 0x00, 0xD0, 0x8C, 0x9D, 0xDF, 0x01, 0x15, 0xD1, 0x11, 0x8C, 0x7A, 0x00, 0xC0, 0x4F, 0xC2, 0x97, 0xEB];
+
+    /// <summary>
+    /// Whether <paramref name="value"/> has the shape of a value this layer wrote, not just its prefix (2026-10-24, the database review's D10:
+    /// a typed plain password that happened to start <c>dpapi:</c> or <c>keychain:</c> counted as protected, so it stayed plain on disk and
+    /// every sign-in failed to decrypt it for good): base64 of a DPAPI blob (its fixed header), or of the Keychain's IV, ciphertext and tag.
+    /// A value with the prefix but not the shape is plain text and is encrypted like one. Pure; nothing is decrypted.
+    /// </summary>
+    public static bool IsSealed(string? value)
+    {
+        if (!IsProtected(value))
+        {
+            return false;
+        }
+
+        bool dpapi = value!.StartsWith(ProtectedPrefix, StringComparison.Ordinal);
+        byte[] blob;
+        try
+        {
+            blob = Convert.FromBase64String(value[(dpapi ? ProtectedPrefix.Length : KeychainPrefix.Length)..]);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return dpapi ? blob.AsSpan().StartsWith(DpapiHeader) : blob.Length >= 16 + 16 + 32 && (blob.Length - 16 - 32) % 16 == 0;
+    }
 
     /// <summary><paramref name="secret"/> encrypted for this Windows user on this machine: <c>dpapi:</c> and the blob in base64.</summary>
     public static CredentialResult Protect(string secret)
@@ -173,41 +205,62 @@ public static unsafe partial class WindowsCredentials
             return CredentialResult.Failed(code == ErrorNotFound ? SqlText.NoCredential(target) : Marshal.GetPInvokeErrorMessage(code), notFound: code == ErrorNotFound);
         }
 
+        var blob = new Span<byte>(credential->CredentialBlob, (int)credential->CredentialBlobSize);
         try
         {
-            // cmdkey and CredWriteW below store the password as UTF-16; a blob of odd length is someone else's shape, read as UTF-8.
-            var blob = new ReadOnlySpan<byte>(credential->CredentialBlob, (int)credential->CredentialBlobSize);
-            string secret = blob.Length % 2 == 0 ? Encoding.Unicode.GetString(blob) : Encoding.UTF8.GetString(blob);
-            return CredentialResult.Ok(secret, credential->UserName is null ? null : new string(credential->UserName));
+            // An empty secret is no credential (2026-10-24, the database review's K4: cmdkey /generic:… with no /pass stored one, and the app
+            // signed in with an empty password rather than say the password was never set).
+            if (blob.IsEmpty)
+            {
+                return CredentialResult.Failed(SqlText.EmptyCredential(target));
+            }
+
+            var mark = CredentialMark.Parse(credential->Comment is null ? null : new string(credential->Comment));
+            string secret = mark.Wide is { } wide ? (wide ? Encoding.Unicode.GetString(blob) : Encoding.UTF8.GetString(blob)) : CredentialMark.Decode(blob);
+            return CredentialResult.Ok(secret, credential->UserName is null ? null : new string(credential->UserName), mark.Host);
         }
         finally
         {
+            // Zeroed before it goes back (2026-10-24, review K5: CredFree left the password in the freed heap).
+            blob.Clear();
             CredFree(credential);
         }
     }
 
-    /// <summary>Writes (or replaces) the Generic credential <paramref name="target"/>: <paramref name="user"/> and <paramref name="secret"/>, kept on this machine for this Windows user.</summary>
-    public static CredentialResult WriteGeneric(string target, string user, string secret)
+    /// <summary>
+    /// Writes (or replaces) the Generic credential <paramref name="target"/>: <paramref name="user"/> and <paramref name="secret"/>, kept on this
+    /// machine for this Windows user. Its comment marks the secret as the app's UTF-16 (K3) and, given <paramref name="host"/>, records the host
+    /// it is for (DB9): a read for another host is refused by the caller.
+    /// </summary>
+    public static CredentialResult WriteGeneric(string target, string user, string secret, string? host = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(secret);
         if (!OperatingSystem.IsWindows())
         {
-            return OperatingSystem.IsMacOS() ? MacKeychain.WriteGeneric(target, user, secret) : CredentialResult.Failed(NotWindows);
+            return OperatingSystem.IsMacOS() ? MacKeychain.WriteGeneric(target, user, secret, host) : CredentialResult.Failed(NotWindows);
+        }
+
+        if (secret.Length == 0)
+        {
+            return CredentialResult.Failed(SqlText.EmptyCredential(target));
         }
 
         byte[] blob = Encoding.Unicode.GetBytes(secret);
+        string comment = CredentialMark.Format(wide: true, host);
         try
         {
             fixed (char* targetPointer = target)
             fixed (char* userPointer = user)
+            fixed (char* commentPointer = comment)
             fixed (byte* blobPointer = blob)
             {
                 var credential = new Credential
                 {
                     Type = CredTypeGeneric,
                     TargetName = targetPointer,
+                    Comment = commentPointer,
                     UserName = userPointer,
                     CredentialBlob = blobPointer,
                     CredentialBlobSize = (uint)blob.Length,

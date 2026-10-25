@@ -115,6 +115,22 @@ public static class SqlReadOnlyGate
 
         public override void Visit(NextValueForExpression node) => Mark("NEXT VALUE FOR");
 
+        /// <summary>
+        /// A locking table hint (2026-10-24, the database review's B1): TABLOCKX, XLOCK, UPDLOCK, HOLDLOCK (and its SERIALIZABLE and
+        /// REPEATABLEREAD kin) and PAGLOCK take or keep locks to the transaction's end — an exclusive one blocks every other user until the
+        /// rollback or the timeout.
+        /// </summary>
+        public override void Visit(TableHint node)
+        {
+            if (node.HintKind is TableHintKind.TabLockX or TableHintKind.XLock or TableHintKind.UpdLock or TableHintKind.HoldLock
+                or TableHintKind.Serializable or TableHintKind.RepeatableRead or TableHintKind.PagLock)
+            {
+                Mark(node.HintKind.ToString().ToUpperInvariant() + " (a locking hint)");
+            }
+
+            base.Visit(node);
+        }
+
         /// <summary>A four-part name (<c>server.db.schema.table</c>) is a linked server: another machine, under whatever login the link maps to.</summary>
         public override void Visit(SchemaObjectName node)
         {

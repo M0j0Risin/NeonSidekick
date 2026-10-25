@@ -41,16 +41,19 @@ public static class MySqlCatalogQueries
     public const string Resolve =
         """
         SELECT t.TABLE_SCHEMA AS `database`, t.TABLE_NAME AS `name`, CASE t.TABLE_TYPE WHEN 'VIEW' THEN 'view' ELSE 'table' END AS `type`,
-               CASE WHEN t.TABLE_NAME = @name THEN 1 ELSE 0 END AS `exact`
+               CASE WHEN CAST(t.TABLE_NAME AS BINARY) = CAST(@name AS BINARY) THEN 1 ELSE 0 END AS `exact`
         FROM information_schema.TABLES t
-        WHERE t.TABLE_SCHEMA = DATABASE() AND LOWER(t.TABLE_NAME) = LOWER(@name)
+        WHERE t.TABLE_SCHEMA = DATABASE() AND LOWER(t.TABLE_NAME) = LOWER(@name) AND (@db IS NULL OR t.TABLE_SCHEMA = @db)
         ORDER BY 4 DESC, 2
         """;
 
     /// <summary>
     /// Six statements on the object <c>@db</c>.<c>@name</c>, read by position in <see cref="MySqlText.Describe"/>: 0 its columns
     /// (the type as declared, nullability, extra, default, primary-key position, comment); 1 the foreign keys out of and into it;
-    /// 2 its indexes with their key columns; 3 its own comment; 4 its CHECK constraints; 5 its triggers.
+    /// 2 its indexes with their key columns; 3 its own comment; 4 its CHECK constraints; 5 its triggers. Since 2026-10-24 (the database
+    /// review): a functional key part reads <c>(an expression)</c> (O4: its NULL column name made the CONCAT NULL, and GROUP_CONCAT dropped
+    /// it), and on MariaDB, whose CHECK names are per table, the checks are joined by table too through a MariaDB-only comment (O3: other
+    /// tables' clauses of the same name were listed).
     /// </summary>
     public static readonly IReadOnlyList<string> Describe =
     [
@@ -74,7 +77,7 @@ public static class MySqlCatalogQueries
         """,
         """
         SELECT s.INDEX_NAME AS `index`, MAX(s.INDEX_TYPE) AS `kind`, MIN(s.NON_UNIQUE) AS `non_unique`,
-               GROUP_CONCAT(CONCAT(s.COLUMN_NAME, IFNULL(CONCAT('(', s.SUB_PART, ')'), ''), CASE WHEN s.COLLATION = 'D' THEN ' DESC' ELSE '' END)
+               GROUP_CONCAT(CONCAT(COALESCE(s.COLUMN_NAME, '(an expression)'), IFNULL(CONCAT('(', s.SUB_PART, ')'), ''), CASE WHEN s.COLLATION = 'D' THEN ' DESC' ELSE '' END)
                             ORDER BY s.SEQ_IN_INDEX SEPARATOR ', ') AS `keys`
         FROM information_schema.STATISTICS s
         WHERE s.TABLE_SCHEMA = @db AND s.TABLE_NAME = @name
@@ -91,7 +94,7 @@ public static class MySqlCatalogQueries
         FROM information_schema.CHECK_CONSTRAINTS cc
         JOIN information_schema.TABLE_CONSTRAINTS tc
           ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME AND tc.CONSTRAINT_TYPE = 'CHECK'
-        WHERE tc.TABLE_SCHEMA = @db AND tc.TABLE_NAME = @name
+        WHERE tc.TABLE_SCHEMA = @db AND tc.TABLE_NAME = @name /*M!100310 AND cc.TABLE_NAME = tc.TABLE_NAME */
         ORDER BY 1
         """,
         """
@@ -131,7 +134,7 @@ public static class MySqlCatalogQueries
     public const string Indexes =
         """
         SELECT CONCAT(s.TABLE_SCHEMA, '.', s.TABLE_NAME) AS `table`, s.INDEX_NAME AS `index`, MAX(s.INDEX_TYPE) AS `kind`, MIN(s.NON_UNIQUE) AS `non_unique`,
-               GROUP_CONCAT(CONCAT(s.COLUMN_NAME, IFNULL(CONCAT('(', s.SUB_PART, ')'), ''), CASE WHEN s.COLLATION = 'D' THEN ' DESC' ELSE '' END)
+               GROUP_CONCAT(CONCAT(COALESCE(s.COLUMN_NAME, '(an expression)'), IFNULL(CONCAT('(', s.SUB_PART, ')'), ''), CASE WHEN s.COLLATION = 'D' THEN ' DESC' ELSE '' END)
                             ORDER BY s.SEQ_IN_INDEX SEPARATOR ', ') AS `keys`,
                MAX(s.CARDINALITY) AS `cardinality`, s.TABLE_SCHEMA AS `database`, s.TABLE_NAME AS `name`
         FROM information_schema.STATISTICS s

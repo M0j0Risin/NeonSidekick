@@ -880,7 +880,7 @@ public partial class ToolsMenuTests : IDisposable
         Type("neon");
         Push(Keys.Enter);                         // file
         Type("s3cret");
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // verify-full
+        Push(Keys.Enter);                         // verify-full, where a new connection's pick starts since 2026-10-24 (the database review's DB1)
         Push(Keys.Enter);                         // the default timeout
         Push(Keys.Enter);                         // read, the default access (2026-10-05)
         Type("the sample shop");

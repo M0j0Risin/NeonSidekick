@@ -58,8 +58,11 @@ internal static class SqliteCheck
         var passed = bypasses.Where(b => SqliteReadOnlyGate.Check(b) is null).ToList();
         checks.Add(new SmokeCheck("sqlite:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
 
+        // The read-only refusal itself (2026-10-24, the database review's D9: any failure passed — a table already there, a locked file —
+        // where only SQLite's "attempt to write a readonly database" proves the layers held).
         var write = await Run(["CREATE TABLE neonsidekick_check (a)"], timeoutSeconds).ConfigureAwait(false);
-        checks.Add(new SmokeCheck("sqlite:readonly", write.Outcome == SqlOutcome.Failed, write.Outcome == SqlOutcome.Failed ? "a write past the gate refused: " + write.Detail : "a write was not refused: " + write.Outcome));
+        bool refused = write.Outcome == SqlOutcome.Failed && write.Detail.Contains("readonly", StringComparison.OrdinalIgnoreCase);
+        checks.Add(new SmokeCheck("sqlite:readonly", refused, refused ? "a write past the gate refused: " + write.Detail : "a write was not refused as read-only: " + write.Outcome + " " + write.Detail));
 
         var slow = await Run([SlowQuery], 1).ConfigureAwait(false);
         checks.Add(new SmokeCheck("sqlite:interrupt", slow.Outcome == SqlOutcome.Timeout, slow.Outcome == SqlOutcome.Timeout ? $"stopped at 1 s ({(long)slow.Elapsed.TotalMilliseconds} ms)" : "not stopped: " + slow.Outcome));

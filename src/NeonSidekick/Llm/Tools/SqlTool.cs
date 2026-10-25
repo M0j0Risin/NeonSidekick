@@ -12,28 +12,19 @@ namespace NeonSidekick.Llm.Tools;
 /// <see cref="SqlText.NoDatabaseArgument"/>) — the batch timeout, and the table lookup <c>sql_describe</c>, <c>sql_relationships</c> and <c>sql_indexes</c> need. A refused
 /// run is <see cref="SqlText.Error"/>'s sentence, every one starting <c>Error:</c>.
 /// </summary>
-public abstract class SqlTool : AIFunction
+public abstract class SqlTool : ServerTool<SqlAccess>
 {
-    public const string ConnectionArgument = "connection";
     /// <summary>The argument the tools took until 2026-10-09; a call that still sends it is refused.</summary>
     public const string DatabaseArgument = "database";
-    public const string TableArgument = "table";
 
     /// <summary>The <c>connection</c> property the server-reaching schemas carry.</summary>
     public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The SQL connection's name (sql_connections lists them); it may be left out only when there is one.\" }";
 
-    private readonly SqlAccess _sql;
-    private readonly Func<AppSettingsData> _effective;
-
-    protected SqlTool(SqlAccess sql, Func<AppSettingsData> effective)
+    protected SqlTool(SqlAccess sql, Func<AppSettingsData> effective) : base(sql, effective)
     {
-        _sql = sql ?? throw new ArgumentNullException(nameof(sql));
-        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
 
-    protected SqlAccess Sql => _sql;
-
-    protected AppSettingsData Effective => _effective();
+    protected SqlAccess Sql => Access;
 
     /// <summary>
     /// The characters of table a query tool's answer may carry (2026-10-01, the user's ask): <c>SQL query result max chars</c> (named so on 2026-10-03, the user's ask; <c>Query result max chars</c> before)
@@ -53,26 +44,14 @@ public abstract class SqlTool : AIFunction
         return Math.Clamp(effective.SqlQueryTimeoutSeconds, AppSettingsData.MinSqlQueryTimeoutSeconds, AppSettingsData.MaxSqlQueryTimeoutSeconds);
     }
 
-    /// <summary>
-    /// Every SQL tool's call: refused when it still names a <c>database</c> (a model that remembers the argument would otherwise
-    /// believe it read another database), else the tool's own <see cref="InvokeToolAsync"/>.
-    /// </summary>
-    protected sealed override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(arguments);
-        return Optional(arguments, DatabaseArgument) is not null ? new(SqlText.NoDatabaseArgument) : InvokeToolAsync(arguments, cancellationToken);
-    }
+    /// <summary>Every SQL tool refuses a call that still names a <c>database</c> (<see cref="ServerTool{TAccess}.InvokeCoreAsync"/>).</summary>
+    protected sealed override string RetiredArgument => DatabaseArgument;
 
-    /// <summary>The tool's own call, its arguments read.</summary>
-    protected abstract ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken);
-
-    /// <summary>A string argument, or null when blank.</summary>
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    protected sealed override string RetiredRefusal => SqlText.NoDatabaseArgument;
 
     /// <summary>Runs one of the app's catalog batches on the call's connection (in its database), capped at <see cref="SqlAccess.MaxCatalogRows"/>.</summary>
-    protected Task<SqlRun> CatalogAsync(string? connection, string sql, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _sql.RunAsync(connection, sql, parameters, SqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+    protected async Task<SqlRun> CatalogAsync(string? connection, string sql, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
+        SqlText.CatalogRun(await Sql.RunAsync(connection, sql, parameters, SqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken, keepLaterSets: true).ConfigureAwait(false));
 
     /// <summary>
     /// The model's own SQL held to the connection's database (<see cref="SqlBoundary"/>): null when it keeps to it, or when the
@@ -80,9 +59,10 @@ public abstract class SqlTool : AIFunction
     /// database's or an alias's column method sends for the server's database names (<see cref="SqlCatalogQueries.DatabaseNames"/>,
     /// kept a minute, <see cref="SqlAccess.Names"/>; the review, 2026-10-09); a failed read of them is its error, never a pass.
     /// </summary>
-    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
+    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken, SqlAccess? via = null)
     {
-        if (Sql.Resolve(connection, out _) is not { } target)
+        var access = via ?? Sql;
+        if (access.Resolve(connection, out _) is not { } target)
         {
             return null;
         }
@@ -94,9 +74,36 @@ public abstract class SqlTool : AIFunction
             return refused;
         }
 
-        var (rows, failed) = await Sql.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.Server, database),
-            token => Sql.RunAsync(connection, SqlCatalogQueries.DatabaseNames, [], 100_000, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
-        return failed is not null ? SqlText.Error(failed) : SqlBoundary.Check(sql, database, rows!.Select(r => r[0]));
+        var (rows, failed) = await ReadNamesAsync(access.Names, BoundaryNames.Key(target.Name, target.Config.Server, database),
+            token => access.RunAsync(connection, SqlCatalogQueries.DatabaseNames, [], 100_000, TimeoutSeconds(Effective), token), SqlText.Error, cancellationToken).ConfigureAwait(false);
+        if (failed is not null)
+        {
+            return failed;
+        }
+
+        // A partial list (no VIEW ANY DATABASE) is made whole for this statement's heads: a database the login can open joins it, one it cannot
+        // is out of reach anyway (2026-10-24, the review of these fixes).
+        var names = rows!.Select(r => r[0]).ToList();
+        if (SqlBoundary.UnsettledHeads(sql, database, names) is { Count: > 0 } unsettled)
+        {
+            foreach (string head in unsettled)
+            {
+                var probe = await access.RunAsync(connection, SqlCatalogQueries.CanOpen, [new SqlParameterValue("name", head)], 1, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+                if (probe.Outcome != SqlOutcome.Ok)
+                {
+                    return SqlText.Error(probe);
+                }
+
+                if (probe.Grids.FirstOrDefault()?.Rows.FirstOrDefault()?[0] == "1")
+                {
+                    names.Add(head);
+                }
+            }
+
+            names.Remove("");
+        }
+
+        return SqlBoundary.Check(sql, database, names);
     }
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's id, schema, name and kind — or the <c>Error:</c> sentence.</summary>
@@ -114,7 +121,7 @@ public abstract class SqlTool : AIFunction
     protected async Task<TableMatch> FindTableAsync(string? connection, string table, CancellationToken cancellationToken)
     {
         if (SqlBoundary.NamedDatabase(table) is { } named && Sql.Resolve(connection, out _) is { } target
-            && SqlBoundary.IsOther(named, target.Config.Database ?? ""))
+            && (SqlBoundary.IsOther(named, target.Config.Database ?? "") || SqlBoundary.IsCaseTwin(named, target.Config.Database ?? "")))   // D4: OBJECT_ID would resolve a twin
         {
             return TableMatch.Refused(SqlText.OtherDatabase(named, target.Config.Database!.Trim()));
         }

@@ -34,7 +34,7 @@ public static class SqlWriteGate
             return error;
         }
 
-        var forbidden = new Forbidden();
+        var forbidden = new Forbidden(statement);
         statement.Accept(forbidden);
         if (forbidden.Found is { } found)
         {
@@ -74,7 +74,7 @@ public static class SqlWriteGate
             return null;
         }
 
-        var forbidden = new Forbidden();
+        var forbidden = new Forbidden(statement);
         statement.Accept(forbidden);
         return forbidden.Found is null ? Kinds(statement) : null;
     }
@@ -175,6 +175,27 @@ public static class SqlWriteGate
                     return (name, ServerWriteText.Denied);
                 }
 
+                // sp_rename's object type may be DATABASE (2026-10-24, the database review's T1: it renamed the connection's database), so
+                // that one is refused, and an object type the gate cannot read (not a string written out) with it.
+                if (name.Equals("sp_rename", StringComparison.OrdinalIgnoreCase) && specification.ExecutableEntity is { } entity)
+                {
+                    var parameters = entity.Parameters;
+                    var objtype = parameters.FirstOrDefault(p => p.Variable?.Name?.Equals("@objtype", StringComparison.OrdinalIgnoreCase) == true)
+                        ?? (parameters.Count >= 3 && parameters[2].Variable is null ? parameters[2] : null);
+                    if (objtype is not null)
+                    {
+                        if (objtype.ParameterValue is not StringLiteral literal)
+                        {
+                            return ("sp_rename with an object type not written out", ServerWriteText.Dynamic);
+                        }
+
+                        if (literal.Value.Trim().Equals("DATABASE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return ("sp_rename of a database", ServerWriteText.ServerWide);
+                        }
+                    }
+                }
+
                 return null;
             case ExecutableProcedureReference:
                 return ("EXEC of a procedure named by a variable", ServerWriteText.Dynamic);
@@ -216,6 +237,34 @@ public static class SqlWriteGate
         if (statement is CreateOrAlterViewStatement)
         {
             found.Add(ServerStatementKind.Alter);   // it changes a view that is there (the review, 2026-10-05)
+        }
+
+        // 2026-10-24, the database review's Phase 8: what a statement does beyond its type's kind. ALTER TABLE … DROP loses a column or a
+        // constraint, SWITCH moves a partition's rows out (B4); ENABLE/DISABLE TRIGGER changes which code runs (G13); ALTER INDEX …
+        // DISABLE makes a table with a clustered index unreadable and drops an indexed view's rows (G14); WITH (DROP_EXISTING = ON) replaces
+        // an index that is there (M5).
+        switch (statement)
+        {
+            case AlterTableDropTableElementStatement:
+                found.Add(ServerStatementKind.Drop);
+                break;
+            case AlterTableSwitchStatement:
+                found.Add(ServerStatementKind.Delete);
+                found.Add(ServerStatementKind.Data);
+                break;
+            case AlterTableTriggerModificationStatement:
+                found.Add(ServerStatementKind.Procedures);
+                break;
+            case AlterIndexStatement { AlterIndexType: AlterIndexType.Disable }:
+                found.Add(ServerStatementKind.Drop);
+                break;
+        }
+
+        var dropExisting = new DropExisting();
+        statement.Accept(dropExisting);
+        if (dropExisting.Found)
+        {
+            found.Add(ServerStatementKind.Drop);
         }
 
         if (kind is ServerStatementKind.Data or ServerStatementKind.Delete || statement is SelectStatement)
@@ -283,14 +332,100 @@ public static class SqlWriteGate
             Kinds.Add(ServerStatementKind.Procedures);
             base.Visit(node);
         }
+
+        /// <summary>An <c>OUTPUT … INTO</c> writes the rows it outputs into another table (2026-10-24, the database review's T2).</summary>
+        public override void Visit(OutputIntoClause node)
+        {
+            Kinds.Add(ServerStatementKind.Data);
+            base.Visit(node);
+        }
+    }
+
+    /// <summary>Whether an index option says <c>DROP_EXISTING = ON</c> (M5).</summary>
+    private sealed class DropExisting : TSqlFragmentVisitor
+    {
+        public bool Found { get; private set; }
+
+        public override void Visit(IndexStateOption node)
+        {
+            Found |= node.OptionKind == IndexOptionKind.DropExisting && node.OptionState == OptionState.On;
+            base.Visit(node);
+        }
     }
 
     /// <summary>What is refused anywhere in the statement: the read gate's doors out (not <c>NEXT VALUE FOR</c>), and an <c>INSERT … EXEC</c> of a string or a system procedure.</summary>
-    private sealed class Forbidden : TSqlFragmentVisitor
+    private sealed class Forbidden(TSqlStatement top) : TSqlFragmentVisitor
     {
         public (string What, string Why)? Found { get; private set; }
 
         private void Mark(string what, string why) => Found ??= (what, why);
+
+        /// <summary>
+        /// A statement inside another — a routine's or trigger's body, a CREATE SCHEMA's elements — meets the top level's refusals
+        /// (2026-10-24, the database review's DB3, A18, C3: GRANT, CREATE LOGIN, ALTER ROLE, EXECUTE AS and the server-wide statements
+        /// passed inside a CREATE PROCEDURE), bar a transaction's own statements and SET, which a body may use.
+        /// </summary>
+        public override void Visit(TSqlStatement node)
+        {
+            if (!ReferenceEquals(node, top) && Refusal(node) is { } refused && refused.Why is not (ServerWriteText.OwnTransaction or ServerWriteText.Session))
+            {
+                Mark(refused.What + " inside the statement", refused.Why);
+            }
+
+            base.Visit(node);
+        }
+
+        /// <summary><c>EXEC OPENDATASOURCE(…).db.schema.proc</c> (M1): another server, as an ad hoc table reference is.</summary>
+        public override void Visit(AdHocDataSource node) => Mark("OPENDATASOURCE", ServerWriteText.Outside);
+
+        /// <summary>A routine's or trigger's <c>WITH EXECUTE AS</c> (I6, DB3): who it runs as.</summary>
+        public override void Visit(ExecuteAsClause node) => Mark("WITH EXECUTE AS", ServerWriteText.RunsAs);
+
+        /// <summary>A CLR routine's <c>EXTERNAL NAME assembly.class.method</c> (M3): code the gate cannot read.</summary>
+        public override void Visit(MethodSpecifier node) => Mark("EXTERNAL NAME (a CLR routine)", ServerWriteText.ForeignCode);
+
+        /// <summary>A trigger <c>ON ALL SERVER</c> (A4): a logon or server-wide DDL trigger, and DISABLE TRIGGER ALL ON ALL SERVER.</summary>
+        public override void Visit(TriggerObject node)
+        {
+            if (node.TriggerScope == TriggerScope.AllServer)
+            {
+                Mark("a trigger ON ALL SERVER", ServerWriteText.ServerWide);
+            }
+
+            base.Visit(node);
+        }
+
+        /// <summary><c>CREATE SCHEMA … AUTHORIZATION</c> (G17): who owns it is an account change, as ALTER AUTHORIZATION is.</summary>
+        public override void Visit(CreateSchemaStatement node)
+        {
+            if (node.Owner is not null)
+            {
+                Mark("CREATE SCHEMA … AUTHORIZATION", ServerWriteText.Accounts);
+            }
+
+            base.Visit(node);
+        }
+
+        /// <summary>
+        /// A synonym for a system object (I1): <c>CREATE SYNONYM dbo.x FOR sys.sp_executesql</c>, then <c>EXEC dbo.x</c>, ran any batch past
+        /// the EXEC's name check. Refused for a <c>sys</c> or <c>INFORMATION_SCHEMA</c> object, one in master or msdb, and any <c>sp_</c> or
+        /// <c>xp_</c> name.
+        /// </summary>
+        public override void Visit(CreateSynonymStatement node)
+        {
+            var target = node.ForName;
+            string? name = target?.BaseIdentifier?.Value;
+            string? schema = target?.SchemaIdentifier?.Value;
+            string? database = target?.DatabaseIdentifier?.Value;
+            if (name is not null && (name.StartsWith("sp_", StringComparison.OrdinalIgnoreCase) || name.StartsWith("xp_", StringComparison.OrdinalIgnoreCase)
+                || schema is { } s && (s.Equals("sys", StringComparison.OrdinalIgnoreCase) || s.Equals("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase))
+                || database is { } d && (d.Equals("master", StringComparison.OrdinalIgnoreCase) || d.Equals("msdb", StringComparison.OrdinalIgnoreCase))))
+            {
+                Mark("a synonym for a system object", ServerWriteText.Denied);
+            }
+
+            base.Visit(node);
+        }
 
         public override void Visit(OpenRowsetTableReference node) => Mark("OPENROWSET", ServerWriteText.Outside);
 
@@ -335,9 +470,9 @@ public static class SqlStatementKinds
         ServerStatementKind.Delete => "DELETE, TRUNCATE TABLE, a MERGE that deletes",
         ServerStatementKind.Create => "CREATE TABLE, INDEX, VIEW, SEQUENCE, TYPE, SCHEMA, SYNONYM; SELECT … INTO",
         ServerStatementKind.Alter => "ALTER TABLE, VIEW, SEQUENCE, SCHEMA; CREATE OR ALTER VIEW (with creating)",
-        ServerStatementKind.Drop => "DROP TABLE, INDEX, VIEW, SEQUENCE, TYPE, SCHEMA, SYNONYM, PROCEDURE, FUNCTION, TRIGGER",
+        ServerStatementKind.Drop => "DROP TABLE, INDEX, VIEW, SEQUENCE, TYPE, SCHEMA, SYNONYM, PROCEDURE, FUNCTION, TRIGGER; ALTER TABLE … DROP, ALTER INDEX … DISABLE",
         ServerStatementKind.Upkeep => "UPDATE STATISTICS, CREATE STATISTICS, ALTER INDEX",
-        ServerStatementKind.Procedures => "EXEC of a procedure (sp_rename and a few system ones); CREATE or ALTER PROCEDURE, FUNCTION, TRIGGER",
+        ServerStatementKind.Procedures => "EXEC of a procedure (sp_rename and a few system ones); CREATE or ALTER PROCEDURE, FUNCTION, TRIGGER (in T-SQL); ENABLE|DISABLE TRIGGER",
         _ => "SELECT",
     };
 

@@ -822,11 +822,28 @@ internal sealed partial class ChatScreen
             // A Ralph loop too (2026-10-18): its lock let go, the file and the log keep everything.
             StopRalphOnReset();
         }
+        ForgetAllows();
+    }
+
+    /// <summary>
+    /// Every "Allow for this session" let go: the camera, the screen, the bot check, the database changes, the project file (2026-10-24, the
+    /// database review's D3: a restored session kept them, so an allow given in one conversation ran another's changes unasked).
+    /// </summary>
+    private void ForgetAllows()
+    {
         _cameraAllowed = false;
         _screenAllowed = false;
         _botCheckAllowed = false;
-        _sqliteAllowed.Clear();
-        _databaseAllowed.Clear();
+        lock (_sqliteAllowed)
+        {
+            _sqliteAllowed.Clear();
+        }
+
+        lock (_databaseAllowed)
+        {
+            _databaseAllowed.Clear();
+        }
+
         _projectFileAllowed.Clear();
     }
 
@@ -1295,7 +1312,7 @@ internal sealed partial class ChatScreen
         _oracleTools = OracleTools(_oracle, _effective, AllowDatabaseWriteAsync);
         _mysql = new MySqlAccess(() => MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().MySqlConnectionsOffered));
         _mysqlTools = MySqlTools(_mysql, _effective, AllowDatabaseWriteAsync);
-        _sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqliteDatabasesOffered), () => _effective().SqliteSandboxFiles ? _files : null);
+        _sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqliteDatabasesOffered), () => _effective().SqliteSandboxFiles ? _files : null, () => UntickedSqliteFiles(_settings.ProfileDirectory, _settings.StorageDirectory, _effective().SqliteDatabasesOffered));
         // sqlite_execute (2026-10-05) asks on the camera's allow pane, per file (AllowSqliteWriteAsync).
         _sqliteTools = SqliteTools(_sqlite, _effective, AllowSqliteWriteAsync);
         _postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().PostgresConnectionsOffered));
@@ -6755,7 +6772,7 @@ internal sealed partial class ChatScreen
     /// the four reads, and <c>sqlite_execute</c> (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there
     /// <see cref="SqliteToolsFor"/> never offers it. What a turn offers of them is <see cref="SqliteToolsFor"/>'s.
     /// </summary>
-    public static IReadOnlyList<AIFunction> SqliteTools(Sqlite.SqliteAccess sqlite, Func<AppSettingsData> effective, Func<Sqlite.SqliteTarget, string, bool, CancellationToken, Task<bool?>>? allow) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> SqliteTools(Sqlite.SqliteAccess sqlite, Func<AppSettingsData> effective, SqliteWriteAllow? allow) => new AIFunction[]
     {
         new SqliteDatabasesTool(sqlite, effective),
         new SqliteTablesTool(sqlite, effective),
@@ -6812,7 +6829,8 @@ internal sealed partial class ChatScreen
                 return cached.Guard;
             }
 
-            var guard = new DatabaseGuard(Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, storageDirectory).Databases.Select(d => d.FullPath).ToList());
+            // Every file both files name, refused and shadowed entries' too (2026-10-24, review H9).
+            var guard = new DatabaseGuard(Sqlite.SqliteConfigFile.EveryFile(profileDirectory, storageDirectory));
             s_sqliteGuard = (key, guard);
             return guard;
         }
@@ -6822,6 +6840,13 @@ internal sealed partial class ChatScreen
             var info = new FileInfo(path);
             return info.Exists ? (info.Length, info.LastWriteTimeUtc) : (-1, default);
         }
+    }
+
+    /// <summary>The files sqlite.json names that <paramref name="offered"/> does not tick (2026-10-24, review I5): their paths are refused too. Pure but for the cached reads.</summary>
+    public static IReadOnlyList<string> UntickedSqliteFiles(string profileDirectory, string? storageDirectory, IReadOnlyList<string>? offered)
+    {
+        var ticked = Sqlite.SqliteConfigFile.LoadCatalog(profileDirectory, storageDirectory).Offered(offered).Databases.Select(d => d.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Sqlite.SqliteConfigFile.EveryFile(profileDirectory, storageDirectory).Where(f => !ticked.Contains(f)).ToList();
     }
 
     private static readonly object s_sqliteGuardGate = new();
@@ -8012,6 +8037,7 @@ internal sealed partial class ChatScreen
             // The files the last conversation saw are not this one's (2026-10-11, the review): its write_file asks for a mode again.
             _files.ForgetSeen();
             _conversation++;
+            ForgetAllows();   // nor are its allows (2026-10-24, review D3)
             _claudeSessionId = stored.ClaudeSessionId;
             _advisorThreads.Restore(stored.AdvisorThreads);
             _advisorThreads.RestoreSessions(stored.AdvisorSessions);

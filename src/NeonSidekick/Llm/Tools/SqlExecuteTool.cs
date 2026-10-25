@@ -42,11 +42,11 @@ public sealed class SqlExecuteTool : SqlTool
     public override string Name => ToolName;
 
     /// <summary>The description, read at each turn: it names the kinds <c>SQL statements allowed</c> ticks.</summary>
-    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.SqlStatementsAllowed));
+    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.SqlStatementsAllowed), !Effective.ToolsDisabled.Contains(SqlQueryTool.ToolName, StringComparer.Ordinal));
 
     /// <summary>The description for <paramref name="kinds"/>. Pinned.</summary>
-    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds) =>
-        ServerWriteText.Describe(SqlStatementKinds.Family, kinds, SqlQueryTool.ToolName, "T-SQL; bind values as @name through params.");
+    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds, bool readOffered = true) =>
+        ServerWriteText.Describe(SqlStatementKinds.Family, kinds, SqlQueryTool.ToolName, "T-SQL; bind values as @name through params.", readOffered);
 
     public override JsonElement JsonSchema => Schema;
 
@@ -62,23 +62,27 @@ public sealed class SqlExecuteTool : SqlTool
         }
 
         int timeout = TimeoutSeconds(effective);
+        // The connection resolved once (2026-10-24, the database review's H11): the boundary, the pane and the run below all work on the entry
+        // as read now, through an access pinned to it.
+        var resolved = Sql.Resolve(connection, out var unresolved);
+        var pinned = resolved is null ? Sql : Sql.Pinned(resolved);
         var hooks = new ServerExecuteHooks(
             SqlWriteGate.Check,
             SqlWriteGate.Kinds,
             SqlReadOnlyGate.Check,
             text => text.Trim(),
-            () => Sql.Resolve(connection, out var refused) is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? ""), null)
-                : (null, SqlText.Error(refused!)),
+            () => resolved is { } target
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? "", target.Config.SignInHost), null)
+                : (null, SqlText.Error(unresolved!)),
             async (body, token) =>
             {
-                var run = await Sql.RunAsync(connection, body, parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await pinned.RunAsync(connection, body, parameters, rows, timeout, token).ConfigureAwait(false);
                 return run.Outcome == SqlOutcome.Ok ? SqlText.Query(run, rows, ResultChars(effective)) : SqlText.Error(run);
             },
-            (body, token) => Sql.ExecuteAsync(connection, body, parameters, rows, timeout, token),
+            (body, token) => pinned.ExecuteAsync(connection, body, parameters, rows, timeout, token),
             SqlText.Error,
-            (body, token) => OutsideAsync(body, connection, token));
-        return ServerExecute.RunAsync(SqlStatementKinds.Family, effective.SqlMode, effective.SqlStatementsAllowed, sql, rows, ResultChars(effective), hooks, _allow, cancellationToken);
+            (body, token) => OutsideAsync(body, connection, token, pinned), Changed: pinned.Names.Forget);
+        return ServerExecute.RunAsync(SqlStatementKinds.Family, effective.SqlMode, effective.SqlStatementsAllowed, sql, parameters, rows, ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

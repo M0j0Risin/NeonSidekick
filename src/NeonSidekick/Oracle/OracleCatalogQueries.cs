@@ -14,6 +14,22 @@ namespace NeonSidekick.Oracle;
 public static class OracleCatalogQueries
 {
     /// <summary>
+    /// The clause that keeps a LISTAGG from failing past 4,000 bytes (12.2 and later); <see cref="ForServer"/> takes it out for an older server
+    /// (2026-10-24, the review of these fixes: on 11g and 12.1 the describe and index listings failed with ORA-00907).
+    /// </summary>
+    public const string OverflowClause = " ON OVERFLOW TRUNCATE '…' WITHOUT COUNT";
+
+    /// <summary><paramref name="sql"/> as <paramref name="serverVersion"/> reads it: without <see cref="OverflowClause"/> before 12.2.</summary>
+    public static string ForServer(string sql, string? serverVersion)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        string[] parts = (serverVersion ?? "").Split('.');
+        bool modern = int.TryParse(parts[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int major)
+            && (major > 12 || (major == 12 && parts.Length > 1 && int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int minor) && minor >= 2));
+        return modern ? sql : sql.Replace(OverflowClause, "", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// What else the account could read (2026-10-09, the wizard's test and <c>--oracle-check</c>; <c>oracle_schemas</c>' listing until the
     /// lock): the other schemas, Oracle's own left out, holding a table or view it may see; then the system privileges that read any.
     /// </summary>
@@ -62,7 +78,10 @@ public static class OracleCatalogQueries
     /// Six statements on the object <c>:owner</c>.<c>:name</c>, read by position in <see cref="OracleText.Describe"/>:
     /// 0 its columns (type parts, nullability, identity, virtual, default, primary-key position, comment); 1 the foreign keys
     /// out of and into it; 2 its indexes with their key columns (a key's index marked P or U); 3 its own comment; 4 its CHECK
-    /// constraints; 5 its triggers.
+    /// constraints; 5 its triggers; 6 the expressions of its function-based indexes (2026-10-24, the database review's F17: their key
+    /// columns showed as the hidden <c>SYS_NC00005$</c>; a key of one reads <c>{expr:N}</c> in set 2, N its position, put back by
+    /// <see cref="OracleText.Describe"/>). Since 2026-10-24 (O6) a column is listed by <c>user_generated</c>, so a 12c INVISIBLE column is
+    /// listed too (<c>hidden_column</c> left it out), and a key list longer than 4,000 bytes is cut rather than failing with ORA-01489.
     /// </summary>
     public static readonly IReadOnlyList<string> Describe =
     [
@@ -75,7 +94,7 @@ public static class OracleCatalogQueries
                m.comments AS "description"
         FROM sys.all_tab_cols c
         LEFT JOIN sys.all_col_comments m ON m.owner = c.owner AND m.table_name = c.table_name AND m.column_name = c.column_name
-        WHERE c.owner = :owner AND c.table_name = :name AND c.hidden_column = 'NO'
+        WHERE c.owner = :owner AND c.table_name = :name AND c.user_generated = 'YES'
         ORDER BY c.column_id
         """,
         """
@@ -93,7 +112,8 @@ public static class OracleCatalogQueries
         SELECT i.index_name AS "index", i.index_type AS "kind", i.uniqueness,
                (SELECT MIN(k.constraint_type) FROM sys.all_constraints k
                 WHERE k.owner = i.table_owner AND k.table_name = i.table_name AND k.index_name = i.index_name AND k.constraint_type IN ('P', 'U')) AS "constraint",
-               (SELECT LISTAGG(ic.column_name || CASE WHEN ic.descend = 'DESC' THEN ' DESC' END, ', ') WITHIN GROUP (ORDER BY ic.column_position)
+               (SELECT LISTAGG(CASE WHEN ic.column_name LIKE 'SYS\_NC%$' ESCAPE '\' THEN '{expr:' || ic.column_position || '}' ELSE ic.column_name END
+                               || CASE WHEN ic.descend = 'DESC' THEN ' DESC' END, ', ' ON OVERFLOW TRUNCATE '…' WITHOUT COUNT) WITHIN GROUP (ORDER BY ic.column_position)
                 FROM sys.all_ind_columns ic WHERE ic.index_owner = i.owner AND ic.index_name = i.index_name) AS "keys",
                i.status
         FROM sys.all_indexes i
@@ -116,6 +136,12 @@ public static class OracleCatalogQueries
         FROM sys.all_triggers t
         WHERE t.table_owner = :owner AND t.table_name = :name
         ORDER BY t.trigger_name
+        """,
+        """
+        SELECT e.index_name AS "index", e.column_position AS "position", e.column_expression AS "expression"
+        FROM sys.all_ind_expressions e
+        WHERE e.table_owner = :owner AND e.table_name = :name
+        ORDER BY 1, 2
         """,
     ];
 
@@ -162,7 +188,8 @@ public static class OracleCatalogQueries
         SELECT i.table_owner || '.' || i.table_name AS "table", i.index_name AS "index", i.index_type AS "kind", i.uniqueness,
                (SELECT MIN(k.constraint_type) FROM sys.all_constraints k
                 WHERE k.owner = i.table_owner AND k.table_name = i.table_name AND k.index_name = i.index_name AND k.constraint_type IN ('P', 'U')) AS "constraint",
-               (SELECT LISTAGG(ic.column_name || CASE WHEN ic.descend = 'DESC' THEN ' DESC' END, ', ') WITHIN GROUP (ORDER BY ic.column_position)
+               (SELECT LISTAGG(CASE WHEN ic.column_name LIKE 'SYS\_NC%$' ESCAPE '\' THEN '(an expression)' ELSE ic.column_name END
+                               || CASE WHEN ic.descend = 'DESC' THEN ' DESC' END, ', ' ON OVERFLOW TRUNCATE '…' WITHOUT COUNT) WITHIN GROUP (ORDER BY ic.column_position)
                 FROM sys.all_ind_columns ic WHERE ic.index_owner = i.owner AND ic.index_name = i.index_name) AS "keys",
                i.status, i.visibility, i.num_rows, i.distinct_keys, TO_CHAR(i.last_analyzed, 'YYYY-MM-DD') AS "last_analyzed", i.owner
         FROM sys.all_indexes i

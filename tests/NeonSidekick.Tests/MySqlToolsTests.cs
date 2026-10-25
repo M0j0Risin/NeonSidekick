@@ -15,11 +15,13 @@ public sealed class MySqlToolsTests
 {
     private readonly AppSettingsData _settings = new() { MySqlTools = true };
     private MySqlCatalog _catalog = MySqlCatalog.Empty;
+    private readonly MySqlAccess _access;
     private readonly IReadOnlyList<AIFunction> _tools;
 
     public MySqlToolsTests()
     {
-        _tools = ChatScreen.MySqlTools(new MySqlAccess(() => _catalog), () => _settings);
+        _access = new MySqlAccess(() => _catalog);
+        _tools = ChatScreen.MySqlTools(_access, () => _settings);
     }
 
     private T Tool<T>() where T : AIFunction => _tools.OfType<T>().Single();
@@ -122,6 +124,13 @@ public sealed class MySqlToolsTests
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM shop.orders")));
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM payroll.salaries")));   // the names are read first
         Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlDescribeTool>(("table", "SHOP.orders")));
+
+        // The names come back (2026-10-24, the database review's S3: every leg above ends at "could not connect", which cannot tell
+        // whether the boundary ran): another database among them is the boundary's refusal; the own database's goes on to the run.
+        _access.Names.Seed([["shop"], ["payroll"]]);
+        Assert.Equal(MySqlText.OtherDatabase("payroll", "shop"), await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM payroll.salaries")));
+        Assert.Equal(MySqlText.OtherDatabase("payroll", "shop"), await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM t AS payroll WHERE payroll.id = 1")));   // an alias spelled like one
+        Assert.StartsWith("Error: could not connect to down: ", await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM t AS o WHERE o.id = 1")));   // no other: the run
     }
 
     [Fact]

@@ -20,21 +20,50 @@ public sealed class SqliteDatabaseConfig
     /// <summary>What the database holds, in the user's words; the model reads it to pick one.</summary>
     public string? Description { get; set; }
 
-    /// <summary>Why the entry cannot be opened as it stands (no path), or null.</summary>
+    /// <summary>Keys the entry does not know (2026-10-24, the database review's K2, mechanism 1): the load refuses the entry. Never written.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
+    /// <summary>
+    /// Why the entry cannot be opened as it stands, or null: no path, or one no file can have (2026-10-24, the database review's D8: a NUL or
+    /// another character a path cannot hold threw from every full-path read, and the SQLite guard, read at every write and shell call,
+    /// threw with it).
+    /// </summary>
     [JsonIgnore]
-    public string? Problem => string.IsNullOrWhiteSpace(Path) ? SqliteText.NoPath : null;
+    public string? Problem => string.IsNullOrWhiteSpace(Path) ? SqliteText.NoPath : SqliteNamedDatabase.Expand(Path) is null ? SqliteText.BadPath(Path.Trim()) : null;
 }
 
 /// <summary>A named database as the catalog holds it: its name, its entry, and the file that named it.</summary>
 public sealed record SqliteNamedDatabase(string Name, SqliteDatabaseConfig Config, string Source)
 {
-    /// <summary>The database file's full path: <see cref="SqliteDatabaseConfig.Path"/> as written, a relative one from <see cref="Source"/>'s folder.</summary>
-    public string FullPath
+    /// <summary>
+    /// The database file's full path: <see cref="SqliteDatabaseConfig.Path"/> as written, a <c>~</c> one from the user's home (2026-10-24, the
+    /// database review's I12: <c>~/data/app.db</c> was joined to the configs folder, and the guard watched the wrong file), a relative one from
+    /// <see cref="Source"/>'s folder. A path no file can have stands as written (D8: it threw); the load refuses such an entry.
+    /// </summary>
+    public string FullPath => Expand(Config.Path, System.IO.Path.GetDirectoryName(Source)) ?? Config.Path?.Trim() ?? "";
+
+    /// <summary><paramref name="path"/> as a full path (a <c>~</c> from the home, a relative one from <paramref name="folder"/>), or null when it cannot be one.</summary>
+    public static string? Expand(string? path, string? folder = null)
     {
-        get
+        string text = path?.Trim() ?? "";
+        if (text.Length == 0 || text.IndexOfAny(System.IO.Path.GetInvalidPathChars()) >= 0)
         {
-            string path = Config.Path?.Trim() ?? "";
-            return System.IO.Path.IsPathRooted(path) ? System.IO.Path.GetFullPath(path) : System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Source) ?? "", path));
+            return null;
+        }
+
+        if (text == "~" || text.StartsWith("~/", StringComparison.Ordinal) || text.StartsWith("~\\", StringComparison.Ordinal))
+        {
+            text = System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), text[1..].TrimStart('/', '\\'));
+        }
+
+        try
+        {
+            return System.IO.Path.IsPathRooted(text) ? System.IO.Path.GetFullPath(text) : System.IO.Path.GetFullPath(System.IO.Path.Combine(folder ?? "", text));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
         }
     }
 }
@@ -50,9 +79,9 @@ public sealed record SqliteCatalog(IReadOnlyList<SqliteNamedDatabase> Databases,
     /// <summary>The catalog narrowed to the databases a profile offers (<c>SQLite databases offered</c>): those named in <paramref name="names"/> (case-insensitive), <see cref="Hidden"/> counting the rest; null offers none. Pure.</summary>
     public SqliteCatalog Offered(IReadOnlyList<string>? names)
     {
-        var wanted = new HashSet<string>((names ?? []).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+        var wanted = ConnectionCatalog.Wanted(names);
         var kept = Databases.Where(d => wanted.Contains(d.Name)).ToList();
-        return this with { Databases = kept, Hidden = Hidden + Databases.Count - kept.Count };
+        return this with { Databases = kept, Problems = ConnectionCatalog.OfferedProblems(Problems, names), Hidden = Hidden + Databases.Count - kept.Count };
     }
 
     /// <summary>The database a name means, case-insensitive; null when none has it.</summary>
@@ -94,24 +123,48 @@ public sealed class SqliteConfigFile
     /// <summary>The databases by name, in file order.</summary>
     public Dictionary<string, SqliteDatabaseConfig?> Databases { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>Keys beside <c>databases</c>: listed as problems, never used (2026-10-24, review K2).</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; set; }
+
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
 
     /// <summary>The home's file: <c>&lt;home&gt;\configs\sqlite.json</c> (configs since 2026-10-16, so a relative <c>path</c> in it counts from there), every profile's.</summary>
     public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
-    /// <summary>Reads <paramref name="path"/>: the usable databases in file order and a problem per entry with no path or a blank name; a file that is not JSON or cannot be read is one problem and one warning. Never throws.</summary>
+    /// <summary>
+    /// Reads <paramref name="path"/>: the usable databases in file order and a problem per entry with no path or a blank name; a file that is
+    /// not JSON or cannot be read is one problem and one warning. Read again only once the file changes (2026-10-24, the database review's
+    /// mechanism 1, <see cref="Computers.ConfigCache"/>); an entry with a key it does not know, a name given twice or a key given twice is
+    /// refused, and a file holding <c>databases</c> twice is refused whole (K2, D2, N5). Never throws.
+    /// </summary>
     public static SqliteCatalog Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return Computers.ConfigCache.Get(FileName, path, () => LoadUncached(path));
+    }
+
+    private static SqliteCatalog LoadUncached(string path)
+    {
         if (!File.Exists(path))
         {
             return SqliteCatalog.Empty;
         }
 
         SqliteConfigFile? file;
+        IReadOnlySet<string> repeated;
+        IReadOnlyDictionary<string, string> twice;
         try
         {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), SqliteJsonContext.Default.SqliteConfigFile);
+            byte[] json = Computers.ConfigChecks.WithoutBom(ConnectionsFileEdit.ForEdit(File.ReadAllBytes(path), out _)).ToArray();
+            if (ConnectionsFileEdit.RepeatedSection(json, Section) is { } section)
+            {
+                return new SqliteCatalog([], [new SqlConfigProblem(path, SqlText.SectionTwice(section), WholeFile: true)]);
+            }
+
+            repeated = ConnectionsFileEdit.RepeatedNames(json, Section);
+            twice = ConnectionsFileEdit.RepeatedKeys(json, Section);
+            file = JsonSerializer.Deserialize(json, SqliteJsonContext.Default.SqliteConfigFile);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -122,13 +175,13 @@ public sealed class SqliteConfigFile
 
         // "databases": null reads as null past the non-nullable type (the third 2026-10-04 review: it threw at every turn's tool
         // build, ConnectionFamily.Load's null check being the Oracle/MySQL/Postgres files' alone).
+        var problems = Computers.ConfigChecks.UnknownFileKeys(file?.Extra, Section).Select(p => new SqlConfigProblem(path, p)).ToList();
         if (file?.Databases is not { Count: > 0 })
         {
-            return SqliteCatalog.Empty;
+            return problems.Count == 0 ? SqliteCatalog.Empty : new SqliteCatalog([], problems);
         }
 
         var databases = new List<SqliteNamedDatabase>(file.Databases.Count);
-        var problems = new List<SqlConfigProblem>();
         foreach (var (name, config) in file.Databases)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -137,9 +190,15 @@ public sealed class SqliteConfigFile
                 continue;
             }
 
-            if ((config is null ? SqliteText.NoPath : config.Problem) is { } reason)
+            string trimmed = name.Trim();
+            string? reason = config is null ? SqliteText.NoPath
+                : repeated.Contains(trimmed) ? Computers.ComputerText.NamedTwice
+                : twice.TryGetValue(trimmed, out string? key) ? Computers.ComputerText.KeyTwice(key)
+                : Computers.ConfigChecks.UnknownKey(config.Extra, SqliteJsonContext.Default.SqliteDatabaseConfig) ?? config.Problem;
+            if (reason is not null)
             {
-                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: name.Trim()));
+                // The entry kept beside the problem (H9): the guard still watches its file.
+                problems.Add(new SqlConfigProblem(SqlText.ConnectionSource(path, name), reason, Name: trimmed, Entry: config is null ? null : new SqliteNamedDatabase(trimmed, config, path)));
                 continue;
             }
 
@@ -159,11 +218,31 @@ public sealed class SqliteConfigFile
             return profile;
         }
 
+        // A profile entry that was refused still hides the home's of its name (2026-10-24, review D1: the profile meant its own).
         var global = Load(GlobalPath(home));
-        var names = new HashSet<string>(profile.Databases.Select(d => d.Name), StringComparer.OrdinalIgnoreCase);
+        var names = new HashSet<string>(profile.Databases.Select(d => d.Name).Concat(profile.Problems.Where(p => p.Name is not null).Select(p => p.Name!)), StringComparer.OrdinalIgnoreCase);
         return new SqliteCatalog(
             [.. profile.Databases, .. global.Databases.Where(d => !names.Contains(d.Name))],
             [.. profile.Problems, .. global.Problems]);
+    }
+
+    /// <summary>
+    /// Every file both files name — usable, refused, and the home's a profile entry shadows alike (2026-10-24, the database review's H9: the
+    /// guard built from <see cref="LoadCatalog"/>, which drops a shadowed entry, so its file went unguarded). The guard's, never a tool's.
+    /// </summary>
+    public static IReadOnlyList<string> EveryFile(string profileDirectory, string? home)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileDirectory);
+        var files = new List<SqliteCatalog> { Load(ProfilePath(profileDirectory)) };
+        if (home is not null && !string.Equals(Path.GetFullPath(ProfilePath(profileDirectory)), Path.GetFullPath(GlobalPath(home)), StringComparison.OrdinalIgnoreCase))
+        {
+            files.Add(Load(GlobalPath(home)));
+        }
+
+        return files.SelectMany(f => f.Databases.Concat(f.Problems.Select(p => p.Entry).OfType<SqliteNamedDatabase>()))
+            .Select(d => SqliteNamedDatabase.Expand(d.Config.Path, Path.GetDirectoryName(d.Source)))
+            .OfType<string>()
+            .ToList();
     }
 
     /// <summary>Adds database <paramref name="name"/> to <paramref name="path"/> (the <c>SQLite add database</c> wizard), the file's comments and layout kept (a missing file made with <see cref="EmptyText"/> first). Null on success, else why not.</summary>
@@ -188,13 +267,14 @@ public sealed class SqliteConfigFile
     /// <summary>What a database is called in a refusal.</summary>
     private const string Noun = "database";
 
-    /// <summary>One database as the file holds it: <see cref="SqliteJsonContext"/>'s keys, indented, the relaxed escaping.</summary>
+    /// <summary>One database as the file holds it: <see cref="SqliteJsonContext"/>'s keys, indented, the relaxed escaping, its unknown keys left out.</summary>
     private static string EntryText(SqliteDatabaseConfig config)
     {
+        var copy = new SqliteDatabaseConfig { Path = config.Path, Description = config.Description };
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
-            JsonSerializer.Serialize(writer, config, SqliteJsonContext.Default.SqliteDatabaseConfig);
+            JsonSerializer.Serialize(writer, copy, SqliteJsonContext.Default.SqliteDatabaseConfig);
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());

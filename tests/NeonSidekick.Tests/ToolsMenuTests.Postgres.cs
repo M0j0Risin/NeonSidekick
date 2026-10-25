@@ -48,7 +48,7 @@ public partial class ToolsMenuTests
         Type("postgres");
         Push(Keys.Enter);                         // file
         Type("s3cret");
-        Push(Keys.Down, Keys.Enter);              // require
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // require: from verify-full, where the pick starts since 2026-10-24 (DB1), round to required
         Push(Keys.Enter);                         // the default timeout
         Push(Keys.Down, Keys.Enter);              // readwrite (2026-10-05), while PostgreSQL mode is read-only
         Type("the sample shop");

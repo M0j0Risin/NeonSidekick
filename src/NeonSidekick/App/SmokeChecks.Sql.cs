@@ -87,7 +87,7 @@ public static partial class SmokeChecks
         string target = "NeonSidekick.smoke/" + Guid.NewGuid().ToString("N");
         try
         {
-            if (WindowsCredentials.WriteGeneric(target, @"SMOKE\nobody", secret).Error is { } writeError)
+            if (WindowsCredentials.WriteGeneric(target, @"SMOKE\nobody", secret, "smoke-host:1").Error is { } writeError)
             {
                 return new SmokeCheck(name, false, "Credential Manager write failed: " + writeError);
             }
@@ -96,6 +96,12 @@ public static partial class SmokeChecks
             if (read.Value != secret)
             {
                 return new SmokeCheck(name, false, "Credential Manager read gave back something else: " + read.Error);
+            }
+
+            // The comment's mark read back (2026-10-24, the database review's K3 and decision DB9): the encoding and the host it was saved for.
+            if (read.Host != "smoke-host:1")
+            {
+                return new SmokeCheck(name, false, "Credential Manager's comment did not read back its host (" + (read.Host ?? "none") + ")");
             }
         }
         finally

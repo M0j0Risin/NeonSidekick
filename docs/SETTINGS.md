@@ -552,10 +552,11 @@ The tools most profiles use, and the pane's own options.
   * **The starter list** holds actions that do harm anywhere, such as `reset --hard`, `push --force`, `| iex` and `.ssh/id_`; on Windows also `Format-Volume` and `diskpart`, on a Mac `diskutil erase` and `dump-keychain`.
   * **Stricter entries you can add:** `rm -rf`, `Remove-Item -Recurse -Force`, `git clean`, `taskkill /f`, upload sites (`pastebin.com`, `ngrok`), and on a Mac `osascript` or `.zshrc`.
 * **Databases:** while the police and a database family's tools are both on, a command or script that reaches that family is refused, even under `yolo`.
-  * **SQLite:** the word `sqlite`, a `.db` or `.sqlite` file, or a file `sqlite.json` names.
-  * **The server families:** their clients and drivers (`sqlcmd`, `sqlplus`, `mysql`, `psql`…) and their connections' hosts.
+  * **SQLite:** the word `sqlite` (or `apsw`), a database file by any of its extensions (wildcards too), or a file `sqlite.json` names.
+  * **The server families:** their clients and drivers (`sqlcmd`, `sqlplus`, `mysql`, `psql`, ODBC and JDBC names…) and their connections' hosts. A one-word host (`db`) counts only where a host stands (`-h db`, `@db`, `db:5432`).
+  * **Scripts:** the scripts a command runs are read too, past an interpreter's options, a `cmd` command's `.bat` or `.cmd`, and the scripts those name; so are the scripts an `execute_code` script names.
   * **Large scripts:** while a database or admin family's tools are on, a script file over 1 MB that a command runs is refused, being too big to check.
-* **Package commands:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`) isn't judged by the database rules.
+* **Package commands and lookups:** a command that only installs, removes or lists packages (`pip install …`, `npm install …`), a search (`grep`, `findstr`, `Select-String`) and a `git commit` message aren't judged by the database rules.
 * **Prefer native tools:** a lone command an offered tool replaces comes back once a turn naming the tool (`cat` → `read_file`, `curl` → `web_fetch`, `sqlcmd` → `sql_query`…). Sent again, it goes to the approval.
 
 #### Clock

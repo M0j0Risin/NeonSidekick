@@ -3483,15 +3483,18 @@ public sealed class WorkingDirectory
         }
 
         // A cloud placeholder is walked (review O1: a cloud-tagged .git passed); a real link never is.
-        var entries = new FileSystemEnumerable<(string Path, bool IsDirectory)>(
+        // A file's header is read only when it could be a database and is on this disk (2026-10-24, the review of these fixes: the walk opened every
+        // file, hydrating each cloud placeholder of a OneDrive folder before its delete): at least one page (512 bytes), not offline or a recall.
+        var entries = new FileSystemEnumerable<(string Path, bool IsDirectory, bool Sniff)>(
             directory,
-            (ref FileSystemEntry entry) => (entry.ToFullPath(), entry.IsDirectory),
+            (ref FileSystemEntry entry) => (entry.ToFullPath(), entry.IsDirectory,
+                !entry.IsDirectory && entry.Length >= 512 && (entry.Attributes & (FileAttributes.Offline | (FileAttributes)0x00040000 | (FileAttributes)0x00400000)) == 0),
             new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0, ReturnSpecialDirectories = false })
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) => !IsLink(ref entry),
             ShouldRecursePredicate = (ref FileSystemEntry entry) => !IsLink(ref entry),
         };
-        foreach (var (path, isDirectory) in entries)
+        foreach (var (path, isDirectory, sniff) in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (git && string.Equals(Path.GetFileName(path), GitFolderName, StringComparison.OrdinalIgnoreCase))
@@ -3499,7 +3502,8 @@ public sealed class WorkingDirectory
                 return FileOutcome.GitProtected;
             }
 
-            if (databases is not null && !isDirectory && databases.IsDatabaseFile(path))
+            // By content too since 2026-10-24 (the database review's B6: a database whose name says nothing went with its folder).
+            if (databases is not null && !isDirectory && (databases.IsDatabaseFile(path) || (sniff && DatabaseGuard.HasSqliteHeader(path))))
             {
                 return FileOutcome.DatabaseProtected;
             }

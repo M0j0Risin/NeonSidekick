@@ -303,8 +303,10 @@ public partial class NeonAdvisorToolTests
     {
         IReadOnlyList<AIFunction> tools = [new NamedTool("read_file"), new NamedTool("run_command"), new NamedTool(NeonAdvisorTool.ToolName), new NamedTool(CameraCaptureTool.ToolName), new NamedTool("srv__thing"), new NamedTool("sql_query")];
 
-        Assert.Equal(["read_file", "sql_query"], NeonAdvisorTool.ReadOnlyOf(tools).Select(t => t.Name));
-        Assert.Equal(["neon_advisor", "ask_user", "camera_capture", "screen_capture", "screen_list"], NeonAdvisorTool.Excluded);   // claude_code_advisor too until it was retired (2026-10-10)
+        // No database tool reaches an advisor (2026-10-24, the database review's J1, decision DB4; sql_query did until then).
+        Assert.Equal(["read_file"], NeonAdvisorTool.ReadOnlyOf(tools).Select(t => t.Name));
+        Assert.Equal(["neon_advisor", "ask_user", "camera_capture", "screen_capture", "screen_list"], NeonAdvisorTool.Excluded.Take(5));   // claude_code_advisor too until it was retired (2026-10-10)
+        Assert.Superset(new HashSet<string>(App.ChatScreen.DatabaseToolNames), new HashSet<string>(NeonAdvisorTool.Excluded));
     }
 
     [Fact]

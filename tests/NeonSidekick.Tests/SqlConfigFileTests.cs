@@ -195,7 +195,9 @@ public sealed class SqlConfigFileTests : IDisposable
         Assert.DoesNotContain("hunter2", after);
         Assert.Contains("// the dev box — keep this comment", after);
         Assert.Contains("},   // trailing note", after);
-        Assert.Contains("\"password\": \"left alone\"", after);   // the credman store's password is not the file's to keep
+        // A credman entry's leftover password is encrypted too (2026-10-24, the database review's N2: it stayed plain on disk for good; this
+        // line pinned "left alone" until then).
+        Assert.DoesNotContain("left alone", after);
         int start = after.IndexOf("\"password\": \"dpapi:", StringComparison.Ordinal);
         Assert.True(start > 0);
         Assert.Equal(text[..text.IndexOf("\"password\"", StringComparison.Ordinal)], after[..start]);   // everything before the value byte for byte

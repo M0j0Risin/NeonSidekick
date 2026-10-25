@@ -31,19 +31,42 @@ public sealed record ServerDatabaseGuard(IReadOnlyList<ServerDatabaseGuard.Famil
 public static partial class ServerDatabasePolice
 {
     /// <summary>SQL Server's clients and drivers.</summary>
-    public static readonly IReadOnlyList<string> SqlServerWords = ["sqlcmd", "osql", "bcp", "sqlpackage", "Invoke-Sqlcmd", "SqlServer", "SqlClient", "pyodbc", "pymssql", "mssql"];
+    /// <remarks>
+    /// Since 2026-10-24 (the database review's A14, G12): Node's <c>tedious</c>, the ODBC and OLE DB routes (the driver names a connection
+    /// string spells, <c>System.Data.Odbc</c>/<c>OleDb</c>, which reach any server a DSN names), dbatools, and JDBC's URL.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> SqlServerWords =
+    [
+        "sqlcmd", "osql", "bcp", "sqlpackage", "Invoke-Sqlcmd", "SqlServer", "SqlClient", "pyodbc", "pymssql", "mssql",
+        "tedious", "{SQL Server", "Driver for SQL Server", "MSOLEDBSQL", "SQLOLEDB", "SQLNCLI", "System.Data.Odbc", "System.Data.OleDb",
+        "Invoke-DbaQuery", "dbatools", "jdbc:sqlserver",
+    ];
 
-    /// <summary>Oracle's.</summary>
-    public static readonly IReadOnlyList<string> OracleWords = ["sqlplus", "sqlcl", "oracledb", "cx_Oracle", "ManagedDataAccess", "tnsping", "expdp", "impdp", "rman"];
+    /// <summary>Oracle's: since 2026-10-24 (I8, Q4, G12) SQL*Loader, the Java driver, the ODBC and OLE DB drivers' names.</summary>
+    public static readonly IReadOnlyList<string> OracleWords =
+    [
+        "sqlplus", "sqlcl", "oracledb", "cx_Oracle", "ManagedDataAccess", "tnsping", "expdp", "impdp", "rman",
+        "sqlldr", "ojdbc", "jdbc:oracle", "OracleDriver", "OraOLEDB", "Oracle in Ora", "Oracle in instantclient",
+    ];
 
     /// <summary>MySQL's and MariaDB's (<c>mysql</c> covers mysqldump, mysqlsh, pymysql, MySqlConnector, mysql2, MySQLdb).</summary>
     public static readonly IReadOnlyList<string> MySqlWords = ["mysql", "mariadb"];
 
-    /// <summary>PostgreSQL's (<c>postgres</c> covers postgresql and node-postgres).</summary>
-    public static readonly IReadOnlyList<string> PostgresWords = ["postgres", "psql", "pg_dump", "pg_dumpall", "pg_restore", "pgcli", "psycopg", "asyncpg", "npgsql", "pg8000"];
+    /// <summary>
+    /// PostgreSQL's (<c>postgres</c> covers postgresql); since 2026-10-24 (A14, I8) node-postgres's package <c>pg</c>, as code names it, quoted
+    /// (<c>require('pg')</c>; bare it is any flag or folder: <c>gcc -pg</c>, <c>src/pg/</c>), and the server's own client programs.
+    /// </summary>
+    public static readonly IReadOnlyList<string> PostgresWords =
+    [
+        "postgres", "psql", "pg_dump", "pg_dumpall", "pg_restore", "pgcli", "psycopg", "asyncpg", "npgsql", "pg8000",
+        "'pg'", "\"pg\"", "dropdb", "createdb", "vacuumdb", "clusterdb", "reindexdb", "createuser", "dropuser", "pg_basebackup", "pg_isready",
+    ];
 
     /// <summary>The words so short they would be found inside unrelated names: they count only standing alone.</summary>
-    public static readonly IReadOnlySet<string> WholeWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "bcp", "osql", "psql", "rman", "sqlcl" };
+    public static readonly IReadOnlySet<string> WholeWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "bcp", "osql", "psql", "rman", "sqlcl", "dropdb", "createdb", "vacuumdb", "clusterdb", "reindexdb", "createuser", "dropuser", "sqlldr",
+    };
 
     /// <summary>The host names a loopback connection uses: matched only with its port, so <c>curl localhost:8080</c> is no database.</summary>
     public static readonly IReadOnlySet<string> Loopback = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "localhost", "127.0.0.1", "::1", "[::1]", ".", "(local)", "host.docker.internal" };
@@ -51,7 +74,8 @@ public static partial class ServerDatabasePolice
     /// <summary>
     /// The guard for the families whose tools are on in <paramref name="effective"/>, their hosts from every connection their files
     /// name (offered or not, and skipped with a problem too — 2026-10-09: an entry from before the database was required is no
-    /// connection the tools use, but its server is still one the shell must not reach); null when none is on.
+    /// connection the tools use, but its server is still one the shell must not reach; and since 2026-10-24 the home's entries a profile's
+    /// shadows, review H9, read through the cached loads, B15); null when none is on.
     /// </summary>
     public static ServerDatabaseGuard? For(AppSettingsData effective, string profileDirectory, string? storageDirectory)
     {
@@ -60,58 +84,75 @@ public static partial class ServerDatabasePolice
         var families = new List<ServerDatabaseGuard.Family>();
         if (effective.SqlTools)
         {
-            var catalog = Sql.SqlConfigFile.LoadCatalog(profileDirectory, storageDirectory);
-            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<Sql.SqlConnectionConfig>(catalog.Problems)).SelectMany(c => SqlServerHosts(c.Server));
+            var hosts = Sql.SqlConfigFile.Family.Everything(profileDirectory, storageDirectory).SelectMany(c => SqlServerHosts(c.Server));
             families.Add(new("SQL Server", Llm.Tools.SqlQueryTool.ToolName, Llm.Tools.SqlExecuteTool.ToolName, SqlServerWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         if (effective.OracleTools)
         {
-            var catalog = Oracle.OracleConfigFile.LoadCatalog(profileDirectory, storageDirectory);
-            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<Oracle.OracleConnectionConfig>(catalog.Problems)).SelectMany(c => OracleHosts(c.DataSource));
+            var hosts = Oracle.OracleConfigFile.Family.Everything(profileDirectory, storageDirectory).SelectMany(c => OracleHosts(c.DataSource));
             families.Add(new("Oracle", Llm.Tools.OracleQueryTool.ToolName, Llm.Tools.OracleExecuteTool.ToolName, OracleWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         if (effective.MySqlTools)
         {
-            var catalog = MySql.MySqlConfigFile.LoadCatalog(profileDirectory, storageDirectory);
-            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<MySql.MySqlConnectionConfig>(catalog.Problems)).SelectMany(c => Hosts(c.Host, c.Port ?? MySql.MySqlConnectionConfig.DefaultPort));
+            var hosts = MySql.MySqlConfigFile.Family.Everything(profileDirectory, storageDirectory).SelectMany(c => Hosts(c.Host, c.Port ?? MySql.MySqlConnectionConfig.DefaultPort));
             families.Add(new("MySQL", Llm.Tools.MySqlQueryTool.ToolName, Llm.Tools.MySqlExecuteTool.ToolName, MySqlWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         if (effective.PostgresTools)
         {
-            var catalog = Postgres.PostgresConfigFile.LoadCatalog(profileDirectory, storageDirectory);
-            var hosts = catalog.Connections.Select(c => c.Config).Concat(Skipped<Postgres.PostgresConnectionConfig>(catalog.Problems)).SelectMany(c => Hosts(c.Host, c.Port ?? Postgres.PostgresConnectionConfig.DefaultPort));
+            var hosts = Postgres.PostgresConfigFile.Family.Everything(profileDirectory, storageDirectory).SelectMany(c => Hosts(c.Host, c.Port ?? Postgres.PostgresConnectionConfig.DefaultPort));
             families.Add(new("PostgreSQL", Llm.Tools.PostgresQueryTool.ToolName, Llm.Tools.PostgresExecuteTool.ToolName, PostgresWords, hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
         }
 
         return families.Count == 0 ? null : new ServerDatabaseGuard(families);
     }
 
-    /// <summary>The entries a family's loader skipped with a problem, as read (a blank name or an unreadable file has none).</summary>
-    private static IEnumerable<T> Skipped<T>(IEnumerable<Sql.SqlConfigProblem> problems) where T : class => problems.Select(p => p.Entry).OfType<T>();
-
     /// <summary>What a host matches as: a loopback one only with its port (<c>host:port</c> and SQL Server's <c>host,port</c>), else the host alone.</summary>
+    /// <remarks>
+    /// Since 2026-10-24 (the database review's D6) a host list (<c>db1,db2</c>, <c>db1:5433,db2</c>: Npgsql's and MySqlConnector's failover) is
+    /// each of its hosts, each with its own port when it writes one.
+    /// </remarks>
     public static IEnumerable<string> Hosts(string? host, int port)
     {
-        string name = host?.Trim() ?? "";
-        if (name.Length == 0)
+        var found = new List<string>();
+        foreach (string entry in (host ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            return [];
+            string name = entry;
+            int at = port;
+            int colon = entry.LastIndexOf(':');
+            if (colon > 0 && !entry.EndsWith(']') && entry.IndexOf(':') == colon && int.TryParse(entry[(colon + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int written))
+            {
+                (name, at) = (entry[..colon], written);
+            }
+
+            string text = at.ToString(CultureInfo.InvariantCulture);
+            found.AddRange(Loopback.Contains(name) ? [name + ":" + text, name + "," + text] : [name]);
         }
 
-        string at = port.ToString(CultureInfo.InvariantCulture);
-        return Loopback.Contains(name) ? [name + ":" + at, name + "," + at] : [name];
+        return found;
     }
 
     /// <summary>A SQL Server <c>server</c>'s hosts: <c>host</c>, <c>host,port</c> or <c>host\instance</c> (1433 when no port is given).</summary>
     public static IEnumerable<string> SqlServerHosts(string? server)
     {
         string text = server?.Trim() ?? "";
-        if (text.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase))
+        // The protocol prefixes (2026-10-24, the database review's B8: only tcp: was taken off, so np:\\host\pipe\…, admin:host and lpc:host
+        // gave a host no line spells); a named pipe's host is its \\host part.
+        foreach (string prefix in new[] { "tcp:", "admin:", "lpc:" })
         {
-            text = text[4..];
+            if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[prefix.Length..];
+            }
+        }
+
+        if (text.StartsWith("np:", StringComparison.OrdinalIgnoreCase))
+        {
+            string pipe = text[3..].TrimStart('\\', '/');
+            int end = pipe.IndexOfAny(['\\', '/']);
+            return Hosts(end < 0 ? pipe : pipe[..end], 1433);
         }
 
         int comma = text.IndexOf(',', StringComparison.Ordinal);
@@ -142,10 +183,11 @@ public static partial class ServerDatabasePolice
                 foreach (Match pm in ports)
                 {
                     int distance = Math.Abs(pm.Index - m.Index);
-                    if (distance < best)
+                    // TryParse (2026-10-24, review B7: int.Parse threw on a long number, and every police check with it).
+                    if (distance < best && int.TryParse(pm.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
                     {
                         best = distance;
-                        port = int.Parse(pm.Groups[1].Value, CultureInfo.InvariantCulture);
+                        port = parsed;
                     }
                 }
 
@@ -155,12 +197,21 @@ public static partial class ServerDatabasePolice
             return found;
         }
 
+        // EZConnect plus (2026-10-24, review D6): a tcp:// or tcps:// scheme, and a host list h1,h2:1521 — each host with the port written last.
+        foreach (string scheme in new[] { "tcps://", "tcp://" })
+        {
+            if (text.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[scheme.Length..];
+            }
+        }
+
         string hostPort = text.StartsWith("//", StringComparison.Ordinal) ? text[2..] : text;
-        hostPort = hostPort.Split('/')[0];
+        hostPort = hostPort.Split('/')[0].Split('?')[0];
         int colon = hostPort.LastIndexOf(':');
-        return colon > 0 && int.TryParse(hostPort[(colon + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int at)
-            ? Hosts(hostPort[..colon], at)
-            : Hosts(hostPort, 1521);
+        bool ported = colon > 0 && int.TryParse(hostPort[(colon + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
+        int listener = ported ? int.Parse(hostPort[(colon + 1)..], CultureInfo.InvariantCulture) : 1521;
+        return Hosts(ported ? hostPort[..colon] : hostPort, listener);
     }
 
     /// <summary>What in <paramref name="text"/> reaches a family of <paramref name="guard"/>: the family's title and the token as written; else null.</summary>
@@ -209,8 +260,9 @@ public static partial class ServerDatabasePolice
     {
         ArgumentNullException.ThrowIfNull(scripts);
         ArgumentNullException.ThrowIfNull(guard);
-        // The line less its package-manager segments (2026-10-10, PackageCommands: dotnet add package Npgsql reaches no database).
-        if (Find(PackageCommands.Strip(command), guard) is { } found)
+        // The line less its package-manager segments (2026-10-10, PackageCommands: dotnet add package Npgsql reaches no database), its lookups
+        // and a commit's message (2026-10-24, review Q5: grep mysql and git commit -m "mysql fix" reach no database).
+        if (Find(SqlitePolice.Judged(command), guard) is { } found)
         {
             return (found.Family, found.Token, null);
         }
@@ -264,8 +316,54 @@ public static partial class ServerDatabasePolice
         return null;
     }
 
-    /// <summary>Whether <paramref name="host"/> stands in <paramref name="text"/> as a whole name: no name character beside it.</summary>
+    /// <summary>
+    /// Whether <paramref name="host"/> stands in <paramref name="text"/> as a whole name: no name character beside it. Since 2026-10-24 (the
+    /// database review's Q6) a one-label name (<c>db</c>, a TNS alias <c>test</c>) counts only where a host stands — after <c>@</c>, <c>//</c>,
+    /// <c>=</c> or a host option (<c>-h</c>, <c>-S</c>, <c>--host</c>), or before a port — so <c>cd db</c> and <c>npm test</c> are no database;
+    /// and a loopback <c>host:port</c> is found with the host and the port written apart too (A14: <c>-h localhost -p 5432</c>).
+    /// </summary>
     private static bool FindHost(string text, string host)
+    {
+        if (LoopbackPort(host) is { } parts)
+        {
+            return FindPlain(text, host) || (FindWhole(text, parts.Host) && FindWhole(text, parts.Port));
+        }
+
+        return !host.Contains('.') && !host.Contains(':') && !host.All(char.IsAsciiDigit) ? FindPlacedHost(text, host) : FindPlain(text, host);
+    }
+
+    /// <summary>A loopback entry's host and port (<c>localhost:5432</c>, <c>localhost,5432</c>); null for any other host.</summary>
+    private static (string Host, string Port)? LoopbackPort(string host)
+    {
+        int split = host.LastIndexOfAny([':', ',']);
+        return split > 0 && Loopback.Contains(host[..split]) && host[(split + 1)..].All(char.IsAsciiDigit) ? (host[..split], host[(split + 1)..]) : null;
+    }
+
+    /// <summary>Whether <paramref name="word"/> stands alone in <paramref name="text"/>: no letter, digit, <c>_</c>, <c>.</c> or <c>-</c> beside it.</summary>
+    private static bool FindWhole(string text, string word)
+    {
+        int from = 0;
+        while (word.Length > 0 && (from = text.IndexOf(word, from, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            int end = from + word.Length;
+            if ((from == 0 || !IsHostChar(text[from - 1])) && (end == text.Length || !IsHostChar(text[end])))
+            {
+                return true;
+            }
+
+            from = end;
+        }
+
+        return false;
+    }
+
+    /// <summary>A one-label host where a host stands (<see cref="FindHost"/>).</summary>
+    private static bool FindPlacedHost(string text, string host) =>
+        Regex.IsMatch(text, @"(?:(?:@|//|=)\s*[""']?|(?:^|\s)(?:-h|-H|-S|--host|--server|-Server|-ServerInstance|/S)[\s=:]+[""']?)" + Regex.Escape(host) + @"(?![\w.\-])"
+            + "|" + @"(?<![\w.\-])" + Regex.Escape(host) + @"[:,]\d", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>Whether <paramref name="host"/> stands in <paramref name="text"/> as a whole name: no name character beside it.</summary>
+    private static bool FindPlain(string text, string host)
     {
         int from = 0;
         while (host.Length > 0 && (from = text.IndexOf(host, from, StringComparison.OrdinalIgnoreCase)) >= 0)

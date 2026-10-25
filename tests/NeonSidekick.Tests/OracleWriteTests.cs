@@ -133,9 +133,9 @@ public sealed class OracleExecuteTests
     public async Task TheTool_ChecksInOrder_ThenAsks_PerConnection()
     {
         var asked = new List<(string Connection, string Place, string Sql)>();
-        var tool = new OracleExecuteTool(Access(), () => _settings, (_, connection, place, sql, _) =>
+        var tool = new OracleExecuteTool(Access(), () => _settings, (_, target, sql, _, _) =>
         {
-            asked.Add((connection, place, sql));
+            asked.Add((target.Connection, target.Place, sql));
             return Task.FromResult<bool?>(false);
         });
 
@@ -149,6 +149,18 @@ public sealed class OracleExecuteTests
         Assert.Equal(OracleText.NoSchemaArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "DELETE FROM t", ["schema"] = "APP" }))!);   // 2026-10-09
         Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("SELECT * FROM dba_users", "hr", [], null, CancellationToken.None));   // the names read first
         Assert.StartsWith("Error: could not connect to hr: ", await tool.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));   // the names read first, never the pane
+
+        // The names read succeeds (2026-10-24, the database review's S2/S4: the dba_users leg took the read path and failed to connect
+        // like every other, so the dictionary's refusal on oracle_execute was never proven): both refused before the read path or the pane.
+        var seeded = Access();
+        seeded.Names.Seed([[OracleBoundary.UserKind, "HR"], [OracleBoundary.UserKind, "APP"], [OracleBoundary.ViewKind, "DBA_USERS"]]);
+        var named = new OracleExecuteTool(seeded, () => _settings, (_, target, sql, _, _) =>
+        {
+            asked.Add((target.Connection, target.Place, sql));
+            return Task.FromResult<bool?>(false);
+        });
+        Assert.Equal(OracleText.Dictionary("DBA_USERS", "HR"), await named.RunAsync("SELECT * FROM dba_users", "hr", [], null, CancellationToken.None));
+        Assert.Equal(OracleText.OtherSchema("APP", "HR"), await named.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));
         Assert.StartsWith("Error: the SQL uses UTL_HTTP", await tool.RunAsync("SELECT UTL_HTTP.REQUEST('x') FROM dual", null, [], null, CancellationToken.None));
         _settings.OracleMode = "read-only";
         Assert.Equal(ServerWriteText.ReadOnlyMode(OracleStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));
@@ -202,7 +214,7 @@ public sealed class LiveOracleWriteTests
         var c = LiveOracle.Config!;
         var copy = new OracleConnectionConfig { DataSource = c.DataSource, User = c.User, Password = c.Password, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Access = access };
         var server = new OracleAccess(() => new OracleCatalog([new OracleNamedConnection("live", copy, "test")], []));
-        return (new OracleExecuteTool(server, () => _settings, (_, _, _, sql, _) =>
+        return (new OracleExecuteTool(server, () => _settings, (_, _, sql, _, _) =>
         {
             asked.Add(sql);
             return Task.FromResult<bool?>(true);
@@ -215,6 +227,7 @@ public sealed class LiveOracleWriteTests
         var (tool, asked) = Tool("readwrite");
         string id = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         string table = "NS_WRITE_" + id, proc = "NS_BUMP_" + id;
+        string? droppedProc, droppedTable;
         try
         {
             Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id NUMBER PRIMARY KEY, a VARCHAR2(10));", null, [], null, CancellationToken.None));
@@ -231,9 +244,14 @@ public sealed class LiveOracleWriteTests
         }
         finally
         {
-            await tool.RunAsync($"DROP PROCEDURE {proc}", null, [], null, CancellationToken.None);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE {table} PURGE", null, [], null, CancellationToken.None));
+            droppedProc = await tool.RunAsync($"DROP PROCEDURE {proc}", null, [], null, CancellationToken.None);
+            droppedTable = await tool.RunAsync($"DROP TABLE {table} PURGE", null, [], null, CancellationToken.None);
         }
+
+        // The cleanup's answers are asserted after the finally (2026-10-24, the database review's S17): an Assert inside it threw over the
+        // test's own failure and hid it, and the procedure's drop was never checked, which left ns_bump_<pid> behind.
+        Assert.StartsWith("Ran it", droppedProc);
+        Assert.StartsWith("Ran it", droppedTable);
 
         var (readOnly, roAsked) = Tool(null);
         Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE NS_NEVER (a NUMBER)", null, [], null, CancellationToken.None));

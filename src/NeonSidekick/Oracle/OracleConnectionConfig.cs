@@ -65,6 +65,15 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
 
     public string? Description { get; set; }
 
+
+    /// <summary>Keys the entry does not know (2026-10-24, the database review's K2): the load refuses the entry naming the first. Never written.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+
+    /// <summary>Where the password is sent (2026-10-24, decision DB9: a stored credential records it, and a read for another is refused).</summary>
+    [JsonIgnore]
+    public string SignInHost => DataSource?.Trim() ?? "";
+
     /// <summary>Whether the password lives in Windows Credential Manager rather than in the file.</summary>
     [JsonIgnore]
     public bool InCredentialManager => string.Equals(PasswordStore?.Trim(), CredmanStore, StringComparison.OrdinalIgnoreCase);

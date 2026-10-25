@@ -137,6 +137,9 @@ internal sealed partial class SettingsMenu
         /// <summary>Whether <see cref="Password"/> is the stored one an edit read, not one typed.</summary>
         public bool PasswordKept { get; set; }
 
+        /// <summary>An edit's host as read (2026-10-24, review E9): a move away from it lets go of the kept password.</summary>
+        public string? OriginalHost { get; init; }
+
         public SqlConnectionConfig Config { get; init; } = new()
         {
             Auth = SqlConnectionConfig.SqlAuth,
@@ -265,7 +268,8 @@ internal sealed partial class SettingsMenu
             Global = global,
             Name = named.Name,
             Original = named.Name,
-            OriginalTarget = c.NeedsPassword && c.InCredentialManager && c.Credential is null ? c.CredentialTarget(named.Name) : null,
+            OriginalHost = c.SignInHost,
+            OriginalTarget = c.NeedsPassword && c.InCredentialManager && string.IsNullOrWhiteSpace(c.Credential) ? c.CredentialTarget(named.Name) : null,   // a blank credential is the default too (2026-10-24, review N13)
             Config = CloneEntry(c, SqlJsonContext.Default.SqlConnectionConfig, x => x.Password = null),
         };
         if (c.NeedsPassword)
@@ -321,6 +325,7 @@ internal sealed partial class SettingsMenu
             }
 
             bool advanced = await SqlWizardStepAsync(step, draft, cancellationToken).ConfigureAwait(false);
+            ForgetKeptPasswordOnMove(draft.OriginalHost, draft.Config.SignInHost, draft.PasswordKept, () => { draft.Password = ""; draft.PasswordKept = false; });
             if (advanced)
             {
                 step = fromSummary ? SqlWizardMissing(draft) ?? SqlWizardStep.Summary : step + 1;
@@ -424,7 +429,7 @@ internal sealed partial class SettingsMenu
             case SqlWizardStep.Auth:
             {
                 var words = SqlWizardAuthWords;
-                int current = Math.Max(0, words.ToList().IndexOf(c.Auth ?? ""));
+                int current = WordIndex(words.ToList(), c.Auth);
                 if (await SqlWizardPickAsync(SqlWizardAuthQuestion, SqlWizardAuthRows, current, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
@@ -485,7 +490,7 @@ internal sealed partial class SettingsMenu
 
             case SqlWizardStep.Encrypt:
             {
-                int current = Math.Max(0, SqlWizardEncryptWords.ToList().IndexOf(c.Encrypt ?? ""));
+                int current = WordIndex(SqlWizardEncryptWords.ToList(), c.Encrypt);
                 if (await SqlWizardPickAsync(SqlWizardEncryptQuestion, SqlWizardEncryptRows, current, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
@@ -724,41 +729,20 @@ internal sealed partial class SettingsMenu
         {
             // An edit opens on its summary, so a page it still lacks (a stored password that could not be read) is caught here.
             string unset = SqlWizardLabels[(int)missing] + " is not set";
-            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, unset) : SqlText.ConnectionChangeFailed(draft.Name, unset));
+            Sink.Error(WizardSaveFailed(draft.Original, draft.Name, unset));
             return null;
         }
 
         if (c.Problem is { } problem)
         {
-            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, problem) : SqlText.ConnectionChangeFailed(draft.Name, problem));
+            Sink.Error(WizardSaveFailed(draft.Original, draft.Name, problem));
             return null;
         }
 
         string path = SqlWizardPath(draft.Global);
-        if ((draft.Original is { } original ? SqlConfigFile.ReplaceConnection(path, original, draft.Name, c) : SqlConfigFile.AddConnection(path, draft.Name, c)) is { } error)
+        if (!SaveWizardEntry(SqlConfigFile.Family, path, SqlWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget))
         {
-            Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, error) : SqlText.ConnectionChangeFailed(draft.Name, error));
             return null;
-        }
-
-        Sink.Notice(draft.Original is null ? SqlText.ConnectionAdded(draft.Name, path) : SqlText.ConnectionChanged(draft.Name, path));
-        bool saved = true;
-        if (c.NeedsPassword)
-        {
-            (saved, string notice) = SqlSecrets.Save(new SqlNamedConnection(draft.Name, c, path), draft.Password);
-            if (saved)
-            {
-                Sink.Notice(notice);
-            }
-            else
-            {
-                Sink.Error(notice);
-            }
-        }
-
-        if (saved)
-        {
-            ForgetOldCredential(draft.OriginalTarget, c.NeedsPassword && c.InCredentialManager ? c.CredentialTarget(draft.Name) : null);
         }
 
         return ApplyOfferedAfterSave(SettingsField.SqlConnectionsOffered, _settings.Current.SqlConnectionsOffered, draft.Original, draft.Name, offer, (d, next) => d.SqlConnectionsOffered = next);

@@ -26,7 +26,13 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     public const int MaxConnectTimeoutSeconds = 120;
 
-    /// <summary>The <see cref="SslMode"/> words, libpq's own spelling; <c>prefer</c> is the default.</summary>
+    /// <summary>What <see cref="Builder"/> sets Npgsql's <c>RequireAuth</c> to while the certificate is unchecked (E3, DB1). Pinned.</summary>
+    public const string NoCleartextPassword = "!Password";
+
+    /// <summary>The TLS word a new connection's wizard starts on: the certificate and host name checked (2026-10-24, decision DB1).</summary>
+    public const string NewConnectionSslMode = "verify-full";
+
+    /// <summary>The <see cref="SslMode"/> words, libpq's own spelling; <c>prefer</c> is the default of an entry that names none.</summary>
     public static readonly IReadOnlyList<string> SslModeWords = ["prefer", "require", "verify-ca", "verify-full", "disable"];
 
     public string? Host { get; set; }
@@ -64,6 +70,23 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     public string? Access { get; set; }
 
     public string? Description { get; set; }
+
+
+    /// <summary>Keys the entry does not know (2026-10-24, the database review's K2): the load refuses the entry naming the first. Never written.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+
+    /// <summary>
+    /// Whether the server's certificate and host name are checked (<c>verify-full</c>; 2026-10-24, the database review's E3, decision DB1): the
+    /// other modes encrypt (or not) but accept any certificate, so a man in the middle could read the password. An absent key is
+    /// <c>prefer</c>, unchecked, as before.
+    /// </summary>
+    [JsonIgnore]
+    public bool TlsChecked => string.Equals(SslMode?.Trim(), "verify-full", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Where the password is sent (2026-10-24, decision DB9: a stored credential records it, and a read for another is refused).</summary>
+    [JsonIgnore]
+    public string SignInHost => Endpoint;
 
     [JsonIgnore]
     public bool InCredentialManager => string.Equals(PasswordStore?.Trim(), CredmanStore, StringComparison.OrdinalIgnoreCase);
@@ -191,6 +214,11 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
                 "disable" => Npgsql.SslMode.Disable,
                 _ => Npgsql.SslMode.Prefer,
             },
+
+            // A server's request for the password in clear refused while the certificate is unchecked (2026-10-24, the database review's E3,
+            // decision DB1: Npgsql 10's RequireAuth, libpq's require_auth): a man in the middle could ask for it and read it. SCRAM and MD5
+            // still sign in; under verify-full the link itself is the server's, and cleartext is let through as before.
+            RequireAuth = TlsChecked ? null : NoCleartextPassword,
         };
     }
 }

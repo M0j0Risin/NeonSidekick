@@ -35,6 +35,9 @@ public sealed record ObjectVerb(IReadOnlyDictionary<string, ServerStatementKind>
 /// deletes too), the reading first words, the object verbs and the modifiers between a verb and its object (<c>CREATE OR REPLACE
 /// TEMP</c>), a scan for what is refused wherever it stands (a denied function, a database link), and how the <c>;</c>s that end a
 /// statement are counted (a routine's body holds its own; a negative count is a body the gate cannot read for sure, refused).
+/// Since 2026-10-24 (the database review's Phase 8) two more: <see cref="Also"/>, the kinds a statement needs beyond its verb's (MySQL's
+/// REPLACE deletes the row it replaces, PostgreSQL's SELECT … INTO makes a table), and <see cref="Body"/>, a routine's or block's body
+/// read with the top level's refusals (DB3).
 /// </summary>
 public sealed record WriteGateRules(
     ServerWriteFamily Family,
@@ -45,7 +48,9 @@ public sealed record WriteGateRules(
     IReadOnlyDictionary<string, ObjectVerb> Objects,
     IReadOnlySet<string> Modifiers,
     Func<IReadOnlyList<GateToken>, int, (string What, string Why)?> Scan,
-    Func<IReadOnlyList<GateToken>, int, int>? Separators = null);
+    Func<IReadOnlyList<GateToken>, int, int>? Separators = null,
+    Func<IReadOnlyList<GateToken>, int, IEnumerable<ServerStatementKind>>? Also = null,
+    Func<IReadOnlyList<GateToken>, int, (string What, string Why)?>? Body = null);
 
 /// <summary>
 /// The write gates' common engine (2026-10-05, the user's ask: <c>SqliteWriteGate</c> mirrored for PostgreSQL, MySQL and Oracle; SQL
@@ -100,6 +105,11 @@ public static class ServerWriteGate
             }
         }
 
+        if (rules.Body?.Invoke(body, lead) is { } inBody)
+        {
+            return ServerWriteText.Forbidden(family, inBody.What, inBody.Why);
+        }
+
         var kinds = Kinds(rules, body, lead, out string? objectRefused, out string unknown);
         if (objectRefused is not null)
         {
@@ -148,6 +158,73 @@ public static class ServerWriteGate
 
     private static IReadOnlyList<ServerStatementKind>? Kinds(WriteGateRules rules, List<GateToken> body, int lead, out string? refused, out string what)
     {
+        if (OwnKinds(rules, body, lead, out refused, out what) is not { } own)
+        {
+            return null;
+        }
+
+        var found = new HashSet<ServerStatementKind>(own);
+        if (rules.Also is { } also)
+        {
+            found.UnionWith(also(body, lead));
+        }
+
+        // A read that also does something else is that something (2026-10-24: PostgreSQL's SELECT … INTO makes a table, review T7), so it
+        // never takes the read-only path, where it fails, and asks as a change.
+        if (found.Count > 1)
+        {
+            found.Remove(ServerStatementKind.Read);
+        }
+
+        return Enum.GetValues<ServerStatementKind>().Where(found.Contains).ToList();
+    }
+
+    /// <summary>
+    /// What an <c>ALTER</c> of a table does beyond changing its structure (2026-10-24, the database review's B4, T6): a <c>DROP</c> of a
+    /// column, constraint or partition loses what it held (dropping; a partition's rows deleting too), <c>TRUNCATE PARTITION</c> deletes,
+    /// <c>EXCHANGE</c>/<c>SWITCH PARTITION</c> moves rows out (deleting and changing data), and enabling or disabling a trigger or rule
+    /// changes which code runs (procedures and triggers). A <c>DROP DEFAULT</c>, <c>NOT NULL</c>, <c>IDENTITY</c> or <c>EXPRESSION</c> loses
+    /// nothing.
+    /// </summary>
+    private static IEnumerable<ServerStatementKind> AlterAlso(List<GateToken> body, int from)
+    {
+        for (int i = from; i < body.Count; i++)
+        {
+            var t = body[i];
+            if (t.Kind != GateTokenKind.Word || (i > 0 && body[i - 1].IsSymbol(".")))
+            {
+                continue;
+            }
+
+            var next = i + 1 < body.Count ? body[i + 1] : default;
+            var after = i + 2 < body.Count ? body[i + 2] : default;
+            switch (t.Text)
+            {
+                case "DROP" when !(next.Kind == GateTokenKind.Word && next.Text is "DEFAULT" or "NOT" or "IDENTITY" or "EXPRESSION"):
+                    yield return ServerStatementKind.Drop;
+                    if (next.Kind == GateTokenKind.Word && next.Text is "PARTITION" or "SUBPARTITION" or "PARTITIONS")
+                    {
+                        yield return ServerStatementKind.Delete;
+                    }
+
+                    break;
+                case "TRUNCATE":
+                    yield return ServerStatementKind.Delete;
+                    break;
+                case "EXCHANGE" or "SWITCH":
+                    yield return ServerStatementKind.Delete;
+                    yield return ServerStatementKind.Data;
+                    break;
+                case "ENABLE" or "DISABLE" when next.Kind == GateTokenKind.Word
+                    && (next.Text is "TRIGGER" or "TRIGGERS" or "RULE" || (next.Text is "ALL" or "REPLICA" or "ALWAYS" && after.Kind == GateTokenKind.Word && after.Text is "TRIGGER" or "TRIGGERS" or "RULE")):
+                    yield return ServerStatementKind.Procedures;
+                    break;
+            }
+        }
+    }
+
+    private static IReadOnlyList<ServerStatementKind>? OwnKinds(WriteGateRules rules, List<GateToken> body, int lead, out string? refused, out string what)
+    {
         refused = null;
         string word = body[lead].Text;
         what = word;
@@ -169,7 +246,10 @@ public static class ServerWriteGate
             for (int i = lead + 1; i < body.Count; i++)
             {
                 var t = body[i];
-                bool call = i + 1 < body.Count && body[i + 1].IsSymbol("(");
+
+                // A MERGE branch's INSERT (cols) is the insert itself, not a function (2026-10-24, the database review's R9: WHEN NOT
+                // MATCHED THEN INSERT (…) classed a MERGE as its DELETE branch alone, inserting with changing data unticked).
+                bool call = i + 1 < body.Count && body[i + 1].IsSymbol("(") && !body[i - 1].IsWord("THEN");
                 if (t.Kind == GateTokenKind.Word && !call && rules.Dml.TryGetValue(t.Text, out var kind))
                 {
                     found.Add(kind);
@@ -224,42 +304,82 @@ public static class ServerWriteGate
         // CREATE OR REPLACE (the review, 2026-10-05) changes what is there as well as making it: a view's or a synonym's definition
         // (changing structure), and MariaDB's table or sequence, which goes with its rows or its place (dropping). A routine's OR
         // REPLACE is the procedures kind either way.
+        var kinds = new List<ServerStatementKind> { objectKind };
         if (replace && objectKind == ServerStatementKind.Create)
         {
-            return [ServerStatementKind.Create, target is "TABLE" or "SEQUENCE" ? ServerStatementKind.Drop : ServerStatementKind.Alter];
+            kinds.Add(target is "TABLE" or "SEQUENCE" ? ServerStatementKind.Drop : ServerStatementKind.Alter);
         }
 
-        return [objectKind];
+        if (word == "ALTER" && target is "TABLE" or "MATERIALIZED")
+        {
+            kinds.AddRange(AlterAlso(body, at + 1));
+        }
+
+        // A CREATE that holds others (2026-10-24, the database review's C2: PostgreSQL's CREATE SCHEMA s CREATE TABLE … CREATE TRIGGER …)
+        // needs each one's kind, and one the family refuses refuses it.
+        if (word == "CREATE")
+        {
+            for (int i = at + 1; i < body.Count; i++)
+            {
+                if (!body[i].IsWord("CREATE") || body[i - 1].IsSymbol("."))
+                {
+                    continue;
+                }
+
+                int inner = i + 1;
+                while (inner < body.Count && body[inner].Kind == GateTokenKind.Word && rules.Modifiers.Contains(body[inner].Text))
+                {
+                    inner++;
+                }
+
+                if (inner >= body.Count || body[inner].Kind != GateTokenKind.Word)
+                {
+                    what = "CREATE";
+                    return null;
+                }
+
+                if (verb.Refused.TryGetValue(body[inner].Text, out var innerWhy))
+                {
+                    what = "CREATE " + body[inner].Text;
+                    refused = innerWhy;
+                    return null;
+                }
+
+                if (!verb.Kinds.TryGetValue(body[inner].Text, out var innerKind))
+                {
+                    what = "CREATE " + body[inner].Text;
+                    return null;
+                }
+
+                kinds.Add(innerKind);
+            }
+        }
+
+        return kinds;
     }
 
     /// <summary>
-    /// The first qualifier in a statement that is one of <paramref name="names"/> (2026-10-09, the lock to a connection's place): the
-    /// head of an <c>x.y</c> chain (<see cref="Qualifiers"/>), compared case-blind. It took the place of <c>NamesElsewhere</c> (the
-    /// review of 2026-10-05), which counted every head but the place and so asked about a table's <c>t.col</c> too. A lexer cannot tell a table's alias
-    /// (<c>t.col</c>) from a database's or schema's name (<c>payroll.salaries</c>), so the caller hands the names that exist on the
-    /// server (and the server's own): a head among them reaches that place — or is an alias spelled like it, which the refusal says
-    /// to rename. Null when none is.
+    /// Every qualifier in a statement, in order: the heads of its <c>x.y</c> chains, as written (<see cref="QualifierTokens"/>).
+    /// <c>NamesAny</c>, which matched these against a set case-blind, went on 2026-10-24 (the database review's R15: no caller, a wrong doc).
     /// </summary>
-    public static string? NamesAny(IReadOnlyList<GateToken> tokens, IReadOnlySet<string> names, IReadOnlySet<string>? members = null)
-    {
-        ArgumentNullException.ThrowIfNull(names);
-        return Qualifiers(tokens, members).FirstOrDefault(names.Contains);
-    }
+    public static IReadOnlyList<string> Qualifiers(IReadOnlyList<GateToken> tokens, IReadOnlySet<string>? members = null) =>
+        QualifierTokens(tokens, members).Select(t => t.Text).ToList();
 
     /// <summary>
-    /// Every qualifier in a statement, in order: the heads of its <c>x.y</c> chains. A head after another dot is no qualifier, nor one
-    /// after <c>:</c> (a bind's, Oracle's <c>:NEW.x</c>); <paramref name="members"/> are the words after a dot that name no object
-    /// (Oracle's <c>NEXTVAL</c>).
+    /// Every qualifier in a statement, in order, as tokens (so a caller can tell a bare word, which the lexer folded, from a quoted name):
+    /// the heads of its <c>x.y</c> chains. A head after another dot is no qualifier; <paramref name="members"/> are the words after a dot
+    /// that name no object (Oracle's <c>NEXTVAL</c>). A head after a <c>:</c> is one since 2026-10-24 (the database review's F3, R7: the skip
+    /// meant for a bind dropped PostgreSQL's <c>x::payroll.t</c> cast and array slice and Oracle's JSON <c>'k' : payroll.f()</c>; a bind is
+    /// a token of its own, never a word, so the skip guarded nothing).
     /// </summary>
-    public static IReadOnlyList<string> Qualifiers(IReadOnlyList<GateToken> tokens, IReadOnlySet<string>? members = null)
+    public static IReadOnlyList<GateToken> QualifierTokens(IReadOnlyList<GateToken> tokens, IReadOnlySet<string>? members = null)
     {
         ArgumentNullException.ThrowIfNull(tokens);
-        var heads = new List<string>();
+        var heads = new List<GateToken>();
         for (int i = 0; i + 1 < tokens.Count; i++)
         {
             var t = tokens[i];
-            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".")
-                || (i > 0 && (tokens[i - 1].IsSymbol(".") || tokens[i - 1].IsSymbol(":"))))
+            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".") || (i > 0 && tokens[i - 1].IsSymbol(".")))
             {
                 continue;
             }
@@ -269,7 +389,7 @@ public static class ServerWriteGate
                 continue;
             }
 
-            heads.Add(t.Text);
+            heads.Add(t);
         }
 
         return heads;
@@ -279,7 +399,8 @@ public static class ServerWriteGate
     /// Every part of every <c>x.y.z</c> chain but its last, in order, as tokens (so a caller can fold a bare word and keep a quoted name
     /// as written): <c>shop.payroll.salaries</c> gives <c>shop</c> and <c>payroll</c> (the review, 2026-10-09: PostgreSQL's three-part
     /// name kept its schema in the middle, which <see cref="Qualifiers"/> never looked at); a chain ending in <c>.*</c> gives all of it.
-    /// A chain after <c>:</c> (a bind's) is none.
+    /// A chain after <c>:</c> is one since 2026-10-24 (<see cref="QualifierTokens"/>), and a chain ending in a dot and an operator
+    /// (<c>OPERATOR(payroll.+)</c>, the review's F4) gives all of it.
     /// </summary>
     public static IReadOnlyList<GateToken> Prefixes(IReadOnlyList<GateToken> tokens)
     {
@@ -288,8 +409,7 @@ public static class ServerWriteGate
         for (int i = 0; i + 1 < tokens.Count; i++)
         {
             var t = tokens[i];
-            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".")
-                || (i > 0 && (tokens[i - 1].IsSymbol(".") || tokens[i - 1].IsSymbol(":"))))
+            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name) || !tokens[i + 1].IsSymbol(".") || (i > 0 && tokens[i - 1].IsSymbol(".")))
             {
                 continue;
             }
@@ -302,7 +422,7 @@ public static class ServerWriteGate
                 j += 2;
             }
 
-            bool star = j + 2 < tokens.Count && tokens[j + 1].IsSymbol(".") && tokens[j + 2].IsSymbol("*");
+            bool star = j + 2 < tokens.Count && tokens[j + 1].IsSymbol(".") && tokens[j + 2].Kind is GateTokenKind.Symbol or GateTokenKind.Other;
             prefixes.AddRange(star ? chain : chain.Take(chain.Count - 1));
             i = j;
         }

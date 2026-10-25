@@ -121,32 +121,113 @@ internal static unsafe class MacKeychain
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="target"/> is the app's own key's service (2026-10-24, the database review's D7: a generic credential named
+    /// <c>NeonSidekick</c> read the key as its password, and saving through it deleted the key — every <c>keychain:</c> secret lost).
+    /// </summary>
+    public static bool IsReserved(string target) =>
+        string.Equals(target.Trim(), Service, StringComparison.OrdinalIgnoreCase) || string.Equals(target.Trim(), KeyService, StringComparison.OrdinalIgnoreCase);
+
     public static CredentialResult ReadGeneric(string target)
     {
-        int status = Find(target, null, out byte[]? secret, out IntPtr item);
-        string? account = status == ErrSecSuccess ? AccountOf(item) : null;
-        Release(item);
-        return status switch
+        if (IsReserved(target))
         {
-            ErrSecSuccess => CredentialResult.Ok(Encoding.UTF8.GetString(secret!), account),
-            ErrSecItemNotFound => CredentialResult.Failed(SqlText.NoCredential(target), notFound: true),
-            _ => CredentialResult.Failed(Describe(status)),
-        };
+            return CredentialResult.Failed(SqlText.ReservedCredential(target));
+        }
+
+        int status = Find(target, null, out byte[]? secret, out IntPtr item);
+        try
+        {
+            if (status != ErrSecSuccess)
+            {
+                return status == ErrSecItemNotFound ? CredentialResult.Failed(SqlText.NoCredential(target), notFound: true) : CredentialResult.Failed(Describe(status));
+            }
+
+            // A found item with no data, or none, is no credential (2026-10-24, review Q10 and K4: secret! threw on it).
+            if (secret is not { Length: > 0 })
+            {
+                return CredentialResult.Failed(SqlText.EmptyCredential(target));
+            }
+
+            var mark = CredentialMark.Parse(AttributeOf(item, KeychainNative.CommentAttribute));
+            return CredentialResult.Ok(Encoding.UTF8.GetString(secret), AccountOf(item), mark.Host);
+        }
+        finally
+        {
+            // Zeroed once read (2026-10-24, review K5).
+            if (secret is not null)
+            {
+                Array.Clear(secret);
+            }
+
+            Release(item);
+        }
     }
 
-    public static CredentialResult WriteGeneric(string target, string user, string secret)
+    /// <summary>
+    /// Writes <paramref name="secret"/> for <paramref name="target"/> as <paramref name="user"/>, its comment the app's mark (<see cref="CredentialMark"/>:
+    /// UTF-8, and <paramref name="host"/> when given, DB9). An item already there is changed in place (2026-10-24, the database review's I11: the
+    /// old one was deleted before the add, so a refused add — a canceled prompt, a locked Keychain — lost the old password).
+    /// </summary>
+    public static CredentialResult WriteGeneric(string target, string user, string secret, string? host = null)
     {
-        // Replace: the old item (whatever its account) goes, the new one is added with this account.
-        if (!DeleteGeneric(target))
+        if (IsReserved(target))
         {
-            return CredentialResult.Failed("the Keychain would not replace the old item");
+            return CredentialResult.Failed(SqlText.ReservedCredential(target));
+        }
+
+        if (secret.Length == 0)
+        {
+            return CredentialResult.Failed(SqlText.EmptyCredential(target));
         }
 
         byte[] data = Encoding.UTF8.GetBytes(secret);
+        string comment = CredentialMark.Format(wide: false, host);
         try
         {
-            int status = Add(target, user, data);
-            return status == ErrSecSuccess ? CredentialResult.Ok("") : CredentialResult.Failed(Describe(status));
+            int found = Find(target, null, out byte[]? old, out IntPtr item);
+            if (old is not null)
+            {
+                Array.Clear(old);
+            }
+
+            try
+            {
+                if (found == ErrSecSuccess)
+                {
+                    // The first item for the target is the one a read finds, so changing it is the replace; another account's item behind it
+                    // (Q9) is never read and goes with the next delete.
+                    int changed = Modify(item, user, comment, data);
+                    return changed == ErrSecSuccess ? CredentialResult.Ok("") : CredentialResult.Failed(Describe(changed));
+                }
+
+                if (found != ErrSecItemNotFound)
+                {
+                    return CredentialResult.Failed(Describe(found));
+                }
+            }
+            finally
+            {
+                Release(item);
+            }
+
+            int status = Add(target, user, data, out IntPtr added);
+            try
+            {
+                if (status != ErrSecSuccess)
+                {
+                    return CredentialResult.Failed(Describe(status));
+                }
+
+                // The comment rides a second call (the add takes no attributes); a refusal leaves a working credential with no host recorded,
+                // which reads as before DB9.
+                _ = Modify(added, null, comment, null);
+                return CredentialResult.Ok("");
+            }
+            finally
+            {
+                Release(added);
+            }
         }
         finally
         {
@@ -154,37 +235,54 @@ internal static unsafe class MacKeychain
         }
     }
 
+    /// <summary>
+    /// Removes every item for <paramref name="target"/> (2026-10-24, the database review's Q9: only the first was removed, so another account's
+    /// item stayed and a read could find its old password), up to 32. One that is not there counts as removed.
+    /// </summary>
     public static bool DeleteGeneric(string target)
     {
-        int status = Find(target, null, out byte[]? secret, out IntPtr item);
-        if (secret is not null)
+        if (IsReserved(target))
         {
-            Array.Clear(secret);
-        }
-
-        if (status == ErrSecItemNotFound)
-        {
-            return true;
-        }
-
-        if (status != ErrSecSuccess)
-        {
-            Release(item);
             return false;
         }
 
-        int deleted = SecKeychainItemDelete(item);
-        Release(item);
-        return deleted == ErrSecSuccess;
+        for (int round = 0; round < 32; round++)
+        {
+            int status = Find(target, null, out byte[]? secret, out IntPtr item);
+            if (secret is not null)
+            {
+                Array.Clear(secret);
+            }
+
+            if (status == ErrSecItemNotFound)
+            {
+                return true;
+            }
+
+            if (status != ErrSecSuccess)
+            {
+                Release(item);
+                return false;
+            }
+
+            int deleted = SecKeychainItemDelete(item);
+            Release(item);
+            if (deleted != ErrSecSuccess)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
-    /// <summary>The sentence for a Keychain status. Pinned in shape.</summary>
+    /// <summary>The sentence for a Keychain status. Pinned in shape (the words in <see cref="SqlText"/> since 2026-10-24, review K10).</summary>
     public static string Describe(int status) => status switch
     {
-        ErrSecUserCanceled => "the Keychain prompt was canceled",
-        ErrSecAuthFailed => "the Keychain refused the sign-in",
-        ErrSecInteractionNotAllowed => "the Keychain is locked and cannot ask here",
-        _ => "the Keychain refused it (OSStatus " + status.ToString(CultureInfo.InvariantCulture) + ")",
+        ErrSecUserCanceled => SqlText.KeychainCanceled,
+        ErrSecAuthFailed => SqlText.KeychainAuthFailed,
+        ErrSecInteractionNotAllowed => SqlText.KeychainLocked,
+        _ => SqlText.KeychainRefused(status.ToString(CultureInfo.InvariantCulture)),
     };
 
     private static byte[] Tag(byte[] key, byte[] associated, byte[] iv, byte[] cipher)
@@ -216,7 +314,7 @@ internal static unsafe class MacKeychain
                         byte[] decoded = Convert.FromBase64String(Encoding.ASCII.GetString(stored!));
                         if (decoded.Length != KeyBytes)
                         {
-                            return CredentialResult.Failed("the app's key in the Keychain is damaged; delete the NeonSidekick item in Keychain Access and save the secrets again");
+                            return CredentialResult.Failed(SqlText.KeychainKeyDamaged);
                         }
 
                         s_key = key = decoded;
@@ -224,7 +322,7 @@ internal static unsafe class MacKeychain
                     }
                     catch (FormatException)
                     {
-                        return CredentialResult.Failed("the app's key in the Keychain is damaged; delete the NeonSidekick item in Keychain Access and save the secrets again");
+                        return CredentialResult.Failed(SqlText.KeychainKeyDamaged);
                     }
                     finally
                     {
@@ -239,7 +337,8 @@ internal static unsafe class MacKeychain
 
                 byte[] fresh = RandomNumberGenerator.GetBytes(KeyBytes);
                 byte[] encoded = Encoding.ASCII.GetBytes(Convert.ToBase64String(fresh));
-                int added = Add(KeyService, MasterAccount, encoded);
+                int added = Add(KeyService, MasterAccount, encoded, out IntPtr made);
+                Release(made);
                 Array.Clear(encoded);
                 if (added == ErrSecSuccess)
                 {
@@ -255,7 +354,7 @@ internal static unsafe class MacKeychain
                 // Another process made it between the find and the add: read theirs.
             }
 
-            return CredentialResult.Failed("the app's key could not be read or made in the Keychain");
+            return CredentialResult.Failed(SqlText.KeychainKeyUnmade);
         }
     }
 
@@ -308,25 +407,93 @@ internal static unsafe class MacKeychain
         }
 
         item = found;
-        if (status == ErrSecSuccess && data is not null)
+        if (status == ErrSecSuccess && data is not null && length > 0)
         {
             secret = new ReadOnlySpan<byte>(data, (int)length).ToArray();
             new Span<byte>(data, (int)length).Clear();
+        }
+
+        if (data is not null)
+        {
             SecKeychainItemFreeContent(null, data);
         }
 
         return status;
     }
 
-    private static int Add(string service, string account, byte[] data)
+    private static int Add(string service, string account, byte[] data, out IntPtr item)
     {
         byte[] serviceBytes = Encoding.UTF8.GetBytes(service);
         byte[] accountBytes = Encoding.UTF8.GetBytes(account);
+        IntPtr made = IntPtr.Zero;
+        int status;
         fixed (byte* s = serviceBytes)
         fixed (byte* a = accountBytes)
         fixed (byte* d = data)
         {
-            return SecKeychainAddGenericPassword(IntPtr.Zero, (uint)serviceBytes.Length, s, (uint)accountBytes.Length, a, (uint)data.Length, d, null);
+            status = SecKeychainAddGenericPassword(IntPtr.Zero, (uint)serviceBytes.Length, s, (uint)accountBytes.Length, a, (uint)data.Length, d, &made);
+        }
+
+        item = made;
+        return status;
+    }
+
+    /// <summary>
+    /// Changes <paramref name="item"/> in place (2026-10-24, review I11 and DB9): its account (when given), its comment, and its password
+    /// (when <paramref name="data"/> is given), through <c>SecKeychainItemModifyAttributesAndData</c>, the Security framework already linked.
+    /// </summary>
+    private static int Modify(IntPtr item, string? account, string comment, byte[]? data)
+    {
+        if (item == IntPtr.Zero)
+        {
+            return ErrSecItemNotFound;
+        }
+
+        byte[] accountBytes = account is null ? [] : Encoding.UTF8.GetBytes(account);
+        byte[] commentBytes = Encoding.UTF8.GetBytes(comment);
+        fixed (byte* a = accountBytes)
+        fixed (byte* c = commentBytes)
+        fixed (byte* d = data)
+        {
+            var attributes = stackalloc KeychainNative.SecKeychainAttribute[2];
+            uint count = 0;
+            attributes[count++] = new KeychainNative.SecKeychainAttribute { Tag = KeychainNative.CommentAttribute, Length = (uint)commentBytes.Length, Data = c };
+            if (account is not null)
+            {
+                attributes[count++] = new KeychainNative.SecKeychainAttribute { Tag = KeychainNative.AccountAttribute, Length = (uint)accountBytes.Length, Data = a };
+            }
+
+            var list = new KeychainNative.SecKeychainAttributeList { Count = count, Attr = attributes };
+            return KeychainNative.SecKeychainItemModifyAttributesAndData(item, &list, data is null ? 0u : (uint)data.Length, data is null ? null : d);
+        }
+    }
+
+    /// <summary>One string attribute of <paramref name="item"/> (<see cref="AccountOf"/>'s read for any tag); null when it can't be read or is absent.</summary>
+    internal static string? AttributeOf(IntPtr item, uint attribute)
+    {
+        if (item == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        uint tag = attribute;
+        uint format = KeychainNative.FormatString;
+        var info = new KeychainNative.SecKeychainAttributeInfo { Count = 1, Tag = &tag, Format = &format };
+        KeychainNative.SecKeychainAttributeList* list = null;
+        if (KeychainNative.SecKeychainItemCopyAttributesAndData(item, &info, null, &list, null, null) != ErrSecSuccess || list is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return list->Count > 0 && list->Attr[0].Data is not null
+                ? Encoding.UTF8.GetString(new ReadOnlySpan<byte>(list->Attr[0].Data, (int)list->Attr[0].Length))
+                : null;
+        }
+        finally
+        {
+            KeychainNative.SecKeychainItemFreeAttributesAndData(list, null);
         }
     }
 

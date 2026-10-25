@@ -40,17 +40,12 @@ public sealed class SqlTablesTool : SqlTool
 
     public override JsonElement JsonSchema => Schema;
 
-    /// <summary>The LIKE pattern a <c>pattern</c> argument means: a text with <c>%</c> or <c>_</c> as it is, <c>*</c> read as <c>%</c>, else the text anywhere in the name.</summary>
-    public static string? LikePattern(string? pattern)
-    {
-        if (string.IsNullOrWhiteSpace(pattern))
-        {
-            return null;
-        }
-
-        string text = pattern.Trim().Replace('*', '%');
-        return text.Contains('%', StringComparison.Ordinal) || text.Contains('_', StringComparison.Ordinal) ? text : "%" + text + "%";
-    }
+    /// <summary>
+    /// The LIKE pattern a <c>pattern</c> argument means: a text with <c>%</c> as it is, <c>*</c> read as <c>%</c>, else the text anywhere in
+    /// the name — <see cref="OracleTablesTool.LikePattern"/>, every family's (2026-10-24, the database review's C12: an <c>_</c> alone made it a
+    /// pattern here, so <c>order_item</c> was no longer a contains search, unlike the other four families).
+    /// </summary>
+    public static string? LikePattern(string? pattern) => OracleTablesTool.LikePattern(pattern);
 
     public async Task<string> DescribeAsync(string? connection, string? schema, string? pattern, CancellationToken cancellationToken)
     {

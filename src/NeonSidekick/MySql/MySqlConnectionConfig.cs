@@ -32,7 +32,10 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
     /// <summary>The <see cref="ConnectTimeoutSeconds"/> ceiling.</summary>
     public const int MaxConnectTimeoutSeconds = 120;
 
-    /// <summary>The <see cref="SslMode"/> words, MySqlConnector's <see cref="MySqlSslMode"/> in the server's own spelling; <c>preferred</c> is the default.</summary>
+    /// <summary>The TLS word a new connection's wizard starts on: the certificate and host name checked (2026-10-24, decision DB1).</summary>
+    public const string NewConnectionSslMode = "verify-full";
+
+    /// <summary>The <see cref="SslMode"/> words, MySqlConnector's <see cref="MySqlSslMode"/> in the server's own spelling; <c>preferred</c> is the default of an entry that names none.</summary>
     public static readonly IReadOnlyList<string> SslModeWords = ["preferred", "required", "verify-ca", "verify-full", "none"];
 
     /// <summary>The host name or address.</summary>
@@ -75,6 +78,23 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
     public string? Access { get; set; }
 
     public string? Description { get; set; }
+
+
+    /// <summary>Keys the entry does not know (2026-10-24, the database review's K2): the load refuses the entry naming the first. Never written.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+
+    /// <summary>
+    /// Whether the server's certificate and host name are checked (<c>verify-full</c>; 2026-10-24, the database review's E4, decision DB1):
+    /// under the others MySqlConnector answers a server's <c>mysql_clear_password</c> request over any TLS link, so a man in the middle gets the
+    /// password; no option refuses that request. An absent key is <c>preferred</c>, unchecked, as before.
+    /// </summary>
+    [JsonIgnore]
+    public bool TlsChecked => string.Equals(SslMode?.Trim(), "verify-full", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Where the password is sent (2026-10-24, decision DB9: a stored credential records it, and a read for another is refused).</summary>
+    [JsonIgnore]
+    public string SignInHost => Endpoint;
 
     /// <summary>Whether the password lives in Windows Credential Manager rather than in the file.</summary>
     [JsonIgnore]
@@ -163,7 +183,10 @@ public sealed class MySqlConnectionConfig : Sql.ISignInConfig
             AllowLoadLocalInfile = false,
             AllowUserVariables = false,
             AllowPublicKeyRetrieval = AllowPublicKeyRetrieval,
-            ConvertZeroDateTime = true,
+            // A TINYINT(1) read as the number it is (2026-10-24, the database review's N9: 2 and 5 read as true), and a zero date as the
+            // MySqlDateTime it is (N10: ConvertZeroDateTime showed 0000-00-00 as 0001-01-01, a real-looking date).
+            TreatTinyAsBoolean = false,
+            AllowZeroDateTime = true,
             SslMode = (SslMode?.Trim().ToLowerInvariant() ?? "") switch
             {
                 "required" => MySqlSslMode.Required,

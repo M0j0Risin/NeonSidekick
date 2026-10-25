@@ -89,7 +89,7 @@ public sealed class ServerWriteTests
             "Error: mysql_execute cannot tell where the routine's body ends; write the body as BEGIN … END and quote any name spelled like a block word (BEGIN, END, a label)",
             ServerWriteText.UnclearBody(NeonSidekick.MySql.MySqlStatementKinds.Family));
         Assert.Equal("shop/sales: 2 rows changed by INSERT …", ServerWriteText.AuditLogLine("shop/sales", 2, "INSERT …"));
-        Assert.Equal("shop/sales: ran by CREATE TABLE t (a int)", ServerWriteText.AuditLogLine("shop/sales", null, "CREATE TABLE t (a int)"));
+        Assert.Equal("shop/sales: ran by CREATE TABLE t (a int)", ServerWriteText.AuditLogLine("shop/sales", (int?)null, "CREATE TABLE t (a int)"));
         Assert.Equal(
             "Error: connection 'shop' is read-only (\"access\": \"read\" in postgres.json); the user makes it readwrite to allow changes",
             ServerWriteText.ReadOnlyConnection(Family, "shop"));
@@ -234,9 +234,9 @@ public sealed class PostgresExecuteTests
     {
         var asked = new List<(string Family, string Connection, string Place, string Sql)>();
         bool? answer = false;
-        var tool = new PostgresExecuteTool(Access(), () => _settings, (family, connection, place, sql, _) =>
+        var tool = new PostgresExecuteTool(Access(), () => _settings, (family, target, sql, _, _) =>
         {
-            asked.Add((family.Title, connection, place, sql));
+            asked.Add((family.Title, target.Connection, target.Place, sql));
             return Task.FromResult(answer);
         });
 
@@ -323,7 +323,8 @@ public sealed class PostgresExecuteTests
     {
         string listing = new PostgresConnectionsTool(Access(), () => _settings).Describe();
         Assert.Contains("- shop: 127.0.0.1:9 / sales, user u, read-write", listing);
-        Assert.Contains("- ro: 127.0.0.1:9 / sales, user u\n", listing + "\n");
+        // A connection whose certificate is not checked says so since 2026-10-24 (the database review's DB1).
+        Assert.Contains("- ro: 127.0.0.1:9 / sales, user u" + SqlText.TlsUnchecked + "\n", listing + "\n");
         _settings.PostgresMode = "read-only";
         Assert.Contains("user u, readwrite (but PostgreSQL mode is read-only)", new PostgresConnectionsTool(Access(), () => _settings).Describe());
     }
@@ -357,7 +358,7 @@ public sealed class LivePostgresWriteTests
         var config = LivePostgres.Config!;
         var copy = new PostgresConnectionConfig { Host = config.Host, Port = config.Port, Database = config.Database, User = config.User, Password = config.Password, SslMode = config.SslMode, ConnectTimeoutSeconds = config.ConnectTimeoutSeconds, Access = access };
         var access_ = new PostgresAccess(() => new PostgresCatalog([new PostgresNamedConnection("live", copy, "test")], []));
-        return (new PostgresExecuteTool(access_, () => _settings, (_, _, _, sql, _) =>
+        return (new PostgresExecuteTool(access_, () => _settings, (_, _, sql, _, _) =>
         {
             asked.Add(sql);
             return Task.FromResult<bool?>(true);
@@ -372,6 +373,7 @@ public sealed class LivePostgresWriteTests
         var audit = new List<string>();
         void Collect(DiagnosticEvent e) => audit.Add(e.Message);
         DiagnosticLog.Emitted += Collect;
+        string? dropped;
         try
         {
             Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id int PRIMARY KEY, a text)", null, [], null, CancellationToken.None));
@@ -395,8 +397,11 @@ public sealed class LivePostgresWriteTests
         finally
         {
             DiagnosticLog.Emitted -= Collect;
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None));
+            dropped = await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None);
         }
+
+        // Asserted after the finally (2026-10-24, the database review's S17): inside it, a failed drop hid the test's own failure.
+        Assert.StartsWith("Ran it", dropped);
 
         var (readOnly, roAsked) = Tool(null);
         Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE ns_never (a int)", null, [], null, CancellationToken.None));

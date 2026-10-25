@@ -262,7 +262,8 @@ public sealed class PostgresToolsTests : IDisposable
     {
         var config = new PostgresConnectionConfig { Host = "127.0.0.1", Port = 1, Database = "shop", User = "reader", Password = "p", ConnectTimeoutSeconds = 1 };
         var catalog = new PostgresCatalog([new PostgresNamedConnection("shop", config, "x.json")], []);
-        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered)), () => _settings);
+        var access = new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered));
+        var tools = ChatScreen.PostgresTools(access, () => _settings);
         foreach (var tool in tools)
         {
             Assert.Equal(PostgresText.NoDatabaseArgument, (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "SELECT 1", ["table"] = "t", ["pattern"] = "x", ["database"] = "other" }))!);
@@ -279,9 +280,16 @@ public sealed class PostgresToolsTests : IDisposable
         Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "public", null, CancellationToken.None));
         Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("public.orders", null, null, CancellationToken.None));
         Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), (string)(await tools.OfType<PostgresIndexesTool>().Single().InvokeAsync(new AIFunctionArguments { ["schema"] = "public" }))!);
+        // An asked schema is spelled exactly since 2026-10-24 (the database review's P4): Sales is another schema than sales.
+        Assert.Equal(PostgresText.SchemaElsewhere("Sales", "sales"), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "Sales", null, CancellationToken.None));
         Assert.Equal(PostgresText.OtherSchema("information_schema", "sales"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
         Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM sales.orders o WHERE o.id = 1", null, [], null, CancellationToken.None));   // the alias sends for the names
         Assert.StartsWith("Error: could not connect to shop", await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("SALES.orders", null, null, CancellationToken.None));
+
+        // The names come back (2026-10-24, the database review's S3): the refusal is the boundary's, the own schema's goes on to the run.
+        access.Names.Seed([["sales"], ["archive"]]);
+        Assert.Equal(PostgresText.OtherSchema("archive", "sales"), await query.RunAsync("SELECT * FROM archive.orders", null, [], null, CancellationToken.None));
+        Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM sales.orders o WHERE o.id = 1", null, [], null, CancellationToken.None));
     }
 
     [Theory]
@@ -432,6 +440,13 @@ internal static class LivePostgres
                 }
             }
 
+            // A second schema for the lock's names read to find (2026-10-24, the database review's S13), made on every run: an older fixture
+            // database has none.
+            using (var other = new NpgsqlCommand("CREATE SCHEMA IF NOT EXISTS ns_other; CREATE TABLE IF NOT EXISTS ns_other.t (a int)", connection))
+            {
+                other.ExecuteNonQuery();
+            }
+
             Config = new PostgresConnectionConfig
             {
                 Host = builder.Host,
@@ -522,6 +537,7 @@ public sealed class LivePostgresTests
         Assert.StartsWith("1 row", await query.RunAsync("SELECT count(o.id) FROM ns_orders o", null, [], null, CancellationToken.None));
         Assert.StartsWith("1 row", await query.RunAsync("SELECT count(*) FROM public.ns_orders", null, [], null, CancellationToken.None));
         Assert.Equal(PostgresText.OtherSchema("information_schema", "public"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
+        Assert.Equal(PostgresText.OtherSchema("ns_other", "public"), await query.RunAsync("SELECT * FROM ns_other.t", null, [], null, CancellationToken.None));   // S13: found by the names read
         Assert.Contains("| public |", (string)(await tools.OfType<PostgresSchemasTool>().Single().InvokeAsync(new AIFunctionArguments()))!);
     }
 
@@ -550,6 +566,25 @@ public sealed class LivePostgresTests
         Assert.StartsWith("(numeric: ", cells["numeric_big"]);
     }
 
+    /// <summary>
+    /// Each read-only layer alone (2026-10-24, the database review's S7: the access's run has both, so either alone was never shown to hold):
+    /// the session's default read-only with no transaction statement, and SET TRANSACTION READ ONLY on a session without the default.
+    /// </summary>
+    [LivePostgresFact]
+    public void EachReadOnlyLayer_RefusesAWriteAlone()
+    {
+        var plain = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(LivePostgres.Variable)) { Pooling = false };
+        var session = new NpgsqlConnectionStringBuilder(plain.ConnectionString) { Options = "-c default_transaction_read_only=on" };
+        foreach (var (builder, sql) in new[] { (session, "INSERT INTO ns_orders VALUES (98, 1, 1, NULL, NULL)"), (plain, "BEGIN; SET TRANSACTION READ ONLY; INSERT INTO ns_orders VALUES (98, 1, 1, NULL, NULL)") })
+        {
+            using var source = PostgresAccess.Build(builder.ConnectionString);
+            using var connection = source.OpenConnection();
+            using var command = new NpgsqlCommand(sql, connection);
+            var ex = Assert.Throws<PostgresException>(() => command.ExecuteNonQuery());
+            Assert.Equal("25006", ex.SqlState);
+        }
+    }
+
     [LivePostgresFact]
     public async Task EveryLayerUnderTheGate_RefusesAWrite_AndTheTimeoutAndCancelStop()
     {
@@ -561,6 +596,7 @@ public sealed class LivePostgresTests
 
         var slow = await Raw(PostgresCheck.SlowQuery, timeoutSeconds: 1);
         Assert.Equal(SqlOutcome.Timeout, slow.Outcome);
+        Assert.True(slow.Elapsed < TimeSpan.FromSeconds(4), slow.Elapsed.ToString());   // S6: the server's statement_timeout, well before the client's 6 s
         using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Raw(PostgresCheck.SlowQuery, 30, cancel.Token));
 

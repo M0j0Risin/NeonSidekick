@@ -14,28 +14,19 @@ namespace NeonSidekick.Llm.Tools;
 /// model's SQL to it) — the statement timeout, and the table lookup <c>oracle_describe</c>, <c>oracle_relationships</c> and <c>oracle_indexes</c> need. A refused run is
 /// <see cref="OracleText.Error"/>'s sentence, every one starting <c>Error:</c>.
 /// </summary>
-public abstract class OracleTool : AIFunction
+public abstract class OracleTool : ServerTool<OracleAccess>
 {
-    public const string ConnectionArgument = "connection";
     /// <summary>The argument the tools took until 2026-10-09; a call that still sends it is refused.</summary>
     public const string SchemaArgument = "schema";
-    public const string TableArgument = "table";
 
     /// <summary>The <c>connection</c> property the server-reaching schemas carry.</summary>
     public const string ConnectionProperty = "\"connection\": { \"type\": \"string\", \"description\": \"The Oracle connection's name (oracle_connections lists them); it may be left out only when there is one.\" }";
 
-    private readonly OracleAccess _oracle;
-    private readonly Func<AppSettingsData> _effective;
-
-    protected OracleTool(OracleAccess oracle, Func<AppSettingsData> effective)
+    protected OracleTool(OracleAccess oracle, Func<AppSettingsData> effective) : base(oracle, effective)
     {
-        _oracle = oracle ?? throw new ArgumentNullException(nameof(oracle));
-        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
 
-    protected OracleAccess Oracle => _oracle;
-
-    protected AppSettingsData Effective => _effective();
+    protected OracleAccess Oracle => Access;
 
     /// <summary>The statement timeout: the setting, clamped to the range a hand-edited value may have left.</summary>
     public static int TimeoutSeconds(AppSettingsData effective)
@@ -44,19 +35,10 @@ public abstract class OracleTool : AIFunction
         return Math.Clamp(effective.OracleQueryTimeoutSeconds, AppSettingsData.MinSqlQueryTimeoutSeconds, AppSettingsData.MaxSqlQueryTimeoutSeconds);
     }
 
-    /// <summary>A string argument, or null when blank.</summary>
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+    /// <summary>Every Oracle tool refuses a call that still names a <c>schema</c> (<see cref="ServerTool{TAccess}.InvokeCoreAsync"/>).</summary>
+    protected sealed override string RetiredArgument => SchemaArgument;
 
-    /// <summary>Every Oracle tool's call: refused when it still names a <c>schema</c>, else the tool's own <see cref="InvokeToolAsync"/>.</summary>
-    protected sealed override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(arguments);
-        return Optional(arguments, SchemaArgument) is not null ? new(OracleText.NoSchemaArgument) : InvokeToolAsync(arguments, cancellationToken);
-    }
-
-    /// <summary>The tool's own call, its arguments read.</summary>
-    protected abstract ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken);
+    protected sealed override string RetiredRefusal => OracleText.NoSchemaArgument;
 
     /// <summary>
     /// The model's own SQL held to the connection's schema (<see cref="OracleBoundary"/>, 2026-10-09): a qualifier but the schema's own,
@@ -64,14 +46,20 @@ public abstract class OracleTool : AIFunction
     /// or a dictionary view among them is refused. A statement with neither asks the database nothing. Null when it keeps to the schema, or
     /// when the connection does not resolve (the run that follows says why); a failed read of the names is its error, never a pass.
     /// </summary>
-    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken)
+    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken, OracleAccess? via = null)
     {
-        if (_oracle.Resolve(connection, out _) is not { } target)
+        var access = via ?? Oracle;
+        if (access.Resolve(connection, out _) is not { } target)
         {
             return null;
         }
 
         string place = OracleAccess.Place(target.Config);
+        if (OracleBoundary.Refusal(sql, place) is { } refused)
+        {
+            return refused;   // before any names are read (2026-10-24, the database review's Phase 9)
+        }
+
         var (heads, dictionary) = OracleBoundary.Qualifiers(sql, place);
         if (heads.Count == 0 && dictionary.Count == 0)
         {
@@ -79,14 +67,20 @@ public abstract class OracleTool : AIFunction
         }
 
         // The names kept a minute per connection (the review, 2026-10-09: an alias's e.id sent every join for them).
-        var (rows, failed) = await _oracle.Names.GetAsync(BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, place),
-            token => _oracle.RunAsync(connection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), cancellationToken).ConfigureAwait(false);
-        return failed is not null ? OracleText.Error(failed) : OracleBoundary.Check(sql, place, rows!);
+        var (rows, failed) = await ReadNamesAsync(access.Names, BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, place),
+            token => access.RunAsync(connection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), OracleText.Error, cancellationToken).ConfigureAwait(false);
+        if (failed is not null)
+        {
+            return failed;
+        }
+
+        var sets = access.Names.Built(rows!, OracleBoundary.Sets);
+        return OracleBoundary.CheckQualifiers(heads, dictionary, place, sets.Users, sets.Views);
     }
 
     /// <summary>Runs the app's own statements on the call's connection (in its schema), capped at <see cref="OracleAccess.MaxCatalogRows"/>.</summary>
-    protected Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _oracle.RunAsync(connection, statements, parameters, OracleAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+    protected async Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
+        SqlText.CatalogRun(await Oracle.RunAsync(connection, statements, parameters, OracleAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false));
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's owner, name and kind — or the <c>Error:</c> sentence.</summary>
     protected sealed record TableMatch(string Owner, string Name, string Kind, string? Error)
@@ -105,7 +99,7 @@ public abstract class OracleTool : AIFunction
             return TableMatch.Refused(OracleText.BadTable(table));
         }
 
-        if (parts.Owner is { } owner && _oracle.Resolve(connection, out _) is { } target
+        if (parts.Owner is { } owner && Oracle.Resolve(connection, out _) is { } target
             && !owner.Equals(OracleAccess.Place(target.Config), StringComparison.Ordinal))
         {
             return TableMatch.Refused(OracleText.TableElsewhere(owner, OracleAccess.Place(target.Config)));

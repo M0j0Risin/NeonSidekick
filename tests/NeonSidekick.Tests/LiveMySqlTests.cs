@@ -183,6 +183,51 @@ public sealed class LiveMySqlTests
         Assert.Equal(1, LiveMySql.Count("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ns_audit'"));
     }
 
+    /// <summary>
+    /// The live legs the database review asked for (2026-10-24). S16: a CREATE TABLE inside the read path — found live to commit the READ ONLY
+    /// transaction and run — is refused by the session's read-only mode. S5: the session reads strings as the gate does whatever the
+    /// server's own mode (run once with the server's GLOBAL sql_mode holding NO_BACKSLASH_ESCAPES and ANSI_QUOTES, 2026-10-24; the read-back
+    /// below holds either way). S13: a qualifier the names read finds is refused, where the container has the second database
+    /// (<c>CREATE DATABASE ns_other; GRANT SELECT ON ns_other.* TO neon</c> as root).
+    /// </summary>
+    [LiveMySqlFact]
+    public async Task TheReadPath_RefusesDdl_ReadsStringsAsTheGate_AndRefusesAnotherDatabaseByItsName()
+    {
+        var ddl = await Raw("CREATE TABLE ns_ddl_probe (x INT)");
+        Assert.True(ddl.Outcome == SqlOutcome.Failed && ddl.Detail.Contains("1792", StringComparison.Ordinal), ddl.Outcome + " " + ddl.Detail);
+        Assert.Equal(0, LiveMySql.Count("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ns_ddl_probe'"));
+
+        var modes = await Raw("SELECT 'a\\'; --' AS s, @@SESSION.sql_mode AS m");
+        Assert.Equal(SqlOutcome.Ok, modes.Outcome);
+        Assert.Equal("a'; --", modes.Grids[0].Rows[0][0]);
+        Assert.DoesNotContain("NO_BACKSLASH_ESCAPES", modes.Grids[0].Rows[0][1], StringComparison.Ordinal);
+        Assert.DoesNotContain("ANSI_QUOTES", modes.Grids[0].Rows[0][1], StringComparison.Ordinal);
+
+        Assert.StartsWith("1 row", await Invoke<MySqlQueryTool>(("sql", "SELECT COUNT(o.id) FROM ns_orders o")));   // an alias reads after the names
+        if (LiveMySql.Count("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'ns_other'") == 1)
+        {
+            Assert.Equal(MySqlText.OtherDatabase("ns_other", LiveMySql.Database), await Invoke<MySqlQueryTool>(("sql", "SELECT * FROM ns_other.t")));
+        }
+    }
+
+    /// <summary>S6: the session's statement cap is the server's own — run with a client timeout far past it, the server stops the query (3024 on MySQL, 1969 on MariaDB).</summary>
+    [LiveMySqlFact]
+    public void TheSessionsCap_IsTheServers()
+    {
+        using var connection = new MySqlConnection(Environment.GetEnvironmentVariable(LiveMySql.Variable)!);
+        connection.Open();
+        using (var session = new MySqlCommand(MySqlAccess.SessionStatement(connection.ServerVersion, 1), connection))
+        {
+            session.ExecuteNonQuery();
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        using var slow = new MySqlCommand(MySqlCheck.SlowQuery, connection) { CommandTimeout = 60 };
+        var ex = Assert.Throws<MySqlException>(() => slow.ExecuteNonQuery());
+        Assert.True(ex.Number is MySqlAccess.MySqlStatementTimeout or MySqlAccess.MariaDbStatementTimeout, ex.Number + " " + ex.Message);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), watch.Elapsed.ToString());
+    }
+
     [LiveMySqlFact]
     public async Task Timeouts_AndCancels_AreOutcomes_NotCrashes()
     {

@@ -285,6 +285,19 @@ public sealed class SqliteExecuteTests : IDisposable
         using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SqliteAccess.ExecuteAsync(Shop(), false, SqliteCheck.SlowQuery, [], 2, 30, cancel.Token));
 
+        // A change stopped under way changes nothing (2026-10-24, the database review's S1: only a read was timed out or canceled): an INSERT of
+        // a hundred million rows, interrupted by the timer and by a cancel — each well before it could end — leaves the two rows as they were.
+        const string slowWrite = "INSERT INTO customers (id, name) WITH RECURSIVE n(i) AS (SELECT 100 UNION ALL SELECT i + 1 FROM n WHERE i < 100000000) SELECT i, 'x' FROM n";
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(SqlOutcome.Timeout, (await SqliteAccess.ExecuteAsync(Shop(), false, slowWrite, [], 2, 1, CancellationToken.None)).Outcome);
+        using (var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(300)))
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SqliteAccess.ExecuteAsync(Shop(), false, slowWrite, [], 2, 60, stop.Token));
+        }
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(30), watch.Elapsed.ToString());   // the interrupt reached the write
+        Assert.Equal("2", Read(_shop, "SELECT count(*) FROM customers"));
+
         var gone = SqliteAccess.Execute(new SqliteTarget("gone", Path.Combine(_work, "gone.db")), false, "CREATE TABLE t (a)", [], 2, 5, CancellationToken.None);
         Assert.Equal(SqlOutcome.ConnectFailed, gone.Outcome);
         Assert.False(File.Exists(Path.Combine(_work, "gone.db")));
@@ -341,7 +354,7 @@ public sealed class SqliteExecuteTests : IDisposable
     {
         var asked = new List<(string Path, string Sql, bool Creating)>();
         bool? answer = true;
-        var tool = new SqliteExecuteTool(Access(), () => _settings, (target, sql, creating, _) =>
+        var tool = new SqliteExecuteTool(Access(), () => _settings, (target, sql, creating, _, _) =>
         {
             asked.Add((target.FullPath, sql, creating));
             return Task.FromResult(answer);
@@ -361,7 +374,7 @@ public sealed class SqliteExecuteTests : IDisposable
             Assert.Contains("| Linus |", returned);
 
             string created = (string)(await tool.InvokeAsync(new AIFunctionArguments { ["sql"] = "CREATE TABLE t (a)", ["database"] = "data/fresh.db", ["create"] = true }))!;
-            Assert.StartsWith("Created data/fresh.db. Changed 0 rows in data/fresh.db", created);
+            Assert.StartsWith("Created data/fresh.db. Ran it in data/fresh.db", created);   // DDL counts no rows (2026-10-24, review G16)
             Assert.True(asked[^1].Creating);
             Assert.True(File.Exists(Path.Combine(_work, "data", "fresh.db")));
 
@@ -395,7 +408,7 @@ public sealed class SqliteExecuteTests : IDisposable
     public async Task TheTool_RunsOnlyTheTickedKinds_AndCreateNeedsCreating()
     {
         int asked = 0;
-        var tool = new SqliteExecuteTool(Access(), () => _settings, (_, _, _, _) =>
+        var tool = new SqliteExecuteTool(Access(), () => _settings, (_, _, _, _, _) =>
         {
             asked++;
             return Task.FromResult<bool?>(true);
@@ -407,7 +420,7 @@ public sealed class SqliteExecuteTests : IDisposable
         Assert.Equal(0, asked);   // refused before asking
         // DELETE is deleting, its own kind since later on 2026-10-05: not ticked here, so refused before asking.
         Assert.Equal(
-            "Error: the SQL is deleting (DELETE), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on /tools › Databases › SQLite",
+            "Error: the SQL is deleting (DELETE, REPLACE), which the user has not allowed; sqlite_execute may run changing data — the user ticks more in SQLite statements allowed on /tools › Databases › SQLite",
             await tool.RunAsync("DELETE FROM customers WHERE id = 1", null, [], null, false, CancellationToken.None));
         Assert.Equal(0, asked);
         Assert.StartsWith("Changed 1 row", await tool.RunAsync("UPDATE customers SET name = 'Ada L.' WHERE id = 1", null, [], null, false, CancellationToken.None));
@@ -424,7 +437,7 @@ public sealed class SqliteExecuteTests : IDisposable
     public async Task TheTool_ARead_AsksNothing_AndRunsReadOnly()
     {
         int asked = 0;
-        var tool = new SqliteExecuteTool(Access(), () => _settings, (_, _, _, _) =>
+        var tool = new SqliteExecuteTool(Access(), () => _settings, (_, _, _, _, _) =>
         {
             asked++;
             return Task.FromResult<bool?>(false);

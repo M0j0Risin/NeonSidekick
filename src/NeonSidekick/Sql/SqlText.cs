@@ -23,6 +23,31 @@ public static class SqlText
 
     public const string NoServer = "no \"server\" is given";
 
+    /// <summary>A connections line's note for a link whose certificate is not checked (2026-10-24, decision DB1). Pinned.</summary>
+    public const string TlsUnchecked = ", TLS certificate not checked";
+
+    /// <summary>The once-a-run note of a connection whose certificate is not checked (DB1). Pinned.</summary>
+    public static string TlsUncheckedLogLine(string family, string name) =>
+        $"{family} connection {name} does not check the server's certificate, so a man in the middle could read what it sends; verify-full in its TLS mode checks it";
+
+    /// <summary>A wizard test that failed on the server's certificate: what to do (2026-10-24, decision DB1). Pinned.</summary>
+    public const string CertificateNotTrusted =
+        "The server's certificate was not trusted. Add the server's CA to this computer's trusted certificates, or pick an unchecked TLS mode (prefer/preferred, which a man in the middle could read) on the TLS page.";
+
+    /// <summary>What an advisor reads in place of a database tool's result (2026-10-24, review J2, decision DB4). Pinned.</summary>
+    public static string WithheldFromAdvisor(string tool, string? connection) =>
+        "(" + tool + (string.IsNullOrWhiteSpace(connection) ? "" : " on " + connection.Trim()) + ": read it with your own database tools)";
+
+    /// <summary>A file whose root holds its section twice in some case (2026-10-24, review N5). Pinned.</summary>
+    public static string SectionTwice(string section) =>
+        $"the file holds \"{section}\" more than once (keys ignore case); keep one, so every entry is read and written in the same place";
+
+    /// <summary>Another process holding a connections file for its own edit past the wait (2026-10-24, review N4).</summary>
+    public static string FileBusy(string path) => $"another NeonSidekick is editing {path}; try again in a moment";
+
+    /// <summary>An <c>access</c> word that is neither <c>read</c> nor <c>readwrite</c> (2026-10-24, review C13: it was inline in <see cref="ConnectionAccess"/>). Pinned.</summary>
+    public static string BadAccess(string word) => $"\"access\" is '{word}'; it must be read or readwrite";
+
     /// <summary>An entry with no <c>database</c> (2026-10-09: a connection reaches that one database alone, so it must name it). Pinned.</summary>
     public const string NoDatabase = "no \"database\" is given; a connection reaches one database, so it must name it";
     public const string NoUser = "a sql login needs a \"user\" (or \"auth\": \"windows\")";
@@ -64,9 +89,49 @@ public static class SqlText
     /// <summary>Where a <c>passwordStore: credman</c> password lives: Windows Credential Manager, or the macOS Keychain (2026-10-06, the macOS build). Pinned.</summary>
     public static string CredentialStore => OperatingSystem.IsMacOS() ? "the macOS Keychain" : "Windows Credential Manager";
 
-    /// <summary>The command that stores one there by hand: <c>cmdkey</c> on Windows, <c>security add-generic-password</c> on macOS. Pinned.</summary>
+    /// <summary>
+    /// The command that stores one there by hand: <c>cmdkey</c> on Windows, <c>security add-generic-password</c> on macOS. Pinned. A target or
+    /// user with a space or a shell character is quoted (2026-10-24, the database review's N16: <c>NeonSidekick/sql/my db</c> gave a broken
+    /// command); a plain one stands bare, as before.
+    /// </summary>
     public static string CredentialCommand(string target, string user) =>
-        OperatingSystem.IsMacOS() ? $"security add-generic-password -s {target} -a {user} -w" : $"cmdkey /generic:{target} /user:{user} /pass";
+        OperatingSystem.IsMacOS()
+            ? $"security add-generic-password -s {ShellQuote(target)} -a {ShellQuote(user)} -w"
+            : $"cmdkey /generic:{CmdQuote(target)} /user:{CmdQuote(user)} /pass";
+
+    private static bool Plain(string text) => text.Length > 0 && text.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '\\' or '_' or '-' or '.' or '@' or '<' or '>' or ':');
+
+    private static string ShellQuote(string text) => Plain(text) ? text : "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static string CmdQuote(string text) => Plain(text) ? text : "\"" + text.Replace("\"", "", StringComparison.Ordinal) + "\"";
+
+    /// <summary>A stored credential with an empty secret (2026-10-24, review K4: it signed in with an empty password). Pinned.</summary>
+    public static string EmptyCredential(string target) => $"the credential {target} in {CredentialStore} holds no password; set the password again";
+
+    /// <summary>A credential named as the app's own Keychain key (2026-10-24, review D7). Pinned.</summary>
+    public static string ReservedCredential(string target) => $"'{target}' is the app's own key in {CredentialStore}; give the connection a credential under NeonSidekick/<family>/";
+
+    /// <summary>
+    /// A stored password saved for another host than the entry's (2026-10-24, review H5, decision DB9: the password is sent only where it was
+    /// saved for). Pinned.
+    /// </summary>
+    public static string CredentialHostMismatch(string target, string recorded, string host, string menu) =>
+        $"the password in {target} was saved for {recorded}, but the connection now points at {host}; set the password again on {menu} (… set password) to send it there";
+
+    /// <summary>
+    /// A sign-in the guard holds: the same account and password were refused by this server before (2026-10-24, review K1: every call, and
+    /// the boundary's names read, tried the refused password again, which locks an account with a lockout policy). Pinned.
+    /// </summary>
+    public static string SignInHeld(string user, string where, string menu) =>
+        $"the sign-in for {user} was refused by {where} a moment ago, so it is not sent again for a quarter of an hour; if the password is wrong, set the right one on {menu} (… set password)";
+
+    // The Keychain's sentences (2026-10-24, review K10: they were inline in MacKeychain).
+    public const string KeychainCanceled = "the Keychain prompt was canceled";
+    public const string KeychainAuthFailed = "the Keychain refused the sign-in";
+    public const string KeychainLocked = "the Keychain is locked and cannot ask here";
+    public static string KeychainRefused(string status) => "the Keychain refused it (OSStatus " + status + ")";
+    public const string KeychainKeyDamaged = "the app's key in the Keychain is damaged; delete the NeonSidekick item in Keychain Access and save the secrets again";
+    public const string KeychainKeyUnmade = "the app's key could not be read or made in the Keychain";
 
     /// <summary>
     /// The connection wizards' two store picks, <c>file</c> then <c>credman</c> (2026-10-06, the macOS build: one place for all five
@@ -183,6 +248,27 @@ public static class SqlText
     public static string AliasLikeDatabase(string named, string database) =>
         $"Error: the SQL calls through '{named}', which is also another database on this server; rename the alias (or the table) so the call cannot reach '{named}' — this connection reaches '{database}' alone";
 
+    /// <summary>
+    /// Why a names read could not settle a qualifier (2026-10-24, the database review's E8, D5): cut at its cap or empty. The detail of a
+    /// failed run. Pinned.
+    /// </summary>
+    public const string NamesUnread =
+        "the app could not read the server's whole list of names, so a qualified name in the statement could not be judged; write the statement without the qualifier, or ask the user";
+
+    /// <summary>
+    /// A call that may be another database's function when the server hides databases from this login (2026-10-24, review D5: without
+    /// VIEW ANY DATABASE sys.databases lists only some, so the list cannot settle it). Pinned.
+    /// </summary>
+    public static string HeadUnsettled(string named, string database) =>
+        $"Error: {named}.… may call a function in another database, which this login cannot list; the SQL tools keep to {database} — rename the alias {named}, or call the function by its two-part name";
+
+    /// <summary>A text the boundary cannot parse (2026-10-24, mechanism 7). Pinned.</summary>
+    public const string BoundaryUnread = "Error: the app could not read the SQL to check it keeps to the connection's database, so nothing was run";
+
+    /// <summary>A function handed an object's name that is not a string written out (2026-10-24, review R12). Pinned.</summary>
+    public static string NameNotWrittenOut(string function) =>
+        $"Error: {function}() is given a name built from a parameter or an expression, which the app cannot check is in this connection's database; write the name out as a string";
+
     /// <summary>A view or function of the whole server rather than the database. Pinned.</summary>
     public static string ServerCatalog(string what) =>
         $"Error: the SQL reads {what}, which describes the whole server rather than this connection's database; the SQL tools keep to the connection's database (sql_tables, sql_columns and sql_describe read its catalog)";
@@ -262,14 +348,18 @@ public static class SqlText
     /// <summary>
     /// One value as text: dates in ISO order, a <see cref="decimal"/> with every digit, a float round-trippable,
     /// binary as <c>0x…</c> (the first <see cref="MaxBinaryBytes"/> bytes), a bit as true/false; clipped to
-    /// <see cref="MaxCellChars"/>.
+    /// <see cref="MaxCellChars"/>. Since 2026-10-24 (the database review's F15) a text's control characters and bidi overrides are scrubbed
+    /// (<see cref="Llm.Tools.UntrustedText.Scrub"/>: a value is anyone's text, and a reorder or an escape sequence in it reached the model and
+    /// the transcript as it was), and a text that is the word <c>NULL</c> reads <c>'NULL'</c> (N8: it read as a real NULL, and the catalog
+    /// renderers dropped a description that said NULL); the clip never splits a surrogate pair (B10).
     /// </summary>
     public static string Cell(object? value)
     {
         string text = value switch
         {
             null or DBNull => Null,
-            string s => s,
+            string s when s == Null => "'" + Null + "'",
+            string s => Llm.Tools.UntrustedText.Scrub(s),
             bool b => b ? "true" : "false",
             DateTime d => d.ToString(d.TimeOfDay == TimeSpan.Zero ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
             DateTimeOffset o => o.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF zzz", CultureInfo.InvariantCulture),
@@ -292,7 +382,30 @@ public static class SqlText
             ? "0x" + Convert.ToHexString(bytes)
             : "0x" + Convert.ToHexString(bytes, 0, MaxBinaryBytes) + $"… ({Invariant(bytes.Length)} bytes)";
 
-    private static string Clip(string text, int max) => text.Length <= max ? text : text[..max] + $"… ({Invariant(text.Length)} chars)";
+    private static string Clip(string text, int max) => text.Length <= max ? text : Files.TextCut.Safe(text, max) + $"… ({Invariant(text.Length)} chars)";
+
+    /// <summary>A cell read only as far as it is shown, with more past it (2026-10-24, review E6). Pinned.</summary>
+    public static string MoreChars(int shown) => $"… (more than {Invariant(shown)} chars)";
+
+    /// <summary>A binary cell read only as far as it is shown, with more past it (E6). Pinned.</summary>
+    public static string MoreBytes(int shown) => $"… (more than {Invariant(shown)} bytes)";
+
+    /// <summary>The longest a column name stands in a table's header (2026-10-24, review E7).</summary>
+    public const int MaxColumnNameChars = 64;
+
+    /// <summary>
+    /// A catalog run's cells one line each, their hiding characters escaped (2026-10-24, the database review's F15): the describe, index,
+    /// key and trigger lines append the server's names as they are, so a name holding a line break or a bidi override forged a line of the
+    /// answer. The app's own catalog batches only; a model's query keeps its cells (a table row escapes its line breaks itself).
+    /// </summary>
+    public static SqlRun CatalogRun(SqlRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return run.Grids.Count == 0 ? run : run with
+        {
+            Grids = [.. run.Grids.Select(g => g with { Rows = [.. g.Rows.Select(r => r.Select(c => c == Null ? c : Llm.Tools.UntrustedText.Name(c)).ToArray())] })],
+        };
+    }
 
     /// <summary>A cell made safe for one Markdown table row: a pipe escaped, a line break shown as <c>\n</c>.</summary>
     public static string TableCell(string cell) => cell.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("|", "\\|", StringComparison.Ordinal).Replace("\r\n", "\\n", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal).Replace("\r", "\\n", StringComparison.Ordinal);
@@ -304,13 +417,23 @@ public static class SqlText
     public static string Table(SqlGrid grid, int maxChars, out int shown)
     {
         ArgumentNullException.ThrowIfNull(grid);
+
+        // The header within the cap too (2026-10-24, the database review's E7: it and the separator were written before the cap was looked
+        // at, and a column name was never clipped, so a wide result blew past the cap): each name clipped, and the columns that fit kept.
+        var names = grid.Columns.Select(c => TableCell(Llm.Tools.UntrustedText.Name(c.Length <= MaxColumnNameChars ? c : Files.TextCut.Safe(c, MaxColumnNameChars) + "…"))).ToList();
+        int keep = names.Count;
+        while (keep > 1 && 4 + names.Take(keep).Sum(n => n.Length + 3) + keep * 4 + 2 > maxChars)
+        {
+            keep--;
+        }
+
         var sb = new StringBuilder();
-        sb.Append("| ").AppendJoin(" | ", grid.Columns.Select(TableCell)).Append(" |\n");
-        sb.Append('|').Append(string.Concat(Enumerable.Repeat("---|", grid.Columns.Count))).Append('\n');
+        sb.Append("| ").AppendJoin(" | ", names.Take(keep)).Append(" |\n");
+        sb.Append('|').Append(string.Concat(Enumerable.Repeat("---|", keep))).Append('\n');
         shown = 0;
         foreach (var row in grid.Rows)
         {
-            string line = "| " + string.Join(" | ", row.Select(TableCell)) + " |\n";
+            string line = "| " + string.Join(" | ", row.Take(keep).Select(TableCell)) + " |\n";
             if (sb.Length + line.Length > maxChars)
             {
                 break;
@@ -320,8 +443,12 @@ public static class SqlText
             shown++;
         }
 
-        return sb.ToString().TrimEnd('\n');
+        string table = sb.ToString().TrimEnd('\n');
+        return keep < names.Count ? table + "\n" + ColumnsLeftOut(names.Count - keep) : table;
     }
+
+    /// <summary>The note under a table whose columns did not all fit the text cap (E7). Pinned.</summary>
+    public static string ColumnsLeftOut(int count) => $"(and {Count(count, "more column")} past the text cap: select fewer columns)";
 
     /// <summary>
     /// <c>sql_query</c>'s answer: <c>N rows × M columns from connection/database (T ms)</c>, a sentence when the row

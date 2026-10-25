@@ -12,15 +12,22 @@ namespace NeonSidekick.Sql;
 /// </summary>
 public static class SqlCatalogQueries
 {
+    /// <summary>Every database's name on the server, for the boundary to settle a call that may be another's (2026-10-09; the app's own read, never the model's).</summary>
+    /// <remarks>
+    /// With an empty row when the login lacks VIEW ANY DATABASE (2026-10-24, the database review's D5): sys.databases then lists only the
+    /// databases it owns, master, tempdb and its own, so <see cref="SqlBoundary.Check(string, string, IEnumerable{string}?)"/> refuses a head the
+    /// list does not hold rather than pass it.
+    /// </remarks>
+    public const string DatabaseNames = "SELECT name FROM sys.databases UNION ALL SELECT N'' WHERE HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DATABASE') = 0";
+
+    /// <summary>Whether the login may open the database <c>@name</c> (1, else 0, NULL for none): what settles a head a partial names list cannot.</summary>
+    public const string CanOpen = "SELECT HAS_DBACCESS(@name)";
+
     /// <summary>
     /// The other databases the login may open, the server's own four (master, tempdb, model, msdb) left out: what the connection's lock
     /// keeps the tools out of but the login could reach, for the wizard's test and <c>--sql-check</c> (2026-10-09; <c>sql_databases</c>'
-    /// listing until the lock). Empty when the server holds the login to its database too.
+    /// listing until the lock). Empty when the server holds the login to its database too (see <see cref="SqlText.Reach"/>).
     /// </summary>
-    /// <summary>Every database's name on the server, for the boundary to settle a call that may be another's (2026-10-09; the app's own read, never the model's).</summary>
-    public const string DatabaseNames = "SELECT name FROM sys.databases";
-
-    /// <summary>The other user databases the login may open (see <see cref="SqlText.Reach"/>).</summary>
     public const string OtherDatabases =
         """
         SELECT d.name AS [database]
@@ -98,7 +105,7 @@ public static class SqlCatalogQueries
         SELECT i.name AS [index], i.type_desc AS [kind], i.is_unique, i.is_primary_key,
                STUFF((SELECT ', ' + c.name + CASE WHEN ic.is_descending_key = 1 THEN ' DESC' ELSE '' END
                       FROM sys.index_columns AS ic JOIN sys.columns AS c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-                      WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0
+                      WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0 AND ic.key_ordinal > 0
                       ORDER BY ic.key_ordinal FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, '') AS [keys],
                i.is_unique_constraint
         FROM sys.indexes AS i

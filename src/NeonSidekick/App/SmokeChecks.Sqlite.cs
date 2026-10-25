@@ -44,9 +44,10 @@ public static partial class SmokeChecks
             }
 
             var write = SqliteAccess.Run(target, ["INSERT INTO t (name) VALUES ('x')"], [], 10, 5, CancellationToken.None);
-            if (write.Outcome == SqlOutcome.Ok)
+            // The read-only refusal itself, not any failure (2026-10-24, the database review's D9, as --sqlite-check).
+            if (write.Outcome == SqlOutcome.Ok || !write.Detail.Contains("readonly", StringComparison.OrdinalIgnoreCase))
             {
-                return new SmokeCheck(name, false, "a write went through the read-only open");
+                return new SmokeCheck(name, false, write.Outcome == SqlOutcome.Ok ? "a write went through the read-only open" : "the write failed, but not as read-only: " + write.Detail);
             }
 
             var slow = SqliteAccess.Run(target, [SqliteCheck.SlowQuery], [], 10, 1, CancellationToken.None);

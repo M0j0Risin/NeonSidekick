@@ -43,11 +43,11 @@ public sealed class OracleExecuteTool : OracleTool
     public override string Name => ToolName;
 
     /// <summary>The description, read at each turn: it names the kinds <c>Oracle statements allowed</c> ticks.</summary>
-    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.OracleStatementsAllowed));
+    public override string Description => DescribeFor(ServerStatementKinds.Resolve(Effective.OracleStatementsAllowed), !Effective.ToolsDisabled.Contains(OracleQueryTool.ToolName, StringComparer.Ordinal));
 
     /// <summary>The description for <paramref name="kinds"/>. Pinned.</summary>
-    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds) =>
-        ServerWriteText.Describe(OracleStatementKinds.Family, kinds, OracleQueryTool.ToolName, "Oracle SQL; bind values as :name through params.");
+    public static string DescribeFor(IReadOnlyList<ServerStatementKind> kinds, bool readOffered = true) =>
+        ServerWriteText.Describe(OracleStatementKinds.Family, kinds, OracleQueryTool.ToolName, "Oracle SQL; bind values as :name through params.", readOffered);
 
     public override JsonElement JsonSchema => Schema;
 
@@ -63,31 +63,35 @@ public sealed class OracleExecuteTool : OracleTool
         }
 
         int timeout = TimeoutSeconds(effective);
+        // The connection resolved once (2026-10-24, the database review's H11): the boundary, the pane and the run below all work on the entry
+        // as read now, through an access pinned to it.
+        var resolved = Oracle.Resolve(connection, out var unresolved);
+        var pinned = resolved is null ? Oracle : Oracle.Pinned(resolved);
         var hooks = new ServerExecuteHooks(
             OracleWriteGate.Check,
             OracleWriteGate.Kinds,
             OracleReadOnlyGate.Check,
             OracleWriteGate.Body,
-            () => Oracle.Resolve(connection, out var refused) is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.Place(target.Config)), null)
-                : (null, OracleText.Error(refused!)),
+            () => resolved is { } target
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.Place(target.Config), target.Config.SignInHost), null)
+                : (null, OracleText.Error(unresolved!)),
             async (body, token) =>
             {
-                var run = await Oracle.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 if (IsTooNew(run))
                 {
                     // ORA-01466 (found live, 2026-10-05): a read-only transaction cannot read a table whose DDL is younger than Oracle's
                     // SCN-to-time grain (about three seconds) — what a read straight after this tool's CREATE meets. Read again once, after it.
                     await Task.Delay(TooNewWait, token).ConfigureAwait(false);
-                    run = await Oracle.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                    run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
                 }
 
                 return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(effective)) : OracleText.Error(run);
             },
-            (body, token) => Oracle.ExecuteAsync(connection, body, parameters, timeout, token),
+            (body, token) => pinned.ExecuteAsync(connection, body, parameters, timeout, token),
             OracleText.Error,
-            (body, token) => OutsideAsync(body, connection, token));
-        return ServerExecute.RunAsync(OracleStatementKinds.Family, effective.OracleMode, effective.OracleStatementsAllowed, sql, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
+            (body, token) => OutsideAsync(body, connection, token, pinned), Changed: pinned.Names.Forget);
+        return ServerExecute.RunAsync(OracleStatementKinds.Family, effective.OracleMode, effective.OracleStatementsAllowed, sql, parameters, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
     /// <summary>How long a read waits before its one retry after ORA-01466.</summary>
@@ -116,7 +120,7 @@ public sealed class OracleExecuteTool : OracleTool
         IReadOnlyList<SqlParameterValue> parameters = [];
         if (objects.Count == 1)
         {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
+            if (SqlQueryTool.ReadParameters(objects[0], out var error, SqlQueryTool.ReadColonName, OracleText.BadParamName) is not { } read)
             {
                 return error?.Replace("@name", ":name", StringComparison.Ordinal);
             }

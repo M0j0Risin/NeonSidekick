@@ -191,6 +191,13 @@ public static class OracleWriteGate
             return (word, ServerWriteText.Outside);
         }
 
+        // A denied member, a quoted package name's too (2026-10-24, the review of these fixes): checked before the bare-word rules below.
+        if (!(i > 0 && tokens[i - 1].IsSymbol(".")) && i + 2 < tokens.Count && next.IsSymbol(".") && tokens[i + 2].Kind is GateTokenKind.Word or GateTokenKind.Name
+            && OracleReadOnlyGate.DeniedMembers.Contains(word + "." + tokens[i + 2].Text.ToUpperInvariant()))
+        {
+            return (word + "." + tokens[i + 2].Text.ToUpperInvariant(), ServerWriteText.Denied);   // A5's member, in a body too
+        }
+
         if (t.Kind != GateTokenKind.Word)
         {
             return null;
@@ -206,9 +213,42 @@ public static class OracleWriteGate
             return ("WITH " + next.Text, ServerWriteText.Denied);
         }
 
-        if (word == "RETURNING" && !IsPlSql(tokens))
+        // RETURN is RETURNING's other spelling (2026-10-24, the database review's T4: { RETURN | RETURNING } … INTO).
+        if (word is "RETURNING" or "RETURN" && !IsPlSql(tokens))
         {
-            return ("RETURNING … INTO", ServerWriteText.ReturnsInto);
+            return (word + " … INTO", ServerWriteText.ReturnsInto);
+        }
+
+        var before = i > 0 ? tokens[i - 1] : default;
+        if (before.IsSymbol("."))
+        {
+            return null;
+        }
+
+        // 2026-10-24, the database review's Phase 8. A call spec (G8: AS LANGUAGE C … LIBRARY, AS LANGUAGE JAVA NAME, AS EXTERNAL) and an
+        // MLE routine (M4: AS MLE LANGUAGE JAVASCRIPT {{ … }}, AS MLE MODULE) are code the gate cannot read. OPEN c FOR a string or a
+        // variable (I2) is dynamic SQL, as EXECUTE IMMEDIATE is. A system trigger (G7: ON DATABASE, AFTER LOGON, BEFORE SHUTDOWN …) fires
+        // for every session. An external table's DEFAULT DIRECTORY, ACCESS PARAMETERS or LOCATION (T3) points it at other server files.
+        var after = i + 2 < tokens.Count ? tokens[i + 2] : default;
+        switch (word)
+        {
+            case "LANGUAGE" or "EXTERNAL" when before.IsWord("AS") || before.IsWord("IS"):
+                return ("AS " + word + " (a call spec)", ServerWriteText.ForeignCode);
+            case "MLE" when before.IsWord("AS") || before.IsWord("IS") || before.IsWord("USING") || next.Kind == GateTokenKind.Word && next.Text is "MODULE" or "LANGUAGE" or "ENV":
+                return ("MLE (JavaScript)", ServerWriteText.ForeignCode);
+            case "OPEN" when i + 2 < tokens.Count && after.IsWord("FOR") && i + 3 < tokens.Count && !(tokens[i + 3].IsWord("SELECT") || tokens[i + 3].IsWord("WITH") || tokens[i + 3].IsSymbol("(")):
+                return ("OPEN … FOR a string", ServerWriteText.Dynamic);
+            case "DATABASE" or "PLUGGABLE" when before.IsWord("ON"):
+                return ("a trigger ON " + word, ServerWriteText.ServerWide);
+            case "LOGON" or "LOGOFF" or "STARTUP" or "SHUTDOWN" or "SERVERERROR" or "SUSPEND" or "DB_ROLE_CHANGE" or "CLONE" or "UNPLUG"
+                when before.Kind == GateTokenKind.Word && before.Text is "AFTER" or "BEFORE" or "OR":
+                return ("a " + word + " trigger", ServerWriteText.ServerWide);
+            case "DIRECTORY" when before.IsWord("DEFAULT"):
+                return ("DEFAULT DIRECTORY", ServerWriteText.Outside);
+            case "PARAMETERS" when before.IsWord("ACCESS"):
+                return ("ACCESS PARAMETERS", ServerWriteText.Outside);
+            case "LOCATION" when next.IsSymbol("("):
+                return ("LOCATION (an external table's files)", ServerWriteText.Outside);
         }
 
         return null;

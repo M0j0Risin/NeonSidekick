@@ -18,13 +18,20 @@ public sealed class MySqlWriteGateTests
     [InlineData("INSERT INTO t (a) VALUES (@a);")]
     [InlineData("INSERT INTO t VALUES (1) ON DUPLICATE KEY UPDATE a = VALUES(a)")]
     [InlineData("UPDATE t SET a = REPLACE(a, 'x', 'y') WHERE id = @id")]
-    [InlineData("REPLACE INTO t VALUES (1, 'a')")]
     [InlineData("WITH c AS (SELECT 1 AS a) SELECT * FROM c")]
     [InlineData("CREATE TABLE t (id INT PRIMARY KEY, a VARCHAR(10), b INT REFERENCES u (id) ON DELETE CASCADE)")]
     [InlineData("CREATE TEMPORARY TABLE x (a INT)")]
     [InlineData("CREATE UNIQUE INDEX t_a ON t (a)")]
     [InlineData("INSERT INTO t VALUES ('grant; revoke') # GRANT in a comment")]
     public void Allows_UnderTheDefault(string sql) => Assert.Null(MySqlWriteGate.Check(sql, ServerStatementKinds.Resolve(null)));
+
+    /// <summary>A REPLACE deletes the row it replaces, so it needs deleting too since 2026-10-24 (the database review's A7); the default leaves deleting off.</summary>
+    [Fact]
+    public void Replace_NeedsDeleting_TooUnderTheDefault()
+    {
+        Assert.StartsWith("Error: the SQL is deleting", MySqlWriteGate.Check("REPLACE INTO t VALUES (1, 'a')", ServerStatementKinds.Resolve(null)));
+        Assert.Equal([ServerStatementKind.Data, ServerStatementKind.Delete], MySqlWriteGate.Kinds("REPLACE INTO t VALUES (1, 'a')"));
+    }
 
     [Theory]
     [InlineData("CREATE PROCEDURE p(IN x INT) BEGIN DECLARE y INT DEFAULT 0; IF x > 0 THEN SET y = 1; ELSEIF x < 0 THEN SET y = -1; END IF; WHILE y < 3 DO SET y = y + 1; END WHILE; SELECT CASE WHEN y > 1 THEN 'a' ELSE 'b' END; END")]
@@ -186,7 +193,7 @@ public sealed class MySqlWriteGateTests
     public void Check_RefusesAKindNotTicked_AndARoutineIsCode()
     {
         Assert.Equal(
-            "Error: the SQL is deleting (DELETE, TRUNCATE), which the user has not allowed; mysql_execute may run changing data, creating, reading — the user ticks more in MySQL statements allowed on /tools › Databases › MySQL",
+            "Error: the SQL is deleting (DELETE, TRUNCATE, REPLACE), which the user has not allowed; mysql_execute may run changing data, creating, reading — the user ticks more in MySQL statements allowed on /tools › Databases › MySQL",
             MySqlWriteGate.Check("TRUNCATE t", ServerStatementKinds.Resolve(null)));
         Assert.StartsWith("Error: the SQL is procedures and triggers", MySqlWriteGate.Check("CREATE FUNCTION f() RETURNS INT DETERMINISTIC RETURN 1", ServerStatementKinds.Resolve(null)));
         Assert.Null(MySqlWriteGate.Kinds("GRANT ALL ON t TO bob"));
@@ -207,9 +214,9 @@ public sealed class MySqlExecuteTests
     public async Task TheTool_ChecksInOrder_ThenAsks_PerConnection()
     {
         var asked = new List<(string Connection, string Place, string Sql)>();
-        var tool = new MySqlExecuteTool(Access(), () => _settings, (_, connection, place, sql, _) =>
+        var tool = new MySqlExecuteTool(Access(), () => _settings, (_, target, sql, _, _) =>
         {
-            asked.Add((connection, place, sql));
+            asked.Add((target.Connection, target.Place, sql));
             return Task.FromResult<bool?>(false);
         });
 
@@ -223,6 +230,20 @@ public sealed class MySqlExecuteTests
         Assert.Equal(MySqlText.ServerCatalog("mysql"), await tool.RunAsync("DELETE FROM mysql.user", "shop", [], null, CancellationToken.None));
         Assert.StartsWith("Error: could not connect to shop: ", await tool.RunAsync("DELETE FROM archive.t", "shop", [], null, CancellationToken.None));
         Assert.Empty(asked);
+
+        // The names read succeeds (2026-10-24, the database review's S2: with port 1 it always failed, so the boundary's own refusal
+        // before the pane never ran): another database among them is refused, never asked; the connection's own still asks.
+        var seeded = Access();
+        seeded.Names.Seed([["sales"], ["archive"]]);
+        var named = new MySqlExecuteTool(seeded, () => _settings, (_, target, sql, _, _) =>
+        {
+            asked.Add((target.Connection, target.Place, sql));
+            return Task.FromResult<bool?>(false);
+        });
+        Assert.Equal(MySqlText.OtherDatabase("archive", "sales"), await named.RunAsync("DELETE FROM archive.t", "shop", [], null, CancellationToken.None));
+        Assert.Empty(asked);
+        Assert.Equal(ServerWriteText.Declined, await named.RunAsync("DELETE FROM sales.t s WHERE s.id = 1", "shop", [], null, CancellationToken.None));
+        Assert.Single(asked);
 
         asked.Clear();
         Assert.Equal(ServerWriteText.ReadOnlyConnection(MySqlStatementKinds.Family, "ro"), await tool.RunAsync("DELETE FROM t", "ro", [], null, CancellationToken.None));
@@ -277,7 +298,7 @@ public sealed class LiveMySqlWriteTests
         var c = LiveMySql.Config!;
         var copy = new MySqlConnectionConfig { Host = c.Host, Port = c.Port, Database = c.Database, User = c.User, Password = c.Password, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Access = access };
         var server = new MySqlAccess(() => new MySqlCatalog([new MySqlNamedConnection("live", copy, "test")], []));
-        return (new MySqlExecuteTool(server, () => _settings, (_, _, _, sql, _) =>
+        return (new MySqlExecuteTool(server, () => _settings, (_, _, sql, _, _) =>
         {
             asked.Add(sql);
             return Task.FromResult<bool?>(true);
@@ -290,6 +311,7 @@ public sealed class LiveMySqlWriteTests
         var (tool, asked) = Tool("readwrite");
         string id = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         string table = "ns_write_" + id, proc = "ns_bump_" + id;
+        string? droppedProc, droppedTable;
         try
         {
             Assert.StartsWith("Ran it in live/", await tool.RunAsync($"CREATE TABLE {table} (id INT PRIMARY KEY, a VARCHAR(10))", null, [], null, CancellationToken.None));
@@ -306,9 +328,14 @@ public sealed class LiveMySqlWriteTests
         }
         finally
         {
-            await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, [], null, CancellationToken.None);
-            Assert.StartsWith("Ran it", await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None));
+            droppedProc = await tool.RunAsync($"DROP PROCEDURE IF EXISTS {proc}", null, [], null, CancellationToken.None);
+            droppedTable = await tool.RunAsync($"DROP TABLE IF EXISTS {table}", null, [], null, CancellationToken.None);
         }
+
+        // The cleanup's answers are asserted after the finally (2026-10-24, the database review's S17): an Assert inside it threw over the
+        // test's own failure and hid it, and the procedure's drop was never checked, which left ns_bump_<pid> behind.
+        Assert.StartsWith("Ran it", droppedProc);
+        Assert.StartsWith("Ran it", droppedTable);
 
         var (readOnly, roAsked) = Tool(null);
         Assert.StartsWith("Error: connection 'live' is read-only", await readOnly.RunAsync("CREATE TABLE ns_never (a INT)", null, [], null, CancellationToken.None));

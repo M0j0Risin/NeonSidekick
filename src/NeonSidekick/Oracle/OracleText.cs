@@ -130,6 +130,21 @@ public static class OracleText
         return $"The account could also {what}{any}. The tools keep to schema {schema}; an account that reads only it is the lock the database keeps too.";
     }
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5, \"name\": \"x\"}} for :id and :name (got {Clip(raw, 200)})";
+    /// <summary>A text the boundary cannot lex (2026-10-24, mechanism 7). Pinned.</summary>
+    public const string BoundaryUnread = "Error: the app could not read the SQL to check it keeps to the connection's schema, so nothing was run";
+
+    /// <summary>A literal's prefix straight after a digit (2026-10-24, review F7). Pinned.</summary>
+    public static string LiteralAfterNumber(int line, int column) =>
+        $"Error: the SQL has a literal straight after a number at line {line.ToString(CultureInfo.InvariantCulture)}, column {column.ToString(CultureInfo.InvariantCulture)} (1q'…', 1n'…'); put a space between them";
+
+    /// <summary>A server version the app cannot read, so it cannot tell which session layers it has (2026-10-24, review H10). Pinned.</summary>
+    public static string VersionUnread(string version) =>
+        $"the server's version ('{version}') does not read, so the app cannot tell whether it can make the session read-only; nothing was run";
+
+    /// <summary>A schema the session cannot be set to (2026-10-24, review H6). Pinned.</summary>
+    public static string SchemaUnset(string schema) =>
+        $"the session cannot be set to schema '{schema}', so the connection could work in another; nothing was run — give \"schema\" in oracle.json";
+
     public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; use letters, digits and _ (bound as :name)";
     public static string TableNotFound(string table, string connection, string schema) => $"Error: no table or view '{table}' visible in {connection}/{schema}; oracle_tables lists them";
     public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' matches more than one table or view; give the schema: {string.Join(", ", candidates)}";
@@ -273,10 +288,16 @@ public static class OracleText
             sb.Append("\nIndexes:\n");
             foreach (var i in Set(run, 2).Rows)
             {
-                // index, kind, uniqueness, constraint, keys, status
+                // index, kind, uniqueness, constraint, keys, status; a function-based key's {expr:N} as its expression (set 6, F17)
                 string flags = At(i, 3) == "P" ? "primary key, " : At(i, 3) == "U" ? "unique constraint, " : At(i, 2) == "UNIQUE" ? "unique, " : "";
                 string status = At(i, 5) is "VALID" or "N/A" or "NULL" ? "" : ", " + At(i, 5).ToLowerInvariant();
-                sb.Append("- ").Append(i[0]).Append(" (").Append(flags).Append(Kind(At(i, 1))).Append(status).Append("): ").Append(Blank(At(i, 4))).Append('\n');
+                string keys = Blank(At(i, 4));
+                foreach (var e in Set(run, 6).Rows.Where(e => At(e, 0) == i[0]))
+                {
+                    keys = keys.Replace("{expr:" + At(e, 1) + "}", OneLine(At(e, 2)), StringComparison.Ordinal);
+                }
+
+                sb.Append("- ").Append(i[0]).Append(" (").Append(flags).Append(Kind(At(i, 1))).Append(status).Append("): ").Append(keys).Append('\n');
             }
         }
 

@@ -23,7 +23,7 @@ public static class ConnectionAccess
         string word = access?.Trim() ?? "";
         return word.Length == 0 || word.Equals(ReadAccess, StringComparison.OrdinalIgnoreCase) || word.Equals(ReadWriteAccess, StringComparison.OrdinalIgnoreCase)
             ? null
-            : $"\"access\" is '{word}'; it must be read or readwrite";
+            : SqlText.BadAccess(word);
     }
 
     /// <summary>The value the wizards store: null for <c>read</c> (the default, left out of the file), else <c>readwrite</c>.</summary>

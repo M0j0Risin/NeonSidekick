@@ -30,6 +30,14 @@ public static class PostgresBoundary
         // prepared transactions, and the functions that name or test the cluster's roles (pg_get_userbyid over a series lists them).
         "pg_stat_statements", "pg_stat_statements_info", "pg_stat_monitor", "pg_locks", "pg_prepared_xacts", "pg_stat_subscription",
         "pg_get_userbyid", "pg_has_role",
+        // 2026-10-24, the database review's B2, R3, C6, R1 (postgresql.org/docs/current/functions-admin.html, functions-info.html,
+        // monitoring-stats.html, view-pg-*.html): the functions behind the refused views, the progress views of other sessions, the
+        // replication origins and slots' statistics, the parameter ACLs and security labels, a tablespace's path, the user mappings'
+        // options (their passwords), the shared objects' comments, and the casts and functions that turn an oid into a role's name.
+        "pg_lock_status", "pg_show_all_settings", "pg_show_all_file_settings", "pg_get_replication_slots", "pg_prepared_xact", "current_setting",
+        "pg_stat_get_progress_info", "pg_blocking_pids", "pg_safe_snapshot_blocking_pids", "pg_stat_replication_slots", "pg_stat_subscription_stats",
+        "pg_replication_origin", "pg_replication_origin_status", "pg_parameter_acl", "pg_seclabels", "pg_tablespace_location",
+        "user_mapping_options", "user_mappings", "shobj_description", "regrole", "to_regrole",
     };
 
     /// <summary>
@@ -50,8 +58,35 @@ public static class PostgresBoundary
         "pg_get_viewdef", "pg_get_functiondef", "pg_get_indexdef", "pg_get_triggerdef", "pg_get_ruledef", "pg_get_constraintdef",
     };
 
-    /// <summary>The function families of other sessions: <c>pg_stat_get_backend_*</c>.</summary>
-    public static readonly IReadOnlyList<string> ServerCatalogPrefixes = ["pg_stat_get_backend_"];
+    /// <summary>The function families of other sessions and the cluster: <c>pg_stat_get_backend_*</c>, <c>pg_stat_get_db_*</c> and the progress views (R3).</summary>
+    public static readonly IReadOnlyList<string> ServerCatalogPrefixes = ["pg_stat_get_backend_", "pg_stat_get_db_", "pg_stat_progress_", "pg_replication_origin_"];
+
+    /// <summary>
+    /// The <c>pg_</c>-named functions a query may call under a schema lock (2026-10-24, the database review's DB2, from Phase 0's sweep of
+    /// postgresql.org/docs/current/functions-*.html): they describe a value, the session or the server's clock, never another object. Every
+    /// other <c>pg_</c> relation or function — the catalogs, <c>pg_get_*def</c>, <c>pg_describe_object</c>, the size functions over a
+    /// <c>regclass</c>, <c>pg_*_is_visible</c>, the advisory locks — is refused under a lock unless the lock's own schema qualifies it (a
+    /// user's table may be named <c>pg_notes</c>). <c>pg_snapshot_*</c> is a family.
+    /// </summary>
+    public static readonly IReadOnlySet<string> LockAllowed = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "pg_catalog", "pg_temp", "pg_typeof", "pg_column_size", "pg_size_pretty", "pg_size_bytes", "pg_backend_pid", "pg_client_encoding",
+        "pg_encoding_to_char", "pg_char_to_encoding", "pg_trigger_depth", "pg_jit_available", "pg_is_in_recovery", "pg_postmaster_start_time",
+        "pg_conf_load_time", "pg_current_xact_id_if_assigned", "pg_current_snapshot", "pg_xact_status", "pg_visible_in_snapshot",
+    };
+
+    /// <summary>
+    /// The readers with no <c>pg_</c> in their name that turn an oid or a name into another schema's objects (DB2, R1, F14): refused under a
+    /// lock, as the <c>pg_</c> ones are. <c>has_*_privilege</c>, <c>to_reg*</c> and the <c>reg*</c> types are families.
+    /// </summary>
+    public static readonly IReadOnlySet<string> LockReaders = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "obj_description", "col_description", "format_type", "acldefault", "aclexplode",   // current_schemas names the session's own path, the lock's
+        "regclass", "regtype", "regproc", "regprocedure", "regoper", "regoperator", "regnamespace", "regconfig", "regdictionary", "regcollation",
+    };
+
+    /// <summary>The functions whose first argument names a sequence as text (R2: <c>setval('payroll.seq', 1)</c> moved another schema's).</summary>
+    public static readonly IReadOnlySet<string> SequenceFunctions = new HashSet<string>(StringComparer.Ordinal) { "nextval", "currval", "setval" };
 
     /// <summary>The qualifiers a schema lock lets stand beside its own: the language's catalog and the session's temporary schema.</summary>
     public static readonly IReadOnlySet<string> AlwaysSchemas = new HashSet<string>(StringComparer.Ordinal) { "pg_catalog", "pg_temp" };
@@ -67,14 +102,20 @@ public static class PostgresBoundary
         "database_to_xml", "database_to_xmlschema", "database_to_xml_and_xmlschema",
     };
 
-    /// <summary>A name as PostgreSQL reads it: a bare word folded to lower case, a quoted name as written (the review, 2026-10-09: <c>"Sales"</c> is not <c>sales</c>).</summary>
-    private static string Fold(GateToken token) => token.Kind == GateTokenKind.Name ? token.Text : token.Text.ToLowerInvariant();
+    /// <summary>
+    /// A name as PostgreSQL reads it: a bare word folded to lower case, A to Z alone (2026-10-24, review B3), a quoted name as written (the
+    /// review, 2026-10-09: <c>"Sales"</c> is not <c>sales</c>).
+    /// </summary>
+    private static string Fold(GateToken token) => token.Kind == GateTokenKind.Name ? token.Text : PostgresReadOnlyGate.AsciiLower(token.Text);
 
     /// <summary>The schemas' names in the database, read before the model's statement under a schema lock.</summary>
     public const string Names = "SELECT nspname FROM pg_namespace";
 
     /// <summary>How many names <see cref="Names"/> reads at most.</summary>
     public const int MaxNames = 100_000;
+
+    /// <summary><see cref="Names"/>' rows as the set <see cref="Check"/> compares with, built once per read (2026-10-24, the database review's R14).</summary>
+    public static IReadOnlySet<string> NameSet(IReadOnlyList<string[]> rows) => new HashSet<string>(rows.Select(r => r[0]), StringComparer.Ordinal);
 
     /// <summary>
     /// What of <paramref name="sql"/> the server must be asked about: under a lock to <paramref name="schema"/>, every part of a dotted
@@ -85,9 +126,11 @@ public static class PostgresBoundary
     public static (IReadOnlyList<string> Heads, string? Refused) Qualifiers(string sql, string? schema)
     {
         ArgumentNullException.ThrowIfNull(sql);
-        if (PostgresWriteGate.Lex(sql, out _) is not { } tokens)
+        if (PostgresWriteGate.LexWithBodies(sql, out _) is not { } tokens)
         {
-            return ([], null);
+            // A text the boundary cannot read is refused (2026-10-24, mechanism 7): it passed here "because the gate refused it", which
+            // held only while every caller ran the gate first.
+            return ([], PostgresText.BoundaryUnread);
         }
 
         foreach (var t in tokens)
@@ -105,6 +148,7 @@ public static class PostgresBoundary
         }
 
         string own = schema.Trim();
+
         if (tokens.FirstOrDefault(t => t.Kind is GateTokenKind.Word or GateTokenKind.Name && XmlExports.Contains(t.Text)) is { Text: { } export })
         {
             return ([], PostgresText.XmlExport(export.ToLowerInvariant(), own));
@@ -115,15 +159,112 @@ public static class PostgresBoundary
             return ([], PostgresText.SchemaListing(listing.ToLowerInvariant(), own));
         }
 
+        if (LockRefusal(tokens, own) is { } locked)
+        {
+            return ([], locked);
+        }
+
         var heads = ServerWriteGate.Prefixes(tokens).Select(Fold).Where(h => !h.Equals(own, StringComparison.Ordinal) && !AlwaysSchemas.Contains(h)).ToList();
+
+        // A bare schema name (G2, A11): DROP SCHEMA payroll, ALTER SCHEMA payroll RENAME, COMMENT ON SCHEMA payroll, ALTER TABLE t SET
+        // SCHEMA payroll, CREATE SCHEMA scratch — the word after SCHEMA (past IF [NOT] EXISTS) is a schema whatever the names say.
+        for (int i = 0; i + 1 < tokens.Count; i++)
+        {
+            if (!tokens[i].IsWord("SCHEMA") || (i > 0 && tokens[i - 1].IsSymbol(".")))
+            {
+                continue;
+            }
+
+            int at = i + 1;
+            while (at < tokens.Count && tokens[at].Kind == GateTokenKind.Word && tokens[at].Text is "IF" or "NOT" or "EXISTS")
+            {
+                at++;
+            }
+
+            if (at < tokens.Count && tokens[at].Kind is GateTokenKind.Word or GateTokenKind.Name && Fold(tokens[at]) is { } named
+                && !named.Equals(own, StringComparison.Ordinal) && !(i > 0 && tokens[i - 1].IsWord("CURRENT")))
+            {
+                return (heads, PostgresText.OtherSchema(named, own));
+            }
+        }
+
         return heads.Contains("information_schema")
             ? (heads, PostgresText.OtherSchema("information_schema", own))
             : (heads, null);
     }
 
     /// <summary>
+    /// What a schema lock refuses before any names are read (2026-10-24, the database review's DB2, R1, R2, R4, F14, H8): a <c>pg_</c>
+    /// relation or function not in <see cref="LockAllowed"/> and a <see cref="LockReaders"/> one (<c>has_*_privilege</c>, <c>to_reg*</c>
+    /// too), unless the lock's own schema qualifies the name; a sequence function handed another schema's sequence as text; and
+    /// <c>CASCADE</c>, which drops or empties what depends on the object wherever it is.
+    /// </summary>
+    private static string? LockRefusal(IReadOnlyList<GateToken> tokens, string own)
+    {
+        int lead = tokens.ToList().FindIndex(t => !t.IsSymbol("("));
+        if (lead >= 0 && PostgresWriteGate.WholeDatabase(tokens, lead) is { } whole)
+        {
+            return PostgresText.WholeUnderLock(whole, own);   // H8: upkeep over every schema's tables
+        }
+
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Kind is not (GateTokenKind.Word or GateTokenKind.Name))
+            {
+                continue;
+            }
+
+            string name = Fold(t);
+            bool qualifiedByOwn = i >= 2 && tokens[i - 1].IsSymbol(".") && tokens[i - 2].Kind is GateTokenKind.Word or GateTokenKind.Name
+                && Fold(tokens[i - 2]).Equals(own, StringComparison.Ordinal);
+            bool member = i >= 2 && tokens[i - 1].IsSymbol(".") && !(tokens[i - 2].Kind is GateTokenKind.Word or GateTokenKind.Name && AlwaysSchemas.Contains(Fold(tokens[i - 2])));
+            if (qualifiedByOwn || (member && !name.StartsWith("pg_", StringComparison.Ordinal)))
+            {
+                continue;   // the lock's own object, or a column or member after another qualifier (which the names judge)
+            }
+
+            bool reader = name.StartsWith("pg_", StringComparison.Ordinal) ? !LockAllowed.Contains(name) && !name.StartsWith("pg_snapshot_", StringComparison.Ordinal)
+                : LockReaders.Contains(name) || name.StartsWith("to_reg", StringComparison.Ordinal)
+                  || (name.StartsWith("has_", StringComparison.Ordinal) && name.EndsWith("_privilege", StringComparison.Ordinal));
+            if (reader)
+            {
+                return PostgresText.CatalogUnderLock(name, own);
+            }
+
+            if (t.IsWord("CASCADE") && !(i > 0 && (tokens[i - 1].IsWord("DELETE") || tokens[i - 1].IsWord("UPDATE"))))   // a key's ON DELETE CASCADE stays
+            {
+                return PostgresText.CascadeUnderLock(own);
+            }
+
+            if (SequenceFunctions.Contains(name) && i + 2 < tokens.Count && tokens[i + 1].IsSymbol("(") && tokens[i + 2].Kind == GateTokenKind.Other
+                && PostgresWriteGate.StringValue(tokens[i + 2].Text) is { } sequence && SequenceSchema(sequence) is { } named
+                && !named.Equals(own, StringComparison.Ordinal) && !AlwaysSchemas.Contains(named))
+            {
+                return PostgresText.OtherSchema(named, own);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The schema part of a sequence's name written as text (<c>payroll.seq</c>, <c>"Pay".seq</c>), as the server reads it; null for none.</summary>
+    private static string? SequenceSchema(string text)
+    {
+        text = text.Trim();
+        if (text.StartsWith('"'))
+        {
+            int close = text.IndexOf('"', 1);
+            return close > 0 && close + 1 < text.Length && text[close + 1] == '.' ? text[1..close] : null;
+        }
+
+        int dot = text.IndexOf('.');
+        return dot > 0 ? PostgresReadOnlyGate.AsciiLower(text[..dot]) : null;
+    }
+
+    /// <summary>
     /// Null when <paramref name="sql"/> keeps to the connection's database and <paramref name="schema"/> (null for no lock), the schemas
-    /// in the database being <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex passes: the gate refused it.
+    /// in the database being <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex is refused (mechanism 7).
     /// </summary>
     public static string? Check(string sql, string? schema, IEnumerable<string> visible)
     {
@@ -135,7 +276,7 @@ public static class PostgresBoundary
         }
 
         // The heads are folded as PostgreSQL folds them, so the schemas' names compare exactly.
-        var others = new HashSet<string>(visible, StringComparer.Ordinal);
-        return heads.FirstOrDefault(others.Contains) is { } head ? PostgresText.OtherSchema(head, schema!.Trim()) : null;
+        var others = visible as IReadOnlySet<string> ?? new HashSet<string>(visible, StringComparer.Ordinal);   // a set the names cache built (R14)
+        return heads.FirstOrDefault(h => others.Contains(SqlText.Cell(h))) is { } head ? PostgresText.OtherSchema(head, schema!.Trim()) : null;   // as the names list writes it: a cell, scrubbed, NULL quoted (2026-10-24, the review of these fixes)
     }
 }

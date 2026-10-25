@@ -208,15 +208,31 @@ public sealed class LiveSqlTests
     [LiveSqlFact]
     public async Task EveryBatch_IsRolledBack_EvenOneThatWrites()
     {
-        // The second layer under the gate: the access itself, handed a write (no tool would pass it), leaves nothing behind.
-        const string read = "SELECT Name FROM Sales.Currency WHERE CurrencyCode = 'AFA'";
-        var before = await _access.RunAsync(null, read, [], 10, 30, CancellationToken.None);
-        var during = await _access.RunAsync(null, "UPDATE Sales.Currency SET Name = Name + N' (changed)' WHERE CurrencyCode = 'AFA'; " + read, [], 10, 30, CancellationToken.None);
-        var after = await _access.RunAsync(null, read, [], 10, 30, CancellationToken.None);
+        // The second layer under the gate: the access itself, handed a write (no tool would pass it), leaves nothing behind. Since 2026-10-24
+        // (the database review's S8) the write goes to a scratch table in tempdb made here and dropped after, a permanent one: a session's
+        // end would drop a #table on its own, so only the rollback can take this one's row away — and AdventureWorks is never changed,
+        // not even by a run that fails halfway.
+        string table = "tempdb.dbo.ns_rollback_" + Guid.NewGuid().ToString("N")[..12];
+        await using var admin = new SqlConnection(LiveSql.Config!.Builder(password: LiveSql.Password).ConnectionString);
+        await admin.OpenAsync();
+        await using (var create = new SqlCommand($"CREATE TABLE {table} (x int)", admin))
+        {
+            await create.ExecuteNonQueryAsync();
+        }
 
-        Assert.Equal(SqlOutcome.Ok, during.Outcome);
-        Assert.Equal(before.Grids[0].Rows[0][0] + " (changed)", during.Grids[0].Rows[0][0]);   // the write happened inside the transaction
-        Assert.Equal(before.Grids[0].Rows[0][0], after.Grids[0].Rows[0][0]);                    // and was rolled back
+        try
+        {
+            var during = await _access.RunAsync(null, $"INSERT INTO {table} VALUES (1); SELECT @@TRANCOUNT AS trancount, COUNT(*) AS n FROM {table}", [], 10, 30, CancellationToken.None);
+            Assert.Equal(SqlOutcome.Ok, during.Outcome);
+            Assert.Equal(["1", "1"], during.Grids[^1].Rows[0]);                                         // inside one transaction, the row there
+            await using var count = new SqlCommand($"SELECT COUNT(*) FROM {table}", admin);
+            Assert.Equal(0, (int)(await count.ExecuteScalarAsync())!);                                  // and rolled back
+        }
+        finally
+        {
+            await using var drop = new SqlCommand($"DROP TABLE {table}", admin);
+            await drop.ExecuteNonQueryAsync();
+        }
     }
 
     [LiveSqlFact]

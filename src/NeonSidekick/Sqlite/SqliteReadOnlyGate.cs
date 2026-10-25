@@ -98,11 +98,17 @@ public static class SqliteReadOnlyGate
 
             // A quoted name is a function's name too: "load_extension"('x.dll') and [fts3_tokenizer](…) call them (the 2026-10-04
             // review found both past the gate, held only by Microsoft.Data.Sqlite's defaults). SQLite's names are case-blind.
-            if (t.Kind == TokenKind.Quoted)
+            if (t.Kind is TokenKind.Quoted or TokenKind.String)
             {
-                if (IsSymbol(next, "(") && DeniedFunctions.Contains(t.Text.ToUpperInvariant()))
+                if (t.Kind == TokenKind.Quoted && IsSymbol(next, "(") && DeniedFunctions.Contains(t.Text.ToUpperInvariant()))
                 {
                     return SqliteText.Forbidden(t.Text.ToLowerInvariant() + "()");
+                }
+
+                // The raw pages by a quoted name or a string where a name fits (2026-10-24, the database review's I4, L3).
+                if (NameOf(t) == "SQLITE_DBPAGE")
+                {
+                    return SqliteText.Forbidden("sqlite_dbpage");
                 }
 
                 continue;
@@ -126,6 +132,13 @@ public static class SqliteReadOnlyGate
             if (DeniedFunctions.Contains(t.Text) && IsSymbol(next, "("))
             {
                 return SqliteText.Forbidden(t.Text.ToLowerInvariant() + "()");
+            }
+
+            // An eponymous virtual table is read with no parentheses too (2026-10-24, the database review's L3: FROM sqlite_dbpage read the
+            // raw pages, deleted rows' bytes among them, where the build has it; the bundled e_sqlite3 does not, so this is the second wall).
+            if (t.Text == "SQLITE_DBPAGE")
+            {
+                return SqliteText.Forbidden("sqlite_dbpage");
             }
         }
 
@@ -167,6 +180,17 @@ public static class SqliteReadOnlyGate
         tokens.Count > 0 && IsSymbol(tokens[^1], ";") ? tokens[..^1] : tokens;
 
     private static bool IsSymbol(Token token, string symbol) => token.Kind == TokenKind.Symbol && token.Text == symbol;
+
+    /// <summary>
+    /// A token as the name SQLite would read it, upper-cased (2026-10-24, the database review's I4): a word as it is, a quoted name's
+    /// text, and a string literal's value (<c>'it''s'</c> is <c>IT'S</c>), since SQLite takes a string where a name fits.
+    /// </summary>
+    public static string NameOf(Token token) => token.Kind switch
+    {
+        TokenKind.Word => token.Text,
+        TokenKind.String when token.Text.Length >= 2 => token.Text[1..^1].Replace("''", "'", StringComparison.Ordinal).ToUpperInvariant(),
+        _ => token.Text.ToUpperInvariant(),
+    };
 
     /// <summary>The text as tokens, comments dropped; null with the sentence for a string, name or comment that never ends.</summary>
     public static List<Token>? Tokenize(string sql, out string? error)

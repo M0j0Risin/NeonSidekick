@@ -12,26 +12,23 @@ namespace NeonSidekick.Llm.Tools;
 /// path while <c>SQLite sandbox files</c> is on; left out, the only named one, several refused since 2026-10-09), the statement timeout, and the table lookup
 /// <c>sqlite_describe</c> needs. A refused run is <see cref="SqliteText.Error"/>'s sentence.
 /// </summary>
-public abstract class SqliteTool : AIFunction
+public abstract class SqliteTool : ServerTool<SqliteAccess>
 {
     public const string DatabaseArgument = "database";
-    public const string TableArgument = "table";
 
     /// <summary>The <c>database</c> property every schema but <c>sqlite_databases</c> carries.</summary>
     public const string DatabaseProperty = "\"database\": { \"type\": \"string\", \"description\": \"The database's name (sqlite_databases lists them), or a .db file in the working directory by its path; it may be left out only when there is one.\" }";
 
-    private readonly SqliteAccess _sqlite;
-    private readonly Func<AppSettingsData> _effective;
-
-    protected SqliteTool(SqliteAccess sqlite, Func<AppSettingsData> effective)
+    protected SqliteTool(SqliteAccess sqlite, Func<AppSettingsData> effective) : base(sqlite, effective)
     {
-        _sqlite = sqlite ?? throw new ArgumentNullException(nameof(sqlite));
-        _effective = effective ?? throw new ArgumentNullException(nameof(effective));
     }
 
-    protected SqliteAccess Files => _sqlite;
+    protected SqliteAccess Files => Access;
 
-    protected AppSettingsData Effective => _effective();
+    /// <summary>SQLite's tools never took another argument for where they work: nothing is retired.</summary>
+    protected sealed override string? RetiredArgument => null;
+
+    protected sealed override string RetiredRefusal => "";
 
     /// <summary>The statement timeout: the setting, clamped to the range a hand-edited value may have left.</summary>
     public static int TimeoutSeconds(AppSettingsData effective)
@@ -40,14 +37,16 @@ public abstract class SqliteTool : AIFunction
         return Math.Clamp(effective.SqliteQueryTimeoutSeconds, AppSettingsData.MinSqlQueryTimeoutSeconds, AppSettingsData.MaxSqlQueryTimeoutSeconds);
     }
 
-    /// <summary>A string argument, or null when blank.</summary>
-    protected static string? Optional(AIFunctionArguments arguments, string name) =>
-        ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
-
     /// <summary>Runs the app's own statements on the call's database, capped at <see cref="SqliteAccess.MaxCatalogRows"/>.</summary>
-    protected Task<SqlRun> CatalogAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        _sqlite.RunAsync(database, statements, parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken);
+    protected async Task<SqlRun> CatalogAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
+        SqlText.CatalogRun(await Files.RunAsync(database, statements, parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false));
 }
+
+/// <summary>
+/// The user's allow for one <c>sqlite_execute</c> change: the file, the statement, whether the file is made, and the values its placeholders
+/// are bound to (2026-10-24, the database review's B5). True to run, false declined, null when no pane could ask.
+/// </summary>
+public delegate Task<bool?> SqliteWriteAllow(SqliteTarget target, string sql, bool creating, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken);
 
 /// <summary><c>sqlite_databases()</c>: the named databases of <c>sqlite.json</c> — the file, the description — and whether a working-directory file may be named too. Opens nothing.</summary>
 public sealed class SqliteDatabasesTool : SqliteTool
@@ -70,7 +69,7 @@ public sealed class SqliteDatabasesTool : SqliteTool
 
     public string Describe() => SqliteText.Databases(Files.Catalog(), Files.SandboxOn);
 
-    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new(Describe());
+    protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new(Describe());
 }
 
 /// <summary><c>sqlite_tables(database?, pattern?)</c>: the tables and views of the file, with their kind.</summary>
@@ -107,7 +106,7 @@ public sealed class SqliteTablesTool : SqliteTool
         return run.Outcome == SqlOutcome.Ok ? SqliteText.Tables(run, NeonSidekick.Files.WorkingDirectory.MaxReadChars) : SqliteText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         return await DescribeAsync(Optional(arguments, DatabaseArgument), Optional(arguments, PatternArgument), cancellationToken).ConfigureAwait(false);
@@ -165,7 +164,7 @@ public sealed class SqliteDescribeTool : SqliteTool
         return run.Outcome == SqlOutcome.Ok ? SqliteText.Describe(row[0], row[1], run, NeonSidekick.Files.WorkingDirectory.MaxReadChars) : SqliteText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         return await DescribeAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, DatabaseArgument), cancellationToken).ConfigureAwait(false);
@@ -241,7 +240,7 @@ public sealed class SqliteQueryTool : SqliteTool
         return run.Outcome == SqlOutcome.Ok ? SqliteText.Query(run, rows, SqlTool.ResultChars(Effective)) : SqliteText.Error(run);
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MaxRowsArgument, out var max, out var raw))
@@ -295,7 +294,7 @@ public sealed class SqliteQueryTool : SqliteTool
 /// <see cref="SqliteAccess.Execute"/>, committed as it runs. Every change is written to the log (the audit line). The answer is
 /// the rows changed and any rows a RETURNING or PRAGMA gave back. Plan mode drops it.
 /// </summary>
-public sealed class SqliteExecuteTool : SqliteTool
+public sealed partial class SqliteExecuteTool : SqliteTool
 {
     public const string ToolName = "sqlite_execute";
     public const string CreateArgument = "create";
@@ -315,10 +314,10 @@ public sealed class SqliteExecuteTool : SqliteTool
         }
         """);
 
-    private readonly Func<SqliteTarget, string, bool, CancellationToken, Task<bool?>>? _allow;
+    private readonly SqliteWriteAllow? _allow;
 
-    /// <param name="allow">The user's allow for one change (the target, the statement, whether the file is made): true to run, false declined, null when no pane could ask. Null where nothing can ask: every call is refused.</param>
-    public SqliteExecuteTool(SqliteAccess sqlite, Func<AppSettingsData> effective, Func<SqliteTarget, string, bool, CancellationToken, Task<bool?>>? allow) : base(sqlite, effective)
+    /// <param name="allow">The user's allow for one change (the target, the statement, whether the file is made, the bound values): true to run, false declined, null when no pane could ask. Null where nothing can ask: every call is refused.</param>
+    public SqliteExecuteTool(SqliteAccess sqlite, Func<AppSettingsData> effective, SqliteWriteAllow? allow) : base(sqlite, effective)
     {
         _allow = allow;
     }
@@ -363,11 +362,6 @@ public sealed class SqliteExecuteTool : SqliteTool
             return SqliteText.NoKindsAllowed;
         }
 
-        if (create && !kinds.Contains(SqliteStatementKind.Create))
-        {
-            return SqliteText.CreateNotAllowed;
-        }
-
         if (SqliteWriteGate.Check(sql, kinds) is { } refused)
         {
             return refused;
@@ -378,12 +372,27 @@ public sealed class SqliteExecuteTool : SqliteTool
             return SqliteText.Error(unresolved!);
         }
 
+        // Create is asked of the kinds only when the file is to be made (2026-10-24, the database review's P3: create: true on a file already
+        // there was refused with Create unticked, though the schema says it is then just opened).
+        if (creating && !kinds.Contains(SqliteStatementKind.Create))
+        {
+            return SqliteText.CreateNotAllowed;
+        }
+
+        // The file guard's other rules hold for a change (2026-10-24, review A10: the target resolved as a read, so .git, .neon and the app's
+        // own home were never judged for a create or a change).
+        if (Files.WriteRefusal(target) is { } guarded)
+        {
+            return guarded;
+        }
+
         string body = SqliteReadOnlyGate.Body(sql);
 
         // A read asks nothing (later on 2026-10-05, the user's ask): it runs as sqlite_query's do — the file opened read-only,
-        // query_only on, the transaction rolled back — so it cannot change the file whatever it is, and is no change to audit.
+        // query_only on, the transaction rolled back — so it cannot change the file whatever it is, and is no change to audit — and only
+        // what sqlite_query's own gate passes counts as one (2026-10-24, review F11: an EXPLAIN-led statement ran on this path unchecked).
         // A read that would make a new file is not one: it asks and runs as a create.
-        if (!creating && SqliteWriteGate.Classify(body) == SqliteStatementKind.Read)
+        if (!creating && SqliteWriteGate.Classify(body) == SqliteStatementKind.Read && ReadGatePasses(body))
         {
             var read = await Task.Run(() => SqliteAccess.Run(target, [body], parameters, rows, TimeoutSeconds(effective), cancellationToken), cancellationToken).ConfigureAwait(false);
             return read.Outcome == SqlOutcome.Ok ? SqliteText.Query(read, rows, SqlTool.ResultChars(effective)) : SqliteText.Error(read);
@@ -394,7 +403,7 @@ public sealed class SqliteExecuteTool : SqliteTool
             return SqliteText.NoPane;
         }
 
-        switch (await _allow(target, body, creating, cancellationToken).ConfigureAwait(false))
+        switch (await _allow(target, body, creating, parameters, cancellationToken).ConfigureAwait(false))
         {
             case null:
                 return SqliteText.NoPane;
@@ -402,17 +411,45 @@ public sealed class SqliteExecuteTool : SqliteTool
                 return SqliteText.Declined;
         }
 
-        var run = await SqliteAccess.ExecuteAsync(target, creating, body, parameters, rows, TimeoutSeconds(effective), cancellationToken).ConfigureAwait(false);
-        if (run.Outcome != SqlOutcome.Ok)
+        // Every attempted change audited whatever its end (2026-10-24, the database review's B17, decision DB7: a failed create whose file
+        // would not go away was never in the log), the whole statement redacted and scrubbed (H3, J4).
+        SqlRun run;
+        try
         {
-            return SqliteText.Error(run);
+            run = await SqliteAccess.ExecuteAsync(target, creating, body, parameters, rows, TimeoutSeconds(effective), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Diagnostics.DiagnosticLog.Info(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating, DatabaseAudit.Word(DatabaseAuditOutcome.Canceled, null), DatabaseAudit.Statement(body)));
+            throw;
         }
 
-        Diagnostics.DiagnosticLog.Info(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating, run.Changes ?? 0, Diagnostics.LogText.Excerpt(body)));
-        return SqliteText.Executed(run, creating, rows, SqlTool.ResultChars(effective));
+        // Rows are counted for a change to data alone (2026-10-24, review G16: DDL, a PRAGMA or VACUUM said "Changed 0 rows"; the server
+        // families say "Ran it").
+        if (SqliteWriteGate.Classify(body) is not (SqliteStatementKind.Data or SqliteStatementKind.Delete))
+        {
+            run = run with { Changes = null };
+        }
+
+        Diagnostics.DiagnosticLog.Info(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating && run.Outcome == SqlOutcome.Ok, DatabaseAudit.Word(DatabaseAudit.OutcomeOf(run), run.Changes), DatabaseAudit.Statement(body)));
+        return run.Outcome != SqlOutcome.Ok ? SqliteText.Error(run) : SqliteText.Executed(run, creating, rows, SqlTool.ResultChars(effective));
     }
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    /// <summary>
+    /// Whether <paramref name="body"/> is a read <c>sqlite_query</c>'s gate passes (F11), an <c>EXPLAIN</c> or <c>EXPLAIN QUERY PLAN</c> in
+    /// front of one too: the plan of a read is a read; <c>EXPLAIN PRAGMA …</c> and the like go to the pane.
+    /// </summary>
+    public static bool ReadGatePasses(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var explain = ExplainLead().Match(body);
+        return SqliteReadOnlyGate.Check(explain.Success ? body[explain.Length..] : body) is null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*EXPLAIN\s+(?:QUERY\s+PLAN\s+)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex ExplainLead();
+
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, SqliteQueryTool.MaxRowsArgument, out var max, out var raw))
