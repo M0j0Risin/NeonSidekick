@@ -397,6 +397,9 @@ if (-not $proc.WaitForExit(120000)) {
 # with a space.
 $checkLines = New-Object System.Collections.Generic.List[string]
 $current = $null
+# The color codes go first (2026-10-26, the first v0.5.2 release run): on a GitHub runner the smoke's console writes ANSI colors even
+# redirected, and a line that starts with an escape matched no verdict, so every check was dropped and a failure showed nothing.
+$smokeOut = $smokeOut -replace "$([char]27)\[[0-9;?]*[A-Za-z]", ''
 foreach ($line in $smokeOut -split "`r?`n") {
     if ($line -cmatch '^\s+(PASS|FAIL)\s' -or $line -cmatch '^SMOKE (PASS|FAIL)\b') {
         if ($null -ne $current) { $checkLines.Add($current) }
