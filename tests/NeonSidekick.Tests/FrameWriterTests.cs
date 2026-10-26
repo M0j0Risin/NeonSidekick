@@ -67,6 +67,99 @@ public sealed class FrameWriterTests
         Assert.Equal("lift pane", Written);
     }
 
+    /// <summary>
+    /// A terminal gone (2026-10-25, the Mac pass: a redraw tick wrote to a pty iTerm2 had closed, and the IOException ended the process): the
+    /// first failed write marks it gone, nothing after throws or reaches the stream, held or not, the dispose too, and it is logged once.
+    /// </summary>
+    [Fact]
+    public void ATerminalGone_DropsTheWrites_NeverThrows_AndIsLoggedOnce()
+    {
+        var stream = new FailingStream();
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == ScreenPane.Category && e.Message.StartsWith("The terminal took no more output", StringComparison.Ordinal)) lines.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            var writer = new FrameWriter(stream);
+            writer.Write("before");
+            Assert.False(writer.Gone);
+
+            stream.Fail = true;
+            writer.Write("lost");
+            Assert.True(writer.Gone);
+            writer.Hold();
+            writer.Write(new string('x', 40_000));   // past the buffer: a flush inside the write
+            writer.Release();
+            writer.WriteLine("after");
+            writer.Settle();
+            writer.Flush();
+            writer.Dispose();
+
+            Assert.Equal("before", Encoding.UTF8.GetString(stream.Written.ToArray()));
+            Assert.Equal([string.Format(System.Globalization.CultureInfo.InvariantCulture, FrameWriter.GoneLogLine, FailingStream.Message)], lines);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+    }
+
+    /// <summary>A held frame bigger than the buffer, the terminal gone mid-frame: the write that flushes is the one that finds out.</summary>
+    [Fact]
+    public void ATerminalGone_WhileHeld_IsFoundByTheWriteThatFlushes()
+    {
+        var stream = new FailingStream();
+        using var writer = new FrameWriter(stream);
+        writer.Hold();
+        stream.Fail = true;
+        writer.Write(new string('y', 40_000));
+        Assert.True(writer.Gone);
+        writer.Release();
+        Assert.Empty(stream.Written.ToArray());
+    }
+
+    // A pty that closes: every write after Fail throws EIO's IOException, as .NET's console stream does.
+    private sealed class FailingStream : Stream
+    {
+        public const string Message = "Input/output error";
+
+        public MemoryStream Written { get; } = new();
+
+        public bool Fail { get; set; }
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => Written.Length;
+
+        public override long Position { get => Written.Position; set => throw new NotSupportedException(); }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (Fail)
+            {
+                throw new IOException(Message);
+            }
+
+            Written.Write(buffer);
+        }
+    }
+
     [Fact]
     public void Dispose_LetsAHeldFrameGo()
     {

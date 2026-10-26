@@ -1,4 +1,5 @@
 using System.Text;
+using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.UI;
 
@@ -31,13 +32,24 @@ public interface IFrameHold
 /// last <see cref="Release"/> and go out as one. <c>Program</c> installs it with <see cref="Console.SetOut"/> before the
 /// Spectre console is created, so Spectre still sees <see cref="Console.Out"/> (its width and terminal detection ask
 /// whether its writer is stdout's).
+/// <para>
+/// A terminal that went away (2026-10-25, the Mac pass: iTerm2 closes a window's pty about 5 s after the close, then sends SIGHUP; a
+/// redraw tick between the two wrote to the closed pty, and the <see cref="IOException"/> "Input/output error" on a pool thread ended
+/// the process with a crash.log while the hangup's own close work ran) is <see cref="Gone"/> from the first write that fails: what was
+/// held and everything after is dropped, never thrown, and it is logged once.
+/// </para>
 /// </summary>
 public sealed class FrameWriter : TextWriter, IFrameHold
 {
+    /// <summary>The log line when the terminal stops taking output; <c>{0}</c> is the failure's message.</summary>
+    public const string GoneLogLine = "The terminal took no more output ({0}); the screen's writes are dropped from here.";
+
     private readonly Stream _stream;
     private readonly StreamWriter _writer;
     private readonly Lock _gate = new();
     private int _held;
+    private bool _gone;
+    private string? _goneReason;   // set under the lock when a write first fails, logged after it
 
     /// <param name="stream">The stream the frames go to: <see cref="Console.OpenStandardOutput()"/> in the app; the tests pass a memory stream.</param>
     public FrameWriter(Stream stream)
@@ -55,6 +67,12 @@ public sealed class FrameWriter : TextWriter, IFrameHold
     public bool Holding
     {
         get { lock (_gate) { return _held > 0; } }
+    }
+
+    /// <summary>Whether the terminal stopped taking output (a write failed): everything since is dropped.</summary>
+    public bool Gone
+    {
+        get { lock (_gate) { return _gone; } }
     }
 
     public void Hold()
@@ -79,6 +97,8 @@ public sealed class FrameWriter : TextWriter, IFrameHold
                 FlushLocked();
             }
         }
+
+        ReportGone();
     }
 
     public void Settle()
@@ -87,51 +107,113 @@ public sealed class FrameWriter : TextWriter, IFrameHold
         {
             FlushLocked();
         }
+
+        ReportGone();
     }
 
     public override void Write(char value)
     {
         lock (_gate)
         {
-            _writer.Write(value);
-            FlushUnheld();
+            if (!_gone)
+            {
+                try
+                {
+                    _writer.Write(value);   // a full buffer flushes here too
+                    FlushUnheld();
+                }
+                catch (IOException ex)
+                {
+                    MarkGone(ex);
+                }
+            }
         }
+
+        ReportGone();
     }
 
     public override void Write(string? value)
     {
         lock (_gate)
         {
-            _writer.Write(value);
-            FlushUnheld();
+            if (!_gone)
+            {
+                try
+                {
+                    _writer.Write(value);   // a full buffer flushes here too
+                    FlushUnheld();
+                }
+                catch (IOException ex)
+                {
+                    MarkGone(ex);
+                }
+            }
         }
+
+        ReportGone();
     }
 
     public override void Write(char[] buffer, int index, int count)
     {
         lock (_gate)
         {
-            _writer.Write(buffer, index, count);
-            FlushUnheld();
+            if (!_gone)
+            {
+                try
+                {
+                    _writer.Write(buffer, index, count);   // a full buffer flushes here too
+                    FlushUnheld();
+                }
+                catch (IOException ex)
+                {
+                    MarkGone(ex);
+                }
+            }
         }
+
+        ReportGone();
     }
 
     public override void Write(ReadOnlySpan<char> buffer)
     {
         lock (_gate)
         {
-            _writer.Write(buffer);
-            FlushUnheld();
+            if (!_gone)
+            {
+                try
+                {
+                    _writer.Write(buffer);   // a full buffer flushes here too
+                    FlushUnheld();
+                }
+                catch (IOException ex)
+                {
+                    MarkGone(ex);
+                }
+            }
         }
+
+        ReportGone();
     }
 
     public override void WriteLine(string? value)
     {
         lock (_gate)
         {
-            _writer.WriteLine(value);
-            FlushUnheld();
+            if (!_gone)
+            {
+                try
+                {
+                    _writer.WriteLine(value);   // a full buffer flushes here too
+                    FlushUnheld();
+                }
+                catch (IOException ex)
+                {
+                    MarkGone(ex);
+                }
+            }
         }
+
+        ReportGone();
     }
 
     /// <summary>What is written so far goes out, unless a hold is open: Spectre flushes after every write it makes, and the frame is the point.</summary>
@@ -141,6 +223,8 @@ public sealed class FrameWriter : TextWriter, IFrameHold
         {
             FlushUnheld();
         }
+
+        ReportGone();
     }
 
     private void FlushUnheld()
@@ -153,8 +237,43 @@ public sealed class FrameWriter : TextWriter, IFrameHold
 
     private void FlushLocked()
     {
-        _writer.Flush();
-        _stream.Flush();
+        if (_gone)
+        {
+            return;
+        }
+
+        try
+        {
+            _writer.Flush();
+            _stream.Flush();
+        }
+        catch (IOException ex)
+        {
+            MarkGone(ex);
+        }
+    }
+
+    // Under the lock: the terminal is gone from here.
+    private void MarkGone(IOException ex)
+    {
+        _gone = true;
+        _goneReason = ex.Message;
+    }
+
+    // The one log line for a terminal gone, outside the lock: a log subscriber may draw (2026-10-25).
+    private void ReportGone()
+    {
+        string? reason;
+        lock (_gate)
+        {
+            reason = _goneReason;
+            _goneReason = null;
+        }
+
+        if (reason is not null)
+        {
+            DiagnosticLog.Info(ScreenPane.Category, string.Format(System.Globalization.CultureInfo.InvariantCulture, GoneLogLine, reason));
+        }
     }
 
     protected override void Dispose(bool disposing)
@@ -165,8 +284,17 @@ public sealed class FrameWriter : TextWriter, IFrameHold
             {
                 _held = 0;
                 FlushLocked();
-                _writer.Dispose();
+                try
+                {
+                    _writer.Dispose();   // flushes again: a terminal gone still holds what failed
+                }
+                catch (IOException)
+                {
+                    // gone already, or now: nothing more can reach it
+                }
             }
+
+            ReportGone();
         }
 
         base.Dispose(disposing);
