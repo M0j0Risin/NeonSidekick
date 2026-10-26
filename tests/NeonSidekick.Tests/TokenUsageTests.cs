@@ -78,6 +78,48 @@ public class TokenUsageTests
         Assert.Null(new TokenUsage(0, 100, 100, 1, TimeSpan.FromSeconds(1), TimeSpan.Zero).TokensPerSecond);   // no time passed: no division
     }
 
+    /// <summary>2026-10-26, the user's report of over 100,000 tok/s: a burst's span is not believed.</summary>
+    [Fact]
+    public void Judged_LeavesABurstUntimed_AndKeepsAQuickRealReply()
+    {
+        // A tool call sent whole: 400 tokens over 5 ms.
+        var burst = new TokenUsage(1_000, 400, 1_400, 1, TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(5)).Judged();
+        Assert.Equal(new TokenUsage(1_000, 400, 1_400, 1, TimeSpan.FromSeconds(2), TimeSpan.Zero, UntimedOutput: 400), burst);
+        Assert.Null(burst.TokensPerSecond);
+
+        // 100 ms or more is believed: a short real reply keeps its figure.
+        var quick = new TokenUsage(1_000, 20, 1_020, 1, TimeSpan.FromSeconds(2), TokenUsage.MinDecodeSpan);
+        Assert.Equal(quick, quick.Judged());
+        Assert.Equal(200, quick.Judged().TokensPerSecond!.Value, 6);
+
+        // Over the ceiling is a burst too, however long the span.
+        var tooFast = new TokenUsage(1_000, 6_000, 7_000, 1, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        Assert.Equal(6_000, tooFast.Judged().UntimedOutput);
+        var fast = new TokenUsage(1_000, 5_000, 6_000, 1, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        Assert.Equal(fast, fast.Judged());
+
+        // Nothing generated, or nothing counted: nothing to judge.
+        var silent = new TokenUsage(1_000, 0, 1_000, 1, TimeSpan.FromSeconds(1), TimeSpan.Zero);
+        Assert.Equal(silent, silent.Judged());
+        Assert.Equal(TokenUsage.Zero, TokenUsage.Zero.Judged());
+    }
+
+    [Fact]
+    public void ASum_OfATimedAndAnUntimedRequest_ReadsTheTimedOnesSpeed()
+    {
+        var timed = new TokenUsage(1_000, 100, 1_100, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)).Judged();
+        var untimed = new TokenUsage(1_100, 400, 1_500, 1, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(3)).Judged();
+
+        var reply = timed + untimed;
+        Assert.Equal(500, reply.Output);
+        Assert.Equal(400, reply.UntimedOutput);
+        Assert.Equal(50, reply.TokensPerSecond);
+        Assert.Null((untimed + untimed).TokensPerSecond);
+
+        // The default leaves the old figures alone.
+        Assert.Equal(0, new TokenUsage(0, 100, 100, 1, TimeSpan.Zero, TimeSpan.FromSeconds(2)).UntimedOutput);
+    }
+
     [Fact]
     public void AverageToFirstToken_IsTheWaitPerRequest_NullWhenNothingCounted()
     {

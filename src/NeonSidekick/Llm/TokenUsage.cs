@@ -36,16 +36,46 @@ namespace NeonSidekick.Llm;
 /// Whether <see cref="Reasoning"/> is (or, in a sum, includes) the app's estimate rather than the server's count (2026-09-29,
 /// <c>LLM reasoning estimate</c>: llama.cpp and Ollama stream the thinking but do not count it). Shown as <c>~</c>.
 /// </param>
-public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null, bool ReasoningEstimated = false)
+/// <param name="UntimedOutput">
+/// The share of <see cref="Output"/> from requests with no credible decode span (2026-10-26, <see cref="Judged"/>): left out of
+/// <see cref="TokensPerSecond"/>, whose span holds none of their time. Zero for a timed request.
+/// </param>
+public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null, bool ReasoningEstimated = false, long UntimedOutput = 0)
 {
     public static readonly TokenUsage Zero = default;
+
+    /// <summary>
+    /// The shortest decode span a request's speed is believed over (2026-10-26, the user's report: the hint row read well over
+    /// 100,000 tok/s). A reply that arrives in one burst — a tool call every client sends whole, a stream a proxy buffered — spans
+    /// under 10 ms over hundreds of tokens; 100 ms keeps a quick real reply's figure.
+    /// </summary>
+    public static readonly TimeSpan MinDecodeSpan = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// The fastest speed believed (2026-10-26, with <see cref="MinDecodeSpan"/>): no local server comes near it, so a faster
+    /// figure is a burst measured over the wrong span, not a decode.
+    /// </summary>
+    public const double MaxPlausibleTokensPerSecond = 5_000;
 
     /// <summary>True when no request was counted.</summary>
     public bool IsEmpty => Requests == 0;
 
-    /// <summary>Completion tokens per second of streaming, or null when nothing streamed or no time passed.</summary>
+    /// <summary>
+    /// Completion tokens per second of streaming, the untimed requests' output left out, or null when nothing timed streamed or no
+    /// time passed.
+    /// </summary>
     public double? TokensPerSecond =>
-        Output > 0 && Generating > TimeSpan.Zero ? Output / Generating.TotalSeconds : null;
+        Output - UntimedOutput is > 0 and var timed && Generating > TimeSpan.Zero ? timed / Generating.TotalSeconds : null;
+
+    /// <summary>
+    /// One request's usage after its spans are stamped (2026-10-26): untimed when it produced output over less than
+    /// <see cref="MinDecodeSpan"/> or faster than <see cref="MaxPlausibleTokensPerSecond"/> — its decode span zeroed and its whole
+    /// output <see cref="UntimedOutput"/>, so a sum with timed requests reads their speed alone. Otherwise unchanged.
+    /// </summary>
+    public TokenUsage Judged() =>
+        Output > 0 && (Generating < MinDecodeSpan || Output / Generating.TotalSeconds > MaxPlausibleTokensPerSecond)
+            ? this with { Generating = TimeSpan.Zero, UntimedOutput = Output }
+            : this;
 
     /// <summary>
     /// The wait per request: <see cref="ToFirstToken"/> is summed over the requests, so a sum of
@@ -84,7 +114,8 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
             Sum(a.CacheRead, b.CacheRead),
             Sum(a.CacheWrite, b.CacheWrite),
             a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0),
-            a.ReasoningEstimated || b.ReasoningEstimated);
+            a.ReasoningEstimated || b.ReasoningEstimated,
+            a.UntimedOutput + b.UntimedOutput);
 
     private static long? Sum(long? a, long? b) => a is null && b is null ? null : (a ?? 0) + (b ?? 0);
 }

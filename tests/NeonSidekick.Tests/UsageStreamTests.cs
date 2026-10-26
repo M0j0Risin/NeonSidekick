@@ -92,6 +92,41 @@ public class UsageStreamTests
         Assert.Equal(0, (await Usage("{\"prompt_tokens\":10,\"completion_tokens\":4,\"total_tokens\":14,\"completion_tokens_details\":{\"reasoning_tokens\":0}}")).Reasoning);
     }
 
+    /// <summary>
+    /// 2026-10-26, the speed's clock: a tool call's argument deltas reach the caller as updates of their own (the SDK's chunk with its
+    /// <c>ToolCallUpdates</c>, no contents) that <see cref="StreamProgress.Shows"/>, then the one whole call. Pins the adapter's
+    /// per-chunk yield: an upgrade that changes it fails here. A server's <c>content: ""</c> role chunk shows nothing.
+    /// </summary>
+    [Fact]
+    public async Task AToolCallsArgumentDeltas_ReachTheCallerAsProgress_BeforeTheOneWholeCall()
+    {
+        string body =
+            Head + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"logprobs\":null,\"finish_reason\":null}]}\n\n"
+            + Head + "\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"echo\",\"arguments\":\"\"}}]},\"logprobs\":null,\"finish_reason\":null}]}\n\n"
+            + Head + "\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"text\\\":\"}}]},\"logprobs\":null,\"finish_reason\":null}]}\n\n"
+            + Head + "\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"hi\\\"}\"}}]},\"logprobs\":null,\"finish_reason\":null}]}\n\n"
+            + Head + "\"choices\":[{\"index\":0,\"delta\":{},\"logprobs\":null,\"finish_reason\":\"tool_calls\"}]}\n\n"
+            + Head + "\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":12,\"total_tokens\":22}}\n\n"
+            + "data: [DONE]\n\n";
+        var stub = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/chat/completions", HttpStatusCode.OK, body, "text/event-stream");
+        using var http = new HttpClient(stub);
+        using var client = new OpenAICompatibleChatClient(Endpoint(), TimeSpan.FromSeconds(5), http);
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync([new Microsoft.Extensions.AI.ChatMessage(ChatRole.User, "q")]))
+        {
+            updates.Add(update);
+        }
+
+        Assert.False(StreamProgress.Shows(updates[0]));   // the role chunk, content ""
+        int[] deltas = [.. updates.Select((u, i) => (u, i)).Where(p => p.u.RawRepresentation is StreamingChatCompletionUpdate { ToolCallUpdates.Count: > 0 }).Select(p => p.i)];
+        Assert.Equal(3, deltas.Length);
+        Assert.All(deltas, i => Assert.True(StreamProgress.Shows(updates[i])));
+        int call = Assert.Single(updates.Select((u, i) => (u, i)).Where(p => p.u.Contents.OfType<FunctionCallContent>().Any()).Select(p => p.i));
+        Assert.True(call > deltas[^1]);
+        Assert.Equal("echo", updates[call].Contents.OfType<FunctionCallContent>().Single().Name);
+    }
+
     private static ChatTokenUsage Parse(string json) =>
         ModelReaderWriter.Read<ChatTokenUsage>(BinaryData.FromString(json), ModelReaderWriterOptions.Json)!;
 

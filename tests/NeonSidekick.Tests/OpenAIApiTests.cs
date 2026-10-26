@@ -248,6 +248,35 @@ public class OpenAIApiTests
         Assert.Equal(0.004m + 0.0032m + 0.005m + 0.01m, tokens.CostUsd);
     }
 
+    /// <summary>
+    /// 2026-10-26, the speed's clock: a reasoning item's start (without a summary the reasoning streams nothing), a call's start and
+    /// its argument deltas come out as contents-free progress updates, in order, and the reply stays one message.
+    /// </summary>
+    [Fact]
+    public async Task Stream_WhatItHoldsBack_ComesOutAsProgress_AndTheReplyStaysOneMessage()
+    {
+        var (client, _) = Client(streams: ToolTurn());
+        using var _client = client;
+
+        var updates = await client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "go")]).ToListAsync();
+
+        static string Kind(ChatResponseUpdate u) =>
+            ReferenceEquals(u.RawRepresentation, StreamProgress.Marker) ? (u.Contents.Count == 0 ? "progress" : "marked with contents")
+            : u.Contents.Single() switch
+            {
+                TextReasoningContent { ProtectedData: not null } => "signed",
+                TextReasoningContent => "thinking",
+                FunctionCallContent => "call",
+                UsageContent => "usage",
+                var other => other.GetType().Name,
+            };
+
+        Assert.Equal(["progress", "thinking", "thinking", "thinking", "signed", "progress", "progress", "call", "usage"], updates.Select(Kind));
+        Assert.All(updates, u => Assert.Equal("resp_1", u.MessageId));
+        var message = Assert.Single(updates.ToChatResponse().Messages);
+        Assert.Single(message.Contents.OfType<FunctionCallContent>());
+    }
+
     [Fact]
     public async Task Stream_TheReasoningGoesBack_InTheNextRequestOfTheTurn()
     {

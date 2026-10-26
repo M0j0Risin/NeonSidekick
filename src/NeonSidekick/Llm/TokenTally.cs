@@ -39,7 +39,9 @@ public sealed class TokenTally
     /// <summary>
     /// The speed the busy row shows as last known (2026-09-25): this turn's once a request of it reported, else the
     /// turn's before it — <see cref="BeginTurn"/> zeroes <see cref="LastReply"/>, and the row would lose its speed
-    /// for the whole first request of every turn. Null until a reply streamed with a count.
+    /// for the whole first request of every turn. Null until a reply streamed with a count. Since 2026-10-26 the idle row
+    /// reads it too, and the turn before is the latest that had a speed: a reply of untimed requests alone (a tool call sent
+    /// whole, <see cref="TokenUsage.Judged"/>) leaves the one before showing. Forgotten at <see cref="HideFromHint"/>.
     /// </summary>
     public double? LastKnownSpeed { get { lock (_gate) { return _lastReply.TokensPerSecond ?? _previousReply.TokensPerSecond; } } }
 
@@ -61,12 +63,12 @@ public sealed class TokenTally
     /// <summary>Replies of this conversation that completed without a usage report from the server.</summary>
     public int UnreportedReplies { get { lock (_gate) { return _unreportedReplies; } } }
 
-    /// <summary>A turn starts: the last reply's figures make way for it.</summary>
+    /// <summary>A turn starts: the last reply's figures make way for it; the last known speed stays the latest reply that had one.</summary>
     public void BeginTurn()
     {
         lock (_gate)
         {
-            if (!_lastReply.IsEmpty)
+            if (_lastReply.TokensPerSecond is not null)
             {
                 _previousReply = _lastReply;
             }
@@ -86,13 +88,15 @@ public sealed class TokenTally
     /// <c>27.1k tokens · 82 tok/s</c> through the new model's load and after it — the old model's speed over the old
     /// window). Display only: the counts, <c>/usage</c> and the auto-compact keep <see cref="LastRequest"/>, since the
     /// history crosses the switch and a smaller window must still compact before the next message. The new model's first
-    /// report brings the row back.
+    /// report brings the row back. The turn before's speed is forgotten (2026-10-26): <see cref="LastKnownSpeed"/> would bring the
+    /// old model's back with a new reply that had none.
     /// </summary>
     public void HideFromHint()
     {
         lock (_gate)
         {
             _hintHidden = true;
+            _previousReply = TokenUsage.Zero;
         }
     }
 

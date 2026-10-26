@@ -44,6 +44,32 @@ public class TokenTallyTests
         Assert.False(tally.HintHidden);
     }
 
+    /// <summary>2026-10-26: the last known speed is the latest reply that had one, and a connect forgets it.</summary>
+    [Fact]
+    public void AnUntimedReply_LeavesTheLastKnownSpeed_AtTheReplyBefore_AndHideFromHintForgetsIt()
+    {
+        var tally = new TokenTally();
+        tally.BeginTurn();
+        tally.Add(One(100, 40, seconds: 2));   // 20 tok/s
+        tally.EndTurn();
+
+        // A reply of one tool call sent whole: untimed.
+        tally.BeginTurn();
+        tally.Add(new TokenUsage(140, 300, 440, 1, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(4)).Judged());
+        tally.EndTurn();
+        Assert.Null(tally.LastReply.TokensPerSecond);
+        Assert.Equal(20, tally.LastKnownSpeed);
+
+        // The next turn's start: the untimed reply does not take the timed one's place.
+        tally.BeginTurn();
+        Assert.Equal(20, tally.LastKnownSpeed);
+
+        tally.HideFromHint();   // an LLM connect: the old model's speed never comes back
+        Assert.Null(tally.LastKnownSpeed);
+        tally.Add(One(200, 30));
+        Assert.Equal(30, tally.LastKnownSpeed);
+    }
+
     [Fact]
     public void Turns_SumIntoEveryScope_AndTheLastReplyStartsOver()
     {

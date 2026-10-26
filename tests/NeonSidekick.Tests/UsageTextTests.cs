@@ -80,12 +80,18 @@ public class UsageTextTests
         Assert.Equal("1.2k tokens · 46 tok/s", UsageText.HintPart(Filled(), null));   // no window: the count keeps its unit
         Assert.Equal("4.6k / 151.4k · 3% · 136 tok/s", UsageText.HintPart(WithLast(4_604), new ContextLength(151_427, "x")));   // the live SGLang figures
 
-        // The last reply said nothing: the last request still stands, without the speed.
+        // The last reply said nothing: the last request still stands, with the last known speed (2026-10-26, the user's choice).
         var tally = Filled();
         tally.BeginTurn();
         tally.EndTurn();
-        Assert.Equal("1.2k / 4.1k · 30%", UsageText.HintPart(tally, Window));
-        Assert.Equal("1.2k tokens", UsageText.HintPart(tally, null));
+        Assert.Equal("1.2k / 4.1k · 30% · 46 tok/s", UsageText.HintPart(tally, Window));
+        Assert.Equal("1.2k tokens · 46 tok/s", UsageText.HintPart(tally, null));
+
+        // A reply of untimed requests alone (a tool call sent whole) keeps the reply before's speed too.
+        tally.BeginTurn();
+        tally.Add(new TokenUsage(1_300, 200, 1_500, 1, TimeSpan.FromSeconds(0.5), TimeSpan.FromMilliseconds(4)).Judged());
+        Assert.Equal("1.5k / 4.1k · 37% · 46 tok/s", UsageText.HintPart(tally, Window));
+        Assert.DoesNotContain("tok/s", UsageText.Lines(tally, Window)[1], StringComparison.Ordinal);   // /usage's last reply stays exact: no speed
 
         // A cleared conversation shows nothing until the next reply, whatever the session holds.
         tally.ResetConversation();
@@ -344,9 +350,9 @@ public class UsageTextTests
         var tally = Filled();
         Assert.Equal("1.2k / 4.1k · 30% · 46 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.LastKnown, streaming));
 
-        // The next turn has begun: the idle part would lose the speed, the busy one keeps the last known.
+        // The next turn has begun: both keep the last known speed (the idle part since 2026-10-26).
         tally.BeginTurn();
-        Assert.Equal("1.2k / 4.1k · 30%", UsageText.HintPart(tally, Window));
+        Assert.Equal("1.2k / 4.1k · 30% · 46 tok/s", UsageText.HintPart(tally, Window));
         Assert.Equal("1.2k / 4.1k · 30% · 46 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.LastKnown, streaming));
         Assert.Equal("1.2k tokens · 46 tok/s", UsageText.BusyHintPart(tally, null, MidTurnUsage.LastKnown, streaming));
     }
@@ -370,7 +376,7 @@ public class UsageTextTests
         Assert.Equal(("~1.7k / 4.1k", "~42%", "~40 tok/s"), (estimate.Tokens, estimate.Percent, estimate.Speed));
         Assert.Equal(UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, live), estimate.Joined);
         Assert.Equal(UsageText.BusyHintPart(tally, Window, MidTurnUsage.LastKnown, live), UsageText.BusyHintParts(tally, Window, MidTurnUsage.LastKnown, live)!.Joined);
-        Assert.Null(UsageText.BusyHintParts(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 1, null))!.Speed);
+        Assert.Equal("46 tok/s", UsageText.BusyHintParts(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 1, null))!.Speed);   // no rate yet: the last known, unmarked
     }
 
     [Fact]
@@ -381,8 +387,9 @@ public class UsageTextTests
         // The last request's 1,240 plus 500 chunks, at the chunks' rate; every figure marked.
         Assert.Equal("~1.7k / 4.1k · ~42% · ~40 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, 40)));
         Assert.Equal("~1.7k tokens · ~40 tok/s", UsageText.BusyHintPart(tally, null, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, 40)));
-        // One chunk in, no rate yet: the context alone.
-        Assert.Equal("~1.2k / 4.1k · ~30%", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 1, null)));
+        // One chunk in, no rate yet: the context marked, the last known speed unmarked (2026-10-26).
+        Assert.Equal("~1.2k / 4.1k · ~30% · 46 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 1, null)));
+        Assert.Equal("~12 tokens", UsageText.BusyHintPart(new TokenTally(), null, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 12, null)));   // none known
         // The very first request of a conversation estimates from nothing.
         Assert.Equal("~12 tokens · ~6 tok/s", UsageText.BusyHintPart(new TokenTally(), null, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 12, 6)));
 
@@ -402,6 +409,7 @@ public class UsageTextTests
         Assert.Null(UsageText.BusyHintPart(tally, Window, MidTurnUsage.LastKnown, new StreamMeter.Reading(true, 500, 40)));
         Assert.Null(UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, StreamMeter.Reading.Idle));
         Assert.Equal("~1.7k / 4.1k · ~42% · ~40 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, 40)));
+        Assert.Equal("~1.7k / 4.1k · ~42%", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, null)));   // no old speed before the rate
         Assert.Equal("Context: 1,240 of 4,096 tokens (30%, max_model_len on /v1/models)", UsageText.ContextLine(tally, Window));   // /usage keeps them
 
         tally.BeginTurn();

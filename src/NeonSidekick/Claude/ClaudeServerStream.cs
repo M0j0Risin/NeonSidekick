@@ -25,6 +25,13 @@ public abstract record ClaudeServerEvent
     /// <summary>A piece of the model's thinking.</summary>
     public sealed record ThinkingDelta(string Text) : ClaudeServerEvent;
 
+    /// <summary>
+    /// The model is producing what the stream shows nothing of yet (2026-10-26, for the speed's clock): a content block began
+    /// (the CLI's thinking is always hidden — a block start, an empty piece, a signature), or a tool call's input or a signature
+    /// streamed. The calls themselves come whole, in the <c>assistant</c> line.
+    /// </summary>
+    public sealed record Generating : ClaudeServerEvent;
+
     /// <summary>The model called a tool: the call's id (the MCP call carries it too), the tool's name as the CLI knows it, and its input as JSON.</summary>
     public sealed record ToolUse(string Id, string Name, string InputJson) : ClaudeServerEvent;
 
@@ -145,9 +152,13 @@ public sealed class ClaudeServerStream
                     ? Number(usage, "input_tokens") + Number(usage, "cache_creation_input_tokens") + Number(usage, "cache_read_input_tokens")
                     : 0;
                 return [new ClaudeServerEvent.MessageStart(input)];
-            case "content_block_start" when evt.TryGetProperty("content_block", out var block) && Text(block, "type") == "text":
-                _pendingBreak = _wroteText;
-                return [];
+            case "content_block_start":
+                if (evt.TryGetProperty("content_block", out var block) && Text(block, "type") == "text")
+                {
+                    _pendingBreak = _wroteText;
+                }
+
+                return [new ClaudeServerEvent.Generating()];
             case "content_block_delta" when evt.TryGetProperty("delta", out var delta):
                 switch (Text(delta, "type"))
                 {
@@ -168,6 +179,9 @@ public sealed class ClaudeServerStream
                         return [new ClaudeServerEvent.TextDelta(text)];
                     case "thinking_delta" when Text(delta, "thinking") is { Length: > 0 } thinking:
                         return [new ClaudeServerEvent.ThinkingDelta(thinking)];
+                    case "input_json_delta":
+                    case "signature_delta":
+                        return [new ClaudeServerEvent.Generating()];
                     default:
                         return [];
                 }

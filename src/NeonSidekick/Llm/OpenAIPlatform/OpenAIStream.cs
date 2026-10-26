@@ -11,7 +11,9 @@ namespace NeonSidekick.Llm.OpenAIPlatform;
 /// (<see cref="Handle"/>), read with <see cref="JsonDocument"/> — no serializer; <see cref="AnthropicStream"/>'s shape, so the
 /// turn loop gets what every other client hands it: <see cref="TextContent"/> as it streams, the reasoning summary as
 /// <see cref="TextReasoningContent"/>, one whole <see cref="FunctionCallContent"/> per call at its item's end, and one
-/// <see cref="UsageContent"/> with the finish reason at <c>response.completed</c> (or <c>response.incomplete</c>).
+/// <see cref="UsageContent"/> with the finish reason at <c>response.completed</c> (or <c>response.incomplete</c>). A reasoning
+/// item's or a function call's start and a call's argument deltas come out as contents-free <see cref="StreamProgress"/> updates
+/// (2026-10-26): without a summary the reasoning streams nothing, and a call comes whole at its end.
 ///
 /// <para>A reasoning item streams its summary as reasoning pieces (a blank line between its parts) and closes with an empty
 /// piece carrying its encrypted content behind <see cref="OpenAIRequest.EncryptedPrefix"/>, which the request side sends back
@@ -87,6 +89,19 @@ public sealed class OpenAIStream
                     updates.Add(Update(new TextReasoningContent(thinking)));
                 }
 
+                break;
+
+            case "response.output_item.added":
+                if (root.TryGetProperty("item"u8, out var added) && added.ValueKind == JsonValueKind.Object
+                    && String(added, "type") is "reasoning" or "function_call")
+                {
+                    updates.Add(Progress());
+                }
+
+                break;
+
+            case "response.function_call_arguments.delta":
+                updates.Add(Progress());
                 break;
 
             case "response.output_item.done":
@@ -208,7 +223,17 @@ public sealed class OpenAIStream
         return details;
     }
 
-    private ChatResponseUpdate Update(AIContent content) => new(ChatRole.Assistant, [content])
+    private ChatResponseUpdate Update(AIContent content) => Update([content]);
+
+    /// <summary>A contents-free update marked <see cref="StreamProgress.Marker"/>: the model producing what this stream holds back.</summary>
+    private ChatResponseUpdate Progress()
+    {
+        var update = Update([]);
+        update.RawRepresentation = StreamProgress.Marker;
+        return update;
+    }
+
+    private ChatResponseUpdate Update(List<AIContent> contents) => new(ChatRole.Assistant, contents)
     {
         MessageId = _responseId,
         ResponseId = _responseId,

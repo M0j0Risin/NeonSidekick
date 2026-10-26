@@ -11,7 +11,9 @@ namespace NeonSidekick.Llm.Anthropic;
 /// (<see cref="Handle"/>), read with <see cref="JsonDocument"/> — no serializer. What the turn loop gets is what the
 /// OpenAI adapter hands it: <see cref="TextContent"/> as it streams, <see cref="TextReasoningContent"/> for thinking,
 /// one whole <see cref="FunctionCallContent"/> per call at its block's end, and one <see cref="UsageContent"/> with
-/// the finish reason at <c>message_stop</c>.
+/// the finish reason at <c>message_stop</c>. What it holds back while the model produces it — a tool call's input, a
+/// signature, a block's start with nothing to show — comes out as a contents-free <see cref="StreamProgress"/> update
+/// (2026-10-26), so the speed's clock starts at the model's first output, not at the call's end.
 ///
 /// <para>A thinking block streams as reasoning pieces and closes with an empty piece carrying the block's signature in
 /// <see cref="TextReasoningContent.ProtectedData"/> (a redacted block, its data behind <see cref="AnthropicRequest.RedactedPrefix"/>):
@@ -137,6 +139,7 @@ public sealed class AnthropicStream
 
         int index = Index(root);
         string kind = String(block, "type") ?? "";
+        int before = updates.Count;
         switch (kind)
         {
             case "text":
@@ -162,6 +165,12 @@ public sealed class AnthropicStream
             case "tool_use":
                 _blocks[index] = new Block(kind) { Id = String(block, "id") ?? "", Name = String(block, "name") ?? "" };
                 break;
+        }
+
+        // Every block start is the model producing (a thinking block with its display omitted streams no text at all).
+        if (updates.Count == before)
+        {
+            updates.Add(Progress());
         }
     }
 
@@ -191,9 +200,11 @@ public sealed class AnthropicStream
                 break;
             case "signature_delta":
                 block?.Buffer.Append(String(delta, "signature"));
+                updates.Add(Progress());
                 break;
             case "input_json_delta":
                 block?.Buffer.Append(String(delta, "partial_json"));
+                updates.Add(Progress());
                 break;
         }
     }
@@ -298,7 +309,17 @@ public sealed class AnthropicStream
         _output = Number(usage, "output_tokens") ?? _output;
     }
 
-    private ChatResponseUpdate Update(AIContent content) => new(ChatRole.Assistant, [content])
+    private ChatResponseUpdate Update(AIContent content) => Update([content]);
+
+    /// <summary>A contents-free update marked <see cref="StreamProgress.Marker"/>: the model producing what this stream holds back.</summary>
+    private ChatResponseUpdate Progress()
+    {
+        var update = Update([]);
+        update.RawRepresentation = StreamProgress.Marker;
+        return update;
+    }
+
+    private ChatResponseUpdate Update(List<AIContent> contents) => new(ChatRole.Assistant, contents)
     {
         MessageId = _messageId,
         ResponseId = _messageId,

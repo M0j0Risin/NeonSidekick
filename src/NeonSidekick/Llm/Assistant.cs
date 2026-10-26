@@ -1631,11 +1631,14 @@ public sealed class Assistant
             Exception? failure = null;
             bool cancelled = false;
 
-            // The request's two phases, for TurnEvent.Usage: the wait for the first chunk with
-            // content (the prefill; a role-only leading chunk does not end it) and the streaming
-            // after it. Stamped on this clock so a test can advance them.
+            // The request's two phases, for TurnEvent.Usage: the wait for the first update that shows the model producing
+            // something (the prefill; a role-only leading chunk does not end it) and the streaming after it — decodeFrom, from
+            // StreamProgress.Shows (2026-10-26: a tool call comes whole, and its round read its tokens over a few milliseconds).
+            // `first` is the first chunk with any content, for the dropped-request check alone: a server's content "" chunk
+            // means it took the request. Stamped on this clock so a test can advance them.
             long sent = _time.GetTimestamp();
             long? first = null;
+            long? decodeFrom = null;
 
             // A turn cancelled before its request (2026-09-25: the /botchat ESC that ends the chat can land as the next bot's
             // turn opens) asks nothing: the server never sees a request its caller has already given up on.
@@ -1702,9 +1705,10 @@ public sealed class Assistant
                             first = _time.GetTimestamp();
                         }
 
-                        if (Meter is { } meter && update.Contents.Any(c => c is not UsageContent))
+                        if (StreamProgress.Shows(update))
                         {
-                            meter.Chunk();
+                            decodeFrom ??= _time.GetTimestamp();
+                            Meter?.Chunk();
                         }
 
                         // The thinking first (2026-09-26): the server's reasoning deltas, then a <think>
@@ -1863,7 +1867,8 @@ public sealed class Assistant
 
             // Summed from the updates, not response.Usage, so the count does not depend on how
             // ToChatResponse merges. The spans go on the first report only: a server that sent
-            // two would otherwise count its time twice. No report (the server does not send
+            // two would otherwise count its time twice, and the sum is judged (TokenUsage.Judged:
+            // a burst's speed is not believed). No report (the server does not send
             // usage, or the stream was cut) means no event, never zeros.
             var usage = TokenUsage.Zero;
 
@@ -1872,12 +1877,13 @@ public sealed class Assistant
             long reserve = 0;
             foreach (var reported in updates.SelectMany(u => u.Contents).OfType<UsageContent>())
             {
-                long firstAt = first ?? ended;
+                long firstAt = decodeFrom ?? ended;
                 usage += usage.IsEmpty
                     ? TokenUsage.From(reported.Details, _time.GetElapsedTime(sent, firstAt), _time.GetElapsedTime(firstAt, ended))
                     : TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
             }
 
+            usage = usage.Judged();
             if (!usage.IsEmpty)
             {
                 DiagnosticLog.Debug(Category, UsageLogLine(usage));
@@ -2209,12 +2215,12 @@ public sealed class Assistant
         int thinking = 0;
         string? toolCall = null;
         long sent = _time.GetTimestamp();
-        long? first = null;
+        long? decodeFrom = null;
         await foreach (var update in _client.GetStreamingResponseAsync(request, options, cancellationToken).ConfigureAwait(false))
         {
-            if (first is null && update.Contents.Count > 0)
+            if (decodeFrom is null && StreamProgress.Shows(update))
             {
-                first = _time.GetTimestamp();
+                decodeFrom = _time.GetTimestamp();
             }
 
             string delta = update.Text;
@@ -2232,8 +2238,8 @@ public sealed class Assistant
         long ended = _time.GetTimestamp();
         text.Append(filter.Flush());
         thinking += raw - text.Length;   // what the filter took out of the text: a <think> block streamed as content
-        long firstAt = first ?? ended;
-        TokenUsage? timed = usage.IsEmpty ? null : usage with { ToFirstToken = _time.GetElapsedTime(sent, firstAt), Generating = _time.GetElapsedTime(firstAt, ended) };
+        long firstAt = decodeFrom ?? ended;
+        TokenUsage? timed = usage.IsEmpty ? null : (usage with { ToFirstToken = _time.GetElapsedTime(sent, firstAt), Generating = _time.GetElapsedTime(firstAt, ended) }).Judged();
         return new SummaryAttempt(text.ToString().Trim(), timed, finish, thinking, toolCall);
     }
 
@@ -2304,13 +2310,13 @@ public sealed class Assistant
         var filter = new ThinkTagFilter();
         var text = new StringBuilder();
         long sent = _time.GetTimestamp();
-        long? first = null;
+        long? decodeFrom = null;
         await foreach (var update in _client.GetStreamingResponseAsync(request, options, cancellationToken).ConfigureAwait(false))
         {
             updates.Add(update);
-            if (first is null && update.Contents.Count > 0)
+            if (decodeFrom is null && StreamProgress.Shows(update))
             {
-                first = _time.GetTimestamp();
+                decodeFrom = _time.GetTimestamp();
             }
 
             text.Append(filter.Push(update.Text));
@@ -2342,11 +2348,13 @@ public sealed class Assistant
         var usage = TokenUsage.Zero;
         foreach (var reported in updates.SelectMany(u => u.Contents).OfType<UsageContent>())
         {
-            long firstAt = first ?? ended;
+            long firstAt = decodeFrom ?? ended;
             usage += usage.IsEmpty
                 ? TokenUsage.From(reported.Details, _time.GetElapsedTime(sent, firstAt), _time.GetElapsedTime(firstAt, ended))
                 : TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
         }
+
+        usage = usage.Judged();
 
         var calls = response.Messages
             .SelectMany(m => m.Contents)

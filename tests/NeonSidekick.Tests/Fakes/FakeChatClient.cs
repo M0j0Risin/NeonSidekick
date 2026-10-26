@@ -61,6 +61,14 @@ public sealed class FakeChatClient : IChatClient
     public static ChatResponseUpdate Usage(long input, long output, long? reasoning = null) =>
         new(ChatRole.Assistant, new List<AIContent> { new UsageContent(new UsageDetails { InputTokenCount = input, OutputTokenCount = output, TotalTokenCount = input + output, ReasoningTokenCount = reasoning }) });
 
+    /// <summary>
+    /// A contents-free update marked <see cref="NeonSidekick.Llm.StreamProgress.Marker"/>: what a real client yields while the model
+    /// produces what it holds back (a tool call's arguments, hidden thinking). <see cref="Call"/> stays one whole update, as the
+    /// real clients send it.
+    /// </summary>
+    public static ChatResponseUpdate Progress() =>
+        new(ChatRole.Assistant, new List<AIContent>()) { RawRepresentation = NeonSidekick.Llm.StreamProgress.Marker };
+
     public static ChatResponseUpdate Call(string callId, string name, IDictionary<string, object?>? arguments = null) =>
         new(ChatRole.Assistant, new List<AIContent> { new FunctionCallContent(callId, name, arguments) })
         {

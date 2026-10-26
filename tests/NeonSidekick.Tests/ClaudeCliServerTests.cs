@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -141,6 +142,23 @@ public class ClaudeCliServerTests
         int first = events.IndexOf(results[0]);
         Assert.Equal("echo: hi", string.Concat(events.Take(first).OfType<ClaudeServerEvent.TextDelta>().Select(d => d.Text)));
         Assert.Empty(events.OfType<ClaudeServerEvent.ThinkingDelta>());   // the spike's thinking came with no text: nothing to show
+    }
+
+    /// <summary>
+    /// 2026-10-26, the speed's clock: the CLI's thinking is always hidden (a block start, an empty piece, a signature) and its call
+    /// comes whole in the <c>assistant</c> line, so every block start, signature and input piece is a <see cref="ClaudeServerEvent.Generating"/>.
+    /// </summary>
+    [Fact]
+    public void Stream_TheBlocksTheSignatureAndTheInputPieces_AreGenerating_BeforeTheCall()
+    {
+        var (toCall, _, _) = ToolTurns();
+        var events = Parse(toCall);
+
+        // The thinking block's start, its signature, the tool_use block's start and its three input pieces.
+        var round = events.TakeWhile(e => e is not ClaudeServerEvent.MessageStop).ToList();
+        Assert.Equal(6, round.OfType<ClaudeServerEvent.Generating>().Count());
+        Assert.True(round.FindIndex(e => e is ClaudeServerEvent.Generating) < round.FindIndex(e => e is ClaudeServerEvent.ToolUse));
+        Assert.IsType<ClaudeServerEvent.Generating>(Assert.Single(Parse(["""{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"""])));
     }
 
     [Fact]
@@ -333,6 +351,43 @@ public class ClaudeCliServerTests
         var written = Assert.Single(host.Written);
         Assert.Equal(SessionId, JsonNode.Parse(written)!["session_id"]!.GetValue<string>());
         Assert.Equal("Call the echo tool with hi", UserContent(written)[0]!["text"]!.GetValue<string>());
+    }
+
+    /// <summary>The updates a client streamed, request by request, on their way to the turn loop.</summary>
+    private sealed class Recording(IChatClient inner) : DelegatingChatClient(inner)
+    {
+        public List<List<ChatResponseUpdate>> Streams { get; } = [];
+
+        public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var seen = new List<ChatResponseUpdate>();
+            Streams.Add(seen);
+            await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
+            {
+                seen.Add(update);
+                yield return update;
+            }
+        }
+    }
+
+    /// <summary>2026-10-26, the speed's clock: the progress updates come ahead of the round's one call update, in the same message.</summary>
+    [Fact]
+    public async Task Client_TheModelsProgress_ComesAheadOfTheRoundsOneCallUpdate()
+    {
+        await using var host = new FakeClaudeServerHost();
+        PlayToolTurn(host, new TaskCompletionSource<ClaudeToolAnswer>());
+        using var client = Client(host);
+        var recording = new Recording(client);
+        var assistant = new Assistant(recording, new ConversationHistory("be brief"), LlmTimeouts.Default, tools: [new EchoTool()]) { ConversationId = SessionId };
+
+        await RunAsync(assistant, "Call the echo tool with hi");
+
+        var round = recording.Streams[0];
+        Assert.Equal(6, round.Count(u => ReferenceEquals(u.RawRepresentation, StreamProgress.Marker) && u.Contents.Count == 0));
+        int call = round.FindIndex(u => u.Contents.OfType<FunctionCallContent>().Any());
+        Assert.Equal(round.Count - 1, call);
+        Assert.True(StreamProgress.Shows(round[0]));
+        Assert.Single(round.ToChatResponse().Messages);
     }
 
     [Fact]

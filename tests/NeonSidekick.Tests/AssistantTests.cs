@@ -1634,6 +1634,81 @@ public class AssistantTests
         Assert.Equal(TimeSpan.FromSeconds(1), usage.Tokens.Generating);
     }
 
+    /// <summary>2026-10-26, the user's report of over 100,000 tok/s: every client sends a tool call whole.</summary>
+    [Fact]
+    public async Task Usage_AToolOnlyRoundSentWhole_HasNoSpeed_AndLeavesTheReplysSpeedToItsTimedRound()
+    {
+        var clock = new ManualTimeProvider();
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() }, clock);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" }), FakeChatClient.Usage(50, 300));
+        client.Enqueue(FakeChatClient.Text("do"), FakeChatClient.Text("ne"), FakeChatClient.Usage(70, 20));
+        client.BeforeUpdateOf = (request, i, _) =>
+        {
+            // The call and its report come together after a second's wait; the answer streams over 2 s.
+            clock.Advance(request == 0 ? (i == 0 ? TimeSpan.FromSeconds(1) : TimeSpan.FromMilliseconds(2)) : (i == 0 ? TimeSpan.FromMilliseconds(500) : TimeSpan.FromSeconds(1)));
+            return Task.CompletedTask;
+        };
+
+        var events = await Run(assistant, "x");
+
+        var reports = events.OfType<TurnEvent.Usage>().Select(u => u.Tokens).ToArray();
+        Assert.Null(reports[0].TokensPerSecond);
+        Assert.Equal(300, reports[0].UntimedOutput);
+        Assert.Equal(TimeSpan.FromSeconds(1), reports[0].ToFirstToken);
+        Assert.Equal(10, reports[1].TokensPerSecond);
+        Assert.Equal(10, (reports[0] + reports[1]).TokensPerSecond);   // the reply's speed: the answer's alone
+    }
+
+    [Fact]
+    public async Task Usage_AToolCallsArgumentsStreamingAsProgress_AreTimed_AndCountedByTheMeter()
+    {
+        var clock = new ManualTimeProvider();
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() }, clock);
+        assistant.Meter = new StreamMeter(clock);
+        client.Enqueue(FakeChatClient.Progress(), FakeChatClient.Progress(), FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" }), FakeChatClient.Usage(50, 40));
+        client.EnqueueText("done");
+        StreamMeter.Reading? beforeTheCall = null;
+        client.BeforeUpdateOf = (request, i, _) =>
+        {
+            if (request == 0 && i == 2)
+            {
+                beforeTheCall = assistant.Meter.Read();
+            }
+
+            clock.Advance(request == 0 ? i switch { 0 => TimeSpan.FromMilliseconds(800), 1 or 2 => TimeSpan.FromMilliseconds(500), _ => TimeSpan.Zero } : TimeSpan.Zero);
+            return Task.CompletedTask;
+        };
+
+        var events = await Run(assistant, "x");
+
+        var report = events.OfType<TurnEvent.Usage>().First().Tokens;
+        Assert.Equal(TimeSpan.FromMilliseconds(800), report.ToFirstToken);
+        Assert.Equal(TimeSpan.FromSeconds(1), report.Generating);
+        Assert.Equal(40, report.TokensPerSecond);
+        Assert.Equal(new StreamMeter.Reading(true, 2, 4.0), beforeTheCall);   // two progress chunks over the half second since the first
+    }
+
+    [Fact]
+    public async Task Usage_HiddenThinking_IsTimedFromItsMarker()
+    {
+        var clock = new ManualTimeProvider();
+        var (client, _, assistant) = Build(time: clock);
+        client.Enqueue(FakeChatClient.Progress(), FakeChatClient.Text("x"), FakeChatClient.Usage(10, 200));
+        client.BeforeUpdate = (i, _) =>
+        {
+            // The thinking block starts after 800 ms and thinks for 4 s unseen; the answer is one quick chunk.
+            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(800), 1 => TimeSpan.FromSeconds(4), _ => TimeSpan.Zero });
+            return Task.CompletedTask;
+        };
+
+        var events = await Run(assistant, "hi");
+
+        var usage = Assert.IsType<TurnEvent.Usage>(events[^1]);
+        Assert.Equal(TimeSpan.FromMilliseconds(800), usage.Tokens.ToFirstToken);
+        Assert.Equal(TimeSpan.FromSeconds(4), usage.Tokens.Generating);
+        Assert.Equal(50, usage.Tokens.TokensPerSecond);
+    }
+
     [Fact]
     public async Task Usage_ComesOncePerRequest_BeforeItsToolCallsRun()
     {
@@ -1903,6 +1978,25 @@ public class AssistantTests
         Assert.Equal(["answered"], Deltas(events));
         Assert.Equal("answered", history.Messages[^1].Text);
         Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+    }
+
+    /// <summary>2026-10-26: the speed's clock ignores a server's <c>content: ""</c> chunk, but the dropped-request check still reads it as the server answering.</summary>
+    [Fact]
+    public async Task ARequestThatDrops_AfterAnEmptyContentChunk_IsNotRetriedAsOversized()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 4);
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        client.Enqueue(FakeChatClient.Text(""), FakeChatClient.Text("never"));
+        client.ThrowAt = 1;
+        client.Failure = ConnectionReset();
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.Single(client.Requests);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.DoesNotContain(Assistant.OversizedRequestHint(1_600_000, 4), error.Text, StringComparison.Ordinal);
     }
 
     [Fact]

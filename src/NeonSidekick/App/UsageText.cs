@@ -315,7 +315,8 @@ public static class UsageText
 
     /// <summary>
     /// The hint row's part, on one base: the context in use over the window, its share, and the last
-    /// reply's speed (<c>4.6k / 151.4k · 3% · 42 tok/s</c>); <c>4.6k tokens · 42 tok/s</c> while the
+    /// known speed (<c>4.6k / 151.4k · 3% · 42 tok/s</c>; <see cref="TokenTally.LastKnownSpeed"/> since 2026-10-26, the user's
+    /// choice: a reply of untimed requests alone keeps the one before's); <c>4.6k tokens · 42 tok/s</c> while the
     /// window is unknown; null while nothing is in the context (before the first reply, after
     /// <c>/clear</c>) and while <see cref="TokenTally.HintHidden"/> (an LLM connect, 2026-10-03, until the new
     /// model reports), so the row reads as before. Never the conversation's summed total: that
@@ -336,7 +337,7 @@ public static class UsageText
             return null;
         }
 
-        return ContextParts(inUse, window, "", tally.LastReply.TokensPerSecond is { } speed ? Speed(speed, 0) : null);
+        return ContextParts(inUse, window, "", tally.LastKnownSpeed is { } speed ? Speed(speed, 0) : null);
     }
 
     /// <summary>What marks a figure of the busy row's <see cref="BusyHintPart"/> as estimated. Pinned.</summary>
@@ -351,7 +352,8 @@ public static class UsageText
     /// (<c>~5.1k / 151.4k · ~3% · ~41 tok/s</c>). The base leaves out what the request added before it streamed (the new
     /// message, the tool results) — the server's report puts it right when the request ends. Null while nothing is known,
     /// and the last-known figures null while <see cref="TokenTally.HintHidden"/> (2026-10-03: another model's, through a
-    /// load's spinner); the live estimate still shows then, being the new model's own count.
+    /// load's spinner); the live estimate still shows then, being the new model's own count. Before the live rate is given
+    /// (<see cref="StreamMeter.MinRateSpan"/>, 2026-10-26) the speed is the last known one, unmarked, and none while hidden.
     /// </summary>
     public static string? BusyHintPart(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live) =>
         BusyHintParts(tally, window, mode, live)?.Joined;
@@ -363,7 +365,10 @@ public static class UsageText
         long known = tally.LastRequest.Total;
         if (mode == MidTurnUsage.Estimate && live is { Streaming: true, Chunks: > 0 })
         {
-            return ContextParts(known + live.Chunks, window, EstimateMark, live.ChunksPerSecond is { } rate ? EstimateMark + Speed(rate, 0) : null);
+            string? streaming = live.ChunksPerSecond is { } rate ? EstimateMark + Speed(rate, 0)
+                : !tally.HintHidden && tally.LastKnownSpeed is { } last ? Speed(last, 0)
+                : null;
+            return ContextParts(known + live.Chunks, window, EstimateMark, streaming);
         }
 
         if (known == 0 || tally.HintHidden)

@@ -256,6 +256,9 @@ public sealed class ClaudeCliChatClient : IChatClient
                     case ClaudeServerEvent.ThinkingDelta thinking:
                         yield return Update(turn, model, new TextReasoningContent(thinking.Text));
                         break;
+                    case ClaudeServerEvent.Generating:
+                        yield return Progress(turn, model);
+                        break;
                     case ClaudeServerEvent.ToolUse use when use.Name.StartsWith(ClaudeArguments.McpToolPrefix, StringComparison.Ordinal):
                         calls.Add(use);
                         break;
@@ -331,8 +334,21 @@ public sealed class ClaudeCliChatClient : IChatClient
         }
     }
 
-    private static ChatResponseUpdate Update(Turn turn, string model, AIContent content) =>
-        new(ChatRole.Assistant, [content]) { ConversationId = turn.SessionId, ModelId = model };
+    private static ChatResponseUpdate Update(Turn turn, string model, AIContent content) => Update(turn, model, [content]);
+
+    /// <summary>
+    /// A contents-free update marked <see cref="StreamProgress.Marker"/> (2026-10-26): the model producing what the round's one
+    /// update at <c>message_stop</c> holds — a tool call's input, the hidden thinking — so the speed's clock starts with it.
+    /// </summary>
+    private static ChatResponseUpdate Progress(Turn turn, string model)
+    {
+        var update = Update(turn, model, []);
+        update.RawRepresentation = StreamProgress.Marker;
+        return update;
+    }
+
+    private static ChatResponseUpdate Update(Turn turn, string model, List<AIContent> contents) =>
+        new(ChatRole.Assistant, contents) { ConversationId = turn.SessionId, ModelId = model };
 
     private static UsageContent Usage(long input, long output) =>
         new(new UsageDetails { InputTokenCount = input, OutputTokenCount = output, TotalTokenCount = input + output });
