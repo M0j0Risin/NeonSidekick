@@ -389,6 +389,7 @@ internal static unsafe partial class AppKitNative
     private static readonly Dictionary<string, nint> s_selectors = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, nint> s_classes = new(StringComparer.Ordinal);
     private static readonly Lock s_gate = new();
+    private static bool s_frameworksLoaded;   // AppKit and QuartzCore loaded by Class's first miss (under s_gate)
 
     /// <summary>The main queue (<c>dispatch_get_main_queue()</c> is a macro over this exported object's address).</summary>
     public static nint MainQueue
@@ -419,7 +420,11 @@ internal static unsafe partial class AppKitNative
         }
     }
 
-    /// <summary>A class by name (AppKit and QuartzCore loaded first), kept; throws when there is none.</summary>
+    /// <summary>
+    /// A class by name, kept; throws when there is none. AppKit and QuartzCore are loaded at the first miss (2026-10-25, the Mac pass: they were
+    /// loaded only as the first window opened, so <c>/shortcut</c> before any window found no NSWorkspace — "no Objective-C class NSWorkspace",
+    /// the icon and the terminal's binding never set), and the class looked up again.
+    /// </summary>
     public static nint Class(string name)
     {
         lock (s_gate)
@@ -427,6 +432,14 @@ internal static unsafe partial class AppKitNative
             if (!s_classes.TryGetValue(name, out nint cls))
             {
                 cls = objc_getClass(name);
+                if (cls == 0 && !s_frameworksLoaded)
+                {
+                    s_frameworksLoaded = true;
+                    NativeLibrary.Load(AppKitPath);
+                    NativeLibrary.Load(QuartzCorePath);
+                    cls = objc_getClass(name);
+                }
+
                 if (cls == 0)
                 {
                     throw new InvalidOperationException($"no Objective-C class {name}");
