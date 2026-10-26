@@ -284,7 +284,7 @@ Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/
 * The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_WINDOWS_VLLM.md), [SGLang](DOCKER_WINDOWS_SGLANG.md).
 * **Picking one:** `/server` lists a row per chosen container; `docker:<container>` picks one (also in `--url` and `NEONSIDEKICK_LLM_URL`).
 * **Switching** stops the other chosen containers, then starts this one and waits until it's ready (*Docker server stop timeout (s)*, *Docker server post-stop delay (s)*, *Docker server ready timeout (s)*). If a stop fails, nothing starts. Esc or Ctrl+C cancels the wait; a stop or start already sent carries on.
-* **Leaving** for a server that uses the GPU of the computer running NeonSidekick (the embedded model, a local server, a blank *LLM URL*) stops the containers; other servers leave them running. *Docker server stop on exit* stops the one in use at exit.
+* **Leaving** for a server that uses the GPU of the computer running NeonSidekick (the embedded model, a local server, a blank *LLM URL*) stops the containers; other servers leave them running. That includes a chosen container NeonSidekick didn't start, such as one left from an earlier run, unless it's the server picked, and says so in the transcript. *Docker server stop on exit* stops the one in use at exit.
 * Bots and advisors share a running container but never start or stop one.
 
 #### Docker on a Mac

@@ -429,4 +429,302 @@ public sealed class LlmSessionDockerTests
         Assert.Equal("running · lmsysorg/sglang:latest · :30000", rows[1].Result.Detail);
         Assert.Contains("list", _docker.Calls);
     }
+
+    // ── a container this run never started (2026-10-26, the user's report) ──────────────────────────
+
+    private static DockerContainer Running(string name, int? port = null, IReadOnlyList<string>? networks = null) =>
+        new("id-" + name, name, "lmsysorg/sglang:latest", "sha", "running", "Up", 0, port is { } p ? [new DockerPort("0.0.0.0", p, p, "tcp")] : [], new Dictionary<string, string>(), networks ?? [], []);
+
+    private static DockerContainer Exited(string name) =>
+        new("id-" + name, name, "vllm/vllm-openai:latest", "sha", "exited", "Exited (0)", 0, [], new Dictionary<string, string>(), [], []);
+
+    private static AppSettingsData Embedded(bool docker = true) => new()
+    {
+        LlmUrl = "embedded",
+        LlmModel = "gemma-4-e2b",
+        LlmContextLength = 8192,
+        LlmScanMode = "disabled",
+        EmbeddedLlmServer = true,
+        DockerServers = docker,
+        DockerServerContainers = ["sglang_a", "vllm_b"],
+    };
+
+    private static AppSettingsData Local(string url)
+    {
+        var local = Docker("sglang_a");
+        local.LlmUrl = url;
+        local.LlmContextLength = 8192;
+        return local;
+    }
+
+    private FakeEmbeddedLlm StartLogged(FakeEmbeddedLlm embedded)
+    {
+        embedded.StartGate = _ =>
+        {
+            _docker.Calls.Add("embedded start");
+            return Task.CompletedTask;
+        };
+        return embedded;
+    }
+
+    private static bool EmbeddedHere => EmbeddedLlm.EmbeddedEndpoint.Offered && OperatingSystem.IsWindows();
+
+    [Fact]
+    public async Task TheEmbeddedLoad_StopsALeftoverContainer_AndSettles_SayingSoOnce()
+    {
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Exited("vllm_b")], [], null);
+        var infos = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Info) lock (infos) { infos.Add(e.Message); } };
+        using var session = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            Assert.True(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(["list", "stop-all settle", "embedded start"], _docker.Calls);
+        Assert.Equal(["sglang_a", "vllm_b"], _docker.StopNames.Single());   // the loaded profile's list
+        string line = DockerServerText.LeftForThisComputer(["sglang_a"], embedded: true);
+        Assert.Contains(line, infos);
+        Assert.Equal(new DockerLeftover(["sglang_a"], true), session.TakeLeftoverStopped(), LeftoverComparer.Instance);
+        Assert.Null(session.TakeLeftoverStopped());   // once
+        Assert.Null(session.DockerInUse);
+    }
+
+    [Fact]
+    public async Task TheEmbeddedLoad_WithNothingActive_OnlyLists()
+    {
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([Exited("sglang_a"), Exited("vllm_b")], [], null);
+        using var session = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        Assert.True(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "embedded start"], _docker.Calls);
+        Assert.Null(session.TakeLeftoverStopped());   // nothing stopped: nothing to say
+    }
+
+    [Fact]
+    public async Task TheEmbeddedLoad_WithTheEngineDown_GoesOn_WithNoWarning()
+    {
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([], [], "The Docker engine is not running.");
+        var warnings = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Level >= NeonSidekick.Diagnostics.DiagnosticLevel.Warning) lock (warnings) { warnings.Add(e.Message); } };
+        using var session = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            Assert.True(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(["list", "embedded start"], _docker.Calls);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public async Task TheEmbeddedLoad_WithDockerServersOff_AsksNothing()
+    {
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([Running("sglang_a", 30000)], [], null);
+        using var session = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        Assert.True(await session.ConnectAsync(Embedded(docker: false), NoPhase, CancellationToken.None));
+        Assert.Equal(["embedded start"], _docker.Calls);
+    }
+
+    [Fact]
+    public async Task TheSameEmbeddedModel_Running_IsNotAskedAgain()
+    {
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([Exited("sglang_a")], [], null);
+        using var session = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        Assert.True(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));   // a /reasoning reconnect
+        Assert.Single(_docker.Calls, "list");
+    }
+
+    [Fact]
+    public async Task AnEmbeddedModelNotInstalled_AsksNothing()
+    {
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([Running("sglang_a", 30000)], [], null);
+        using var session = Session(StartLogged(new FakeEmbeddedLlm()));
+        Assert.False(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));
+        Assert.Empty(_docker.Calls);
+    }
+
+    [Fact]
+    public async Task ALocalServer_StopsALeftoverContainer_OncePerServer_ARemoteOneNever()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        _http.Map("http://gpu-box:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("remote"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Exited("vllm_b")], [], null);
+        using var session = Session();
+
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "stop-all"], _docker.Calls);
+        Assert.Equal(new DockerLeftover(["sglang_a"], false), session.TakeLeftoverStopped(), LeftoverComparer.Instance);
+
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));   // /model, /reasoning
+        Assert.Equal(["list", "stop-all"], _docker.Calls);
+
+        Assert.True(await session.ConnectAsync(Local("http://gpu-box:8000/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "stop-all"], _docker.Calls);   // another machine's GPU
+
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "stop-all", "list", "stop-all"], _docker.Calls);   // back again: asked again
+    }
+
+    [Fact]
+    public async Task ALocalServer_OnAContainersOwnPort_SparesIt()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _http.Map("http://127.0.0.1:30000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("sglang-model"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Running("vllm_b", 8000)], [], null);
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:30000/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "stop-all except sglang_a"], _docker.Calls);
+    }
+
+    [Fact]
+    public async Task ALocalServer_OnTheOnlyActiveContainersPort_StopsNothing()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _http.Map("http://127.0.0.1:30000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("sglang-model"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Exited("vllm_b")], [], null);
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:30000/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["list"], _docker.Calls);
+        Assert.Null(session.TakeLeftoverStopped());
+    }
+
+    [Fact]
+    public async Task AHostNetworkContainer_IsSparedForALocalServer_ButStoppedForTheEmbeddedLoad()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _http.Map("http://127.0.0.1:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("vllm-model"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Running("vllm_b", networks: ["host"])], [], null);
+        using (var session = Session())
+        {
+            Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:8000/v1"), NoPhase, CancellationToken.None));
+            Assert.Equal(["list", "stop-all except vllm_b"], _docker.Calls);   // it publishes no port: it may be the server
+        }
+
+        if (!EmbeddedHere)
+        {
+            return;
+        }
+
+        _docker.Calls.Clear();
+        using var embedded = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        Assert.True(await embedded.ConnectAsync(Embedded(), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "stop-all settle", "embedded start"], _docker.Calls);
+    }
+
+    [Fact]
+    public async Task TheScansPick_IsSwept_ItsPortSpared()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Running("vllm_b", 8000)], [], null);
+        using var session = Session();
+        var blank = Local("");
+        await session.DiscoverAsync(blank, CancellationToken.None);
+        Assert.Equal(["list"], _docker.Calls);   // the rows' list: nothing stopped before the scan, which may be the container
+
+        var row = LlmEndpointProbe.Endpoint(LlmServer.From(new Uri("http://127.0.0.1:8000/v1"), new ProbeResult(true, ["vllm-model"], "1")), null, null, false);
+        Assert.True(await session.ConnectAsync(blank, row, CancellationToken.None));
+        Assert.Equal(["list", "list", "stop-all except vllm_b"], _docker.Calls);
+    }
+
+    [Fact]
+    public async Task TheLeftover_IsClearedAtTheNextConnect_AndAnOwnedLeaveSetsNone()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000)], [], null);
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None));
+        Assert.Null(session.TakeLeftoverStopped());   // not taken, then cleared by the next connect's start
+
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["list", "stop-all", "switch sglang_a", "stop-all"], _docker.Calls);   // its own container left: no second list
+        Assert.Null(session.TakeLeftoverStopped());
+    }
+
+    [Fact]
+    public void LeftForThisComputer_NamesTheContainers_AndWhatComesNext()
+    {
+        Assert.Equal("Stopped the Docker server sglang_a: the embedded model loads next.", DockerServerText.LeftForThisComputer(["sglang_a"], embedded: true));
+        Assert.Equal("Stopped the Docker servers sglang_a, vllm_b: a server on this computer was picked.", DockerServerText.LeftForThisComputer(["sglang_a", "vllm_b"], embedded: false));
+        Assert.Equal("Stopped the Docker server vllm_b: a server on this computer was picked.", DockerServerText.LeftForThisComputer(["vllm_b"], embedded: false));
+        Assert.Equal("Stopped the Docker servers sglang_a, vllm_b: the embedded model loads next.", DockerServerText.LeftForThisComputer(["sglang_a", "vllm_b"], embedded: true));
+    }
+
+    /// <summary>A leftover's names compared by sequence: the record's own equality compares the list by reference.</summary>
+    private sealed class LeftoverComparer : IEqualityComparer<DockerLeftover?>
+    {
+        public static readonly LeftoverComparer Instance = new();
+
+        public bool Equals(DockerLeftover? x, DockerLeftover? y) =>
+            x is null ? y is null : y is not null && x.Embedded == y.Embedded && x.Names.SequenceEqual(y.Names);
+
+        public int GetHashCode(DockerLeftover? obj) => 0;
+    }
 }

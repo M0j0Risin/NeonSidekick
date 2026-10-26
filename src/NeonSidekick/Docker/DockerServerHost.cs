@@ -16,6 +16,13 @@ public sealed record DockerSwitch(bool Ok, string? Error, Uri? LiveUrl, int Port
 /// <summary>What a stop of the chosen containers did: the ones stopped, and a sentence per one that would not stop.</summary>
 public sealed record DockerStopAll(IReadOnlyList<string> Stopped, IReadOnlyList<string> Errors);
 
+/// <summary>
+/// The chosen containers a connect stopped though this run never started them (2026-10-26, the user's report: one left running by an
+/// earlier run sat beside the embedded model on the GPU): their names, and whether the embedded model loaded next (else a server on
+/// this computer was picked). The screen and headless say it once (<c>LlmSession.TakeLeftoverStopped</c>).
+/// </summary>
+public sealed record DockerLeftover(IReadOnlyList<string> Names, bool Embedded);
+
 /// <summary>The Docker servers' switcher (2026-10-02): a seam, so the session's tests run over a fake (<c>FakeDockerServers</c>).</summary>
 public interface IDockerServers : IDisposable
 {
@@ -26,11 +33,12 @@ public interface IDockerServers : IDisposable
     Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Stops every running chosen container but <paramref name="except"/> (another server picked, a profile switch, the app's
-    /// exit). With <paramref name="settle"/> (a model about to load next: the embedded one or another container, 2026-10-02)
-    /// and any stopped, <c>Docker server post-stop delay</c> is waited after, as a switch waits it.
+    /// Stops every running chosen container but those named in <paramref name="except"/> (another server picked, a profile switch,
+    /// the app's exit; a set since 2026-10-26, when a local server's leftover sweep spared the container it may be). With
+    /// <paramref name="settle"/> (a model about to load next: the embedded one or another container, 2026-10-02) and any stopped,
+    /// <c>Docker server post-stop delay</c> is waited after, as a switch waits it.
     /// </summary>
-    Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, bool settle, Action<string>? phase, CancellationToken cancellationToken);
+    Task<DockerStopAll> StopAllAsync(AppSettingsData effective, IReadOnlyCollection<string> except, bool settle, Action<string>? phase, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -159,7 +167,7 @@ public sealed class DockerServerHost : IDockerServers
             }
 
             var stopped = new List<string>();
-            foreach (var other in OthersToStop(all, names, except: name))
+            foreach (var other in OthersToStop(all, names, except: [name]))
             {
                 phase?.Invoke(DockerServerText.Stopping(other.Name));
                 if (await StopOneAsync(other, effective, cancellationToken).ConfigureAwait(false) is { } failed)
@@ -189,9 +197,10 @@ public sealed class DockerServerHost : IDockerServers
         }
     }
 
-    public async Task<DockerStopAll> StopAllAsync(AppSettingsData effective, string? except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<DockerStopAll> StopAllAsync(AppSettingsData effective, IReadOnlyCollection<string> except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(except);
         var names = DockerEndpoint.ChosenNames(effective);
         if (names.Count == 0)
         {
@@ -245,9 +254,9 @@ public sealed class DockerServerHost : IDockerServers
         }
     }
 
-    /// <summary>The chosen containers other than <paramref name="except"/> that hold memory, in the chosen order.</summary>
-    private static IEnumerable<DockerContainer> OthersToStop(IReadOnlyList<DockerContainer> all, IReadOnlyList<string> names, string? except) =>
-        names.Where(n => !string.Equals(n, except, StringComparison.Ordinal))
+    /// <summary>The chosen containers not named in <paramref name="except"/> that hold memory, in the chosen order.</summary>
+    private static IEnumerable<DockerContainer> OthersToStop(IReadOnlyList<DockerContainer> all, IReadOnlyList<string> names, IReadOnlyCollection<string> except) =>
+        names.Where(n => !except.Contains(n, StringComparer.Ordinal))
             .Select(n => all.FirstOrDefault(c => string.Equals(c.Name, n, StringComparison.Ordinal)))
             .OfType<DockerContainer>()
             .Where(Active)

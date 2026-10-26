@@ -54,6 +54,18 @@ public static class DockerServerText
     /// <summary>The log line when the others are stopped on leaving the containers.</summary>
     public static string Left(IReadOnlyList<string> stopped) => "Stopped the Docker server" + (stopped.Count == 1 ? " " : "s ") + string.Join(", ", stopped) + ": another server was picked.";
 
+    /// <summary>
+    /// The transcript's line (and the log's) when a connect stopped chosen containers this run never started (2026-10-26, the user's
+    /// report and call): one left from an earlier run, or started by hand. <see cref="Left"/>'s "another server was picked" reads wrong
+    /// at startup, so it says what comes next: the embedded model (<paramref name="embedded"/>) or a server on this computer.
+    /// </summary>
+    public static string LeftForThisComputer(IReadOnlyList<string> stopped, bool embedded)
+    {
+        ArgumentNullException.ThrowIfNull(stopped);
+        return "Stopped the Docker server" + (stopped.Count == 1 ? " " : "s ") + string.Join(", ", stopped)
+            + (embedded ? ": the embedded model loads next." : ": a server on this computer was picked.");
+    }
+
     // ─── refusals and failures ──────────────────────────────────────────────────
 
     public static string NotChosen(string name) => $"{name} is not one of the Docker server containers; tick it on /settings › Servers › Docker.";

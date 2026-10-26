@@ -12873,6 +12873,7 @@ internal sealed partial class ChatScreen
             await _session.ConnectAsync(effective, setLabel, token).ConfigureAwait(false);
             return true;
         }), cancellationToken).ConfigureAwait(false);
+        ReportLeftoverDocker();
         if (cancelled)
         {
             _transcript.Notice(ConnectCancelledNotice(NoticeGlyphs.Llm));
@@ -13055,13 +13056,29 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> ConnectUnderWatchAsync(string glyph, Func<CancellationToken, Task> connect, CancellationToken cancellationToken)
     {
-        if (await WaitUnderWatchAsync(connect, Keys.IsInterrupt, cancellationToken, kind: KillScopeKind.Load).ConfigureAwait(false))
+        bool cancelled = await WaitUnderWatchAsync(connect, Keys.IsInterrupt, cancellationToken, kind: KillScopeKind.Load).ConfigureAwait(false);
+        ReportLeftoverDocker();
+        if (cancelled)
         {
             _transcript.Notice(ConnectCancelledNotice(glyph));
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The connect's stop of chosen containers this run never started (2026-10-26, the user's call: one left from an earlier run stopped
+    /// before the embedded model or a server on this computer, <see cref="LlmSession.TakeLeftoverStopped"/>): a notice before the <c>LLM:</c>
+    /// line, and after a cancel or a failed load too, since the stop still happened. The log's Info line never reaches the transcript.
+    /// Taken once, so a second call says nothing; the feed carries it to the Web UI page.
+    /// </summary>
+    private void ReportLeftoverDocker()
+    {
+        if (_session.TakeLeftoverStopped() is { } leftover)
+        {
+            _transcript.Notice(DockerText.Glyph + " " + DockerServerText.LeftForThisComputer(leftover.Names, leftover.Embedded));
+        }
     }
 
     /// <summary>

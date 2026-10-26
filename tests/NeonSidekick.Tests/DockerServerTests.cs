@@ -202,7 +202,7 @@ public sealed class DockerServerTests : IDisposable
     [Fact]
     public async Task StopAll_StopsTheRunningChosenOnes_AndNothingElse()
     {
-        var left = await _host.StopAllAsync(_settings, except: null, settle: false, _phases.Add, CancellationToken.None);
+        var left = await _host.StopAllAsync(_settings, except: [], settle: false, _phases.Add, CancellationToken.None);
         Assert.Equal(["sglang_a", "paused_c"], left.Stopped);
         Assert.Empty(left.Errors);
         Assert.Equal("running", _engine.State("mysql_dev"));
@@ -214,7 +214,7 @@ public sealed class DockerServerTests : IDisposable
     public async Task StopAll_ToSettle_WaitsThePostStopDelay_OnlyWhenItStoppedOne()
     {
         // A model loads next (an embedded one, another profile's container): the GPU's memory is given the delay, as a switch gives it.
-        var left = await _host.StopAllAsync(_settings, except: "paused_c", settle: true, _phases.Add, CancellationToken.None);
+        var left = await _host.StopAllAsync(_settings, except: ["paused_c"], settle: true, _phases.Add, CancellationToken.None);
         Assert.Equal(["sglang_a"], left.Stopped);
         Assert.Equal("paused", _engine.State("paused_c"));
         Assert.Equal(["stopping sglang_a", "letting the GPU's memory settle"], _phases);
@@ -222,10 +222,23 @@ public sealed class DockerServerTests : IDisposable
 
         _phases.Clear();
         _waits.Clear();
-        var none = await _host.StopAllAsync(_settings, except: "paused_c", settle: true, _phases.Add, CancellationToken.None);
+        var none = await _host.StopAllAsync(_settings, except: ["paused_c"], settle: true, _phases.Add, CancellationToken.None);
         Assert.Empty(none.Stopped);
         Assert.Empty(_phases);
         Assert.Empty(_waits);
+    }
+
+    [Fact]
+    public async Task StopAll_SparesEveryNameItIsGiven_AndStopsTheOtherActiveOne()
+    {
+        // A local server's leftover sweep (2026-10-26) spares the containers that may be that server: a set, not one name.
+        _engine.Set("vllm_b", "running");
+        var left = await _host.StopAllAsync(_settings, except: ["sglang_a", "vllm_b"], settle: false, _phases.Add, CancellationToken.None);
+        Assert.Equal(["paused_c"], left.Stopped);
+        Assert.Equal("running", _engine.State("sglang_a"));
+        Assert.Equal("running", _engine.State("vllm_b"));
+        Assert.Equal("exited", _engine.State("paused_c"));
+        Assert.Equal(["stopping paused_c"], _phases);
     }
 
     [Fact]

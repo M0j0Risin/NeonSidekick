@@ -1125,6 +1125,12 @@ public sealed partial class SidekickApp
             // A chosen Docker container (2026-10-02) takes minutes to load: each step of its switch is a notice, said once.
             Action<string>? phase = Docker.DockerEndpoint.Chosen(EffectiveSettings) ? HeadlessDockerPhase : null;
             await session.ConnectAsync(EffectiveSettings, phase, cancellationToken).ConfigureAwait(false);
+            if (session.TakeLeftoverStopped() is { } leftover)
+            {
+                // A chosen container this run never started, stopped before the embedded model or a server on this computer (2026-10-26).
+                HeadlessDockerPhase(Docker.DockerServerText.LeftForThisComputer(leftover.Names, leftover.Embedded));
+            }
+
             await HeadlessLineAsync(session.Endpoint is null ? HeadlessNoServerLine(LlmScanMode.Resolve(EffectiveSettings)) : LlmSession.ConnectedLine(session.Endpoint)).ConfigureAwait(false);
             try
             {

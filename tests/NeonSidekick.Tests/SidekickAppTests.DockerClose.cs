@@ -88,6 +88,41 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_ALocalServer_StopsALeftoverContainer_AndSaysSo()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // 2026-10-26, the user's report: a chosen container an earlier run left running stays beside a server on this computer; it stops
+        // first, with the headless Docker notice before the LLM line.
+        ServerOn1234("llama");
+        _settings.Update(d =>
+        {
+            d.DockerServers = true;
+            d.DockerServerContainers = ["sglang_a"];
+            d.LlmUrl = "http://127.0.0.1:1234/v1";
+            d.LlmContextLength = 8192;
+        });
+        var docker = new FakeDockerServers
+        {
+            List = new Docker.DockerServerList(
+                [new Docker.DockerContainer("id-a", "sglang_a", "lmsysorg/sglang:latest", "sha", "running", "Up", 0, [new Docker.DockerPort("0.0.0.0", 30000, 30000, "tcp")], new Dictionary<string, string>(), [], [])],
+                [], null),
+        };
+        var stdout = new StringWriter();
+        var app = App(stdin: new StringReader(""), stdout: stdout, dockerServers: () => docker);
+        Assert.Equal(0, await app.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+
+        string output = stdout.ToString();
+        string notice = "[notice] " + Docker.DockerText.Glyph + " " + Docker.DockerServerText.LeftForThisComputer(["sglang_a"], embedded: false);
+        Assert.Equal(["list", "stop-all"], docker.Calls);
+        Assert.Contains(notice, output);
+        Assert.True(output.IndexOf(notice, StringComparison.Ordinal) < output.IndexOf("LLM: http://127.0.0.1:1234", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TheWindowsClose_WithNoRunLive_DoesNothing()
     {
         var docker = new FakeDockerServers();
