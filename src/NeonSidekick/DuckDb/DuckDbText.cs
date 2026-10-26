@@ -272,6 +272,9 @@ public static class DuckDbText
     public static string OpenFailedLogLine(string database, string detail) => $"{database} did not open: {detail}";
     public static string LockdownFailedLogLine(string database, string detail) => $"{database} opened, but its settings could not be locked, so it was closed: {detail}";
     public static string UnmakeFailedLogLine(string path, string detail) => $"{path}, made by a create whose statement failed, could not be removed: {detail}";
+    /// <summary>The exit's log line when the start's spill sweep had not ended within <see cref="DuckDbAccess.SweepExitWait"/> (2026-10-25).</summary>
+    public const string SweepUnfinishedLogLine = "The spill folders of DuckDB runs that ended were still being removed at the exit; the next start goes on.";
+
     public static string SweepFailedLogLine(string path, string detail) => $"{path}, a spill folder of a DuckDB run that ended, could not be removed: {detail}";
 
     /// <summary>The lockdown read back and found not in force: the call is refused. Pinned.</summary>

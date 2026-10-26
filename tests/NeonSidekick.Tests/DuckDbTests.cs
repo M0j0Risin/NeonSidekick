@@ -544,6 +544,32 @@ public sealed class DuckDbToolsTests : IDisposable
     }
 
     /// <summary>
+    /// The exit waits for the start's sweep (2026-10-25, the Mac pass: a run that ended at once cut it mid-delete): an ended one at once, a
+    /// slow one until it ends, one past the wait given up on, never thrown.
+    /// </summary>
+    [Fact]
+    public async Task FinishSweep_WaitsForTheStartsSweep_UpToItsCap()
+    {
+        string root = Path.Combine(_dir, "spill");
+        Directory.CreateDirectory(Path.Combine(root, "11", "nested"));
+        File.WriteAllText(Path.Combine(root, "11", "nested", "duckdb_temp_storage_DEFAULT-1.tmp"), new string('x', 1000));
+        var release = new TaskCompletionSource();
+        var slow = Task.Run(async () =>
+        {
+            await release.Task;
+            return DuckDbAccess.Sweep(root, _ => false);
+        });
+
+        Assert.False(DuckDbAccess.FinishSweep(slow, TimeSpan.FromMilliseconds(50)));   // past the cap: given up on
+        _ = Task.Delay(100).ContinueWith(_ => release.SetResult(), TaskScheduler.Default);
+        Assert.True(DuckDbAccess.FinishSweep(slow, TimeSpan.FromSeconds(10)));
+        Assert.False(Directory.Exists(Path.Combine(root, "11")));
+        Assert.True(DuckDbAccess.FinishSweep(Task.FromResult(0), TimeSpan.Zero));
+        Assert.True(DuckDbAccess.FinishSweep(Task.FromException<int>(new IOException("x")), TimeSpan.Zero));
+        await slow;
+    }
+
+    /// <summary>
     /// The Mac pass (2026-10-25): DuckDB makes only the last folder of <c>temp_directory</c>, so the spill folder's parents are made before a
     /// locked connection opens; a file in the way is left to DuckDB's own error, never thrown.
     /// </summary>

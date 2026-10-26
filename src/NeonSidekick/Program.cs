@@ -183,8 +183,8 @@ if (OperatingSystem.IsMacOS())
 }
 
 // The DuckDB tools' spill folders (2026-10-25): a folder per process under the temp folder; those of processes that are gone are swept
-// off the start's path (DuckDB deletes its own files as it closes, but not a crashed run's).
-_ = Task.Run(() => NeonSidekick.DuckDb.DuckDbAccess.Sweep());
+// off the start's path (DuckDB deletes its own files as it closes, but not a crashed run's), and the exit waits for it (FinishSweep).
+var spillSweep = Task.Run(() => NeonSidekick.DuckDb.DuckDbAccess.Sweep());
 
 // A crash lands in crash.log beside the profiles, stack and all: the terminal window closes with
 // the process, so the runtime's stderr print is never read, and --log carries no stack. The
@@ -574,6 +574,9 @@ if (OperatingSystem.IsMacOS())
 {
     NeonSidekick.Shell.ShellGroups.Current?.KillTracked();
 }
+
+// The start's spill sweep ends before the process does (2026-10-25, the Mac pass: a run that ended at once cut it mid-delete).
+NeonSidekick.DuckDb.DuckDbAccess.FinishSweep(spillSweep);
 
 // A change made in the last quarter-second before quitting must not be lost to the debounce.
 await settings.FlushAsync().ConfigureAwait(false);

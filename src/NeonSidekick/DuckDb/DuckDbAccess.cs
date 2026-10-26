@@ -787,6 +787,33 @@ public sealed class DuckDbAccess
         }
     }
 
+    /// <summary>How long the exit waits for the start's <see cref="Sweep"/> to end (<see cref="FinishSweep"/>).</summary>
+    public static readonly TimeSpan SweepExitWait = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The start's <see cref="Sweep"/>, waited for at the exit, at most <paramref name="wait"/> (<see cref="SweepExitWait"/>) (2026-10-25, the
+    /// Mac pass: the sweep runs off the start's path, on the pool, and a run that ended at once — headless, a script — ended it mid-delete, a
+    /// killed run's 2 GB folder left half there until a later start). A sweep done already costs nothing; true when it ended. Never throws.
+    /// </summary>
+    public static bool FinishSweep(Task sweep, TimeSpan? wait = null)
+    {
+        ArgumentNullException.ThrowIfNull(sweep);
+        try
+        {
+            if (sweep.Wait(wait ?? SweepExitWait))
+            {
+                return true;
+            }
+        }
+        catch (AggregateException)
+        {
+            return true;   // Sweep never throws; a fault is an end all the same
+        }
+
+        DiagnosticLog.Debug(DuckDbConfigFile.Category, DuckDbText.SweepUnfinishedLogLine);
+        return false;
+    }
+
     /// <summary>
     /// The spill folders of processes that are gone, deleted (at the app's start): never this process's nor one whose process still runs.
     /// <paramref name="alive"/> is the look-up (the process table in the app). How many went. Never throws.
