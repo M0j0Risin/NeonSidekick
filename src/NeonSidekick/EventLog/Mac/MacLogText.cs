@@ -124,9 +124,21 @@ public static class MacLogText
     /// <summary>The note when a summary has more groups than it shows.</summary>
     public static string MoreGroups(int more) => "(" + EventLogText.Count(more, "more group") + " not shown; filter by process or subsystem to see them)";
 
-    /// <summary>The note on a read the scan's limit or budget stopped.</summary>
-    public static string ScanStopped(int read, string? reached) =>
-        "(stopped after reading " + EventLogText.Count(read, "entry", "entries") + (reached is null ? "" : ", back to " + reached) + "; the unified log is vast: narrow it with process, subsystem, level or a shorter since)";
+    /// <summary>
+    /// The note on a read the scan's limit or budget stopped, in <paramref name="kind"/>'s own words (2026-10-25, the Mac pass: an install.log read
+    /// said "the unified log is vast" and named subsystem and level, which a file log doesn't take): the crash reports count reports and are narrowed by
+    /// process and text, install.log by process, pid and text.
+    /// </summary>
+    public static string ScanStopped(int read, string? reached, MacLogKind kind = MacLogKind.Unified)
+    {
+        string back = reached is null ? "" : ", back to " + reached;
+        return kind switch
+        {
+            MacLogKind.Crashes => "(stopped after reading " + EventLogText.Count(read, "report") + back + "; narrow it with process, text or a shorter since)",
+            MacLogKind.Install => "(stopped after reading " + EventLogText.Count(read, "entry", "entries") + back + "; install.log is long: narrow it with process, pid, text or a shorter since)",
+            _ => "(stopped after reading " + EventLogText.Count(read, "entry", "entries") + back + "; the unified log is vast: narrow it with process, subsystem, level or a shorter since)",
+        };
+    }
 
     /// <summary>The note when one process made most of a read (Phase 0: mediaanalysisd made 19,997 of 20,000 errors).</summary>
     /// <remarks>

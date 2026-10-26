@@ -390,7 +390,7 @@ internal sealed class MacLogMenu
 
         if (page.BudgetStop)
         {
-            Sink.Notice(MacLogText.ScanStopped(page.Read, page.Reached is { } reached ? EventLogText.Time(reached, _access.Time.LocalTimeZone) : null));
+            Sink.Notice(MacLogText.ScanStopped(page.Read, page.Reached is { } reached ? EventLogText.Time(reached, _access.Time.LocalTimeZone) : null, tab.Source.Kind));
         }
     }
 

@@ -92,6 +92,28 @@ public sealed partial class AdminFixesTests
         Assert.Equal(["after"], InstallLog.Backward(first).Select(e => e.Message).ToList());
     }
 
+    /// <summary>
+    /// A stopped read says so in its own log's words (2026-10-25, the Mac pass: an install.log read said "the unified log is vast" and named subsystem
+    /// and level): reports for the crashes, process, pid and text for install.log, the unified log's as before.
+    /// </summary>
+    [Fact]
+    public void AStoppedRead_IsWordedForItsLog()
+    {
+        Assert.Equal("(stopped after reading 30,000 entries, back to yesterday; the unified log is vast: narrow it with process, subsystem, level or a shorter since)",
+            MacLogText.ScanStopped(30_000, "yesterday"));
+        Assert.Equal("(stopped after reading 453 reports, back to yesterday; narrow it with process, text or a shorter since)",
+            MacLogText.ScanStopped(453, "yesterday", MacLogKind.Crashes));
+        Assert.Equal("(stopped after reading 30,000 entries; install.log is long: narrow it with process, pid, text or a shorter since)",
+            MacLogText.ScanStopped(30_000, null, MacLogKind.Install));
+
+        var source = new MacLogSource(MacLogAccess.InstallNames[0], UnifiedLogTarget.Local, Redacted: true, MacLogKind.Install);
+        var query = new MacLogQuery(source.Log, [], LogNow.AddDays(-120), Text: "zz", Limit: 20);
+        var page = new MacFilePage([], 30_000, More: false, Cursor: null, BudgetStop: true, LogNow.AddDays(-30), Loudest: null);
+        string answer = MacLogRender.FileSearch(source, query, page, [], TimeZoneInfo.Utc, LogNow);
+        Assert.Contains("install.log is long: narrow it with process, pid, text or a shorter since", answer);
+        Assert.DoesNotContain("unified log", answer);
+    }
+
     /// <summary>S4: the copyable exclusion is the whole name quoted, with the query's own kept.</summary>
     [Fact]
     public void S4_TheCopyableExclusion()

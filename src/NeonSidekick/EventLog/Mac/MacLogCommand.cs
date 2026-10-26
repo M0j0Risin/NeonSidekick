@@ -210,7 +210,7 @@ public static class MacLogCommand
         lines.AddRange(page.Rows.Select(r => PlainLine(r, zone)));
         if (page.BudgetStop)
         {
-            lines.Add(MacLogText.ScanStopped(page.Read, page.Reached is { } reached ? EventLogText.Time(reached, zone) : null));
+            lines.Add(MacLogText.ScanStopped(page.Read, page.Reached is { } reached ? EventLogText.Time(reached, zone) : null, source.Kind));
         }
 
         if (page.Loudest is { } loud)

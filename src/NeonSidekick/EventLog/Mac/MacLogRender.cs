@@ -70,7 +70,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.Cut(page.Entries.Count - lines.Count));
         }
 
-        AppendNotes(answer, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone, query.Exclude);
+        AppendNotes(answer, source.Kind, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone, query.Exclude);
         if ((page.More || lines.Count < page.Entries.Count) && cursor is { } next)
         {
             answer.Append('\n').Append(NextCall(query, next, zone));
@@ -118,7 +118,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.MoreGroups(summary.GroupCount - shown));
         }
 
-        AppendNotes(answer, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone, query.Exclude);
+        AppendNotes(answer, source.Kind, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone, query.Exclude);
         return answer.ToString();
     }
 
@@ -296,7 +296,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.Cut(page.Entries.Count - lines.Count));
         }
 
-        AppendNotes(answer, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone, query.Exclude);
+        AppendNotes(answer, source.Kind, page.BudgetStop, page.Read, page.Reached, page.Loudest, zone, query.Exclude);
         if (page.Refused is { } refusedFolders)
         {
             answer.Append('\n').Append(MacLogText.FoldersRefused(refusedFolders));   // X11
@@ -358,7 +358,7 @@ public static class MacLogRender
             answer.Append('\n').Append(MacLogText.MoreGroups(summary.GroupCount - shown));
         }
 
-        AppendNotes(answer, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone, query.Exclude);
+        AppendNotes(answer, source.Kind, summary.BudgetStop, summary.Read, summary.Reached, summary.Loudest, zone, query.Exclude);
         return answer.ToString();
     }
 
@@ -433,11 +433,11 @@ public static class MacLogRender
     private static string FileWho(string process, int? pid) =>
         Fence(process.Length > 0 ? process : "?", 40) + (pid is { } p ? "[" + p.ToString(CultureInfo.InvariantCulture) + "]" : "");
 
-    private static void AppendNotes(StringBuilder answer, bool stopped, int read, DateTimeOffset? reached, MacLoudest? loudest, TimeZoneInfo zone, IReadOnlyList<string>? exclude = null)
+    private static void AppendNotes(StringBuilder answer, MacLogKind kind, bool stopped, int read, DateTimeOffset? reached, MacLoudest? loudest, TimeZoneInfo zone, IReadOnlyList<string>? exclude = null)
     {
         if (stopped)
         {
-            answer.Append('\n').Append(MacLogText.ScanStopped(read, reached is { } r ? EventLogText.Time(r, zone) : null));
+            answer.Append('\n').Append(MacLogText.ScanStopped(read, reached is { } r ? EventLogText.Time(r, zone) : null, kind));
         }
 
         if (loudest is { } loud)
