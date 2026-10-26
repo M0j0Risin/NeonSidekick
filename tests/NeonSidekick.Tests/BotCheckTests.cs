@@ -194,6 +194,13 @@ public sealed class BotCheckTests : IDisposable
         Assert.Equal("; the Browser window could not open: no runtime", BotCheckText.For(BotCheckResult.Ended(BotCheckEnd.Unavailable, url, "no runtime")));
         Assert.Equal("", BotCheckText.For(FakeBrowserWindow.Cleared(request, Article)));
 
+        // The window's log line as a check ends, both windows' (2026-10-26): the status and the detail, each when there is one.
+        Assert.Equal("The bot check on example.com ended: Cleared (HTTP 200).", BrowserText.CheckEndedLogLine("example.com", FakeBrowserWindow.Cleared(request, Article)));
+        Assert.Equal("The bot check on example.com ended: Refused (HTTP 403).", BrowserText.CheckEndedLogLine("example.com", BotCheckResult.Ended(BotCheckEnd.Refused, url, status: 403)));
+        Assert.Equal("The bot check on example.com ended: Refused (HTTP 404; the page did not load).", BrowserText.CheckEndedLogLine("example.com", BotCheckResult.Ended(BotCheckEnd.Refused, url, BrowserText.DidNotLoad, 404)));
+        Assert.Equal("The bot check on example.com ended: Unavailable (the Browser window closed).", BrowserText.CheckEndedLogLine("example.com", BotCheckResult.Ended(BotCheckEnd.Unavailable, url, BrowserText.Closed)));
+        Assert.Equal("The bot check on example.com ended: GaveUp.", BrowserText.CheckEndedLogLine("example.com", BotCheckResult.Ended(BotCheckEnd.GaveUp, url)));
+
         Assert.Equal("The Browser window closed; 2 cookies for example.com, shop.example.com handed to the web tools.", BotCheckText.Closed(2, ["example.com", "shop.example.com"]));
         Assert.Equal("The Browser window closed; 1 cookie for example.com handed to the web tools.", BotCheckText.Closed(1, ["example.com"]));
         Assert.Equal("The Browser window closed; no cookies to hand to the web tools.", BotCheckText.Closed(0, ["example.com"]));
@@ -258,6 +265,108 @@ public sealed class BotCheckTests : IDisposable
         Assert.Equal(BrowserWatchStep.Wait, new BrowserWatch().Decide());   // unread
     }
 
+    // The user's report (2026-10-26, session 795): the check passed and its site went on to the page, which was interactive long before
+    // its pictures loaded; taken then, it carried the check's own 403 and was refused.
+    [Fact]
+    public void Watch_WaitsForTheNavigationUnderWay_BeforeJudgingItsStatus()
+    {
+        var url = new Uri("https://example.com/");
+        var watch = new BrowserWatch();
+        watch.Navigated(true, 403, 1);
+        watch.Read(TimeSpan.Zero, Cloudflare, url);
+        Assert.True(watch.Gated);
+        Assert.False(watch.Observe(TimeSpan.Zero, "complete", HeadlessBrowser.Fingerprint(Cloudflare)));
+
+        var t = TimeSpan.FromSeconds(3);
+        watch.Began(t, 2);
+        var article = HeadlessBrowser.Fingerprint(Article);
+        watch.Read(t, Article, url);
+        Assert.False(watch.Gated);
+        Assert.False(watch.Observe(t, "interactive", article));
+        Assert.False(watch.Observe(t + DomSettle.Quiet + TimeSpan.FromSeconds(0.5), "interactive", article));
+        Assert.False(watch.Observe(t + DomSettle.MostAfterLoad + TimeSpan.FromSeconds(1), "interactive", article));
+        Assert.Equal(403, watch.Status);   // still the check's: its page has not completed
+
+        // Loaded: its own status, and it settles as any page does.
+        var loaded = t + TimeSpan.FromSeconds(9);
+        watch.Navigated(true, 200, 2);
+        string done = Article + "<!-- loaded -->";
+        var donePrint = HeadlessBrowser.Fingerprint(done);
+        watch.Read(loaded, done, url);
+        Assert.False(watch.Observe(loaded, "complete", donePrint));
+        Assert.True(watch.Observe(loaded + DomSettle.Quiet, "complete", donePrint));
+        Assert.Equal(BrowserWatchStep.Read, watch.Decide());
+        Assert.Equal(200, watch.Status);
+    }
+
+    [Fact]
+    public void Watch_IgnoresASupersededNavigationsEnd()
+    {
+        var url = new Uri("https://example.com/");
+        var print = HeadlessBrowser.Fingerprint(Article);
+        var watch = new BrowserWatch();
+        watch.Began(TimeSpan.Zero, 1);
+        watch.Began(TimeSpan.FromSeconds(1), 2);
+        watch.Navigated(false, 0, 1);   // the first, cancelled by the second: no answer for the page under way
+        Assert.False(watch.LoadFailed);
+        Assert.False(watch.Loaded);
+        watch.Read(TimeSpan.FromSeconds(1), Article, url);
+        Assert.False(watch.Observe(TimeSpan.FromSeconds(1), "complete", print));
+        Assert.False(watch.Observe(TimeSpan.FromSeconds(4), "complete", print));
+
+        watch.Navigated(true, 200, 2);
+        Assert.True(watch.Observe(TimeSpan.FromSeconds(5), "complete", print));
+        Assert.Equal(BrowserWatchStep.Read, watch.Decide());
+        Assert.Equal(200, watch.Status);
+    }
+
+    [Fact]
+    public void Watch_TakesAPageWhoseLoadNeverEnds_AfterMostLoading()
+    {
+        var url = new Uri("https://example.com/");
+        var print = HeadlessBrowser.Fingerprint(Article);
+        var watch = new BrowserWatch();
+        watch.Navigated(true, 403, 1);
+        watch.Read(TimeSpan.Zero, Cloudflare, url);
+        watch.Began(TimeSpan.FromSeconds(1), 2);
+        watch.Read(TimeSpan.FromSeconds(1), Article, url);
+        Assert.False(watch.Observe(TimeSpan.FromSeconds(1), "interactive", print));
+        Assert.False(watch.Observe(BrowserWatch.MostLoading, "interactive", print));   // 1 s short of its cap
+
+        Assert.True(watch.Observe(BrowserWatch.MostLoading + TimeSpan.FromSeconds(1), "interactive", print));
+        Assert.Equal(BrowserWatchStep.Read, watch.Decide());   // no status: not the check's 403
+        Assert.Equal(0, watch.Status);
+        Assert.False(watch.LoadFailed);
+    }
+
+    [Fact]
+    public void Watch_LoadEnded_StopsOnlyItsOwnWait()
+    {
+        var url = new Uri("https://example.com/");
+        var print = HeadlessBrowser.Fingerprint(Article);
+        var watch = new BrowserWatch();
+        watch.Navigated(true, 200, 1);
+        watch.Read(TimeSpan.Zero, Article, url);
+        watch.Began(TimeSpan.Zero, 2);
+        watch.LoadEnded(3);   // another navigation's: the blank start page completing late, say
+        Assert.False(watch.Observe(TimeSpan.Zero, "complete", print));
+        Assert.False(watch.Observe(TimeSpan.FromSeconds(8), "complete", print));
+        watch.LoadEnded(2);
+        Assert.True(watch.Observe(TimeSpan.FromSeconds(9), "complete", print));
+
+        foreach (ulong? id in new ulong?[] { 7, null })   // no id (the Mac) ends any wait
+        {
+            var any = new BrowserWatch();
+            any.Navigated(true, 200);
+            any.Read(TimeSpan.Zero, Article, url);
+            any.Began(TimeSpan.Zero, id);
+            Assert.False(any.Observe(TimeSpan.Zero, "complete", print));
+            Assert.False(any.Observe(TimeSpan.FromSeconds(8), "complete", print));
+            any.LoadEnded();
+            Assert.True(any.Observe(TimeSpan.FromSeconds(9), "complete", print));
+        }
+    }
+
     [Theory]
     [InlineData("https://example.com/a", true)]
     [InlineData("http://example.com/", true)]
@@ -308,6 +417,12 @@ public sealed class BotCheckTests : IDisposable
         Assert.False(BrowserAnswers.TryReadPrint("{\"s\":\"loading\",\"n\":0,\"x\":1}", out _, out _));
         Assert.False(BrowserAnswers.TryReadPrint("null", out _, out _));
         Assert.False(BrowserAnswers.TryReadPrint("not json", out _, out _));
+        // A hash past 2³¹ as WebView2 writes it, a whole double (2026-10-26, the live test: such a page was never read).
+        Assert.True(BrowserAnswers.TryReadPrint("{\"n\":1544,\"s\":\"interactive\",\"x\":4083221934.0}", out _, out print));
+        Assert.Equal((1544, 4083221934u), print);
+        Assert.False(BrowserAnswers.TryReadPrint("{\"n\":12,\"x\":1.5}", out _, out _));
+        Assert.False(BrowserAnswers.TryReadPrint("{\"n\":12,\"x\":4294967296.0}", out _, out _));
+        Assert.False(BrowserAnswers.TryReadPrint("{\"n\":12,\"x\":-1}", out _, out _));
 
         Assert.True(BrowserAnswers.TryReadPage("{\"s\":\"complete\",\"h\":\"<html></html>\"}", out string html));
         Assert.Equal("<html></html>", html);

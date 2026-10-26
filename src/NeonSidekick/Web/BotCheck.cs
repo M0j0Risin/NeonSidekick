@@ -25,7 +25,7 @@ public enum BotCheckEnd
     /// <summary>The check let the page through: its DOM, the address it ended on and its cookies came back.</summary>
     Cleared,
 
-    /// <summary>The page settled with no check showing but an error status (<see cref="BotCheckResult.Status"/>): a refusal no person can solve.</summary>
+    /// <summary>The page loaded and settled with no check showing but an error status (<see cref="BotCheckResult.Status"/>): a refusal no person can solve.</summary>
     Refused,
 
     /// <summary>The user said no on the pane.</summary>

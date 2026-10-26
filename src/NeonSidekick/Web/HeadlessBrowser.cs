@@ -131,6 +131,28 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         return (html.Length, x);
     }
 
+    /// <summary>
+    /// <see cref="PrintExpression"/>'s hash as the browser sent it: a whole number, written plain or, past 2³¹, with a <c>.0</c>
+    /// (2026-10-26, the Browser window's live test: WebView2's <c>ExecuteScript</c> answered <c>4083221934.0</c>, Chromium's JSON writer
+    /// marking a whole double, and the window never read such a page, its check ending given up). Pure.
+    /// </summary>
+    public static bool TryReadHash(JsonElement value, out uint hash)
+    {
+        if (value.TryGetUInt32(out hash))
+        {
+            return true;
+        }
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out double number) && number >= 0 && number <= uint.MaxValue && number == Math.Floor(number))
+        {
+            hash = (uint)number;
+            return true;
+        }
+
+        hash = 0;
+        return false;
+    }
+
     /// <summary>How long the output must stay whole and unchanged before a browser that has not exited is stopped (<see cref="WaitForExitOrWholeAsync"/>).</summary>
     public static readonly TimeSpan WholeGrace = TimeSpan.FromSeconds(1.5);
 
@@ -1220,7 +1242,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     {
         if (await EvaluateAsync(client, session, PrintExpression, cancellationToken).ConfigureAwait(false) is not { } value
             || !value.TryGetProperty("n", out var n) || !n.TryGetInt32(out int length) || length == 0
-            || !value.TryGetProperty("x", out var x) || !x.TryGetUInt32(out uint hash))
+            || !value.TryGetProperty("x", out var x) || !TryReadHash(x, out uint hash))
         {
             return null;
         }

@@ -106,7 +106,7 @@ public static class BrowserAnswers
             var value = document.RootElement;
             if (value.ValueKind != JsonValueKind.Object
                 || !value.TryGetProperty("n", out var n) || !n.TryGetInt32(out int length) || length == 0
-                || !value.TryGetProperty("x", out var x) || !x.TryGetUInt32(out uint hash))
+                || !value.TryGetProperty("x", out var x) || !HeadlessBrowser.TryReadHash(x, out uint hash))
             {
                 return false;
             }

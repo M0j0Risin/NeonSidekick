@@ -71,7 +71,7 @@ internal sealed partial class MacBrowserWindow : IBrowserCheckPage
         ReleaseHeld(check);
         bool hide = _jobs.EndCheck(check, close);
         Settle(check.Done, result);
-        DiagnosticLog.Info("Browser", $"The bot check on {check.Request.Url.Host} ended: {result.End}{(result.Detail.Length > 0 ? " (" + result.Detail + ")" : "")}.");
+        DiagnosticLog.Info("Browser", BrowserText.CheckEndedLogLine(check.Request.Url.Host, result));
         if (!Alive)
         {
             return;

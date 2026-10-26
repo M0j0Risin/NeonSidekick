@@ -109,6 +109,7 @@ internal sealed unsafe partial class WebViewHost
             run.Host = new WebViewHost(hwnd)
             {
                 NavigationDone = run.OnNavigationDone,
+                NavigationBegan = run.OnNavigationBegan,
                 HistoryChanged = run.OnHistoryChanged,
                 Refused = run.OnRefused,
                 DownloadStarting = run.OnDownloadStarting,
@@ -214,6 +215,7 @@ internal sealed unsafe partial class WebViewHost
         private bool _viewPending;
         private bool _viewing;
         private bool _viewed;
+        private ulong _pdfNavigation;
 
         public WebViewHost? Host { get; set; }
 
@@ -225,11 +227,21 @@ internal sealed unsafe partial class WebViewHost
 
         public bool Exited { get; private set; }
 
-        public void OnNavigationDone(bool ok, int status)
+        // The staged PDF's navigation id as it starts (2026-10-26, the bot check's navigation ids): its completion must carry the same. Only that
+        // address's: the canceled download before it starts a navigation of its own, and the blank page's may fire no start at all.
+        public void OnNavigationBegan(string uri, ulong id)
+        {
+            if (PdfView.IsOurs(uri))
+            {
+                _pdfNavigation = id;
+            }
+        }
+
+        public void OnNavigationDone(bool ok, int status, ulong id)
         {
             if (_viewing)
             {
-                OnPdfViewed(ok, status);
+                OnPdfViewed(ok, status, id);
                 return;
             }
 
@@ -467,7 +479,7 @@ internal sealed unsafe partial class WebViewHost
             }
         }
 
-        private void OnPdfViewed(bool ok, int status)
+        private void OnPdfViewed(bool ok, int status, ulong id)
         {
             if (_viewed || Done)
             {
@@ -484,6 +496,12 @@ internal sealed unsafe partial class WebViewHost
             if (!PdfView.IsOurs(Host!.Source))
             {
                 Finish(false, $"the view's address read {Host.Source ?? "nothing"} after the staged PDF");
+                return;
+            }
+
+            if (id == 0 || id != _pdfNavigation)
+            {
+                Finish(false, $"the staged PDF's navigation ids differ (started {_pdfNavigation.ToString(CultureInfo.InvariantCulture)}, completed {id.ToString(CultureInfo.InvariantCulture)})");
                 return;
             }
 

@@ -32,7 +32,8 @@ namespace NeonSidekick.Viewer;
 /// 3 get_IsSuccess, and their second interface's 6 get_HttpStatusCode; the download-starting arguments 5 put_Cancel, 9 put_Handled.
 /// Its navigation bar's (later the same day, the same header): ICoreWebView2 13 add_HistoryChanged, 38 get_CanGoBack,
 /// 39 get_CanGoForward, 41 GoForward, 43 Stop; ICoreWebView2Controller 12 MoveFocus. Its privacy (later still): ICoreWebView2_13
-/// 105 get_Profile; ICoreWebView2Profile2 10 ClearBrowsingData, 12 ClearBrowsingDataAll.</para>
+/// 105 get_Profile; ICoreWebView2Profile2 10 ClearBrowsingData, 12 ClearBrowsingDataAll. Its bot check's navigations (2026-10-26, the
+/// same header, 1.0.4258.31): the navigation-starting arguments 9 get_NavigationId, the navigation-completed arguments 5 get_NavigationId.</para>
 ///
 /// <para>The <c>add_*</c> calls' registration tokens are not kept: <see cref="ControllerClose"/> drops every handler with the
 /// view, and nothing is ever unsubscribed earlier. Every string WebView2 hands out is <c>CoTaskMemAlloc</c>'d and freed here
@@ -153,6 +154,8 @@ internal static unsafe partial class WebViewNative
     private const int PrintToPdfSlot = 80;
     private const int NavigationCompletedGetIsSuccessSlot = 3;
     private const int NavigationCompletedGetHttpStatusCodeSlot = 6;
+    private const int NavigationStartingGetNavigationIdSlot = 9;
+    private const int NavigationCompletedGetNavigationIdSlot = 5;
     private const int DownloadPutCancelSlot = 5;
     private const int DownloadPutHandledSlot = 9;
 
@@ -423,6 +426,18 @@ internal static unsafe partial class WebViewNative
         {
             Release(args2);
         }
+    }
+
+    /// <summary>The starting navigation's id (<c>get_NavigationId</c>), the same for its redirects and its completion; 0 when the call fails.</summary>
+    internal static ulong NavigationStartingId(nint args) => GetId(args, NavigationStartingGetNavigationIdSlot);
+
+    /// <summary>The completed navigation's id (<c>get_NavigationId</c>), the one its start gave; 0 when the call fails.</summary>
+    internal static ulong NavigationCompletedId(nint args) => GetId(args, NavigationCompletedGetNavigationIdSlot);
+
+    private static ulong GetId(nint args, int slot)
+    {
+        ulong id;
+        return ((delegate* unmanaged<nint, ulong*, int>)Slot(args, slot))(args, &id) >= 0 ? id : 0;
     }
 
     // ── ICoreWebView2Settings ────────────────────────────────────────────────

@@ -15,7 +15,7 @@ namespace NeonSidekick.Viewer;
 /// app profile's own since later on 2026-10-13, <see cref="ProfileDirectory"/>).
 ///
 /// <para>Two uses. A web tool's bot check (<see cref="IBrowserWindow.SolveAsync"/>): the window opens on the address and comes to the
-/// front, the user solves the check, and once the page has settled with no check showing (<see cref="BrowserWatch"/>) its DOM, the
+/// front, the user solves the check, and once the page has loaded and settled with no check showing (<see cref="BrowserWatch"/>) its DOM, the
 /// address it ended on, its cookies (DevTools' <c>Network.getAllCookies</c>, for the two hosts) and, for a PDF, the page printed by
 /// WebView2 itself go back; then the window closes. <c>/browser</c> (<see cref="IBrowserWindow.BrowseAsync"/>): the window is the
 /// user's to browse — sign in somewhere, say — and when they close it, the cookies for every host it went to go to the web tools.
@@ -1082,7 +1082,7 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
 
         ReleaseHeld(job);
         Settle(job.Done, result);
-        DiagnosticLog.Info("Browser", $"The bot check on {job.Request.Url.Host} ended: {result.End}{(result.Detail.Length > 0 ? " (" + result.Detail + ")" : "")}.");
+        DiagnosticLog.Info("Browser", BrowserText.CheckEndedLogLine(job.Request.Url.Host, result));
         ShowTitle();
         if (close)
         {
@@ -1194,8 +1194,9 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
 
     // ── Events ───────────────────────────────────────────────────────────────
 
-    // A check's page completed. The blank page the view starts on is no answer: it may complete after the check began.
-    private void OnNavigationDone(bool ok, int status)
+    // A check's page completed. The blank page the view starts on is no answer: it may complete after the check began, which its id
+    // tells (2026-10-26, BrowserWatch: it ends no wait but its own), as it does a navigation the next one superseded.
+    private void OnNavigationDone(bool ok, int status, ulong id)
     {
         SetBarState(_barState with { Loading = false });
         ReadHistory();
@@ -1205,11 +1206,21 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
             FillLinkName();
         }
 
-        if (_job is { } job && BrowserPage.HostOf(_host?.Source) is not null)
+        if (_job is { } job)
         {
-            job.Watch.Navigated(ok, status);
+            if (BrowserPage.HostOf(_host?.Source) is not null)
+            {
+                job.Watch.Navigated(ok, status, NavigationId(id));
+            }
+            else
+            {
+                job.Watch.LoadEnded(NavigationId(id));
+            }
         }
     }
+
+    // A navigation's id as the watch takes it: 0 is WebView2's call failing, no id at all.
+    private static ulong? NavigationId(ulong id) => id == 0 ? null : id;
 
     private void OnTitleChanged(string title)
     {
@@ -1218,7 +1229,15 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
         ShowTitle();
     }
 
-    private void OnNavigationBegan(string uri) => SetBarState(_barState with { Loading = true });
+    // A navigation let through: the bar shows it loading, and a check's watch waits for its page to complete (2026-10-26, BrowserWatch).
+    private void OnNavigationBegan(string uri, ulong id)
+    {
+        SetBarState(_barState with { Loading = true });
+        if (_job is { } job && BrowserPage.HostOf(uri) is not null)
+        {
+            job.Watch.Began(job.Clock.Elapsed, NavigationId(id));
+        }
+    }
 
     private void OnSourceChanged(string source)
     {

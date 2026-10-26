@@ -127,6 +127,7 @@ Only for running the tests from source. Each live test is skipped unless its res
 * `NEONSIDEKICK_TEST_AD_DOMAIN`: `Domain=…;Server=…;User=DOMAIN\name;Password=…`, read through a scratch home's `ad.json`. For the `samba_ad_dev` container: `Domain=lab.neon.test;Server=localhost;User=LAB\reader` and its password. On a Mac, `Server=dc1.lab.neon.test;User=reader@LAB.NEON.TEST` with a hosts entry for that name ([TESTCONTAINERS.md](TESTCONTAINERS.md#samba_ad_dev-on-a-mac)). Reads only.
   * On a Mac the user is `name@REALM` (`User=reader@LAB.NEON.TEST`), and the test realm needs a `krb5.conf` ([TESTCONTAINERS.md](TESTCONTAINERS.md)).
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`: a folder to keep the test photo in.
+* `NEONSIDEKICK_TEST_BROWSER_WINDOW`: `1` runs the Browser window's bot-check test against a local page (Windows, macOS 14+; the window shows briefly).
 * `NEONSIDEKICK_TEST_RECYCLE`: `1` runs the real Recycle bin test (the Trash on a Mac), which leaves a temp file in it.
 * `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). Jobs are held and canceled, so nothing prints.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.

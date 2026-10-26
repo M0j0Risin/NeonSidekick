@@ -71,6 +71,28 @@ public static class BrowserText
     /// <summary>A page that did not load at all (no name, no answer): the detail of a <see cref="Web.BotCheckEnd.Refused"/> with no status. Pinned.</summary>
     public const string DidNotLoad = "the page did not load";
 
+    /// <summary>
+    /// The log line as a bot check in the window ends, both windows' (2026-10-26, the bot-check load wait: a refusal named no status, so
+    /// the user's report could be read only from the stored session): its end, then in parentheses the page's status and the detail, each
+    /// when it has one, <c>ended: Refused (HTTP 403).</c> Pinned.
+    /// </summary>
+    public static string CheckEndedLogLine(string host, Web.BotCheckResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var parts = new List<string>(2);
+        if (result.Status > 0)
+        {
+            parts.Add("HTTP " + result.Status.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (result.Detail.Length > 0)
+        {
+            parts.Add(result.Detail);
+        }
+
+        return $"The bot check on {host} ended: {result.End}{(parts.Count > 0 ? " (" + string.Join("; ", parts) + ")" : "")}.";
+    }
+
     // ── The page's live view (2026-10-17): why an input from the Web UI was refused (BrowserRemote.Check) ──
 
     /// <summary>A tap, hold or scroll whose place is off the picture.</summary>

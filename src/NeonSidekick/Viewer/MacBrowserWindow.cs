@@ -884,10 +884,16 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         return MacNavigationPolicy.Download;
     }
 
+    // A navigation began: a check's watch waits for its page to finish (2026-10-26, BrowserWatch; no ids here, its cap the backstop).
+    // Not for the window's own error page, whose failure the watch was told already: its wait would end in the cap as no error at all.
     public void Started()
     {
         _mainStatus = 0;
         RefreshBar();
+        if (_jobs.Check is { } check && _errorShownFor is null)
+        {
+            check.Watch.Began(check.Clock.Elapsed);
+        }
     }
 
     public void Finished()
@@ -902,9 +908,16 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         RecordVisit();
         FillLinkName();
         FocusPage();
-        if (_jobs.Check is { } check && BrowserPage.HostOf(source) is not null)
+        if (_jobs.Check is { } check)
         {
-            check.Watch.Navigated(true, _mainStatus);
+            if (BrowserPage.HostOf(source) is not null)
+            {
+                check.Watch.Navigated(true, _mainStatus);
+            }
+            else
+            {
+                check.Watch.LoadEnded();   // no web page (the blank one): its wait ends, nothing more
+            }
         }
     }
 

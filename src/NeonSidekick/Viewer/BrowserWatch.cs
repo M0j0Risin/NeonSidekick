@@ -8,10 +8,10 @@ public enum BrowserWatchStep
     /// <summary>Not yet: the page is loading, changing, or still a bot check.</summary>
     Wait,
 
-    /// <summary>Through: the page has settled with no check showing; read it and hand it back.</summary>
+    /// <summary>Through: the page has loaded and settled with no check showing; read it and hand it back.</summary>
     Read,
 
-    /// <summary>Settled with no check showing, but with an error status (or no page at all): no person can solve that.</summary>
+    /// <summary>Loaded and settled with no check showing, but with an error status (or no page at all): no person can solve that.</summary>
     Refused,
 }
 
@@ -24,6 +24,16 @@ public enum BrowserWatchStep
 /// headless browser's it never takes a check's page as it is (<see cref="DomSettle.ChallengeLimit"/> infinite): a person is solving
 /// it, and the caller's clock (<see cref="BotCheck.SolveTimeout"/>) ends the wait. The navigation's own outcome comes from
 /// <see cref="Navigated"/>. Pure: time is the caller's.
+///
+/// <para>A navigation under way is waited for (2026-10-26, the user's report, session 795: a Cloudflare check passed on
+/// thewoksoflife.com, and the tool still said the window "got HTTP 403 too, with no check to solve"). The status comes only with a
+/// navigation's completion, which waits for the page's pictures and scripts; the recipe page that followed the check was
+/// <c>interactive</c> and still long before then, so it was taken under the check's own 403 and refused. So the window tells the watch
+/// when a navigation begins (<see cref="Began"/>), and until it completes (<see cref="Navigated"/>, or <see cref="LoadEnded"/> for one
+/// that ended on no web page) the page is not taken, for at most <see cref="MostLoading"/>; past that its status is unknown and a page
+/// with no check is read. Navigations can overlap (WebView2's docs): one superseded by the next completes too, failed, after the next
+/// began, so Windows passes each navigation's id and a completion for another is ignored. The Mac has no ids; there the cap is the
+/// backstop.</para>
 /// </summary>
 public sealed class BrowserWatch
 {
@@ -32,6 +42,11 @@ public sealed class BrowserWatch
     private (int, uint)? _readPrint;
     private TimeSpan _readAt;
     private bool _thin;
+    private TimeSpan? _loadingSince;
+    private ulong? _loadingId;
+
+    /// <summary>The longest a navigation under way (<see cref="Began"/>) is waited for before its page is judged with no status.</summary>
+    public static readonly TimeSpan MostLoading = TimeSpan.FromSeconds(15);
 
     /// <summary>The DOM last read; null before the first read.</summary>
     public string? Html { get; private set; }
@@ -51,12 +66,48 @@ public sealed class BrowserWatch
     /// <summary>Whether the last navigation failed without an answer (no name, no connection, cancelled).</summary>
     public bool LoadFailed { get; private set; }
 
-    /// <summary>A top-level navigation completed: <paramref name="ok"/> without a network error, its <paramref name="status"/>.</summary>
-    public void Navigated(bool ok, int status)
+    /// <summary>
+    /// A top-level navigation to a web page began at <paramref name="now"/>, its <paramref name="id"/> when the window has one: its page
+    /// is not taken until it completes. A new id starts the wait again; the same one (a redirect) keeps it, as does no id (the Mac).
+    /// </summary>
+    public void Began(TimeSpan now, ulong? id = null)
     {
+        if (_loadingSince is null || (id is not null && id != _loadingId))
+        {
+            _loadingSince = now;
+            _loadingId = id;
+        }
+    }
+
+    /// <summary>
+    /// A top-level navigation completed: <paramref name="ok"/> without a network error, its <paramref name="status"/>. One whose
+    /// <paramref name="id"/> is not the navigation under way's was superseded by it, and is ignored; with no id on either side it counts.
+    /// </summary>
+    public void Navigated(bool ok, int status, ulong? id = null)
+    {
+        if (_loadingId is { } pending && id is { } done && pending != done)
+        {
+            return;
+        }
+
+        _loadingSince = null;
+        _loadingId = null;
         Loaded = true;
         LoadFailed = !ok && status == 0;
         Status = status;
+    }
+
+    /// <summary>
+    /// A navigation ended on no web page (the window's blank start page, say), which <see cref="Navigated"/> is never told: the wait for
+    /// it ends, when it is the navigation under way (<paramref name="id"/>) or with no id.
+    /// </summary>
+    public void LoadEnded(ulong? id = null)
+    {
+        if (id is null || _loadingId is null || id == _loadingId)
+        {
+            _loadingSince = null;
+            _loadingId = null;
+        }
     }
 
     /// <summary>Whether a look with <paramref name="print"/> at <paramref name="now"/> should read the DOM first.</summary>
@@ -82,14 +133,32 @@ public sealed class BrowserWatch
 
     /// <summary>
     /// One look at <paramref name="now"/>: the page's ready <paramref name="state"/> and its DOM's <paramref name="print"/>, after any
-    /// read it wanted. True when the page is ready to be taken (<see cref="Decide"/> then says how).
+    /// read it wanted. True when the page is ready to be taken (<see cref="Decide"/> then says how). A navigation under way holds it
+    /// unloaded, its changes still counted, until it completes or <see cref="MostLoading"/> has passed: then its status is unknown (0).
     /// </summary>
     public bool Observe(TimeSpan now, string state, (int, uint) print)
     {
         ArgumentNullException.ThrowIfNull(state);
         bool changed = print != _last;
         _last = print;
-        return Loaded && _settle.Observe(now, state is "interactive" or "complete", changed, Gated, _thin);
+        bool loading = false;
+        if (_loadingSince is { } since)
+        {
+            if (now - since < MostLoading)
+            {
+                loading = true;
+            }
+            else
+            {
+                _loadingSince = null;
+                _loadingId = null;
+                Loaded = true;
+                LoadFailed = false;
+                Status = 0;
+            }
+        }
+
+        return Loaded && _settle.Observe(now, !loading && (state is "interactive" or "complete"), changed, Gated, _thin);
     }
 
     /// <summary>What a ready page is: <see cref="BrowserWatchStep.Read"/>, or <see cref="BrowserWatchStep.Refused"/> for an error status or no page; <see cref="BrowserWatchStep.Wait"/> while it is a check or unread.</summary>

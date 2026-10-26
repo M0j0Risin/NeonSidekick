@@ -115,8 +115,12 @@ internal sealed unsafe partial class WebViewHost
     /// <summary>A step of the chain failed with its HRESULT; the host is closed.</summary>
     public Action<WebViewStep, int>? Failed { get; set; }
 
-    /// <summary>A browsing profile's top-level navigation completed: whether without a network error, and its HTTP status (0 when none).</summary>
-    public Action<bool, int>? NavigationDone { get; set; }
+    /// <summary>
+    /// A browsing profile's top-level navigation completed: whether without a network error, its HTTP status (0 when none), and its id
+    /// (<see cref="NavigationBegan"/>'s; 0 when unread). Navigations can overlap (2026-10-26, WebView2's docs): one superseded by the next
+    /// completes too, failed, after the next one began.
+    /// </summary>
+    public Action<bool, int, ulong>? NavigationDone { get; set; }
 
     /// <summary>A browsing profile's page title changed.</summary>
     public Action<string>? TitleChanged { get; set; }
@@ -130,8 +134,11 @@ internal sealed unsafe partial class WebViewHost
     /// <summary>A browsing profile's back and forward list changed (<see cref="CanGoBack"/>, <see cref="CanGoForward"/>).</summary>
     public Action? HistoryChanged { get; set; }
 
-    /// <summary>A browsing profile's top-level navigation was let through, its address: the page loads until <see cref="NavigationDone"/>.</summary>
-    public Action<string>? NavigationBegan { get; set; }
+    /// <summary>
+    /// A browsing profile's top-level navigation was let through, its address and its id (2026-10-26, the same for its redirects and its
+    /// completion; 0 when unread): the page loads until <see cref="NavigationDone"/> with that id.
+    /// </summary>
+    public Action<string, ulong>? NavigationBegan { get; set; }
 
     /// <summary>
     /// The pixels at the top of the window the view leaves alone (2026-10-13, the Browser window's navigation bar); 0, the whole
@@ -621,7 +628,7 @@ internal sealed unsafe partial class WebViewHost
         }
         else if (!_closed && _profile.Browsing)
         {
-            NavigationBegan?.Invoke(uri ?? "");
+            NavigationBegan?.Invoke(uri ?? "", NavigationStartingId(args));
         }
     }
 
@@ -688,7 +695,7 @@ internal sealed unsafe partial class WebViewHost
     {
         if (!_closed)
         {
-            NavigationDone?.Invoke(NavigationSucceeded(args), NavigationStatus(args));
+            NavigationDone?.Invoke(NavigationSucceeded(args), NavigationStatus(args), NavigationCompletedId(args));
         }
     }
 
