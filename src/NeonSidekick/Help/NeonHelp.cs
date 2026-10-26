@@ -145,7 +145,7 @@ internal static class NeonHelp
 
         if (Is("setting") && !flag && SettingsHolding(q).Where(f => HelpLocation.Of(f, windows) is not null).ToList() is { Count: > 0 } holding)
         {
-            return string.Join("\n\n", holding.Select(Setting));
+            return string.Join("\n\n", holding.Select(f => Setting(f, windows)));
         }
 
         // A lone tool name or flag that matched nothing is the miss, never plain words (2026-10-25: on a Mac `service_control` and
@@ -165,7 +165,7 @@ internal static class NeonHelp
     /// so its answer says what the switch offers.
     /// </summary>
     private static string SwitchSetting(SettingsField field, Func<HelpLive?> live, bool windows) =>
-        HelpToolCatalog.GroupOfSwitch(field, windows) is null ? Setting(field) : Setting(field) + "\n" + HelpToolCatalog.SwitchTools(field, live(), windows);
+        HelpToolCatalog.GroupOfSwitch(field, windows) is null ? Setting(field, windows) : Setting(field, windows) + "\n" + HelpToolCatalog.SwitchTools(field, live(), windows);
 
     /// <summary>
     /// The tools a query names (2026-10-25, step 9), in its order, each once, at most <see cref="HelpText.MaxMatches"/>: an underscored name
@@ -249,6 +249,14 @@ internal static class NeonHelp
     /// <summary>A setting in full (<see cref="HelpText.Setting"/>).</summary>
     public static string Setting(SettingsField field) =>
         HelpText.Setting(HelpLocation.Of(field), HelpLocation.Default(field), HelpSettings.Describe(field));
+
+    /// <summary>
+    /// A setting in full as <paramref name="windows"/>' system places it (2026-10-25, the Mac pass: the answers asked as the other system
+    /// walked that system's rows but placed each through this machine's, so a Windows-only row asked on a Mac threw). The caller has
+    /// checked the row is there (<see cref="HelpLocation.Of(SettingsField, bool)"/>).
+    /// </summary>
+    private static string Setting(SettingsField field, bool windows) =>
+        HelpText.Setting(HelpLocation.Of(field, windows)!, HelpLocation.Default(field), HelpSettings.Describe(field));
 
     /// <summary>The keys as <c>/help</c> lists them, without the voice rows (they hang on this profile's settings; <see cref="HelpText.KeysTail"/> names them).</summary>
     public static IReadOnlyList<(string Key, string Meaning)> KeyRows() => [.. ChatScreen.KeyRows(voiceOn: false, ConsoleKey.F4, wakeReady: false, "").Select(r => r.Pair)];
@@ -416,7 +424,7 @@ internal static class NeonHelp
             foreach (var row in HelpLocation.RowsFor(windows))
             {
                 string description = HelpSettings.Describe(row.Field);
-                items.Add((Score(words, row.Label + " " + row.Place, description), row.Label.Length, Setting(row.Field)));
+                items.Add((Score(words, row.Label + " " + row.Place, description), row.Label.Length, Setting(row.Field, windows)));
             }
         }
 

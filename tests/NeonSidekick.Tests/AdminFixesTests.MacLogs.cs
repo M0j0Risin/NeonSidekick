@@ -80,6 +80,16 @@ public sealed partial class AdminFixesTests
         var entries = InstallLog.Backward(big).ToList();
         Assert.Single(entries);
         Assert.StartsWith("head", entries[0].Message);
+
+        // A long line that begins with a time is dropped head and all (the Mac pass of 2026-10-25: its head was listed as a cut entry), at
+        // the file's start too, and the lines around it stay.
+        string timed = "2026-10-23 12:00:00-07 mac installd[1]: before\n"
+            + "2026-10-23 12:00:01-07 mac bigproc[2]: " + new string('x', InstallLog.MaxLineBytes + InstallLog.Chunk + 10) + "\n"
+            + "2026-10-23 12:00:02-07 mac installd[1]: after\n";
+        using var timedStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(timed));
+        Assert.Equal(["after", "before"], InstallLog.Backward(timedStream).Select(e => e.Message).ToList());
+        using var first = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(timed[(timed.IndexOf('\n') + 1)..]));
+        Assert.Equal(["after"], InstallLog.Backward(first).Select(e => e.Message).ToList());
     }
 
     /// <summary>S4: the copyable exclusion is the whole name quoted, with the query's own kept.</summary>

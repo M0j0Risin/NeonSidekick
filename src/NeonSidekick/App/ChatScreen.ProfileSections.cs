@@ -265,11 +265,15 @@ internal sealed partial class ChatScreen
         var (heldFolders, heldNames) = SkillEditor.ProfileSkillNames(targetRoot);
         var copies = new List<string>();
         var skipped = new List<string>();
+        var links = new List<string>();
         foreach (string folder in folders)
         {
             string name = Path.GetFileName(folder);
-            bool linked = (new DirectoryInfo(folder).Attributes & FileAttributes.ReparsePoint) != 0;
-            if (linked || heldFolders.Contains(name) || (SkillEditor.FrontmatterName(folder) is { } skill && heldNames.Contains(skill)))
+            if ((new DirectoryInfo(folder).Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                links.Add(name);   // never followed, and not "there already" (the Mac pass of 2026-10-25: a link was named as the target's own)
+            }
+            else if (heldFolders.Contains(name) || (SkillEditor.FrontmatterName(folder) is { } skill && heldNames.Contains(skill)))
             {
                 skipped.Add(name);
             }
@@ -281,7 +285,7 @@ internal sealed partial class ChatScreen
 
         if (copies.Count == 0)
         {
-            _flow.Notice(ProfileSkillsNothingNewNotice(skipped, other, pull));
+            _flow.Notice(ProfileSkillsNothingNewNotice(skipped, other, pull, links));
             return;
         }
 
@@ -337,7 +341,7 @@ internal sealed partial class ChatScreen
 
         if (copied.Count > 0)
         {
-            _flow.Notice(ProfileSkillsCopiedNotice(copied, skipped, other, pull));
+            _flow.Notice(ProfileSkillsCopiedNotice(copied, skipped, other, pull, links));
             if (pull)
             {
                 ReconcileSkills();
@@ -466,13 +470,29 @@ internal sealed partial class ChatScreen
     public static string ProfileSkillsNothingNotice(string profile, bool pull) =>
         $"({NoticeGlyphs.Skill}nothing to copy: {SourceName(profile, pull)} has no skills of its own)";
 
-    /// <summary>Every skill held by the target already (or a link): <c>(🧩 nothing to copy: "work" has these 2 skills already: notes, todo)</c>.</summary>
-    public static string ProfileSkillsNothingNewNotice(IReadOnlyList<string> skipped, string profile, bool pull)
+    /// <summary>
+    /// Every skill held by the target already, or a link: <c>(🧩 nothing to copy: "work" has these 2 skills already: notes, todo)</c>, the links
+    /// after (<see cref="ProfileSkillsLinksTail"/>), or only <c>(🧩 nothing to copy: 1 skill folder is a link, never followed: notes)</c>.
+    /// </summary>
+    public static string ProfileSkillsNothingNewNotice(IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null)
     {
         ArgumentNullException.ThrowIfNull(skipped);
+        links ??= [];
+        if (skipped.Count == 0)
+        {
+            return $"({NoticeGlyphs.Skill}nothing to copy: {Counted(links.Count, "skill folder is a link", "skill folders are links")}, never followed: {ProfileSectionNames(links)})";
+        }
+
         string target = pull ? "this profile" : $"\"{profile}\"";
-        return $"({NoticeGlyphs.Skill}nothing to copy: {target} has {(skipped.Count == 1 ? "this skill" : $"these {SkillCount(skipped.Count)}")} already: {ProfileSectionNames(skipped)})";
+        return $"({NoticeGlyphs.Skill}nothing to copy: {target} has {(skipped.Count == 1 ? "this skill" : $"these {SkillCount(skipped.Count)}")} already: {ProfileSectionNames(skipped)}{ProfileSkillsLinksTail(links)})";
     }
+
+    /// <summary>
+    /// The skill folders skipped as links (the Mac pass of 2026-10-25: they were counted "there already"): <c>; 1 skipped as a link: notes</c>,
+    /// or "" with none.
+    /// </summary>
+    public static string ProfileSkillsLinksTail(IReadOnlyList<string> links) =>
+        links.Count == 0 ? "" : $"; {links.Count.ToString(CultureInfo.InvariantCulture)} skipped as {(links.Count == 1 ? "a link" : "links")}: {ProfileSectionNames(links)}";
 
     /// <summary>
     /// The question before a <c>skills</c> copy: <c>🧩 Copy 2 skills (notes, todo) into "work"? Each starts there with no history.</c>
@@ -485,13 +505,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>A <c>skills</c> copy done: <c>(🧩 2 skills copied into "work"; 1 skipped, there already: notes)</c>.</summary>
-    public static string ProfileSkillsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull)
+    public static string ProfileSkillsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null)
     {
         ArgumentNullException.ThrowIfNull(copied);
         ArgumentNullException.ThrowIfNull(skipped);
         string done = $"{SkillCount(copied.Count)} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")}";
         string tail = skipped.Count == 0 ? "" : $"; {skipped.Count.ToString(CultureInfo.InvariantCulture)} skipped, there already: {ProfileSectionNames(skipped)}";
-        return $"({NoticeGlyphs.Skill}{done}{tail})";
+        return $"({NoticeGlyphs.Skill}{done}{tail}{ProfileSkillsLinksTail(links ?? [])})";
     }
 
     /// <summary>A <c>skills</c> copy stopped (Esc, the kill switch): the ones made before it stay.</summary>

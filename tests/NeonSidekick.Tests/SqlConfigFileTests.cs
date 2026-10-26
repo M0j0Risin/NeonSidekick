@@ -238,7 +238,9 @@ public sealed class SqlConfigFileTests : IDisposable
         string after = File.ReadAllText(path);
         Assert.DoesNotContain("hunter2", after);
         Assert.Contains("},   // trailing note", after);
-        Assert.Contains("\"password\": \"left alone\"", after);
+        // A credman entry's leftover password is encrypted too, as on Windows (the database review's N2; this line pinned "left alone"
+        // until the Mac pass of 2026-10-25).
+        Assert.DoesNotContain("left alone", after);
         int start = after.IndexOf("\"password\": \"keychain:", StringComparison.Ordinal);
         Assert.True(start > 0);
         Assert.Equal(text[..text.IndexOf("\"password\"", StringComparison.Ordinal)], after[..start]);

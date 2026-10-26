@@ -542,6 +542,29 @@ public sealed class DuckDbToolsTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(root, "not-a-pid")));
         Assert.Equal(0, DuckDbAccess.Sweep(Path.Combine(_dir, "no-such-folder")));
     }
+
+    /// <summary>
+    /// The Mac pass (2026-10-25): DuckDB makes only the last folder of <c>temp_directory</c>, so the spill folder's parents are made before a
+    /// locked connection opens; a file in the way is left to DuckDB's own error, never thrown.
+    /// </summary>
+    [Fact]
+    public async Task TheSpillFoldersParents_AreMadeBeforeALockedOpen_AndAFileInTheWayIsNoThrow()
+    {
+        string root = Path.Combine(_dir, "temp", "NeonSidekick", "duckdb");
+        DuckDbAccess.EnsureSpillRoot(root);
+        Assert.True(Directory.Exists(root));
+        DuckDbAccess.EnsureSpillRoot(root);
+
+        string blocked = Path.Combine(_dir, "file");
+        File.WriteAllText(blocked, "");
+        DuckDbAccess.EnsureSpillRoot(Path.Combine(blocked, "duckdb"));
+
+        var access = new DuckDbAccess(() => DuckDbCatalog.Empty, () => new WorkingDirectory(() => _dir, TimeProvider.System));
+        var run = await access.RunAsync(DuckDbTarget.MemoryPath, ["SELECT 1"], [], 10, 5, CancellationToken.None);
+        Assert.Equal(SqlOutcome.Ok, run.Outcome);
+        Assert.True(Directory.Exists(DuckDbAccess.SpillRoot));
+        Assert.Equal(DuckDbAccess.SpillRoot, Path.GetDirectoryName(DuckDbAccess.SpillFolder));
+    }
 }
 
 /// <summary><c>--duckdb-check</c> over a temp file (2026-10-25): every line passes on a real database, and a missing one fails at the open.</summary>

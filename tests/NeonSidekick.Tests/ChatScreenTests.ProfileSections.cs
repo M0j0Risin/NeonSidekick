@@ -356,6 +356,33 @@ public sealed partial class ChatScreenTests
         Assert.True(File.Exists(Path.Combine(SkillsHere, odd, SkillCatalog.FileName)));
     }
 
+    /// <summary>
+    /// A skill folder that is a link is skipped as a link, never "there already" (the Mac pass of 2026-10-25: a push named the linked folder
+    /// among the target's own); alone, it is said so with nothing asked.
+    /// </summary>
+    [UnixFact]
+    public async Task ProfilePushSkills_ALinkedFolder_IsSkippedAsALink()
+    {
+        WorkProfile();
+        WriteSkill(SkillsHere, "notes", "notes");
+        string outside = WriteSkill(Path.Combine(_dir, "outside"), "linked", "linked");
+        Directory.CreateSymbolicLink(Path.Combine(SkillsHere, "linked"), outside);
+        string theirs = SkillsMenu.ProfileSkillsRoot(_dir, "work");
+        WriteSkill(theirs, "todo", "todo");
+        WriteSkill(SkillsHere, "todo", "todo");
+        PushLine("/profile push skills work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileSkillsCopiedNotice(["notes"], ["todo"], "work", pull: false, ["linked"]), output);
+        Assert.Contains("1 skipped, there already: todo; 1 skipped as a link: linked", output);
+        Assert.False(Directory.Exists(Path.Combine(theirs, "linked")));
+        Assert.Equal($"({NoticeGlyphs.Skill}nothing to copy: 1 skill folder is a link, never followed: linked)",
+            ChatScreen.ProfileSkillsNothingNewNotice([], "work", pull: false, ["linked"]));
+    }
+
     /// <summary>None of its own: said, nothing asked; everything there already: said too.</summary>
     [Fact]
     public async Task ProfilePushSkills_NothingToCopy_SaysSo()

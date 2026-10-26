@@ -65,6 +65,7 @@ public static partial class InstallLog
         ArgumentNullException.ThrowIfNull(stream);
         long position = Math.Min(before ?? long.MaxValue, stream.Length);
         byte[] carry = [];
+        bool dropping = false;   // inside a line past MaxLineBytes: its head, still to come, goes too
         var pending = new Pending();   // continuation lines met so far, the lowest first
         while (position > 0)
         {
@@ -83,7 +84,11 @@ public static partial class InstallLog
                     continue;
                 }
 
-                if (Line(combined.AsSpan(i + 1, end - i - 1), position + i + 1, pending) is { } entry)
+                if (dropping)
+                {
+                    dropping = false;   // the dropped line's head (the Mac pass of 2026-10-25: it was listed as a cut entry of its own)
+                }
+                else if (Line(combined.AsSpan(i + 1, end - i - 1), position + i + 1, pending) is { } entry)
                 {
                     yield return entry;
                 }
@@ -95,12 +100,14 @@ public static partial class InstallLog
             if (carry.Length > MaxLineBytes)
             {
                 // A line past MaxLineBytes is dropped whole (2026-10-23, the admin review's X13): its tail was emitted, a phantom entry when it
-                // began like a log line, and the entry above lost its continuation lines; those met so far stay with it.
+                // began like a log line, and the entry above lost its continuation lines; those met so far stay with it. Its head, read in a
+                // later chunk, goes too (the Mac pass of 2026-10-25: a long line that began with a time was listed cut, from its head).
                 carry = [];
+                dropping = true;
             }
         }
 
-        if (carry.Length > 0 && Line(carry, 0, pending) is { } first)
+        if (!dropping && carry.Length > 0 && Line(carry, 0, pending) is { } first)
         {
             yield return first;
         }

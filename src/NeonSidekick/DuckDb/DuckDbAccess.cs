@@ -601,6 +601,7 @@ public sealed class DuckDbAccess
             builder["memory_limit"] = MemoryCap;
             builder["max_temp_directory_size"] = MaxSpill;
             builder["temp_directory"] = SpillFolder;
+            EnsureSpillRoot();
         }
 
         return builder.ConnectionString;
@@ -764,8 +765,27 @@ public sealed class DuckDbAccess
     /// <summary>The folder every run's spill folder sits in: <c>&lt;temp&gt;/NeonSidekick/duckdb</c>.</summary>
     public static string SpillRoot { get; } = Path.Combine(Path.GetTempPath(), "NeonSidekick", "duckdb");
 
-    /// <summary>This process's spill folder (DuckDB makes it at the first spill).</summary>
+    /// <summary>This process's spill folder (DuckDB makes it at the first spill, <see cref="EnsureSpillRoot"/> the folder it sits in).</summary>
     public static string SpillFolder { get; } = Path.Combine(SpillRoot, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// Makes <paramref name="root"/> (<see cref="SpillRoot"/> by default) before a locked connection opens (2026-10-25, the Mac pass): DuckDB makes
+    /// only the last folder of <c>temp_directory</c>, so while <c>&lt;temp&gt;/NeonSidekick/duckdb</c> wasn't there every query that spilled failed
+    /// with "IO Error: Failed to create directory …/duckdb/&lt;pid&gt;: No such file or directory" (no test or smoke query spilled). Never throws: a
+    /// folder that can't be made leaves DuckDB's own error to the spill.
+    /// </summary>
+    internal static void EnsureSpillRoot(string? root = null)
+    {
+        root ??= SpillRoot;
+        try
+        {
+            Directory.CreateDirectory(root);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Debug(DuckDbConfigFile.Category, DuckDbText.SweepFailedLogLine(root, LogText.Excerpt(ex.Message)));
+        }
+    }
 
     /// <summary>
     /// The spill folders of processes that are gone, deleted (at the app's start): never this process's nor one whose process still runs.

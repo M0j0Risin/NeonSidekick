@@ -237,11 +237,12 @@ public sealed class DuckDbExecuteTests : IDisposable
     public async Task AStoredViewReachingOut_IsRefusedByTheEngine_WhenRead()
     {
         string outside = Path.Combine(_dir, "outside.csv");
-        File.WriteAllText(outside, "secret\n42\n");
+        // A value no temp path holds (2026-10-25, the Mac pass: "42" was in this Mac's TMPDIR, /var/folders/jm/cr7tmbwd2gn42…, which the refusal quotes).
+        File.WriteAllText(outside, "secret\nleaked-cell\n");
         DuckDbToolsTests.Make(Path.Combine(_work, "views.duckdb"), "CREATE VIEW leak AS SELECT * FROM read_csv('" + outside.Replace("'", "''", StringComparison.Ordinal) + "');");
         string answer = await new DuckDbQueryTool(Access(), () => _settings).RunAsync("SELECT * FROM leak", "views.duckdb", [], null, CancellationToken.None);
         Assert.StartsWith("Error: ", answer);
-        Assert.DoesNotContain("42", answer);
+        Assert.DoesNotContain("leaked-cell", answer);
     }
 
     [Fact]
