@@ -377,6 +377,7 @@ $info.RedirectStandardError = $true
 $info.UseShellExecute = $false
 $info.StandardOutputEncoding = [System.Text.Encoding]::UTF8
 
+$smokeStarted = Get-Date
 $proc = [System.Diagnostics.Process]::Start($info)
 $smokeOut = $proc.StandardOutput.ReadToEnd()
 $smokeErr = $proc.StandardError.ReadToEnd()
@@ -414,6 +415,18 @@ foreach ($check in $checkLines) {
 }
 if ($proc.ExitCode -ne 0) {
     if ($smokeErr) { Write-Host $smokeErr -ForegroundColor Red }
+    # A failure with no check lines (2026-10-26, the first v0.5.2 release run: exit 1 and nothing shown) is a run that ended before
+    # its checks, a crash whose notice is on stdout and its stack in crash.log: both are shown, the crash.log only when this run wrote it.
+    if ($checkLines.Count -eq 0) {
+        Write-Host "  The smoke run printed no check lines; its stdout:" -ForegroundColor Red
+        foreach ($line in $smokeOut -split "`r?`n") { if ($line.Trim().Length -gt 0) { Write-Host "    $line" } }
+        $smokeHome = if ($env:NEONSIDEKICK_HOME) { $env:NEONSIDEKICK_HOME } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) ".neonsidekick" }
+        $crashLog = Join-Path $smokeHome "crash.log"
+        if ((Test-Path $crashLog) -and (Get-Item $crashLog).LastWriteTime -ge $smokeStarted) {
+            Write-Host "  ${crashLog}:" -ForegroundColor Red
+            Get-Content $crashLog | ForEach-Object { Write-Host "    $_" }
+        }
+    }
     Fail "Smoke FAILED (exit $($proc.ExitCode))."
 }
 
