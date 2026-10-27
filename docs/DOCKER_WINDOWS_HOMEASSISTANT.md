@@ -114,7 +114,7 @@ docker compose logs -f ring-mqtt
 
 Open `http://localhost:55123` in Windows, sign in with your Ring account and enter the two-factor code. The log then shows "MQTT connection established" and a "New device" line for each Ring device.
 
-The token is saved in `ring-mqtt/ring-state.json` and gives full access to your Ring account: keep that file out of backups and shares. Once it's saved, you can delete the `55123` port line.
+The token is saved in `ring-mqtt/ring-state.json` and gives full access to your Ring account: keep that file out of backups and shares. Once it's saved, comment out ring-mqtt's `ports:` line and the `55123` line under it, then run `docker compose up -d ring-mqtt`.
 
 Each camera arrives in Home Assistant with a snapshot camera, `camera.<name>_snapshot`, beside its motion, ding and light entities. For live video, see ring-mqtt's [Video Streaming](https://github.com/tsightler/ring-mqtt/wiki/Video-Streaming) guide.
 
@@ -137,5 +137,6 @@ docker exec mosquitto mosquitto_sub -u mqtt -P '<password>' -t 'ring/+/camera/+/
 
 * **`denied` pulling `ghcr.io/tsightler/ring-mqtt`:** that copy refuses anonymous pulls; use `tsightler/ring-mqtt` from Docker Hub, as above.
 * **ring-mqtt logs "Not authorized":** the password in `mqtt_url` doesn't match the MQTT account, or the login isn't inside the URL.
+* **ring-mqtt logs "No refresh token was found":** `ring-state.json`'s token is gone. Uncomment the two port lines, run `docker compose up -d ring-mqtt` and sign in at `http://localhost:55123`; then comment them out and run it again.
 * **A camera's snapshots time out in ring-mqtt's log:** check that the camera is online in the Ring app.
 * **No Ring devices in Home Assistant:** check that the MQTT integration is added; ring-mqtt sends its devices when Home Assistant connects.
