@@ -42,7 +42,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
   - [Headless and scripted runs](docs/HEADLESS.md)
   - [Command-line options](docs/COMMANDLINE.md)
   - [Environment variables](docs/ENVIRONMENT.md)
-  - Setup guides: [SearXNG](docs/DOCKER_WINDOWS_SEARXNG.md), [vLLM](docs/DOCKER_WINDOWS_VLLM.md) and [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) in Docker on Windows
+  - Setup guides: [SearXNG](docs/DOCKER_WINDOWS_SEARXNG.md), [vLLM](docs/DOCKER_WINDOWS_VLLM.md), [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) and [Home Assistant with MQTT](docs/DOCKER_WINDOWS_HOMEASSISTANT.md) in Docker on Windows
 - For developers:
   - [Building from source](docs/BUILD.md)
   - [Components & libraries](docs/COMPONENTS.md)
