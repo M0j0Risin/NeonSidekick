@@ -253,7 +253,7 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 
 ## About
 
-**Inspiration:** I started out using Claude Code, Hermes Agent and Cline, and kept wishing one app had the parts I liked from each, running on my own hardware. Neon Sidekick is that app.
+**Inspiration:** I started out using Claude Code, Hermes Agent and Cline, and kept wishing one app had the parts I liked from each, with more utilitarian tools, running on my own hardware. Neon Sidekick is that app.
 
 **Why "Neon":** early on I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration. I needed a short, punchy wake word, and "Neon" fit the look. The name stuck.
 
