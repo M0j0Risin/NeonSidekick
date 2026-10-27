@@ -488,7 +488,7 @@ Each group's tools and what they do are in [Tools](TOOLS.md); this section cover
 
 ### Offered
 
-Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. In a new profile, `gitlib_delete`, `zip`, `unzip`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
+Every tool, grouped, with the description the model reads. Enter or Space switches one; a group whose switch is off is dim. In a new profile, `gitlib_delete`, `unc_delete`, `docker_remove`, `docker_prune`, `ha_todo` and `service_start_type` start off.
 
 ### Core
 

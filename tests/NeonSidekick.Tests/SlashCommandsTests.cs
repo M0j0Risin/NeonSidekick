@@ -572,11 +572,12 @@ public class SlashCommandsTests
         Assert.Contains(Row("/settings, //", Summary("/settings"), "/settings", "/settings <words>", "/settings changed"), SlashCommands.HelpText);
         Assert.Contains(
             Row("/profile", Summary("/profile"), "/profile [<name>]", "/profile add|delete <name>", "/profile rename <name> <new-name>", "/profile reset [<name>] [--all]", "/profile push|pull <name>",
-                "/profile push|pull keys <name>", "/profile push|pull servers <name>", "/profile push|pull allowed <name> [overwrite]",
+                "/profile push|pull keys <name>", "/profile push|pull servers <name>", "/profile push|pull homeassistant <name>", "/profile push|pull toolbar <name>",
+                "/profile push|pull perfbar <name>", "/profile push|pull statusbar <name>", "/profile push|pull barorder <name>", "/profile push|pull allowed <name> [overwrite]",
                 "/profile push|pull history <name> [overwrite]", "/profile push|pull memory <name> [overwrite]", "/profile push|pull prompts <name> [overwrite]", "/profile push|pull mcp <name> [overwrite]", "/profile push|pull links <name> [overwrite]",
                 "/profile push|pull videos <name> [overwrite]", "/profile push|pull monitors <name> [overwrite]", "/profile push|pull skills <name>", "/profile push|pull policestrings <name> [overwrite]",
                 "/profile push|pull persona <name> [overwrite]", "/profile push|pull operata <name> [overwrite]", "/profile push|pull vocalia <name> [overwrite]", "/profile push|pull avatar user|model <name>", "/profile edit|reload"),
-            SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28, their sections 2026-10-09, the prompt files 2026-10-10, the avatars 2026-10-12, memory and prompts 2026-10-13, mcp, links, videos, monitors and skills 2026-10-25; one form a line since 2026-10-05
+            SlashCommands.HelpText);   // edit and reload 2026-09-21, push and pull 2026-09-28, their sections 2026-10-09, the prompt files 2026-10-10, the avatars 2026-10-12, memory and prompts 2026-10-13, mcp, links, videos, monitors and skills 2026-10-25, the home and the bars 2026-10-26; one form a line since 2026-10-05
         Assert.Contains(Row("/clear", Summary("/clear")), SlashCommands.HelpText);   // a bare command: no forms column
         Assert.Contains(Row("/timer", Summary("/timer"), "/timer [<duration> [<name>]]", "/timer stopwatch [<name>]", "/timer stop <name>|all"), SlashCommands.HelpText);
         Assert.All(SlashCommands.HelpEntries, e => Assert.Contains(Row(e), SlashCommands.HelpText));

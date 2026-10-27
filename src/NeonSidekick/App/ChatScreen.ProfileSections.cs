@@ -14,8 +14,8 @@ namespace NeonSidekick.App;
 // ── /profile push|pull mcp, links, videos, skills (2026-10-25, the user's ask) ─────────────────────────────────────
 // The profile's other files and lists, each a section with the memory section's shape: the source read, nothing to copy said and
 // nothing asked, the question, then the target written. A push reads the loaded profile's and writes the other's; a pull the other way.
-// The monitors section is a profile.json one (PlanSectionCopy). Names read from the other profile's files are shown through
-// NameScrub.Display, and a question lists only a few of them. Every line below is pinned.
+// The monitors section is a profile.json one (PlanSectionCopy), as are the home and the bars (2026-10-26, below). Names read from the
+// other profile's files are shown through NameScrub.Display, and a question lists only a few of them. Every line below is pinned.
 
 internal sealed partial class ChatScreen
 {
@@ -349,7 +349,147 @@ internal sealed partial class ChatScreen
         }
     }
 
+    // ── /profile push|pull homeassistant, toolbar, perfbar, statusbar, barorder (2026-10-26, the user's ask) ──
+    // profile.json sections, mirrored as servers is (PlanSectionCopy): the target ends up as the source, a default here resetting the
+    // target's. The saved values alone, as a bare push carries them; a pull goes through Update, and every bar reads its settings on
+    // each draw and tick (the home bar reconnects by itself when its URL or key change; the ha_ tools read them each turn).
+
+    /// <summary>
+    /// What each of the five sections carries: each <see cref="AppSettingsData"/> property by name (<c>nameof</c>, as
+    /// <see cref="Profiles.ResetKeptSettings"/> keys them: most have no settings row) and the copy of its stored value, lists and maps
+    /// copied deep and null staying null, as <see cref="AppSettings.Copy"/> does. <c>homeassistant</c> carries the <c>Home Assistant API
+    /// key</c> too, as stored (a home bar without it shows nothing; it stays in <c>keys</c>): a <c>dpapi:</c> value reads the same in any
+    /// profile of this Windows user, a Mac's <c>keychain:</c> one likewise (one app key, nothing per profile), <see cref="CopyKeys"/>'
+    /// reasoning. Not <c>Web UI home controls</c>, not the ha_ tools' Offered switches (the user's call). Each prefix
+    /// (<c>HomeAssistant</c>/<c>HomeBar</c>, <c>Toolbar</c>, <c>PerformanceBar</c>, <c>StatusBar</c> and <c>HintsBar</c>, <c>BarOrder</c>)
+    /// names exactly these properties, which a test holds, so a new one can't be missed.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>> ProfileSettingGroups =
+        new Dictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>>
+        {
+            [ProfileSection.HomeAssistant] =
+            [
+                (nameof(AppSettingsData.HomeAssistantTools), (from, to) => to.HomeAssistantTools = from.HomeAssistantTools),
+                (nameof(AppSettingsData.HomeAssistantUrl), (from, to) => to.HomeAssistantUrl = from.HomeAssistantUrl),
+                (nameof(AppSettingsData.HomeAssistantToken), (from, to) => to.HomeAssistantToken = from.HomeAssistantToken),
+                (nameof(AppSettingsData.HomeAssistantActionPolicy), (from, to) => to.HomeAssistantActionPolicy = from.HomeAssistantActionPolicy),
+                (nameof(AppSettingsData.HomeAssistantSafeServices), (from, to) => to.HomeAssistantSafeServices = CopyList(from.HomeAssistantSafeServices)),
+                (nameof(AppSettingsData.HomeAssistantAssistAgent), (from, to) => to.HomeAssistantAssistAgent = from.HomeAssistantAssistAgent),
+                (nameof(AppSettingsData.HomeAssistantTimeoutSeconds), (from, to) => to.HomeAssistantTimeoutSeconds = from.HomeAssistantTimeoutSeconds),
+                (nameof(AppSettingsData.HomeBarItems), (from, to) => to.HomeBarItems = CopyList(from.HomeBarItems)),
+                (nameof(AppSettingsData.HomeBarLastItems), (from, to) => to.HomeBarLastItems = CopyList(from.HomeBarLastItems)),
+                (nameof(AppSettingsData.HomeBarLeft), (from, to) => to.HomeBarLeft = CopyList(from.HomeBarLeft)),
+                (nameof(AppSettingsData.HomeBarRight), (from, to) => to.HomeBarRight = CopyList(from.HomeBarRight)),
+                (nameof(AppSettingsData.HomeBarAliases), (from, to) => to.HomeBarAliases = CopyMap(from.HomeBarAliases)),
+                (nameof(AppSettingsData.HomeBarGlyphs), (from, to) => to.HomeBarGlyphs = CopyMap(from.HomeBarGlyphs)),
+            ],
+            [ProfileSection.Toolbar] =
+            [
+                (nameof(AppSettingsData.ToolbarItems), (from, to) => to.ToolbarItems = CopyList(from.ToolbarItems)),
+                (nameof(AppSettingsData.ToolbarLastItems), (from, to) => to.ToolbarLastItems = CopyList(from.ToolbarLastItems)),
+                (nameof(AppSettingsData.ToolbarOrder), (from, to) => to.ToolbarOrder = CopyList(from.ToolbarOrder)),
+                (nameof(AppSettingsData.ToolbarRight), (from, to) => to.ToolbarRight = CopyList(from.ToolbarRight)),
+            ],
+            [ProfileSection.PerfBar] =
+            [
+                (nameof(AppSettingsData.PerformanceBarItems), (from, to) => to.PerformanceBarItems = CopyList(from.PerformanceBarItems)),
+                (nameof(AppSettingsData.PerformanceBarLastItems), (from, to) => to.PerformanceBarLastItems = CopyList(from.PerformanceBarLastItems)),
+                (nameof(AppSettingsData.PerformanceBarOrder), (from, to) => to.PerformanceBarOrder = CopyList(from.PerformanceBarOrder)),
+                (nameof(AppSettingsData.PerformanceBarLeft), (from, to) => to.PerformanceBarLeft = CopyList(from.PerformanceBarLeft)),
+                (nameof(AppSettingsData.PerformanceBarRight), (from, to) => to.PerformanceBarRight = CopyList(from.PerformanceBarRight)),
+                (nameof(AppSettingsData.PerformanceBarLook), (from, to) => to.PerformanceBarLook = from.PerformanceBarLook),
+            ],
+            [ProfileSection.StatusBar] =
+            [
+                (nameof(AppSettingsData.StatusBarItems), (from, to) => to.StatusBarItems = CopyList(from.StatusBarItems)),
+                (nameof(AppSettingsData.StatusBarOrder), (from, to) => to.StatusBarOrder = CopyList(from.StatusBarOrder)),
+                (nameof(AppSettingsData.StatusBarRight), (from, to) => to.StatusBarRight = CopyList(from.StatusBarRight)),
+                (nameof(AppSettingsData.HintsBar), (from, to) => to.HintsBar = from.HintsBar),
+            ],
+            [ProfileSection.BarOrder] =
+            [
+                (nameof(AppSettingsData.BarOrder), (from, to) => to.BarOrder = CopyList(from.BarOrder)),
+            ],
+        };
+
+    /// <summary>Whether a section is one of <see cref="ProfileSettingGroups"/>' five.</summary>
+    public static bool IsSettingGroupSection(ProfileSection section) => ProfileSettingGroups.ContainsKey(section);
+
+    private static List<string>? CopyList(List<string>? list) => list is null ? null : [.. list];
+
+    private static Dictionary<string, string>? CopyMap(Dictionary<string, string>? map) =>
+        map is null ? null : new Dictionary<string, string>(map, StringComparer.Ordinal);
+
+    // The home bar's chips, its dividers left out, for the done line.
+    private static int HomeBarItemCount(AppSettingsData data) => (data.HomeBarItems ?? []).Count(item => !HomeBarItems.IsDivider(item));
+
     // ── The lines ─────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// What a bar section's copy replaces, its verb included (2026-10-26): <c>toolbar items, order and sides are replaced</c>, or the
+    /// performance bar's, the Status bar's or the bar order's. Pinned through <see cref="ProfileBarPrompt"/>.
+    /// </summary>
+    private static string ProfileBarReplaced(ProfileSection section) => section switch
+    {
+        ProfileSection.Toolbar => "toolbar items, order and sides are replaced",
+        ProfileSection.PerfBar => "performance bar meters, order, sides and look are replaced",
+        ProfileSection.StatusBar => "Status bar sections, order, sides and Hints bar are replaced",
+        ProfileSection.BarOrder => "bar order is replaced",
+        _ => throw new ArgumentOutOfRangeException(nameof(section), section, "Not a bar section."),
+    };
+
+    /// <summary>
+    /// The question before a bar section's copy: <c>Copy this profile's toolbar setup into "work"? Its toolbar items, order and sides are
+    /// replaced.</c>, pulled <c>Copy "work"'s toolbar setup into this profile? This profile's toolbar items, order and sides are replaced.</c>
+    /// </summary>
+    public static string ProfileBarPrompt(ProfileSection section, string profile, bool pull)
+    {
+        string subject = ProfileSectionSubject(section);
+        return pull
+            ? $"Copy \"{profile}\"'s {subject} into this profile? This profile's {ProfileBarReplaced(section)}."
+            : $"Copy this profile's {subject} into \"{profile}\"? Its {ProfileBarReplaced(section)}.";
+    }
+
+    /// <summary>A bar section's copy done: <c>(copied the toolbar setup into "work")</c>, a pull <c>from "work"</c>.</summary>
+    public static string ProfileBarCopiedNotice(ProfileSection section, string profile, bool pull) =>
+        $"(copied the {ProfileSectionSubject(section)} {(pull ? "from" : "into")} \"{profile}\")";
+
+    /// <summary>
+    /// The question before a <c>homeassistant</c> copy, in the rows' own words: <c>Copy this profile's Home Assistant settings and home bar
+    /// into "work"? Its Home Assistant tools switch, URL, API key, … are replaced.</c>; pulled, the mirror. When the source has no URL or no
+    /// key, what the mirror does, as <see cref="ProfileKeysPrompt"/> says it: <c> "work"'s Home Assistant URL and API key are cleared: none
+    /// here.</c>, pulled <c> This profile's … cleared: none in "work".</c>, so a mirror that wipes is never a surprise.
+    /// </summary>
+    public static string ProfileHomeAssistantPrompt(string profile, bool urlSet, bool keySet, bool pull)
+    {
+        const string Replaced = "Home Assistant tools switch, URL, API key, action policy, safe services, Assist agent and timeout, and its home bar's items, sides, names and emoji are replaced.";
+        string question = pull
+            ? $"Copy \"{profile}\"'s Home Assistant settings and home bar into this profile? This profile's {Replaced}"
+            : $"Copy this profile's Home Assistant settings and home bar into \"{profile}\"? Its {Replaced}";
+        string? cleared = (urlSet, keySet) switch
+        {
+            (false, false) => "Home Assistant URL and API key are",
+            (false, true) => "Home Assistant URL is",
+            (true, false) => HomeAssistantKeyName + " is",
+            _ => null,
+        };
+        if (cleared is null)
+        {
+            return question;
+        }
+
+        return pull
+            ? $"{question} This profile's {cleared} cleared: none in \"{profile}\"."
+            : $"{question} \"{profile}\"'s {cleared} cleared: none here.";
+    }
+
+    /// <summary>
+    /// A <c>homeassistant</c> copy done: <c>(copied the Home Assistant settings into "work": Home Assistant URL http://…, 6 home bar items)</c>,
+    /// the URL as the settings pane shows it (<c>(not set)</c> when empty), the chips counted without their dividers; never the key. A pull
+    /// says from.
+    /// </summary>
+    public static string ProfileHomeAssistantCopiedNotice(string profile, string url, int items, bool pull) =>
+        $"(copied the Home Assistant settings {(pull ? "from" : "into")} \"{profile}\": Home Assistant URL {url}, {Counted(items, "home bar item", "home bar items")})";
 
     /// <summary>
     /// Names as a question or notice lists them: each through <see cref="NameScrub.Display"/>, the first <see cref="ProfileSectionNamesShown"/>

@@ -1675,9 +1675,10 @@ public sealed class AppSettingsData
     /// too); a name no tool carries is inert and kept. Read at each turn, no reconnect, no
     /// conversation clear. Not a settings row — the one list in the file. No variable.
     /// <c>gitlib_delete</c> / <c>gitlib_discard</c> (later on 2026-09-20, the user's call: the two git tools that lose
-    /// work), and <c>unzip</c> / <c>zip</c> since 2026-09-21 (the same call again: a bulk extract and a bulk
-    /// pack are opt-in too); a saved list stands — a profile that holds <c>[]</c> or <c>["delete"]</c> keeps the
-    /// rest on, so a profile from before keeps zip and unzip. <c>delete</c> was here from the start (2026-09-20,
+    /// work); a saved list stands — a profile that holds <c>[]</c> or <c>["delete"]</c> keeps the rest on.
+    /// <c>unzip</c> / <c>zip</c> were here from 2026-09-21 (the same call again: a bulk extract and a bulk pack
+    /// opt-in too) until 2026-10-26 (the user's call: ordinary file tools, on with <c>File tools</c>); a profile
+    /// saved with them off keeps them off until they are flipped on the Offered tab. <c>delete</c> was here from the start (2026-09-20,
     /// the user's call: opt-in, flipped on <c>/tools</c>' Offered tab) until later on 2026-09-21,
     /// when the user asked for it on out of the box; a profile saved with it off keeps it off. <c>gitlib_discard</c> left
     /// the list on 2026-09-23 (the user's call: on out of the box, as <c>delete</c> went before it); a profile saved
@@ -1689,7 +1690,7 @@ public sealed class AppSettingsData
     /// <c>ha_todo</c> on. <c>service_start_type</c> joined on 2026-10-15 (the admin-tools plan: a disabled service stays down across reboots;
     /// opt-in even under <c>Service writes</c>, each call still asking); a profile saved before keeps its list.
     /// </summary>
-    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UnzipTool.ToolName, Llm.Tools.ZipTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName, Llm.Tools.HaTodoTool.ToolName, Llm.Tools.ServiceStartTypeTool.ToolName];
+    public List<string> ToolsDisabled { get; set; } = [Llm.Tools.GitDeleteTool.ToolName, Llm.Tools.UncDeleteTool.ToolName, Llm.Tools.DockerRemoveTool.ToolName, Llm.Tools.DockerPruneTool.ToolName, Llm.Tools.HaTodoTool.ToolName, Llm.Tools.ServiceStartTypeTool.ToolName];
 
     /// <summary>
     /// Whether <c>$</c> and part of a name on the chat line lists the tools the next turn offers

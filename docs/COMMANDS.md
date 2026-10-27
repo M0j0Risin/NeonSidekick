@@ -91,6 +91,8 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the five API keys; one the source lacks is cleared in the target, and one set only by a variable isn't copied. |
 | `/profile push\|pull servers <name>` | Copies the server settings (server, model, reasoning, sampling, the Embedded, Docker, Anthropic and OpenAI tabs but the keys), replacing the target's. |
+| `/profile push\|pull homeassistant <name>` | Copies the Home Assistant settings, API key included, and the home bar, replacing the target's. |
+| `/profile push\|pull toolbar <name>`, `/profile push\|pull perfbar <name>`, `/profile push\|pull statusbar <name>`, `/profile push\|pull barorder <name>` | Copies the toolbar's, the performance bar's or the Status bar's setup, or the bars' order, replacing the target's. |
 | `/profile push\|pull allowed <name> [overwrite]`, `/profile push\|pull policestrings <name> [overwrite]` | Copies *Shell allowed commands* or *Shell police forbidden strings*. |
 | `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history, the memories or the saved prompts; history is refused while the target has *Keep message history* off. |
 | `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive). |

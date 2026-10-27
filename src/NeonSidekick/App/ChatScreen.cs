@@ -159,6 +159,21 @@ public enum ProfileSection
 
     /// <summary><c>skills</c> (2026-10-25, the user's ask): every profile skill's folder copied; one the target holds (by folder or name) skipped. No overwrite.</summary>
     Skills,
+
+    /// <summary><c>homeassistant</c>: <c>ChatScreen.ProfileSettingGroups</c>, the Home Assistant settings (its API key included) and the home bar, mirrored (2026-10-26, the user's ask).</summary>
+    HomeAssistant,
+
+    /// <summary><c>toolbar</c>: <c>ChatScreen.ProfileSettingGroups</c>, the toolbar's items, order and sides, mirrored (2026-10-26, the user's ask).</summary>
+    Toolbar,
+
+    /// <summary><c>perfbar</c>: <c>ChatScreen.ProfileSettingGroups</c>, the performance bar's meters, order, sides and look, mirrored (2026-10-26, the user's ask).</summary>
+    PerfBar,
+
+    /// <summary><c>statusbar</c>: <c>ChatScreen.ProfileSettingGroups</c>, the Status bar's sections, order and sides and the Hints bar, mirrored (2026-10-26, the user's pick).</summary>
+    StatusBar,
+
+    /// <summary><c>barorder</c>: <c>ChatScreen.ProfileSettingGroups</c>, <c>Toolbar order</c> (the bars' top-to-bottom order), mirrored (2026-10-26, the user's pick).</summary>
+    BarOrder,
 }
 
 /// <summary>
@@ -5107,6 +5122,11 @@ internal sealed partial class ChatScreen
         ProfileSection.Videos => "saved videos",
         ProfileSection.Monitors => "monitor input settings",
         ProfileSection.Skills => "skills",
+        ProfileSection.HomeAssistant => "Home Assistant settings",
+        ProfileSection.Toolbar => "toolbar setup",
+        ProfileSection.PerfBar => "performance bar setup",
+        ProfileSection.StatusBar => "Status bar setup",
+        ProfileSection.BarOrder => "bar order",
         _ when IsPromptFileSection(section) => PromptFileOf(section),
         _ => ProfileSettingsSubject,
     };
@@ -8737,7 +8757,8 @@ internal sealed partial class ChatScreen
     /// servers are mirrored. The lists come out as their editors save them — <see cref="CommandAllowList.Merge"/> (lower case, sorted, no
     /// doubles) and <see cref="ForbiddenStrings.Sorted"/> (normalised, no doubles ignoring case) — added to the target's unless
     /// <paramref name="overwrite"/>, what it already holds counted as already there. The monitor settings (2026-10-25) go through
-    /// <see cref="Monitors.MonitorWords.Merge"/>, by monitor key.
+    /// <see cref="Monitors.MonitorWords.Merge"/>, by monitor key. The home and the bars (2026-10-26) are mirrored, each property of
+    /// <see cref="ProfileSettingGroups"/> copied: never nothing to copy, as a default here resets the target's.
     /// </summary>
     private static SectionCopy PlanSectionCopy(ProfileSection section, AppSettingsData from, AppSettingsData to, string profile, bool overwrite, bool pull)
     {
@@ -8853,6 +8874,23 @@ internal sealed partial class ChatScreen
                     (_, _) => ProfileMonitorsCopiedNotice(merge.Added, merge.Duplicates, merge.Kept, profile, overwrite, pull));
             }
 
+            case ProfileSection when IsSettingGroupSection(section):
+                return new(
+                    null,
+                    section == ProfileSection.HomeAssistant
+                        ? ProfileHomeAssistantPrompt(profile, !string.IsNullOrWhiteSpace(from.HomeAssistantUrl), !string.IsNullOrWhiteSpace(from.HomeAssistantToken), pull)
+                        : ProfileBarPrompt(section, profile, pull),
+                    target =>
+                    {
+                        foreach (var (_, copy) in ProfileSettingGroups[section])
+                        {
+                            copy(from, target);
+                        }
+                    },
+                    (data, directory) => section == ProfileSection.HomeAssistant
+                        ? ProfileHomeAssistantCopiedNotice(profile, SettingsMenu.FieldValue(SettingsField.HomeAssistantUrl, data, directory), HomeBarItemCount(data), pull)
+                        : ProfileBarCopiedNotice(section, profile, pull));
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(section), section, "Not a profile.json section.");
         }
@@ -8925,7 +8963,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A <c>profile.json</c> section (keys, servers, commands, policestrings, the avatars, monitors) pushed into <paramref name="other"/> or pulled from it. The
+    /// A <c>profile.json</c> section (keys, servers, commands, policestrings, the avatars, monitors, the home and the bars) pushed into <paramref name="other"/> or pulled from it. The
     /// other's file is read first (a corrupt one is an error and nothing is asked), the copy planned (<see cref="PlanSectionCopy"/>), the
     /// question asked, then a push writes the other's file back and a pull goes through <see cref="AppSettings.Update"/> and reconnects
     /// what changed (<see cref="ApplySettingsChangesAsync"/> over <see cref="ReloadChanges"/>, as <c>/profile reload</c> does).
@@ -10931,6 +10969,12 @@ internal sealed partial class ChatScreen
     [
         ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
         ("servers", ProfileSection.Servers, "the server settings: Common, Http, Embedded, Docker, Anthropic and OpenAI"),
+        // 2026-10-26 (the user's ask): the home and the bars, mirrored.
+        ("homeassistant", ProfileSection.HomeAssistant, "the Home Assistant settings, API key included, and the home bar"),
+        ("toolbar", ProfileSection.Toolbar, "the toolbar's items, order and sides"),
+        ("perfbar", ProfileSection.PerfBar, "the performance bar's meters, order, sides and look"),
+        ("statusbar", ProfileSection.StatusBar, "the Status bar's sections, order and sides, and the Hints bar"),
+        ("barorder", ProfileSection.BarOrder, "the order of the bars (Toolbar order)"),
         ("allowed", ProfileSection.Commands, "Shell allowed commands, added (or replaced with overwrite)"),
         ("history", ProfileSection.History, "the message history, added (or replaced with overwrite)"),
         ("memory", ProfileSection.Memory, "the memories, added (or replaced with overwrite)"),   // 2026-10-13, /memory copy's
@@ -10971,7 +11015,7 @@ internal sealed partial class ChatScreen
     /// Whether a section takes <see cref="OverwriteWord"/>: the lists, which are added to by default, and the prompt files (2026-10-10), whose
     /// copy refuses to replace one already there without it. Keys and servers are mirrored, so replacing is all they do. The merges of
     /// 2026-10-25 take it too: <c>mcp</c> (same-named servers replaced), <c>links</c>, <c>videos</c> and <c>monitors</c>; <c>skills</c> never
-    /// replaces a folder.
+    /// replaces a folder. The home and the bars (2026-10-26) are mirrored, as keys and servers are.
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
         section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings

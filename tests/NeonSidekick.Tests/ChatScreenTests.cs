@@ -4194,12 +4194,13 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen()
+    public async Task Turn_FreshProfile_DeleteGitDiscardAndZipOn_GitDeleteOff_AndSysPromptCountsSixteen()
     {
-        // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
-        // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
+        // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20) — zip and unzip no longer (on since 2026-10-26, the user's call: ordinary file tools), gitlib_discard
+        // no longer (2026-09-23, the user's call) and delete no longer (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause);
+        // the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName, ServiceStartTypeTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName, ServiceStartTypeTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4213,9 +4214,9 @@ public partial class ChatScreenTests : IDisposable
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.Contains(DeleteTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length + 3 - 3, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; zip, unzip and gitlib_delete gone
-        Assert.DoesNotContain(ZipTool.ToolName, offered);
-        Assert.DoesNotContain(UnzipTool.ToolName, offered);
+        Assert.Equal(StandingAndFileTools.Length + 3 - 1, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; gitlib_delete gone (zip and unzip too until 2026-10-26)
+        Assert.Contains(ZipTool.ToolName, offered);
+        Assert.Contains(UnzipTool.ToolName, offered);
         Assert.Contains(GitDiscardTool.ToolName, offered);
         Assert.DoesNotContain(GitDeleteTool.ToolName, offered);
         Assert.Contains(GitCommitTool.ToolName, offered);
@@ -4223,18 +4224,19 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; 13 with read_pdf, 2026-10-14; 14 with pdf_edit later that day
+        Assert.Matches(ToolsHeading("Files (16)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; 13 with read_pdf, 2026-10-14; 14 with pdf_edit later that day; 16 with zip and unzip on, 2026-10-26
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
-    /// <summary>The Unix twin of <see cref="Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="Turn_FreshProfile_DeleteGitDiscardAndZipOn_GitDeleteOff_AndSysPromptCountsSixteen"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
-    public async Task Turn_FreshProfile_DeleteAndGitDiscardOn_ZipAndGitDeleteOff_AndSysPromptCountsThirteen_Unix()
+    public async Task Turn_FreshProfile_DeleteGitDiscardAndZipOn_GitDeleteOff_AndSysPromptCountsSixteen_Unix()
     {
-        // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20), zip and unzip (2026-09-21) — gitlib_discard no longer (2026-09-23, the user's call) and delete no longer
-        // (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause); the fixture had opted every tool on.
+        // A fresh profile's ToolsDisabled: gitlib_delete (2026-09-20) — zip and unzip no longer (on since 2026-10-26, the user's call: ordinary file tools), gitlib_discard
+        // no longer (2026-09-23, the user's call) and delete no longer (later on 2026-09-21, the user's call: on out of the box, so the file rule keeps its delete clause);
+        // the fixture had opted every tool on.
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = [.. new AppSettingsData().ToolsDisabled]; });
-        Assert.Equal([GitDeleteTool.ToolName, UnzipTool.ToolName, ZipTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName, ServiceStartTypeTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
+        Assert.Equal([GitDeleteTool.ToolName, UncDeleteTool.ToolName, DockerRemoveTool.ToolName, DockerPruneTool.ToolName, HaTodoTool.ToolName, ServiceStartTypeTool.ToolName], _settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; docker_remove and docker_prune since 2026-10-02; unc_delete since 2026-09-30
         _chat.EnqueueText("Hello.");
         _console.Profile.Height = 90;
         _geometry = new ScreenGeometry(() => null);
@@ -4248,9 +4250,9 @@ public partial class ChatScreenTests : IDisposable
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.Contains(DeleteTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length + 3 - 3, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; zip, unzip and gitlib_delete gone
-        Assert.DoesNotContain(ZipTool.ToolName, offered);
-        Assert.DoesNotContain(UnzipTool.ToolName, offered);
+        Assert.Equal(StandingAndFileTools.Length + 3 - 1, offered.Length);   // skill_editor, session_manager and (the pane on) ask_user ride; gitlib_delete gone (zip and unzip too until 2026-10-26)
+        Assert.Contains(ZipTool.ToolName, offered);
+        Assert.Contains(UnzipTool.ToolName, offered);
         Assert.Contains(GitDiscardTool.ToolName, offered);
         Assert.DoesNotContain(GitDeleteTool.ToolName, offered);
         Assert.Contains(GitCommitTool.ToolName, offered);
@@ -4258,12 +4260,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (14)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass)
+        Assert.Matches(ToolsHeading("Files (16)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 16 with zip and unzip on, 2026-10-26
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
     [Fact]
-    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve()
+    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsFifteen()
     {
         // delete off by name on /tools (opt-out since later on 2026-09-21; the fresh-profile default from 2026-09-20 until then): the file rule
         // drops its delete clause (the DownloadRule shape), the group and every other file tool stand.
@@ -4281,20 +4283,20 @@ public partial class ChatScreenTests : IDisposable
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.DoesNotContain(DeleteTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length + 3 - 4, offered.Length);   // delete gone with the three (gitlib_discard on since 2026-09-23)
+        Assert.Equal(StandingAndFileTools.Length + 3 - 2, offered.Length);   // delete gone with gitlib_delete (gitlib_discard on since 2026-09-23, zip and unzip since 2026-10-26)
         string prompt = _chat.Requests[0][0].Text!;
         Assert.Contains(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (13)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; 12 with read_pdf, 2026-10-14; 13 with pdf_edit later that day
+        Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; 12 with read_pdf, 2026-10-14; 13 with pdf_edit later that day; 15 with zip and unzip on, 2026-10-26
         Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
 
-    /// <summary>The Unix twin of <see cref="Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsFifteen"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
-    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsTwelve_Unix()
+    public async Task Turn_DeleteSwitchedOff_TheRuleLosesItsClause_AndSysPromptCountsFifteen_Unix()
     {
         // delete off by name on /tools (opt-out since later on 2026-09-21; the fresh-profile default from 2026-09-20 until then): the file rule
         // drops its delete clause (the DownloadRule shape), the group and every other file tool stand.
@@ -4312,13 +4314,13 @@ public partial class ChatScreenTests : IDisposable
 
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.DoesNotContain(DeleteTool.ToolName, offered);
-        Assert.Equal(StandingAndFileTools.Length + 3 - 4, offered.Length);   // delete gone with the three (gitlib_discard on since 2026-09-23)
+        Assert.Equal(StandingAndFileTools.Length + 3 - 2, offered.Length);   // delete gone with gitlib_delete (gitlib_discard on since 2026-09-23, zip and unzip since 2026-10-26)
         string prompt = _chat.Requests[0][0].Text!;
         Assert.Contains(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (13)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass)
+        Assert.Matches(ToolsHeading("Files (15)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 15 with zip and unzip on, 2026-10-26
         Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
@@ -7255,6 +7257,13 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("push skills work", ProfileActionKind.Push, "work", ProfileSection.Skills, false)]
     [InlineData("pull skills work", ProfileActionKind.Pull, "work", ProfileSection.Skills, false)]
     [InlineData("push skills work overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // nothing is ever replaced
+    [InlineData("push toolbar work", ProfileActionKind.Push, "work", ProfileSection.Toolbar, false)]   // the home and the bars, 2026-10-26 (the user's ask)
+    [InlineData("pull PERFBAR work", ProfileActionKind.Pull, "work", ProfileSection.PerfBar, false)]
+    [InlineData("push statusbar work", ProfileActionKind.Push, "work", ProfileSection.StatusBar, false)]
+    [InlineData("pull barorder work", ProfileActionKind.Pull, "work", ProfileSection.BarOrder, false)]
+    [InlineData("push homeassistant work", ProfileActionKind.Push, "work", ProfileSection.HomeAssistant, false)]
+    [InlineData("pull toolbar work overwrite", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // mirrored: no overwrite
+    [InlineData("push homeassistant", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push mcp", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push avatar", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // a two-word section's first word alone, never a profile
     [InlineData("pull Avatar", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
@@ -9314,6 +9323,289 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
         Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3"));
         Assert.Equal("(copied the server settings from \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3", pull: true));
+    }
+
+    // ── /profile push|pull the home and the bars (2026-10-26) ───────────────
+
+    /// <summary>
+    /// The five sections' lists (2026-10-26, the user's ask): each names exactly the properties its prefixes name, so a new bar or Home
+    /// Assistant setting can't be missed; a source with every one off its default, copied into a fresh profile, leaves no difference in
+    /// any of them, the lists and maps copies of their own. The questions and the done lines pinned.
+    /// </summary>
+    [Fact]
+    public void ProfileSettingGroups_HoldEveryPropertyOfTheirPrefix_AndEachIsCopied()
+    {
+        var prefixes = new Dictionary<ProfileSection, string[]>
+        {
+            [ProfileSection.HomeAssistant] = ["HomeAssistant", "HomeBar"],
+            [ProfileSection.Toolbar] = ["Toolbar"],
+            [ProfileSection.PerfBar] = ["PerformanceBar"],
+            [ProfileSection.StatusBar] = ["StatusBar", "HintsBar"],
+            [ProfileSection.BarOrder] = ["BarOrder"],
+        };
+        Assert.Equal(prefixes.Keys.Order(), ChatScreen.ProfileSettingGroups.Keys.Order());
+        var properties = SettingsJsonContext.Default.AppSettingsData.Properties;
+        foreach (var (section, heads) in prefixes)
+        {
+            Assert.True(ChatScreen.IsSettingGroupSection(section));
+            Assert.False(ChatScreen.SectionTakesOverwrite(section));   // mirrored
+            var group = ChatScreen.ProfileSettingGroups[section];
+            Assert.Equal(
+                properties.Where(p => heads.Any(head => p.Name.StartsWith(head, StringComparison.Ordinal))).Select(p => p.Name).Order(StringComparer.Ordinal),
+                group.Select(g => g.Name).Order(StringComparer.Ordinal));
+
+            var names = group.Select(g => g.Name).ToHashSet(StringComparer.Ordinal);
+            var from = new AppSettingsData();
+            foreach (var p in properties.Where(p => names.Contains(p.Name)))
+            {
+                object? off = p.PropertyType switch
+                {
+                    var t when t == typeof(bool) => !(bool)p.Get!(from)!,
+                    var t when t == typeof(int) => (int)p.Get!(from)! + 7,
+                    var t when t == typeof(string) => "x-" + p.Name,
+                    var t when t == typeof(List<string>) => new List<string> { "x-" + p.Name },
+                    var t when t == typeof(Dictionary<string, string>) => new Dictionary<string, string>(StringComparer.Ordinal) { ["entity:light.x"] = "x-" + p.Name },
+                    _ => throw new InvalidOperationException(p.Name + " has a type this test doesn't set"),
+                };
+                p.Set!(from, off);
+            }
+
+            Assert.Equal(names.Order(StringComparer.Ordinal), SettingsDiff.Changes(new AppSettingsData(), from).Select(line => line.Split(':')[0]).Order(StringComparer.Ordinal));   // every one off its default
+            var to = new AppSettingsData();
+            foreach (var (_, copy) in group)
+            {
+                copy(from, to);
+            }
+
+            Assert.Empty(SettingsDiff.Changes(from, to));
+            foreach (var p in properties.Where(p => names.Contains(p.Name) && !p.PropertyType.IsValueType && p.PropertyType != typeof(string)))
+            {
+                Assert.NotSame(p.Get!(from), p.Get!(to));   // a list or map of its own
+            }
+
+            var nulls = new AppSettingsData { ToolbarItems = ["x"], StatusBarItems = ["x"], HomeBarAliases = new() { ["a"] = "b" }, BarOrder = ["x"], PerformanceBarItems = ["x"] };
+            foreach (var (_, copy) in group)
+            {
+                copy(new AppSettingsData(), nulls);
+            }
+
+            Assert.DoesNotContain(SettingsDiff.Changes(new AppSettingsData(), nulls), line => names.Contains(line.Split(':')[0]));   // null stays null
+        }
+
+        Assert.Equal("Copy this profile's toolbar setup into \"work\"? Its toolbar items, order and sides are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.Toolbar, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s toolbar setup into this profile? This profile's toolbar items, order and sides are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.Toolbar, "work", pull: true));
+        Assert.Equal("Copy this profile's performance bar setup into \"work\"? Its performance bar meters, order, sides and look are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.PerfBar, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s performance bar setup into this profile? This profile's performance bar meters, order, sides and look are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.PerfBar, "work", pull: true));
+        Assert.Equal("Copy this profile's Status bar setup into \"work\"? Its Status bar sections, order, sides and Hints bar are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.StatusBar, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s Status bar setup into this profile? This profile's Status bar sections, order, sides and Hints bar are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.StatusBar, "work", pull: true));
+        Assert.Equal("Copy this profile's bar order into \"work\"? Its bar order is replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.BarOrder, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s bar order into this profile? This profile's bar order is replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.BarOrder, "work", pull: true));
+        Assert.Equal("(copied the toolbar setup into \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.Toolbar, "work", pull: false));
+        Assert.Equal("(copied the performance bar setup from \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.PerfBar, "work", pull: true));
+        Assert.Equal("(copied the Status bar setup into \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.StatusBar, "work", pull: false));
+        Assert.Equal("(copied the bar order from \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.BarOrder, "work", pull: true));
+
+        const string Push = "Copy this profile's Home Assistant settings and home bar into \"work\"? Its Home Assistant tools switch, URL, API key, action policy, safe services, Assist agent and timeout, and its home bar's items, sides, names and emoji are replaced.";
+        const string Pull = "Copy \"work\"'s Home Assistant settings and home bar into this profile? This profile's Home Assistant tools switch, URL, API key, action policy, safe services, Assist agent and timeout, and its home bar's items, sides, names and emoji are replaced.";
+        Assert.Equal(Push, ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: false));
+        Assert.Equal(Pull, ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: true));
+        Assert.Equal(Push + " \"work\"'s Home Assistant URL and API key are cleared: none here.", ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: false, keySet: false, pull: false));
+        Assert.Equal(Push + " \"work\"'s Home Assistant URL is cleared: none here.", ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: false, keySet: true, pull: false));
+        Assert.Equal(Pull + " This profile's Home Assistant API key is cleared: none in \"work\".", ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: false, pull: true));
+        Assert.Equal("(copied the Home Assistant settings into \"work\": Home Assistant URL http://ha:8123, 6 home bar items)", ChatScreen.ProfileHomeAssistantCopiedNotice("work", "http://ha:8123", 6, pull: false));
+        Assert.Equal("(copied the Home Assistant settings from \"work\": Home Assistant URL (not set), 1 home bar item)", ChatScreen.ProfileHomeAssistantCopiedNotice("work", SettingsMenu.NoHomeAssistantUrlLabel, 1, pull: true));
+    }
+
+    /// <summary>A toolbar push writes the toolbar's four settings into the target; its other bars and settings stay.</summary>
+    [Fact]
+    public async Task ProfilePushToolbar_Yes_WritesTheToolbar_AndLeavesTheRestAlone()
+    {
+        _console.Profile.Width = 320;   // the question and its keys on one row
+        Profiles.Create(_dir, "work", new AppSettingsData { ToolbarItems = ["settings"], ToolbarRight = [], PerformanceBarItems = ["cpu"], BarOrder = ["home", "perf", "toolbar", "status", "hints"], Theme = "synthwave" });
+        _settings.Update(d => { d.ToolbarItems = ["tools", "path"]; d.ToolbarLastItems = ["tools"]; d.ToolbarOrder = ["path", "tools"]; d.ToolbarRight = ["path"]; d.PerformanceBarItems = ["ram"]; d.BarOrder = null; });
+        PushLine("/profile push toolbar work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileBarPrompt(ProfileSection.Toolbar, "work", pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileBarCopiedNotice(ProfileSection.Toolbar, "work", pull: false), output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal(["tools", "path"], work.ToolbarItems!);
+        Assert.Equal(["tools"], work.ToolbarLastItems!);
+        Assert.Equal(["path", "tools"], work.ToolbarOrder!);
+        Assert.Equal(["path"], work.ToolbarRight!);
+        Assert.Equal(["cpu"], work.PerformanceBarItems!);   // the other bars are their own sections
+        Assert.Equal(["home", "perf", "toolbar", "status", "hints"], work.BarOrder!);
+        Assert.Equal("synthwave", work.Theme);
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+    }
+
+    [Fact]
+    public async Task ProfilePushToolbar_No_Keeps_AndACorruptTargetIsLeftAlone()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { ToolbarItems = ["settings"] });
+        Profiles.Create(_dir, "broken", new AppSettingsData());
+        File.WriteAllText(Profiles.ProfileFile(_dir, "broken"), "{ not json");
+        _settings.Update(d => d.ToolbarItems = ["tools"]);
+        PushLine("/profile push toolbar work");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/profile push toolbar broken");   // read before the question: nothing asked
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.KeptNotice, output);
+        Assert.Contains("  ✗ " + ChatScreen.ProfileSectionFailedError(""), output);
+        Assert.Equal(["settings"], ReadProfile(Profiles.ProfileFile(_dir, "work")).ToolbarItems!);
+        Assert.Equal("{ not json", File.ReadAllText(Profiles.ProfileFile(_dir, "broken")));
+    }
+
+    /// <summary>Mirrored: a Status bar at its defaults here puts the target's back to them, the Hints bar too.</summary>
+    [Fact]
+    public async Task ProfilePushStatusBar_Mirrors_ADefaultHereResetsTheTargets()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { StatusBarItems = ["status"], StatusBarOrder = ["model", "status"], StatusBarRight = [], HintsBar = "always" });
+        _settings.Update(d => { d.StatusBarItems = null; d.StatusBarOrder = null; d.StatusBarRight = null; d.HintsBar = null; });
+        PushLine("/profile push statusbar work");
+        PickYes();
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal((null, null, null, null), (work.StatusBarItems, work.StatusBarOrder, work.StatusBarRight, work.HintsBar));
+    }
+
+    /// <summary>A perfbar pull applies live: the meters and the look come over, the rest of this profile and the conversation stay.</summary>
+    [Fact]
+    public async Task ProfilePullPerfBar_AppliesLive_AndKeepsTheConversation()
+    {
+        _console.Profile.Width = 320;
+        WorkProfile(more: w => { w.PerformanceBarItems = ["cpu", "net"]; w.PerformanceBarLook = "gauge"; w.PerformanceBarRight = ["net"]; w.ToolbarItems = ["settings"]; });
+        _settings.Update(d => { d.PerformanceBarItems = []; d.ToolbarItems = ["tools"]; d.ToolCollapseCount = 7; });
+        _chat.EnqueueText("Hello.").EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/profile pull perfbar work");
+        PickYes();
+        PushLine("hi again");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileBarPrompt(ProfileSection.PerfBar, "work", pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileBarCopiedNotice(ProfileSection.PerfBar, "work", pull: true), output);
+        Assert.Equal(["cpu", "net"], _settings.Current.PerformanceBarItems!);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
+        Assert.Equal(["net"], _settings.Current.PerformanceBarRight!);
+        Assert.Equal(["tools"], _settings.Current.ToolbarItems!);   // the rest of this profile stays
+        Assert.Equal(7, _settings.Current.ToolCollapseCount);
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");   // the conversation kept
+    }
+
+    [Fact]
+    public async Task ProfilePullBarOrder_TakesTheOrder()
+    {
+        WorkProfile(more: w => w.BarOrder = ["home", "perf", "toolbar", "status", "hints"]);
+        PushLine("/profile pull barorder work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.ProfileBarCopiedNotice(ProfileSection.BarOrder, "work", pull: true), output);
+        Assert.Equal(["home", "perf", "toolbar", "status", "hints"], _settings.Current.BarOrder!);
+    }
+
+    /// <summary>
+    /// A homeassistant push writes the Home Assistant settings and the home bar into the target; its other keys, Web UI home controls and
+    /// Offered switches stay. The done line names the URL, never the key.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePushHomeAssistant_Yes_WritesThem_AndLeavesTheRestAlone()
+    {
+        _console.Profile.Width = 600;
+        HomeServer();
+        Profiles.Create(_dir, "work", new AppSettingsData { HomeAssistantUrl = "http://old.test:8123", HomeAssistantToken = "work-ha", LlmApiKey = "work-llm", WebUiHomeControls = !new AppSettingsData().WebUiHomeControls, ToolsDisabled = ["ha_todo", "zip"] });
+        _settings.Update(d =>
+        {
+            d.HomeAssistantTools = true;
+            d.HomeAssistantActionPolicy = "any";
+            d.HomeAssistantSafeServices = ["light.turn_on"];
+            d.HomeAssistantAssistAgent = "conversation.neon";
+            d.HomeAssistantTimeoutSeconds = 20;
+            d.HomeBarItems = ["area:den", "divider:1", "entity:light.desk"];
+            d.HomeBarLeft = ["area:den"];
+            d.HomeBarAliases = new() { ["area:den"] = "Den" };
+            d.HomeBarGlyphs = new() { ["entity:light.desk"] = "💡" };
+        });
+        PushLine("/profile push homeassistant work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileHomeAssistantCopiedNotice("work", "http://ha.test:8123", 2, pull: false), output);   // the divider isn't a chip
+        Assert.DoesNotContain("secret", output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal(("http://ha.test:8123", "secret", true, "any", "conversation.neon", 20), (work.HomeAssistantUrl, work.HomeAssistantToken, work.HomeAssistantTools, work.HomeAssistantActionPolicy, work.HomeAssistantAssistAgent, work.HomeAssistantTimeoutSeconds));
+        Assert.Equal(["light.turn_on"], work.HomeAssistantSafeServices!);
+        Assert.Equal(["area:den", "divider:1", "entity:light.desk"], work.HomeBarItems!);
+        Assert.Equal(["area:den"], work.HomeBarLeft!);
+        Assert.Equal("Den", work.HomeBarAliases!["area:den"]);
+        Assert.Equal("💡", work.HomeBarGlyphs!["entity:light.desk"]);
+        Assert.Equal("work-llm", work.LlmApiKey);   // the other keys are the keys section's
+        Assert.Equal(!new AppSettingsData().WebUiHomeControls, work.WebUiHomeControls);
+        Assert.Equal(["ha_todo", "zip"], work.ToolsDisabled);
+    }
+
+    /// <summary>A source with no URL and no key says the mirror clears the target's, and does.</summary>
+    [Fact]
+    public async Task ProfilePushHomeAssistant_NoUrlHere_SaysSo_AndClearsTheTargets()
+    {
+        _console.Profile.Width = 600;
+        Profiles.Create(_dir, "work", new AppSettingsData { HomeAssistantUrl = "http://old.test:8123", HomeAssistantToken = "work-ha", HomeBarItems = ["entity:light.desk"] });
+        _settings.Update(d => { d.HomeAssistantUrl = ""; d.HomeAssistantToken = ""; d.HomeBarItems = null; });
+        PushLine("/profile push homeassistant work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: false, keySet: false, pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileHomeAssistantCopiedNotice("work", SettingsMenu.NoHomeAssistantUrlLabel, 0, pull: false), output);
+        var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
+        Assert.Equal(("", "", null), (work.HomeAssistantUrl, work.HomeAssistantToken, work.HomeBarItems));
+    }
+
+    /// <summary>A homeassistant pull applies live: the settings and the home bar come over, the conversation stays.</summary>
+    [Fact]
+    public async Task ProfilePullHomeAssistant_AppliesLive_AndKeepsTheConversation()
+    {
+        _console.Profile.Width = 600;
+        _haWire = new FakeHaServer().Area("den", "Den").Connect;
+        WorkProfile(more: w => { w.HomeAssistantUrl = "http://ha.test:8123"; w.HomeAssistantToken = "secret"; w.HomeBarItems = ["area:den"]; w.HomeAssistantTimeoutSeconds = 30; });
+        _settings.Update(d => { d.ToolbarItems = []; d.PerformanceBarItems = []; d.LlmApiKey = "my-llm"; });
+        _chat.EnqueueText("Hello.").EnqueueText("Hi.");
+        PushLine("hi");
+        PushLine("/profile pull homeassistant work");
+        PickYes();
+        PushLine("hi again");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileHomeAssistantCopiedNotice("work", "http://ha.test:8123", 1, pull: true), output);
+        Assert.Equal(("http://ha.test:8123", "secret", 30), (_settings.Current.HomeAssistantUrl, _settings.Current.HomeAssistantToken, _settings.Current.HomeAssistantTimeoutSeconds));
+        Assert.Equal(["area:den"], _settings.Current.HomeBarItems!);
+        Assert.Equal("my-llm", _settings.Current.LlmApiKey);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == "hi");   // the conversation kept
     }
 
     // ── /profile push|pull keys (2026-10-09; /keycopy from 2026-09-28) ──────
@@ -24743,13 +25035,16 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push videos", "push monitors", "push skills", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull videos", "pull monitors", "pull skills", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push homeassistant", "push toolbar", "push perfbar", "push statusbar", "push barorder", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push videos", "push monitors", "push skills", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull homeassistant", "pull toolbar", "pull perfbar", "pull statusbar", "pull barorder", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull videos", "pull monitors", "pull skills", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
         // The sections of 2026-10-25: mcp's overwrite has its own note, the lists the list note, and skills takes none.
         Assert.Equal([new CompletionItem("push mcp work overwrite", ChatScreen.ProfileMcpOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push mcp work ", sources));
         Assert.Equal([new CompletionItem("pull videos chef overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "pull videos chef ", sources));
         Assert.Equal([new CompletionItem("push skills chef", "skills: neon → chef")], ChatScreen.ArgumentItems("/profile", "push skills c", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "push skills work ", sources));
+        // The home and the bars (2026-10-26): the profiles, then nothing (mirrored, as keys).
+        Assert.Equal([new CompletionItem("push toolbar chef", "toolbar setup: neon → chef"), new CompletionItem("push toolbar work", "toolbar setup: neon → work")], ChatScreen.ArgumentItems("/profile", "push toolbar ", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "push homeassistant work ", sources));
         // The avatars (2026-10-12, the user's ask): two words, then the profiles, nothing after the name.
         Assert.Equal(["push avatar user", "push avatar model"], Texts(ChatScreen.ArgumentItems("/profile", "push avatar ", sources)));
         Assert.Equal([new CompletionItem("push avatar user chef", "user avatar: neon → chef"), new CompletionItem("push avatar user work", "user avatar: neon → work")], ChatScreen.ArgumentItems("/profile", "push avatar user ", sources));
@@ -24942,7 +25237,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
         Assert.Equal("settings: neon ← larry", ChatScreen.ProfilePullNote(ChatScreen.ProfileSettingsSubject, "larry", "neon"));   // 2026-10-16: a pull reads into the loaded profile
         Assert.Equal(
-            ["API keys", "server settings", "allowed commands", "message history", "memory", "saved prompts", "MCP servers", "saved links", "saved videos", "monitor input settings", "skills", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
+            ["API keys", "server settings", "Home Assistant settings", "toolbar setup", "performance bar setup", "Status bar setup", "bar order", "allowed commands", "message history", "memory", "saved prompts", "MCP servers", "saved links", "saved videos", "monitor input settings", "skills", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
         Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
         Assert.Equal("rename it", ChatScreen.ProfileRenameNote);

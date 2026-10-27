@@ -53,10 +53,11 @@ public static class Profiles
     /// reads as a profile called keys); a profile cannot be called any of them, so <c>/profile add</c> is never a switch and
     /// <c>/profile reset</c> is always the loaded one. 2026-10-25 (the user's call): <c>links</c>, <c>mcp</c>, <c>monitors</c>, <c>skills</c> and
     /// <c>videos</c> with their sections; <c>avatar</c>, the first word of the two-word avatar sections, never reserved until then; and
-    /// <c>overwrite</c>, the one word push and pull read where a name goes. A profile elsewhere with one of these names drops out of
+    /// <c>overwrite</c>, the one word push and pull read where a name goes. 2026-10-26 (the user's ask): <c>barorder</c>, <c>homeassistant</c>,
+    /// <c>perfbar</c>, <c>statusbar</c> and <c>toolbar</c> with their sections. A profile elsewhere with one of these names drops out of
     /// <see cref="List"/>, as one did when <c>memory</c> and <c>prompts</c> came; no migration. A to Z.
     /// </summary>
-    public static readonly string[] ReservedNames = { "add", "allowed", "avatar", "delete", "edit", "history", "keys", "links", "mcp", "memory", "monitors", "operata", "overwrite", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "skills", "videos", "vocalia" };
+    public static readonly string[] ReservedNames = { "add", "allowed", "avatar", "barorder", "delete", "edit", "history", "homeassistant", "keys", "links", "mcp", "memory", "monitors", "operata", "overwrite", "perfbar", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "skills", "statusbar", "toolbar", "videos", "vocalia" };
 
     /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
     public const string NameError = "must be 1 to 32 letters, digits, - or _, not starting with - (and not add, delete, edit, pull, push, reload, rename or reset)";
