@@ -589,23 +589,30 @@ public sealed class CameraSessionTests : IDisposable
         Assert.Null(_session.Fault);
     }
 
+    /// <summary>
+    /// Stepped (the v0.5.3 release run's osx-arm64 job, 2026-10-27; once on this PC 2026-10-22): free-running frames came a
+    /// millisecond apart from the lease on, so on a loaded runner the failing read could land with no waiter, the next wait
+    /// reopened the camera and failed again, and the closes passed one. Each frame now comes when the test lets it.
+    /// </summary>
     [Fact]
     public async Task AReadFailure_FailsTheWaiters()
     {
         _system.ReadFailure = new CameraException(CameraFailure.Unplugged, "gone");
         _system.FailAfterFrames = 2;
+        _system.Stepped = true;
         using var lease = _session.Acquire("test");
 
-        var error = await Assert.ThrowsAsync<CameraException>(async () =>
-        {
-            while (true)
-            {
-                _ = await lease.NextFrameAsync(settled: false, CancellationToken.None);
-            }
-        });
+        var first = lease.NextFrameAsync(settled: false, CancellationToken.None);
+        _system.Deliver(2);
+        _ = await first;   // the first frame, or the second when the first was read before the wait (copy off)
+        await Until(() => _system.Reads == 2);
+        var failing = lease.NextFrameAsync(settled: false, CancellationToken.None);
+        _system.Deliver();
+        var error = await Assert.ThrowsAsync<CameraException>(() => failing);
 
         Assert.Equal(CameraFailure.Unplugged, error.Failure);
-        await Until(() => _system.Closes == 1);
+        await Until(() => _system.Closes == 1 && _session.State == CameraState.Faulted);
+        Assert.Equal(1, _system.Opens);
     }
 
     [Fact]
