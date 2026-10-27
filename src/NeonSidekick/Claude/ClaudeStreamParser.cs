@@ -83,9 +83,14 @@ public sealed class ClaudeStreamParser
     {
         switch (Text(evt, "type"))
         {
-            case "content_block_start" when evt.TryGetProperty("content_block", out var block) && Text(block, "type") == "text":
-                _pendingBreak = _wroteText;
-                return [];
+            case "content_block_start":
+                // Any block (2026-10-26, the review's R29): the model producing, though a thinking block streams nothing a one-shot reads.
+                if (evt.TryGetProperty("content_block", out var block) && Text(block, "type") == "text")
+                {
+                    _pendingBreak = _wroteText;
+                }
+
+                return [new ClaudeEvent.BlockStarted()];
             case "content_block_delta" when evt.TryGetProperty("delta", out var delta) && Text(delta, "type") == "text_delta":
                 string text = Text(delta, "text") ?? "";
                 if (text.Length == 0)

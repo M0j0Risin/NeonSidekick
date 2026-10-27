@@ -55,7 +55,7 @@ public class TokenTallyTests
 
         // A reply of one tool call sent whole: untimed.
         tally.BeginTurn();
-        tally.Add(new TokenUsage(140, 300, 440, 1, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(4)).Judged());
+        tally.Add(new TokenUsage(140, 300, 440, 1, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(4)).Judged(shown: 1));
         tally.EndTurn();
         Assert.Null(tally.LastReply.TokensPerSecond);
         Assert.Equal(20, tally.LastKnownSpeed);
@@ -68,6 +68,21 @@ public class TokenTallyTests
         Assert.Null(tally.LastKnownSpeed);
         tally.Add(One(200, 30));
         Assert.Equal(30, tally.LastKnownSpeed);
+    }
+
+    [Fact]
+    public void AConnect_ThenATurn_NeverBringsTheOldModelsReplyBack()
+    {
+        // 2026-10-26 (the review's R2): HideFromHint forgot the turn before, but the next BeginTurn promoted the old model's last reply.
+        var tally = new TokenTally();
+        tally.BeginTurn();
+        tally.Add(One(100, 40, seconds: 2));   // the old model: 20 tok/s
+        tally.EndTurn();
+
+        tally.HideFromHint();
+        tally.BeginTurn();
+        tally.Add(new TokenUsage(140, 300, 440, 1, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(4)).Judged(shown: 1));   // the new one: untimed
+        Assert.Null(tally.LastKnownSpeed);
     }
 
     [Fact]

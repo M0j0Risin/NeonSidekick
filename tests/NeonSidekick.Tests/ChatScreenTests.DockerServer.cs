@@ -43,7 +43,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal("http://docker.localhost/vllm_b/v1", _settings.Current.LlmUrl);
-        Assert.Equal(["list", "switch vllm_b"], docker.Calls);   // the launch's server is on this computer: listed, nothing running to stop
+        Assert.Equal(["clear port 1234", "switch vllm_b"], docker.Calls);   // the launch's server is on this computer: cleared, nothing running to stop
         Assert.Equal(FakeDockerServers.LiveUrl, _endpoints[^1].LiveUrl);
         Assert.Contains("LLM: http://docker.localhost/vllm_b/v1 model=sglang-model (docker vllm_b :30000)", output);
         Assert.Equal("vllm_b", _session.DockerInUse);
@@ -91,7 +91,7 @@ public partial class ChatScreenTests
         string output = await RunAsync(input);
 
         Assert.Contains(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
-        Assert.Equal(["list", "switch vllm_b"], docker.Calls);   // the launch's list: nothing running to stop
+        Assert.Equal(["clear port 1234", "switch vllm_b"], docker.Calls);   // the launch's clear: nothing running to stop
         Assert.Null(_session.Assistant);
     }
 
@@ -173,7 +173,7 @@ public partial class ChatScreenTests
 
         Assert.Contains("exited · lmsysorg/sglang:latest", output);
         Assert.Contains("exited · vllm/vllm-openai:latest", output);
-        Assert.Equal(["list", "list", "switch sglang_a", "stop-all"], docker.Calls);   // the launch's list (nothing running to stop), then /server docker's
+        Assert.Equal(["clear port 1234", "list", "switch sglang_a", "clear"], docker.Calls);   // the launch's clear (nothing running to stop), then /server docker's
         Assert.Equal("http://docker.localhost/sglang_a/v1", _settings.Current.LlmUrl);
         Assert.Null(_session.DockerInUse);   // stopped at the exit
     }
@@ -195,7 +195,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(DockerServerText.NotChosen("mysql_dev"), output);
         Assert.Equal(url, _settings.Current.LlmUrl);
-        Assert.Equal(["list"], docker.Calls);   // the launch's alone: nothing running to stop
+        Assert.Equal(["clear port 1234"], docker.Calls);   // the launch's alone: nothing running to stop
     }
 
     [Fact]
@@ -218,11 +218,11 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Equal(["list", "stop-all"], docker.Calls);
+        Assert.Equal(["clear port 1234"], docker.Calls);
         string notice = DockerServerText.LeftForThisComputer(["sglang_a"], embedded: false);
         Assert.Contains(notice, output);
         Assert.True(output.IndexOf(notice, StringComparison.Ordinal) < output.IndexOf("LLM: http://127.0.0.1:1234", StringComparison.Ordinal));
-        Assert.Null(_session.TakeLeftoverStopped());   // said once
+        Assert.Empty(_session.TakeLeftoverStopped());   // said once
     }
 
     [Fact]

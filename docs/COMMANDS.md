@@ -551,6 +551,7 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 * **Starting:** every start opens `neon`, and a switch lasts until the app closes. A desktop shortcut, `--profile <name>` or `NEONSIDEKICK_PROFILE` opens another for a launch; an unknown name exits with code 2.
 * **Reset:** keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`. `neon` can only be reset while loaded.
 * **Push and pull** ask first; the bare forms copy only `profile.json`.
+* **Changes made elsewhere** to the loaded profile's `profile.json` (a push from another copy of the app, a hand edit) are taken within seconds, with a notice. A setting changed on both sides keeps this window's.
 * **API keys** in `profile.json` are encrypted (DPAPI on Windows, a key in the Keychain on a Mac), one typed in by hand at the next load. Only you, on the computer running NeonSidekick, can read them.
 
 ### Desktop shortcuts

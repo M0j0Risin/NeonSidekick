@@ -134,15 +134,25 @@ public class MacBrowserTests
 
     // ── BrowserCheckWatch (2026-10-20, the code review's G8 and G1: both windows' watch, shared) ──
 
-    private const string APrint = "{\"s\":\"complete\",\"n\":42,\"x\":7}";
-    private const string APage = "{\"h\":\"<html><body><p>Through.</p></body></html>\"}";
+    private const string APrint = "{\"s\":\"complete\",\"n\":42,\"x\":7,\"st\":200,\"u\":\"https://example.com/\",\"o\":1}";
+    private const string APage = "{\"h\":\"<html><body><p>Through.</p></body></html>\",\"o\":1}";
 
-    private static BrowserCheck LoadedCheck(BotCheckRequest? request = null, bool keepOpen = false)
+    // A look at document 1 of example.com (2026-10-26, the watch keeps its state per document).
+    private static BrowserLook Look(int status = 200, string url = "https://example.com/", double document = 1) =>
+        new("complete", (42, 7u), status, url, document);
+
+    // A check whose window went to its address and shows document 1 with this status.
+    private static BrowserCheck LoadedCheck(BotCheckRequest? request = null, bool keepOpen = false, int status = 200)
     {
         var check = new BrowserCheck(request ?? Request(), Done(), keepOpen);
-        check.Watch.Navigated(true, 200);
+        check.GoNow();
+        check.Watch.WantsRead(TimeSpan.Zero, Look(status), status, errorPage: false);
         return check;
     }
+
+    // Document 1's DOM read.
+    private static void ReadPage(BrowserCheck check, string html) =>
+        Assert.True(check.Watch.Read(TimeSpan.Zero, html, new Uri("https://example.com/"), 1));
 
     [Fact]
     public void Watch_AFileDuringACheck_EndsItAsAFile_OnceAndOnlyThen()
@@ -220,12 +230,12 @@ public class MacBrowserTests
     }
 
     [Fact]
-    public void Watch_NoLook_BeforeAPageLoaded_WhileOneIsOnItsWay_OrWithNothingToSendItTo()
+    public void Watch_NoLook_BeforeTheWindowWent_WhileOneIsOnItsWay_OrWithNothingToSendItTo()
     {
         var page = new FakeCheckPage();
         var unloaded = new BrowserCheck(Request(), Done(), keepOpen: false);
         BrowserCheckWatch.Tick(page, unloaded);
-        Assert.Empty(page.Evaluations);   // the blank page before the address is no answer
+        Assert.Empty(page.Evaluations);   // not gone yet (Start): no look, and no go before a poll's time
 
         var check = LoadedCheck();
         BrowserCheckWatch.Tick(page, check);
@@ -241,12 +251,106 @@ public class MacBrowserTests
         Assert.False(other.Busy);   // nothing sent: the next tick tries again
     }
 
+    // 2026-10-26, the redesign: with no wait for loads, a reused window's page from before could answer the first looks and be read.
+    [Fact]
+    public void Start_LooksAtThePageFromBefore_ThenGoes_AndThatPageIsNeverJudged()
+    {
+        var page = new FakeCheckPage();
+        var check = new BrowserCheck(Request(), Done(), keepOpen: false);
+        int went = 0;
+        BrowserCheckWatch.Start(page, check, () => went++);
+        var first = Assert.Single(page.Evaluations);
+        Assert.Equal(HeadlessBrowser.PrintExpression, first.Expression);
+        Assert.Equal(0, went);   // not before the look answers
+        BrowserCheckWatch.Tick(page, check);
+        Assert.Single(page.Evaluations);   // no look of the tick's while the first is out
+
+        first.Answer("{\"s\":\"complete\",\"n\":42,\"x\":7,\"st\":200,\"u\":\"https://news.example.org/\",\"o\":5}");
+        Assert.Equal(1, went);
+        Assert.True(check.Gone);
+        Assert.Equal(5, check.Watch.Before);
+
+        Assert.False(check.Watch.WantsRead(TimeSpan.Zero, Look(document: 5), 200, errorPage: false));
+        Assert.False(check.Watch.Observe(TimeSpan.FromMinutes(1), Look(document: 5), 200, errorPage: false));
+        Assert.Equal(BrowserWatchStep.Wait, check.Watch.Decide());
+    }
+
+    [Fact]
+    public void Start_GoesAtOnce_WithNothingToAsk_OrNoDocument_AndAfterAPoll_ForAPageThatDoesNotAnswer()
+    {
+        var blind = new FakeCheckPage { CanEvaluate = false };
+        var check = new BrowserCheck(Request(), Done(), keepOpen: false);
+        int went = 0;
+        BrowserCheckWatch.Start(blind, check, () => went++);
+        Assert.Equal(1, went);   // no view yet: nothing showed before
+        Assert.Null(check.Watch.Before);
+
+        var page = new FakeCheckPage();
+        var fresh = new BrowserCheck(Request(), Done(), keepOpen: false);
+        went = 0;
+        BrowserCheckWatch.Start(page, fresh, () => went++);
+        page.Evaluations[0].Answer(null);   // a fresh window, no document
+        Assert.Equal(1, went);
+        Assert.Null(fresh.Watch.Before);
+
+        var hung = new BrowserCheck(Request(), Done(), keepOpen: false);
+        var stuck = new FakeCheckPage();
+        went = 0;
+        BrowserCheckWatch.Start(stuck, hung, () => went++);
+        while (hung.Clock.Elapsed < DomSettle.PollInterval)
+        {
+            BrowserCheckWatch.Tick(stuck, hung);
+            Assert.Equal(0, went);
+            Thread.Sleep(20);
+        }
+
+        BrowserCheckWatch.Tick(stuck, hung);
+        Assert.Equal(1, went);
+        stuck.Evaluations[0].Answer(APrint);   // late: it may be the new document's, so it marks nothing
+        Assert.Null(hung.Watch.Before);
+        Assert.Equal(1, went);
+    }
+
+    [Fact]
+    public void Start_TheSamePageButForTheFragment_IsNoPageFromBefore()
+    {
+        var page = new FakeCheckPage();
+        var check = new BrowserCheck(Request("https://example.com/a#part"), Done(), keepOpen: false);
+        BrowserCheckWatch.Start(page, check, () => { });
+        page.Evaluations[0].Answer("{\"s\":\"complete\",\"n\":42,\"x\":7,\"st\":200,\"u\":\"https://example.com/a\",\"o\":5}");
+        Assert.Null(check.Watch.Before);   // the window only scrolls: the same document is the page
+
+        Assert.True(BrowserCheckWatch.SameDocumentTarget("https://example.com/a#x", new Uri("https://example.com/a#part")));
+        Assert.False(BrowserCheckWatch.SameDocumentTarget("https://example.com/a", new Uri("https://example.com/a")));   // no fragment: a new document
+        Assert.False(BrowserCheckWatch.SameDocumentTarget("https://example.com/b", new Uri("https://example.com/a#part")));
+    }
+
+    [Fact]
+    public void Watch_AReadFromTheNextDocument_IsDropped_AndTheWindowSaysWhatThePageIs()
+    {
+        var check = LoadedCheck();
+        var page = new FakeCheckPage { Describing = look => (404, look.Url.StartsWith("chrome-error:", StringComparison.Ordinal)) };
+        BrowserCheckWatch.Tick(page, check);
+        page.Evaluations[0].Answer("{\"s\":\"complete\",\"n\":42,\"x\":8,\"st\":200,\"u\":\"https://example.com/\",\"o\":1}");
+        var read = page.Evaluations[1];
+        Assert.Equal(HeadlessBrowser.PageExpression, read.Expression);
+        read.Answer("{\"h\":\"<html><body><p>Next.</p></body></html>\",\"o\":2}");   // the next document came in between
+        Assert.Null(check.Watch.Html);
+        Assert.Equal(200, check.Watch.Status);   // document 1's, taken when it was first seen
+
+        var fresh = new BrowserCheck(Request(), Done(), keepOpen: false);
+        fresh.GoNow();
+        BrowserCheckWatch.Tick(page, fresh);
+        page.Evaluations[2].Answer("{\"s\":\"complete\",\"n\":42,\"x\":8,\"st\":0,\"u\":\"chrome-error://chromewebdata/\",\"o\":3}");
+        Assert.Equal(404, fresh.Watch.Status);   // the window's say, not the look's
+        Assert.True(fresh.Watch.LoadFailed);
+    }
+
     [Fact]
     public void Watch_AnErrorPage_IsRefusedWhereItEnded()
     {
-        var check = LoadedCheck();
-        check.Watch.Navigated(true, 404);
-        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Not here.</p></body></html>", new Uri("https://example.com/"));
+        var check = LoadedCheck(status: 404);
+        ReadPage(check, "<html><body><p>Not here.</p></body></html>");
         var page = new FakeCheckPage { Source = "https://example.com/gone" };
 
         BrowserCheckWatch.Conclude(page, check);
@@ -263,7 +367,7 @@ public class MacBrowserTests
     public void Watch_Through_PrintsThenReadsTheCookies_ThenEndsOnce()
     {
         var check = LoadedCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"), keepOpen: true);
-        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        ReadPage(check, "<html><body><p>Through.</p></body></html>");
         var page = new FakeCheckPage { Source = "https://www.example.com/landed" };
 
         BrowserCheckWatch.Conclude(page, check);
@@ -291,7 +395,7 @@ public class MacBrowserTests
     public void Watch_APrintOrCookiesAfterTheCheckEnded_DoNothing()
     {
         var check = LoadedCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"));
-        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        ReadPage(check, "<html><body><p>Through.</p></body></html>");
         var page = new FakeCheckPage();
         BrowserCheckWatch.Conclude(page, check);
 
@@ -307,7 +411,7 @@ public class MacBrowserTests
     public void Watch_NoPrint_GoesStraightToTheCookies()
     {
         var check = LoadedCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"));
-        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        ReadPage(check, "<html><body><p>Through.</p></body></html>");
         var page = new FakeCheckPage { CanPrint = false };   // a sheet up on the Mac, no view on Windows
 
         BrowserCheckWatch.Conclude(page, check);
@@ -359,8 +463,8 @@ public class MacBrowserTests
     {
         var jobs = new BrowserJobs();
         var (check, _) = jobs.BeginCheck(new BotCheckRequest(new Uri("https://example.com/"), BotCheckUse.Pdf, "403", "/tmp/x.pdf"), Done());
-        check.Watch.Navigated(true, 200);
-        check.Watch.Read(TimeSpan.Zero, "<html><body><p>Through.</p></body></html>", new Uri("https://example.com/"));
+        check.Watch.WantsRead(TimeSpan.Zero, Look(), 200, errorPage: false);
+        ReadPage(check, "<html><body><p>Through.</p></body></html>");
         check.PdfWritten = true;
         var cookie = new BrowserCookie("cf_clearance", "v", ".example.com", "/", -1, true, true);
         var identity = BrowserIdentity.Safari("26.6");
@@ -376,7 +480,7 @@ public class MacBrowserTests
         check.WasFile = true;
         Assert.Null(BrowserJobs.Cleared(check, "https://example.com/", [], identity).Html);
 
-        check.Watch.Navigated(false, 0);
+        check.Watch.WantsRead(TimeSpan.Zero, Look(0, "chrome-error://chromewebdata/", 2), 0, errorPage: true);   // the window's error page
         var refused = BrowserJobs.Refused(check, "https://example.com/");
         Assert.Equal(BotCheckEnd.Refused, refused.End);
         Assert.Equal(BrowserText.DidNotLoad, refused.Detail);

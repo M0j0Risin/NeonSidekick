@@ -1122,13 +1122,26 @@ public sealed partial class SidekickApp
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
             await HeadlessLineAsync(HeadlessModeLine).ConfigureAwait(false);
 
-            // A chosen Docker container (2026-10-02) takes minutes to load: each step of its switch is a notice, said once.
-            Action<string>? phase = Docker.DockerEndpoint.Chosen(EffectiveSettings) ? HeadlessDockerPhase : null;
-            await session.ConnectAsync(EffectiveSettings, phase, cancellationToken).ConfigureAwait(false);
-            if (session.TakeLeftoverStopped() is { } leftover)
+            // A chosen Docker container (2026-10-02) takes minutes to load: each step of its switch is a notice, said once. Since 2026-10-26
+            // (the review's R38) whenever Docker servers are offered: a clear before the embedded model or a server on this computer says its stops too.
+            Action<string>? phase = Docker.DockerEndpoint.Chosen(EffectiveSettings) ? HeadlessDockerPhase
+                : session.DockerOffered(EffectiveSettings) ? step =>
+                {
+                    // Only the clear's own steps: the spinner's other words (the embedded model's, "looking for…") are no Docker notice.
+                    if (Docker.DockerServerText.IsClearStep(step))
+                    {
+                        HeadlessDockerPhase(step);
+                    }
+                }
+                : null;
+            try
             {
-                // A chosen container this run never started, stopped before the embedded model or a server on this computer (2026-10-26).
-                HeadlessDockerPhase(Docker.DockerServerText.LeftForThisComputer(leftover.Names, leftover.Embedded));
+                await session.ConnectAsync(EffectiveSettings, phase, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // A Ctrl+C after a stop still says it (the review's R23).
+                ReportHeadlessLeftover(session);
             }
 
             await HeadlessLineAsync(session.Endpoint is null ? HeadlessNoServerLine(LlmScanMode.Resolve(EffectiveSettings)) : LlmSession.ConnectedLine(session.Endpoint)).ConfigureAwait(false);
@@ -2577,6 +2590,7 @@ public sealed partial class SidekickApp
         }
 
         await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
+        ReportHeadlessLeftover(session);   // an advisor's embedded load, under a tool call, may have cleared the GPU
         await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         return new HeadlessTurn(reply.ToString(), trace, cancelled, failed);
     }
@@ -2985,6 +2999,18 @@ public sealed partial class SidekickApp
 
         _headlessOutput.WriteLine("[notice] " + Docker.DockerText.Glyph + " " + phase);
         _headlessAtLineStart = true;
+    }
+
+    /// <summary>
+    /// The chosen containers a clear stopped though this run never started them (2026-10-26): before the embedded model or a server on this
+    /// computer, or a bot's or an advisor's load. A notice each, once.
+    /// </summary>
+    private void ReportHeadlessLeftover(LlmSession session)
+    {
+        foreach (var leftover in session.TakeLeftoverStopped())
+        {
+            HeadlessDockerPhase(Docker.DockerServerText.LeftForThisComputer(leftover.Names, leftover.Embedded));
+        }
     }
 
     /// <summary>The loaded profile's saved videos for a headless run (2026-10-07): made afresh each time, so a profile switch moves it.</summary>

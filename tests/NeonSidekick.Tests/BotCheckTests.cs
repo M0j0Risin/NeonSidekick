@@ -211,160 +211,126 @@ public sealed class BotCheckTests : IDisposable
 
     // ── The window's pure parts ──────────────────────────────────────────────
 
-    [Fact]
-    public void Watch_WaitsOnTheCheck_ThenReadsThePageItLetsThrough()
-    {
-        var url = new Uri("https://example.com/");
-        var watch = new BrowserWatch();
-        var page = (Html: Cloudflare, Print: HeadlessBrowser.Fingerprint(Cloudflare));
+    // A look at a document (2026-10-26, the redesign: the watch keeps its state per document, its status the document's own).
+    private static BrowserLook Look(string html, int status, double document, string url = "https://example.com/", string state = "complete") =>
+        new(state, HeadlessBrowser.Fingerprint(html), status, url, document);
 
-        Assert.False(watch.Observe(TimeSpan.Zero, "complete", page.Print));   // nothing loaded yet: the blank page is no answer
-        watch.Navigated(true, 403);
-        Assert.True(watch.WantsRead(TimeSpan.Zero, page.Print));
-        watch.Read(TimeSpan.Zero, page.Html, url);
+    // One look as the shared watch makes it: the DOM read first when wanted, then the look observed. Whether the page is ready.
+    private static bool See(BrowserWatch watch, TimeSpan now, string html, int status, double document, string url = "https://example.com/", bool errorPage = false)
+    {
+        var look = Look(html, status, document, url);
+        if (watch.WantsRead(now, look, status, errorPage))
+        {
+            Assert.True(watch.Read(now, html, new Uri("https://example.com/"), document));
+        }
+
+        return watch.Observe(now, look, status, errorPage);
+    }
+
+    [Fact]
+    public void Watch_WaitsOnTheCheck_ThenReadsTheNextDocument_WithItsOwnStatus()
+    {
+        var watch = new BrowserWatch();
+        Assert.False(See(watch, TimeSpan.Zero, Cloudflare, 403, 1));
         Assert.True(watch.Gated);
-        Assert.False(watch.WantsRead(TimeSpan.FromSeconds(1), page.Print));
-        Assert.False(watch.Observe(TimeSpan.FromSeconds(1), "complete", page.Print));
-        Assert.False(watch.Observe(TimeSpan.FromMinutes(4), "complete", page.Print));   // never taken as it is: a person is solving it
+        Assert.False(See(watch, TimeSpan.FromSeconds(2), Cloudflare, 403, 1));
+        Assert.False(See(watch, TimeSpan.FromMinutes(4), Cloudflare, 403, 1));   // never taken as it is: a person is solving it
         Assert.Equal(BrowserWatchStep.Wait, watch.Decide());
 
-        // Solved: the page reloads into the article.
-        watch.Navigated(true, 200);
-        var article = HeadlessBrowser.Fingerprint(Article);
+        // Solved: the site goes on to the article, a new document. Its status is its own, interactive long before its pictures load
+        // (the user's report, 2026-10-26, session 795: it was taken under the check's 403).
         var now = TimeSpan.FromMinutes(4) + TimeSpan.FromSeconds(1);
-        Assert.True(watch.WantsRead(now, article));
-        watch.Read(now, Article, url);
+        Assert.False(See(watch, now, Article, 200, 2));
         Assert.False(watch.Gated);
-        Assert.True(watch.ChallengeSeen);
-        Assert.False(watch.Observe(now, "complete", article));
-        Assert.True(watch.Observe(now + TimeSpan.FromSeconds(2), "complete", article));
-        Assert.False(watch.Stale(article));
+        Assert.Equal(200, watch.Status);
+        Assert.True(See(watch, now + TimeSpan.FromSeconds(2), Article, 200, 2));
+        Assert.False(watch.Stale(HeadlessBrowser.Fingerprint(Article)));
         Assert.Equal(BrowserWatchStep.Read, watch.Decide());
         Assert.Equal(Article, watch.Html);
-        Assert.Equal(200, watch.Status);
+    }
+
+    // R18 of the 2026-10-26 review: Cloudflare's "Verification successful. Waiting for … to respond" shows on the check's own 403 document.
+    [Fact]
+    public void Watch_A4xxDocumentACheckWasSeenOn_Waits_ForTheNextDocument()
+    {
+        var watch = new BrowserWatch();
+        Assert.False(See(watch, TimeSpan.Zero, Cloudflare, 403, 1));
+        string passed = "<html><body><h1>example.com</h1><p>Verification successful. Waiting for example.com to respond...</p></body></html>";
+        Assert.False(See(watch, TimeSpan.FromSeconds(5), passed, 403, 1));
+        Assert.False(watch.Gated);
+        Assert.True(See(watch, TimeSpan.FromSeconds(8), passed, 403, 1));
+        Assert.Equal(BrowserWatchStep.Wait, watch.Decide());   // the check's page about to move on, not a refusal
+
+        Assert.False(See(watch, TimeSpan.FromSeconds(9), Article, 200, 2));
+        Assert.True(See(watch, TimeSpan.FromSeconds(11), Article, 200, 2));
+        Assert.Equal(BrowserWatchStep.Read, watch.Decide());
     }
 
     [Fact]
-    public void Watch_RefusesAnErrorPage_WithNoCheck_AndAPageThatDidNotLoad()
+    public void Watch_RefusesAnErrorStatus_WithNoCheck_AndTheErrorPage()
     {
-        var url = new Uri("https://example.com/");
         var denied = "<html><body><h1>Access Denied</h1><p>You don't have permission.</p></body></html>";
         var watch = new BrowserWatch();
-        watch.Navigated(true, 403);
-        watch.Read(TimeSpan.Zero, denied, url);
-        Assert.False(watch.Observe(TimeSpan.Zero, "complete", HeadlessBrowser.Fingerprint(denied)));
-        Assert.True(watch.Observe(TimeSpan.FromSeconds(2), "complete", HeadlessBrowser.Fingerprint(denied)));
+        Assert.False(See(watch, TimeSpan.Zero, denied, 403, 1));
+        Assert.True(See(watch, TimeSpan.FromSeconds(2), denied, 403, 1));
         Assert.Equal(BrowserWatchStep.Refused, watch.Decide());
+        Assert.False(watch.LoadFailed);
+        Assert.Equal(403, watch.Status);
 
         var failed = new BrowserWatch();
-        failed.Navigated(false, 0);
+        string error = "<html><body><h1>Hmmm… can't reach this page</h1></body></html>";
+        Assert.False(See(failed, TimeSpan.Zero, error, 0, 1, "chrome-error://chromewebdata/", errorPage: true));
+        Assert.True(See(failed, TimeSpan.FromSeconds(2), error, 0, 1, "chrome-error://chromewebdata/", errorPage: true));
         Assert.True(failed.LoadFailed);
-        failed.Read(TimeSpan.Zero, Article, url);
         Assert.Equal(BrowserWatchStep.Refused, failed.Decide());
 
-        Assert.Equal(BrowserWatchStep.Wait, new BrowserWatch().Decide());   // unread
+        Assert.Equal(BrowserWatchStep.Wait, new BrowserWatch().Decide());   // nothing seen
     }
 
-    // The user's report (2026-10-26, session 795): the check passed and its site went on to the page, which was interactive long before
-    // its pictures loaded; taken then, it carried the check's own 403 and was refused.
     [Fact]
-    public void Watch_WaitsForTheNavigationUnderWay_BeforeJudgingItsStatus()
+    public void Watch_NeverJudgesThePageFromBefore_NorABlankPage()
     {
-        var url = new Uri("https://example.com/");
+        var watch = new BrowserWatch { Before = 1 };
+        Assert.False(See(watch, TimeSpan.Zero, Article, 200, 1));
+        Assert.False(See(watch, TimeSpan.FromMinutes(1), Article, 200, 1));
+        Assert.Null(watch.Html);   // not even read
+        Assert.Equal(BrowserWatchStep.Wait, watch.Decide());
+
+        string blank = "<html><head></head><body></body></html>";
+        Assert.False(See(watch, TimeSpan.FromMinutes(1), blank, 0, 2, "about:blank"));
+        Assert.False(See(watch, TimeSpan.FromMinutes(2), blank, 0, 2, "about:blank"));
+        Assert.Equal(BrowserWatchStep.Wait, watch.Decide());
+
+        Assert.False(See(watch, TimeSpan.FromMinutes(2), Article, 200, 3));
+        Assert.True(See(watch, TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(2), Article, 200, 3));
+        Assert.Equal(BrowserWatchStep.Read, watch.Decide());
+    }
+
+    [Fact]
+    public void Watch_KeepsADocumentsStatus_ThroughAPushState_AndStartsANewOneAfresh()
+    {
         var watch = new BrowserWatch();
-        watch.Navigated(true, 403, 1);
-        watch.Read(TimeSpan.Zero, Cloudflare, url);
+        Assert.False(See(watch, TimeSpan.Zero, Article, 200, 1));
+        string moved = Article + "<!-- page 2 -->";
+        Assert.False(See(watch, TimeSpan.FromSeconds(2), moved, 0, 1, "https://example.com/?page=2"));   // pushState: the same document
+        Assert.Equal(200, watch.Status);
+        Assert.Equal("https://example.com/", watch.Url);
+
+        Assert.False(See(watch, TimeSpan.FromSeconds(3), Cloudflare, 503, 2));   // a new document: its read, settle and status its own
+        Assert.Equal(503, watch.Status);
         Assert.True(watch.Gated);
-        Assert.False(watch.Observe(TimeSpan.Zero, "complete", HeadlessBrowser.Fingerprint(Cloudflare)));
-
-        var t = TimeSpan.FromSeconds(3);
-        watch.Began(t, 2);
-        var article = HeadlessBrowser.Fingerprint(Article);
-        watch.Read(t, Article, url);
-        Assert.False(watch.Gated);
-        Assert.False(watch.Observe(t, "interactive", article));
-        Assert.False(watch.Observe(t + DomSettle.Quiet + TimeSpan.FromSeconds(0.5), "interactive", article));
-        Assert.False(watch.Observe(t + DomSettle.MostAfterLoad + TimeSpan.FromSeconds(1), "interactive", article));
-        Assert.Equal(403, watch.Status);   // still the check's: its page has not completed
-
-        // Loaded: its own status, and it settles as any page does.
-        var loaded = t + TimeSpan.FromSeconds(9);
-        watch.Navigated(true, 200, 2);
-        string done = Article + "<!-- loaded -->";
-        var donePrint = HeadlessBrowser.Fingerprint(done);
-        watch.Read(loaded, done, url);
-        Assert.False(watch.Observe(loaded, "complete", donePrint));
-        Assert.True(watch.Observe(loaded + DomSettle.Quiet, "complete", donePrint));
-        Assert.Equal(BrowserWatchStep.Read, watch.Decide());
-        Assert.Equal(200, watch.Status);
+        Assert.Equal(BrowserWatchStep.Wait, watch.Decide());
     }
 
     [Fact]
-    public void Watch_IgnoresASupersededNavigationsEnd()
+    public void Watch_DropsARead_FromAnotherDocument()
     {
-        var url = new Uri("https://example.com/");
-        var print = HeadlessBrowser.Fingerprint(Article);
         var watch = new BrowserWatch();
-        watch.Began(TimeSpan.Zero, 1);
-        watch.Began(TimeSpan.FromSeconds(1), 2);
-        watch.Navigated(false, 0, 1);   // the first, cancelled by the second: no answer for the page under way
-        Assert.False(watch.LoadFailed);
-        Assert.False(watch.Loaded);
-        watch.Read(TimeSpan.FromSeconds(1), Article, url);
-        Assert.False(watch.Observe(TimeSpan.FromSeconds(1), "complete", print));
-        Assert.False(watch.Observe(TimeSpan.FromSeconds(4), "complete", print));
-
-        watch.Navigated(true, 200, 2);
-        Assert.True(watch.Observe(TimeSpan.FromSeconds(5), "complete", print));
-        Assert.Equal(BrowserWatchStep.Read, watch.Decide());
-        Assert.Equal(200, watch.Status);
-    }
-
-    [Fact]
-    public void Watch_TakesAPageWhoseLoadNeverEnds_AfterMostLoading()
-    {
-        var url = new Uri("https://example.com/");
-        var print = HeadlessBrowser.Fingerprint(Article);
-        var watch = new BrowserWatch();
-        watch.Navigated(true, 403, 1);
-        watch.Read(TimeSpan.Zero, Cloudflare, url);
-        watch.Began(TimeSpan.FromSeconds(1), 2);
-        watch.Read(TimeSpan.FromSeconds(1), Article, url);
-        Assert.False(watch.Observe(TimeSpan.FromSeconds(1), "interactive", print));
-        Assert.False(watch.Observe(BrowserWatch.MostLoading, "interactive", print));   // 1 s short of its cap
-
-        Assert.True(watch.Observe(BrowserWatch.MostLoading + TimeSpan.FromSeconds(1), "interactive", print));
-        Assert.Equal(BrowserWatchStep.Read, watch.Decide());   // no status: not the check's 403
-        Assert.Equal(0, watch.Status);
-        Assert.False(watch.LoadFailed);
-    }
-
-    [Fact]
-    public void Watch_LoadEnded_StopsOnlyItsOwnWait()
-    {
-        var url = new Uri("https://example.com/");
-        var print = HeadlessBrowser.Fingerprint(Article);
-        var watch = new BrowserWatch();
-        watch.Navigated(true, 200, 1);
-        watch.Read(TimeSpan.Zero, Article, url);
-        watch.Began(TimeSpan.Zero, 2);
-        watch.LoadEnded(3);   // another navigation's: the blank start page completing late, say
-        Assert.False(watch.Observe(TimeSpan.Zero, "complete", print));
-        Assert.False(watch.Observe(TimeSpan.FromSeconds(8), "complete", print));
-        watch.LoadEnded(2);
-        Assert.True(watch.Observe(TimeSpan.FromSeconds(9), "complete", print));
-
-        foreach (ulong? id in new ulong?[] { 7, null })   // no id (the Mac) ends any wait
-        {
-            var any = new BrowserWatch();
-            any.Navigated(true, 200);
-            any.Read(TimeSpan.Zero, Article, url);
-            any.Began(TimeSpan.Zero, id);
-            Assert.False(any.Observe(TimeSpan.Zero, "complete", print));
-            Assert.False(any.Observe(TimeSpan.FromSeconds(8), "complete", print));
-            any.LoadEnded();
-            Assert.True(any.Observe(TimeSpan.FromSeconds(9), "complete", print));
-        }
+        Assert.True(watch.WantsRead(TimeSpan.Zero, Look(Article, 200, 1), 200, errorPage: false));
+        Assert.True(watch.WantsRead(TimeSpan.Zero, Look(Cloudflare, 403, 2), 403, errorPage: false));   // the next document's look came first
+        Assert.False(watch.Read(TimeSpan.Zero, Article, new Uri("https://example.com/"), 1));
+        Assert.Null(watch.Html);
+        Assert.Equal(403, watch.Status);
     }
 
     [Theory]
@@ -411,23 +377,30 @@ public sealed class BotCheckTests : IDisposable
     [Fact]
     public void Answers_ReadTheScriptsAndTheCookies()
     {
-        Assert.True(BrowserAnswers.TryReadPrint("{\"s\":\"complete\",\"n\":12,\"x\":3456}", out string state, out var print));
-        Assert.Equal("complete", state);
-        Assert.Equal((12, 3456u), print);
-        Assert.False(BrowserAnswers.TryReadPrint("{\"s\":\"loading\",\"n\":0,\"x\":1}", out _, out _));
-        Assert.False(BrowserAnswers.TryReadPrint("null", out _, out _));
-        Assert.False(BrowserAnswers.TryReadPrint("not json", out _, out _));
+        Assert.True(BrowserAnswers.TryReadLook("{\"s\":\"complete\",\"n\":12,\"x\":3456}", out var look));
+        Assert.Equal("complete", look.State);
+        Assert.Equal((12, 3456u), look.Print);
+        Assert.Equal(0, look.Status);   // an answer from before 2026-10-26's fields, or WebKit's: no status
+        Assert.False(BrowserAnswers.TryReadLook("{\"s\":\"loading\",\"n\":0,\"x\":1}", out _));
+        Assert.False(BrowserAnswers.TryReadLook("null", out _));
+        Assert.False(BrowserAnswers.TryReadLook("not json", out _));
         // A hash past 2³¹ as WebView2 writes it, a whole double (2026-10-26, the live test: such a page was never read).
-        Assert.True(BrowserAnswers.TryReadPrint("{\"n\":1544,\"s\":\"interactive\",\"x\":4083221934.0}", out _, out print));
-        Assert.Equal((1544, 4083221934u), print);
-        Assert.False(BrowserAnswers.TryReadPrint("{\"n\":12,\"x\":1.5}", out _, out _));
-        Assert.False(BrowserAnswers.TryReadPrint("{\"n\":12,\"x\":4294967296.0}", out _, out _));
-        Assert.False(BrowserAnswers.TryReadPrint("{\"n\":12,\"x\":-1}", out _, out _));
+        Assert.True(BrowserAnswers.TryReadLook("{\"n\":1544,\"s\":\"interactive\",\"x\":4083221934.0}", out look));
+        Assert.Equal((1544, 4083221934u), look.Print);
+        Assert.False(BrowserAnswers.TryReadLook("{\"n\":12,\"x\":1.5}", out _));
+        Assert.False(BrowserAnswers.TryReadLook("{\"n\":12,\"x\":4294967296.0}", out _));
+        Assert.False(BrowserAnswers.TryReadLook("{\"n\":12,\"x\":-1}", out _));
+        // The document's own status, address and time origin (2026-10-26, the redesign).
+        Assert.True(BrowserAnswers.TryReadLook("{\"s\":\"complete\",\"n\":12,\"x\":1,\"st\":403,\"u\":\"https://example.com/a\",\"o\":1761500000123.4}", out look));
+        Assert.Equal(new BrowserLook("complete", (12, 1u), 403, "https://example.com/a", 1761500000123.4), look);
+        Assert.True(BrowserAnswers.TryReadLook("{\"n\":12,\"x\":1,\"st\":12345}", out look));
+        Assert.Equal(0, look.Status);   // no HTTP status
 
-        Assert.True(BrowserAnswers.TryReadPage("{\"s\":\"complete\",\"h\":\"<html></html>\"}", out string html));
+        Assert.True(BrowserAnswers.TryReadPage("{\"s\":\"complete\",\"h\":\"<html></html>\",\"o\":7.5}", out string html, out double document));
         Assert.Equal("<html></html>", html);
-        Assert.False(BrowserAnswers.TryReadPage("{\"h\":\"\"}", out _));
-        Assert.False(BrowserAnswers.TryReadPage(null, out _));
+        Assert.Equal(7.5, document);
+        Assert.False(BrowserAnswers.TryReadPage("{\"h\":\"\"}", out _, out _));
+        Assert.False(BrowserAnswers.TryReadPage(null, out _, out _));
 
         string cookies = "{\"cookies\":[{\"name\":\"cf_clearance\",\"value\":\"a\",\"domain\":\".example.com\",\"path\":\"/\",\"expires\":-1,\"session\":true,\"secure\":true,\"httpOnly\":true},"
             + "{\"name\":\"other\",\"value\":\"b\",\"domain\":\"elsewhere.org\",\"path\":\"/\",\"expires\":-1,\"session\":true}]}";

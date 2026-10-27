@@ -146,7 +146,7 @@ public class ClaudeCliServerTests
 
     /// <summary>
     /// 2026-10-26, the speed's clock: the CLI's thinking is always hidden (a block start, an empty piece, a signature) and its call
-    /// comes whole in the <c>assistant</c> line, so every block start, signature and input piece is a <see cref="ClaudeServerEvent.Generating"/>.
+    /// comes whole in the <c>assistant</c> line, so each block's start is a <see cref="ClaudeServerEvent.Generating"/>.
     /// </summary>
     [Fact]
     public void Stream_TheBlocksTheSignatureAndTheInputPieces_AreGenerating_BeforeTheCall()
@@ -154,9 +154,9 @@ public class ClaudeCliServerTests
         var (toCall, _, _) = ToolTurns();
         var events = Parse(toCall);
 
-        // The thinking block's start, its signature, the tool_use block's start and its three input pieces.
+        // The thinking block's start and the tool_use block's: one a block (2026-10-26, the review's R25), the signature and input pieces unmarked.
         var round = events.TakeWhile(e => e is not ClaudeServerEvent.MessageStop).ToList();
-        Assert.Equal(6, round.OfType<ClaudeServerEvent.Generating>().Count());
+        Assert.Equal(2, round.OfType<ClaudeServerEvent.Generating>().Count());
         Assert.True(round.FindIndex(e => e is ClaudeServerEvent.Generating) < round.FindIndex(e => e is ClaudeServerEvent.ToolUse));
         Assert.IsType<ClaudeServerEvent.Generating>(Assert.Single(Parse(["""{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"""])));
     }
@@ -383,7 +383,7 @@ public class ClaudeCliServerTests
         await RunAsync(assistant, "Call the echo tool with hi");
 
         var round = recording.Streams[0];
-        Assert.Equal(6, round.Count(u => ReferenceEquals(u.RawRepresentation, StreamProgress.Marker) && u.Contents.Count == 0));
+        Assert.Equal(2, round.Count(u => ReferenceEquals(u.RawRepresentation, StreamProgress.Marker) && u.Contents.Count == 0));   // a block's start each
         int call = round.FindIndex(u => u.Contents.OfType<FunctionCallContent>().Any());
         Assert.Equal(round.Count - 1, call);
         Assert.True(StreamProgress.Shows(round[0]));
@@ -574,6 +574,25 @@ public class ClaudeCliServerTests
         Assert.Equal(@"C:\home\claude-cli", capture.Launch.WorkingDirectory);
         Assert.Empty(host.Starts);   // the chat's CLI is never asked
         Assert.Empty(host.Written);
+    }
+
+    [Fact]
+    public async Task Client_AOneShotsBlockStart_IsAMarker_SoItsHiddenThinkingIsTimed()
+    {
+        // 2026-10-26 (the review's R29): a one-shot's thinking never streams; its block's start marks the model producing.
+        await using var host = new FakeClaudeServerHost();
+        var capture = new ProcessLaunchCapture();
+        using var client = Client(host, _ => Events(new ClaudeEvent.BlockStarted(), new ClaudeEvent.TextDelta("Title"), FakeClaudeCli.Ok("x")), capture);
+
+        var updates = new List<ChatResponseUpdate>();
+        await foreach (var update in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))
+        {
+            updates.Add(update);
+        }
+
+        Assert.True(StreamProgress.IsMarker(updates[0]));
+        Assert.Empty(updates[0].Contents);
+        Assert.Equal("Title", updates.ToChatResponse().Text);
     }
 
     [Fact]

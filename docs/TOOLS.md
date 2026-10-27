@@ -52,7 +52,7 @@ Under *Web tools*.
 The app's own browser (macOS 14+ on a Mac), for a bot check the web tools can't pass. Its bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
 
 * **When:** `web_fetch`, `web_search`, `download_file` and `convert_to_pdf` offer it on a 403 or a 503 page, or a check's page. Never for a rate limit (a 403 too), an API's JSON or XML refusal, or headless. *Web browser botcheck window* says whether it asks first.
-* **Solving:** Esc, *Give up*, closing the window or 5 minutes gives up. Once the page shows no check and has finished loading, the window closes and the tool goes on.
+* **Solving:** Esc, *Give up*, closing the window or 5 minutes gives up. Once the page shows no check and settles, the window closes and the tool goes on with that page and its own HTTP status.
 * **From the phone:** the Web UI's Chat tab can answer it and, with *Web UI bot check control*, drive the window ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)).
 * **Cookies:** the window hands the site's cookies to the web tools for this run. A page that ends on another site is refused, and none of that site's cookies are read. On a Mac: [The Browser window on a Mac](MAC.md#the-browser-window-on-a-mac).
 
@@ -284,8 +284,10 @@ Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/
 * The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_WINDOWS_VLLM.md), [SGLang](DOCKER_WINDOWS_SGLANG.md).
 * **Picking one:** `/server` lists a row per chosen container; `docker:<container>` picks one (also in `--url` and `NEONSIDEKICK_LLM_URL`).
 * **Switching** stops the other chosen containers, then starts this one and waits until it's ready (*Docker server stop timeout (s)*, *Docker server post-stop delay (s)*, *Docker server ready timeout (s)*). If a stop fails, nothing starts. Esc or Ctrl+C cancels the wait; a stop or start already sent carries on.
-* **Leaving** for a server that uses the GPU of the computer running NeonSidekick (the embedded model, a local server, a blank *LLM URL*) stops the containers; other servers leave them running. That includes a chosen container NeonSidekick didn't start, such as one left from an earlier run, unless it's the server picked, and says so in the transcript. *Docker server stop on exit* stops the one in use at exit.
-* Bots and advisors share a running container but never start or stop one.
+* **Clearing the GPU:** before the embedded model loads or a server on this computer connects (`localhost`, `0.0.0.0`, a blank *LLM URL*), the running chosen containers stop, even one NeonSidekick didn't start. The transcript says which.
+* A container publishing that server's port, or on the `host` network, is that server and keeps running. A container behind a proxy on another port: pick it as `docker:<name>`, or leave it unticked.
+* Other servers leave the containers running. *Docker server stop on exit* stops the one in use at exit.
+* Bots and advisors share a running container but never start one. Their embedded model clears the GPU the same way, sparing the container in use.
 
 #### Docker on a Mac
 

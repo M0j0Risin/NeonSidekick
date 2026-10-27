@@ -109,7 +109,6 @@ internal sealed unsafe partial class WebViewHost
             run.Host = new WebViewHost(hwnd)
             {
                 NavigationDone = run.OnNavigationDone,
-                NavigationBegan = run.OnNavigationBegan,
                 HistoryChanged = run.OnHistoryChanged,
                 Refused = run.OnRefused,
                 DownloadStarting = run.OnDownloadStarting,
@@ -215,7 +214,6 @@ internal sealed unsafe partial class WebViewHost
         private bool _viewPending;
         private bool _viewing;
         private bool _viewed;
-        private ulong _pdfNavigation;
 
         public WebViewHost? Host { get; set; }
 
@@ -227,21 +225,11 @@ internal sealed unsafe partial class WebViewHost
 
         public bool Exited { get; private set; }
 
-        // The staged PDF's navigation id as it starts (2026-10-26, the bot check's navigation ids): its completion must carry the same. Only that
-        // address's: the canceled download before it starts a navigation of its own, and the blank page's may fire no start at all.
-        public void OnNavigationBegan(string uri, ulong id)
-        {
-            if (PdfView.IsOurs(uri))
-            {
-                _pdfNavigation = id;
-            }
-        }
-
-        public void OnNavigationDone(bool ok, int status, ulong id)
+        public void OnNavigationDone(bool ok, int status)
         {
             if (_viewing)
             {
-                OnPdfViewed(ok, status, id);
+                OnPdfViewed(ok, status);
                 return;
             }
 
@@ -266,9 +254,26 @@ internal sealed unsafe partial class WebViewHost
             _step = "the DOM read";
             Host.RunScript(Web.HeadlessBrowser.PageExpression, (hr, json) =>
             {
-                if (hr < 0 || !BrowserAnswers.TryReadPage(json, out _))
+                if (hr < 0 || !BrowserAnswers.TryReadPage(json, out _, out double document) || document <= 0)
                 {
                     Finish(false, $"the DOM read answered {json} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
+                    return;
+                }
+
+                ReadLook();
+            });
+        }
+
+        // The bot check's look on the real runtime (2026-10-26, the Browser window's redesign): its address and its document must read; the
+        // blank page has no HTTP status, which the live Browser window test proves on a served page.
+        private void ReadLook()
+        {
+            _step = "the look";
+            Host!.RunScript(Web.HeadlessBrowser.PrintExpression, (hr, json) =>
+            {
+                if (hr < 0 || !BrowserAnswers.TryReadLook(json, out var look) || look.Document <= 0 || look.Url != BrowserPage.Blank)
+                {
+                    Finish(false, $"the look answered {json} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
                     return;
                 }
 
@@ -479,7 +484,7 @@ internal sealed unsafe partial class WebViewHost
             }
         }
 
-        private void OnPdfViewed(bool ok, int status, ulong id)
+        private void OnPdfViewed(bool ok, int status)
         {
             if (_viewed || Done)
             {
@@ -499,12 +504,6 @@ internal sealed unsafe partial class WebViewHost
                 return;
             }
 
-            if (id == 0 || id != _pdfNavigation)
-            {
-                Finish(false, $"the staged PDF's navigation ids differ (started {_pdfNavigation.ToString(CultureInfo.InvariantCulture)}, completed {id.ToString(CultureInfo.InvariantCulture)})");
-                return;
-            }
-
             Host.RunScript("document.contentType", (hr, json) =>
             {
                 if (hr < 0 || json != "\"application/pdf\"")
@@ -513,7 +512,7 @@ internal sealed unsafe partial class WebViewHost
                     return;
                 }
 
-                Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a picture of {_frameBytes.ToString(CultureInfo.InvariantCulture)} B and a mouse move over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled, the PDF staged and shown on {PdfView.HostName}");
+                Finish(true, $"runtime {version}; the bar's address box and a tooltip; the blank page's navigation and address, its DOM and look, a history entry gone back from and cleared, {_cookies.ToString(CultureInfo.InvariantCulture)} cookie set and read over DevTools, a picture of {_frameBytes.ToString(CultureInfo.InvariantCulture)} B and a mouse move over DevTools, a PDF of {_pdfBytes.ToString(CultureInfo.InvariantCulture)} B, a file: navigation refused, a download canceled, the PDF staged and shown on {PdfView.HostName}");
             });
         }
 

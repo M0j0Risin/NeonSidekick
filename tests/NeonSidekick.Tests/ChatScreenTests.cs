@@ -7131,7 +7131,10 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal("Profile name must be 1 to 32 letters, digits, - or _, not starting with - (and not add, delete, edit, pull, push, reload, rename or reset).", ChatScreen.ProfileNameError);
+        Assert.StartsWith("Profile name must be 1 to 32 letters, digits, - or _, not starting with -, and not a word /profile reads (add, allowed, ", ChatScreen.ProfileNameError, StringComparison.Ordinal);
+        Assert.EndsWith(", videos, vocalia).", ChatScreen.ProfileNameError, StringComparison.Ordinal);
+        string listed = ChatScreen.ProfileNameError[(ChatScreen.ProfileNameError.LastIndexOf('(') + 1)..^2];
+        Assert.Equal(Profiles.ReservedNames, listed.Split(", "));   // every word it refuses (R13)
         // /profile edit and /profile reload (2026-09-21).
         Assert.Equal("(🪪 opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditOpenedNotice("x"));
         Assert.Equal("(🪪 created and opened profile \"x\"'s profile.json in your editor; /profile reload reads it back)", ChatScreen.ProfileEditCreatedNotice("x"));
@@ -8284,6 +8287,47 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(SettingsChanges.None, ChatScreen.ReloadChanges([]));
     }
 
+    /// <summary>
+    /// 2026-10-26, the review's R24: a push into the loaded profile from another copy of the app is taken at the idle line within
+    /// <see cref="ChatScreen.OutsideChangesPoll"/>, said once, and what it asks rebuilt (the model here), the conversation kept.
+    /// </summary>
+    [Fact]
+    public async Task AnOutsideChange_ToTheProfilesFile_IsTakenAtTheIdleLine_AndReconnectsWhatItAsks()
+    {
+        _settings.Update(d => d.LlmModel = "before");
+        await _settings.FlushAsync();
+        _chat.EnqueueText("one").EnqueueText("two");
+        var input = new ScriptedInput();
+        PushLine(input, "hi");
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            switch (++waits)
+            {
+                case 1:
+                    var pushed = Profiles.ReadProfileFile(_settings.FilePath);
+                    pushed.LlmModel = "pushed-model";
+                    pushed.GitLibLogMaxCommits = 33;
+                    Profiles.WriteProfileFile(_settings.FilePath, pushed);
+                    _time.Advance(ChatScreen.OutsideChangesPoll);   // the look under the read: the change ends it
+                    break;
+                case 2:
+                    PushLine(input, "again");
+                    PushLine(input, "/exit");
+                    break;
+            }
+        };
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(1, output.Split("  · " + ProfileText.ChangedElsewhereNotice(_settings.ProfileName, 2)).Length - 1);
+        Assert.Equal("pushed-model", _settings.Current.LlmModel);
+        Assert.Equal(33, _settings.Current.GitLibLogMaxCommits);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("hi", _chat.Requests[1][1].Text);   // the conversation kept
+        Assert.Equal("pushed-model", Profiles.ReadProfileFile(_settings.FilePath).LlmModel);
+    }
+
     [Fact]
     public async Task Profile_Rename_MovesAnotherProfile_AndTouchesNothingElse()
     {
@@ -8346,7 +8390,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileExistsError("neon")).Length - 1);
         Assert.Contains("  ✗ " + ChatScreen.ProfileExistsError("work"), output);
-        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileNameError).Length - 1);
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileNameError[..40]).Length - 1);   // its start: it names every reserved word, so it wraps
         Assert.Contains("  ✗ " + ChatScreen.ProfileMissingError("ghost"), output);
         Assert.DoesNotContain("(renamed profile", output);
         Assert.Equal(new[] { "neon", "work" }, Profiles.List(_dir));
@@ -8366,7 +8410,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileNameError).Length - 1);
+        Assert.Equal(2, output.Split("  ✗ " + ChatScreen.ProfileNameError[..40]).Length - 1);   // its start: it names every reserved word, so it wraps
         Assert.Contains("  ✗ " + ChatScreen.ProfileExistsError("neon"), output);
         Assert.Contains("  ✗ " + ChatScreen.ProfileExistsError("work"), output);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
@@ -9271,7 +9315,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void ProfileServerFields_AreTheServerSettings_AndEachIsCopied()
     {
-        Assert.Equal(
+        // Each name is its settings row's (R16: servers joined ProfileSettingGroups, by property name).
+        SettingsField[] fields =
             [
                 SettingsField.LlmScanMode, SettingsField.LlmUrl, SettingsField.LlmModel,
                 SettingsField.LlmReasoning, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace,   // 2026-10-10
@@ -9283,8 +9328,12 @@ public partial class ChatScreenTests : IDisposable
                 SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,   // later on 2026-10-10, on the Anthropic tab
                 SettingsField.AnthropicApi, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,
-            ],
-            ChatScreen.ProfileServerFields.Select(f => f.Field));
+            ];
+        var group = ChatScreen.ProfileSettingGroups[ProfileSection.Servers];
+        Assert.Equal(fields.Select(f => f.ToString()), group.Select(g => g.Name));
+        Assert.True(ChatScreen.IsSettingGroupSection(ProfileSection.Servers));
+        var properties = SettingsJsonContext.Default.AppSettingsData.Properties.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+        Assert.All(group, g => Assert.Contains(g.Name, properties));
 
         var from = new AppSettingsData
         {
@@ -9301,13 +9350,13 @@ public partial class ChatScreenTests : IDisposable
             OpenAIApi = true, OpenAIApiMaxTokens = 4_096, OpenAIApiOrganization = "org-neon", OpenAIApiProject = "proj-neon",
         };
         var to = new AppSettingsData();
-        foreach (var (_, copy) in ChatScreen.ProfileServerFields)
+        foreach (var (_, copy) in group)
         {
             copy(from, to);
         }
 
         string dir = _settings.ProfileDirectory;
-        foreach (var (field, _) in ChatScreen.ProfileServerFields)
+        foreach (var field in fields)
         {
             Assert.Equal(SettingsMenu.FieldValue(field, from, dir), SettingsMenu.FieldValue(field, to, dir));
             Assert.NotEqual(SettingsMenu.FieldValue(field, new AppSettingsData(), dir), SettingsMenu.FieldValue(field, to, dir));
@@ -9343,7 +9392,7 @@ public partial class ChatScreenTests : IDisposable
             [ProfileSection.StatusBar] = ["StatusBar", "HintsBar"],
             [ProfileSection.BarOrder] = ["BarOrder"],
         };
-        Assert.Equal(prefixes.Keys.Order(), ChatScreen.ProfileSettingGroups.Keys.Order());
+        Assert.Equal(prefixes.Keys.Order(), ChatScreen.ProfileSettingGroups.Keys.Where(k => k != ProfileSection.Servers).Order());   // servers spans prefixes in part: its own test
         var properties = SettingsJsonContext.Default.AppSettingsData.Properties;
         foreach (var (section, heads) in prefixes)
         {
@@ -9392,28 +9441,32 @@ public partial class ChatScreenTests : IDisposable
             Assert.DoesNotContain(SettingsDiff.Changes(new AppSettingsData(), nulls), line => names.Contains(line.Split(':')[0]));   // null stays null
         }
 
-        Assert.Equal("Copy this profile's toolbar setup into \"work\"? Its toolbar items, order and sides are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.Toolbar, "work", pull: false));
-        Assert.Equal("Copy \"work\"'s toolbar setup into this profile? This profile's toolbar items, order and sides are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.Toolbar, "work", pull: true));
-        Assert.Equal("Copy this profile's performance bar setup into \"work\"? Its performance bar meters, order, sides and look are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.PerfBar, "work", pull: false));
-        Assert.Equal("Copy \"work\"'s performance bar setup into this profile? This profile's performance bar meters, order, sides and look are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.PerfBar, "work", pull: true));
-        Assert.Equal("Copy this profile's Status bar setup into \"work\"? Its Status bar sections, order, sides and Hints bar are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.StatusBar, "work", pull: false));
-        Assert.Equal("Copy \"work\"'s Status bar setup into this profile? This profile's Status bar sections, order, sides and Hints bar are replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.StatusBar, "work", pull: true));
-        Assert.Equal("Copy this profile's bar order into \"work\"? Its bar order is replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.BarOrder, "work", pull: false));
-        Assert.Equal("Copy \"work\"'s bar order into this profile? This profile's bar order is replaced.", ChatScreen.ProfileBarPrompt(ProfileSection.BarOrder, "work", pull: true));
-        Assert.Equal("(copied the toolbar setup into \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.Toolbar, "work", pull: false));
-        Assert.Equal("(copied the performance bar setup from \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.PerfBar, "work", pull: true));
-        Assert.Equal("(copied the Status bar setup into \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.StatusBar, "work", pull: false));
-        Assert.Equal("(copied the bar order from \"work\")", ChatScreen.ProfileBarCopiedNotice(ProfileSection.BarOrder, "work", pull: true));
+        Assert.Equal("Copy this profile's toolbar setup into \"work\"? Its toolbar items, order and sides are replaced.", ProfileText.BarPrompt(ProfileSection.Toolbar, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s toolbar setup into this profile? This profile's toolbar items, order and sides are replaced.", ProfileText.BarPrompt(ProfileSection.Toolbar, "work", pull: true));
+        Assert.Equal("Copy this profile's performance bar setup into \"work\"? Its performance bar meters, order, sides and look are replaced.", ProfileText.BarPrompt(ProfileSection.PerfBar, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s performance bar setup into this profile? This profile's performance bar meters, order, sides and look are replaced.", ProfileText.BarPrompt(ProfileSection.PerfBar, "work", pull: true));
+        Assert.Equal("Copy this profile's Status bar setup into \"work\"? Its Status bar sections, order, sides and Hints bar are replaced.", ProfileText.BarPrompt(ProfileSection.StatusBar, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s Status bar setup into this profile? This profile's Status bar sections, order, sides and Hints bar are replaced.", ProfileText.BarPrompt(ProfileSection.StatusBar, "work", pull: true));
+        Assert.Equal("Copy this profile's bar order into \"work\"? Its bar order is replaced.", ProfileText.BarPrompt(ProfileSection.BarOrder, "work", pull: false));
+        Assert.Equal("Copy \"work\"'s bar order into this profile? This profile's bar order is replaced.", ProfileText.BarPrompt(ProfileSection.BarOrder, "work", pull: true));
+        Assert.Equal("(copied the toolbar setup into \"work\")", ProfileText.BarCopiedNotice(ProfileSection.Toolbar, "work", pull: false));
+        Assert.Equal("(copied the performance bar setup from \"work\")", ProfileText.BarCopiedNotice(ProfileSection.PerfBar, "work", pull: true));
+        Assert.Equal("(copied the Status bar setup into \"work\")", ProfileText.BarCopiedNotice(ProfileSection.StatusBar, "work", pull: false));
+        Assert.Equal("(copied the bar order from \"work\")", ProfileText.BarCopiedNotice(ProfileSection.BarOrder, "work", pull: true));
 
         const string Push = "Copy this profile's Home Assistant settings and home bar into \"work\"? Its Home Assistant tools switch, URL, API key, action policy, safe services, Assist agent and timeout, and its home bar's items, sides, names and emoji are replaced.";
         const string Pull = "Copy \"work\"'s Home Assistant settings and home bar into this profile? This profile's Home Assistant tools switch, URL, API key, action policy, safe services, Assist agent and timeout, and its home bar's items, sides, names and emoji are replaced.";
-        Assert.Equal(Push, ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: false));
-        Assert.Equal(Pull, ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: true));
-        Assert.Equal(Push + " \"work\"'s Home Assistant URL and API key are cleared: none here.", ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: false, keySet: false, pull: false));
-        Assert.Equal(Push + " \"work\"'s Home Assistant URL is cleared: none here.", ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: false, keySet: true, pull: false));
-        Assert.Equal(Pull + " This profile's Home Assistant API key is cleared: none in \"work\".", ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: false, pull: true));
-        Assert.Equal("(copied the Home Assistant settings into \"work\": Home Assistant URL http://ha:8123, 6 home bar items)", ChatScreen.ProfileHomeAssistantCopiedNotice("work", "http://ha:8123", 6, pull: false));
-        Assert.Equal("(copied the Home Assistant settings from \"work\": Home Assistant URL (not set), 1 home bar item)", ChatScreen.ProfileHomeAssistantCopiedNotice("work", SettingsMenu.NoHomeAssistantUrlLabel, 1, pull: true));
+        Assert.Equal(Push, ProfileText.HomeAssistantPrompt("work", urlSet: true, keySet: true, pull: false));
+        Assert.Equal(Pull, ProfileText.HomeAssistantPrompt("work", urlSet: true, keySet: true, pull: true));
+        Assert.Equal(Push + " \"work\"'s Home Assistant URL and API key are cleared: none here.", ProfileText.HomeAssistantPrompt("work", urlSet: false, keySet: false, pull: false));
+        Assert.Equal(Push + " \"work\"'s Home Assistant URL is cleared: none here.", ProfileText.HomeAssistantPrompt("work", urlSet: false, keySet: true, pull: false));
+        Assert.Equal(Pull + " This profile's Home Assistant API key is cleared: none in \"work\".", ProfileText.HomeAssistantPrompt("work", urlSet: true, keySet: false, pull: true));
+        Assert.Equal("(copied the Home Assistant settings into \"work\": Home Assistant URL http://ha:8123, 6 home bar items)", ProfileText.HomeAssistantCopiedNotice("work", "http://ha:8123", 6, pull: false));
+        Assert.Equal("(copied the Home Assistant settings from \"work\": Home Assistant URL (not set), 1 home bar item)", ProfileText.HomeAssistantCopiedNotice("work", SettingsMenu.NoHomeAssistantUrlLabel, 1, pull: true));
+        // R22: a URL's user name and password never reach the transcript.
+        Assert.Equal("(copied the Home Assistant settings into \"work\": Home Assistant URL http://ha:8123/, 2 home bar items)", ProfileText.HomeAssistantCopiedNotice("work", "http://me:secret@ha:8123", 2, pull: false));
+        Assert.Equal("https://ha.test/api", ProfileText.WithoutUserInfo("https://me@ha.test/api"));
+        Assert.Equal("http://ha:8123", ProfileText.WithoutUserInfo("http://ha:8123"));
     }
 
     /// <summary>A toolbar push writes the toolbar's four settings into the target; its other bars and settings stay.</summary>
@@ -9429,8 +9482,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileBarPrompt(ProfileSection.Toolbar, "work", pull: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileBarCopiedNotice(ProfileSection.Toolbar, "work", pull: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ProfileText.BarPrompt(ProfileSection.Toolbar, "work", pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ProfileText.BarCopiedNotice(ProfileSection.Toolbar, "work", pull: false), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(["tools", "path"], work.ToolbarItems!);
         Assert.Equal(["tools"], work.ToolbarLastItems!);
@@ -9494,8 +9547,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileBarPrompt(ProfileSection.PerfBar, "work", pull: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileBarCopiedNotice(ProfileSection.PerfBar, "work", pull: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ProfileText.BarPrompt(ProfileSection.PerfBar, "work", pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ProfileText.BarCopiedNotice(ProfileSection.PerfBar, "work", pull: true), output);
         Assert.Equal(["cpu", "net"], _settings.Current.PerformanceBarItems!);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Equal(["net"], _settings.Current.PerformanceBarRight!);
@@ -9516,7 +9569,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.ProfileBarCopiedNotice(ProfileSection.BarOrder, "work", pull: true), output);
+        Assert.Contains("  · " + ProfileText.BarCopiedNotice(ProfileSection.BarOrder, "work", pull: true), output);
         Assert.Equal(["home", "perf", "toolbar", "status", "hints"], _settings.Current.BarOrder!);
     }
 
@@ -9548,8 +9601,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileHomeAssistantCopiedNotice("work", "http://ha.test:8123", 2, pull: false), output);   // the divider isn't a chip
+        Assert.Contains(SettingsMenu.PromptTitle(ProfileText.HomeAssistantPrompt("work", urlSet: true, keySet: true, pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ProfileText.HomeAssistantCopiedNotice("work", "http://ha.test:8123", 2, pull: false), output);   // the divider isn't a chip
         Assert.DoesNotContain("secret", output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(("http://ha.test:8123", "secret", true, "any", "conversation.neon", 20), (work.HomeAssistantUrl, work.HomeAssistantToken, work.HomeAssistantTools, work.HomeAssistantActionPolicy, work.HomeAssistantAssistAgent, work.HomeAssistantTimeoutSeconds));
@@ -9576,8 +9629,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: false, keySet: false, pull: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileHomeAssistantCopiedNotice("work", SettingsMenu.NoHomeAssistantUrlLabel, 0, pull: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ProfileText.HomeAssistantPrompt("work", urlSet: false, keySet: false, pull: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ProfileText.HomeAssistantCopiedNotice("work", SettingsMenu.NoHomeAssistantUrlLabel, 0, pull: false), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(("", "", null), (work.HomeAssistantUrl, work.HomeAssistantToken, work.HomeBarItems));
     }
@@ -9599,8 +9652,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileHomeAssistantPrompt("work", urlSet: true, keySet: true, pull: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileHomeAssistantCopiedNotice("work", "http://ha.test:8123", 1, pull: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ProfileText.HomeAssistantPrompt("work", urlSet: true, keySet: true, pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ProfileText.HomeAssistantCopiedNotice("work", "http://ha.test:8123", 1, pull: true), output);
         Assert.Equal(("http://ha.test:8123", "secret", 30), (_settings.Current.HomeAssistantUrl, _settings.Current.HomeAssistantToken, _settings.Current.HomeAssistantTimeoutSeconds));
         Assert.Equal(["area:den"], _settings.Current.HomeBarItems!);
         Assert.Equal("my-llm", _settings.Current.LlmApiKey);
@@ -12873,10 +12926,11 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>The server reads the prompt for 500 ms, then streams for 5 s: 15 tokens out makes 3 tok/s.</summary>
     private void ReplyWithUsage(string text = "Hello there.", long input = 10, long output = 15)
     {
-        _chat.Enqueue(FakeChatClient.Text(text), FakeChatClient.Usage(input, output));
+        // Two pieces 5 s apart, the report right after the last (2026-10-26: the speed's span ends at the last piece that showed).
+        _chat.Enqueue(FakeChatClient.Text(text[..(text.Length / 2)]), FakeChatClient.Text(text[(text.Length / 2)..]), FakeChatClient.Usage(input, output));
         _chat.BeforeUpdate = (i, _) =>
         {
-            _time.Advance(i == 0 ? TimeSpan.FromMilliseconds(500) : TimeSpan.FromSeconds(5));
+            _time.Advance(i switch { 0 => TimeSpan.FromMilliseconds(500), 1 => TimeSpan.FromSeconds(5), _ => TimeSpan.Zero });
             return Task.CompletedTask;
         };
     }
@@ -13720,9 +13774,9 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         LmStudioWindow();
         ReplyWithUsage();                                                                  // a: 25 in use
-        _chat.Enqueue(FakeChatClient.Text("two"), FakeChatClient.Usage(12, 3));            // b: 15
+        _chat.Enqueue(FakeChatClient.Text("tw"), FakeChatClient.Text("o"), FakeChatClient.Usage(12, 3));            // b: 15
         _chat.Enqueue(FakeChatClient.Text("A summary."), FakeChatClient.Usage(30, 4));     // the compact: 34, billed, nothing in use
-        _chat.Enqueue(FakeChatClient.Text("three"), FakeChatClient.Usage(20, 4));          // c: 24, measured again
+        _chat.Enqueue(FakeChatClient.Text("thr"), FakeChatClient.Text("ee"), FakeChatClient.Usage(20, 4));          // c: 24, measured again
         StepsWhenIdle(Line("a"), Line("b"), Line("/compact"), Line("c"), Line("/usage"), Key(Keys.Escape), Line("/exit"));
 
         string output = await RunAsync();

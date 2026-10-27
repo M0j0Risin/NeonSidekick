@@ -249,8 +249,8 @@ public class OpenAIApiTests
     }
 
     /// <summary>
-    /// 2026-10-26, the speed's clock: a reasoning item's start (without a summary the reasoning streams nothing), a call's start and
-    /// its argument deltas come out as contents-free progress updates, in order, and the reply stays one message.
+    /// 2026-10-26, the speed's clock: a reasoning item's start (without a summary the reasoning streams nothing) and a call's start
+    /// come out as contents-free progress updates, in order, its argument deltas held back unmarked, and the reply stays one message.
     /// </summary>
     [Fact]
     public async Task Stream_WhatItHoldsBack_ComesOutAsProgress_AndTheReplyStaysOneMessage()
@@ -271,7 +271,7 @@ public class OpenAIApiTests
                 var other => other.GetType().Name,
             };
 
-        Assert.Equal(["progress", "thinking", "thinking", "thinking", "signed", "progress", "progress", "call", "usage"], updates.Select(Kind));
+        Assert.Equal(["progress", "thinking", "thinking", "thinking", "signed", "progress", "call", "usage"], updates.Select(Kind));   // one marker an item (R25)
         Assert.All(updates, u => Assert.Equal("resp_1", u.MessageId));
         var message = Assert.Single(updates.ToChatResponse().Messages);
         Assert.Single(message.Contents.OfType<FunctionCallContent>());

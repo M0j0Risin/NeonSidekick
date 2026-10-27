@@ -199,22 +199,29 @@ public sealed class DockerServerTests : IDisposable
         Assert.Equal(new Uri("http://127.0.0.1:8100/v1"), result.LiveUrl);
     }
 
+    private Task<DockerStopAll> Clear(IReadOnlyCollection<string>? spare = null, int? port = null, bool settle = false, Action<string>? stoppedOne = null) =>
+        _host.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(_settings), _settings, settle) { SpareNames = spare ?? [], SparePort = port }, _phases.Add, stoppedOne, CancellationToken.None);
+
     [Fact]
-    public async Task StopAll_StopsTheRunningChosenOnes_AndNothingElse()
+    public async Task Clear_StopsTheRunningChosenOnes_AndNothingElse_FromOneList_ReportingEach()
     {
-        var left = await _host.StopAllAsync(_settings, except: [], settle: false, _phases.Add, CancellationToken.None);
+        var reported = new List<string>();
+        var left = await Clear(stoppedOne: reported.Add);
         Assert.Equal(["sglang_a", "paused_c"], left.Stopped);
+        Assert.Equal(["sglang_a", "paused_c"], reported);
         Assert.Empty(left.Errors);
+        Assert.Null(left.EngineError);
         Assert.Equal("running", _engine.State("mysql_dev"));
         Assert.Equal("exited", _engine.State("sglang_a"));
+        Assert.Single(_engine.Log, l => l.StartsWith("GET /v1.47/containers/json", StringComparison.Ordinal));   // one list (the review's R7)
         Assert.DoesNotContain(TimeSpan.FromSeconds(2), _waits);   // no settle: nothing starts after
     }
 
     [Fact]
-    public async Task StopAll_ToSettle_WaitsThePostStopDelay_OnlyWhenItStoppedOne()
+    public async Task Clear_ToSettle_WaitsThePostStopDelay_OnlyWhenItStoppedOne()
     {
         // A model loads next (an embedded one, another profile's container): the GPU's memory is given the delay, as a switch gives it.
-        var left = await _host.StopAllAsync(_settings, except: ["paused_c"], settle: true, _phases.Add, CancellationToken.None);
+        var left = await Clear(spare: ["paused_c"], settle: true);
         Assert.Equal(["sglang_a"], left.Stopped);
         Assert.Equal("paused", _engine.State("paused_c"));
         Assert.Equal(["stopping sglang_a", "letting the GPU's memory settle"], _phases);
@@ -222,23 +229,37 @@ public sealed class DockerServerTests : IDisposable
 
         _phases.Clear();
         _waits.Clear();
-        var none = await _host.StopAllAsync(_settings, except: ["paused_c"], settle: true, _phases.Add, CancellationToken.None);
+        var none = await Clear(spare: ["paused_c"], settle: true);
         Assert.Empty(none.Stopped);
         Assert.Empty(_phases);
         Assert.Empty(_waits);
     }
 
     [Fact]
-    public async Task StopAll_SparesEveryNameItIsGiven_AndStopsTheOtherActiveOne()
+    public async Task Clear_SparesEveryNameItIsGiven_AndStopsTheOtherActiveOne()
     {
-        // A local server's leftover sweep (2026-10-26) spares the containers that may be that server: a set, not one name.
         _engine.Set("vllm_b", "running");
-        var left = await _host.StopAllAsync(_settings, except: ["sglang_a", "vllm_b"], settle: false, _phases.Add, CancellationToken.None);
+        var left = await Clear(spare: ["sglang_a", "vllm_b"]);
         Assert.Equal(["paused_c"], left.Stopped);
         Assert.Equal("running", _engine.State("sglang_a"));
         Assert.Equal("running", _engine.State("vllm_b"));
         Assert.Equal("exited", _engine.State("paused_c"));
         Assert.Equal(["stopping paused_c"], _phases);
+    }
+
+    [Fact]
+    public async Task Clear_SparesTheContainerOnTheServersPort_ARestartingOneByItsBindings()
+    {
+        // A server on this computer (2026-10-26): the container publishing its port may be it. One restarting lists no ports; its inspect's
+        // bindings say which it asks for (the review's R5).
+        var left = await Clear(port: 30000);
+        Assert.Equal(["paused_c"], left.Stopped);
+        Assert.Equal("running", _engine.State("sglang_a"));
+
+        _engine.Set("vllm_b", "restarting");
+        var restarting = await Clear(port: 8000);
+        Assert.Equal(["sglang_a"], restarting.Stopped);
+        Assert.Equal("restarting", _engine.State("vllm_b"));
     }
 
     [Fact]

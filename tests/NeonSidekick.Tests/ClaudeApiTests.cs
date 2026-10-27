@@ -312,7 +312,7 @@ public class ClaudeApiTests
             };
 
         Assert.Equal(
-            ["progress", "thinking", "thinking", "progress", "signed", "progress", "text", "progress", "progress", "progress", "call", "usage"],
+            ["progress", "thinking", "thinking", "signed", "progress", "text", "progress", "call", "usage"],   // one marker a block (R25)
             updates.Select(Kind));
         Assert.All(updates, u => Assert.Equal("msg_1", u.MessageId));
 

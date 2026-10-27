@@ -1045,10 +1045,10 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
         }
 
         KillTimer(_hwnd, LingerTimer);
-        _job = new BrowserCheck(request, done, keepOpen: _visited is not null);
+        var job = _job = new BrowserCheck(request, done, keepOpen: _visited is not null);
         DiagnosticLog.Info("Browser", $"A bot check on {request.Url.Host} for the user to solve ({request.Why}).");
         ShowTitle();
-        Go(request.Url.AbsoluteUri);
+        BrowserCheckWatch.Start(this, job, () => Go(request.Url.AbsoluteUri));   // a look at the page from before first (2026-10-26)
         Show();
         SetTimer(_hwnd, PollTimer, (uint)DomSettle.PollInterval.TotalMilliseconds, IntPtr.Zero);
     }
@@ -1110,6 +1110,10 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
     BrowserIdentity IBrowserCheckPage.Identity => _identity;
 
     void IBrowserCheckPage.Finish(BrowserCheck check, BotCheckResult result, bool close) => Finish(check, result, close);
+
+    // The document's own status is in the look (Chromium's responseStatus); a page that did not load is Chromium's error page.
+    (int Status, bool ErrorPage) IBrowserCheckPage.Describe(BrowserLook look) =>
+        (look.Status, look.Url.StartsWith("chrome-error:", StringComparison.OrdinalIgnoreCase));
 
     // WebView2's ExecuteScript: a failed call (hr < 0) is no answer, as before.
     bool IBrowserCheckPage.Evaluate(string expression, Action<string?> answer) =>
@@ -1194,9 +1198,8 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
 
     // ── Events ───────────────────────────────────────────────────────────────
 
-    // A check's page completed. The blank page the view starts on is no answer: it may complete after the check began, which its id
-    // tells (2026-10-26, BrowserWatch: it ends no wait but its own), as it does a navigation the next one superseded.
-    private void OnNavigationDone(bool ok, int status, ulong id)
+    // A page completed. A check's watch reads each document's own status in its looks (2026-10-26, BrowserWatch), not from here.
+    private void OnNavigationDone(bool ok, int status)
     {
         SetBarState(_barState with { Loading = false });
         ReadHistory();
@@ -1205,22 +1208,7 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
             RecordVisit();
             FillLinkName();
         }
-
-        if (_job is { } job)
-        {
-            if (BrowserPage.HostOf(_host?.Source) is not null)
-            {
-                job.Watch.Navigated(ok, status, NavigationId(id));
-            }
-            else
-            {
-                job.Watch.LoadEnded(NavigationId(id));
-            }
-        }
     }
-
-    // A navigation's id as the watch takes it: 0 is WebView2's call failing, no id at all.
-    private static ulong? NavigationId(ulong id) => id == 0 ? null : id;
 
     private void OnTitleChanged(string title)
     {
@@ -1229,15 +1217,8 @@ internal sealed unsafe partial class BrowserWindowThread : IBrowserCheckPage
         ShowTitle();
     }
 
-    // A navigation let through: the bar shows it loading, and a check's watch waits for its page to complete (2026-10-26, BrowserWatch).
-    private void OnNavigationBegan(string uri, ulong id)
-    {
-        SetBarState(_barState with { Loading = true });
-        if (_job is { } job && BrowserPage.HostOf(uri) is not null)
-        {
-            job.Watch.Began(job.Clock.Elapsed, NavigationId(id));
-        }
-    }
+    // A navigation let through: the bar shows it loading.
+    private void OnNavigationBegan(string uri) => SetBarState(_barState with { Loading = true });
 
     private void OnSourceChanged(string source)
     {

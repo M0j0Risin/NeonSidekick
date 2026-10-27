@@ -37,4 +37,10 @@ public static class ConnectText
     public const string NotNowLabel = "Not now";
 
     public const string NotNowNote = "/server connects later";
+
+    /// <summary>
+    /// A connect's spinner (2026-10-26, the review's R39: here from <c>ChatScreen</c>, so the session puts it back after a Docker clear said
+    /// "stopping …"). Pinned.
+    /// </summary>
+    public const string Connecting = "looking for an LLM server";
 }

@@ -17,6 +17,10 @@ public static class DockerServerText
 
     public const string Settling = "letting the GPU's memory settle";
 
+    /// <summary>Whether <paramref name="phase"/> is a clear's step (<see cref="Stopping"/> or <see cref="Settling"/>): what headless says outside a switch.</summary>
+    public static bool IsClearStep(string phase) =>
+        phase.StartsWith("stopping ", StringComparison.Ordinal) || string.Equals(phase, Settling, StringComparison.Ordinal);
+
     public static string Starting(string name) => $"starting {name}";
 
     public static string Loading(string name) => $"loading the model in {name}";
@@ -55,16 +59,20 @@ public static class DockerServerText
     public static string Left(IReadOnlyList<string> stopped) => "Stopped the Docker server" + (stopped.Count == 1 ? " " : "s ") + string.Join(", ", stopped) + ": another server was picked.";
 
     /// <summary>
-    /// The transcript's line (and the log's) when a connect stopped chosen containers this run never started (2026-10-26, the user's
+    /// The transcript's line (and the log's) when a clear stopped chosen containers this run never started (2026-10-26, the user's
     /// report and call): one left from an earlier run, or started by hand. <see cref="Left"/>'s "another server was picked" reads wrong
-    /// at startup, so it says what comes next: the embedded model (<paramref name="embedded"/>) or a server on this computer.
+    /// at startup, so it says what for: the embedded model (<paramref name="embedded"/>, the main session's or a bot's) or a server on this
+    /// computer. Past tense (the review's R38): a bot's load, or a cancel after the stop, loads nothing next.
     /// </summary>
     public static string LeftForThisComputer(IReadOnlyList<string> stopped, bool embedded)
     {
         ArgumentNullException.ThrowIfNull(stopped);
         return "Stopped the Docker server" + (stopped.Count == 1 ? " " : "s ") + string.Join(", ", stopped)
-            + (embedded ? ": the embedded model loads next." : ": a server on this computer was picked.");
+            + (embedded ? " to free the GPU for the embedded model." : " to free the GPU for a server on this computer.");
     }
+
+    /// <summary>The debug line when a clear found the engine not answering (2026-10-26): nothing of it holds the GPU, and it goes unasked a minute.</summary>
+    public static string EngineDownLogLine(string error) => "Docker servers, clearing the GPU: " + error;
 
     // ─── refusals and failures ──────────────────────────────────────────────────
 

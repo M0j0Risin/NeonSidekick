@@ -68,7 +68,7 @@ public partial class SidekickAppTests
 
         var (docker, log) = await CloseTheWindowAsync(stopOnExit: true);
 
-        Assert.Equal(["switch sglang_a", "stop-all"], docker.Calls);   // the close's stop; the exit's finds none in use
+        Assert.Equal(["switch sglang_a", "clear"], docker.Calls);   // the close's stop; the exit's finds none in use
         Assert.Contains(SidekickApp.DockerServerClosingLine("sglang_a"), log);
         Assert.Contains(SidekickApp.DockerServerExitNotice("sglang_a"), log);
     }
@@ -117,9 +117,53 @@ public partial class SidekickAppTests
 
         string output = stdout.ToString();
         string notice = "[notice] " + Docker.DockerText.Glyph + " " + Docker.DockerServerText.LeftForThisComputer(["sglang_a"], embedded: false);
-        Assert.Equal(["list", "stop-all"], docker.Calls);
+        Assert.Equal(["clear port 1234"], docker.Calls);
         Assert.Contains(notice, output);
         Assert.True(output.IndexOf(notice, StringComparison.Ordinal) < output.IndexOf("LLM: http://127.0.0.1:1234", StringComparison.Ordinal));
+    }
+
+    [WindowsFact]
+    public async Task Headless_ACtrlCMidClear_StillSaysTheStopMade()
+    {
+        // The review's R23: the notice is said in a finally, so a cancel after a stop still prints it.
+        ServerOn1234("llama");
+        _settings.Update(d =>
+        {
+            d.DockerServers = true;
+            d.DockerServerContainers = ["sglang_a", "vllm_b"];
+            d.LlmUrl = "http://127.0.0.1:1234/v1";
+            d.LlmContextLength = 8192;
+        });
+        using var cts = new CancellationTokenSource();
+        var docker = new FakeDockerServers
+        {
+            List = new Docker.DockerServerList(
+                [
+                    new Docker.DockerContainer("id-a", "sglang_a", "lmsysorg/sglang:latest", "sha", "running", "Up", 0, [new Docker.DockerPort("0.0.0.0", 30000, 30000, "tcp")], new Dictionary<string, string>(), [], []),
+                    new Docker.DockerContainer("id-b", "vllm_b", "vllm/vllm-openai:latest", "sha", "running", "Up", 0, [new Docker.DockerPort("0.0.0.0", 8000, 8000, "tcp")], new Dictionary<string, string>(), [], []),
+                ],
+                [], null),
+            StopGate = (name, _) =>
+            {
+                if (name == "vllm_b")
+                {
+                    cts.Cancel();
+                }
+
+                return Task.CompletedTask;
+            },
+        };
+        var stdout = new StringWriter();
+        var app = App(stdin: new StringReader(""), stdout: stdout, dockerServers: () => docker);
+        try
+        {
+            await app.RunAsync(SidekickOptions.None with { Headless = true }, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.Contains("[notice] " + Docker.DockerText.Glyph + " " + Docker.DockerServerText.LeftForThisComputer(["sglang_a"], embedded: false), stdout.ToString());
     }
 
     [Fact]

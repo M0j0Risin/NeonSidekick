@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using NeonSidekick.Diagnostics;
 
@@ -61,6 +62,23 @@ public sealed class AppSettings : IDisposable
     /// <summary>Awaited inside a write, after the temp file is written and before it moves into place: a test holds a save mid-write with it.</summary>
     internal Func<Task>? WriteHook { get; set; }
 
+    /// <summary>
+    /// What the file held when last read or written here (2026-10-26, the review's R24: a <c>/profile push toolbar</c> into a profile open
+    /// in a second copy of the app was undone by that copy's next save, which wrote its whole snapshot): the file as parsed, before any
+    /// upgrade, as JSON. A write first takes what changed in the file since and not here (<see cref="MergeOutside"/>). Null when the
+    /// file couldn't be read: nothing is merged then. Under <see cref="_gate"/>.
+    /// </summary>
+    private JsonObject? _base;
+
+    /// <summary>Bumped with every <see cref="_base"/> a load sets (a switch, a reset, a copy, a reload): a merge from before one is dropped.</summary>
+    private long _baseEpoch;
+
+    /// <summary>The file's write time and length when <see cref="PollOutsideChanges"/> last looked: an unchanged one costs one <c>stat</c>.</summary>
+    private (DateTime Written, long Length)? _seenStamp;
+
+    /// <summary>The changes taken from the file and not yet handed to the screen (<see cref="TakeOutsideChanges"/>). Under <see cref="_gate"/>.</summary>
+    private readonly List<string> _outsideChanges = [];
+
     /// <param name="storageDirectory">The home: <c>models</c> and <c>profiles</c> live under it. Created on first save if absent.</param>
     /// <param name="profileOverride">
     /// The profile this launch loads (2026-09-26, <c>--profile</c> / <c>NEONSIDEKICK_PROFILE</c>, the user's ask; since 2026-10-16
@@ -78,6 +96,7 @@ public sealed class AppSettings : IDisposable
         _profileName = Profiles.Resolve(storageDirectory, wanted)
             ?? throw new ArgumentException(UnknownProfileMessage(wanted, Profiles.List(storageDirectory)), nameof(profileOverride));
         _data = Load(FilePath);
+        ResetBase(FilePath);
         DiagnosticLog.Info(Category, LoadedProfileNotice(_profileName));
         EnsureProfileDirectories();
     }
@@ -376,6 +395,7 @@ public sealed class AppSettings : IDisposable
         {
             _profileName = resolved;
             _data = Load(Profiles.ProfileFile(StorageDirectory, resolved));
+            ResetBase(Profiles.ProfileFile(StorageDirectory, resolved));
             snapshot = Copy(_data);
         }
 
@@ -417,6 +437,7 @@ public sealed class AppSettings : IDisposable
         lock (_gate)
         {
             _data = Load(Profiles.ProfileFile(StorageDirectory, resolved));
+            ResetBase(Profiles.ProfileFile(StorageDirectory, resolved));
             snapshot = Copy(_data);
         }
 
@@ -458,6 +479,7 @@ public sealed class AppSettings : IDisposable
         lock (_gate)
         {
             _data = Load(Profiles.ProfileFile(StorageDirectory, target));
+            ResetBase(Profiles.ProfileFile(StorageDirectory, target));
             snapshot = Copy(_data);
         }
 
@@ -485,6 +507,7 @@ public sealed class AppSettings : IDisposable
             _saveTurn++;
             name = _profileName;
             _data = Load(Profiles.ProfileFile(StorageDirectory, name));
+            ResetBase(Profiles.ProfileFile(StorageDirectory, name));
             snapshot = Copy(_data);
         }
 
@@ -531,7 +554,9 @@ public sealed class AppSettings : IDisposable
     /// One write, under <see cref="_writeGate"/>: the loaded profile's data to the loaded profile's file, both read under
     /// <see cref="_gate"/> once the write is ours, so a switch can never pair one profile's values with another's file. A debounced
     /// save passes its <paramref name="turn"/> and writes nothing once another turn has begun (that one writes); a flush passes null
-    /// and always writes.
+    /// and always writes. Since 2026-10-26 (the review's R24) what another writer changed in the file since it was last read or written
+    /// here, and this side hasn't, is taken into the write first (<see cref="MergeOutside"/>), so a push, a reset or a copy made from
+    /// another copy of the app is never undone by this one's save; the flushes before a switch, a reset or a copy merge the same way.
     /// </summary>
     private async Task SaveLatestAsync(long? turn)
     {
@@ -540,6 +565,8 @@ public sealed class AppSettings : IDisposable
         {
             AppSettingsData snapshot;
             string path;
+            JsonObject? baseNode;
+            long epoch;
             lock (_gate)
             {
                 if (turn is { } mine && mine != _saveTurn)
@@ -549,9 +576,26 @@ public sealed class AppSettings : IDisposable
 
                 snapshot = Copy(_data);
                 path = Profiles.ProfileFile(StorageDirectory, _profileName);
+                baseNode = _base;
+                epoch = _baseEpoch;
             }
 
-            await SaveAsync(snapshot, path).ConfigureAwait(false);
+            if (baseNode is not null)
+            {
+                MergeOutside(snapshot, path, baseNode, epoch);
+            }
+
+            if (await SaveAsync(snapshot, path).ConfigureAwait(false))
+            {
+                var written = Node(snapshot);
+                lock (_gate)
+                {
+                    if (epoch == _baseEpoch)
+                    {
+                        _base = written;
+                    }
+                }
+            }
         }
         finally
         {
@@ -559,7 +603,248 @@ public sealed class AppSettings : IDisposable
         }
     }
 
-    private async Task SaveAsync(AppSettingsData snapshot, string path)
+    /// <summary>
+    /// Sets <see cref="_base"/> to what <paramref name="path"/> holds now, as a load leaves it (its plain keys written back encrypted), and
+    /// starts a new epoch: changes taken from the file before it are dropped, the screen's untaken ones with them (the load raises
+    /// <see cref="Changed"/> with everything). Under <see cref="_gate"/>.
+    /// </summary>
+    private void ResetBase(string path)
+    {
+        _base = ReadFile(path)?.Node;
+        _baseEpoch++;
+        _outsideChanges.Clear();
+        _seenStamp = Stamp(path);
+    }
+
+    /// <summary>The file's write time and length, or null when there is none (<c>MemoryStore</c>'s stamp).</summary>
+    private static (DateTime Written, long Length)? Stamp(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? (info.LastWriteTimeUtc, info.Length) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A snapshot as JSON, the file's shape (the property names are the keys).</summary>
+    private static JsonObject Node(AppSettingsData data) =>
+        (JsonObject)JsonSerializer.SerializeToNode(data, SettingsJsonContext.Default.AppSettingsData)!;
+
+    /// <summary>
+    /// <paramref name="path"/> read for a merge: the file as parsed (before any upgrade) as JSON, and the data it loads to — the upgrades
+    /// <see cref="Load"/> makes, quietly, a plain key encrypted in memory and never written back here (the merge's write carries it). A
+    /// missing file reads as the defaults; one that can't be read or parsed is null.
+    /// </summary>
+    private static (JsonObject Node, AppSettingsData Data)? ReadFile(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                var defaults = new AppSettingsData();
+                return (Node(defaults), defaults);
+            }
+
+            if (JsonSerializer.Deserialize(File.ReadAllText(path), ReadInfo) is not { } data)
+            {
+                return null;
+            }
+
+            var node = Node(data);
+            RetiredWords.Upgrade(data);
+            if (data.SttInterrupt && !data.SttWake)
+            {
+                data.SttInterrupt = false;
+            }
+
+            SettingsSecrets.ProtectAtRest(data);
+            return (node, data);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Takes into <paramref name="ours"/> (a snapshot of this side's data, owned by the caller) what another writer changed in
+    /// <paramref name="path"/> since <paramref name="baseNode"/>, property by property: a property the file changed and this side didn't
+    /// takes the file's value; one both changed keeps this side's. What it took goes into the loaded data too (a property an
+    /// <see cref="Update"/> changed since the snapshot keeps the newer value), is logged and waits for <see cref="TakeOutsideChanges"/>.
+    /// Dropped when a load came since (<paramref name="epoch"/>). Returns the file's JSON when it differed from the base, else null.
+    /// Called under <see cref="_writeGate"/>.
+    /// </summary>
+    private JsonObject? MergeOutside(AppSettingsData ours, string path, JsonObject baseNode, long epoch)
+    {
+        if (ReadFile(path) is not { } file || JsonNode.DeepEquals(file.Node, baseNode))
+        {
+            return null;
+        }
+
+        var oursNode = Node(ours);
+        var taken = new List<JsonPropertyInfo>();
+        foreach (var property in SettingsJsonContext.Default.AppSettingsData.Properties)
+        {
+            if (property.Get is not null && property.Set is not null
+                && !JsonNode.DeepEquals(file.Node[property.Name], baseNode[property.Name])
+                && JsonNode.DeepEquals(oursNode[property.Name], baseNode[property.Name]))
+            {
+                taken.Add(property);
+            }
+        }
+
+        if (taken.Count == 0)
+        {
+            return file.Node;
+        }
+
+        var before = Copy(ours);
+        var theirs = Copy(file.Data);
+        foreach (var property in taken)
+        {
+            property.Set!(ours, property.Get!(theirs));
+        }
+
+        var lines = SettingsDiff.Changes(before, ours);
+        lock (_gate)
+        {
+            if (epoch != _baseEpoch)
+            {
+                return null;
+            }
+
+            var now = Node(_data);
+            var forData = Copy(file.Data);
+            foreach (var property in taken)
+            {
+                if (JsonNode.DeepEquals(now[property.Name], oursNode[property.Name]))
+                {
+                    property.Set!(_data, property.Get!(forData));
+                }
+            }
+
+            _outsideChanges.AddRange(lines);
+        }
+
+        foreach (string change in lines)
+        {
+            DiagnosticLog.Info(Category, OutsideChangeLogLine(change));
+        }
+
+        return file.Node;
+    }
+
+    /// <summary>The log line for one property taken from the file another writer changed (2026-10-26): <c>Changed elsewhere TtsSpeed: 1 → 1.2</c>.</summary>
+    public static string OutsideChangeLogLine(string change) => "Changed elsewhere " + change;
+
+    /// <summary>
+    /// Looks for another writer's changes to the loaded profile's file (2026-10-26, the review's R24), the screen's idle check every few
+    /// seconds: nothing but a <c>stat</c> while the file's write time and length are as last seen; else, when no write of this side's is
+    /// under way (it would merge them itself), the changes are taken as a save takes them (<see cref="MergeOutside"/>) and wait for
+    /// <see cref="TakeOutsideChanges"/>. True when changes wait. Any thread.
+    /// </summary>
+    public bool PollOutsideChanges()
+    {
+        string path;
+        (DateTime, long)? seen;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return false;
+            }
+
+            path = Profiles.ProfileFile(StorageDirectory, _profileName);
+            seen = _seenStamp;
+        }
+
+        var stamp = Stamp(path);
+        if (stamp == seen || !_writeGate.Wait(0))
+        {
+            return OutsideChangesReady;
+        }
+
+        try
+        {
+            AppSettingsData ours;
+            JsonObject? baseNode;
+            long epoch;
+            lock (_gate)
+            {
+                if (!string.Equals(path, Profiles.ProfileFile(StorageDirectory, _profileName), StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                // The stamp taken before the read: a write after it changes it again, and the next look reads once more.
+                _seenStamp = stamp;
+                ours = Copy(_data);
+                baseNode = _base;
+                epoch = _baseEpoch;
+            }
+
+            if (baseNode is not null && MergeOutside(ours, path, baseNode, epoch) is { } file)
+            {
+                lock (_gate)
+                {
+                    if (epoch == _baseEpoch)
+                    {
+                        _base = file;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+
+        return OutsideChangesReady;
+    }
+
+    /// <summary>Whether changes taken from the file wait for <see cref="TakeOutsideChanges"/>: the idle read's arm-time check.</summary>
+    public bool OutsideChangesReady
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _outsideChanges.Count > 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The changes taken from the file since the last call (a save's merge, or <see cref="PollOutsideChanges"/>), as
+    /// <see cref="SettingsDiff.Changes"/> lines, <see cref="Changed"/> raised once on the loaded data when there are any, so the screen
+    /// follows them as <c>/profile reload</c> does. Empty when none wait.
+    /// </summary>
+    public IReadOnlyList<string> TakeOutsideChanges()
+    {
+        List<string> lines;
+        AppSettingsData snapshot;
+        lock (_gate)
+        {
+            if (_outsideChanges.Count == 0)
+            {
+                return [];
+            }
+
+            lines = [.. _outsideChanges];
+            _outsideChanges.Clear();
+            snapshot = Copy(_data);
+        }
+
+        RaiseChanged(snapshot);
+        return lines;
+    }
+
+    /// <summary>Writes <paramref name="snapshot"/> to <paramref name="path"/>; false when the write failed (logged).</summary>
+    private async Task<bool> SaveAsync(AppSettingsData snapshot, string path)
     {
         // Temp file then File.Move: a half-written settings file is indistinguishable from a
         // corrupt one on the next launch. The GUID suffix keeps two writers apart.
@@ -575,11 +860,13 @@ public sealed class AppSettings : IDisposable
             }
 
             File.Move(tempPath, path, overwrite: true);
+            return true;
         }
         catch (Exception ex)
         {
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best effort */ }
             DiagnosticLog.Error(Category, $"Failed to save settings to {path}: {ex.Message}", ex);
+            return false;
         }
     }
 

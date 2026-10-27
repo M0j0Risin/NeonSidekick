@@ -13,13 +13,31 @@ public sealed record DockerSwitch(bool Ok, string? Error, Uri? LiveUrl, int Port
     public static DockerSwitch Failed(string error, IReadOnlyList<string> stopped) => new(false, error, null, 0, default, stopped);
 }
 
-/// <summary>What a stop of the chosen containers did: the ones stopped, and a sentence per one that would not stop.</summary>
-public sealed record DockerStopAll(IReadOnlyList<string> Stopped, IReadOnlyList<string> Errors);
+/// <summary>
+/// What a clear of the chosen containers did: the ones stopped, a sentence per one that would not stop, and the engine's failure when it
+/// answered nothing (Docker Desktop not running: then nothing of it holds the GPU).
+/// </summary>
+public sealed record DockerStopAll(IReadOnlyList<string> Stopped, IReadOnlyList<string> Errors, string? EngineError = null);
 
 /// <summary>
-/// The chosen containers a connect stopped though this run never started them (2026-10-26, the user's report: one left running by an
-/// earlier run sat beside the embedded model on the GPU): their names, and whether the embedded model loaded next (else a server on
-/// this computer was picked). The screen and headless say it once (<c>LlmSession.TakeLeftoverStopped</c>).
+/// A clear of the chosen containers (2026-10-26, the review of 12729c54, the user's call: one clear, one engine list under the switcher's
+/// gate, where an owned leave and a leftover sweep had listed apart): the names to stop (the profile's, and the profile's before a switch),
+/// the settings their stops go by, whether the post-stop delay is waited after (a model loads next), and what is spared — names (the
+/// container a switch goes to, the one serving the main session) and the port of a server on this computer, whose container may be it.
+/// </summary>
+public sealed record DockerClear(IReadOnlyList<string> Names, AppSettingsData Settings, bool Settle)
+{
+    /// <summary>Names never stopped.</summary>
+    public IReadOnlyCollection<string> SpareNames { get; init; } = [];
+
+    /// <summary>A server on this computer's port: the container publishing it, or on the <c>host</c> network (which publishes none), is spared.</summary>
+    public int? SparePort { get; init; }
+}
+
+/// <summary>
+/// The chosen containers a clear stopped though this run never started them (2026-10-26, the user's report: one left running by an
+/// earlier run sat beside the embedded model on the GPU): their names, and whether it was for an embedded model (else a server on this
+/// computer). The screen and headless say each once (<c>LlmSession.TakeLeftoverStopped</c>).
 /// </summary>
 public sealed record DockerLeftover(IReadOnlyList<string> Names, bool Embedded);
 
@@ -33,12 +51,12 @@ public interface IDockerServers : IDisposable
     Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Stops every running chosen container but those named in <paramref name="except"/> (another server picked, a profile switch,
-    /// the app's exit; a set since 2026-10-26, when a local server's leftover sweep spared the container it may be). With
-    /// <paramref name="settle"/> (a model about to load next: the embedded one or another container, 2026-10-02) and any stopped,
+    /// Stops every active container <paramref name="request"/> names but those it spares (another server picked, an embedded model about to
+    /// load, a profile switch, the app's exit), from one list of the engine's, under the switch's gate; each name told to
+    /// <paramref name="stoppedOne"/> as it stops, so a cancel keeps what happened. With <see cref="DockerClear.Settle"/> and any stopped,
     /// <c>Docker server post-stop delay</c> is waited after, as a switch waits it.
     /// </summary>
-    Task<DockerStopAll> StopAllAsync(AppSettingsData effective, IReadOnlyCollection<string> except, bool settle, Action<string>? phase, CancellationToken cancellationToken);
+    Task<DockerStopAll> ClearAsync(DockerClear request, Action<string>? phase, Action<string>? stoppedOne, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -197,12 +215,10 @@ public sealed class DockerServerHost : IDockerServers
         }
     }
 
-    public async Task<DockerStopAll> StopAllAsync(AppSettingsData effective, IReadOnlyCollection<string> except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<DockerStopAll> ClearAsync(DockerClear request, Action<string>? phase, Action<string>? stoppedOne, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(effective);
-        ArgumentNullException.ThrowIfNull(except);
-        var names = DockerEndpoint.ChosenNames(effective);
-        if (names.Count == 0)
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Names.Count == 0)
         {
             return new DockerStopAll([], []);
         }
@@ -213,27 +229,33 @@ public sealed class DockerServerHost : IDockerServers
             var (all, error) = await _docker.ContainersAsync(cancellationToken).ConfigureAwait(false);
             if (all is null)
             {
-                return new DockerStopAll([], [error!]);
+                return new DockerStopAll([], [], error);
             }
 
             var stopped = new List<string>();
             var errors = new List<string>();
-            foreach (var other in OthersToStop(all, names, except))
+            foreach (var other in OthersToStop(all, request.Names, request.SpareNames))
             {
+                if (request.SparePort is { } port && await MayServeAsync(other, port, cancellationToken).ConfigureAwait(false))
+                {
+                    continue;
+                }
+
                 phase?.Invoke(DockerServerText.Stopping(other.Name));
-                if (await StopOneAsync(other, effective, cancellationToken).ConfigureAwait(false) is { } failed)
+                if (await StopOneAsync(other, request.Settings, cancellationToken).ConfigureAwait(false) is { } failed)
                 {
                     errors.Add(other.Name + ": " + failed);
                 }
                 else
                 {
                     stopped.Add(other.Name);
+                    stoppedOne?.Invoke(other.Name);
                 }
             }
 
-            if (settle)
+            if (request.Settle)
             {
-                await SettleAsync(stopped, effective, phase, cancellationToken).ConfigureAwait(false);
+                await SettleAsync(stopped, request.Settings, phase, cancellationToken).ConfigureAwait(false);
             }
 
             return new DockerStopAll(stopped, errors);
@@ -242,6 +264,29 @@ public sealed class DockerServerHost : IDockerServers
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="container"/> may be the server on this computer's <paramref name="port"/>: it publishes the port, or it is
+    /// on the <c>host</c> network, which publishes none to compare. One the list shows no ports for (restarting, 2026-10-26, the review's R5)
+    /// is judged by its inspect's bindings, the ones it asks for.
+    /// </summary>
+    private async Task<bool> MayServeAsync(DockerContainer container, int port, CancellationToken cancellationToken)
+    {
+        if (container.Networks.Contains("host", StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        var ports = HostPortsOf(container);
+        if (ports.Count > 0)
+        {
+            return ports.Contains(port);
+        }
+
+        var (inspected, _) = await _docker.InspectAsync(container.Id, cancellationToken).ConfigureAwait(false);
+        return inspected is not null && (string.Equals(inspected.NetworkMode, "host", StringComparison.Ordinal)
+            || inspected.Published.Concat(inspected.Bound).Any(b => b.HostPort == port));
     }
 
     /// <summary>When any container was stopped, <c>Docker server post-stop delay</c> for the GPU's memory to settle before the next model loads.</summary>

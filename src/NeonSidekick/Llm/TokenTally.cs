@@ -17,6 +17,9 @@ public sealed class TokenTally
 {
     private readonly object _gate = new();
     private TokenUsage _lastReply;
+
+    // The last reply is the model's before a connect (HideFromHint), until the next report: never promoted to the turn before.
+    private bool _lastReplyStale;
     private TokenUsage _previousReply;
     private TokenUsage _conversation;
     private TokenUsage _session;
@@ -68,12 +71,14 @@ public sealed class TokenTally
     {
         lock (_gate)
         {
-            if (_lastReply.TokensPerSecond is not null)
+            // Not the old model's reply after a connect (2026-10-26, the review's R2): HideFromHint forgot the turn before, and this would bring it back.
+            if (_lastReply.TokensPerSecond is not null && !_lastReplyStale)
             {
                 _previousReply = _lastReply;
             }
 
             _lastReply = TokenUsage.Zero;
+            _lastReplyStale = false;
         }
     }
 
@@ -97,6 +102,7 @@ public sealed class TokenTally
         {
             _hintHidden = true;
             _previousReply = TokenUsage.Zero;
+            _lastReplyStale = true;
         }
     }
 
@@ -106,6 +112,7 @@ public sealed class TokenTally
         lock (_gate)
         {
             _hintHidden = false;
+            _lastReplyStale = false;
             _lastRequest = usage;
             _lastReply += usage;
             _conversation += usage;

@@ -446,6 +446,30 @@ public class EmbeddedModelsTests : IDisposable
     }
 
     [Fact]
+    public async Task TheBeforeLoadHook_ReachesTheHost_SoAReloadForAChangedLaunchClearsToo()
+    {
+        // 2026-10-26 (the review's R43): the session's Docker clear runs where llama-server really loads, a changed launch of the same model too.
+        InstallByHand();
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(_files, host, Cuda);
+        int cleared = 0;
+        Task Clear(CancellationToken _)
+        {
+            cleared++;
+            return Task.CompletedTask;
+        }
+
+        var settings = new AppSettingsData { EmbeddedContextSize = 8192 };
+        await service.StartAsync(_model, settings, null, CancellationToken.None, Clear);
+        await service.StartAsync(_model, settings, null, CancellationToken.None, Clear);   // the launch running: kept
+        Assert.Equal(1, cleared);
+
+        await service.StartAsync(_model, new AppSettingsData { EmbeddedContextSize = 4096 }, null, CancellationToken.None, Clear);
+        Assert.Equal(2, cleared);
+        Assert.Equal(2, host.BeforeLoads);
+    }
+
+    [Fact]
     public async Task StartExtra_RunsOnAHostOfItsOwn_UnderTheBotsSettings_TheMainUntouched()
     {
         // A multi-server botchat's extra (later on 2026-09-29): its own host, the bot's profile's launch, reused while it runs.

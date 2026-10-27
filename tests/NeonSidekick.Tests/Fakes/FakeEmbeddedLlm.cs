@@ -126,11 +126,23 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         return new ModelResult(true, "", EmbeddedLlmText.Installed(model));
     }
 
-    public async Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    /// <summary>
+    /// Whether a start of <paramref name="model"/> keeps the one running (2026-10-26): then its before-load hook doesn't run, as the real
+    /// host's same-launch return. By default the same model running.
+    /// </summary>
+    public Func<EmbeddedModel, AppSettingsData, bool>? KeepsRunning { get; set; }
+
+    public async Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null)
     {
         Starts.Add(model.Id);
         StartSettings.Add(effective);
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
+        bool keeps = KeepsRunning?.Invoke(model, effective) ?? string.Equals(Running?.ModelId, model.Id, StringComparison.OrdinalIgnoreCase);
+        if (!keeps && beforeLoad is not null && State(model).IsInstalled)
+        {
+            await beforeLoad(cancellationToken);
+        }
+
         await GateAsync(model, cancellationToken);
 
         if (StartFailure is { } failure)
@@ -147,7 +159,7 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
         return Running;
     }
 
-    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null)
     {
         if (!State(model).IsInstalled)
         {
@@ -162,6 +174,11 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
         ExtraStarts.Add(model.Id);
         ExtraStartSettings.Add(effective);
+        if (beforeLoad is not null)
+        {
+            await beforeLoad(cancellationToken);
+        }
+
         await GateAsync(model, cancellationToken);
 
         if (ExtraStartFailure is { } failure)
@@ -314,8 +331,20 @@ public sealed class FakeLlamaServerHost : ILlamaServerHost
     /// </summary>
     public Func<CancellationToken, Task>? StartGate { get; set; }
 
-    public async Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
+    /// <summary>How many times a start ran its before-load hook (2026-10-26): never for the launch already running, as the real host.</summary>
+    public int BeforeLoads { get; private set; }
+
+    private LlamaLaunch? _runningLaunch;
+
+    public async Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null)
     {
+        // Recorded as before (a test counts the launches), but the hook runs only where the real host's would: not for the launch running.
+        if (beforeLoad is not null && !(Running is not null && _runningLaunch == launch))
+        {
+            BeforeLoads++;
+            await beforeLoad(cancellationToken);
+        }
+
         Launches.Add(launch);
         int kills = Kills;
         if (StartGate is { } gate)
@@ -334,6 +363,7 @@ public sealed class FakeLlamaServerHost : ILlamaServerHost
         }
 
         Running = new EmbeddedServerInfo(new Uri($"http://127.0.0.1:{Port}/v1"), Port, "host-key", launch.Backend, model.Id, launch.Vision);
+        _runningLaunch = launch;
         return Running;
     }
 

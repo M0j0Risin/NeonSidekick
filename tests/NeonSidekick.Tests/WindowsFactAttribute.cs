@@ -113,3 +113,20 @@ public sealed class AudioBackendFactAttribute : FactAttribute
         }
     }
 }
+
+/// <summary>
+/// A fact about Docker servers beside the embedded model (2026-10-26, the review's R42: the tests returned early, passing, where they could
+/// prove nothing): Docker servers are Windows only, and the embedded model must be offered on this machine. Skipped otherwise, with why.
+/// </summary>
+public sealed class EmbeddedHereFactAttribute : FactAttribute
+{
+    public const string SkipReason = "Docker servers beside the embedded model: Windows only, with the embedded model offered here.";
+
+    public EmbeddedHereFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows() || !NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered)
+        {
+            Skip = SkipReason;
+        }
+    }
+}

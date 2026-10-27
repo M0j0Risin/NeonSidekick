@@ -56,8 +56,10 @@ public interface ILlamaServerHost : IAsyncDisposable
     /// <summary>
     /// The server for <paramref name="launch"/>: the running one when its launch is equal and it is alive, else the old
     /// one stopped and a new one started and waited for. Throws <see cref="EmbeddedLlmException"/> when it does not start.
+    /// <paramref name="beforeLoad"/> runs before the old one stops and the new one starts (2026-10-26, the session's Docker clear), never
+    /// when the running one is kept.
     /// </summary>
-    Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken);
+    Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null);
 
     /// <summary>Stops the server, if any, and waits briefly for it to go (its model files are memory-mapped until then).</summary>
     void Stop();
@@ -158,7 +160,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
         }
     }
 
-    public async Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<EmbeddedServerInfo> EnsureRunningAsync(LlamaLaunch launch, EmbeddedModel model, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null)
     {
         ArgumentNullException.ThrowIfNull(launch);
         ArgumentNullException.ThrowIfNull(model);
@@ -171,6 +173,13 @@ public sealed class LlamaServerHost : ILlamaServerHost
                 {
                     return info;
                 }
+            }
+
+            // A real load (2026-10-26): what holds the GPU besides — a Docker server — goes first. Under _gate; the Docker host's gate is taken
+            // inside, and Docker code never calls into a llama host, so the order can't invert.
+            if (beforeLoad is not null)
+            {
+                await beforeLoad(cancellationToken).ConfigureAwait(false);
             }
 
             StopCore();

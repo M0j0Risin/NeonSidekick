@@ -63,6 +63,11 @@ internal sealed class FakeCheckPage(BrowserCheck? holds = null) : IBrowserCheckP
         return true;
     }
 
+    /// <summary>The window's say on a look's document: by default its own status, and no error page.</summary>
+    public Func<BrowserLook, (int Status, bool ErrorPage)> Describing { get; set; } = look => (look.Status, false);
+
+    public (int Status, bool ErrorPage) Describe(BrowserLook look) => Describing(look);
+
     public void Finish(BrowserCheck check, BotCheckResult result, bool close)
     {
         if (check.TryEnd())

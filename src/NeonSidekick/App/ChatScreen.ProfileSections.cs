@@ -349,24 +349,68 @@ internal sealed partial class ChatScreen
         }
     }
 
-    // ── /profile push|pull homeassistant, toolbar, perfbar, statusbar, barorder (2026-10-26, the user's ask) ──
-    // profile.json sections, mirrored as servers is (PlanSectionCopy): the target ends up as the source, a default here resetting the
+    // ── /profile push|pull servers, homeassistant, toolbar, perfbar, statusbar, barorder (2026-10-26, the user's ask) ──
+    // profile.json sections, mirrored (PlanSectionCopy): the target ends up as the source, a default here resetting the
     // target's. The saved values alone, as a bare push carries them; a pull goes through Update, and every bar reads its settings on
     // each draw and tick (the home bar reconnects by itself when its URL or key change; the ha_ tools read them each turn).
 
     /// <summary>
-    /// What each of the five sections carries: each <see cref="AppSettingsData"/> property by name (<c>nameof</c>, as
+    /// What each mirrored profile.json section carries (<c>servers</c> joined the five on 2026-10-26, the review's R16: one list of names, one
+    /// copy loop): each <see cref="AppSettingsData"/> property by name (<c>nameof</c>, as
     /// <see cref="Profiles.ResetKeptSettings"/> keys them: most have no settings row) and the copy of its stored value, lists and maps
     /// copied deep and null staying null, as <see cref="AppSettings.Copy"/> does. <c>homeassistant</c> carries the <c>Home Assistant API
     /// key</c> too, as stored (a home bar without it shows nothing; it stays in <c>keys</c>): a <c>dpapi:</c> value reads the same in any
     /// profile of this Windows user, a Mac's <c>keychain:</c> one likewise (one app key, nothing per profile), <see cref="CopyKeys"/>'
     /// reasoning. Not <c>Web UI home controls</c>, not the ha_ tools' Offered switches (the user's call). Each prefix
     /// (<c>HomeAssistant</c>/<c>HomeBar</c>, <c>Toolbar</c>, <c>PerformanceBar</c>, <c>StatusBar</c> and <c>HintsBar</c>, <c>BarOrder</c>)
-    /// names exactly these properties, which a test holds, so a new one can't be missed.
+    /// names exactly these properties, which a test holds, so a new one can't be missed. <c>servers</c> (2026-10-07, the user's list, and the
+    /// three groups they added: the Claude Code server, the embedded tuning, the Docker server timings) spans several prefixes in part, so its
+    /// test pins its names instead: <c>Embedded models</c> stores nothing per profile (the models are shared under the home, the one in use is
+    /// in <c>LLM URL</c> and <c>LLM model</c>), and the keys are <c>keys</c>'. 2026-10-10 (the user's list): how the model answers — LLM
+    /// reasoning, its estimate, the sampling overrides (every model's, a deep copy) and the Hugging Face switch — and the Anthropic and OpenAI
+    /// APIs' own rows beyond their switches; later that day (the user's pick) <c>/claude</c>'s four rows. Each name is its settings row's too
+    /// (<c>SettingsField</c>), so the done line reads the pane's words. The order each joined in, pinned, as nothing reads it by position.
     /// </summary>
     public static readonly IReadOnlyDictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>> ProfileSettingGroups =
         new Dictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>>
         {
+            [ProfileSection.Servers] =
+            [
+                (nameof(AppSettingsData.LlmScanMode), (from, to) => to.LlmScanMode = from.LlmScanMode),
+                (nameof(AppSettingsData.LlmUrl), (from, to) => to.LlmUrl = from.LlmUrl),
+                (nameof(AppSettingsData.LlmModel), (from, to) => to.LlmModel = from.LlmModel),
+                (nameof(AppSettingsData.LlmReasoning), (from, to) => to.LlmReasoning = from.LlmReasoning),
+                (nameof(AppSettingsData.LlmReasoningEstimate), (from, to) => to.LlmReasoningEstimate = from.LlmReasoningEstimate),
+                (nameof(AppSettingsData.LlmSampling), (from, to) => to.LlmSampling = LlmSamplingEntry.CopyAll(from.LlmSampling)),
+                (nameof(AppSettingsData.LlmSamplingFromHuggingFace), (from, to) => to.LlmSamplingFromHuggingFace = from.LlmSamplingFromHuggingFace),
+                (nameof(AppSettingsData.EmbeddedLlmServer), (from, to) => to.EmbeddedLlmServer = from.EmbeddedLlmServer),
+                (nameof(AppSettingsData.EmbeddedBackend), (from, to) => to.EmbeddedBackend = from.EmbeddedBackend),
+                (nameof(AppSettingsData.EmbeddedContextSize), (from, to) => to.EmbeddedContextSize = from.EmbeddedContextSize),
+                (nameof(AppSettingsData.EmbeddedGpuLayers), (from, to) => to.EmbeddedGpuLayers = from.EmbeddedGpuLayers),
+                (nameof(AppSettingsData.EmbeddedVramBudget), (from, to) => to.EmbeddedVramBudget = from.EmbeddedVramBudget),
+                (nameof(AppSettingsData.EmbeddedVramOnly), (from, to) => to.EmbeddedVramOnly = from.EmbeddedVramOnly),
+                (nameof(AppSettingsData.EmbeddedVision), (from, to) => to.EmbeddedVision = from.EmbeddedVision),
+                (nameof(AppSettingsData.EmbeddedDrafter), (from, to) => to.EmbeddedDrafter = from.EmbeddedDrafter),
+                (nameof(AppSettingsData.DockerServers), (from, to) => to.DockerServers = from.DockerServers),
+                (nameof(AppSettingsData.DockerServerContainers), (from, to) => to.DockerServerContainers = CopyList(from.DockerServerContainers)),
+                (nameof(AppSettingsData.DockerServerMatchWords), (from, to) => to.DockerServerMatchWords = [.. from.DockerServerMatchWords]),
+                (nameof(AppSettingsData.DockerServerStopTimeoutSeconds), (from, to) => to.DockerServerStopTimeoutSeconds = from.DockerServerStopTimeoutSeconds),
+                (nameof(AppSettingsData.DockerServerPostStopDelaySeconds), (from, to) => to.DockerServerPostStopDelaySeconds = from.DockerServerPostStopDelaySeconds),
+                (nameof(AppSettingsData.DockerServerReadyTimeoutSeconds), (from, to) => to.DockerServerReadyTimeoutSeconds = from.DockerServerReadyTimeoutSeconds),
+                (nameof(AppSettingsData.DockerServerStopOnExit), (from, to) => to.DockerServerStopOnExit = from.DockerServerStopOnExit),
+                (nameof(AppSettingsData.ClaudeCodeServer), (from, to) => to.ClaudeCodeServer = from.ClaudeCodeServer),
+                (nameof(AppSettingsData.ClaudeCodeExecutable), (from, to) => to.ClaudeCodeExecutable = from.ClaudeCodeExecutable),
+                (nameof(AppSettingsData.ClaudeCodePermissions), (from, to) => to.ClaudeCodePermissions = from.ClaudeCodePermissions),
+                (nameof(AppSettingsData.ClaudeCodeModel), (from, to) => to.ClaudeCodeModel = from.ClaudeCodeModel),
+                (nameof(AppSettingsData.ClaudeCodeEffort), (from, to) => to.ClaudeCodeEffort = from.ClaudeCodeEffort),
+                (nameof(AppSettingsData.AnthropicApi), (from, to) => to.AnthropicApi = from.AnthropicApi),
+                (nameof(AppSettingsData.AnthropicApiMaxTokens), (from, to) => to.AnthropicApiMaxTokens = from.AnthropicApiMaxTokens),
+                (nameof(AppSettingsData.AnthropicApiPromptCaching), (from, to) => to.AnthropicApiPromptCaching = from.AnthropicApiPromptCaching),
+                (nameof(AppSettingsData.OpenAIApi), (from, to) => to.OpenAIApi = from.OpenAIApi),
+                (nameof(AppSettingsData.OpenAIApiMaxTokens), (from, to) => to.OpenAIApiMaxTokens = from.OpenAIApiMaxTokens),
+                (nameof(AppSettingsData.OpenAIApiOrganization), (from, to) => to.OpenAIApiOrganization = from.OpenAIApiOrganization),
+                (nameof(AppSettingsData.OpenAIApiProject), (from, to) => to.OpenAIApiProject = from.OpenAIApiProject),
+            ],
             [ProfileSection.HomeAssistant] =
             [
                 (nameof(AppSettingsData.HomeAssistantTools), (from, to) => to.HomeAssistantTools = from.HomeAssistantTools),
@@ -412,7 +456,7 @@ internal sealed partial class ChatScreen
             ],
         };
 
-    /// <summary>Whether a section is one of <see cref="ProfileSettingGroups"/>' five.</summary>
+    /// <summary>Whether a section is one of <see cref="ProfileSettingGroups"/>' six.</summary>
     public static bool IsSettingGroupSection(ProfileSection section) => ProfileSettingGroups.ContainsKey(section);
 
     private static List<string>? CopyList(List<string>? list) => list is null ? null : [.. list];
@@ -423,73 +467,24 @@ internal sealed partial class ChatScreen
     // The home bar's chips, its dividers left out, for the done line.
     private static int HomeBarItemCount(AppSettingsData data) => (data.HomeBarItems ?? []).Count(item => !HomeBarItems.IsDivider(item));
 
-    // ── The lines ─────────────────────────────────────────────────────────────────────────────────────
-
     /// <summary>
-    /// What a bar section's copy replaces, its verb included (2026-10-26): <c>toolbar items, order and sides are replaced</c>, or the
-    /// performance bar's, the Status bar's or the bar order's. Pinned through <see cref="ProfileBarPrompt"/>.
+    /// A mirrored section's question and its done line (given the target's data afterwards and its folder) (2026-10-26, the review's R16):
+    /// <c>servers</c>' lines as they were, the five's from <see cref="ProfileText"/>.
     /// </summary>
-    private static string ProfileBarReplaced(ProfileSection section) => section switch
+    private static (string Prompt, Func<AppSettingsData, string, string> Notice) ProfileGroupWords(ProfileSection section, AppSettingsData from, string profile, bool pull) => section switch
     {
-        ProfileSection.Toolbar => "toolbar items, order and sides are replaced",
-        ProfileSection.PerfBar => "performance bar meters, order, sides and look are replaced",
-        ProfileSection.StatusBar => "Status bar sections, order, sides and Hints bar are replaced",
-        ProfileSection.BarOrder => "bar order is replaced",
-        _ => throw new ArgumentOutOfRangeException(nameof(section), section, "Not a bar section."),
+        ProfileSection.Servers => (
+            ProfileServersPrompt(profile, pull),
+            (data, directory) => ProfileServersCopiedNotice(
+                profile, SettingsMenu.FieldValue(SettingsField.LlmUrl, data, directory), SettingsMenu.FieldValue(SettingsField.LlmModel, data, directory), pull)),
+        ProfileSection.HomeAssistant => (
+            ProfileText.HomeAssistantPrompt(profile, !string.IsNullOrWhiteSpace(from.HomeAssistantUrl), !string.IsNullOrWhiteSpace(from.HomeAssistantToken), pull),
+            (data, directory) => ProfileText.HomeAssistantCopiedNotice(profile, SettingsMenu.FieldValue(SettingsField.HomeAssistantUrl, data, directory), HomeBarItemCount(data), pull)),
+        _ => (ProfileText.BarPrompt(section, profile, pull), (_, _) => ProfileText.BarCopiedNotice(section, profile, pull)),
     };
 
-    /// <summary>
-    /// The question before a bar section's copy: <c>Copy this profile's toolbar setup into "work"? Its toolbar items, order and sides are
-    /// replaced.</c>, pulled <c>Copy "work"'s toolbar setup into this profile? This profile's toolbar items, order and sides are replaced.</c>
-    /// </summary>
-    public static string ProfileBarPrompt(ProfileSection section, string profile, bool pull)
-    {
-        string subject = ProfileSectionSubject(section);
-        return pull
-            ? $"Copy \"{profile}\"'s {subject} into this profile? This profile's {ProfileBarReplaced(section)}."
-            : $"Copy this profile's {subject} into \"{profile}\"? Its {ProfileBarReplaced(section)}.";
-    }
-
-    /// <summary>A bar section's copy done: <c>(copied the toolbar setup into "work")</c>, a pull <c>from "work"</c>.</summary>
-    public static string ProfileBarCopiedNotice(ProfileSection section, string profile, bool pull) =>
-        $"(copied the {ProfileSectionSubject(section)} {(pull ? "from" : "into")} \"{profile}\")";
-
-    /// <summary>
-    /// The question before a <c>homeassistant</c> copy, in the rows' own words: <c>Copy this profile's Home Assistant settings and home bar
-    /// into "work"? Its Home Assistant tools switch, URL, API key, … are replaced.</c>; pulled, the mirror. When the source has no URL or no
-    /// key, what the mirror does, as <see cref="ProfileKeysPrompt"/> says it: <c> "work"'s Home Assistant URL and API key are cleared: none
-    /// here.</c>, pulled <c> This profile's … cleared: none in "work".</c>, so a mirror that wipes is never a surprise.
-    /// </summary>
-    public static string ProfileHomeAssistantPrompt(string profile, bool urlSet, bool keySet, bool pull)
-    {
-        const string Replaced = "Home Assistant tools switch, URL, API key, action policy, safe services, Assist agent and timeout, and its home bar's items, sides, names and emoji are replaced.";
-        string question = pull
-            ? $"Copy \"{profile}\"'s Home Assistant settings and home bar into this profile? This profile's {Replaced}"
-            : $"Copy this profile's Home Assistant settings and home bar into \"{profile}\"? Its {Replaced}";
-        string? cleared = (urlSet, keySet) switch
-        {
-            (false, false) => "Home Assistant URL and API key are",
-            (false, true) => "Home Assistant URL is",
-            (true, false) => HomeAssistantKeyName + " is",
-            _ => null,
-        };
-        if (cleared is null)
-        {
-            return question;
-        }
-
-        return pull
-            ? $"{question} This profile's {cleared} cleared: none in \"{profile}\"."
-            : $"{question} \"{profile}\"'s {cleared} cleared: none here.";
-    }
-
-    /// <summary>
-    /// A <c>homeassistant</c> copy done: <c>(copied the Home Assistant settings into "work": Home Assistant URL http://…, 6 home bar items)</c>,
-    /// the URL as the settings pane shows it (<c>(not set)</c> when empty), the chips counted without their dividers; never the key. A pull
-    /// says from.
-    /// </summary>
-    public static string ProfileHomeAssistantCopiedNotice(string profile, string url, int items, bool pull) =>
-        $"(copied the Home Assistant settings {(pull ? "from" : "into")} \"{profile}\": Home Assistant URL {url}, {Counted(items, "home bar item", "home bar items")})";
+    // ── The lines ─────────────────────────────────────────────────────────────────────────────────────
+    // The five sections' questions and done lines are ProfileText's (2026-10-26, the review's R27).
 
     /// <summary>
     /// Names as a question or notice lists them: each through <see cref="NameScrub.Display"/>, the first <see cref="ProfileSectionNamesShown"/>

@@ -120,8 +120,11 @@ public class UsageStreamTests
 
         Assert.False(StreamProgress.Shows(updates[0]));   // the role chunk, content ""
         int[] deltas = [.. updates.Select((u, i) => (u, i)).Where(p => p.u.RawRepresentation is StreamingChatCompletionUpdate { ToolCallUpdates.Count: > 0 }).Select(p => p.i)];
-        Assert.Equal(3, deltas.Length);
+        int sent = body.Split("\"tool_calls\":[").Length - 1;   // the chunks the server sent with a delta: counted from the wire, not the predicate (R41)
+        Assert.Equal(3, sent);
+        Assert.Equal(sent, deltas.Length);
         Assert.All(deltas, i => Assert.True(StreamProgress.Shows(updates[i])));
+        Assert.Equal(sent + 1, updates.Count(StreamProgress.Shows));   // each delta and the one whole call, nothing else
         int call = Assert.Single(updates.Select((u, i) => (u, i)).Where(p => p.u.Contents.OfType<FunctionCallContent>().Any()).Select(p => p.i));
         Assert.True(call > deltas[^1]);
         Assert.Equal("echo", updates[call].Contents.OfType<FunctionCallContent>().Single().Name);

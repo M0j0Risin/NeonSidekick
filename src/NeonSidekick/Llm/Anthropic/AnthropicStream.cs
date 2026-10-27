@@ -170,7 +170,7 @@ public sealed class AnthropicStream
         // Every block start is the model producing (a thinking block with its display omitted streams no text at all).
         if (updates.Count == before)
         {
-            updates.Add(Progress());
+            updates.Add(StreamProgress.Mark(Update([])));
         }
     }
 
@@ -199,12 +199,11 @@ public sealed class AnthropicStream
 
                 break;
             case "signature_delta":
+                // Held back: the block's start marked it (one marker a block, 2026-10-26, the review's R25).
                 block?.Buffer.Append(String(delta, "signature"));
-                updates.Add(Progress());
                 break;
             case "input_json_delta":
                 block?.Buffer.Append(String(delta, "partial_json"));
-                updates.Add(Progress());
                 break;
         }
     }
@@ -311,13 +310,6 @@ public sealed class AnthropicStream
 
     private ChatResponseUpdate Update(AIContent content) => Update([content]);
 
-    /// <summary>A contents-free update marked <see cref="StreamProgress.Marker"/>: the model producing what this stream holds back.</summary>
-    private ChatResponseUpdate Progress()
-    {
-        var update = Update([]);
-        update.RawRepresentation = StreamProgress.Marker;
-        return update;
-    }
 
     private ChatResponseUpdate Update(List<AIContent> contents) => new(ChatRole.Assistant, contents)
     {

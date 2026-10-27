@@ -16,12 +16,32 @@ namespace NeonSidekick.Llm;
 /// own update code with an empty contents list, so its role and ids match and <c>ToChatResponse</c> keeps the reply one message;
 /// <c>ToChatResponse</c> never reads a <c>RawRepresentation</c>, so nothing of the marker reaches the history. The OpenAI-compatible
 /// servers need none: the adapter yields every chunk with the SDK's own as its raw representation, the tool calls' deltas in
-/// <see cref="StreamingChatCompletionUpdate.ToolCallUpdates"/>. A new stream client keeps marking what it buffers.</para>
+/// <see cref="StreamingChatCompletionUpdate.ToolCallUpdates"/>. A new stream client keeps marking what it buffers: one marker as each
+/// block it holds back starts (2026-10-26, the review's R25: one per delta made a tool call's arguments read as hundreds of updates), through
+/// <see cref="Mark"/>.</para>
 /// </summary>
 public static class StreamProgress
 {
     /// <summary>The sentinel a contents-free update carries as its raw representation while the model produces what the caller can't see yet.</summary>
     public static readonly object Marker = new();
+
+    /// <summary>
+    /// <paramref name="update"/> (a stream's own contents-free update, its role and ids set) marked: the model producing what the stream holds
+    /// back (2026-10-26, the review's R26: one helper for the three streams' copies).
+    /// </summary>
+    public static ChatResponseUpdate Mark(ChatResponseUpdate update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        update.RawRepresentation = Marker;
+        return update;
+    }
+
+    /// <summary>Whether <paramref name="update"/> is a marker (<see cref="Mark"/>).</summary>
+    public static bool IsMarker(ChatResponseUpdate update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        return ReferenceEquals(update.RawRepresentation, Marker);
+    }
 
     /// <summary>
     /// True when <paramref name="update"/> carries something the model produced: a content that holds something, the

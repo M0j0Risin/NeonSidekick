@@ -1597,8 +1597,8 @@ public class AssistantTests
         client.Enqueue(FakeChatClient.Text("Hel"), FakeChatClient.Text("lo"), FakeChatClient.Usage(10, 5));
         client.BeforeUpdate = (i, _) =>
         {
-            // The server reads the prompt for 800 ms, then streams for 2 s; the usage chunk is last.
-            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(800), 2 => TimeSpan.FromSeconds(2), _ => TimeSpan.Zero });
+            // The server reads the prompt for 800 ms, then streams for 2 s; the usage chunk is last, a second later, and no decode (R34).
+            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(800), 1 => TimeSpan.FromSeconds(2), _ => TimeSpan.FromSeconds(1) });
             return Task.CompletedTask;
         };
 
@@ -1620,10 +1620,10 @@ public class AssistantTests
     {
         var clock = new ManualTimeProvider();
         var (client, _, assistant) = Build(time: clock);
-        client.Enqueue(new ChatResponseUpdate { Role = ChatRole.Assistant }, FakeChatClient.Text("x"), FakeChatClient.Usage(1, 1));
+        client.Enqueue(new ChatResponseUpdate { Role = ChatRole.Assistant }, FakeChatClient.Text("x"), FakeChatClient.Text("y"), FakeChatClient.Usage(1, 2));
         client.BeforeUpdate = (i, _) =>
         {
-            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(500), 1 => TimeSpan.FromMilliseconds(300), _ => TimeSpan.FromSeconds(1) });
+            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(500), 1 => TimeSpan.FromMilliseconds(300), 2 => TimeSpan.FromSeconds(1), _ => TimeSpan.Zero });
             return Task.CompletedTask;
         };
 
@@ -1654,9 +1654,11 @@ public class AssistantTests
         var reports = events.OfType<TurnEvent.Usage>().Select(u => u.Tokens).ToArray();
         Assert.Null(reports[0].TokensPerSecond);
         Assert.Equal(300, reports[0].UntimedOutput);
-        Assert.Equal(TimeSpan.FromSeconds(1), reports[0].ToFirstToken);
-        Assert.Equal(10, reports[1].TokensPerSecond);
-        Assert.Equal(10, (reports[0] + reports[1]).TokensPerSecond);   // the reply's speed: the answer's alone
+        Assert.Equal(TimeSpan.Zero, reports[0].ToFirstToken);   // unmarked, the burst's arrival holds its decode too: no known wait (R37)
+        Assert.Equal(1, reports[0].UnknownWaits);
+        Assert.Equal(20, reports[1].TokensPerSecond);   // "do" to "ne": the trailing report's second is no decode (R34)
+        Assert.Equal(20, (reports[0] + reports[1]).TokensPerSecond);   // the reply's speed: the answer's alone
+        Assert.Equal(TimeSpan.FromMilliseconds(500), (reports[0] + reports[1]).AverageToFirstToken);   // the known wait alone
     }
 
     [Fact]
@@ -1685,7 +1687,7 @@ public class AssistantTests
         Assert.Equal(TimeSpan.FromMilliseconds(800), report.ToFirstToken);
         Assert.Equal(TimeSpan.FromSeconds(1), report.Generating);
         Assert.Equal(40, report.TokensPerSecond);
-        Assert.Equal(new StreamMeter.Reading(true, 2, 4.0), beforeTheCall);   // two progress chunks over the half second since the first
+        Assert.Equal(new StreamMeter.Reading(true, 0, null), beforeTheCall);   // a marker is no token: the meter counts none (R19)
     }
 
     [Fact]
@@ -1714,14 +1716,14 @@ public class AssistantTests
     {
         var clock = new ManualTimeProvider();
         var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() }, clock);
-        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" }), FakeChatClient.Usage(50, 8));
-        client.Enqueue(FakeChatClient.Text("done"), FakeChatClient.Usage(70, 3));
+        client.Enqueue(FakeChatClient.Progress(), FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "hi" }), FakeChatClient.Usage(50, 8));
+        client.Enqueue(FakeChatClient.Text("do"), FakeChatClient.Text("ne"), FakeChatClient.Usage(70, 3));
         client.BeforeUpdate = (_, _) => { clock.Advance(TimeSpan.FromSeconds(1)); return Task.CompletedTask; };
 
         var events = await Run(assistant, "x");
 
         Assert.Equal(
-            new[] { typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.TextDelta), typeof(TurnEvent.Usage) },
+            new[] { typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.TextDelta), typeof(TurnEvent.TextDelta), typeof(TurnEvent.Usage) },
             events.Select(e => e.GetType()));
         var reports = events.OfType<TurnEvent.Usage>().Select(u => u.Tokens).ToArray();
         Assert.Equal(new TokenUsage(50, 8, 58, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)), reports[0]);
@@ -1748,13 +1750,13 @@ public class AssistantTests
     {
         var clock = new ManualTimeProvider();
         var (client, _, assistant) = Build(time: clock);
-        client.Enqueue(FakeChatClient.Text("x"), FakeChatClient.Usage(10, 5), FakeChatClient.Usage(1, 1));
+        client.Enqueue(FakeChatClient.Text("x"), FakeChatClient.Text("y"), FakeChatClient.Usage(10, 5), FakeChatClient.Usage(1, 1));
         client.BeforeUpdate = (_, _) => { clock.Advance(TimeSpan.FromSeconds(1)); return Task.CompletedTask; };
 
         var events = await Run(assistant, "hi");
 
         var usage = Assert.Single(events.OfType<TurnEvent.Usage>());
-        Assert.Equal(new TokenUsage(11, 6, 17, 2, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)), usage.Tokens);
+        Assert.Equal(new TokenUsage(11, 6, 17, 2, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)), usage.Tokens);
     }
 
     [Fact]
@@ -1784,6 +1786,9 @@ public class AssistantTests
         Assert.Equal(
             "Usage: 10 in, 5 out, 15 total; first token after 0.00s, streamed 0.00s.",
             Assistant.UsageLogLine(new TokenUsage(10, 5, 15, 1, TimeSpan.Zero, TimeSpan.Zero)));
+        Assert.Equal(
+            "Usage: 10 in, 5 out, 15 total; first token after ?, streamed untimed.",
+            Assistant.UsageLogLine(new TokenUsage(10, 5, 15, 1, TimeSpan.Zero, TimeSpan.Zero, UntimedOutput: 5, UnknownWaits: 1)));
     }
 
     // ── SummarizeAsync (/compact) ───────────────────────────────────────────
@@ -1797,7 +1802,7 @@ public class AssistantTests
         client.Enqueue(FakeChatClient.Text("<think>hmm</think>"), FakeChatClient.Text("The user said hi."), FakeChatClient.Usage(40, 6));
         client.BeforeUpdate = (i, _) =>
         {
-            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(500), 2 => TimeSpan.FromSeconds(3), _ => TimeSpan.Zero });
+            clock.Advance(i switch { 0 => TimeSpan.FromMilliseconds(500), 1 => TimeSpan.FromSeconds(3), _ => TimeSpan.FromSeconds(1) });
             return Task.CompletedTask;
         };
         var transcript = new List<ChatMessage> { new(ChatRole.User, "hi"), new(ChatRole.Assistant, "hello") };
@@ -2785,7 +2790,7 @@ public class AssistantTests
         Assert.NotNull(response.Usage);
         Assert.Equal(60, response.Usage!.Value.Total);
         Assert.Equal(TimeSpan.FromSeconds(0.5), response.Usage.Value.ToFirstToken);
-        Assert.Equal(TimeSpan.FromSeconds(3), response.Usage.Value.Generating);
+        Assert.Equal(TimeSpan.FromSeconds(2), response.Usage.Value.Generating);   // to the call, the last that showed; the report's second is no decode
         Assert.Contains(response.Messages, m => m.Contents.OfType<FunctionCallContent>().Any());
         Assert.DoesNotContain("<think>", string.Concat(response.Messages.Select(m => m.Text)), StringComparison.Ordinal);   // the leaked block is stripped from what goes back
 

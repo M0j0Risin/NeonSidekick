@@ -89,7 +89,7 @@ public class UsageTextTests
 
         // A reply of untimed requests alone (a tool call sent whole) keeps the reply before's speed too.
         tally.BeginTurn();
-        tally.Add(new TokenUsage(1_300, 200, 1_500, 1, TimeSpan.FromSeconds(0.5), TimeSpan.FromMilliseconds(4)).Judged());
+        tally.Add(new TokenUsage(1_300, 200, 1_500, 1, TimeSpan.FromSeconds(0.5), TimeSpan.FromMilliseconds(4)).Judged(shown: 1));
         Assert.Equal("1.5k / 4.1k · 37% · 46 tok/s", UsageText.HintPart(tally, Window));
         Assert.DoesNotContain("tok/s", UsageText.Lines(tally, Window)[1], StringComparison.Ordinal);   // /usage's last reply stays exact: no speed
 

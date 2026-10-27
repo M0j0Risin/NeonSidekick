@@ -1632,13 +1632,12 @@ public sealed class Assistant
             bool cancelled = false;
 
             // The request's two phases, for TurnEvent.Usage: the wait for the first update that shows the model producing
-            // something (the prefill; a role-only leading chunk does not end it) and the streaming after it — decodeFrom, from
-            // StreamProgress.Shows (2026-10-26: a tool call comes whole, and its round read its tokens over a few milliseconds).
-            // `first` is the first chunk with any content, for the dropped-request check alone: a server's content "" chunk
-            // means it took the request. Stamped on this clock so a test can advance them.
+            // something (the prefill; a role-only leading chunk does not end it) and the streaming after it, to the last that does
+            // (StreamClock, 2026-10-26: a tool call comes whole, and its round read its tokens over a few milliseconds). Its First is
+            // the first chunk with any content or a marker, for the dropped-request check alone: a server's content "" chunk means
+            // it took the request. Stamped on this clock so a test can advance them.
             long sent = _time.GetTimestamp();
-            long? first = null;
-            long? decodeFrom = null;
+            var clock = new StreamClock(_time, Meter);
 
             // A turn cancelled before its request (2026-09-25: the /botchat ESC that ends the chat can land as the next bot's
             // turn opens) asks nothing: the server never sees a request its caller has already given up on.
@@ -1700,16 +1699,7 @@ public sealed class Assistant
 
                         var update = stream.Current;
                         updates.Add(update);
-                        if (first is null && update.Contents.Count > 0)
-                        {
-                            first = _time.GetTimestamp();
-                        }
-
-                        if (StreamProgress.Shows(update))
-                        {
-                            decodeFrom ??= _time.GetTimestamp();
-                            Meter?.Chunk();
-                        }
+                        clock.Observe(update);
 
                         // The thinking first (2026-09-26): the server's reasoning deltas, then a <think>
                         // block the filter kept aside. Shown by the host, never part of the reply.
@@ -1748,7 +1738,7 @@ public sealed class Assistant
                 Meter?.End();
             }
 
-            long ended = _time.GetTimestamp();
+            clock.End();
 
             // A reply that ends in "<" was held back as a possible tag; it is text after all.
             string held = filter.Flush();
@@ -1796,7 +1786,7 @@ public sealed class Assistant
                 string explained = ExplainFailure(failure!, lastUsage);
                 bool hinted = false;
                 DiagnosticLog.Info(Category, "Model call failed: " + explained);
-                if (first is null && partial.Length == 0 && sentPictures > 0 && LooksLikeOversizedRequest(failure!))
+                if (clock.First is null && partial.Length == 0 && sentPictures > 0 && LooksLikeOversizedRequest(failure!))
                 {
                     // A request with pictures dropped before a byte came back (2026-10-03): most likely its size. Once a
                     // turn, half the pictures it carried come out of the history and the same round goes again.
@@ -1866,7 +1856,7 @@ public sealed class Assistant
             }
 
             // Summed from the updates, not response.Usage, so the count does not depend on how
-            // ToChatResponse merges. The spans go on the first report only: a server that sent
+            // ToChatResponse merges. The spans go on the sum once (StreamClock.Stamp): a server that sent
             // two would otherwise count its time twice, and the sum is judged (TokenUsage.Judged:
             // a burst's speed is not believed). No report (the server does not send
             // usage, or the stream was cut) means no event, never zeros.
@@ -1877,13 +1867,10 @@ public sealed class Assistant
             long reserve = 0;
             foreach (var reported in updates.SelectMany(u => u.Contents).OfType<UsageContent>())
             {
-                long firstAt = decodeFrom ?? ended;
-                usage += usage.IsEmpty
-                    ? TokenUsage.From(reported.Details, _time.GetElapsedTime(sent, firstAt), _time.GetElapsedTime(firstAt, ended))
-                    : TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
+                usage += TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
             }
 
-            usage = usage.Judged();
+            usage = clock.Stamp(usage);
             if (!usage.IsEmpty)
             {
                 DiagnosticLog.Debug(Category, UsageLogLine(usage));
@@ -2191,7 +2178,7 @@ public sealed class Assistant
         }
 
         DiagnosticLog.Debug(Category, string.Create(CultureInfo.InvariantCulture,
-            $"Summary usage: {total.Input} in, {total.Output} out, {total.Total} total; first token after {total.ToFirstToken.TotalSeconds:F2}s, streamed {total.Generating.TotalSeconds:F2}s."));
+            $"Summary usage: {total.Input} in, {total.Output} out, {total.Total} total; {SpansLogText(total)}."));
         return (attempt.Text, total);
     }
 
@@ -2214,15 +2201,10 @@ public sealed class Assistant
         int raw = 0;
         int thinking = 0;
         string? toolCall = null;
-        long sent = _time.GetTimestamp();
-        long? decodeFrom = null;
+        var clock = new StreamClock(_time);
         await foreach (var update in _client.GetStreamingResponseAsync(request, options, cancellationToken).ConfigureAwait(false))
         {
-            if (decodeFrom is null && StreamProgress.Shows(update))
-            {
-                decodeFrom = _time.GetTimestamp();
-            }
-
+            clock.Observe(update);
             string delta = update.Text;
             raw += delta.Length;
             text.Append(filter.Push(delta));
@@ -2235,11 +2217,10 @@ public sealed class Assistant
             }
         }
 
-        long ended = _time.GetTimestamp();
+        clock.End();
         text.Append(filter.Flush());
         thinking += raw - text.Length;   // what the filter took out of the text: a <think> block streamed as content
-        long firstAt = decodeFrom ?? ended;
-        TokenUsage? timed = usage.IsEmpty ? null : (usage with { ToFirstToken = _time.GetElapsedTime(sent, firstAt), Generating = _time.GetElapsedTime(firstAt, ended) }).Judged();
+        TokenUsage? timed = usage.IsEmpty ? null : clock.Stamp(usage);
         return new SummaryAttempt(text.ToString().Trim(), timed, finish, thinking, toolCall);
     }
 
@@ -2309,20 +2290,15 @@ public sealed class Assistant
         var updates = new List<ChatResponseUpdate>();
         var filter = new ThinkTagFilter();
         var text = new StringBuilder();
-        long sent = _time.GetTimestamp();
-        long? decodeFrom = null;
+        var clock = new StreamClock(_time);
         await foreach (var update in _client.GetStreamingResponseAsync(request, options, cancellationToken).ConfigureAwait(false))
         {
             updates.Add(update);
-            if (decodeFrom is null && StreamProgress.Shows(update))
-            {
-                decodeFrom = _time.GetTimestamp();
-            }
-
+            clock.Observe(update);
             text.Append(filter.Push(update.Text));
         }
 
-        long ended = _time.GetTimestamp();
+        clock.End();
         text.Append(filter.Flush());
 
         var response = updates.ToChatResponse();
@@ -2348,13 +2324,10 @@ public sealed class Assistant
         var usage = TokenUsage.Zero;
         foreach (var reported in updates.SelectMany(u => u.Contents).OfType<UsageContent>())
         {
-            long firstAt = decodeFrom ?? ended;
-            usage += usage.IsEmpty
-                ? TokenUsage.From(reported.Details, _time.GetElapsedTime(sent, firstAt), _time.GetElapsedTime(firstAt, ended))
-                : TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
+            usage += TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
         }
 
-        usage = usage.Judged();
+        usage = clock.Stamp(usage);
 
         var calls = response.Messages
             .SelectMany(m => m.Contents)
@@ -2740,8 +2713,16 @@ public sealed class Assistant
     {
         string reasoning = usage.Reasoning is { } count ? string.Create(CultureInfo.InvariantCulture, $" ({(usage.ReasoningEstimated ? "~" : "")}{count} reasoning)") : "";
         return string.Create(CultureInfo.InvariantCulture,
-            $"Usage: {usage.Input} in, {usage.Output} out{reasoning}, {usage.Total} total; first token after {usage.ToFirstToken.TotalSeconds:F2}s, streamed {usage.Generating.TotalSeconds:F2}s.");
+            $"Usage: {usage.Input} in, {usage.Output} out{reasoning}, {usage.Total} total; {SpansLogText(usage)}.");
     }
+
+    /// <summary>
+    /// A usage's two spans for the log (2026-10-26, the review's R37): <c>first token after 0.80s, streamed 2.10s</c>; a wait no request
+    /// knew reads <c>first token after ?</c>, and output none of which was timed <c>streamed untimed</c> — never a made-up <c>0.00s</c>.
+    /// </summary>
+    internal static string SpansLogText(TokenUsage usage) =>
+        "first token after " + (usage.WaitUnknown ? "?" : usage.ToFirstToken.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture) + "s")
+        + ", streamed " + (usage.Untimed ? "untimed" : usage.Generating.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture) + "s");
 
     /// <summary>
     /// Unwraps an exception into something that identifies the failure on its own. Necessary

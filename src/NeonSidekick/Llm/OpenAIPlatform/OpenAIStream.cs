@@ -95,13 +95,10 @@ public sealed class OpenAIStream
                 if (root.TryGetProperty("item"u8, out var added) && added.ValueKind == JsonValueKind.Object
                     && String(added, "type") is "reasoning" or "function_call")
                 {
-                    updates.Add(Progress());
+                    // One marker an item (2026-10-26, the review's R25): its arguments' deltas are held back unmarked.
+                    updates.Add(StreamProgress.Mark(Update([])));
                 }
 
-                break;
-
-            case "response.function_call_arguments.delta":
-                updates.Add(Progress());
                 break;
 
             case "response.output_item.done":
@@ -225,13 +222,6 @@ public sealed class OpenAIStream
 
     private ChatResponseUpdate Update(AIContent content) => Update([content]);
 
-    /// <summary>A contents-free update marked <see cref="StreamProgress.Marker"/>: the model producing what this stream holds back.</summary>
-    private ChatResponseUpdate Progress()
-    {
-        var update = Update([]);
-        update.RawRepresentation = StreamProgress.Marker;
-        return update;
-    }
 
     private ChatResponseUpdate Update(List<AIContent> contents) => new(ChatRole.Assistant, contents)
     {

@@ -63,8 +63,10 @@ public static class DockerEndpoint
             return true;
         }
 
+        // 0.0.0.0 and :: (2026-10-26, the review's R35): a server's own every-address bind, typed as its URL, reaches this machine.
         string host = baseUrl.Host;
         bool thisMachine = baseUrl.IsLoopback
+            || host is "0.0.0.0" or "[::]"
             || string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
             || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
             || string.Equals(host, machine ?? Environment.MachineName, StringComparison.OrdinalIgnoreCase);

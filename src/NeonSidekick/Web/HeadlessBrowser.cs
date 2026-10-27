@@ -103,7 +103,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     public const string WindowSize = "1920,1080";
 
     /// <summary>What a page is asked for when its DOM is read: its ready state and its DOM.</summary>
-    public const string PageExpression = "({ s: document.readyState, h: document.documentElement ? document.documentElement.outerHTML : '' })";
+    /// <remarks>Its document too (<c>o</c>, 2026-10-26): the Browser window drops a read that came from another document than its look's.</remarks>
+    public const string PageExpression = "({ s: document.readyState, h: document.documentElement ? document.documentElement.outerHTML : '', o: performance.timeOrigin })";
 
     /// <summary>What a settled page is asked for before its cookies are read: the address it ended on, after any redirect.</summary>
     public const string LocationExpression = "({ u: location.href })";
@@ -111,12 +112,15 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     /// <summary>
     /// What a page is asked for at each look (2026-10-11, the review: the whole DOM, up to megabytes, crossed the socket and was
     /// converted to Markdown at every look of a page with a clock or rotating ads): its ready state and its DOM's <see cref="Fingerprint"/>
-    /// worked out in the page — the length and an FNV-1a hash over its UTF-16 units — leaving nothing there a script could find.
+    /// worked out in the page — the length and an FNV-1a hash over its UTF-16 units — leaving nothing there a script could find. Since
+    /// 2026-10-26 (the Browser window's redesign, <c>BrowserWatch</c>) also the document's own HTTP status (<c>st</c>, Chromium 109+; 0 on
+    /// WebKit), its address (<c>u</c>) and its time origin (<c>o</c>, a per-document id); the headless watch reads none of them.
     /// </summary>
     public const string PrintExpression =
         "(() => { const d = document.documentElement; const h = d ? d.outerHTML : ''; let x = 0x811c9dc5; " +
         "for (let i = 0; i < h.length; i++) { x = Math.imul(x ^ h.charCodeAt(i), 0x01000193); } " +
-        "return { s: document.readyState, n: h.length, x: x >>> 0 }; })()";
+        "const e = performance.getEntriesByType('navigation')[0]; " +
+        "return { s: document.readyState, n: h.length, x: x >>> 0, st: (e && e.responseStatus) || 0, u: location.href, o: performance.timeOrigin }; })()";
 
     /// <summary><see cref="PrintExpression"/>'s fingerprint of <paramref name="html"/>, worked out here: its length and its 32-bit FNV-1a hash over UTF-16 units. Pure.</summary>
     public static (int Length, uint Hash) Fingerprint(string html)

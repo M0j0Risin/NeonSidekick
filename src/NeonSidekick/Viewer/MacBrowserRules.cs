@@ -296,6 +296,29 @@ public static class MacBrowserRules
     };
 
     /// <summary>
+    /// A look's document's status from the main frame's latest answers, newest last (2026-10-26, the bot check's redesign: WebKit's documents
+    /// carry no <c>responseStatus</c>): the newest for <paramref name="url"/> (<see cref="SameAddress"/>), else the newest of all, else 0. Pure.
+    /// </summary>
+    public static int StatusFor(IReadOnlyList<(string Url, int Status)> responses, string url)
+    {
+        ArgumentNullException.ThrowIfNull(responses);
+        for (int i = responses.Count - 1; i >= 0; i--)
+        {
+            if (SameAddress(responses[i].Url, url))
+            {
+                return responses[i].Status;
+            }
+        }
+
+        return responses.Count > 0 ? responses[^1].Status : 0;
+    }
+
+    /// <summary>Whether two addresses are one, but for the fragment (a document's <c>location.href</c> against the answer's or the failed one's). Pure.</summary>
+    public static bool SameAddress(string? a, string? b) =>
+        Uri.TryCreate(a, UriKind.Absolute, out var left) && Uri.TryCreate(b, UriKind.Absolute, out var right)
+        && string.Equals(left.GetLeftPart(UriPartial.Query), right.GetLeftPart(UriPartial.Query), StringComparison.Ordinal);
+
+    /// <summary>
     /// Whether a failed load is no failure to show (pass 17): a load the window or a newer one cancelled (<c>NSURLErrorCancelled</c>), one
     /// that became a download or was refused by the filter (WebKit's 102, "Frame load interrupted"), or one a plug-in took (204).
     /// </summary>

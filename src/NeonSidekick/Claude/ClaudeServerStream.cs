@@ -179,10 +179,8 @@ public sealed class ClaudeServerStream
                         return [new ClaudeServerEvent.TextDelta(text)];
                     case "thinking_delta" when Text(delta, "thinking") is { Length: > 0 } thinking:
                         return [new ClaudeServerEvent.ThinkingDelta(thinking)];
-                    case "input_json_delta":
-                    case "signature_delta":
-                        return [new ClaudeServerEvent.Generating()];
                     default:
+                        // A tool call's input and a signature are held back; the block's start marked them (2026-10-26, the review's R25).
                         return [];
                 }
 

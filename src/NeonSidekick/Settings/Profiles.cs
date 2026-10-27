@@ -59,8 +59,12 @@ public static class Profiles
     /// </summary>
     public static readonly string[] ReservedNames = { "add", "allowed", "avatar", "barorder", "delete", "edit", "history", "homeassistant", "keys", "links", "mcp", "memory", "monitors", "operata", "overwrite", "perfbar", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "skills", "statusbar", "toolbar", "videos", "vocalia" };
 
-    /// <summary>The wording for a name <see cref="IsValidName"/> refuses. Pinned.</summary>
-    public const string NameError = "must be 1 to 32 letters, digits, - or _, not starting with - (and not add, delete, edit, pull, push, reload, rename or reset)";
+    /// <summary>
+    /// The wording for a name <see cref="IsValidName"/> refuses, every <see cref="ReservedNames"/> word in it (2026-10-26, the review's R13/R46:
+    /// a hand list named eight of the thirty, so a refused <c>toolbar</c> read as a mystery). Pinned by shape.
+    /// </summary>
+    public static readonly string NameError =
+        "must be 1 to 32 letters, digits, - or _, not starting with -, and not a word /profile reads (" + string.Join(", ", ReservedNames) + ")";
 
     /// <summary>Why <c>neon</c> cannot be deleted. Pinned.</summary>
     public const string DefaultUndeletable = "The default profile cannot be deleted.";

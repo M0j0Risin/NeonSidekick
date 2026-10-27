@@ -90,11 +90,13 @@ public static class BrowserKeys
 /// </summary>
 public static class BrowserAnswers
 {
-    /// <summary>A fingerprint answer: the ready state and the fingerprint; false while the page has no document to ask.</summary>
-    public static bool TryReadPrint(string? json, out string state, out (int, uint) print)
+    /// <summary>
+    /// A look's answer (<see cref="HeadlessBrowser.PrintExpression"/>): the ready state, the fingerprint, and since 2026-10-26 the document's
+    /// status (0 when it gives none), address and time origin (<see cref="BrowserLook"/>); false while the page has no document to ask.
+    /// </summary>
+    public static bool TryReadLook(string? json, out BrowserLook look)
     {
-        state = "";
-        print = default;
+        look = default;
         if (string.IsNullOrEmpty(json))
         {
             return false;
@@ -111,8 +113,11 @@ public static class BrowserAnswers
                 return false;
             }
 
-            state = value.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
-            print = (length, hash);
+            string state = value.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() ?? "" : "";
+            int status = value.TryGetProperty("st", out var st) && st.ValueKind == JsonValueKind.Number && st.TryGetDouble(out double code)
+                && code is >= 100 and <= 999 && code == Math.Floor(code) ? (int)code : 0;
+            string url = value.TryGetProperty("u", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() ?? "" : "";
+            look = new BrowserLook(state, (length, hash), status, url, Origin(value));
             return true;
         }
         catch (JsonException)
@@ -121,10 +126,11 @@ public static class BrowserAnswers
         }
     }
 
-    /// <summary>A DOM answer: the DOM; false while the page has none to give.</summary>
-    public static bool TryReadPage(string? json, out string html)
+    /// <summary>A DOM answer (<see cref="HeadlessBrowser.PageExpression"/>): the DOM and its document's time origin; false while the page has none to give.</summary>
+    public static bool TryReadPage(string? json, out string html, out double document)
     {
         html = "";
+        document = 0;
         if (string.IsNullOrEmpty(json))
         {
             return false;
@@ -132,10 +138,11 @@ public static class BrowserAnswers
 
         try
         {
-            using var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("h", out var h) && h.ValueKind == JsonValueKind.String)
+            using var answer = JsonDocument.Parse(json);
+            if (answer.RootElement.ValueKind == JsonValueKind.Object && answer.RootElement.TryGetProperty("h", out var h) && h.ValueKind == JsonValueKind.String)
             {
                 html = h.GetString() ?? "";
+                document = Origin(answer.RootElement);
             }
 
             return html.Length > 0;
@@ -145,6 +152,10 @@ public static class BrowserAnswers
             return false;
         }
     }
+
+    // A document's time origin (o): a double, as the page writes it; 0 when it gives none.
+    private static double Origin(JsonElement value) =>
+        value.TryGetProperty("o", out var o) && o.ValueKind == JsonValueKind.Number && o.TryGetDouble(out double origin) ? origin : 0;
 
     /// <summary>A <c>Page.captureScreenshot</c> answer's picture (2026-10-17, the Web UI's live view): its bytes; false for an answer with none.</summary>
     public static bool TryReadScreenshot(string? json, out byte[] picture)

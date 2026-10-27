@@ -37,23 +37,20 @@ namespace NeonSidekick.Llm;
 /// <c>LLM reasoning estimate</c>: llama.cpp and Ollama stream the thinking but do not count it). Shown as <c>~</c>.
 /// </param>
 /// <param name="UntimedOutput">
-/// The share of <see cref="Output"/> from requests with no credible decode span (2026-10-26, <see cref="Judged"/>): left out of
-/// <see cref="TokensPerSecond"/>, whose span holds none of their time. Zero for a timed request.
+/// The share of <see cref="Output"/> with no credible decode span (2026-10-26, <see cref="Judged"/>): a burst's whole output, or thinking
+/// the server counted but never streamed. Left out of <see cref="TokensPerSecond"/>, whose span holds none of its time. Zero when all is timed.
 /// </param>
-public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null, bool ReasoningEstimated = false, long UntimedOutput = 0)
+/// <param name="UnknownWaits">
+/// How many of the requests have no known wait (2026-10-26, the review's R37): their whole reply came in one unmarked burst, whose arrival
+/// holds the decode as well as the prefill. Their <see cref="ToFirstToken"/> is zero and <see cref="AverageToFirstToken"/> leaves them out.
+/// </param>
+public readonly record struct TokenUsage(long Input, long Output, long Total, int Requests, TimeSpan ToFirstToken, TimeSpan Generating, long? Reasoning = null, long? CacheRead = null, long? CacheWrite = null, decimal? CostUsd = null, bool ReasoningEstimated = false, long UntimedOutput = 0, int UnknownWaits = 0)
 {
     public static readonly TokenUsage Zero = default;
 
     /// <summary>
-    /// The shortest decode span a request's speed is believed over (2026-10-26, the user's report: the hint row read well over
-    /// 100,000 tok/s). A reply that arrives in one burst — a tool call every client sends whole, a stream a proxy buffered — spans
-    /// under 10 ms over hundreds of tokens; 100 ms keeps a quick real reply's figure.
-    /// </summary>
-    public static readonly TimeSpan MinDecodeSpan = TimeSpan.FromMilliseconds(100);
-
-    /// <summary>
-    /// The fastest speed believed (2026-10-26, with <see cref="MinDecodeSpan"/>): no local server comes near it, so a faster
-    /// figure is a burst measured over the wrong span, not a decode.
+    /// The fastest speed believed (2026-10-26, the user's report: the hint row read well over 100,000 tok/s): no local server comes near
+    /// it, so a faster figure is a burst measured over the wrong span, not a decode.
     /// </summary>
     public const double MaxPlausibleTokensPerSecond = 5_000;
 
@@ -68,21 +65,29 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
         Output - UntimedOutput is > 0 and var timed && Generating > TimeSpan.Zero ? timed / Generating.TotalSeconds : null;
 
     /// <summary>
-    /// One request's usage after its spans are stamped (2026-10-26): untimed when it produced output over less than
-    /// <see cref="MinDecodeSpan"/> or faster than <see cref="MaxPlausibleTokensPerSecond"/> — its decode span zeroed and its whole
-    /// output <see cref="UntimedOutput"/>, so a sum with timed requests reads their speed alone. Otherwise unchanged.
+    /// One request's usage after its spans are stamped (2026-10-26), <paramref name="shown"/> the updates that showed the model producing
+    /// (<see cref="StreamClock.Shown"/>): untimed when its output came in fewer than two (one burst: no decode was seen) or its timed output
+    /// reads faster than <see cref="MaxPlausibleTokensPerSecond"/> — its decode span zeroed and its whole output <see cref="UntimedOutput"/>,
+    /// so a sum with timed requests reads their speed alone. A short real answer keeps its speed however quick (the review's R12: a floor
+    /// on the span dropped a 6-token reply's). Otherwise unchanged.
     /// </summary>
-    public TokenUsage Judged() =>
-        Output > 0 && (Generating < MinDecodeSpan || Output / Generating.TotalSeconds > MaxPlausibleTokensPerSecond)
+    public TokenUsage Judged(int shown) =>
+        Output > 0 && (shown < 2 || Generating <= TimeSpan.Zero || (Output - UntimedOutput) / Generating.TotalSeconds > MaxPlausibleTokensPerSecond)
             ? this with { Generating = TimeSpan.Zero, UntimedOutput = Output }
             : this;
 
     /// <summary>
     /// The wait per request: <see cref="ToFirstToken"/> is summed over the requests, so a sum of
     /// many (the conversation, the session) reads as an average this way, the aggregate counterpart
-    /// of the last reply's whole wait. Null when nothing was counted.
+    /// of the last reply's whole wait. The requests with no known wait are left out (<see cref="UnknownWaits"/>). Null when no wait is known.
     /// </summary>
-    public TimeSpan? AverageToFirstToken => Requests > 0 ? ToFirstToken / Requests : null;
+    public TimeSpan? AverageToFirstToken => Requests - UnknownWaits > 0 ? ToFirstToken / (Requests - UnknownWaits) : null;
+
+    /// <summary>Whether no request's wait is known (2026-10-26): every one was a burst. False when nothing was counted.</summary>
+    public bool WaitUnknown => Requests > 0 && UnknownWaits >= Requests;
+
+    /// <summary>Whether output was counted but none of it timed (2026-10-26): the log says "streamed untimed", never "0.00s".</summary>
+    public bool Untimed => Output > 0 && UntimedOutput >= Output;
 
     /// <summary>
     /// One request's usage as the adapter delivered it. A server may report only some of the
@@ -115,7 +120,8 @@ public readonly record struct TokenUsage(long Input, long Output, long Total, in
             Sum(a.CacheWrite, b.CacheWrite),
             a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0),
             a.ReasoningEstimated || b.ReasoningEstimated,
-            a.UntimedOutput + b.UntimedOutput);
+            a.UntimedOutput + b.UntimedOutput,
+            a.UnknownWaits + b.UnknownWaits);
 
     private static long? Sum(long? a, long? b) => a is null && b is null ? null : (a ?? 0) + (b ?? 0);
 }

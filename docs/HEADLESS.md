@@ -144,7 +144,7 @@ Special servers for `--url`:
 - **The Anthropic or OpenAI API:** `--url https://api.anthropic.com` (or `https://api.openai.com`) with `NEONSIDEKICK_ANTHROPIC_API=on` and its key (or the `OPENAI` pair); without them the URL is ignored. Requests are billed to the key's account.
 - **The embedded model:** `--url embedded`, with `--model` naming an installed model (else the first). A run never downloads a model, but fetches the llama.cpp runtime the first time. On a Mac it runs on Metal.
 - **The Claude Code server:** `--url claude-code` with `NEONSIDEKICK_CLAUDE_CODE_SERVER=on` runs your logged-in Claude Code as the model ([Anthropic](SETTINGS.md#anthropic)); `--model` is `fable`, `opus`, `sonnet` (the default) or `haiku`.
-- **A Docker server (Windows only):** `--url docker:<container>` stops the profile's other chosen containers and starts this one ([Docker servers](TOOLS.md#docker-servers)). It keeps running after the app exits unless *Docker server stop on exit* is on. The embedded model or a server on this computer stops a running chosen container first, with a `[notice]` naming it ([Docker servers](TOOLS.md#docker-servers)).
+- **A Docker server (Windows only):** `--url docker:<container>` stops the profile's other chosen containers and starts this one ([Docker servers](TOOLS.md#docker-servers)). It keeps running after the app exits unless *Docker server stop on exit* is on. The embedded model or a server on this computer stops a running chosen container first, whatever the `--url`: each stop is a `[notice]`, at startup (after a Ctrl+C too) or after a turn whose advisor loaded a model.
 
 ## Running "yolo": every shell command allowed
 

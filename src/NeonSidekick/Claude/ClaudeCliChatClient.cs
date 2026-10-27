@@ -257,7 +257,7 @@ public sealed class ClaudeCliChatClient : IChatClient
                         yield return Update(turn, model, new TextReasoningContent(thinking.Text));
                         break;
                     case ClaudeServerEvent.Generating:
-                        yield return Progress(turn, model);
+                        yield return StreamProgress.Mark(Update(turn, model, []));
                         break;
                     case ClaudeServerEvent.ToolUse use when use.Name.StartsWith(ClaudeArguments.McpToolPrefix, StringComparison.Ordinal):
                         calls.Add(use);
@@ -336,16 +336,6 @@ public sealed class ClaudeCliChatClient : IChatClient
 
     private static ChatResponseUpdate Update(Turn turn, string model, AIContent content) => Update(turn, model, [content]);
 
-    /// <summary>
-    /// A contents-free update marked <see cref="StreamProgress.Marker"/> (2026-10-26): the model producing what the round's one
-    /// update at <c>message_stop</c> holds — a tool call's input, the hidden thinking — so the speed's clock starts with it.
-    /// </summary>
-    private static ChatResponseUpdate Progress(Turn turn, string model)
-    {
-        var update = Update(turn, model, []);
-        update.RawRepresentation = StreamProgress.Marker;
-        return update;
-    }
 
     private static ChatResponseUpdate Update(Turn turn, string model, List<AIContent> contents) =>
         new(ChatRole.Assistant, contents) { ConversationId = turn.SessionId, ModelId = model };
@@ -504,6 +494,10 @@ public sealed class ClaudeCliChatClient : IChatClient
                 {
                     case ClaudeEvent.TextDelta text:
                         yield return new ChatResponseUpdate(ChatRole.Assistant, text.Text) { ModelId = model };
+                        break;
+                    case ClaudeEvent.BlockStarted:
+                        // The thinking a one-shot never shows, or the text about to come (2026-10-26, the review's R29): the speed's clock starts here.
+                        yield return StreamProgress.Mark(new ChatResponseUpdate(ChatRole.Assistant, (IList<AIContent>)[]) { ModelId = model });
                         break;
                     case ClaudeEvent.Result { IsError: true } failed:
                         throw new InvalidOperationException(ClaudeText.Failed(failed.Error ?? ClaudeText.UnknownFailure));

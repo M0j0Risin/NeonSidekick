@@ -473,7 +473,8 @@ public static class UsageText
     }
 
     /// <summary>The wait a row shows: the scope's whole wait, or per request for an aggregate — null for an aggregate with nothing counted (the conversation after <c>/clear</c>).</summary>
-    private static TimeSpan? Wait(TokenUsage usage, bool averaged) => averaged ? usage.AverageToFirstToken : usage.ToFirstToken;
+    private static TimeSpan? Wait(TokenUsage usage, bool averaged) =>
+        averaged ? usage.AverageToFirstToken : usage.WaitUnknown ? null : usage.ToFirstToken;   // a burst's wait is unknown, never 0 s (2026-10-26)
 
     private static string N0(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 

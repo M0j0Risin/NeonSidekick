@@ -1,5 +1,6 @@
 using NeonSidekick.App;
 using NeonSidekick.EmbeddedLlm;
+using NeonSidekick.Llm;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -44,6 +45,32 @@ public partial class ChatScreenTests
         Assert.Contains(BotChat.SharedEmbeddedWarning("bob", "Gemma 4 E4B QAT", "Gemma 4 E2B"), output);
         Assert.DoesNotContain("bob sits this one out", output);
         Assert.Contains(BotChat.LinkNotice("bob", EmbeddedEndpoint.BaseUrl, "gemma-4-e2b", "none"), output);
+    }
+
+    [EmbeddedHereFact]
+    public async Task BotChat_Multi_ABotsLoad_StopsALeftoverContainer_AndSaysSo()
+    {
+        // 2026-10-26 (the review's R14): a bot's extra loads beside a chosen container as the main model would; the loaded profile's list goes,
+        // and the notice comes under the links. The container publishes the launch server's port, so the launch's own clear spares it.
+        var embedded = EmbeddedBotsFixture("multi-server");
+        var docker = new FakeDockerServers
+        {
+            List = new Docker.DockerServerList(
+                [new Docker.DockerContainer("id-a", "sglang_a", "lmsysorg/sglang:latest", "sha", "running", "Up", 0, [new Docker.DockerPort("0.0.0.0", 1234, 1234, "tcp")], new Dictionary<string, string>(), [], [])],
+                [], null),
+        };
+        _settings.Update(d => { d.DockerServers = true; d.DockerServerContainers = ["sglang_a"]; });
+        _session.Dispose();
+        _session = new LlmSession(new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)), new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
+            (endpoint, _) => { _endpoints.Add(endpoint); return _chat; }, _time, embedded: embedded, dockerServers: docker);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(["clear port 1234", "clear settle", "clear settle"], docker.Calls);   // the launch's, then each extra's
+        Assert.Contains(Docker.DockerServerText.LeftForThisComputer(["sglang_a"], embedded: true), output);
+        Assert.Equal(["gemma-4-e2b", "gemma-4-e4b-qat"], embedded.ExtraStarts);
     }
 
     [Fact]

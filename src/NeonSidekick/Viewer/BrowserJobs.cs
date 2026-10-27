@@ -23,6 +23,33 @@ public sealed class BrowserCheck(BotCheckRequest request, TaskCompletionSource<B
     /// <summary>A look at the page is on its way: the next tick waits for it.</summary>
     public bool Busy { get; set; }
 
+    /// <summary>
+    /// The window went to the check's address (<see cref="BrowserCheckWatch.Start"/>): until then only the first look, at the page from
+    /// before, is on its way, and no tick looks.
+    /// </summary>
+    public bool Gone { get; private set; }
+
+    // The window's way to the check's address, held until Gone.
+    private Action? _go;
+
+    /// <summary>The way to the check's address (<see cref="BrowserCheckWatch.Start"/>), taken once by <see cref="GoNow"/>.</summary>
+    internal void GoBy(Action go) => _go = go;
+
+    /// <summary>The window goes to the check's address, once: false when it went already.</summary>
+    internal bool GoNow()
+    {
+        if (Gone)
+        {
+            return false;
+        }
+
+        Gone = true;
+        var go = _go;
+        _go = null;
+        go?.Invoke();
+        return true;
+    }
+
     /// <summary>The check is through (its PDF, its cookies on their way): nothing more is asked of the page, and no input goes in.</summary>
     public bool Finishing { get; set; }
 
@@ -268,6 +295,12 @@ internal interface IBrowserCheckPage
 
     /// <summary>The check's end carried out by the window (its timers, the hide, the linger): once per check (<see cref="BrowserCheck.TryEnd"/>).</summary>
     void Finish(BrowserCheck check, BotCheckResult result, bool close);
+
+    /// <summary>
+    /// What the window knows of <paramref name="look"/>'s document (2026-10-26): its HTTP status (Windows' is the look's own; the Mac matches
+    /// its main-frame answers by address) and whether it is the window's error page (a page that did not load).
+    /// </summary>
+    (int Status, bool ErrorPage) Describe(BrowserLook look);
 }
 
 /// <summary>
@@ -281,12 +314,67 @@ internal interface IBrowserCheckPage
 /// </summary>
 internal static class BrowserCheckWatch
 {
-    /// <summary>One look at the page while <paramref name="check"/> waits; nothing while one is on its way, the check is finishing, or no page loaded yet.</summary>
+    /// <summary>
+    /// <paramref name="check"/> begins: one look at the page showing first, its document the watch's <see cref="BrowserWatch.Before"/>
+    /// (2026-10-26, the redesign: with no wait for loads, a reused window's page from before — a <c>/browser</c> visit, the last check's —
+    /// could answer the first looks before the check's address came in, and be read), then <paramref name="go"/>. A look that can't be sent
+    /// or reads no document (a fresh window) goes at once; a page that doesn't answer is gone from at the next <see cref="Tick"/> past
+    /// <see cref="DomSettle.PollInterval"/>, and its answer, which may then be the new document's, dropped. An old page on the same address
+    /// but for its fragment stays the document (the window only scrolls), so it is no <see cref="BrowserWatch.Before"/>.
+    /// </summary>
+    public static void Start(IBrowserCheckPage page, BrowserCheck check, Action go)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(check);
+        ArgumentNullException.ThrowIfNull(go);
+        check.GoBy(go);
+        bool sent = page.Evaluate(HeadlessBrowser.PrintExpression, json =>
+        {
+            if (check.Gone || Stale(page, check))
+            {
+                return;   // gone already (the tick's backstop): this answer may be the new document's
+            }
+
+            if (BrowserAnswers.TryReadLook(json, out var look) && !SameDocumentTarget(look.Url, check.Request.Url))
+            {
+                check.Watch.Before = look.Document;
+            }
+
+            check.GoNow();
+        });
+        if (!sent)
+        {
+            check.GoNow();
+        }
+    }
+
+    /// <summary>Whether going to <paramref name="target"/> from <paramref name="showing"/> keeps the document: the same address but for the fragment. Pure.</summary>
+    internal static bool SameDocumentTarget(string showing, Uri target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return target.Fragment.Length > 0 && Uri.TryCreate(showing, UriKind.Absolute, out var at)
+            && string.Equals(at.GetLeftPart(UriPartial.Query), target.GetLeftPart(UriPartial.Query), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One look at the page while <paramref name="check"/> waits; nothing while one is on its way or the check is finishing. Before the
+    /// window went to the check's address (<see cref="Start"/>) it only goes, once <see cref="DomSettle.PollInterval"/> has passed.
+    /// </summary>
     public static void Tick(IBrowserCheckPage page, BrowserCheck check)
     {
         ArgumentNullException.ThrowIfNull(page);
         ArgumentNullException.ThrowIfNull(check);
-        if (check.Busy || check.Finishing || !check.Watch.Loaded || !page.Holds(check))
+        if (!check.Gone)
+        {
+            if (!check.Finishing && page.Holds(check) && check.Clock.Elapsed >= DomSettle.PollInterval)
+            {
+                check.GoNow();
+            }
+
+            return;
+        }
+
+        if (check.Busy || check.Finishing || !page.Holds(check))
         {
             return;
         }
@@ -327,26 +415,27 @@ internal static class BrowserCheckWatch
             return;
         }
 
-        if (!BrowserAnswers.TryReadPrint(json, out string state, out var print))
+        if (!BrowserAnswers.TryReadLook(json, out var look))
         {
             check.Busy = false;   // mid-navigation: the next look tries again
             return;
         }
 
-        if (check.Watch.WantsRead(check.Clock.Elapsed, print))
+        var (status, errorPage) = page.Describe(look);
+        if (check.Watch.WantsRead(check.Clock.Elapsed, look, status, errorPage))
         {
-            ReadDom(page, check, () => AfterRead(page, check, state, print));
+            ReadDom(page, check, () => AfterRead(page, check, look, status, errorPage));
         }
         else
         {
-            AfterRead(page, check, state, print);
+            AfterRead(page, check, look, status, errorPage);
         }
     }
 
-    private static void AfterRead(IBrowserCheckPage page, BrowserCheck check, string state, (int, uint) print)
+    private static void AfterRead(IBrowserCheckPage page, BrowserCheck check, BrowserLook look, int status, bool errorPage)
     {
-        bool ready = check.Watch.Observe(check.Clock.Elapsed, state, print);
-        if (ready && check.Watch.Stale(print))
+        bool ready = check.Watch.Observe(check.Clock.Elapsed, look, status, errorPage);
+        if (ready && check.Watch.Stale(look.Print))
         {
             ReadDom(page, check, () => Conclude(page, check));   // ready: the DOM as it is now, when the last read is older than the last change
         }
@@ -369,7 +458,7 @@ internal static class BrowserCheckWatch
                 return;
             }
 
-            if (BrowserAnswers.TryReadPage(json, out string html))
+            if (BrowserAnswers.TryReadPage(json, out string html, out double document))
             {
                 if (html.Length > WebFetcher.MaxDownloadBytes)
                 {
@@ -378,7 +467,7 @@ internal static class BrowserCheckWatch
                 }
 
                 var url = Uri.TryCreate(page.Source, UriKind.Absolute, out var at) && WebFetcher.IsHttp(at) ? at : check.Request.Url;
-                check.Watch.Read(check.Clock.Elapsed, html, url);
+                check.Watch.Read(check.Clock.Elapsed, html, url, document);   // another document's read is kept nowhere: the next look reads again
             }
 
             then();

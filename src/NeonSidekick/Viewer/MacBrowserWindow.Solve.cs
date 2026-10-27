@@ -37,7 +37,11 @@ internal sealed partial class MacBrowserWindow : IBrowserCheckPage
         DiagnosticLog.Info("Browser", $"A bot check on {request.Url.Host} for the user to solve ({request.Why}).");
         ShowTitle();
         BeginActivity();
-        Go(request.Url.AbsoluteUri);
+        if (_jobs.Check is { } check)
+        {
+            BrowserCheckWatch.Start(this, check, () => Go(request.Url.AbsoluteUri));   // a look at the page from before first (2026-10-26)
+        }
+
         Show();
         _poll.Start(DomSettle.PollInterval);
     }
@@ -144,6 +148,11 @@ internal sealed partial class MacBrowserWindow : IBrowserCheckPage
     BrowserIdentity IBrowserCheckPage.Identity => _identity;
 
     void IBrowserCheckPage.Finish(BrowserCheck check, BotCheckResult result, bool close) => Finish(check, result, close);
+
+    // WebKit's documents carry no status: the main frame's latest answer for the look's address (else the latest at all), and the window's own
+    // error page, loaded with the failing address as its base (2026-10-26, the bot check's redesign).
+    (int Status, bool ErrorPage) IBrowserCheckPage.Describe(BrowserLook look) =>
+        (MacBrowserRules.StatusFor(_responses, look.Url), _errorShownFor is { } failed && MacBrowserRules.SameAddress(failed, look.Url));
 
     bool IBrowserCheckPage.Evaluate(string expression, Action<string?> answer)
     {

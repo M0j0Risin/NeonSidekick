@@ -100,7 +100,7 @@ public enum ProfileSection
     /// <summary><c>keys</c>: the five API keys, mirrored (a key unset in the source clears the target's). <c>/keycopy</c> until 2026-10-09.</summary>
     Keys,
 
-    /// <summary><c>servers</c>: <c>ChatScreen.ProfileServerFields</c>, mirrored. <c>/srvcopy</c> until 2026-10-09.</summary>
+    /// <summary><c>servers</c>: <c>ChatScreen.ProfileSettingGroups</c>, mirrored. <c>/srvcopy</c> until 2026-10-09.</summary>
     Servers,
 
     /// <summary><c>commands [overwrite]</c>: <c>Shell allowed commands</c>, added or replaced. <c>/cmdcopy</c> until 2026-10-09.</summary>
@@ -424,7 +424,7 @@ internal sealed partial class ChatScreen
     /// <summary>The ghost text on the empty idle input row (<see cref="ScreenPane.Placeholder"/>): dim, gone with the first key, never under the spinner. Pinned.</summary>
     public const string InputPlaceholder = "Type a message or /help for more info";
 
-    public const string ConnectingLabel = "looking for an LLM server";
+    public const string ConnectingLabel = ConnectText.Connecting;
     public const string ServerSearchLabel = "looking for LLM servers";
 
     /// <summary>The spinner over a scan that reaches the network (<see cref="ScanScope.Remote"/> / <see cref="ScanScope.Both"/>): a wave of a /24 × six ports takes a few seconds, and the row should say why.</summary>
@@ -1155,6 +1155,15 @@ internal sealed partial class ChatScreen
 
     /// <summary>The settle timer (<see cref="ReadSeekSettle"/>): its tick nudges the read out for <see cref="TakeReadSeekAsync"/>. Made on the first arrow; disposed with the screen.</summary>
     private ITimer? _readSeekTimer;
+
+    /// <summary>
+    /// How often the loaded profile's file is looked at for another writer's changes (2026-10-26, the review's R24): a push from another copy
+    /// of the app, a reset or a copy made there, a hand edit. A look is one <c>stat</c> while nothing changed.
+    /// </summary>
+    internal static readonly TimeSpan OutsideChangesPoll = TimeSpan.FromSeconds(2);
+
+    /// <summary>The <see cref="OutsideChangesPoll"/> timer: its tick takes the changes (<see cref="AppSettings.PollOutsideChanges"/>) and nudges the idle read. Disposed with the screen.</summary>
+    private ITimer? _outsideTimer;
 
     /// <param name="effective">The settings in force (flags over variables over the file), read fresh on every connect and turn.</param>
     /// <param name="overriddenBy">For the menus: the variable or flag that outranks a saved field, or null.</param>
@@ -8587,7 +8596,7 @@ internal sealed partial class ChatScreen
     private const string LlmKeyName = "LLM API key";
     private const string AnthropicKeyName = "Anthropic API key";
     private const string OpenAIKeyName = "OpenAI API key";
-    private const string HomeAssistantKeyName = "Home Assistant API key";
+    internal const string HomeAssistantKeyName = "Home Assistant API key";
     private const string YouTubeKeyName = "YouTube API key";   // 2026-10-05, the user's ask
 
     /// <summary><c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
@@ -8670,56 +8679,7 @@ internal sealed partial class ChatScreen
         return unset.Count == 0 ? $"({copied})" : $"({copied}; {(pull ? owner : "its")} {KeySeries(unset)} cleared)";
     }
 
-    // The server settings (/srvcopy, 2026-10-07).
-
-    /// <summary>
-    /// What <c>servers</c> carries (2026-10-07, the user's list, and the three groups they added: the Claude Code server, the embedded
-    /// tuning, the Docker server timings), in the settings pane's order: each field and the copy of its stored value. <c>Embedded
-    /// models</c> stores nothing per profile (the models are shared under the home, the one in use is in <c>LLM URL</c> and
-    /// <c>LLM model</c>), and the keys are <c>keys</c>'. A server setting added later is one line here. 2026-10-10 (the user's
-    /// list): how the model answers came along — LLM reasoning, its estimate, the sampling overrides (every model's, a deep copy)
-    /// and the Hugging Face switch — and the Anthropic and OpenAI APIs' own rows beyond their switches (output caps, prompt
-    /// caching, organization and project). Later on 2026-10-10 (the user's pick) <c>/claude</c>'s four rows, once they joined the Anthropic tab.
-    /// The pane has moved rows since (the Anthropic tab's executable above the server's switch, the Http tab's scan mode off the URL's
-    /// tab); this list keeps the order each row joined it in, pinned, as nothing reads it by position.
-    /// </summary>
-    public static readonly IReadOnlyList<(SettingsField Field, Action<AppSettingsData, AppSettingsData> Copy)> ProfileServerFields =
-    [
-        (SettingsField.LlmScanMode, (from, to) => to.LlmScanMode = from.LlmScanMode),
-        (SettingsField.LlmUrl, (from, to) => to.LlmUrl = from.LlmUrl),
-        (SettingsField.LlmModel, (from, to) => to.LlmModel = from.LlmModel),
-        (SettingsField.LlmReasoning, (from, to) => to.LlmReasoning = from.LlmReasoning),
-        (SettingsField.LlmReasoningEstimate, (from, to) => to.LlmReasoningEstimate = from.LlmReasoningEstimate),
-        (SettingsField.LlmSampling, (from, to) => to.LlmSampling = LlmSamplingEntry.CopyAll(from.LlmSampling)),
-        (SettingsField.LlmSamplingFromHuggingFace, (from, to) => to.LlmSamplingFromHuggingFace = from.LlmSamplingFromHuggingFace),
-        (SettingsField.EmbeddedLlmServer, (from, to) => to.EmbeddedLlmServer = from.EmbeddedLlmServer),
-        (SettingsField.EmbeddedBackend, (from, to) => to.EmbeddedBackend = from.EmbeddedBackend),
-        (SettingsField.EmbeddedContextSize, (from, to) => to.EmbeddedContextSize = from.EmbeddedContextSize),
-        (SettingsField.EmbeddedGpuLayers, (from, to) => to.EmbeddedGpuLayers = from.EmbeddedGpuLayers),
-        (SettingsField.EmbeddedVramBudget, (from, to) => to.EmbeddedVramBudget = from.EmbeddedVramBudget),
-        (SettingsField.EmbeddedVramOnly, (from, to) => to.EmbeddedVramOnly = from.EmbeddedVramOnly),
-        (SettingsField.EmbeddedVision, (from, to) => to.EmbeddedVision = from.EmbeddedVision),
-        (SettingsField.EmbeddedDrafter, (from, to) => to.EmbeddedDrafter = from.EmbeddedDrafter),
-        (SettingsField.DockerServers, (from, to) => to.DockerServers = from.DockerServers),
-        (SettingsField.DockerServerContainers, (from, to) => to.DockerServerContainers = from.DockerServerContainers is { } containers ? [.. containers] : null),
-        (SettingsField.DockerServerMatchWords, (from, to) => to.DockerServerMatchWords = [.. from.DockerServerMatchWords]),
-        (SettingsField.DockerServerStopTimeoutSeconds, (from, to) => to.DockerServerStopTimeoutSeconds = from.DockerServerStopTimeoutSeconds),
-        (SettingsField.DockerServerPostStopDelaySeconds, (from, to) => to.DockerServerPostStopDelaySeconds = from.DockerServerPostStopDelaySeconds),
-        (SettingsField.DockerServerReadyTimeoutSeconds, (from, to) => to.DockerServerReadyTimeoutSeconds = from.DockerServerReadyTimeoutSeconds),
-        (SettingsField.DockerServerStopOnExit, (from, to) => to.DockerServerStopOnExit = from.DockerServerStopOnExit),
-        (SettingsField.ClaudeCodeServer, (from, to) => to.ClaudeCodeServer = from.ClaudeCodeServer),
-        (SettingsField.ClaudeCodeExecutable, (from, to) => to.ClaudeCodeExecutable = from.ClaudeCodeExecutable),
-        (SettingsField.ClaudeCodePermissions, (from, to) => to.ClaudeCodePermissions = from.ClaudeCodePermissions),
-        (SettingsField.ClaudeCodeModel, (from, to) => to.ClaudeCodeModel = from.ClaudeCodeModel),
-        (SettingsField.ClaudeCodeEffort, (from, to) => to.ClaudeCodeEffort = from.ClaudeCodeEffort),
-        (SettingsField.AnthropicApi, (from, to) => to.AnthropicApi = from.AnthropicApi),
-        (SettingsField.AnthropicApiMaxTokens, (from, to) => to.AnthropicApiMaxTokens = from.AnthropicApiMaxTokens),
-        (SettingsField.AnthropicApiPromptCaching, (from, to) => to.AnthropicApiPromptCaching = from.AnthropicApiPromptCaching),
-        (SettingsField.OpenAIApi, (from, to) => to.OpenAIApi = from.OpenAIApi),
-        (SettingsField.OpenAIApiMaxTokens, (from, to) => to.OpenAIApiMaxTokens = from.OpenAIApiMaxTokens),
-        (SettingsField.OpenAIApiOrganization, (from, to) => to.OpenAIApiOrganization = from.OpenAIApiOrganization),
-        (SettingsField.OpenAIApiProject, (from, to) => to.OpenAIApiProject = from.OpenAIApiProject),
-    ];
+    // The server settings (/srvcopy, 2026-10-07): ProfileSettingGroups[ProfileSection.Servers] since 2026-10-26.
 
     /// <summary>The question before a <c>servers</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open).</summary>
     public static string ProfileServersPrompt(string profile, bool pull = false) => pull
@@ -8773,20 +8733,6 @@ internal sealed partial class ChatScreen
                     target => CopyKeys(from, target),
                     (_, _) => ProfileKeysCopiedNotice(profile, llm, anthropic, openAI, homeAssistant, youTube, pull));
             }
-
-            case ProfileSection.Servers:
-                return new(
-                    null,
-                    ProfileServersPrompt(profile, pull),
-                    target =>
-                    {
-                        foreach (var (_, copy) in ProfileServerFields)
-                        {
-                            copy(from, target);
-                        }
-                    },
-                    (data, directory) => ProfileServersCopiedNotice(
-                        profile, SettingsMenu.FieldValue(SettingsField.LlmUrl, data, directory), SettingsMenu.FieldValue(SettingsField.LlmModel, data, directory), pull));
 
             case ProfileSection.Commands:
             {
@@ -8875,11 +8821,11 @@ internal sealed partial class ChatScreen
             }
 
             case ProfileSection when IsSettingGroupSection(section):
+            {
+                var (prompt, notice) = ProfileGroupWords(section, from, profile, pull);
                 return new(
                     null,
-                    section == ProfileSection.HomeAssistant
-                        ? ProfileHomeAssistantPrompt(profile, !string.IsNullOrWhiteSpace(from.HomeAssistantUrl), !string.IsNullOrWhiteSpace(from.HomeAssistantToken), pull)
-                        : ProfileBarPrompt(section, profile, pull),
+                    prompt,
                     target =>
                     {
                         foreach (var (_, copy) in ProfileSettingGroups[section])
@@ -8887,9 +8833,8 @@ internal sealed partial class ChatScreen
                             copy(from, target);
                         }
                     },
-                    (data, directory) => section == ProfileSection.HomeAssistant
-                        ? ProfileHomeAssistantCopiedNotice(profile, SettingsMenu.FieldValue(SettingsField.HomeAssistantUrl, data, directory), HomeBarItemCount(data), pull)
-                        : ProfileBarCopiedNotice(section, profile, pull));
+                    notice);
+            }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(section), section, "Not a profile.json section.");
@@ -8994,6 +8939,21 @@ internal sealed partial class ChatScreen
         {
             _flow.Notice(KeptNotice);
             return;
+        }
+
+        if (!pull)
+        {
+            // Read again after the yes (2026-10-26, the review's R24): the file read before the question may have changed while it was
+            // open — the other profile loaded in a second copy of the app saves as it is used — and writing the old read back would undo that.
+            try
+            {
+                theirs = Profiles.ReadProfileFile(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                _flow.Error(ProfileSectionFailedError(ex.Message));
+                return;
+            }
         }
 
         if (pull)
@@ -11316,6 +11276,8 @@ internal sealed partial class ChatScreen
             ReconcileWebUi();
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
+            // Another writer's changes to the profile's file (2026-10-26, the review's R24), shown at the loop top (TakeOutsideChangesAsync).
+            _outsideTimer = _time.CreateTimer(static state => ((ChatScreen)state!).PollOutsideChanges(), this, OutsideChangesPoll, OutsideChangesPoll);
 
             // The profile's desktop shortcut offer (2026-10-09; per profile since 2026-10-16): first of all, before the LLM's connect (the user's call the
             // same day), so it never waits behind a scan, a server picker or the Connect page.
@@ -11768,6 +11730,7 @@ internal sealed partial class ChatScreen
             StopRalphOnReset();
             _tones.Dispose();
             _readSeekTimer?.Dispose();
+            _outsideTimer?.Dispose();
             _perf.Dispose();
             _homeLive.Dispose();
             // The background processes go with the screen (2026-09-21): what still runs is killed, tree and all.
@@ -11859,7 +11822,7 @@ internal sealed partial class ChatScreen
 
         Volatile.Write(ref _alertSignal, alert);
         if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady
-            || _webUi.LinesReady || _webUi.NoticesReady)
+            || _webUi.LinesReady || _webUi.NoticesReady || _settings.OutsideChangesReady)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -11963,6 +11926,38 @@ internal sealed partial class ChatScreen
         return (result, hit, tailArmed);
     }
 
+    /// <summary>The <see cref="OutsideChangesPoll"/> tick, on the clock's thread: changes taken end the idle read. Never writes; never throws.</summary>
+    private void PollOutsideChanges()
+    {
+        try
+        {
+            if (_settings.PollOutsideChanges())
+            {
+                SignalAlert();
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn(AppSettings.Category, "Could not look at the profile's file: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The changes another writer made to the profile's file, taken behind the line (2026-10-26, the review's R24): one notice, then what
+    /// they ask rebuilt, as <c>/profile reload</c> does. The loop top's.
+    /// </summary>
+    private async Task TakeOutsideChangesAsync(CancellationToken cancellationToken)
+    {
+        var changes = _settings.TakeOutsideChanges();
+        if (changes.Count == 0)
+        {
+            return;
+        }
+
+        _transcript.Notice(ProfileText.ChangedElsewhereNotice(_settings.ProfileName, changes.Count));
+        await ApplySettingsChangesAsync(ReloadChanges(changes), cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>The board's signal, on the clock's thread — and the tail's end, on the pool: end the idle read, if one is waiting. Never writes.</summary>
     private void SignalAlert()
     {
@@ -12024,6 +12019,7 @@ internal sealed partial class ChatScreen
     private async Task<bool> AnnounceAlertsAsync(CancellationToken cancellationToken)
     {
         DrainLearn();
+        await TakeOutsideChangesAsync(cancellationToken).ConfigureAwait(false);
         // A reflection's write waiting for the user (2026-10-12, Reflection confirm mode): asked on the pane before anything else.
         // The reflection writes (or not) on its own task after the answer; its line comes with its own alert.
         await AnswerLearnAsksAsync(cancellationToken).ConfigureAwait(false);
@@ -13112,14 +13108,15 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The connect's stop of chosen containers this run never started (2026-10-26, the user's call: one left from an earlier run stopped
-    /// before the embedded model or a server on this computer, <see cref="LlmSession.TakeLeftoverStopped"/>): a notice before the <c>LLM:</c>
-    /// line, and after a cancel or a failed load too, since the stop still happened. The log's Info line never reaches the transcript.
-    /// Taken once, so a second call says nothing; the feed carries it to the Web UI page.
+    /// The stops of chosen containers this run never started (2026-10-26, the user's call: one left from an earlier run stopped
+    /// before the embedded model or a server on this computer, <see cref="LlmSession.TakeLeftoverStopped"/>): a notice each, before the
+    /// <c>LLM:</c> line, and after a cancel or a failed load too, since the stop still happened; under a botchat's links, and at a turn's end
+    /// for an advisor's load. The log's Info line never reaches the transcript. Taken once, so a second call says nothing; the feed carries
+    /// it to the Web UI page.
     /// </summary>
     private void ReportLeftoverDocker()
     {
-        if (_session.TakeLeftoverStopped() is { } leftover)
+        foreach (var leftover in _session.TakeLeftoverStopped())
         {
             _transcript.Notice(DockerText.Glyph + " " + DockerServerText.LeftForThisComputer(leftover.Names, leftover.Embedded));
         }
@@ -15955,6 +15952,8 @@ internal sealed partial class ChatScreen
             jobs = cast.Select(bot => bot.Profile is { } profile ? _session.LinkAsync(profile, embeddedMode, NeonSidekick.EmbeddedLlm.ExtraOwner.BotChat, token) : Task.FromResult<(BotLink?, string?)>((null, null))).ToArray();
             return Task.WhenAll(jobs);
         }, cancellationToken).ConfigureAwait(false);
+        // A bot's embedded load clears the GPU as the main session's does (2026-10-26, the review's R14): said under the links, cancel or not.
+        ReportLeftoverDocker();
         if (cancelled)
         {
             foreach (var job in jobs.Where(job => job.IsCompletedSuccessfully))
@@ -17642,6 +17641,8 @@ internal sealed partial class ChatScreen
             }
 
             DrainDiagnostics();
+            // An advisor's embedded load, under a tool call, may have cleared the GPU (2026-10-26, the review's R14): said at the turn's end.
+            ReportLeftoverDocker();
         }
 
         return outcome;

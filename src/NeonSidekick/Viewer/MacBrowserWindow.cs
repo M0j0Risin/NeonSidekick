@@ -489,7 +489,10 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
     private BrowserFullScreen _full;
     private string? _pageTitle;
     private string? _shownTitle;
-    private int _mainStatus;
+    // The main frame's latest answers, (address, status), newest last (2026-10-26, the bot check's redesign: WebKit's documents carry no
+    // responseStatus, so a look's document takes the status of the answer for its address, BrowserCheckWatch through Describe).
+    private readonly List<(string Url, int Status)> _responses = [];
+    private const int MostResponses = 8;
     private string? _errorShownFor;
     private MacContentEnds _contentEnds;
     private bool _handOver = true;
@@ -851,7 +854,12 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
             return canShow ? MacNavigationPolicy.Allow : MacNavigationPolicy.Cancel;
         }
 
-        _mainStatus = status;
+        _responses.Add((url ?? "", status));
+        if (_responses.Count > MostResponses)
+        {
+            _responses.RemoveAt(0);
+        }
+
         if (attachment || !canShow)
         {
             return DownloadOrFile();
@@ -884,22 +892,11 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         return MacNavigationPolicy.Download;
     }
 
-    // A navigation began: a check's watch waits for its page to finish (2026-10-26, BrowserWatch; no ids here, its cap the backstop).
-    // Not for the window's own error page, whose failure the watch was told already: its wait would end in the cap as no error at all.
-    public void Started()
-    {
-        _mainStatus = 0;
-        RefreshBar();
-        if (_jobs.Check is { } check && _errorShownFor is null)
-        {
-            check.Watch.Began(check.Clock.Elapsed);
-        }
-    }
+    public void Started() => RefreshBar();
 
     public void Finished()
     {
         RefreshBar();
-        string? source = Source;
         if (_errorShownFor is not null)
         {
             return;   // the window's own error page: no visit, no answer
@@ -908,17 +905,6 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         RecordVisit();
         FillLinkName();
         FocusPage();
-        if (_jobs.Check is { } check)
-        {
-            if (BrowserPage.HostOf(source) is not null)
-            {
-                check.Watch.Navigated(true, _mainStatus);
-            }
-            else
-            {
-                check.Watch.LoadEnded();   // no web page (the blank one): its wait ends, nothing more
-            }
-        }
     }
 
     public void Failed(bool provisional, string? domain, long code, string message, string? failingUrl)
@@ -930,11 +916,6 @@ internal sealed partial class MacBrowserWindow : AppKitWindow, IBrowserViewSink
         }
 
         DiagnosticLog.Info("Browser", $"A page did not load ({domain} {code.ToString(System.Globalization.CultureInfo.InvariantCulture)}): {message}");
-        if (_jobs.Check is { } check)
-        {
-            check.Watch.Navigated(false, 0);
-        }
-
         // WebKit draws no page of its own (pass 17): the window's, at the failed address, so the box keeps it and Reload retries.
         string at = failingUrl ?? Source ?? BrowserPage.Blank;
         if (provisional && _web != 0 && BrowserPage.Allows(at))

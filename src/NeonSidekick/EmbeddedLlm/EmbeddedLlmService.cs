@@ -43,8 +43,12 @@ public interface IEmbeddedLlm : IAsyncDisposable
     /// <summary>Installs the runtime <paramref name="effective"/> needs and then <paramref name="model"/>; a result, never a throw but the caller's cancel.</summary>
     Task<ModelResult> InstallAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
 
-    /// <summary>The server for <paramref name="model"/> under <paramref name="effective"/>, started if need be. Throws <see cref="EmbeddedLlmException"/>.</summary>
-    Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
+    /// <summary>
+    /// The server for <paramref name="model"/> under <paramref name="effective"/>, started if need be. Throws <see cref="EmbeddedLlmException"/>.
+    /// <paramref name="beforeLoad"/> runs just before llama-server really (re)loads — never for the one running with the same launch
+    /// (2026-10-26, the review's R33/R43: the session's Docker clear, so a reload for a changed launch frees the GPU too).
+    /// </summary>
+    Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null);
 
     /// <summary>Deletes <paramref name="model"/>'s files, stopping the server first when it has them loaded. Null on success, else why not.</summary>
     string? Remove(EmbeddedModel model);
@@ -62,9 +66,9 @@ public interface IEmbeddedLlm : IAsyncDisposable
     /// An extra server for <paramref name="model"/> under <paramref name="effective"/> (a bot's or an advisor's own profile), beside
     /// the main one, held for <paramref name="owner"/>: the running extra of that model whatever its launch (its owner added), else
     /// one started on a host of its own. Throws <see cref="EmbeddedLlmException"/>, <see cref="EmbeddedLlmText.NotInstalled"/> for
-    /// a model not on disk.
+    /// a model not on disk. <paramref name="beforeLoad"/> as <see cref="StartAsync"/>'s: only when an extra really loads.
     /// </summary>
-    Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken);
+    Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null);
 
     /// <summary>Stops every extra server, whoever holds it, never the main one; the ones that were running.</summary>
     IReadOnlyList<EmbeddedServerInfo> StopExtras();
@@ -206,7 +210,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         return installed.Ok ? installed : ModelResult.Failed(installed.Path, EmbeddedLlmText.InstallFailed(model, installed.Detail));
     }
 
-    public Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    public Task<EmbeddedServerInfo> StartAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(effective);
@@ -215,7 +219,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             throw new EmbeddedLlmException(EmbeddedLlmText.NotInstalled(model));
         }
 
-        return StartOnHostAsync(_host, model, effective, phase, cancellationToken);
+        return StartOnHostAsync(_host, model, effective, phase, beforeLoad, cancellationToken);
     }
 
     public IReadOnlyList<EmbeddedServerInfo> Extras
@@ -237,7 +241,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         }
     }
 
-    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<EmbeddedServerInfo> StartExtraAsync(EmbeddedModel model, AppSettingsData effective, ExtraOwner owner, Action<string>? phase, CancellationToken cancellationToken, Func<CancellationToken, Task>? beforeLoad = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(effective);
@@ -269,7 +273,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             }
 
             DiagnosticLog.Info(Category, $"Starting an extra llama-server for {model.Id} ({(owner == ExtraOwner.Advisor ? "an advisor" : "a multi-server botchat")}).");
-            var info = await StartOnHostAsync(extra.Host, model, effective, phase, cancellationToken).ConfigureAwait(false);
+            var info = await StartOnHostAsync(extra.Host, model, effective, phase, beforeLoad, cancellationToken).ConfigureAwait(false);
             lock (_extrasLock)
             {
                 extra.Owners.Add(owner);
@@ -332,7 +336,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     /// A start on <paramref name="host"/> — the main one or an extra: the backend <paramref name="effective"/> picks, and the
     /// CUDA to Vulkan fallback when <c>auto</c> chose CUDA and it does not start.
     /// </summary>
-    private async Task<EmbeddedServerInfo> StartOnHostAsync(ILlamaServerHost host, EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task<EmbeddedServerInfo> StartOnHostAsync(ILlamaServerHost host, EmbeddedModel model, AppSettingsData effective, Action<string>? phase, Func<CancellationToken, Task>? beforeLoad, CancellationToken cancellationToken)
     {
         int kills = Volatile.Read(ref _kills);
         lock (_startingLock)
@@ -347,14 +351,14 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             DiagnosticLog.Info(Category, $"Backend {LlamaRelease.Name(choice.Backend)} ({choice.Reason}).");
             try
             {
-                return await StartOnAsync(host, choice.Backend, model, effective, auto, phase, kills, cancellationToken).ConfigureAwait(false);
+                return await StartOnAsync(host, choice.Backend, model, effective, auto, phase, beforeLoad, kills, cancellationToken).ConfigureAwait(false);
             }
             catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramOnlyRefused && !ex.Killed
                 && !cancellationToken.IsCancellationRequested && !KilledSince(kills))
             {
                 _cudaFailed = true;
                 DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
-                return await StartOnAsync(host, LlamaBackend.Vulkan, model, effective, auto, phase, kills, cancellationToken).ConfigureAwait(false);
+                return await StartOnAsync(host, LlamaBackend.Vulkan, model, effective, auto, phase, beforeLoad, kills, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (EmbeddedLlmException ex) when (!ex.Killed && KilledSince(kills))
@@ -458,7 +462,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         _extrasGate.Dispose();
     }
 
-    private async Task<EmbeddedServerInfo> StartOnAsync(ILlamaServerHost host, LlamaBackend backend, EmbeddedModel model, AppSettingsData effective, bool auto, Action<string>? phase, int kills, CancellationToken cancellationToken)
+    private async Task<EmbeddedServerInfo> StartOnAsync(ILlamaServerHost host, LlamaBackend backend, EmbeddedModel model, AppSettingsData effective, bool auto, Action<string>? phase, Func<CancellationToken, Task>? beforeLoad, int kills, CancellationToken cancellationToken)
     {
         // Embedded VRAM only (2026-10-01, the user's ask): every layer on the GPU whatever Embedded GPU layers says, and
         // no start at all on the CPU backend, which has no VRAM to stay in — nor, the same day (the review's finding, the
@@ -509,7 +513,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         }
 
         phase?.Invoke(EmbeddedLlmText.StartingLabel(model));
-        return await host.EnsureRunningAsync(launch, model, phase, cancellationToken).ConfigureAwait(false);
+        return await host.EnsureRunningAsync(launch, model, phase, cancellationToken, beforeLoad).ConfigureAwait(false);
     }
 
     /// <summary>

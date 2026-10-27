@@ -77,18 +77,26 @@ internal sealed class LlmSession : IDisposable
 
     // The chosen Docker container this session last switched to (2026-10-02): set before the switch, since a failed one may still
     // have started it; cleared when another server is picked and the containers are stopped. Null says nothing about the engine
-    // (2026-10-26, the user's report): a chosen container left running by an earlier run, or started by hand, was never this run's,
-    // and the embedded model loaded beside it; SweepLeftoverDockerAsync asks the engine for those.
+    // (2026-10-26, the user's report): a chosen container left running by an earlier run, or started by hand, was never this run's;
+    // ClearGpuAsync asks the engine for every active one.
     private string? _dockerInUse;
 
-    // The local server's URL the last leftover sweep was made for (2026-10-26, the user's report and call): a /model or /reasoning
-    // reconnect to the same server asks the engine nothing again; null after a connect to anything else (the embedded model, a
-    // container, another machine, a hosted API), so coming back to it asks again.
-    private string? _dockerSweptFor;
+    // The last clear for a server on this computer that the engine answered (2026-10-26, the review of 12729c54: R11, R36, R44): the names
+    // it went by and the server's URL. A /model or /reasoning reconnect to the same server asks the engine nothing again; a connect to
+    // anything else, a Docker switch or another list asks again. An embedded load always asks: a container started by hand since must go.
+    private (string Names, string Url)? _cleared;
 
-    // What the last connect's leftover sweep stopped (2026-10-26, the user's call: a stop of a container this run didn't start leaves
-    // a transcript line); taken once by TakeLeftoverStopped, cleared at the start of each public connect as DockerServedModel is.
-    private DockerLeftover? _leftoverStopped;
+    // Whether the connect under way stopped every chosen container, sparing none (the container in use left): a later clear in it asks
+    // nothing more (the scan's clear, then the pick's). Reset as each connect starts and ends.
+    private bool _clearedAll;
+
+    // When the engine last answered nothing (2026-10-26, the review's R21: Docker Desktop not running costs a 2 s pipe wait): no clear
+    // asks it again before EngineDownWait.
+    private DateTimeOffset? _engineDownAt;
+
+    // The chosen containers a clear stopped though this run never started them (2026-10-26, the user's call: a transcript line each),
+    // kept until TakeLeftoverStopped: a bot's or an advisor's load stops some outside a connect. Locked: an advisor links on a turn's task.
+    private readonly List<DockerLeftover> _leftoverStopped = [];
 
     // That container's live endpoint (2026-10-10): kept while it runs though this session connected elsewhere (a server that leaves the
     // GPU alone), so a bot or an advisor naming it still shares it. Set and cleared with _dockerInUse.
@@ -219,8 +227,8 @@ internal sealed class LlmSession : IDisposable
     /// URL starts the embedded server (<see cref="ResolveEmbeddedAsync"/>) — the llama.cpp runtime downloaded first when
     /// missing, then the model loaded — and <paramref name="phase"/> is told each step. Any other URL stops an embedded
     /// server this session had running, so its memory is free for whatever runs next. An embedded model about to load, or a
-    /// server on this computer, stops a running chosen container this run never started first (2026-10-26,
-    /// <see cref="SweepLeftoverDockerAsync"/>; <see cref="TakeLeftoverStopped"/> says which).
+    /// server on this computer, stops the running chosen containers first, this run's or not (2026-10-26, <see cref="ClearGpuAsync"/>;
+    /// <see cref="TakeLeftoverStopped"/> says which this run never started).
     /// </summary>
     public async Task<bool> ConnectAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
@@ -228,41 +236,45 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Remember(effective);
         DockerServedModel = null;
-        _leftoverStopped = null;
+        _clearedAll = false;
+        try
+        {
+            return await ConnectWithAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _clearedAll = false;
+        }
+    }
 
+    private async Task<bool> ConnectWithAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
         // Another server than a chosen container (2026-10-02, the user's call): the running one stops first, before an embedded
         // model loads, so the GPU never holds the two — and the GPU's memory is given the post-stop delay before that load.
         // Since 2026-10-10 (the user's call) only a server that would compete for this machine's GPU: the Claude Code server, the hosted
         // APIs and another machine's server leave the container running (KeepsDocker), a bot or an advisor still sharing it.
-        // Whether that leave ran (2026-10-26): a connect that just left its own container asks the engine for no leftovers too.
+        // Since 2026-10-26 (the review's R3, R33) one clear of every chosen container, the profile's and the one before's, sparing none.
         bool docker = _docker is not null && DockerEndpoint.Chosen(effective);
-        bool ownedLeft = false;
-        if (!docker && !KeepsDocker(effective))
+        bool embedded = EmbeddedEndpoint.Chosen(effective);
+        if (!docker && !KeepsDocker(effective) && _dockerInUse is not null)
         {
-            ownedLeft = _dockerInUse is not null;
-            await LeaveDockerAsync(effective, except: [], settle: EmbeddedEndpoint.Chosen(effective), phase, cancellationToken).ConfigureAwait(false);
+            _clearedAll = await ClearGpuAsync(effective, embedded, server: null, spareNames: [], settle: embedded, phase, ConnectText.Connecting, cancellationToken).ConfigureAwait(false);
         }
-        else if (_dockerInUse is { } inUse && DockerEndpoint.ContainerOf(effective.LlmUrl) is { } target
+        else if (docker && _dockerInUse is { } inUse && DockerEndpoint.ContainerOf(effective.LlmUrl) is { } target
             && !string.Equals(inUse, target, StringComparison.Ordinal) && !DockerEndpoint.ChosenNames(effective).Contains(inUse, StringComparer.Ordinal))
         {
             // A profile switch to another container (2026-10-02, the user's ask): the new profile's switch stops only the ones
             // its own list names, so the old profile's container, not among them, stops here first. One both lists name is the
             // switch's to stop, as within one profile.
-            ownedLeft = true;
-            await LeaveDockerAsync(effective, except: [target], settle: true, phase, cancellationToken).ConfigureAwait(false);
+            await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [target], settle: true, phase, resume: null, cancellationToken).ConfigureAwait(false);
         }
 
-        if (EmbeddedEndpoint.Chosen(effective))
+        if (embedded)
         {
-            if (!ownedLeft && LoadsEmbedded(effective))
-            {
-                // A model about to load (2026-10-26, the user's report): a chosen container left running by an earlier run, or started by
-                // hand, stops first and the GPU's memory settles, as one this run started does. A reconnect to the model running asks nothing.
-                await SweepLeftoverDockerAsync(effective, ownPort: null, settle: true, embedded: true, phase, cancellationToken).ConfigureAwait(false);
-            }
-
+            // Its load clears the GPU first (2026-10-26, the user's report: a container left running by an earlier run sat beside it), only
+            // when llama-server really loads: a reconnect to the model running with the same launch asks nothing.
             Endpoint = await ResolveEmbeddedAsync(effective, phase, cancellationToken).ConfigureAwait(false);
-            return Endpoint is { LiveUrl: not null } && await ConnectCoreAsync(effective, Endpoint, sweep: !ownedLeft, phase, cancellationToken).ConfigureAwait(false);
+            return Endpoint is { LiveUrl: not null } && await ConnectCoreAsync(effective, Endpoint, phase, cancellationToken).ConfigureAwait(false);
         }
 
         EmbeddedServer = null;
@@ -280,7 +292,7 @@ internal sealed class LlmSession : IDisposable
         {
             // A chosen container (2026-10-02): the others stopped, it started, its API waited for — after the embedded server let go.
             Endpoint = await ResolveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
-            return Endpoint is { LiveUrl: not null } && await ConnectCoreAsync(effective, Endpoint, sweep: !ownedLeft, phase, cancellationToken).ConfigureAwait(false);
+            return Endpoint is { LiveUrl: not null } && await ConnectCoreAsync(effective, Endpoint, phase, cancellationToken).ConfigureAwait(false);
         }
 
         if (DockerEndpoint.IsDocker(effective.LlmUrl))
@@ -299,7 +311,7 @@ internal sealed class LlmSession : IDisposable
             {
                 // The Claude CLI (2026-09-30) is asked nothing: its process starts at the first turn, with that turn's prompt and tools.
                 Endpoint = ClaudeCliEndpointOf(effective.LlmModel);
-                return await ConnectCoreAsync(effective, Endpoint, sweep: !ownedLeft, phase, cancellationToken).ConfigureAwait(false);
+                return await ConnectCoreAsync(effective, Endpoint, phase, cancellationToken).ConfigureAwait(false);
             }
 
             // Saved while it was offered; switched off (or the CLI gone) the URL stands for nothing, as the Anthropic API's.
@@ -311,18 +323,8 @@ internal sealed class LlmSession : IDisposable
         }
 
         Endpoint = await _probe.ResolveAsync(effective, cancellationToken).ConfigureAwait(false);
-        return Endpoint is not null && await ConnectCoreAsync(effective, Endpoint, sweep: !ownedLeft, phase, cancellationToken).ConfigureAwait(false);
+        return Endpoint is not null && await ConnectCoreAsync(effective, Endpoint, phase, cancellationToken).ConfigureAwait(false);
     }
-
-    /// <summary>
-    /// Whether a connect under <paramref name="effective"/> loads an embedded model (2026-10-26): the embedded URL, an embedded model offered
-    /// here, the one it names installed and not the one running. A <c>/reasoning</c> reconnect to the model running, or a model not
-    /// installed, asks the engine nothing.
-    /// </summary>
-    private bool LoadsEmbedded(AppSettingsData effective) =>
-        EmbeddedEndpoint.Chosen(effective) && _embedded is not null && EmbeddedEndpoint.Offered
-        && EmbeddedModelFor(effective.LlmModel) is { } model
-        && !string.Equals(_embedded.Running?.ModelId, model.Id, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// A server on this computer (2026-10-26): not a container's sentinel, not the embedded model, and not one that leaves this machine's GPU
@@ -368,7 +370,10 @@ internal sealed class LlmSession : IDisposable
 
         try
         {
-            var info = await _embedded.StartAsync(model, effective, phase, cancellationToken).ConfigureAwait(false);
+            // The main session's load: every chosen container stops, the GPU's memory settles, then the spinner says the model again.
+            var info = await _embedded.StartAsync(model, effective, phase, cancellationToken,
+                beforeLoad: token => _clearedAll ? Task.CompletedTask
+                    : ClearGpuAsync(effective, embedded: true, server: null, spareNames: [], settle: true, phase, EmbeddedLlmText.StartingLabel(model), token)).ConfigureAwait(false);
             EmbeddedServer = info;
             return EmbeddedEndpointOf(info);
         }
@@ -399,6 +404,7 @@ internal sealed class LlmSession : IDisposable
 
         _dockerInUse = name;
         _dockerSettings = effective;
+        _cleared = null;   // the switch changed what runs: the next local server's clear asks again
         var result = await _docker!.SwitchToAsync(name, effective, phase, cancellationToken).ConfigureAwait(false);
         if (!result.Ok)
         {
@@ -448,89 +454,155 @@ internal sealed class LlmSession : IDisposable
             : DockerEndpoint.LeavesTheGpuAlone(url);
     }
 
+    /// <summary>How long an engine that answered nothing goes unasked (2026-10-26, the review's R21): one pipe wait a minute at most.</summary>
+    internal static readonly TimeSpan EngineDownWait = TimeSpan.FromSeconds(60);
+
     /// <summary>
-    /// Another server picked while a chosen container was in use (2026-10-02, the user's call): every running chosen container
-    /// but <paramref name="except"/> stops, so the GPU is free for what comes next. The chosen ones are those of the settings the
-    /// container was switched to under (later that day, the user's ask: a profile switch's new list may not name it), and so is
-    /// the post-stop delay <paramref name="settle"/> waits when a model loads next. A container that would not stop is a
-    /// warning; the connect goes on.
+    /// The one clear of the GPU (2026-10-26, the review of 12729c54, the user's call: it replaces the owned leave, which knew only the
+    /// container this run switched to, and the leftover sweep, which listed the engine apart). Every active chosen container stops, from one
+    /// list of the engine's (<see cref="IDockerServers.ClearAsync"/>): the names of the profile now (while Docker servers are offered) and of
+    /// the settings the container in use was switched to under (a profile switch's new list may not name it, 2026-10-02), so "only chosen
+    /// containers are ever touched" still holds. Spared: <paramref name="spareNames"/>, and for <paramref name="server"/>, a server on this
+    /// computer, the container that may <i>be</i> it (publishing its port, or on the <c>host</c> network). <paramref name="settle"/> waits
+    /// the post-stop delay when a model loads next. The container in use, stopped, is logged as left; any other is kept for
+    /// <see cref="TakeLeftoverStopped"/> as it stops, so an Esc keeps what happened. An engine that answers nothing (Docker Desktop not running:
+    /// nothing on the GPU) is a debug line and goes unasked for <see cref="EngineDownWait"/>; a container that won't stop is a warning, and
+    /// what called goes on. After it the spinner says <paramref name="resume"/> again, if the clear said anything. True when it stopped every
+    /// chosen container, sparing none, with no server's and no failure: a connect then asks the engine nothing more (<see cref="_clearedAll"/>).
     /// </summary>
-    private async Task LeaveDockerAsync(AppSettingsData effective, IReadOnlyCollection<string> except, bool settle, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task<bool> ClearGpuAsync(AppSettingsData effective, bool embedded, Uri? server, IReadOnlyCollection<string> spareNames, bool settle, Action<string>? phase, string? resume, CancellationToken cancellationToken)
     {
-        if (_docker is null || _dockerInUse is null)
+        if (_docker is null)
         {
-            return;
+            return false;
         }
 
-        var left = await _docker.StopAllAsync(_dockerSettings ?? effective, except, settle, phase, cancellationToken).ConfigureAwait(false);
+        var names = ClearNames(effective);
+        if (names.Count == 0)
+        {
+            return false;
+        }
+
+        // The container in use, unspared, is left whatever the engine says (2026-10-02: the old leave's rule; an engine that answers nothing
+        // runs no container).
+        string? owned = _dockerInUse;
+        bool leaves = owned is not null && server is null && !spareNames.Contains(owned, StringComparer.Ordinal);
+        if (_engineDownAt is { } down && _time.GetUtcNow() - down < EngineDownWait)
+        {
+            if (leaves)
+            {
+                ForgetDocker();
+            }
+
+            return false;
+        }
+
+        string key = ClearKey(names);
+        if (server is not null && _cleared is { } cleared && cleared.Names == key && cleared.Url == server.AbsoluteUri)
+        {
+            return false;
+        }
+
+        var leftovers = new List<string>();
+        bool told = false;
+        Action<string>? tell = phase is null ? null : text =>
+        {
+            told = true;
+            phase(text);
+        };
+
+        var request = new DockerClear(names, _dockerSettings ?? _effective, settle) { SpareNames = spareNames, SparePort = server?.Port };
+        try
+        {
+            var result = await _docker.ClearAsync(request, tell, StoppedOne, cancellationToken).ConfigureAwait(false);
+            if (leaves)
+            {
+                ForgetDocker();
+            }
+
+            if (result.EngineError is { } error)
+            {
+                _engineDownAt = _time.GetUtcNow();
+                DiagnosticLog.Debug(Category, DockerServerText.EngineDownLogLine(error));
+                return false;
+            }
+
+            _engineDownAt = null;
+            foreach (string failed in result.Errors)
+            {
+                DiagnosticLog.Warn(Category, failed);
+            }
+
+            if (server is not null)
+            {
+                _cleared = (key, server.AbsoluteUri);
+            }
+
+            return server is null && spareNames.Count == 0 && result.Errors.Count == 0;
+        }
+        finally
+        {
+            if (leftovers.Count > 0)
+            {
+                DiagnosticLog.Info(Category, DockerServerText.LeftForThisComputer(leftovers, embedded));
+                lock (_leftoverStopped)
+                {
+                    _leftoverStopped.Add(new DockerLeftover(leftovers, embedded));
+                }
+            }
+
+            if (told && resume is not null)
+            {
+                phase!(resume);
+            }
+        }
+
+        void StoppedOne(string name)
+        {
+            if (string.Equals(name, owned, StringComparison.Ordinal))
+            {
+                ForgetDocker();
+                DiagnosticLog.Info(Category, DockerServerText.Left([name]));
+            }
+            else
+            {
+                leftovers.Add(name);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A clear's names: those of <paramref name="effective"/> and of the loaded profile (a bot's load: its own profile's and the main one's)
+    /// while Docker servers are offered under each, then the container in use's list.
+    /// </summary>
+    private List<string> ClearNames(AppSettingsData effective) =>
+        (DockerOffered(effective) ? DockerEndpoint.ChosenNames(effective) : [])
+            .Concat(DockerOffered(_effective) ? DockerEndpoint.ChosenNames(_effective) : [])
+            .Concat(_dockerSettings is { } before ? DockerEndpoint.ChosenNames(before) : [])
+            .Distinct(StringComparer.Ordinal).ToList();
+
+    private static string ClearKey(IEnumerable<string> names) => string.Join('\n', names);
+
+    /// <summary>The container in use is no more: left, or stopped.</summary>
+    private void ForgetDocker()
+    {
         _dockerInUse = null;
         _dockerSettings = null;
         _dockerLive = null;
-        if (left.Stopped.Count > 0)
-        {
-            DiagnosticLog.Info(Category, DockerServerText.Left(left.Stopped));
-        }
-
-        foreach (string error in left.Errors)
-        {
-            DiagnosticLog.Warn(Category, error);
-        }
     }
 
     /// <summary>
-    /// The leftover sweep (2026-10-26, the user's report: starting straight into a profile on the embedded model loaded it beside a
-    /// container an earlier run had left running, since <see cref="LeaveDockerAsync"/> knows only the one this run switched to). With no
-    /// container in use and Docker servers offered, the chosen ones the engine lists as active stop, under <paramref name="effective"/>'s list
-    /// — "only chosen containers are ever touched" still holds. With <paramref name="ownPort"/> (a server on this computer) the containers that
-    /// may <i>be</i> that server are spared: the one publishing that port, and any on the <c>host</c> network, which publishes no port to compare.
-    /// An engine that doesn't answer (Docker Desktop not running: nothing on the GPU) is a debug line alone; a container that won't stop
-    /// a warning, and the connect goes on, as the owned leave's. What stopped is logged and kept for <see cref="TakeLeftoverStopped"/>.
+    /// The chosen containers this run stopped though it never started them (2026-10-26, the user's call), each once: the screen and
+    /// headless say them, then they are gone. A connect's, a bot's or an advisor's embedded load's, in the order they stopped; empty when none.
     /// </summary>
-    private async Task SweepLeftoverDockerAsync(AppSettingsData effective, int? ownPort, bool settle, bool embedded, Action<string>? phase, CancellationToken cancellationToken)
+    public IReadOnlyList<DockerLeftover> TakeLeftoverStopped()
     {
-        if (_docker is null || _dockerInUse is not null || !DockerOffered(effective))
+        lock (_leftoverStopped)
         {
-            return;
+            var taken = _leftoverStopped.ToList();
+            _leftoverStopped.Clear();
+            return taken;
         }
-
-        var list = await _docker.ListAsync(effective, cancellationToken).ConfigureAwait(false);
-        if (list.Error is not null)
-        {
-            DiagnosticLog.Debug(Category, "Docker servers, the leftover check: " + list.Error);
-            return;
-        }
-
-        var active = list.Chosen.Where(DockerServerHost.Active).ToList();
-        IReadOnlyList<string> spared = ownPort is { } port
-            ? active.Where(c => DockerServerHost.HostPortsOf(c).Contains(port) || c.Networks.Contains("host", StringComparer.Ordinal)).Select(c => c.Name).ToList()
-            : [];
-        if (active.All(c => spared.Contains(c.Name, StringComparer.Ordinal)))
-        {
-            return;
-        }
-
-        var left = await _docker.StopAllAsync(effective, spared, settle, phase, cancellationToken).ConfigureAwait(false);
-        if (left.Stopped.Count > 0)
-        {
-            DiagnosticLog.Info(Category, DockerServerText.LeftForThisComputer(left.Stopped, embedded));
-            _leftoverStopped = new DockerLeftover(left.Stopped, embedded);
-        }
-
-        foreach (string error in left.Errors)
-        {
-            DiagnosticLog.Warn(Category, error);
-        }
-    }
-
-    /// <summary>
-    /// The chosen containers the last connect stopped though this run never started them (2026-10-26, the user's call), once: the screen
-    /// and headless say it, then it is null. Null too after a connect whose sweep stopped nothing, or that left its own container.
-    /// </summary>
-    public DockerLeftover? TakeLeftoverStopped()
-    {
-        var leftover = _leftoverStopped;
-        _leftoverStopped = null;
-        return leftover;
     }
 
     /// <summary>The chosen container this session switched to and has not left (2026-10-02); null for none.</summary>
@@ -557,10 +629,14 @@ internal sealed class LlmSession : IDisposable
         }
 
         // The chosen list it was switched to under: the profile now loaded may not name it (2026-10-02).
-        var left = await _docker.StopAllAsync(_dockerSettings ?? effective, except: [], settle: false, null, cancellationToken).ConfigureAwait(false);
-        _dockerInUse = null;
-        _dockerSettings = null;
-        _dockerLive = null;
+        var settings = _dockerSettings ?? effective;
+        var left = await _docker.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(settings), settings, Settle: false), null, null, cancellationToken).ConfigureAwait(false);
+        ForgetDocker();
+        if (left.EngineError is { } down)
+        {
+            DiagnosticLog.Warn(Category, down);
+        }
+
         foreach (string error in left.Errors)
         {
             DiagnosticLog.Warn(Category, error);
@@ -695,40 +771,53 @@ internal sealed class LlmSession : IDisposable
     /// <see cref="Connect"/> over an endpoint already resolved, then — when neither the settings
     /// nor the server's model list named the window — the context probe's native tiers. What the
     /// screen's server pick and the session's own <see cref="ConnectAsync(AppSettingsData, CancellationToken)"/> both end in. A server
-    /// on this computer stops a running chosen container this run never started first, the one that may be that server spared (2026-10-26,
-    /// <see cref="SweepLeftoverDockerAsync"/>; <see cref="TakeLeftoverStopped"/> says which).
+    /// on this computer stops the running chosen containers first, the one that may be that server spared (2026-10-26,
+    /// <see cref="ClearGpuAsync"/>; <see cref="TakeLeftoverStopped"/> says which this run never started).
     /// </summary>
-    public Task<bool> ConnectAsync(AppSettingsData effective, LlmEndpoint endpoint, CancellationToken cancellationToken, Action<string>? phase = null)
+    public async Task<bool> ConnectAsync(AppSettingsData effective, LlmEndpoint endpoint, CancellationToken cancellationToken, Action<string>? phase = null)
     {
-        _leftoverStopped = null;
-        return ConnectCoreAsync(effective, endpoint, sweep: true, phase, cancellationToken);
+        // A scan's clear (DiscoverAsync) stopped them all: the pick's asks nothing more. Taken here, so it never outlives the pick.
+        try
+        {
+            return await ConnectCoreAsync(effective, endpoint, phase, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _clearedAll = false;
+        }
     }
 
-    /// <summary>
-    /// The public endpoint connect's body (2026-10-26): <paramref name="sweep"/> false when the caller just left its own container, so the
-    /// engine isn't asked again.
-    /// </summary>
-    private async Task<bool> ConnectCoreAsync(AppSettingsData effective, LlmEndpoint endpoint, bool sweep, Action<string>? phase, CancellationToken cancellationToken)
+    /// <summary>The endpoint connect's body (2026-10-26): the GPU's clear first, then the connect.</summary>
+    private async Task<bool> ConnectCoreAsync(AppSettingsData effective, LlmEndpoint endpoint, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         bool local = OnThisComputer(endpoint.BaseUrl);
-        bool noneInUse = _dockerInUse is null;
-        if (!DockerEndpoint.IsDocker(endpoint.BaseUrl) && !DockerEndpoint.LeavesTheGpuAlone(endpoint.BaseUrl))
+        if (local && !_clearedAll)
         {
-            // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call. Its server runs already: no settle.
-            // Not for a server that leaves the GPU alone (2026-10-10): Claude Code, the hosted APIs, another machine's.
-            await LeaveDockerAsync(effective, except: [], settle: false, phase, cancellationToken).ConfigureAwait(false);
+            if (_dockerInUse is not null)
+            {
+                // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call, the row's own port or not. Its server
+                // runs already: no settle. Not for a server that leaves the GPU alone (2026-10-10): Claude Code, the hosted APIs, another machine's.
+                _clearedAll = await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Then any other (2026-10-26, the user's call): a leftover one stops, unless it may be that server. Once per server and list: a
+            // /model or /reasoning reconnect to it asks nothing; coming back to it after another server asks again.
+            if (!_clearedAll)
+            {
+                await ClearGpuAsync(effective, embedded: false, endpoint.BaseUrl, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken).ConfigureAwait(false);
+            }
         }
 
-        // A server on this computer with no container in use (2026-10-26, the user's call): a leftover one stops, unless it may be that server.
-        // Once per server: a /model or /reasoning reconnect to it asks nothing; coming back to it after another server asks again.
-        string url = endpoint.BaseUrl.AbsoluteUri;
-        if (local && noneInUse && sweep && !string.Equals(url, _dockerSweptFor, StringComparison.Ordinal))
+        if (!local)
         {
-            await SweepLeftoverDockerAsync(effective, ownPort: endpoint.BaseUrl.Port, settle: false, embedded: false, phase, cancellationToken).ConfigureAwait(false);
+            _cleared = null;
         }
-
-        _dockerSweptFor = local ? url : null;
+        else if (_clearedAll && ClearNames(effective) is { Count: > 0 } names)
+        {
+            // A clear of them all in this connect (or the scan's before it) covers this server too: a reconnect to it asks nothing.
+            _cleared = (ClearKey(names), endpoint.BaseUrl.AbsoluteUri);
+        }
 
         if (!Connect(effective, endpoint))
         {
@@ -769,7 +858,12 @@ internal sealed class LlmSession : IDisposable
         Reconnecting();
         Endpoint = null;
         Remember(effective);
-        await LeaveDockerAsync(effective, except: [], settle: false, phase: null, cancellationToken).ConfigureAwait(false);
+        _clearedAll = false;
+        if (_dockerInUse is not null)
+        {
+            // Its clear spares nothing: the pick's connect then asks the engine nothing more (_clearedAll, taken by that connect).
+            _clearedAll = await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase: null, resume: null, cancellationToken).ConfigureAwait(false);
+        }
         return await WithExtraRowsAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken).ConfigureAwait(false);
     }
 
@@ -1081,9 +1175,13 @@ internal sealed class LlmSession : IDisposable
 
             try
             {
+                // A bot's or an advisor's real load clears the GPU too (2026-10-26, the review's R14), under the loaded profile's list and the
+                // bot's own, sparing the main session's container in use: the main session still talks to it.
+                Func<CancellationToken, Task>? clear = _docker is null ? null : token =>
+                    ClearGpuAsync(profile, embedded: true, server: null, spareNames: _dockerInUse is { } inUse ? [inUse] : [], settle: true, phase: null, resume: null, token);
                 var info = mode == BotEmbeddedMode.MultiServer
-                    ? await _embedded.StartExtraAsync(wanted, profile, owner, null, cancellationToken).ConfigureAwait(false)
-                    : await _embedded.StartAsync(wanted, profile, null, cancellationToken).ConfigureAwait(false);
+                    ? await _embedded.StartExtraAsync(wanted, profile, owner, null, cancellationToken, clear).ConfigureAwait(false)
+                    : await _embedded.StartAsync(wanted, profile, null, cancellationToken, clear).ConfigureAwait(false);
                 return (EmbeddedEndpointOf(info), null, null);
             }
             catch (EmbeddedLlmException ex)

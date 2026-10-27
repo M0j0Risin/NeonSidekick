@@ -36,6 +36,9 @@ public abstract record ClaudeEvent
     /// <summary>Claude used one of its tools: its name and a short what (<c>Read</c>, <c>src/Foo.cs</c>); <paramref name="Detail"/> may be empty.</summary>
     public sealed record ToolActivity(string Name, string Detail) : ClaudeEvent;
 
+    /// <summary>A content block began (2026-10-26): the model producing, though nothing of it may stream (thinking). A one-shot marks the speed's start with it.</summary>
+    public sealed record BlockStarted : ClaudeEvent;
+
     /// <summary>
     /// The run's end, the CLI's <c>result</c> line: the session it ran in, what it cost, the tokens, and whether it failed.
     /// <paramref name="Text"/> is the whole reply as the CLI saw it (for a run whose text never streamed);

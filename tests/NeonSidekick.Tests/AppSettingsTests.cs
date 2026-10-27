@@ -1481,6 +1481,143 @@ public class AppSettingsTests : IDisposable
         AssertSame(new AppSettingsData(), settings.Current);
     }
 
+    // ── Two writers on one profile file (2026-10-26, the review's R24) ─────────────────────────────────────
+
+    /// <summary>The other copy's /profile push: the file rewritten whole, one section changed.</summary>
+    private static void PushInto(string file, Action<AppSettingsData> change)
+    {
+        var data = Profiles.ReadProfileFile(file);
+        change(data);
+        Profiles.WriteProfileFile(file, data);
+    }
+
+    [Fact]
+    public async Task APushIntoTheProfile_FromAnotherCopy_SurvivesThisOnesNextSave_AndIsTakenIntoItsData()
+    {
+        using var settings = new AppSettings(_dir);
+        settings.Update(d => d.TtsSpeed = 1.1);
+        await settings.FlushAsync();
+        PushInto(settings.FilePath, d => d.ToolbarItems = ["clock", "files"]);
+
+        settings.Update(d => d.TtsSpeed = 1.3);   // this side's own change, made after the push
+        await settings.FlushAsync();
+
+        var onDisk = Profiles.ReadProfileFile(settings.FilePath);
+        Assert.Equal(["clock", "files"], onDisk.ToolbarItems);
+        Assert.Equal(1.3, onDisk.TtsSpeed);
+        Assert.Equal(["clock", "files"], settings.Current.ToolbarItems);   // the running app follows what it wrote
+        var seen = new List<AppSettingsData>();
+        settings.Changed += seen.Add;
+        Assert.True(settings.OutsideChangesReady);
+        var lines = settings.TakeOutsideChanges();
+        Assert.StartsWith("ToolbarItems: ", Assert.Single(lines), StringComparison.Ordinal);
+        Assert.Single(seen);
+        Assert.Empty(settings.TakeOutsideChanges());   // handed over once
+        Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task AChangeMadeOnBothSides_KeepsThisSides()
+    {
+        using var settings = new AppSettings(_dir);
+        PushInto(settings.FilePath, d => { d.LlmModel = "theirs"; d.Theme = "noir"; });
+        settings.Update(d => d.LlmModel = "ours");
+        await settings.FlushAsync();
+
+        var onDisk = Profiles.ReadProfileFile(settings.FilePath);
+        Assert.Equal("ours", onDisk.LlmModel);
+        Assert.Equal("noir", onDisk.Theme);   // what only they changed is still taken
+        Assert.Equal("ours", settings.Current.LlmModel);
+    }
+
+    [Fact]
+    public async Task TwoCopiesSaving_EachKeepsTheOthersChanges()
+    {
+        using var first = new AppSettings(_dir);
+        using var second = new AppSettings(_dir);
+        first.Update(d => d.TtsSpeed = 1.2);
+        await first.FlushAsync();
+        second.Update(d => d.LlmModel = "second");
+        await second.FlushAsync();
+        first.Update(d => d.Theme = "noir");
+        await first.FlushAsync();
+
+        var onDisk = Profiles.ReadProfileFile(first.FilePath);
+        Assert.Equal(1.2, onDisk.TtsSpeed);
+        Assert.Equal("second", onDisk.LlmModel);
+        Assert.Equal("noir", onDisk.Theme);
+        Assert.True(second.PollOutsideChanges());   // the live look takes the first's
+        Assert.Equal("noir", second.Current.Theme);
+        Assert.Equal(1.2, second.Current.TtsSpeed);
+    }
+
+    [Fact]
+    public async Task ThePoll_TakesAnOutsideChangeOnce_AndNothingAfterItsOwnSave()
+    {
+        using var settings = new AppSettings(_dir);
+        settings.Update(d => d.TtsSpeed = 1.2);
+        await settings.FlushAsync();
+        Assert.False(settings.PollOutsideChanges());   // its own write is no outside change (the file read back as written)
+        Assert.False(settings.OutsideChangesReady);
+
+        PushInto(settings.FilePath, d => d.CopyUserPrompt = !d.CopyUserPrompt);
+        bool hints = !settings.Current.CopyUserPrompt;
+        var seen = new List<AppSettingsData>();
+        settings.Changed += seen.Add;
+        Assert.True(settings.PollOutsideChanges());
+        Assert.Equal(hints, settings.Current.CopyUserPrompt);
+        Assert.Empty(seen);   // raised when the screen takes them
+        Assert.Single(settings.TakeOutsideChanges());
+        Assert.Single(seen);
+        Assert.False(settings.PollOutsideChanges());   // the file as last seen: nothing read
+
+        settings.Update(d => d.TtsSpeed = 1.4);
+        await settings.FlushAsync();
+        Assert.False(settings.PollOutsideChanges());
+        Assert.Empty(settings.TakeOutsideChanges());
+        Assert.Equal(hints, Profiles.ReadProfileFile(settings.FilePath).CopyUserPrompt);
+    }
+
+    [Fact]
+    public async Task AHandEdit_BetweenASaveAndAReload_SurvivesTheSave()
+    {
+        using var settings = new AppSettings(_dir);
+        settings.Update(d => d.TtsSpeed = 1.1);
+        await settings.FlushAsync();
+        PushInto(settings.FilePath, d => d.LlmModel = "by-hand");   // /profile edit, saved in the editor
+        settings.Update(d => d.TtsSpeed = 1.2);
+        await settings.FlushAsync();
+
+        settings.Reload();
+
+        Assert.Equal("by-hand", settings.Current.LlmModel);
+        Assert.Equal(1.2, settings.Current.TtsSpeed);
+        Assert.Empty(settings.TakeOutsideChanges());   // a reload starts afresh: its Changed carried everything
+    }
+
+    [Fact]
+    public async Task AResetMadeElsewhere_IsNotUndoneByThisOnesSave()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", Theme = "noir" });
+        using var settings = new AppSettings(_dir, "work");
+        Profiles.Reset(_dir, "work");   // from the other copy: /profile reset work
+
+        settings.Update(d => d.TtsSpeed = 1.3);
+        await settings.FlushAsync();
+
+        var onDisk = Profiles.ReadProfileFile(settings.FilePath);
+        Assert.Equal(new AppSettingsData().Theme, onDisk.Theme);
+        Assert.Equal(1.3, onDisk.TtsSpeed);
+    }
+
+    [Fact]
+    public void ChangedElsewhere_LinesArePinned()
+    {
+        Assert.Equal("Changed elsewhere TtsSpeed: 1 → 1.2", AppSettings.OutsideChangeLogLine("TtsSpeed: 1 → 1.2"));
+        Assert.Equal("(" + NoticeGlyphs.Profile + "profile \"work\" changed outside this window; 2 settings taken)", ProfileText.ChangedElsewhereNotice("work", 2));
+        Assert.Equal("(" + NoticeGlyphs.Profile + "profile \"work\" changed outside this window; 1 setting taken)", ProfileText.ChangedElsewhereNotice("work", 1));
+    }
+
     [Fact]
     public async Task ResetProfile_TheLoadedOne_KeepsItsCurrentUrlsPathsAndKeys()
     {
