@@ -759,7 +759,8 @@ public static class SystemPromptSummary
         bool helpEnabled = true,
         AdminGroupSpec? monitors = null,
         IReadOnlyList<AIFunction>? duckDb = null,
-        bool duckDbEnabled = true)
+        bool duckDbEnabled = true,
+        IReadOnlyDictionary<string, string>? homeNotes = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -896,7 +897,9 @@ public static class SystemPromptSummary
         {
             // The Home Assistant tools (2026-09-28): after the image tools; offered while Home Assistant tools is on and a URL and a token are set.
             string homeNote = !homeAssistantEnabled ? NotOffered(HomeAssistantOffSuffix) : standing;
-            groups.Add(Group(ToolsText.HomeAssistantGroupTitle, homeAssistant, homeNote, homeAssistantEnabled && toolsEnabled, SettingsField.HomeAssistantTools, disabled));
+            // ...and its tools' notes (2026-10-27): ha_camera left out where no picture can be read, the admin groups' way.
+            groups.Add(Group(ToolsText.HomeAssistantGroupTitle, homeAssistant, homeNote, homeAssistantEnabled && toolsEnabled, SettingsField.HomeAssistantTools, disabled,
+                homeNotes is { Count: > 0 } ? new Dictionary<string, string>(homeNotes, StringComparer.Ordinal) : null));
         }
 
         if (print is not null)

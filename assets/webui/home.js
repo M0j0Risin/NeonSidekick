@@ -25,6 +25,7 @@ let home = null;
 let words = null;
 let quickUntil = 0;
 let openSheet = null;   // { ref, timer }
+let camera = null;   // the open sheet's camera: { ref, box, img, status, refresh, abort, running, waitUntil }
 let videoAt = null;   // { position, at } while playing: the clock runs on between reads
 
 // ── Reading ───────────────────────────────────────────────────────────
@@ -167,6 +168,68 @@ function drawSheet(sheet) {
     }
     sheetBody.appendChild(line);
   }
+  if (sheet.camera) {
+    if (!camera || camera.ref !== sheet.ref) { dropCamera(); camera = cameraBox(sheet.ref); fetchStill(); }
+    sheetBody.insertBefore(camera.box, sheetBody.firstChild);
+  } else {
+    dropCamera();
+  }
+}
+
+// ── A camera's still (2026-10-27) ─────────────────────────────────────
+// A camera's sheet shows its still: fetched as the sheet opens and on ↻ only, never on the sheet's own reads (each one a request to Home
+// Assistant and the camera), the box kept across those reads so the picture stays. ↻ waits while a still comes, and after a "slow down" for
+// as long as the app says. Closing the sheet, or a read that is no longer a camera's, drops the box and ends a fetch under way.
+
+function cameraBox(ref) {
+  const c = { ref, box: el('div', 'home-camera'), img: el('img', 'home-camera-picture hidden'), status: el('span', 'home-camera-status'), refresh: el('button', 'home-camera-refresh', words.cameraRefresh), abort: null, running: false, waitUntil: 0 };
+  c.img.alt = '';
+  c.refresh.type = 'button';
+  c.refresh.addEventListener('click', fetchStill);
+  const bar = el('div', 'home-camera-bar');
+  bar.appendChild(c.status);
+  bar.appendChild(c.refresh);
+  c.box.appendChild(c.img);
+  c.box.appendChild(bar);
+  return c;
+}
+
+function paintCamera(c) {
+  const waiting = Date.now() < c.waitUntil;
+  c.refresh.disabled = c.running || waiting;
+  c.refresh.textContent = c.running ? words.cameraFetching : words.cameraRefresh;
+}
+
+async function fetchStill() {
+  const c = camera;
+  if (!c || c.running || Date.now() < c.waitUntil) return;
+  c.running = true;
+  c.abort = new AbortController();
+  paintCamera(c);
+  const r = await Neon.picture('/api/home/camera?ref=' + encodeURIComponent(c.ref), c.abort.signal);
+  if (camera !== c) return;   // closed, or another sheet's since
+  c.running = false;
+  c.abort = null;
+  if (r.ok) {
+    c.img.src = r.dataUrl;
+    c.img.classList.remove('hidden');
+    c.status.textContent = '';
+  } else {
+    c.status.textContent = r.message || '';
+  }
+  c.status.classList.toggle('failed', !r.ok);
+  if (r.status === 429 && r.retryAfter) {
+    c.waitUntil = Date.now() + r.retryAfter * 1000;
+    setTimeout(() => { if (camera === c) paintCamera(c); }, r.retryAfter * 1000 + 50);
+  }
+  paintCamera(c);
+}
+
+function dropCamera() {
+  if (!camera) return;
+  if (camera.abort) camera.abort.abort();
+  camera.box.remove();
+  camera = null;
 }
 
 async function act(ref, entity, action, confirmed) {
@@ -213,6 +276,7 @@ function closeSheet() {
 function hideSheet() {
   if (openSheet && openSheet.timer) clearInterval(openSheet.timer);
   openSheet = null;
+  dropCamera();
   sheetBack.classList.add('hidden');
 }
 

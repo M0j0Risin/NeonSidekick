@@ -436,6 +436,9 @@ public sealed class WebUiHost : IWebUiHost
                         }
 
                         return;
+                    case CameraPath when _backend.Home is { } home && HttpMethods.IsGet(context.Request.Method):
+                        await CameraAsync(context, home, remote).ConfigureAwait(false);
+                        return;
                 }
             }
             else if (post)
@@ -717,6 +720,40 @@ public sealed class WebUiHost : IWebUiHost
         response.ContentType = "image/jpeg";
         response.ContentLength = frame.Jpeg.Length;
         await response.Body.WriteAsync(frame.Jpeg, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    /// <summary>A camera's still for its sheet on the Home tab (2026-10-27): <c>?ref=</c>, a GET in the camera bucket.</summary>
+    public const string CameraPath = "/api/home/camera";
+
+    /// <summary>
+    /// A camera's still (2026-10-27): asked with <c>X-Neon: 1</c> like a post, so only the page's own script gets one (an <c>&lt;img&gt;</c> another
+    /// page planted sends no header); the picture never cached and kept to this origin. 404 for a reference outside the tiles' reach, 502 with
+    /// Home Assistant's reason when it gave none. A HEAD fetches nothing.
+    /// </summary>
+    private static async Task CameraAsync(HttpContext context, IWebHome home, IPAddress? remote)
+    {
+        if (context.Request.Headers[CsrfHeader] != "1")
+        {
+            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
+            return;
+        }
+
+        var answer = await home.CameraAsync(context.Request.Query["ref"].ToString(), remote, context.RequestAborted).ConfigureAwait(false);
+        if (answer.Picture is not { } picture)
+        {
+            var refusal = answer.Refusal ?? new WebReply(WebOutcome.NotFound);
+            int status = refusal.Outcome == WebOutcome.Refused ? StatusCodes.Status502BadGateway : StatusOf(refusal.Outcome);
+            await ResultAsync(context, status, new WebResult(false, refusal.Message ?? (status == StatusCodes.Status404NotFound ? WebUiText.HomeChanged : null))).ConfigureAwait(false);
+            return;
+        }
+
+        var response = context.Response;
+        response.Headers.CacheControl = "no-store";
+        response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
+        response.StatusCode = StatusCodes.Status200OK;
+        response.ContentType = picture.MediaType;
+        response.ContentLength = picture.Bytes.Length;
+        await response.Body.WriteAsync(picture.Bytes, context.RequestAborted).ConfigureAwait(false);
     }
 
     /// <summary>Where a deferred entry is read whole: <c>/api/entry/{seq}</c> (2026-10-15).</summary>

@@ -40,7 +40,9 @@ public sealed class NeonAdvisorTool : AIFunction
     public static IReadOnlySet<string> Excluded => s_excluded ??= new HashSet<string>(
         [ToolName, AskUserTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ScreenListTool.ToolName,
          // Every database tool (2026-10-24, the database review's J1, decision DB4): its rows would go to the advisor's provider.
-         .. App.ChatScreen.DatabaseToolNames],
+         .. App.ChatScreen.DatabaseToolNames,
+         // A home camera's picture (2026-10-27, ha_camera): it would go to the advisor's provider too, DB4's reasoning.
+         HaCameraTool.ToolName],
         StringComparer.Ordinal);
 
     private static IReadOnlySet<string>? s_excluded;

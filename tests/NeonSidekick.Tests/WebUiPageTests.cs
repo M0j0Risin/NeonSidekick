@@ -187,15 +187,44 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
 
         public List<string> Scenes { get; } = [];
 
+        /// <summary>
+        /// A camera's tile (2026-10-27), off by default: <c>entity:camera.front_door</c>, its sheet a camera's while <see cref="CameraSheet"/>
+        /// holds; its stills from <see cref="Stills"/> (a JPEG by default), each held while <see cref="Hold"/> is set.
+        /// </summary>
+        public bool WithCamera { get; set; }
+
+        public bool CameraSheet { get; set; } = true;
+
+        public int CameraCalls;
+
+        public Func<WebCameraAnswer> Stills { get; set; } = () => new WebCameraAnswer(new WebCameraPicture(StripFixtures.Jpeg(), "image/jpeg"), null);
+
+        public TaskCompletionSource? Hold { get; set; }
+
         public WebHome Read() => new("live", null, Controls,
             [
                 new WebHomeTile("entity:light.desk", "💡", "Desk", "", "", Controls ? "call" : "none", null, "on", "#ffcc00", 0, true),
                 new WebHomeTile("entity:lock.front", "🔒", "Front Door", "", "", Controls ? "confirm" : "none", null, "off", null, 1, true),
+                .. WithCamera ? [new WebHomeTile("entity:camera.front_door", "📹", "Front Door Camera", "idle", "", "detail", null, "plain", null, 1, true)] : Array.Empty<WebHomeTile>(),
             ],
             Rooms, VideoCard, new WebHomePc(12, 50, null, null, null, null), new WebHomeModel("m", "host", 8000, false, false, null), new WebPulse(false, 0, null, "", "tag"), WebUiText.HomeWords);
 
-        public WebHomeSheet? Sheet(string reference) =>
-            new(reference, "Desk", "off", [new WebHomeSheetRow("light.desk", "💡", "Desk", "off", [new WebHomeAction(0, "Toggle", false)])]);
+        public int SheetReads;
+
+        public WebHomeSheet? Sheet(string reference) => Interlocked.Increment(ref SheetReads) > 0 && reference == "entity:camera.front_door"
+            ? new(reference, "Front Door Camera", "idle", [new WebHomeSheetRow("camera.front_door", "📹", "Front Door Camera", "idle", [])], CameraSheet)
+            : new(reference, "Desk", "off", [new WebHomeSheetRow("light.desk", "💡", "Desk", "off", [new WebHomeAction(0, "Toggle", false)])]);
+
+        public async Task<WebCameraAnswer> CameraAsync(string reference, IPAddress? remote, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref CameraCalls);
+            if (Hold is { } hold)
+            {
+                await hold.Task.WaitAsync(cancellationToken);
+            }
+
+            return reference == "entity:camera.front_door" ? Stills() : new WebCameraAnswer(null, new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged));
+        }
 
         public WebReply Tap(WebHomeTapRequest request, IPAddress? remote)
         {

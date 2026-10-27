@@ -577,12 +577,14 @@ public sealed class Assistant
     /// <summary>
     /// The sentence the default rules gain while the Home Assistant tools are offered (the setting <c>Home Assistant tools</c>
     /// on, a URL and a token set, 2026-09-28): appended after the SQL sentence by <see cref="DefaultRules"/>. It says look
-    /// before acting and never guess an id, that a room goes to its group light, the order of the tools (the typed ones, then
+    /// before acting (and, since 2026-10-27, <c>ha_camera</c> to look at a camera, named even while its note leaves it out: one constant is
+    /// worth more than a second rule) and never guess an id, that a room goes to its group light, the order of the tools (the typed ones, then
     /// the generic call, Assist last), to say what changed, and that a declined call is not retried. Pinned.
     /// </summary>
     public const string HomeAssistantRule =
         "The ha_ tools reach the user's home through Home Assistant: look before you act — " + NeonSidekick.Llm.Tools.HaOverviewTool.ToolName + " for the house, " +
-        NeonSidekick.Llm.Tools.HaStatesTool.ToolName + " for names, ids and a device's options, " + NeonSidekick.Llm.Tools.HaHistoryTool.ToolName + " for what happened — and never guess an entity id; when the user names a room, act on that room's group light. " +
+        NeonSidekick.Llm.Tools.HaStatesTool.ToolName + " for names, ids and a device's options, " + NeonSidekick.Llm.Tools.HaHistoryTool.ToolName + " for what happened, " +
+        NeonSidekick.Llm.Tools.HaCameraTool.ToolName + " to look at a camera — and never guess an entity id; when the user names a room, act on that room's group light. " +
         "Use " + NeonSidekick.Llm.Tools.HaLightsTool.ToolName + ", " + NeonSidekick.Llm.Tools.HaSceneTool.ToolName + ", " + NeonSidekick.Llm.Tools.HaMediaTool.ToolName + " and " + NeonSidekick.Llm.Tools.HaTodoTool.ToolName + " first, " +
         NeonSidekick.Llm.Tools.HaCallServiceTool.ToolName + " for any other service and " + NeonSidekick.Llm.Tools.HaAssistTool.ToolName + " as a last resort, and say in a few words what you changed. " +
         "Some calls wait for the user's approval; one they decline is not retried.";

@@ -976,12 +976,14 @@ Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API 
 
 * **Names, not ids:** "the den", "kitchen and hallway" or "all"; a room uses its group light if it has one. An ambiguous name comes back as a question.
 * *Home Assistant action policy* decides what runs unasked; under `ask` only safe services do.
+* **Camera pictures:** a read, so `ha_camera` runs under every policy; it isn't offered to an advisor or to a model that reads no pictures. A camera's token and signed links are left out of `ha_states`.
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `ha_overview` | — | Lights on per room, media players, temperatures, motion, low batteries (under 20%), to-do lists and scenes. |
 | `ha_states` | `query?, domain?, area?` | Entities narrowed by words, domain and room (at most 80); an exact id gives every attribute. |
 | `ha_history` | `entity, hours?` | One entity's states over the last 1–336 hours (24 by default). |
+| `ha_camera` | `target?` | A camera's still for the model, kept in `home-cameras` under the profile's `images` folder. Some cameras, Ring's among them, send their latest recording's picture, and none without a recent one. |
 | `ha_lights` | `target, action?, brightness_pct?, color_name?, color_temp_kelvin?, transition?` | `on` (default), `off` or `toggle`, with brightness, a color or white (1500–9000 K) and a 0–300 s fade. |
 | `ha_scene` | `scene, transition?` | Activates a scene by name or id. |
 | `ha_media` | `action, target?, volume_pct?, source?` | Power, volume, mute, `source` (by name or prefix), play, pause, stop, next and previous for a media player. |
@@ -1093,6 +1095,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **A wrong `runas` password on a remote event log** may come back as access denied; the answer names both.
 * **YouTube:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 * **Bot-checked downloads:** a site that ties its clearance to the browser's connection may still refuse a download after the Browser window passed its check.
+* **Live Ring pictures:** Ring cameras added to Home Assistant through ring-mqtt and a Generic Camera should give live stills to `ha_camera`, the 📹 chip and the Web UI; that route hasn't been tried.
 * **The camera pane:** its "The camera is opening…" line stays until the next key after the camera is on.
 * **The Web UI's floating buttons** riding above a phone's keyboard can only be checked by hand on a phone; no test shows it.
 * **Oracle before 23ai:** a `SELECT` that calls a stored function declared `PRAGMA AUTONOMOUS_TRANSACTION` commits whatever that function writes; neither the read-only transaction nor the rollback covers it. Give the account no such function, or use 23ai.

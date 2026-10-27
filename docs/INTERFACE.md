@@ -354,6 +354,7 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
 * **Alerts:** an open door, a leak, a jammed lock or a low battery turns amber or red. Every chip goes dim while Home Assistant is unreachable.
 * **🛒 n** counts the shopping lines still to get; it needs no Home Assistant and opens `/shopping`.
 * **🖥️** (Windows only) stands for this PC's monitors, the glyph alone. A double-click or right-click opens [the monitors pane](#the-monitors-pane).
+* **📹** is a camera. A double-click or right-click shows its still in [the picture viewer](#the-picture-viewer) (in the transcript without one), kept in `home-cameras` under the profile's `images` folder; `…` while it comes, `!` if none came.
 * **Clicks:** a click shows a chip's state. A double-click acts: it toggles a light, switch or fan, turns a room's lights off (or on), runs a scene, plays or pauses, or moves a cover.
 * **A right-click** opens the chip's pane of actions (a room's: its devices). A chip shows `…` until a change is reported, `!` after six seconds without.
 * **Asks first:** unlocking, opening a garage, gate or door, and disarming an alarm. An alarm that wants a code is disarmed in Home Assistant itself.
@@ -366,7 +367,7 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
   * **Rename on the bar…**: an alias the chip shows ("PC"; blank shows the emoji alone). **Default name** puts Home Assistant's back; panes keep the real name.
   * **Change emoji…**: the [emoji grid](#the-avatar-picker); **Default emoji** or 🚫 puts the chip's own back. A chosen emoji stays fixed, whatever the state. `/homebar emoji <item> = <emoji>` does the same.
   * **+ Add divider** (the last row): a dim `│`, shown only between two chips of its group.
-* **The other tabs:** **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms), **Zones** (people in each), **Other**, **Monitors** (Windows only) and **Shopping**.
+* **The other tabs:** **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms, cameras), **Zones** (people in each), **Other**, **Monitors** (Windows only) and **Shopping**.
 * There, Space or Enter adds or removes, and typing filters by name, id, room or label. Without Home Assistant only **On the bar**, **Monitors** and **Shopping** show.
 
 ## Bar checklists
@@ -646,14 +647,14 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 **Home** is the house and the PC at a glance, shown only with *Web UI home controls* on (off by default).
 
-* **The tiles:** the home bar's items in its order, with your names and emoji, live and colored as on the bar (the 🛒 stays on Shopping). A tap does what a double-click on the chip does; a long-press or › opens its sheet of actions.
+* **The tiles:** the home bar's items in its order, with your names and emoji, live and colored as on the bar (the 🛒 stays on Shopping). A tap does what a double-click on the chip does, but a camera's opens its sheet with a still and ↻; a long-press or › opens its sheet of actions.
 * **Rooms:** a box per room (as `/homebar show <room>`), each Hue zone, and *No area* for scenes in no room. The home bar's rooms come first and open; the others are folded.
 * **A box:** its lights on (`3 of 5 on`) and its switch (off if any light is on, else on), then *All lights*, a row per device with its switch or first action, and its scenes.
 * **Reach:** only the home bar's devices and the rooms' can be read or acted on. Unlocking, opening a garage, gate or door, and disarming ask on the page first.
 * **Ask the house:** a line for Home Assistant's Assist (as `/ha say`), its answer under it.
 * **Now playing** (while a video is open, in the PC's window or on the YouTube tab): its title and a remote.
 * **The PC:** CPU, RAM, GPU, VRAM and the network's rates, and the model's name, server, context window and usage.
-* **The log:** each action is logged with the phone's address; what was asked of the house is not. `/ha` typed in Chat follows *Web UI commands*, not this tab's setting.
+* **The log:** each action and each camera still viewed is logged with the phone's address; what was asked of the house is not. `/ha` typed in Chat follows *Web UI commands*, not this tab's setting.
 
 ### The YouTube tab
 

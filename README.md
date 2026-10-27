@@ -54,7 +54,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, the mouse, and sixty color themes or your own.
 * **Its own windows:** pictures and thumbnails (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`), a container's live log (`/docker logs`) and a YouTube player (`/youtube play`).
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with voices you can mix, both in-process or through a Kokoro server.
-* **Web UI:** the chat, the model's questions, the shopping list, a Home tab (rooms, lights, scenes and the PC's meters) and a YouTube player on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
+* **Web UI:** the chat, the model's questions, the shopping list, a Home tab (rooms, lights, scenes, cameras and the PC's meters) and a YouTube player on your phone, over your home network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 * **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`).
 * **No installer:** unzip and run. It's compiled to native code, so it starts fast and needs no .NET runtime.
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
@@ -111,7 +111,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **Printing:** `/print` to any printer, and `/pdf` makes a PDF from Markdown, text, pictures or a web page.
 
 ### Smart home
-* **Home Assistant:** lights, scenes, the TV, to-do lists and sensors ("dim the den to 30%"); `/ha` drives the house directly.
+* **Home Assistant:** lights, scenes, the TV, to-do lists, sensors and cameras ("dim the den to 30%"); `/ha` drives the house directly.
 * **Shopping list:** one per profile, in your store's aisle order, learning where things are; on your phone too (`/shopping`).
 * **Monitors (Windows only):** switch a monitor's input over DDC/CI, or extend, duplicate or pick one screen, from the home bar's 🖥️ or `/monitor`.
 

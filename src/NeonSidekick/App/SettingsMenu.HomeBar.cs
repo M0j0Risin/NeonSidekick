@@ -34,13 +34,13 @@ internal sealed partial class SettingsMenu
         (HomeBarText.ClimateTab, ["climate"]),
         (HomeBarText.MediaTab, ["media_player"]),
         (HomeBarText.ScenesTab, ["scene", "script"]),
-        (HomeBarText.SafetyTab, ["lock", "cover", "alarm_control_panel"]),
+        (HomeBarText.SafetyTab, ["lock", "cover", "alarm_control_panel", "camera"]),   // cameras (2026-10-27, the ring-integration plan): a still on a double-click
         (HomeBarText.ZonesTab, ["zone"]),
         (HomeBarText.OtherTab, []),
     ];
 
     /// <summary>The domains the picker never lists: Home Assistant's own machinery, nothing a chip could show or switch.</summary>
-    internal static readonly string[] HomeHiddenDomains = ["persistent_notification", "sun", "conversation", "tts", "stt", "wake_word", "event", "assist_satellite", "tag", "image", "camera", "update", "todo", "calendar", "weather", "ai_task"];
+    internal static readonly string[] HomeHiddenDomains = ["persistent_notification", "sun", "conversation", "tts", "stt", "wake_word", "event", "assist_satellite", "tag", "image", "update", "todo", "calendar", "weather", "ai_task"];
 
     // One tab as built: its strip title and rows, and the reference behind each row (null for a heading, a gap or a note).
     private sealed record HomeTab(MenuTab Tab, List<string?> Refs);

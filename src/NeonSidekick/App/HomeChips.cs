@@ -93,6 +93,9 @@ public static class HomeChips
     public const string AlarmGlyph = "🚨";
     public const string ZoneGlyph = "📍";
 
+    /// <summary>A Home Assistant camera (2026-10-27, the ring-integration plan): a double-click fetches its still.</summary>
+    public const string CameraGlyph = "📹";
+
     /// <summary>The shopping list's chip (later on 2026-10-12): the toolbar's cart.</summary>
     public const string ShoppingGlyph = ChatScreen.ShoppingToolGlyph;
 
@@ -110,7 +113,7 @@ public static class HomeChips
     [
         AreaGlyph, LightGlyph, SwitchGlyph, ToggleGlyph, FanGlyph, SensorGlyph, HumidityGlyph, BatteryGlyph, PowerGlyph, LightLevelGlyph,
         DoorGlyph, WindowGlyph, GarageGlyph, GateGlyph, MotionGlyph, SmokeGlyph, CoolGlyph, IdleGlyph, TvGlyph, SpeakerGlyph,
-        MediaGlyph, SceneGlyph, ScriptGlyph, LockedGlyph, UnlockedGlyph, AlarmGlyph, ZoneGlyph, ShoppingGlyph,
+        MediaGlyph, SceneGlyph, ScriptGlyph, LockedGlyph, UnlockedGlyph, AlarmGlyph, ZoneGlyph, ShoppingGlyph, CameraGlyph,
     ];
 
     /// <summary>The short name's widest, in cells.</summary>
@@ -382,6 +385,11 @@ public static class HomeChips
                 return new HomeChip(reference, glyph, name, shortName, value, people > 0 ? new Style(Theme.Ink) : Off, HomeChipAction.Detail, null, HomeBarText.ZoneNote(name, people));
             }
 
+            case "camera":
+                // A camera (2026-10-27, the ring-integration plan): plain ink, no value; a double-click or /homebar tap fetches its still
+                // (ChatScreen.StartHomeCamera, through HomeShowAsync), so the page's tile is a detail with its sheet.
+                return new HomeChip(reference, glyph, name, shortName, "", new Style(Theme.Ink), HomeChipAction.Detail, null, HomeBarText.CameraNote(name, state));
+
             case "climate":
             {
                 string action = entity.Text("hvac_action") ?? "";
@@ -420,6 +428,7 @@ public static class HomeChips
             "lock" => entity?.State == "locked" ? LockedGlyph : entity is null ? LockedGlyph : UnlockedGlyph,
             "alarm_control_panel" => AlarmGlyph,
             "zone" => ZoneGlyph,
+            "camera" => CameraGlyph,
             "media_player" => deviceClass == "tv" ? TvGlyph : deviceClass is "speaker" or "receiver" ? SpeakerGlyph : MediaGlyph,
             "climate" => entity?.Text("hvac_action") switch { "heating" => HeatGlyph, "cooling" => CoolGlyph, _ => IdleGlyph },
             "cover" => deviceClass switch { "garage" => GarageGlyph, "gate" => GateGlyph, "door" => DoorGlyph, _ => WindowGlyph },

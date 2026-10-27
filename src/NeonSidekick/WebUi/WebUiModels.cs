@@ -303,10 +303,21 @@ public sealed record WebHomeWords(
     string Busy,
     string Window,
     string Down,
-    string Up);
+    string Up,
+    string CameraRefresh,
+    string CameraFetching);
 
-/// <summary>A tile's sheet: a room's devices (its first row the room's all on and all off), or one device; the title and the state under it.</summary>
-public sealed record WebHomeSheet(string Ref, string Title, string? State, IReadOnlyList<WebHomeSheetRow> Rows);
+/// <summary>
+/// A tile's sheet: a room's devices (its first row the room's all on and all off), or one device; the title and the state under it; and
+/// (2026-10-27) whether it is a camera's whose still the page may ask for (<see cref="WebUiHost.CameraPath"/>).
+/// </summary>
+public sealed record WebHomeSheet(string Ref, string Title, string? State, IReadOnlyList<WebHomeSheetRow> Rows, bool Camera = false);
+
+/// <summary>A camera's still for the Home tab's sheet (2026-10-27): its bytes, metadata stripped, and its media type.</summary>
+public sealed record WebCameraPicture(byte[] Bytes, string MediaType);
+
+/// <summary>A camera still's answer (2026-10-27): the picture, or the refusal the host turns into a status and a sentence.</summary>
+public sealed record WebCameraAnswer(WebCameraPicture? Picture, WebReply? Refusal);
 
 /// <summary>A row of a sheet: its entity (none for a room's own row), glyph, name, state, and the actions a tap offers.</summary>
 public sealed record WebHomeSheetRow(string? Entity, string Glyph, string Name, string State, IReadOnlyList<WebHomeAction> Actions);

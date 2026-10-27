@@ -44,6 +44,8 @@ public static class PlanTools
         "docker_containers", "docker_logs", "docker_inspect", "docker_stats", "docker_resources", "docker_compose",
         // Home Assistant: the reads (2026-09-28)
         "ha_overview", "ha_states", "ha_history",
+        // ...and a camera's still (2026-10-27): Home Assistant only read, the still kept in the profile's images folder as camera_capture's is
+        "ha_camera",
         // printing: the list only (2026-09-28)
         "list_printers",
         // Obsidian

@@ -906,7 +906,7 @@ public static class WebUiText
 
     /// <summary>The Home tab's own words.</summary>
     public static readonly WebHomeWords HomeWords = new(
-        HomeControlsOff, "Rooms", "Scenes", "All lights", "Actions", "Ask the house", "Ask", "Now playing", "The PC", "Model", "Yes", "No", CloseChoice, "loading", "busy", "window", "down", "up");
+        HomeControlsOff, "Rooms", "Scenes", "All lights", "Actions", "Ask the house", "Ask", "Now playing", "The PC", "Model", "Yes", "No", CloseChoice, "loading", "busy", "window", "down", "up", "↻ Refresh", "Fetching…");
 
     /// <summary>A home action from the page, flashed on the PC's hint row: the device and the service.</summary>
     public static string HomeFlash(string name, string service) => Glyph + name + ": " + service.Replace('_', ' ');
@@ -919,6 +919,9 @@ public static class WebUiText
 
     /// <summary>A home action from the page (audit): the device, the service, the address.</summary>
     public static string HomeLogLine(string name, string call, IPAddress? remote) => "Web UI called " + call + " on \"" + name + "\" from " + Where(remote) + ".";
+
+    /// <summary>A camera's still served to the page (2026-10-27, audit): the camera and the address, one line per still served.</summary>
+    public static string HomeCameraLogLine(string name, IPAddress? remote) => "Web UI showed a still from \"" + name + "\" to " + Where(remote) + ".";
 
     /// <summary>A question for Assist from the page (audit): its length alone, never its words.</summary>
     public static string HomeSayLogLine(int length, IPAddress? remote) =>
@@ -987,6 +990,7 @@ public static class WebUiText
             WebRateBucket.Say => "questions to Home Assistant",
             WebRateBucket.SignIn => "sign-in attempts",
             WebRateBucket.Report => "player reports",
+            WebRateBucket.Camera => "camera pictures",
             _ => "requests",
         } + " from " + Where(remote) + "; refused for now.";
 

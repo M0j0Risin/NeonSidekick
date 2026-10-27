@@ -68,6 +68,7 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/shopping/bought", WebTab.Shopping)]   // the 🕘 sheet (2026-10-16)
     [InlineData("/api/home", WebTab.Home)]
     [InlineData("/api/home/sheet?ref=x", WebTab.Home)]
+    [InlineData("/api/home/camera?ref=x", WebTab.Home)]   // a camera's still (2026-10-27)
     public async Task AReadOfATabThatIsOff_Is404_WithTabOff_AndItsSentence(string path, WebTab tab)
     {
         _backend.TabsOn = new WebTabs(tab != WebTab.Chat, tab != WebTab.Home, tab != WebTab.Shopping);

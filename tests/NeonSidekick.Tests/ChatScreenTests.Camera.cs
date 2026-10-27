@@ -340,6 +340,41 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task HaCamera_TheStill_ReachesTheModel_AsACameraPhoto_KeptUnderHomeCameras()
+    {
+        // 2026-10-27 (the ring-integration plan's step 3): ha_camera's still rides the carrier marked a camera photo, so Camera keep
+        // in sessions governs it as it does camera_capture's, and the file is kept in the profile's images folder.
+        const string server = "http://ha.lan:8123";
+        var stub = new StubHttpMessageHandler()
+            .Map(server + "/api/states", System.Net.HttpStatusCode.OK, """[{"entity_id":"camera.porch","state":"idle","attributes":{"friendly_name":"Porch"}}]""")
+            .Map(server + "/api/template", System.Net.HttpStatusCode.OK, "", "text/plain")
+            .Map(server + "/api/camera_proxy/", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, StripFixtures.Jpeg(), "image/jpeg")));
+        _haClient = (url, token) => new NeonSidekick.HomeAssistant.HaClient(url, token, new HttpClient(stub));
+        _settings.Update(d =>
+        {
+            d.TtsOutput = false;
+            d.HomeAssistantUrl = server;
+            d.HomeAssistantToken = "test-token";
+            d.HomeAssistantTools = true;
+        });
+        _chat.Enqueue(FakeChatClient.Call("c1", HaCameraTool.ToolName, new Dictionary<string, object?>()));
+        _chat.EnqueueText("A quiet porch.");
+        StepsWhenIdle(Line("how's the porch?"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("A quiet porch.", output);
+        Assert.Contains(HaCameraTool.ToolName, _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name));
+        string folder = Path.Combine(_settings.ProfileImagesDirectory, NeonSidekick.HomeAssistant.HaCamera.FolderName);
+        var result = Assert.Single(Results(_chat.Requests[1]));
+        Assert.StartsWith("Porch (camera.porch): a still (", result.Result as string);
+        Assert.Contains(", saved as " + Path.Combine(folder, "porch-"), result.Result as string);
+        var carrier = _chat.Requests[1].Last(m => m.Role == ChatRole.User);
+        Assert.True(ConversationHistory.IsImageCarrier(carrier));
+        Assert.Equal(Assert.Single(Directory.GetFiles(folder)), ConversationHistory.CameraPath(Assert.Single(carrier.Contents.OfType<DataContent>())));
+    }
+
+    [Fact]
     public async Task CameraTool_UserShutter_Esc_Declines_AndTheTurnsNextCallIsNotAsked()
     {
         CameraToolFixture([Keys.Escape], "Never mind.", calls: 2);

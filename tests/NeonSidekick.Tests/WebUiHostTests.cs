@@ -382,6 +382,17 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
         public Task<WebReply> SayAsync(WebHomeSayRequest request, IPAddress? remote, CancellationToken cancellationToken) { Calls.Add("say " + request.Text); return Task.FromResult(new WebReply(WebOutcome.Ok, "Done.")); }
 
         public WebReply Video(WebHomeVideoRequest request, IPAddress? remote) { Calls.Add("video " + request.Action); return Next; }
+
+        /// <summary>The camera's answer (2026-10-27): a JPEG for <c>entity:camera.porch</c> by default, else the sheet gone.</summary>
+        public WebCameraAnswer? Still { get; set; }
+
+        public Task<WebCameraAnswer> CameraAsync(string reference, IPAddress? remote, CancellationToken cancellationToken)
+        {
+            Calls.Add("camera " + reference);
+            return Task.FromResult(Still ?? (reference == "entity:camera.porch"
+                ? new WebCameraAnswer(new WebCameraPicture([0xFF, 0xD8, 0xFF, 0xD9], "image/jpeg"), null)
+                : new WebCameraAnswer(null, new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged))));
+        }
     }
 
     [Fact]

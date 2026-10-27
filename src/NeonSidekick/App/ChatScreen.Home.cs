@@ -18,15 +18,17 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _haTools;
 
     /// <summary>
-    /// The Home Assistant tools (2026-09-28): the three reads (overview, states, history), the four typed acts (lights, scene,
-    /// media, to-do), the generic service call and Assist — the acts and Assist behind <paramref name="confirm"/> for what the policy asks
-    /// about (null where nothing can ask: headless). Shared with headless.
+    /// The Home Assistant tools (2026-09-28): the four reads (overview, states, history and, since 2026-10-27, <c>ha_camera</c>), the four
+    /// typed acts (lights, scene, media, to-do), the generic service call and Assist — the acts and Assist behind <paramref name="confirm"/>
+    /// for what the policy asks about (null where nothing can ask: headless). <c>ha_camera</c> keeps its stills in <paramref name="images"/>,
+    /// and is left out without one. Shared with headless.
     /// </summary>
-    public static IReadOnlyList<AIFunction> HomeAssistantTools(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm, TimeZoneInfo? zone = null) =>
+    public static IReadOnlyList<AIFunction> HomeAssistantTools(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm, TimeZoneInfo? zone = null, Files.WorkingDirectory? images = null) =>
     [
         new HaOverviewTool(ha),
         new HaStatesTool(ha),
         new HaHistoryTool(ha, zone),
+        .. images is null ? [] : new AIFunction[] { new HaCameraTool(ha, images, zone) },
         new HaLightsTool(ha, confirm),
         new HaSceneTool(ha, confirm),
         new HaMediaTool(ha, confirm),
@@ -48,6 +50,34 @@ internal sealed partial class ChatScreen
         HaCallServiceTool.ToolName,
         HaAssistTool.ToolName,
     };
+
+    /// <summary>
+    /// The Home Assistant tools a turn leaves out and why, as notes (2026-10-27, <c>ha_camera</c>; <see cref="NetworkToolNotes"/>'s way, so
+    /// <c>/tools</c>, <c>/sys</c> and <c>neon_help</c>'s live line say "not offered: …" rather than "switched off on /tools"): <c>ha_camera</c>
+    /// with no codecs to decode a picture (<see cref="HaText.NoPictureSupportReason"/>), or under a model that reads none
+    /// (<see cref="ToolsText.BlindReason"/>, the embedded server without vision). Pure.
+    /// </summary>
+    public static Dictionary<string, string> HomeToolNotes(bool codecs, bool blind)
+    {
+        var notes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!codecs || blind)
+        {
+            notes[HaCameraTool.ToolName] = SystemPromptSummary.NotOffered(!codecs ? HaText.NoPictureSupportReason : ToolsText.BlindReason);
+        }
+
+        return notes;
+    }
+
+    /// <summary>The screen's notes: <see cref="Files.ImageCodecs.Available"/> and the embedded server's vision, <see cref="ModelSeesPictures"/>' halves.</summary>
+    private Dictionary<string, string> HomeToolNotes() => HomeToolNotes(Files.ImageCodecs.Available, _session.EmbeddedServer is { Vision: false });
+
+    /// <summary>What a turn may offer of the Home Assistant tools: every one but those <paramref name="notes"/> leave out (<see cref="NetworkToolsFor"/>'s shape). Pure.</summary>
+    public static IReadOnlyList<AIFunction> HomeToolsFor(IReadOnlyList<AIFunction> tools, IReadOnlyDictionary<string, string> notes)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(notes);
+        return notes.Count == 0 ? tools : tools.Where(t => !notes.ContainsKey(t.Name)).ToList();
+    }
 
     /// <summary>Whether the Home Assistant group is offered (2026-09-28): the setting <c>Home Assistant tools</c> on, an http(s) URL and a readable token.</summary>
     public static bool HomeAssistantOffered(AppSettingsData effective)

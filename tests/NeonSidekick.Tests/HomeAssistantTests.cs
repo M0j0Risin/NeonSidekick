@@ -718,6 +718,20 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.All(tools, t => Assert.StartsWith("ha_", t.Name, StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void WithAnImagesFolder_TheCameraJoins_AfterHistory_AReadForPlanMode()
+    {
+        var images = new Files.WorkingDirectory(() => _dir, _time, Files.WorkingDirectoryOptions.Images);
+        var tools = ChatScreen.HomeAssistantTools(_ha, null, images: images);
+
+        Assert.Equal(10, tools.Count);
+        Assert.Equal(HaCameraTool.ToolName, tools[3].Name);
+        Assert.Equal([HaCameraTool.ToolName], tools.Select(t => t.Name).Except(ChatScreen.HomeAssistantToolNames));
+        Assert.All(tools, t => Assert.True(PlanTools.ReadOnly.Contains(t.Name) ^ PlanTools.Mutating.Contains(t.Name), t.Name));
+        Assert.Contains(HaCameraTool.ToolName, PlanTools.ReadOnly);
+        Assert.Contains(HaCameraTool.ToolName, NeonAdvisorTool.Excluded);
+    }
+
     // ── /ha ─────────────────────────────────────────────────────────────────
 
     [Theory]
@@ -839,6 +853,7 @@ public sealed class HomeAssistantTests : IDisposable
     public void Rule_NamesEveryTool()
     {
         Assert.All(ChatScreen.HomeAssistantToolNames, name => Assert.Contains(name, Assistant.HomeAssistantRule));
+        Assert.Contains(HaCameraTool.ToolName, Assistant.HomeAssistantRule);
     }
 
     // ── live, read-only ─────────────────────────────────────────────────────

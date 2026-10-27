@@ -5,7 +5,7 @@
 // (a tab exists only while its controls are on at the PC), so the nav hides the others and a page whose tab went off goes to /. 2026-10-16: the
 // YouTube tab (on only while the PC says so: Web UI YouTube controls since later that day), and the jump to it while a video waits (watch).
 // Later on 2026-10-16: post's keepalive (a page leaving still says so) and the two-tap buttons (armTwice), shared by Chat's sheet and the
-// YouTube tab's saved list.
+// YouTube tab's saved list. 2026-10-27: the picture read (picture), for the Home tab's camera stills.
 'use strict';
 
 const Neon = (() => {
@@ -72,6 +72,36 @@ const Neon = (() => {
     } catch {
       connected(false);
       return { ok: false, status: 0, json: null };
+    }
+  }
+
+  // A picture only the page's own script may ask for (2026-10-27, a camera's still): sent with the header no planted <img> can send, and
+  // handed back as a data: URL, which the page's policy lets in (img-src 'self' data:). The answer: ok, the status, the picture or the app's
+  // sentence, a 429's wait in seconds; aborted when the signal ended it. Any answer from the app lights the dot: a camera that failed is
+  // Home Assistant's trouble, not the connection's.
+  async function picture(path, signal) {
+    try {
+      const r = await fetch(path, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Neon': '1' }, signal });
+      if (r.status === 401) { location.reload(); return { ok: false, status: 401 }; }
+      connected(true);
+      if (r.ok) {
+        const blob = await r.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+        return { ok: true, status: r.status, dataUrl };
+      }
+      let j = null;
+      try { j = await r.json(); } catch { /* none */ }
+      if (r.status === 404 && j && j.tabOff) leave();
+      return { ok: false, status: r.status, message: j && j.message, retryAfter: Number(r.headers.get('Retry-After')) || null };
+    } catch (e) {
+      if (signal && signal.aborted) return { ok: false, status: 0, aborted: true };
+      connected(false);
+      return { ok: false, status: 0, message: 'The app could not be reached.' };
     }
   }
 
@@ -364,5 +394,5 @@ const Neon = (() => {
     lastAsks = waiting;
   }
 
-  return Object.assign(api, { el, say, post, get, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
+  return Object.assign(api, { el, say, post, get, picture, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
 })();

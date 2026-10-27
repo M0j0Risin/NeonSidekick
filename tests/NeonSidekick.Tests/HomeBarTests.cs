@@ -261,6 +261,27 @@ public sealed class HomeBarTests
         Assert.Empty(ChatScreen.HomeActions(Entity("zone.work", "0")));
     }
 
+    /// <summary>A camera's chip (2026-10-27, the ring-integration plan): 📹 in plain ink, no value, a detail whose note gives its state and the double-click's still.</summary>
+    [Fact]
+    public void ACamera_IsADetail_WhoseNoteOffersAStill_AndUnavailableIsAQuestionMark()
+    {
+        var porch = HomeChips.Build("entity:camera.porch_live_view", Entities(Entity("camera.porch_live_view", "idle", """{"friendly_name":"Porch Live view"}""")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeChips.CameraGlyph, porch.Glyph);
+        Assert.Equal("", porch.Value);
+        Assert.Equal(new Style(Theme.Ink), porch.Style);
+        Assert.Equal(HomeChipAction.Detail, porch.Action);
+        Assert.Null(porch.Call);
+        Assert.Equal("Porch Live view: idle — double-click for a still", porch.Note);
+        Assert.Equal("Porch: on fire — double-click for a still", HomeBarText.CameraNote("Porch", "on_fire"));
+        Assert.Contains(HomeChips.CameraGlyph, HomeChips.Glyphs);
+
+        var gone = HomeChips.Build("entity:camera.garage", Entities(Entity("camera.garage", "unavailable")), null, HomeChipMark.None, false);
+        Assert.Equal(HomeChips.CameraGlyph, gone.Glyph);
+        Assert.Equal("?", gone.Value);
+        Assert.Equal(HomeChipAction.None, gone.Action);
+        Assert.Equal(HomeChips.CameraGlyph, HomeChips.GlyphFor("camera.garage", null));
+    }
+
     [Fact]
     public void Sensors_ShowTheirValue_AndALowBatteryWarns()
     {

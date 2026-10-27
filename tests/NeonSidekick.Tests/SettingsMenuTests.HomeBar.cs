@@ -153,6 +153,36 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>Cameras on Security (2026-10-27, the ring-integration plan; hidden until then), never on Other; a disabled one (Ring's last recording) not at all.</summary>
+    [Fact]
+    public async Task ThePicker_ListsCamerasOnSecurity_NotOther_AndLeavesADisabledOneOut()
+    {
+        _settings.Update(d => { d.HomeAssistantUrl = "http://ha.test:8123"; d.HomeAssistantToken = "secret"; });
+        var (menu, pane) = PaneMenu();
+        var catalog = new HaCatalog([], [], [],
+            [
+                new HaRegistryEntity("camera.porch_live_view", null, null, null, false, false, null, []),
+                new HaRegistryEntity("camera.porch_last_recording", null, null, null, true, false, null, []),
+            ],
+            [],
+            [new HaEntity("camera.porch_live_view", "Porch Live view", "idle", null, default, null)]);
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((catalog, null));
+        var titles = SettingsMenu.HomeDomainTabs.Select(t => t.Title).ToList();
+        Assert.Contains("camera", SettingsMenu.HomeDomainTabs.Single(t => t.Title == HomeBarText.SafetyTab).Domains);
+        Assert.DoesNotContain("camera", SettingsMenu.HomeHiddenDomains);
+
+        // On the bar, Rooms, then the kinds up to Security; Other's emptiness is read below.
+        Push([.. Enumerable.Repeat(Keys.Right, titles.IndexOf(HomeBarText.SafetyTab) + 2), Keys.Char(' '), Keys.Escape]);
+
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Equal(["entity:camera.porch_live_view"], _settings.Current.HomeBarItems);
+        Assert.Contains("Porch Live view", Output);
+        Assert.DoesNotContain("last_recording", Output);
+        Assert.DoesNotContain("Last recording", Output);
+        pane.Dispose();
+    }
+
     /// <summary>The bar's tab shows an item's own glyph, read from its state's attributes (2026-10-12: a TV was 🎵 there and 📺 on its chip).</summary>
     [Fact]
     public async Task ThePicker_ShowsAnItemsGlyphFromItsAttributes_AsItsChipDoes()

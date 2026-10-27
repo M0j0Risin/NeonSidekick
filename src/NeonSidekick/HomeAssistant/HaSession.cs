@@ -203,6 +203,45 @@ public sealed class HaSession : IDisposable
     }
 
     /// <summary>
+    /// A camera's still (2026-10-27, <see cref="HaClient.CameraAsync"/>), under <see cref="HaCamera.TimeoutFor"/>: at least
+    /// <see cref="HaCamera.MinTimeout"/>, since Home Assistant gives the camera 10 s of its own. Safe from any thread
+    /// (<see cref="Client"/> is locked). Never throws but the caller's cancellation.
+    /// </summary>
+    public async Task<HaPictureReply> CameraAsync(string entityId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entityId);
+        if (Client() is not { } client)
+        {
+            return HaPictureReply.Failed(HaText.NotConfigured);
+        }
+
+        return await client.CameraAsync(entityId, HaCamera.TimeoutFor(Timeout), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// When <paramref name="entityId"/>'s latest recording was (2026-10-27, <see cref="HaCamera.TimeTemplate"/> through <c>/api/template</c>,
+    /// the areas' door, so headless has it too): null for none, an id a template won't carry, or any failure, which is only logged —
+    /// the time is a help to the still, never a reason to fail it. Never throws but the caller's cancellation.
+    /// </summary>
+    public async Task<DateTimeOffset?> CameraTimeAsync(string entityId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entityId);
+        if (HaCamera.TimeTemplate(entityId) is not { } template || Client() is not { } client)
+        {
+            return null;
+        }
+
+        var reply = await client.TemplateAsync(template, Timeout, cancellationToken).ConfigureAwait(false);
+        if (!reply.Ok)
+        {
+            DiagnosticLog.Debug(HaText.Category, "The camera's recording time could not be read: " + reply.Error);
+            return null;
+        }
+
+        return HaCamera.RecordingTime(reply.Body);
+    }
+
+    /// <summary>
     /// The connection as the settings stand (the settings menu's <c>Home Assistant test connection</c>): <c>/api/config</c>'s
     /// version and place as one line, or the failure. Never throws but the caller's cancellation.
     /// </summary>

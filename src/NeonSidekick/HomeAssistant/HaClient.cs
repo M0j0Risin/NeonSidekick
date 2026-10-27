@@ -16,6 +16,17 @@ public sealed record HaReply(bool Ok, string Body, string? Error)
 }
 
 /// <summary>
+/// A camera's still (2026-10-27, <see cref="HaClient.CameraAsync"/>): the bytes and their type when <see cref="Ok"/>, else
+/// <see cref="Error"/> (an <c>Error:</c> sentence). <see cref="Status"/> is Home Assistant's answer, 0 when none came.
+/// </summary>
+public sealed record HaPictureReply(bool Ok, byte[] Bytes, string MediaType, int Status, string? Error)
+{
+    public static HaPictureReply Success(byte[] bytes, string mediaType) => new(true, bytes, mediaType, 200, null);
+
+    public static HaPictureReply Failed(string error, int status = 0) => new(false, [], "", status, error);
+}
+
+/// <summary>
 /// Home Assistant's REST API, the part the <c>ha_</c> tools and <c>/ha</c> use (2026-09-28, the user's ask: "plan an
 /// integration for Home Assistant" — a Docker instance at <c>http://localhost:8123</c> with Hue lights and a Bravia TV):
 /// <c>GET /api/</c> (the ping), <c>GET /api/config</c>, <c>GET /api/states</c>, <c>GET /api/states/{id}</c>,
@@ -134,42 +145,134 @@ public sealed class HaClient : IDisposable
         return SendAsync(HttpMethod.Post, "/api/conversation/process", body, timeout, cancellationToken);
     }
 
+    /// <summary>How much of a failing camera's body is read for its sentence: never the whole of it, whatever it holds.</summary>
+    public const int CameraErrorBytes = 4 * 1024;
+
+    /// <summary>The still's request path, the id escaped. Pure.</summary>
+    public static string CameraPath(string entityId)
+    {
+        ArgumentNullException.ThrowIfNull(entityId);
+        return "/api/camera_proxy/" + Uri.EscapeDataString(entityId);
+    }
+
+    /// <summary>
+    /// <c>GET /api/camera_proxy/{id}</c>: a camera's still, which Home Assistant makes from whatever the integration has (2026-10-27,
+    /// the home bar's camera chip, the Web UI's sheet and <c>ha_camera</c>; a Ring camera's is a frame of its latest recording).
+    /// Read from the headers on, never buffered whole first: a 503, 500 or 404 is worded for a camera (<see cref="HaText.CameraOff"/>,
+    /// <see cref="HaText.CameraNoPicture"/>, <see cref="HaText.NoSuchCamera"/>), another failure as <see cref="SendAsync"/> words it
+    /// from at most <see cref="CameraErrorBytes"/> of its body; then the type (a 200 that is no <c>image/*</c>, a proxy's sign-in
+    /// page say, is refused unread), a <c>Content-Length</c> over <see cref="HaCamera.MaxBytes"/>, and the body read under that
+    /// cap, all within <paramref name="timeout"/>, so a camera that trickles its bytes still ends. A client disposed under the
+    /// fetch (<see cref="HaSession.Client"/> makes a new one when the URL or token changes, and a still can take 15 s) reads as
+    /// unreachable. Never throws but the caller's cancellation.
+    /// </summary>
+    public async Task<HaPictureReply> CameraAsync(string entityId, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        string path = CameraPath(entityId);
+        try
+        {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            budget.CancelAfter(timeout);
+            using var request = Request(HttpMethod.Get, path, null);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
+            int status = (int)response.StatusCode;
+            if (!response.IsSuccessStatusCode)
+            {
+                string? camera = response.StatusCode switch
+                {
+                    HttpStatusCode.ServiceUnavailable => HaText.CameraOff,
+                    HttpStatusCode.InternalServerError => HaText.CameraNoPicture,
+                    HttpStatusCode.NotFound => HaText.NoSuchCamera,
+                    _ => null,
+                };
+                if (camera is not null)
+                {
+                    DiagnosticLog.Debug(Category, $"GET {path} answered {status}.");
+                    return HaPictureReply.Failed(camera, status);
+                }
+
+                await using var failed = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
+                var (said, _) = await Docker.DockerLogStream.ReadCappedAsync(failed, CameraErrorBytes, budget.Token).ConfigureAwait(false);
+                return HaPictureReply.Failed(StatusError(HttpMethod.Get, path, response.StatusCode, Encoding.UTF8.GetString(said)), status);
+            }
+
+            string type = response.Content.Headers.ContentType?.MediaType ?? "";
+            if (!type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return HaPictureReply.Failed(HaText.NotAPicture(type), status);
+            }
+
+            if (response.Content.Headers.ContentLength > HaCamera.MaxBytes)
+            {
+                return HaPictureReply.Failed(HaText.PictureTooLarge, status);
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
+            // One byte past the cap tells a picture of exactly the cap from a larger one.
+            var (bytes, capped) = await Docker.DockerLogStream.ReadCappedAsync(stream, HaCamera.MaxBytes + 1, budget.Token).ConfigureAwait(false);
+            return capped ? HaPictureReply.Failed(HaText.PictureTooLarge, status) : HaPictureReply.Success(bytes, type.ToLowerInvariant());
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (Failure(ex, timeout) is { } error)
+        {
+            return HaPictureReply.Failed(error);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            return HaPictureReply.Failed(HaText.Unreachable(BaseUrl, ex.Message));
+        }
+    }
+
     private async Task<HaReply> SendAsync(HttpMethod method, string path, string? body, TimeSpan timeout, CancellationToken cancellationToken)
     {
         try
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(timeout);
-            using var request = new HttpRequestMessage(method, new Uri(BaseUrl + path));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
-            if (body is not null)
-            {
-                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-            }
-
+            using var request = Request(method, path, body);
             using var response = await _http.SendAsync(request, budget.Token).ConfigureAwait(false);
             string text = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                DiagnosticLog.Debug(Category, $"{method} {path} answered {(int)response.StatusCode}.");
-                return HaReply.Failed(response.StatusCode == HttpStatusCode.Unauthorized ? HaText.Unauthorized : HaText.HttpError((int)response.StatusCode, PathOnly(path), text));
-            }
-
-            return HaReply.Success(text);
+            return response.IsSuccessStatusCode ? HaReply.Success(text) : HaReply.Failed(StatusError(method, path, response.StatusCode, text));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (Failure(ex, timeout) is { } error)
         {
-            return HaReply.Failed(HaText.NoAnswer(LlmTimeouts.Format(timeout)));
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException)
-        {
-            return HaReply.Failed(HaText.Unreachable(BaseUrl, ex.Message));
+            return HaReply.Failed(error);
         }
     }
+
+    private HttpRequestMessage Request(HttpMethod method, string path, string? body)
+    {
+        var request = new HttpRequestMessage(method, new Uri(BaseUrl + path));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+        if (body is not null)
+        {
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        }
+
+        return request;
+    }
+
+    /// <summary>A non-2xx answer's sentence, logged: the refused token, else the status, the endpoint and the server's words.</summary>
+    private static string StatusError(HttpMethod method, string path, HttpStatusCode status, string body)
+    {
+        DiagnosticLog.Debug(Category, $"{method} {path} answered {(int)status}.");
+        return status == HttpStatusCode.Unauthorized ? HaText.Unauthorized : HaText.HttpError((int)status, PathOnly(path), body);
+    }
+
+    /// <summary>The sentence for a request that got no answer: the budget ran out, or the server could not be reached; null for any other exception.</summary>
+    private string? Failure(Exception ex, TimeSpan timeout) => ex switch
+    {
+        OperationCanceledException => HaText.NoAnswer(LlmTimeouts.Format(timeout)),
+        HttpRequestException or IOException => HaText.Unreachable(BaseUrl, ex.Message),
+        _ => null,
+    };
 
     /// <summary>A request path without its query, for an error sentence.</summary>
     private static string PathOnly(string path)

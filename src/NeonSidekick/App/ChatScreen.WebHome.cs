@@ -57,6 +57,8 @@ internal sealed partial class ChatScreen
         public Task<WebReply> SayAsync(WebHomeSayRequest request, IPAddress? remote, CancellationToken cancellationToken) => screen.WebHomeSayAsync(request, remote, cancellationToken);
 
         public WebReply Video(WebHomeVideoRequest request, IPAddress? remote) => screen.WebHomeVideo(request, remote);
+
+        public Task<WebCameraAnswer> CameraAsync(string reference, IPAddress? remote, CancellationToken cancellationToken) => screen.WebHomeCameraAsync(reference, remote, cancellationToken);
     }
 
     // ── The lease and the feed's wanted set ─────────────────────────────────
@@ -290,7 +292,9 @@ internal sealed partial class ChatScreen
         else if (kind == HomeItemKind.Entity)
         {
             var row = SheetRow(id, live, controls);
-            sheet = new WebHomeSheet(reference, name, row.State, [row]);
+            // A camera's sheet shows its still (2026-10-27), but for one Home Assistant reports unavailable: there is none to ask for.
+            bool camera = HaCatalog.DomainOf(id) == "camera" && live.Entities.GetValueOrDefault(id) is { Unavailable: false };
+            sheet = new WebHomeSheet(reference, name, row.State, [row], camera);
             watched = [id];
         }
         else
@@ -542,6 +546,53 @@ internal sealed partial class ChatScreen
         DiagnosticLog.Info(WebUiCategory, WebUiText.HomeVideoLogLine(request.Action!, remote));
         _webUi.FlashPc(WebUiText.HomeVideoFlash(request.Action!));
         return WebReply.Ok;
+    }
+
+    /// <summary>
+    /// A camera's still for its sheet (2026-10-27, a Kestrel thread): a camera in the tiles' reach, fetched through the stills the chips share
+    /// (<see cref="HomeCameraFetches"/>: one request to Home Assistant however many ask, a still under two seconds old answered again), never
+    /// saved and never shown at the PC. Each still served is logged with the address; a refusal is not. One Home Assistant reports unavailable is
+    /// refused without a request; a fetch forgotten under the wait (a profile switch) is the sheet gone.
+    /// </summary>
+    private async Task<WebCameraAnswer> WebHomeCameraAsync(string reference, IPAddress? remote, CancellationToken cancellationToken)
+    {
+        var effective = _effective();
+        var items = WebHomeView.Items(effective);
+        var live = _homeLive.Snapshot;
+        if (!WebHomeView.Reaches(reference, items, HomeReach(items, live)) || !HomeBarItems.TryParse(reference, out var kind, out string id)
+            || kind != HomeItemKind.Entity || HaCatalog.DomainOf(id) != "camera")
+        {
+            return new WebCameraAnswer(null, new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged));
+        }
+
+        var chip = HomeChips.Build(reference, live.Entities, live.Catalog, HomeChipMark.None, stale: false, effective.HomeBarAliases, effective.HomeBarGlyphs);
+        string name = chip.Label is { Length: > 0 } label ? label : chip.Name;
+        if (live.Entities.GetValueOrDefault(id) is { Unavailable: true } entity)
+        {
+            return new WebCameraAnswer(null, new WebReply(WebOutcome.Refused, HomeBarText.Strip(HaText.CameraUnavailable(name, entity.State))));
+        }
+
+        HomeCameraStill still;
+        try
+        {
+            still = await _homeCameras.Get(id).WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new WebCameraAnswer(null, new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+        {
+            return new WebCameraAnswer(null, new WebReply(WebOutcome.Refused, HomeBarText.Failed(name, ex.Message)));
+        }
+
+        if (still.Image is not { } image)
+        {
+            return new WebCameraAnswer(null, new WebReply(WebOutcome.Refused, HomeBarText.Failed(name, still.Error ?? "")));
+        }
+
+        DiagnosticLog.Info(WebUiCategory, WebUiText.HomeCameraLogLine(name, remote));
+        return new WebCameraAnswer(new WebCameraPicture(image.Bytes, image.MediaType), null);
     }
 
     /// <summary>What the page did, in the log and on the PC's hint row (never under <c>_homeGate</c>).</summary>

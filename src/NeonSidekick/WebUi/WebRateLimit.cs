@@ -20,6 +20,9 @@ public enum WebRateBucket
 
     /// <summary>A bot check card's taps, holds, scrolls and typing (2026-10-17): 10 a second, bursts of 30, more than any finger.</summary>
     BotCheck,
+
+    /// <summary>A camera's still on the Home tab (2026-10-27): one a second, bursts of 3, each a request to Home Assistant and the camera.</summary>
+    Camera,
 }
 
 /// <summary>
@@ -56,18 +59,25 @@ public sealed class WebRateLimit
         WebRateBucket.SignIn => (5, 5.0 / 60),
         WebRateBucket.Report => (30, 10),
         WebRateBucket.BotCheck => (30, 10),
+        WebRateBucket.Camera => (3, 1),
         _ => throw new ArgumentOutOfRangeException(nameof(bucket), bucket, null),
     };
 
     /// <summary>
     /// The bucket a request counts against: a post to one of the limited paths, a <paramref name="get"/> (not a HEAD, which spends nothing) of the
-    /// sign-in link (2026-10-19, the review: anyone on the LAN could loop it unlimited, a log line each), or null for everything else.
+    /// sign-in link (2026-10-19, the review: anyone on the LAN could loop it unlimited, a log line each) or of a camera's still (2026-10-27), or null for
+    /// everything else.
     /// </summary>
     public static WebRateBucket? BucketOf(string path, bool post, bool get = false)
     {
         if (!post)
         {
-            return get && path == WebUiAuth.SignInPath ? WebRateBucket.SignIn : null;
+            return !get ? null : path switch
+            {
+                WebUiAuth.SignInPath => WebRateBucket.SignIn,
+                WebUiHost.CameraPath => WebRateBucket.Camera,
+                _ => null,
+            };
         }
 
         return path switch

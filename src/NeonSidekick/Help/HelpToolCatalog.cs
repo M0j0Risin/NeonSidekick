@@ -227,6 +227,7 @@ internal static class HelpToolCatalog
         T(HaOverviewTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Gives Home Assistant at a glance: lights on by room, media players, temperatures, motion, batteries and lists.", setup: HaSetup),
         T(HaStatesTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Lists Home Assistant entities with their ids and states, narrowed by name, domain or room.", setup: HaSetup),
         T(HaHistoryTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Shows a Home Assistant entity's state changes over the last hours.", setup: HaSetup),
+        T(HaCameraTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Fetches a Home Assistant camera's still for the model, kept in home-cameras under the profile's images folder.", setup: HaSetup),
         T(HaLightsTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Turns Home Assistant lights on or off by room, name or id, with brightness or a color.", setup: HaSetup),
         T(HaSceneTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Activates a Home Assistant scene by name.", setup: HaSetup),
         T(HaMediaTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Controls a Home Assistant media player: power, volume, mute, source, play, pause, skip.", setup: HaSetup),

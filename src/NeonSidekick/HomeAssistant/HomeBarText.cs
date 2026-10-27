@@ -243,6 +243,15 @@ public static class HomeBarText
 
     public static string ValueNote(string name, string value) => name + ": " + value + " — double-click for more";
 
+    /// <summary>A camera's chip (2026-10-27, the ring-integration plan): its state as Home Assistant writes it, and the double-click's still.</summary>
+    public static string CameraNote(string name, string state) => name + ": " + StateWord(state) + " — double-click for a still";
+
+    /// <summary>
+    /// A camera chip's still, shown (2026-10-27): the camera and the file it was kept in; a still that could not be kept says why
+    /// (<see cref="HaText.CameraNotSaved"/>'s sentence), the picture shown anyway. Pinned.
+    /// </summary>
+    public static string CameraShown(string name, string? saved, string? error) =>
+        saved is not null ? name + ": a still, saved as " + saved : name + ": a still. " + (error ?? "");
     // ─── confirm and outcomes ───────────────────────────────────────────────────
 
     /// <summary>The Yes/No question before an unlock, a guarded opening or a disarm. Pinned.</summary>
@@ -398,5 +407,6 @@ public static class HomeBarText
     /// <summary>A detail pane with nothing to do.</summary>
     public const string NothingToDo = "Nothing to switch here; its state is in the title";
 
-    private static string Strip(string error) => error.StartsWith("Error: ", StringComparison.Ordinal) ? error["Error: ".Length..] : error;
+    /// <summary>A tool error's words without its <c>Error: </c> (2026-10-27: public for the Web UI's camera sheet).</summary>
+    public static string Strip(string error) => error.StartsWith("Error: ", StringComparison.Ordinal) ? error["Error: ".Length..] : error;
 }

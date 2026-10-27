@@ -920,7 +920,9 @@ public sealed partial class SidekickApp
         var comfyTools = ChatScreen.ComfyTools(comfy);
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
-        var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null);
+        // ha_camera (2026-10-27) keeps its stills in the profile's images folder, as the screen's does.
+        var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null, images: images);
+        Dictionary<string, string> HomeNotes() => ChatScreen.HomeToolNotes(ImageCodecs.Available, session.EmbeddedServer is { Vision: false });
         // The YouTube search (2026-10-05): no window headless, so youtube_search, and the saved videos (2026-10-07) to list and change.
         var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings, _time, HeadlessYouTubeLibrary);
         // The shopping list (2026-10-11): the loaded profile's store; no pane to ask on, so a whole-list clear is refused.
@@ -1043,7 +1045,7 @@ public sealed partial class SidekickApp
                 ComfyEnabled = ChatScreen.ComfyOffered(effective, comfy),
                 NeonAdvisor = neonAdvisorTools,
                 NeonAdvisorEnabled = ChatScreen.AdvisorsOffered(effective),
-                Home = haTools,
+                Home = ChatScreen.HomeToolsFor(haTools, HomeNotes()),
                 HomeEnabled = ChatScreen.HomeAssistantOffered(effective),
                 Print = printTools,
                 PrintEnabled = ChatScreen.PrintOffered(effective),
@@ -1093,6 +1095,7 @@ public sealed partial class SidekickApp
             var offered = ChatScreen.ComposeTurnTools(HeadlessInputs() with { Skills = skillTools }).Tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
             bool eventLogsHere = (OperatingSystem.IsWindows() && eventLog.System is not null) || macLog.Log is not null;
             var networkNotes = ChatScreen.NetworkToolNotes(effective, _pinger);
+            var homeNotes = HomeNotes();
             return new Help.HelpLive(
                 offered,
                 effective.LlmOfferTools,
@@ -1102,7 +1105,7 @@ public sealed partial class SidekickApp
                 name => Help.HelpLive.PassReasonFor(name, effective, audit.InPass, planState.Ralph is { Loop.InPass: true }, ralphHeadless: true, plan.Reviewing),
                 field => Help.HelpToolCatalog.Offers(field, effective) == false ? ToolsText.SwitchOffReason(field)
                     : ChatScreen.GroupOffReasonFor(field, effective, eventLogsHere, services.System is not null, tasks.System is not null, directory.System is not null, () => directory.Catalog().Domains.Count),
-                name => Help.HelpLive.Bare(networkNotes.GetValueOrDefault(name)))
+                name => Help.HelpLive.Bare(networkNotes.GetValueOrDefault(name) ?? homeNotes.GetValueOrDefault(name)))
             {
                 Settings = effective,
                 Mcp = name => Help.HelpMcpLookup.Find(mcp.Servers, name),

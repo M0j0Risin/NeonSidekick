@@ -61,8 +61,9 @@ internal sealed partial class ChatScreen
     // 2026-10-12: a key fixed in /settings, or a profile switch, waited for a wake that never came).
     private string? _homeServerKey;
 
-    // A chip clicked: when, and the entities behind it as they were (any change ends the wait), and whether the wait ran out.
-    private sealed record HomePending(DateTimeOffset Since, IReadOnlyList<HaLiveEntity?> Before, IReadOnlyList<string> Ids, bool Failed);
+    // A chip clicked: when, and the entities behind it as they were (any change ends the wait), and whether the wait ran out. A camera's
+    // still being fetched (Fetch, 2026-10-27) waits on no state and no clock: the fetch ends its own mark (ChatScreen.HomeCamera.cs).
+    private sealed record HomePending(DateTimeOffset Since, IReadOnlyList<HaLiveEntity?> Before, IReadOnlyList<string> Ids, bool Failed, bool Fetch = false);
 
     // The bar as last built, and what it was built from.
     private sealed record HomeCache(string ItemsKey, HaCatalog? Catalog, long Model, IReadOnlySet<string> Ids, long Live, int Cells, ThemePalette Palette, DateTimeOffset Built, IReadOnlyList<HomeChip> Chips, HomeRow? Row);
@@ -235,7 +236,7 @@ internal sealed partial class ChatScreen
 
     // Under _homeGate: whether a pending chip's wait (or its failed mark) has run out since the last build.
     private bool HomeExpiryDue(DateTimeOffset now) =>
-        _homePending.Values.Any(p => now - p.Since >= (p.Failed ? HomeFailedShows : HomePendingWait));
+        _homePending.Values.Any(p => (!p.Fetch || p.Failed) && now - p.Since >= (p.Failed ? HomeFailedShows : HomePendingWait));
 
     // Under _homeGate: the pending chips against the feed — a change ends the wait; a wait run out shows the failed mark, then goes. Any change
     // moves _homeModel (2026-10-19, the review: the Web UI's Home tab runs this too, and a mark it changed left the bar's cached row as it was).
@@ -244,6 +245,11 @@ internal sealed partial class ChatScreen
         bool marked = false;
         foreach (var (reference, pending) in _homePending.ToList())
         {
+            if (pending.Fetch && !pending.Failed)
+            {
+                continue;   // a still being fetched: its state may move (a stream opened for it) and it outlasts HomePendingWait
+            }
+
             bool moved = pending.Ids.Select((id, i) => !ReferenceEquals(live.Entities.GetValueOrDefault(id), pending.Before[i])).Any(changed => changed);
             if (moved || (pending.Failed && now - pending.Since >= HomeFailedShows))
             {
@@ -651,6 +657,14 @@ internal sealed partial class ChatScreen
         if (FindHomeChip(item) is not { } chip || !HomeBarItems.TryParse(chip.Reference, out var kind, out string id))
         {
             sink.Error(HomeBarText.NotOnBar(item));
+            return;
+        }
+
+        // A camera (2026-10-27, the ring-integration plan): its still, fetched behind the line whether or not the pane is on; one the feed
+        // reports unavailable takes every unavailable chip's way below, unfetched.
+        if (kind == HomeItemKind.Entity && HaCatalog.DomainOf(id) == Llm.Tools.HaCameraTool.Domain && _homeLive.Snapshot.Entities.GetValueOrDefault(id) is not { Unavailable: true })
+        {
+            StartHomeCamera(chip, id);
             return;
         }
 

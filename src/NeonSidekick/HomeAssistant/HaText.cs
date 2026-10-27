@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace NeonSidekick.HomeAssistant;
 
@@ -9,7 +10,7 @@ namespace NeonSidekick.HomeAssistant;
 /// the confirm question, the transcript's note and the <c>/ha</c> lines. Every failure starts <c>Error:</c>; a result's
 /// first line is its header, which is the transcript's note (<see cref="Note"/>). Pure; pinned by tests.
 /// </summary>
-public static class HaText
+public static partial class HaText
 {
     /// <summary>A change from the Web UI's page the user said no to (later on 2026-10-14).</summary>
     public const string Kept = "(kept)";
@@ -90,6 +91,81 @@ public static class HaText
 
     /// <summary>No entity of a domain the tool needs (no media player, no to-do list).</summary>
     public static string NoneOf(string what) => $"Error: Home Assistant has no {what}";
+
+    // ─── camera stills (2026-10-27, HaClient.CameraAsync and HaCamera) ──────────
+
+    /// <summary>A still's 503: the camera is switched off in Home Assistant.</summary>
+    public const string CameraOff = "Error: the camera is off in Home Assistant (503); switch it on there first";
+
+    /// <summary>
+    /// A still's 500: the integration made no picture. Step 0 on the user's Ring cameras (2026-10-27): a camera with a recent
+    /// recording gave one with no Ring Protect plan, the one whose last recording was a month old gave this.
+    /// </summary>
+    public const string CameraNoPicture = "Error: Home Assistant could not make a picture from this camera (500); some cameras, Ring's among them, make one only from a recent recording";
+
+    /// <summary>A still's 404: no such camera entity.</summary>
+    public const string NoSuchCamera = "Error: Home Assistant has no such camera (404)";
+
+    /// <summary>A still's answer that is no <c>image/*</c>: a proxy's sign-in page, say.</summary>
+    public static string NotAPicture(string mediaType) =>
+        $"Error: Home Assistant answered with {(string.IsNullOrWhiteSpace(mediaType) ? "no type" : Clip(Single(mediaType), 60))}, not a picture";
+
+    /// <summary>A still over <see cref="HaCamera.MaxBytes"/>.</summary>
+    public static readonly string PictureTooLarge =
+        $"Error: the camera's picture is over {(HaCamera.MaxBytes / 1_000_000).ToString(CultureInfo.InvariantCulture)} MB";
+
+    /// <summary>A still that came but could not be decoded, or no codecs to decode it with.</summary>
+    public static string PictureUnreadable(Files.ImageLoadFailure failure) => failure switch
+    {
+        Files.ImageLoadFailure.TooLarge => $"Error: the camera's picture is over {(Files.ImageFile.MaxPixels / 1_000_000).ToString(CultureInfo.InvariantCulture)} megapixels",
+        Files.ImageLoadFailure.Unsupported => "Error: pictures can't be read on this computer",
+        _ => "Error: the camera's picture could not be read",
+    };
+
+    /// <summary>A still the images folder refused (the <c>Error:</c> sentence after it): the still is used anyway, with no file.</summary>
+    public static string CameraNotSaved(string error) => "The picture could not be saved: " + error;
+
+    /// <summary><c>ha_camera</c>'s target an entity id of another domain (a light, a sensor).</summary>
+    public static string NotACamera(HaEntity entity) => $"Error: {Label(entity)} is not a camera; ha_camera takes a camera entity";
+
+    /// <summary>A camera Home Assistant reports <c>unavailable</c> or <c>unknown</c>, refused before any fetch: the state as Home Assistant gives it.</summary>
+    public static string CameraUnavailable(string name, string state) =>
+        $"Error: {name} is {HomeBarText.StateWord(state)} in Home Assistant, so it has no picture";
+
+    /// <summary>
+    /// The caveat every <c>ha_camera</c> result carries (2026-10-27, step 0: the user's Ring stills were frames of the latest recording, not
+    /// live), so the model never takes a still for what is there now. Pinned.
+    /// </summary>
+    public const string SnapshotNote = "Some cameras send their latest recording's picture rather than a live frame.";
+
+    /// <summary>Why <c>ha_camera</c> isn't offered where no picture can be decoded (any OS's words, never "needs Windows"). Pinned.</summary>
+    public const string NoPictureSupportReason = "pictures can't be read on this computer";
+
+    /// <summary>The recording a still came from, in <paramref name="zone"/>'s time with its date, since a recording can be weeks old.</summary>
+    public static string CameraRecorded(DateTimeOffset when, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        return "From the latest recording, at " + TimeZoneInfo.ConvertTime(when, zone).ToString("ddd yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + ".";
+    }
+
+    /// <summary>
+    /// <c>ha_camera</c>'s result (<see cref="Camera.CameraText.Taken"/>'s shape): the camera, the size sent and the saved file on the first
+    /// line, which is the transcript's note — or, for a save refused, why, the picture going anyway — then the recording's time when one
+    /// was found (<paramref name="recorded"/>, <see cref="CameraRecorded"/>), <see cref="SnapshotNote"/>, and where the picture is.
+    /// </summary>
+    public static string CameraTaken(HaEntity camera, HaCameraSave save, string? recorded)
+    {
+        ArgumentNullException.ThrowIfNull(camera);
+        ArgumentNullException.ThrowIfNull(save);
+        string head = $"{Label(camera)}: a still ({save.Image.Width.ToString(CultureInfo.InvariantCulture)}x{save.Image.Height.ToString(CultureInfo.InvariantCulture)})";
+        var sb = new StringBuilder(save.Saved is { } saved ? head + ", saved as " + saved : head + ". " + save.Error);
+        if (recorded is not null)
+        {
+            sb.Append('\n').Append(recorded);
+        }
+
+        return sb.Append('\n').Append(SnapshotNote).Append("\nThe picture is in the next message.").ToString();
+    }
 
     // ─── the confirm pane ───────────────────────────────────────────────────────
 
@@ -374,7 +450,10 @@ public static class HaText
 
     /// <summary>
     /// Every attribute of one entity, a line each, lists cut short — what <c>ha_states</c> gives for a single id. The
-    /// source list and the effects come whole enough to choose from.
+    /// source list and the effects come whole enough to choose from. Since 2026-10-27 (the ring-integration plan's step 2: step 0
+    /// found a Ring camera's <c>access_token</c>, its <c>entity_picture</c>'s <c>?token=</c> and its signed <c>video_url</c> printed
+    /// whole) no secret is: <c>access_token</c> is left out, and each line goes through <see cref="Redacted"/> before the cut, so a
+    /// cut never leaves half a token showing. Every domain alike.
     /// </summary>
     public static string Full(HaEntity entity)
     {
@@ -390,12 +469,39 @@ public static class HaText
         {
             foreach (var attribute in entity.Attributes.EnumerateObject())
             {
-                sb.Append('\n').Append(attribute.Name).Append(": ").Append(Clip(Single(attribute.Value.ValueKind == JsonValueKind.String ? attribute.Value.GetString() ?? "" : attribute.Value.GetRawText()), 400));
+                if (string.Equals(attribute.Name, AccessToken, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string value = attribute.Value.ValueKind == JsonValueKind.String ? attribute.Value.GetString() ?? "" : attribute.Value.GetRawText();
+                sb.Append('\n').Append(attribute.Name).Append(": ").Append(Clip(Single(Redacted(value)), 400));
             }
         }
 
         return sb.ToString();
     }
+
+    /// <summary>The attribute <see cref="Full"/> leaves out: a camera's token, which opens its picture and stream to anyone holding it.</summary>
+    public const string AccessToken = "access_token";
+
+    /// <summary>
+    /// An attribute's text, whatever its kind (a string as itself, an object or a list as its raw JSON, where a URL or a token can
+    /// sit nested), with its secrets hidden: every <c>http(s)://</c> link's and root-relative <c>/api/</c> path's query replaced by
+    /// <c>?&lt;redacted&gt;</c> — a query is a link's secret part whatever its names (<c>token=</c>, <c>X-Amz-Signature=</c>,
+    /// <c>Key-Pair-Id=</c>, <c>Policy=</c>) — then <see cref="Llm.Tools.ToolRedaction.Text"/>'s free-text rules (a nested
+    /// <c>"access_token": "…"</c> or <c>"password": "…"</c>, a JWT, a URL's password). Pure.
+    /// </summary>
+    public static string Redacted(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        string queries = LinkQuery().Replace(value, m => m.Groups["link"].Value + "?" + Llm.Tools.ToolRedaction.Placeholder);
+        return Llm.Tools.ToolRedaction.Text(queries);
+    }
+
+    // A link (http(s):// or a root-relative /api/ path) and its query, up to a space, a quote or an angle bracket: JSON's quotes end it.
+    [GeneratedRegex(@"(?<link>(?:\bhttps?://|(?<![\w/.])/api/)[^\s""'<>?]*)\?[^\s""'<>]*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex LinkQuery();
 
     /// <summary>The <c>ha_states</c> list: a header with the count and the filter, then a line per entity.</summary>
     public static string States(IReadOnlyList<HaEntity> entities, int total, string filter)

@@ -44,6 +44,12 @@ public interface IWebHome
     Task<WebReply> SayAsync(WebHomeSayRequest request, IPAddress? remote, CancellationToken cancellationToken);
 
     WebReply Video(WebHomeVideoRequest request, IPAddress? remote);
+
+    /// <summary>
+    /// A camera's still for its sheet (2026-10-27): NotFound for a reference outside the tiles' reach or not a camera's, Refused with the reason
+    /// when Home Assistant gave none; never saved, never shown at the PC.
+    /// </summary>
+    Task<WebCameraAnswer> CameraAsync(string reference, IPAddress? remote, CancellationToken cancellationToken);
 }
 
 /// <summary>

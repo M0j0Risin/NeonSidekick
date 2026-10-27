@@ -1016,6 +1016,7 @@ internal sealed partial class ChatScreen
         Interlocked.Exchange(ref _actSignal, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
         // The Web UI's notices under a reply (2026-10-14): printed by the turn task, the transcript's one writer.
         PrintWebNotices();
+        ShowHomeCameras(idle: false);   // the camera chips' notices and windows; a transcript picture waits for the idle line (2026-10-27)
         while (_acts.TryDequeue(out var act))
         {
             try

@@ -383,6 +383,8 @@ public class NeonHelpCatalogTests
         Assert.EndsWith(HelpInterface.SeeAlsoBar(PaneBars.Toolbar), Win("/toolbar"), StringComparison.Ordinal);
         Assert.Contains(HelpInterface.HomeMonitorsLine, Win("home bar"), StringComparison.Ordinal);
         Assert.DoesNotContain(HelpInterface.HomeMonitorsLine, Mac("home bar"), StringComparison.Ordinal);
+        Assert.Contains(HelpInterface.HomeCameraLine, Win("home bar"), StringComparison.Ordinal);   // the camera chip on both (2026-10-27)
+        Assert.Contains(HelpInterface.HomeCameraLine, Mac("home bar"), StringComparison.Ordinal);
         Assert.DoesNotContain("🧩", Mac("", "interface"), StringComparison.Ordinal);
         Assert.True(Win("", "bars").Length < HelpText.MaxChars);
     }

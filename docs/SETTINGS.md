@@ -900,7 +900,7 @@ The camera, screen, monitor and printer tools.
 | Camera device | The camera, by its system name. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
 | Camera output folder | Where photos are saved, under the profile's `images` folder. | `camera` |
-| Camera keep in sessions | Keeps photos in stored sessions. Off, a stored session keeps a line naming the photo instead. | off |
+| Camera keep in sessions | Keeps photos in stored sessions, Home Assistant camera stills too. Off, a stored session keeps a line naming the photo instead. | off |
 | Camera watch interval (s) | How often `/camera watch` looks (2–3600). | 10 |
 | Camera watch change (%) | How much of the picture must change to count (1–100). `--camera-check` prints your camera's noise. | 8% |
 | Camera watch unprompted | On, the model is shown a changed picture unasked when nothing else is going on. Off, it rides your next message. | off |
@@ -944,13 +944,13 @@ The household's tools.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`) once a URL and token are set. | off |
+| Home Assistant tools | Offers the Home Assistant tools (`ha_overview`, `ha_states`, `ha_history`, `ha_camera`, `ha_lights`, `ha_scene`, `ha_media`, `ha_todo`, `ha_call_service`, `ha_assist`) once a URL and token are set. | off |
 | Home Assistant URL | Your server (`http://localhost:8123`, or one on your LAN). | empty |
 | Home Assistant API key | A long-lived access token (your Home Assistant profile › Security), saved encrypted. Empty clears it. | empty |
 | Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
 | Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run; anything else (a switch, a script, an automation, a sentence for Assist) asks first, refused headless. `allow`: everything runs. `/ha` never asks. | `ask` |
 | Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use. | empty (Home Assistant's default) |
-| Home Assistant timeout (s) | How long one request may take (2–60). | 10 |
+| Home Assistant timeout (s) | How long one request may take (2–60); a camera's picture gets at least 15 s. | 10 |
 
 The services that run unasked under `ask` can be changed in `profile.json` (`HomeAssistantSafeServices`); adding `conversation.process` there lets `ha_assist` run unasked.
 
