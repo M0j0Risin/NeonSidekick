@@ -842,7 +842,7 @@ public partial class SettingsMenuTests : IDisposable
         data.LlmUrl = "";
         // The label column is the longest name plus two spaces, computed ("STT interrupt echo guard" once touched "100 %" when it was a hand-kept number).
         int longest = Enum.GetValues<SettingsField>().Max(f => SettingsMenu.FieldName(f).Length);
-        Assert.Equal(33, longest);   // "Botchat ComfyUI limited workflows" and "Reflection edit downloaded skills" (2026-10-13, when the external-skills row lost its Use); before then "External skills (.agents\\skills)" (again since later on 2026-10-10, when "Claude Code slash command permissions", 37, became "Claude Code command permissions", the user's call; that one from 2026-10-10, when the advisor tool's rows went; "Claude Code advisor tool calls per turn", 39, from 2026-10-09; "Claude CLI …", 38, from 2026-10-04; the skills one from 2026-09-16; "Ask max choices per question", 28, before)
+        Assert.Equal(33, longest);   // "Reflection edit downloaded skills" (2026-10-13, with "Botchat ComfyUI limited workflows" until it became "Botchat limited workflows" on 2026-10-27; when the external-skills row lost its Use); before then "External skills (.agents\\skills)" (again since later on 2026-10-10, when "Claude Code slash command permissions", 37, became "Claude Code command permissions", the user's call; that one from 2026-10-10, when the advisor tool's rows went; "Claude Code advisor tool calls per turn", 39, from 2026-10-09; "Claude CLI …", 38, from 2026-10-04; the skills one from 2026-09-16; "Ask max choices per question", 28, before)
         Assert.Equal(35, SettingsMenu.LabelWidth);
         Assert.Equal(longest + 2, SettingsMenu.LabelWidth);
         Assert.Equal("LLM request timeout (s)", SettingsMenu.FieldName(SettingsField.LlmRequestTimeoutSeconds));
@@ -912,7 +912,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmShowThinking,
                 SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
                 SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
-                SettingsField.BotChatSkills,
                 SettingsField.BotChatVision,
                 SettingsField.ThemedExternalWindows,
                 SettingsField.ReflectionEditsSupportingFiles,
@@ -979,7 +978,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
                 SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
-                SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows
+                SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows (its BotChatComfy switch retired 2026-10-27, as BotChatSkills was above)
                 SettingsField.DiffCollapseCount,   // later still on 2026-10-04, /tools' Options tab under Diff max lines: the diff's fold
                 SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder,   // later still on 2026-10-04, /tools' Files tab: image_edit's defaults
                 SettingsField.ImageEditMode,   // later still on 2026-10-04: the picture menu's and image_edit's
@@ -1774,7 +1773,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(32, SettingsMenu.TabLabelWidth(SettingsTab.Http));       // "LLM sampling from Hugging Face" (2026-10-10)
         Assert.Equal(19, SettingsMenu.TabLabelWidth(SettingsTab.Tts));       // "TTS voice preview"
         Assert.Equal(30, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard (%)" (2026-10-13; 26 without the unit)
-        Assert.Equal(35, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat ComfyUI limited workflows" (later on 2026-10-04; "Botchat stop extra servers", 29, from later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
+        Assert.Equal(28, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat stop extra servers" and "Botchat image mention mode" (2026-10-27, when "Botchat ComfyUI limited workflows", 35, became "Botchat limited workflows"; that one from later on 2026-10-04; "Botchat stop extra servers", 29, from later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
         Assert.Equal(21, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle)));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
         Assert.Equal(29, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.WebTabTitle)));   // "Web browser botcheck window" (2026-10-13); "Web browser network mode", 26, until then (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(Math.Max(28, SettingsMenu.FieldName(SettingsField.FileDeletesToRecycleBin).Length + 2), SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle)));   // "File deletes to Recycle bin" since later on 2026-10-15; "File view image max images" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
@@ -1876,7 +1875,7 @@ public partial class SettingsMenuTests : IDisposable
         _console.Profile.Width = 240;   // the error line is longer than 100 cells
         var (menu, pane) = PaneMenu();
         GoTo(SettingsTab.BotChat);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatNonTtsDelaySeconds));   // the last row until Botchat skills enabled (2026-09-27)
+        Down(SettingsMenu.TabFields[(int)SettingsTab.BotChat].ToList().IndexOf(SettingsField.BotChatNonTtsDelaySeconds));   // the last row until Botchat skills enabled (2026-09-27, retired 2026-10-27)
         Push(Keys.Enter);                       // "5"
         Backspace(1);
         _console.Input.PushText("12");
@@ -5088,10 +5087,10 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// Botchat ComfyUI limited workflows on the pane (later on 2026-10-04, the user's ask): every installed workflow, the profile's
+    /// Botchat limited workflows on the pane (later on 2026-10-04, the user's ask): every installed workflow, the profile's
     /// and the home's, offered to the main chat or not; Space flips one, A all, N none. A name no longer installed is dropped as the
-    /// list opens, the status line naming it (2026-10-04, the user's call; it stayed, unseen, until then). While Botchat ComfyUI
-    /// enabled is on, the caption says the list waits.
+    /// list opens, the status line naming it (2026-10-04, the user's call; it stayed, unseen, until then). Its caption, saying the
+    /// list waited while Botchat ComfyUI enabled was on, went with that switch (2026-10-27).
     /// </summary>
     [Fact]
     public async Task OnThePane_BotchatLimitedComfyWorkflows_AnyInstalledOne_FlipsOne_SelectsAll_ThenNone_DroppingAGoneName()
@@ -5115,9 +5114,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(["pony"], _settings.Current.BotChatLimitedComfyWorkflows);
         Assert.Contains(SettingsMenu.StaleDroppedNotice(SettingsField.BotChatLimitedComfyWorkflows, ["gone"]), Output);
-        Assert.DoesNotContain(SettingsMenu.LimitedComfyUnusedCaption, Output);
 
-        _settings.Update(d => d.BotChatComfy = true);
         (menu, pane) = PaneMenu();
         GoTo(SettingsTab.BotChat);
         Down(row);
@@ -5128,7 +5125,6 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         Assert.Equal(["flux", "pony"], _settings.Current.BotChatLimitedComfyWorkflows);
-        Assert.Contains(SettingsMenu.LimitedComfyUnusedCaption, Output);
 
         (menu, pane) = PaneMenu();
         GoTo(SettingsTab.BotChat);

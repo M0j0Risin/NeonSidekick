@@ -448,9 +448,6 @@ public enum SettingsField
     /// <summary>A toggle: whether Anthropic API requests carry prompt-cache breakpoints (<see cref="Settings.AppSettingsData.AnthropicApiPromptCaching"/>). Under the output cap on <c>/settings</c>' Anthropic tab (2026-10-03; <c>/tools</c>' ClaudeCode tab from 2026-09-29, the Claude (API) tab's from 2026-09-27); a reconnect.</summary>
     AnthropicApiPromptCaching,
 
-    /// <summary>A toggle: whether the <c>/botchat</c> bots get the main chat's skills and <c>load_skill</c> (<see cref="Settings.AppSettingsData.BotChatSkills"/>). The Botchat tab (2026-09-27, the user's ask); no reconnect (read per reply).</summary>
-    BotChatSkills,
-
     /// <summary>A toggle: whether the <c>/botchat</c> bots are shown the chat's pictures (<see cref="Settings.AppSettingsData.BotChatVision"/>). The Botchat tab's last row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatVision,
 
@@ -463,7 +460,7 @@ public enum SettingsField
     /// <summary>A picker: which pictures a <c>/botchat</c> rework may start from — <c>latest</c> / <c>chat-history</c> (<see cref="Settings.AppSettingsData.BotChatImg2ImgMode"/>). The Botchat tab, under the img2img row (2026-09-27, the user's ask); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
     BotChatImg2ImgMode,
 
-    /// <summary>A checklist: the skills the <c>/botchat</c> bots may load while <see cref="BotChatSkills"/> is off (<see cref="Settings.AppSettingsData.BotChatLimitedSkills"/>). The Botchat tab, under the skills switch (2026-10-04, the user's ask; <c>BotChatPreloadedSkills</c> from 2026-09-27, whose <c>BotChatSkillMode</c> picker went the same day); no reconnect (read per reply).</summary>
+    /// <summary>A checklist: the skills the <c>/botchat</c> bots may load (<see cref="Settings.AppSettingsData.BotChatLimitedSkills"/>). The Botchat tab, under the limited tools (2026-10-04, the user's ask; <c>BotChatPreloadedSkills</c> from 2026-09-27, whose <c>BotChatSkillMode</c> picker went the same day; its <c>Botchat skills enabled</c> switch above it retired 2026-10-27); no reconnect (read per reply).</summary>
     BotChatLimitedSkills,
 
     /// <summary>A toggle: whether every turn's thinking goes back to a local server and the chat template is asked to keep it (<see cref="Settings.AppSettingsData.LlmPreserveThinking"/>). The Http tab's thinking run, first (2026-10-10, the user's call: only an OpenAI-compatible server reads it; the LLM tab, under Show thinking, from 2026-09-28, the user's question); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -938,10 +935,7 @@ public enum SettingsField
     /// <summary>An edit row: Enter opens the home's <c>postgres.json</c>, every profile's. The PostgreSQL tab's last row (2026-10-04).</summary>
     PostgresConnectionsGlobal,
 
-    /// <summary>A toggle: whether the <c>/botchat</c> bots get this profile's offered ComfyUI workflows (<see cref="Settings.AppSettingsData.BotChatComfy"/>). The Botchat tab, after the multi-embedded rows (later on 2026-10-04, the user's ask: in place of <c>Botchat images enabled</c> and the two workflow pickers); no reconnect (read per reply).</summary>
-    BotChatComfy,
-
-    /// <summary>A checklist: the installed ComfyUI workflows the <c>/botchat</c> bots get while <see cref="BotChatComfy"/> is off (<see cref="Settings.AppSettingsData.BotChatLimitedComfyWorkflows"/>). The Botchat tab, under the switch (later on 2026-10-04, the user's ask); no reconnect (read per reply).</summary>
+    /// <summary>A checklist (the <c>Botchat limited workflows</c> row, <c>Botchat ComfyUI limited workflows</c> until 2026-10-27): the installed ComfyUI workflows the <c>/botchat</c> bots get (<see cref="Settings.AppSettingsData.BotChatLimitedComfyWorkflows"/>). The Botchat tab, after the multi-embedded rows (later on 2026-10-04, the user's ask: in place of <c>Botchat images enabled</c> and the two workflow pickers; its <c>Botchat ComfyUI enabled</c> switch above it retired 2026-10-27); no reconnect (read per reply).</summary>
     BotChatLimitedComfyWorkflows,
 
     /// <summary>Typed: how many rows an edit's diff may have before it folds once its tool run is over, 0 (off) to 500 (<see cref="Settings.AppSettingsData.DiffCollapseCount"/>). The Options tab of <c>/tools</c>, under <see cref="DiffMaxLines"/> (2026-10-04, the user's ask and place); no reconnect (read at each result). Last in the enum, as every newcomer.</summary>
@@ -1804,7 +1798,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
@@ -2320,7 +2314,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
-            or SettingsField.BotChatComfy or SettingsField.BotChatImageAsync or SettingsField.BotChatSkills or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill
+            or SettingsField.BotChatImageAsync or SettingsField.BotChatMemory or SettingsField.BotChatVision or SettingsField.BotChatMultiEmbeddedKill
             or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCodeServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
@@ -2522,15 +2516,13 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatMultiEmbedded => "Botchat embedded mode",
         SettingsField.BotChatMultiEmbeddedKill => "Botchat stop extra servers",
         SettingsField.LlmMidTurnUsage => "LLM mid-turn usage",
-        SettingsField.BotChatComfy => "Botchat ComfyUI enabled",
-        SettingsField.BotChatLimitedComfyWorkflows => "Botchat ComfyUI limited workflows",
+        SettingsField.BotChatLimitedComfyWorkflows => "Botchat limited workflows",   // "Limited workflows" on the Botchat tab (RowName); "Botchat ComfyUI limited workflows" until 2026-10-27
         SettingsField.BotChatImageMode => "Botchat image mode",
         SettingsField.BotChatImg2ImgMode => "Botchat rework source",
         SettingsField.BotChatImageMentionMode => "Botchat image mention mode",   // "Image mention mode" on the Botchat tab (RowName)
         SettingsField.BotChatImageAsync => "Botchat image async",
         SettingsField.BotChatNonTtsDelaySeconds => "Botchat reading pause (s)",
         SettingsField.BotChatLimitedTools => "Botchat limited tools",
-        SettingsField.BotChatSkills => "Botchat skills enabled",
         SettingsField.BotChatVision => "Botchat vision enabled",
         SettingsField.BotChatLimitedSkills => "Botchat limited skills",
         SettingsField.BotChatMemory => "Botchat memory enabled",
@@ -2961,7 +2953,6 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatMultiEmbedded => data.BotChatMultiEmbedded,
             SettingsField.BotChatMultiEmbeddedKill => OnOff(data.BotChatMultiEmbeddedKill),
             SettingsField.LlmMidTurnUsage => data.LlmMidTurnUsage,
-            SettingsField.BotChatComfy => OnOff(data.BotChatComfy),
             SettingsField.BotChatLimitedComfyWorkflows => LimitedNamesValue(data.BotChatLimitedComfyWorkflows),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
             SettingsField.BotChatImg2ImgMode => data.BotChatImg2ImgMode,
@@ -2969,7 +2960,6 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
             SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
             SettingsField.BotChatLimitedTools => LimitedNamesValue(data.BotChatLimitedTools),
-            SettingsField.BotChatSkills => OnOff(data.BotChatSkills),
             SettingsField.BotChatVision => OnOff(data.BotChatVision),
             SettingsField.BotChatLimitedSkills => LimitedNamesValue(data.BotChatLimitedSkills),
             SettingsField.BotChatMemory => OnOff(data.BotChatMemory),
@@ -3201,7 +3191,7 @@ internal sealed partial class SettingsMenu
     /// <summary>A <c>Botchat limited …</c> row's value while it names none (2026-09-27 as the two workflow pickers' none, which went on 2026-10-04; renamed from <c>NoBotChatWorkflowLabel</c> in that day's second code review). Pinned.</summary>
     public const string NoLimitedNamesLabel = "(none)";
 
-    /// <summary>The <c>Botchat limited skills</c>, <c>Botchat limited tools</c> and <c>Botchat ComfyUI limited workflows</c> value (2026-09-27 as the preloaded skills'; all three since 2026-10-04): <see cref="NoLimitedNamesLabel"/> with none, else the names, comma-joined. Pinned.</summary>
+    /// <summary>The <c>Botchat limited skills</c>, <c>Botchat limited tools</c> and <c>Botchat limited workflows</c> value (2026-09-27 as the preloaded skills'; all three since 2026-10-04): <see cref="NoLimitedNamesLabel"/> with none, else the names, comma-joined. Pinned.</summary>
     public static string LimitedNamesValue(IReadOnlyList<string>? names)
     {
         var kept = names?.Select(n => n.Trim()).Where(n => n.Length > 0).ToList() ?? [];
@@ -3213,12 +3203,6 @@ internal sealed partial class SettingsMenu
 
     /// <summary>When the <c>Botchat limited tools</c> checklist has nothing to list (2026-10-04). Pinned.</summary>
     public const string NoToolsToLimit = "No tools to list for the botchat.";
-
-    /// <summary>The <c>Botchat ComfyUI limited workflows</c> checklist's caption while <c>Botchat ComfyUI enabled</c> is on (later on 2026-10-04). Pinned.</summary>
-    public const string LimitedComfyUnusedCaption = "Botchat ComfyUI enabled is on: the bots get this profile's offered workflows, and this list is not used until it is off.";
-
-    /// <summary>The <c>Botchat limited skills</c> checklist's caption while <c>Botchat skills enabled</c> is on (2026-10-04). Pinned.</summary>
-    public const string LimitedSkillsUnusedCaption = "Botchat skills enabled is on: the bots get every skill, and this list is not used until it is off.";
 
     /// <summary>
     /// The status line when a checklist dropped saved names it no longer lists (2026-10-04, the user's call: the list keeps what the
@@ -8227,9 +8211,7 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedVramOnly => data.EmbeddedVramOnly,
             SettingsField.EmbeddedLlmServer => data.EmbeddedLlmServer,
             SettingsField.EmbeddedDrafter => data.EmbeddedDrafter,
-            SettingsField.BotChatComfy => data.BotChatComfy,
             SettingsField.BotChatImageAsync => data.BotChatImageAsync,
-            SettingsField.BotChatSkills => data.BotChatSkills,
             SettingsField.BotChatMemory => data.BotChatMemory,
             SettingsField.BotChatVision => data.BotChatVision,
             SettingsField.BotChatMultiEmbeddedKill => data.BotChatMultiEmbeddedKill,
@@ -8363,9 +8345,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.EmbeddedVramOnly: data.EmbeddedVramOnly = on; break;
             case SettingsField.EmbeddedLlmServer: data.EmbeddedLlmServer = on; break;
             case SettingsField.EmbeddedDrafter: data.EmbeddedDrafter = on; break;
-            case SettingsField.BotChatComfy: data.BotChatComfy = on; break;
             case SettingsField.BotChatImageAsync: data.BotChatImageAsync = on; break;
-            case SettingsField.BotChatSkills: data.BotChatSkills = on; break;
             case SettingsField.BotChatMemory: data.BotChatMemory = on; break;
             case SettingsField.BotChatVision: data.BotChatVision = on; break;
             case SettingsField.BotChatMultiEmbeddedKill: data.BotChatMultiEmbeddedKill = on; break;
@@ -8526,9 +8506,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedVramOnly => on ? "every layer on the GPU; a load that spills into system RAM is refused" : "a model too big for VRAM may run partly from system RAM, slowly",
         SettingsField.EmbeddedLlmServer => on ? "/server offers the embedded models" : "no embedded models in /server; a running one stops",
         SettingsField.EmbeddedDrafter => on ? "the embedded model drafts ahead with its drafter (faster, same answers)" : "the embedded model decodes one token at a time, no drafter loaded",
-        SettingsField.BotChatComfy => on ? "the bots get this profile's offered ComfyUI workflows" : "the bots get the Botchat ComfyUI limited workflows alone",
         SettingsField.BotChatImageAsync => on ? "the next bot answers while the picture renders" : "the chat waits for each picture",
-        SettingsField.BotChatSkills => on ? "the bots get load_skill over the skills this chat sees" : "the bots get the Botchat limited skills alone",
         SettingsField.BotChatMemory => on ? "the bots remember (Botchat memory mode says whose memories)" : "the bots remember nothing",
         SettingsField.BotChatVision => on ? "each bot sees the pictures shown since it last spoke (vision models)" : "the bots see text alone",
         SettingsField.BotChatMultiEmbeddedKill => on ? "the extra servers stop when the botchat ends" : "extra servers stay up for later botchats until /botchat --kill or exit",
@@ -9692,19 +9670,19 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The <c>Botchat ComfyUI limited workflows</c> checklist (later on 2026-10-04, the user's ask; in place of the
+    /// The <c>Botchat limited workflows</c> checklist (later on 2026-10-04, the user's ask; in place of the
     /// <c>Botchat txt2img workflow</c> / <c>Botchat img2img workflow</c> pickers of 2026-09-25 and 2026-09-27):
     /// <see cref="EditWorkflowChecklistAsync"/>, <c>ComfyUI workflows offered</c>'s loop, over every installed workflow — <c>ComfyUI workflows offered</c> has no say (the
     /// user's pick, the pickers' rule) — each row with its kind, family and size (<see cref="ComfyOfferedRow"/>). Enter or Space flips
-    /// one, A every one, N none, saved at once; a name ticked before but no longer installed stays in the list. Its caption says the
-    /// list waits while <c>Botchat ComfyUI enabled</c> is on.
+    /// one, A every one, N none, saved at once; a name ticked before but no longer installed is dropped as the list opens
+    /// (<see cref="StaleDroppedNotice"/>). Its caption said the list waited while <c>Botchat ComfyUI enabled</c> was on, until that
+    /// switch went (2026-10-27).
     /// </summary>
     private Task<bool> EditBotChatLimitedComfyAsync(CancellationToken cancellationToken) =>
         EditWorkflowChecklistAsync(
             SettingsField.BotChatLimitedComfyWorkflows,
             d => d.BotChatLimitedComfyWorkflows,
             (d, next) => d.BotChatLimitedComfyWorkflows = next.Count == 0 ? null : next,
-            d => d.BotChatComfy ? LimitedComfyUnusedCaption : null,
             cancellationToken);
 
     /// <summary>The memory-mode picker under the settings list (2026-10-04): one <see cref="MemoryModeLabel"/> row per <see cref="App.MemoryMode.Names"/> entry, the saved one under the cursor.</summary>
@@ -9749,7 +9727,8 @@ internal sealed partial class SettingsMenu
     /// over the skills a botchat sees: Enter or Space flips one, saved at once. A ticked name with no skill listed now (external skills
     /// off, another folder's own) is a row of its own after them (<see cref="LimitedGoneRow"/>, 2026-10-04, the user's call: until
     /// then it rode along unseen and even N kept it), never dropped by itself since it may come back; Enter unticks it, A keeps it, N
-    /// clears it with the rest. Its caption says the list waits while <c>Botchat skills enabled</c> is on (2026-10-04).
+    /// clears it with the rest. Its caption said the list waited while <c>Botchat skills enabled</c> was on (2026-10-04), until that
+    /// switch went (2026-10-27).
     /// </summary>
     private async Task<bool> EditBotChatLimitedSkillsAsync(CancellationToken cancellationToken)
     {
@@ -9773,7 +9752,6 @@ internal sealed partial class SettingsMenu
             var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatLimitedSkills)), rows, ToggleKeys)
             {
                 SpaceToggles = true,
-                Caption = _settings.Current.BotChatSkills ? LimitedSkillsUnusedCaption : null,
             };
             var picked = await PickChecklistAsync(page, Math.Min(cursor, names.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)

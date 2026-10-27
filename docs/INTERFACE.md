@@ -322,7 +322,7 @@ Icons under the status bar (*Tool bar*), each shown while it is checked there. A
 | 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* on / off (none while the policy is `off`) | `/tools shell police` |
 | 🐚 | dark under `off` | `/tools shell` |
-| 📁 🌄 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ | dark while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
+| 📁 🖼️ 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ | dark while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
 | 🪵 | dark while off, and always where there are no event logs to read | `/tools eventlog` |
 | 📡 | dark while off | `/tools network` |
 | 🧩 📅 | dark while off; Windows only ([MAC.md](MAC.md#what-works)) | `/tools services`, `tasks` |
@@ -383,7 +383,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 * **Performance bar:** **look:** on the title row (`l`) steps the look: text, gauge, led.
 * **Status bar:** the Spinner can't be unchecked, only moved. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
 * **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor. It moves like an item and Delete takes it out.
-* The toolbar's default has three dividers: `⚙️ 🛠️ 🎓 │ 💾 📣 ⏳ │ 🔒 👮 🐚 │ 📁 🌄 🌐 📱`.
+* The toolbar's default has three dividers: `⚙️ 🛠️ 🎓 │ 💾 📣 ⏳ │ 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱`.
 
 *Toolbar order* orders the five bars: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, and `d` puts the default back. A bar that is off keeps its place.
 

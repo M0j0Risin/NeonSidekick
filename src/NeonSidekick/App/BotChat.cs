@@ -20,9 +20,9 @@ namespace NeonSidekick.App;
 /// every turn on the starting profile's LLM server and model, one after another — a profile's own
 /// <c>LLM URL</c> and <c>LLM model</c> are never read here. The first exception to "no tools" (2026-09-25, the
 /// user's ask): pictures — the bots' own <c>generate_image</c> (<see cref="ImageRule"/>) or the app's picture of each reply
-/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says — over the workflows <c>Botchat ComfyUI enabled</c> or
-/// <c>Botchat ComfyUI limited workflows</c> give (<see cref="ComfyWorkflows"/>, 2026-10-04; <c>Botchat images enabled</c> and one
-/// workflow of each kind until then). Then skills (2026-09-27) and, on 2026-10-04 (the
+/// (<see cref="ImagePromptInstruction"/>), as <c>Botchat image mode</c> says — over the workflows <c>Botchat limited workflows</c>
+/// names (<see cref="ComfyWorkflows"/>, 2026-10-04, beside <c>Botchat ComfyUI enabled</c> until 2026-10-27; <c>Botchat images
+/// enabled</c> and one workflow of each kind until then). Then skills (2026-09-27) and, on 2026-10-04 (the
 /// user's asks), the main chat's tools (the <c>Botchat limited tools</c>; only the eight groups of <see cref="LimitedGroups"/> since
 /// 2026-10-22, when <c>Botchat tools enabled</c> went) and memory
 /// (<c>Botchat memory enabled</c>, on by default; <see cref="BotChatMemoryMode"/> says whose): each its own switch on the tab.</para>
@@ -243,7 +243,7 @@ public static partial class BotChat
     /// the default rules carry the sentences of the tools offered, as the main chat's would; with
     /// <paramref name="memories"/> (<c>Botchat memory enabled</c>) the memory section with the list follows them
     /// (<paramref name="memorySave"/>: <c>save_memory</c> offered) and <see cref="Rules"/> gains <see cref="MemoryRule"/>. With
-    /// <paramref name="skills"/> (<c>Botchat skills enabled</c>, 2026-09-27, or <c>Botchat limited skills</c> since 2026-10-04: the
+    /// <paramref name="skills"/> (<c>Botchat limited skills</c> since 2026-10-04; <c>Botchat skills enabled</c> from 2026-09-27 to 2026-10-27: the
     /// main chat's catalog — the starting profile's, the global (while its Global skills is on) and the external skills, never the speaker's own profile's) the
     /// load-only skills block (<see cref="Skills.SkillsPrompt.LoadOnlySection"/>) goes before the rules. With none of them the
     /// prompt is as before, byte for byte. The preloaded skills' block of 2026-09-27 went on 2026-10-04 (the user's call). The
@@ -505,20 +505,20 @@ public static partial class BotChat
 
     /// <summary>
     /// Whether the settings give <c>/botchat</c> any ComfyUI workflow at all (2026-10-04, in place of <c>Botchat images enabled</c>):
-    /// <c>Botchat ComfyUI enabled</c> on, or a name in <c>Botchat ComfyUI limited workflows</c>. The settings alone, no catalog: what
-    /// <see cref="BotPicturePacer.Applies"/> reads. Whether a picture can be made is <see cref="ComfyWorkflows"/>'. Pure.
+    /// a name in <c>Botchat limited workflows</c> (alone since 2026-10-27, when <c>Botchat ComfyUI enabled</c> went). The settings
+    /// alone, no catalog: what <see cref="BotPicturePacer.Applies"/> reads. Whether a picture can be made is <see cref="ComfyWorkflows"/>'. Pure.
     /// </summary>
     public static bool ComfyChosen(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.BotChatComfy || (effective.BotChatLimitedComfyWorkflows?.Any(name => !string.IsNullOrWhiteSpace(name)) ?? false);
+        return effective.BotChatLimitedComfyWorkflows?.Any(name => !string.IsNullOrWhiteSpace(name)) ?? false;
     }
 
     /// <summary>
     /// The ComfyUI workflows of <c>/botchat</c> (2026-10-04, the user's ask: the bots never confused about which the user wants):
-    /// with <c>Botchat ComfyUI enabled</c> the ones <c>ComfyUI workflows offered</c> offers the main chat, else those
-    /// <c>Botchat ComfyUI limited workflows</c> names among every installed one (offered or not, the user's pick) — in
-    /// <paramref name="installed"/>'s order either way, a name not installed skipped (<see cref="ComfyWorkflowCatalog.Offered"/>).
+    /// those <c>Botchat limited workflows</c> names among every installed one (offered or not, the user's pick) — in
+    /// <paramref name="installed"/>'s order, a name not installed skipped (<see cref="ComfyWorkflowCatalog.Offered"/>). Until
+    /// 2026-10-27 <c>Botchat ComfyUI enabled</c> gave the ones <c>ComfyUI workflows offered</c> offers the main chat instead.
     /// <see cref="Txt2ImgWorkflows"/> and <see cref="Img2ImgWorkflows"/> sort them into fresh pictures and reworks; another kind
     /// (two pictures, no prompt) is never used. Pure.
     /// </summary>
@@ -526,7 +526,7 @@ public static partial class BotChat
     {
         ArgumentNullException.ThrowIfNull(installed);
         ArgumentNullException.ThrowIfNull(effective);
-        return ComfyWorkflowCatalog.Offered(installed, effective.BotChatComfy ? effective.ComfyWorkflowsOffered : effective.BotChatLimitedComfyWorkflows);
+        return ComfyWorkflowCatalog.Offered(installed, effective.BotChatLimitedComfyWorkflows);
     }
 
     /// <summary>
@@ -1084,7 +1084,7 @@ public static partial class BotChat
     /// Once per chat, when pictures are on but no picture can be made (2026-09-25; since 2026-09-27: no txt2img workflow set, nor an
     /// img2img one with a picture to rework; since 2026-10-04: none in the chat's set, <see cref="ComfyWorkflows"/>). Pinned.
     /// </summary>
-    public const string NoWorkflowNotice = "(botchat: Botchat ComfyUI enabled and Botchat ComfyUI limited workflows give no installed txt2img workflow, so there are no pictures of the replies)";
+    public const string NoWorkflowNotice = "(botchat: Botchat limited workflows gives no installed txt2img workflow, so there are no pictures of the replies)";
 
     /// <summary>The <c>--log</c> warning when the image-prompt writer named no workflow of a kind with several (2026-10-04): the first is used.</summary>
     public static string UnnamedWorkflowLogLine(string speaker, string workflow) =>

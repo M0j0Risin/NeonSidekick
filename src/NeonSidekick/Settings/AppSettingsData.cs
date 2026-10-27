@@ -1292,25 +1292,22 @@ public sealed class AppSettingsData
     public bool BotChatMultiEmbeddedKill { get; set; } = true;
 
     /// <summary>
-    /// Whether the <c>/botchat</c> bots get the starting profile's ComfyUI workflows (2026-10-04, the user's ask: the bots should
-    /// never be confused about which workflows the user wants them to use): on, the workflows <see cref="ComfyWorkflowsOffered"/>
-    /// offers the main chat; off (the default), <see cref="BotChatLimitedComfyWorkflows"/> says. Either way the set's text → image
-    /// workflows draw fresh pictures and its image → image ones rework the chat's pictures; a workflow of another kind is skipped.
-    /// A chat has pictures while either row chooses a workflow and the ComfyUI tools can run (<c>ComfyUI tools</c> on, an http(s)
-    /// <c>ComfyUI URL</c>) — a set with nothing to draw with says so once — and <see cref="BotChatImageMode"/> says who draws. It folds in <c>BotChatImages</c> (<c>Botchat images
-    /// enabled</c>, 2026-09-25) and, with <see cref="BotChatLimitedComfyWorkflows"/>, replaces <c>BotChatTxt2ImgWorkflow</c> and
-    /// <c>BotChatImg2ImgWorkflow</c> (2026-09-27, one workflow of each kind): the three keys retired, no migration, as ever. The
-    /// main chat's own <c>generate_image</c> is never among the bots' tools since: with <c>Botchat tools enabled</c> on (retired 2026-10-22) it was offered
-    /// beside botchat's narrowed one under the same name, and the bots drew with the profile's workflows (the user's report).
-    /// Read per reply, no reconnect. The Botchat tab of <c>/settings</c>. No variable.
-    /// </summary>
-    public bool BotChatComfy { get; set; }
-
-    /// <summary>
-    /// The ComfyUI workflows the <c>/botchat</c> bots get while <see cref="BotChatComfy"/> is off (2026-10-04, the user's ask):
-    /// names among every installed workflow, offered to the main chat or not, as the old pickers' were (the user's pick). Null or
-    /// empty (the default) is none: no pictures. A name no longer installed is kept and skipped. Read per reply. The Botchat tab
-    /// of <c>/settings</c>, a checklist. No variable.
+    /// The ComfyUI workflows the <c>/botchat</c> bots get (2026-10-04, the user's ask: the bots should never be confused about
+    /// which workflows the user wants them to use): names among every installed workflow, offered to the main chat or not, as
+    /// the old pickers' were (the user's pick). The set's text → image workflows draw fresh pictures and its image → image ones
+    /// rework the chat's pictures; a workflow of another kind is skipped. A chat has pictures while a name here is installed and
+    /// the ComfyUI tools can run (<c>ComfyUI tools</c> on, an http(s) <c>ComfyUI URL</c>) — a set with nothing to draw with says
+    /// so once — and <see cref="BotChatImageMode"/> says who draws. Null or empty (the default) is none: no pictures, no
+    /// <c>generate_image</c>. A name no longer installed is kept and skipped (the checklist drops it as it opens).
+    /// <para>History: it folds in <c>BotChatImages</c> (<c>Botchat images enabled</c>, 2026-09-25) and replaces
+    /// <c>BotChatTxt2ImgWorkflow</c> and <c>BotChatImg2ImgWorkflow</c> (2026-09-27, one workflow of each kind): the three keys
+    /// retired, no migration, as ever. Its switch <c>BotChatComfy</c> (<c>Botchat ComfyUI enabled</c>, the workflows
+    /// <see cref="ComfyWorkflowsOffered"/> offers the main chat) was retired on 2026-10-27 (the user's ask: this list alone says),
+    /// no migration: a profile's key is skipped on read; the row was <c>Botchat ComfyUI limited workflows</c> until then. The
+    /// main chat's own <c>generate_image</c> is never among the bots' tools: with <c>Botchat tools enabled</c> on (retired
+    /// 2026-10-22) it was offered beside botchat's narrowed one under the same name, and the bots drew with the profile's
+    /// workflows (the user's report).</para>
+    /// Read per reply, no reconnect. The Botchat tab of <c>/settings</c>, a checklist. No variable.
     /// </summary>
     public List<string>? BotChatLimitedComfyWorkflows { get; set; }
 
@@ -1322,7 +1319,7 @@ public sealed class AppSettingsData
     /// <c>autonomous</c> (the bots are offered <c>generate_image</c> over that set alone and draw when they choose; the app draws only a picture a bot talked about but did not
     /// draw — a call that failed counts as not drawn, and a call written out as text runs as a real one — later on 2026-09-25,
     /// so the reply is true). Only while
-    /// the chat has pictures (<see cref="BotChatComfy"/>, <see cref="BotChatLimitedComfyWorkflows"/>). The Botchat tab of <c>/settings</c>. No variable.
+    /// the chat has pictures (<see cref="BotChatLimitedComfyWorkflows"/>). The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string BotChatImageMode { get; set; } = App.BotChatImageMode.Default;
 
@@ -1330,7 +1327,7 @@ public sealed class AppSettingsData
     /// Which pictures a <c>/botchat</c> rework may start from (2026-09-27, the user's words): one of
     /// <see cref="App.BotChatImg2ImgMode.Names"/> — <c>latest</c> (the default: the chat's latest picture alone) or
     /// <c>chat-history</c> (any of its pictures so far, the last few, numbered). A picture still rendering is none of them yet.
-    /// Only while the chat's set has an image → image workflow (<see cref="BotChatComfy"/>). The Botchat tab of <c>/settings</c>. No variable.
+    /// Only while the chat's set has an image → image workflow (<see cref="BotChatLimitedComfyWorkflows"/>). The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string BotChatImg2ImgMode { get; set; } = App.BotChatImg2ImgMode.Default;
 
@@ -1382,23 +1379,17 @@ public sealed class AppSettingsData
     public List<string>? BotChatLimitedTools { get; set; }
 
     /// <summary>
-    /// Whether the <c>/botchat</c> bots get skills (2026-09-27, the user's ask): on, and with <see cref="AgentSkills"/> on,
-    /// every bot's prompt lists the skills the main chat sees — the starting profile's, the global ones while its <see cref="GlobalSkills"/> is on and, with
-    /// <see cref="ExternalSkills"/> on, the external ones; never a bot's own profile's (the user's call: the parent's
-    /// skills stand for the room) — and each bot is offered <c>load_skill</c>, never <c>skill_editor</c> (a bot must not
-    /// write the parent's skills). Off (the default), <see cref="BotChatLimitedSkills"/> says. Read per reply, no reconnect.
-    /// The Botchat tab of <c>/settings</c>. No variable.
-    /// </summary>
-    public bool BotChatSkills { get; set; }
-
-    /// <summary>
-    /// The skills the <c>/botchat</c> bots and its picture prompt writer may load while <see cref="BotChatSkills"/> is off
-    /// (2026-10-04, the user's ask; until then <c>BotChatPreloadedSkills</c>, whose skills were pasted into the prompts, and
-    /// <c>BotChatSkillMode</c>, which said whose — both keys retired, no migration): names among the skills a botchat sees
-    /// (the starting profile's, the global while <see cref="GlobalSkills"/> is on and, with <see cref="ExternalSkills"/>, the external ones). With any, the skills
-    /// list and <c>load_skill</c> are offered for those skills alone; null or empty (the default), no skill tool. Needs
-    /// <see cref="AgentSkills"/>. A name no longer installed is kept and skipped. Read per reply. The Botchat tab of
-    /// <c>/settings</c>, a checklist. No variable.
+    /// The skills the <c>/botchat</c> bots and its picture prompt writer may load (2026-10-04, the user's ask; until then
+    /// <c>BotChatPreloadedSkills</c>, whose skills were pasted into the prompts, and <c>BotChatSkillMode</c>, which said whose —
+    /// both keys retired, no migration): names among the skills a botchat sees — the starting profile's, the global while
+    /// <see cref="GlobalSkills"/> is on and, with <see cref="ExternalSkills"/>, the external ones; never a bot's own profile's
+    /// (the user's call: the parent's skills stand for the room). With any, the skills list and <c>load_skill</c> are offered for
+    /// those skills alone, never <c>skill_editor</c> (a bot must not write the parent's skills); null or empty (the default), no
+    /// skill tool. Needs <see cref="AgentSkills"/>, and <c>load_skill</c> not switched off on <c>/tools</c>. A name no longer
+    /// installed is kept and skipped. Its switch <c>BotChatSkills</c> (<c>Botchat skills enabled</c>, every skill the main chat
+    /// sees, 2026-09-27) was retired on 2026-10-27 (the user's ask: this list alone says, as <see cref="BotChatLimitedTools"/>
+    /// does), no migration: a profile's key is skipped on read. Read per reply. The Botchat tab of <c>/settings</c>, a
+    /// checklist. No variable.
     /// </summary>
     public List<string>? BotChatLimitedSkills { get; set; }
 

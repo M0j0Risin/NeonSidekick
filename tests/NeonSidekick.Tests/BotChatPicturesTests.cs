@@ -37,27 +37,28 @@ public class BotChatPicturesTests
         Assert.Equal(["edit", "restyle"], BotChat.Img2ImgWorkflows(offered).Select(w => w.Name));   // the promptless upscale is neither
     }
 
-    /// <summary>2026-10-04 (the user's ask): Botchat ComfyUI enabled's offered workflows, else the limited ones among every installed one.</summary>
+    /// <summary>
+    /// 2026-10-04 (the user's ask): the limited ones among every installed one. Alone since 2026-10-27, when Botchat ComfyUI
+    /// enabled (this profile's offered workflows instead) went: an offered workflow the list leaves out is never the bots'.
+    /// </summary>
     [Fact]
-    public void ComfyWorkflows_AreTheOfferedOnes_WhenEnabled_ElseTheLimitedOnes_InCatalogOrder()
+    public void ComfyWorkflows_AreTheLimitedOnes_InCatalogOrder_NeverTheOfferedOnes()
     {
         var installed = new[] { Workflow("edit", image: true), Workflow("pony"), Workflow("flux", family: ComfyFamily.Flux) };
 
-        var on = new AppSettingsData { BotChatComfy = true, ComfyWorkflowsOffered = ["flux"], BotChatLimitedComfyWorkflows = ["pony"] };
-        Assert.Equal(["flux"], BotChat.ComfyWorkflows(installed, on).Select(w => w.Name));
-        // Off: the limited list, any installed workflow offered or not, ignoring case and spaces; a name not installed is skipped.
-        var off = new AppSettingsData { ComfyWorkflowsOffered = ["flux"], BotChatLimitedComfyWorkflows = [" FLUX ", "gone", "edit"] };
-        Assert.Equal(["edit", "flux"], BotChat.ComfyWorkflows(installed, off).Select(w => w.Name));
-        Assert.Empty(BotChat.ComfyWorkflows(installed, new AppSettingsData { ComfyWorkflowsOffered = ["flux"] }));   // the default: none
-        Assert.Empty(BotChat.ComfyWorkflows(installed, new AppSettingsData { BotChatComfy = true }));   // on, with nothing offered
+        // Any installed workflow offered or not, ignoring case and spaces; a name not installed is skipped.
+        var limited = new AppSettingsData { ComfyWorkflowsOffered = ["flux"], BotChatLimitedComfyWorkflows = [" FLUX ", "gone", "edit"] };
+        Assert.Equal(["edit", "flux"], BotChat.ComfyWorkflows(installed, limited).Select(w => w.Name));
+        Assert.Equal(["pony"], BotChat.ComfyWorkflows(installed, new AppSettingsData { ComfyWorkflowsOffered = ["flux"], BotChatLimitedComfyWorkflows = ["pony"] }).Select(w => w.Name));
+        Assert.Empty(BotChat.ComfyWorkflows(installed, new AppSettingsData { ComfyWorkflowsOffered = ["flux"] }));   // the default: none, the offered one too
     }
 
     [Fact]
-    public void ComfyChosen_IsTheSwitch_OrANameInTheLimitedList()
+    public void ComfyChosen_IsANameInTheLimitedList()
     {
         Assert.False(BotChat.ComfyChosen(new AppSettingsData()));
         Assert.False(BotChat.ComfyChosen(new AppSettingsData { BotChatLimitedComfyWorkflows = ["", "  "] }));
-        Assert.True(BotChat.ComfyChosen(new AppSettingsData { BotChatComfy = true }));
+        Assert.False(BotChat.ComfyChosen(new AppSettingsData { ComfyWorkflowsOffered = ["flux"] }));   // the main chat's offered ones never count (2026-10-27)
         Assert.True(BotChat.ComfyChosen(new AppSettingsData { BotChatLimitedComfyWorkflows = ["pony"] }));
     }
 
@@ -408,15 +409,15 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoComfy_NoWorkflows_Automatic_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
+    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoWorkflows_Automatic_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal(2, (int)SettingsTab.BotChat);   // third, under Client after Chat and Sessions, since later on 2026-10-10 (the user's order); before the Advisors tab from 2026-10-10; last again from later on 2026-09-27 (the Claude tab moved to /tools)
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatComfy, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatSkills, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat ComfyUI enabled", "Botchat ComfyUI limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image mention mode", "Botchat image async", "Botchat reading pause (s)", "Botchat limited tools", "Botchat skills enabled", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image mention mode", "Botchat image async", "Botchat reading pause (s)", "Botchat limited tools", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         // Botchat recent context (later still on 2026-10-10): a toggle, off, saying what the bots are told.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatRecentContext));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatRecentContext, data, "."));
@@ -432,14 +433,13 @@ public class BotChatPicturesTests
         Assert.Equal("extra servers stay up for later botchats until /botchat --kill or exit", SettingsMenu.ToggleDescribe(SettingsField.BotChatMultiEmbeddedKill, false));
         Assert.Equal("single", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, data, "."));
         Assert.Equal("multi", SettingsMenu.FieldValue(SettingsField.BotChatLlmMode, new AppSettingsData { BotChatLlmMode = "multi" }, "."));
-        // ComfyUI (later on 2026-10-04, in place of the images switch and the two pickers): a toggle, off, and its checklist, none.
-        Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatComfy));
+        // ComfyUI (later on 2026-10-04, in place of the images switch and the two pickers): a checklist, none; its switch above it
+        // retired and the row named "Limited workflows" on its tab (2026-10-27, the user's ask).
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedComfyWorkflows));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatComfy, data, "."));
+        Assert.Equal("Botchat limited workflows", SettingsMenu.FieldName(SettingsField.BotChatLimitedComfyWorkflows));
+        Assert.Equal("Limited workflows", SettingsMenu.RowName(SettingsField.BotChatLimitedComfyWorkflows, "Botchat"));
         Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedComfyWorkflows, data, "."));
         Assert.Equal("flux, edit", SettingsMenu.FieldValue(SettingsField.BotChatLimitedComfyWorkflows, new AppSettingsData { BotChatLimitedComfyWorkflows = ["flux", " edit ", ""] }, "."));
-        Assert.Equal("the bots get this profile's offered ComfyUI workflows", SettingsMenu.ToggleDescribe(SettingsField.BotChatComfy, true));
-        Assert.Equal("the bots get the Botchat ComfyUI limited workflows alone", SettingsMenu.ToggleDescribe(SettingsField.BotChatComfy, false));
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImageAsync));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImg2ImgMode));
@@ -458,11 +458,8 @@ public class BotChatPicturesTests
         Assert.Equal("1 second", SettingsMenu.SecondsLabel(1));
         Assert.Equal("5", SettingsMenu.EditableValue(SettingsField.BotChatNonTtsDelaySeconds, data));
         Assert.Equal("must be 0 (off) or 1 to 30 seconds", SettingsMenu.BotChatNonTtsDelayRangeError);
-        // The skills (2026-09-27): a toggle, off by default.
-        Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatSkills));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatSkills, data, "."));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatSkills, new AppSettingsData { BotChatSkills = true }, "."));
-        // Limited skills (2026-10-04; the preloaded skills' checklist of 2026-09-27): a checklist, none by default.
+        // Limited skills (2026-10-04; the preloaded skills' checklist of 2026-09-27): a checklist, none by default (its Botchat
+        // skills enabled switch, 2026-09-27, retired 2026-10-27).
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedSkills));
         Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, data, "."));
         Assert.Equal("haiku, pony-prompts", SettingsMenu.FieldValue(SettingsField.BotChatLimitedSkills, new AppSettingsData { BotChatLimitedSkills = ["haiku", " pony-prompts ", ""] }, "."));

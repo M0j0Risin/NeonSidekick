@@ -69,7 +69,7 @@ public partial class ChatScreenTests
     /// <summary>
     /// The main chat's ComfyUI tools are never the bots' (later on 2026-10-04, the user's report: its generate_image sat beside the
     /// bot's own and the bots drew with the profile's workflows): ticked in the limited tools, they are not
-    /// offered; the Botchat ComfyUI rows alone give a bot generate_image.
+    /// offered; Botchat limited workflows alone gives a bot generate_image.
     /// </summary>
     [Fact]
     public async Task BotChat_TheMainChatsComfyTools_AreNeverTheBots()

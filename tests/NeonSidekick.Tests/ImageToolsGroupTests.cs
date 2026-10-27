@@ -11,7 +11,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The picture tools as a group of their own (2026-10-10, the user's ask): <c>view_image</c>, <c>image_info</c> and <c>image_edit</c> off the
-/// file tools, under the <c>Image tools</c> switch on <c>/tools</c> › Files › Image, the word <c>/tools image</c> and the toolbar's 🌄; and
+/// file tools, under the <c>Image tools</c> switch on <c>/tools</c> › Files › Image, the word <c>/tools image</c> and the toolbar's 🖼️ (🌄 until 2026-10-27); and
 /// <c>Image edit output folder</c> naming a folder under the profile's images folder (later that day, the user's ask).
 /// </summary>
 public sealed class ImageToolsGroupTests : IDisposable
@@ -41,14 +41,18 @@ public sealed class ImageToolsGroupTests : IDisposable
     {
         Assert.Equal(SettingsField.ImageTools, ToolsText.SwitchField(" IMAGE "));
         Assert.Equal(ToolsText.SwitchWords.ToList().IndexOf(ToolbarItems.Files) + 1, ToolsText.SwitchWords.ToList().IndexOf(ToolbarItems.Image));
-        Assert.Equal("🌄", ToolbarItems.Glyph(ToolbarItems.Image));
+        Assert.Equal("🖼️", ToolbarItems.Glyph(ToolbarItems.Image));   // 🌄 until 2026-10-27 (the user's ask)
         Assert.Equal("Image", ToolbarItems.Title(ToolbarItems.Image));
         Assert.Equal(ToolbarItems.Image, ChatScreen.ToolbarItemOf(ChatScreen.ImageToolGlyph));
         Assert.Equal(ToolsText.SwitchLine(ToolbarItems.Image), ChatScreen.ToolbarWord(ChatScreen.ImageToolGlyph));
         Assert.Equal(ToolbarItems.Defaults.ToList().IndexOf(ToolbarItems.Files) + 1, ToolbarItems.Defaults.ToList().IndexOf(ToolbarItems.Image));   // a default since later on 2026-10-10 (the user's ask), after the folder
         Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Image, new AppSettingsData()));
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Image, new AppSettingsData { ImageTools = true }));
-        Assert.NotEqual(ChatScreen.ImageToolGlyph, "🖼️");   // the frame is the hint row's ComfyUI generation
+        // The frame is also the status bar's ComfyUI generation (2026-10-27): only the toolbar's routes read it as the Image switch,
+        // and no status-bar handler claims it as one of theirs (the cancel answers the strip's zone alone).
+        Assert.Equal(NeonSidekick.Comfy.ComfyText.TextToImageLabel, ChatScreen.ImageToolGlyph);
+        Assert.Null(ChatScreen.SwitchForGlyph(ChatScreen.ImageToolGlyph));
+        Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.ImageToolGlyph));
     }
 
     [Fact]

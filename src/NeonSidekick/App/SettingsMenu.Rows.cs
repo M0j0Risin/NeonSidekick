@@ -98,7 +98,7 @@ internal sealed partial class SettingsMenu
             [SettingsTab.BotChat] =
             [
                 (SettingsField.BotChatLlmMode, "Models"),
-                (SettingsField.BotChatComfy, "Pictures"),
+                (SettingsField.BotChatLimitedComfyWorkflows, "Pictures"),   // Botchat ComfyUI enabled until 2026-10-27
                 (SettingsField.BotChatNonTtsDelaySeconds, "Pace"),
                 (SettingsField.BotChatLimitedTools, "Tools and skills"),
                 (SettingsField.BotChatMemory, "Memory"),

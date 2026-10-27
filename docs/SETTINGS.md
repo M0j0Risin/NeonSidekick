@@ -91,16 +91,14 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat LLM mode | `single`: every bot uses this profile's server, model and reasoning. `multi`: each bot uses its own profile's (a blank URL borrows this profile's server). | `single` |
 | Botchat embedded mode | Under `multi`, for bots on another embedded model: `parent-server` shares the running model; `multi-server` runs one more `llama-server` per model (more memory). | `parent-server` |
 | Botchat stop extra servers | Stops the bots' `multi-server` extras when the chat ends (never an advisor's). Off, they run until `/botchat --kill` or you quit. | on |
-| Botchat ComfyUI enabled | Gives the bots this profile's *ComfyUI workflows offered* for pictures. Needs *ComfyUI tools* and a *ComfyUI URL*. | off |
-| Botchat ComfyUI limited workflows | With *Botchat ComfyUI enabled* off, the workflows the bots get (a checklist). None ticked: no pictures. | none |
+| Botchat limited workflows | The workflows the bots draw with, from every installed one (a checklist); needs *ComfyUI tools* and a *ComfyUI URL*. None ticked: no pictures. | none |
 | Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` and draw when they choose. See [Botchat pictures](#botchat-pictures). | `automatic` |
 | Botchat rework source | Which pictures a rework may start from: the `latest`, or any of the last 8 (`chat-history`). Needs an image → image workflow. | `latest` |
 | Botchat image mention mode | Shown as *Image mention mode*. Under `autonomous`: `generate` draws a picture a bot mentions but never drew; `off` ignores it. | `off` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture. | on |
 | Botchat reading pause (s) | A pause after each reply to read it, when *TTS output* is off (0–30). A line you send ends it. | 5 |
 | Botchat limited tools | The tools the bots get, from the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups (a checklist). None ticked: no tools. | none |
-| Botchat skills enabled | Offers every bot `load_skill` over this chat's skills. Needs *Agent skills*. Off, *Botchat limited skills* decides. | off |
-| Botchat limited skills | With *Botchat skills enabled* off, the skills the bots may load (a checklist). None ticked: no skill tool. | none |
+| Botchat limited skills | The skills the bots may load (a checklist); needs *Agent skills*. None ticked: no skill tool. | none |
 | Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`. Inside `/botchat` this overrides every profile's *Memory mode*. | on |
 | Botchat memory mode | Whose memories: `shared-parent` (the starting profile's) or `independent` (each bot's own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot the newest 4 pictures since it last spoke. Needs models that read images. | off |
@@ -109,8 +107,8 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 ##### Botchat pictures
 
-* **Workflows:** this profile's offered ones (*Botchat ComfyUI enabled*) or the ticked ones (*Botchat ComfyUI limited workflows*). Text → image workflows draw new pictures; image → image ones rework the chat's pictures.
-* **`automatic`:** after each reply the model writes an image prompt and the app draws it; the bots get no tool. With skills on, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
+* **Workflows:** the ones ticked in *Botchat limited workflows*. Text → image workflows draw new pictures; image → image ones rework the chat's pictures.
+* **`automatic`:** after each reply the model writes an image prompt and the app draws it; the bots get no tool. With *Botchat limited skills* ticked, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
 * **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call written out as text still runs, and if a call fails, the app draws the picture itself.
 * **Reworks:** once there's a picture and an image → image workflow, the prompt writer chooses between a new picture and a rework.
 * **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders. **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips the picture.

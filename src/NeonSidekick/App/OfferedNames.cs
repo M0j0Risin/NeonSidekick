@@ -4,7 +4,7 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// The arithmetic under the checklists that save a list of names (<c>SQL connections offered</c> and its five twins,
-/// <c>ComfyUI workflows offered</c>, <c>Botchat ComfyUI limited workflows</c>, <c>Docker server containers</c>, and the botchat's
+/// <c>ComfyUI workflows offered</c>, <c>Botchat limited workflows</c>, <c>Docker server containers</c>, and the botchat's
 /// limited skills and tools), 2026-10-04, the user's call. Until that day a saved name the checklist no longer listed was carried
 /// along at every save ("it counts again if it comes back"), so it could never be unticked: <c>profile.json</c> kept workflows
 /// long deleted and N kept them too. Now the lists read from files (and Docker's, from an engine that answered) drop such a name

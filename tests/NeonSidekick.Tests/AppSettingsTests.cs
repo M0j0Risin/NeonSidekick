@@ -48,7 +48,6 @@ public class AppSettingsTests : IDisposable
         Theme = "noir",
         BotChatLlmMode = "multi",
         LlmMidTurnUsage = "estimate",   // last-known is the default since later on 2026-09-25
-        BotChatComfy = true,
         BotChatLimitedComfyWorkflows = ["flux", "flux-edit"],
         BotChatImageMode = "autonomous",
         BotChatImg2ImgMode = "chat-history",
@@ -56,7 +55,6 @@ public class AppSettingsTests : IDisposable
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
         BotChatLimitedTools = ["web_search", "read_file"],
-        BotChatSkills = true,
         BotChatLimitedSkills = ["pony-prompts", "haiku"],
         BotChatMemory = false,
         BotChatMemoryMode = "independent",
@@ -933,9 +931,10 @@ public class AppSettingsTests : IDisposable
         // On 2026-10-05 SqliteProtectionMode became SqliteMode and ShellPoliceOutsidePaths became ShellPolice (the user's calls, no migration).
         // On 2026-10-10 claude_code_advisor was retired with its six ClaudeCodeAdvisor* keys (the user's call): skipped the same way.
         // On 2026-10-23 the tool bridge went with ShellToolBridge and ShellCodeMaxToolCalls (the user's call, no migration): skipped the same way.
+        // On 2026-10-27 BotChatComfy and BotChatSkills went (the user's ask: the limited lists alone say, no migration): skipped the same way.
         Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
         File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName),
-            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\", \"SqliteProtectionMode\": \"read-write\", \"ShellPoliceOutsidePaths\": false, \"ClaudeCodeAdvisor\": true, \"ClaudeCodeAdvisorContext\": \"recent\", \"ClaudeCodeAdvisorCallsPerTurn\": 5, \"ClaudeCodeAdvisorModel\": \"opus\", \"ClaudeCodeAdvisorEffort\": \"high\", \"ClaudeCodeAdvisorConfirm\": true, \"ShellToolBridge\": true, \"ShellCodeMaxToolCalls\": 7, \"ShellCodeTimeoutSeconds\": 42 }");
+            "{ \"SchemaVersion\": 1, \"BotChatImages\": true, \"BotChatTxt2ImgWorkflow\": \"flux\", \"BotChatImg2ImgWorkflow\": \"edit\", \"LlmUrl\": \"http://old:1234/v1\", \"ShowProfileName\": false, \"ThinkingFunVerbs\": true, \"LlmUseFunVerbs\": true, \"SpeechOutputEnabled\": true, \"CopyUserText\": false, \"WebBrowserAllowLan\": true, \"SkillSlashCommands\": false, \"LlmTools\": false, \"FileLineNumbers\": true, \"FileStaleLineNumberGuard\": true, \"TreeMaxLength\": 750, \"SearxngUrl\": \"http://old:8080\", \"ReflectionVerbose\": false, \"WelcomeSplash\": false, \"ComfyPictureStripSync\": \"disabled\", \"GitNativeTools\": true, \"GitNativeEmail\": \"me@example.com\", \"GitNativeLogMaxCommits\": 50, \"BotChatPreloadedSkills\": [\"haiku\"], \"BotChatSkillMode\": \"prompt-writer-only\", \"SqliteProtectionMode\": \"read-write\", \"ShellPoliceOutsidePaths\": false, \"ClaudeCodeAdvisor\": true, \"ClaudeCodeAdvisorContext\": \"recent\", \"ClaudeCodeAdvisorCallsPerTurn\": 5, \"ClaudeCodeAdvisorModel\": \"opus\", \"ClaudeCodeAdvisorEffort\": \"high\", \"ClaudeCodeAdvisorConfirm\": true, \"ShellToolBridge\": true, \"ShellCodeMaxToolCalls\": 7, \"ShellCodeTimeoutSeconds\": 42, \"BotChatComfy\": true, \"BotChatSkills\": true }");
 
         using var settings = new AppSettings(_dir);
         Assert.Equal("http://old:1234/v1", settings.Current.LlmUrl);
@@ -946,9 +945,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("off", settings.Current.WelcomeSplashMode);   // the retired switch, skipped (2026-09-24); image since 2026-10-20, off (the default) since 2026-10-21
         Assert.True(settings.Current.ComfyPictureStrip);   // its neighbour untouched by the retired ComfyPictureStripSync key (2026-09-28)
         Assert.True(settings.Current.SkillHashMention);   // its neighbour untouched by the retired SkillSlashCommands key
-        Assert.Null(settings.Current.BotChatLimitedSkills);   // the renamed BotChatPreloadedSkills is not carried over (2026-10-04)
-        Assert.False(settings.Current.BotChatComfy);   // the retired BotChatImages is not carried over (later on 2026-10-04)
-        Assert.Null(settings.Current.BotChatLimitedComfyWorkflows);   // nor the two retired workflow pickers
+        Assert.Null(settings.Current.BotChatLimitedSkills);   // the renamed BotChatPreloadedSkills is not carried over (2026-10-04), nor the retired BotChatSkills (2026-10-27)
+        Assert.Null(settings.Current.BotChatLimitedComfyWorkflows);   // nor the retired BotChatImages and two workflow pickers (later on 2026-10-04), nor BotChatComfy (2026-10-27)
         Assert.True(settings.Current.LlmOfferTools);   // the renamed key, skipped; the default stands
         Assert.Equal(["gitlib_delete", "unc_delete", "docker_remove", "docker_prune", "ha_todo", "service_start_type"], settings.Current.ToolsDisabled);   // ha_todo since 2026-10-07; no ToolsDisabled key in the old file: the default fills it (a saved [] or ["delete"] would stand)
         Assert.Equal(WorkingDirectory.DefaultTreeLength, settings.Current.FileTreeMaxLength);   // the old TreeMaxLength key, skipped

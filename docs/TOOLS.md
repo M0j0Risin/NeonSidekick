@@ -167,7 +167,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 
 ### Image
 
-Under *Image tools* (`/tools image`, or the toolbar's 🌄), apart from *File tools*; off in a new profile. They reach the working directory and, by full path, the profile's `images` folder. Every picture sent to a model, by any tool or a paste, goes without its EXIF, GPS and XMP (the file on disk keeps them).
+Under *Image tools* (`/tools image`, or the toolbar's 🖼️), apart from *File tools*; off in a new profile. They reach the working directory and, by full path, the profile's `images` folder. Every picture sent to a model, by any tool or a paste, goes without its EXIF, GPS and XMP (the file on disk keeps them).
 
 | Tool | Arguments | What it does |
 |---|---|---|

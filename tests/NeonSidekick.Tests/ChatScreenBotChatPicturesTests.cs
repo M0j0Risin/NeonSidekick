@@ -24,8 +24,8 @@ public partial class ChatScreenTests
     {
         BotChatFixture();
         var stub = ComfyServer(width, height);
-        // The workflow ticked (later on 2026-10-04, Botchat ComfyUI limited workflows; Botchat images enabled and the txt2img
-        // picker until then).
+        // The workflow ticked (later on 2026-10-04, Botchat limited workflows; Botchat images enabled and the txt2img picker
+        // until then).
         _settings.Update(d => { d.BotChatLimitedComfyWorkflows = ["pony"]; d.BotChatImageMode = mode; d.BotChatImageAsync = async; d.BotChatImageMentionMode = mention; });   // mention: generate, what autonomous did before 2026-10-13
         return stub;
     }
@@ -296,6 +296,8 @@ public partial class ChatScreenTests
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         BotPicturesFixture(async: true);
+        // The toolbar without Image (2026-10-27): its glyph is the frame since then, the strip's own, and this test reads the strip's.
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Defaults.Where(id => id != ToolbarItems.Image)]);
         // The picture's download held until ada's reply has been seen with the glyph on the strip.
         var view = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stub = new StubHttpMessageHandler()
@@ -356,6 +358,8 @@ public partial class ChatScreenTests
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);   // the hint row at 102
         BotPicturesFixture(async: true);
+        // The toolbar without Image (2026-10-27): its glyph is the frame since then, the strip's own, and this test reads the strip's.
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Defaults.Where(id => id != ToolbarItems.Image)]);
         var polled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stub = HeldComfyServer(polled);
         _chat.EnqueueText(DogReply);
@@ -630,7 +634,7 @@ public partial class ChatScreenTests
         Assert.Equal(1, CountOf(output, BotChat.NoWorkflowNotice));
     }
 
-    /// <summary>Neither Botchat ComfyUI row choosing a workflow (later on 2026-10-04, as Botchat images enabled off was): talk alone, no notice.</summary>
+    /// <summary>No workflow ticked in Botchat limited workflows (later on 2026-10-04, as Botchat images enabled off was): talk alone, no notice.</summary>
     [Fact]
     public async Task BotChat_NoComfyWorkflowChosen_IsTalkAlone_WithNoNotice()
     {
@@ -674,26 +678,6 @@ public partial class ChatScreenTests
         Assert.Contains("\n- pony ", description);
         Assert.DoesNotContain("other-t2i", description);   // the profile's offered workflow is the main chat's alone
         Assert.DoesNotContain(ToolsOf(_chat.Options[0]), t => t.Name == SetSplashImageTool.ToolName);   // never a bot's: the ComfyUI group's until 2026-10-12, the picture tools' since, kept from the bots by name
-    }
-
-    /// <summary>Botchat ComfyUI enabled (later on 2026-10-04, the user's ask): the bots get this profile's offered workflows, the limited list unused.</summary>
-    [Fact]
-    public async Task BotChat_ComfyEnabled_TheBotsGetTheOfferedWorkflows_NotTheLimitedOnes()
-    {
-        var stub = BotPicturesFixture(mode: "autonomous");
-        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "other-t2i.json"), File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "pony.json")));
-        _settings.Update(d => { d.BotChatComfy = true; d.ComfyWorkflowsOffered = ["other-t2i"]; });
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(2);
-        PushLine("/botchat");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        string description = Assert.Single(ToolsOf(_chat.Options[0])).Description!;
-        Assert.Contains("\n- other-t2i ", description);
-        Assert.DoesNotContain("\n- pony ", description);
     }
 
     /// <summary>
@@ -796,14 +780,15 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Botchat skills enabled in automatic (2026-09-27, the user's report: the first picture was prompted before any skill could
-    /// be loaded): the image-prompt writer sees the catalog and load_skill, loads the one the topic asks for, and its prompt follows.
+    /// The bots' skills in automatic (2026-09-27, the user's report: the first picture was prompted before any skill could be
+    /// loaded; the limited skills alone since 2026-10-27): the image-prompt writer sees the ticked skills and load_skill, loads
+    /// the one the topic asks for, and its prompt follows.
     /// </summary>
     [Fact]
     public async Task BotChat_Automatic_ThePromptWriter_LoadsTheSkillFirst()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         _chat.EnqueueText(DogReply);
         _chat.Enqueue(FakeChatClient.Call("s1", LoadSkillTool.ToolName, new Dictionary<string, object?> { ["name"] = "pony-prompts" }));
@@ -835,7 +820,7 @@ public partial class ChatScreenTests
     public async Task BotChat_GlobalSkillsOff_TheBotsSeeNoGlobalSkill()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => { d.BotChatSkills = true; d.GlobalSkills = false; });
+        _settings.Update(d => { d.BotChatLimitedSkills = ["pony-prompts", "global-prompts"]; d.GlobalSkills = false; });   // the global one ticked, and still unseen
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         PutSkill(GlobalSkills, "global-prompts", "Not read: Global skills is off.");
         _chat.EnqueueText(DogReply);
@@ -863,7 +848,7 @@ public partial class ChatScreenTests
     public async Task BotChat_Automatic_ThePromptWriter_IsAskedForTheAnswer_AfterThreeLoads()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.");
         _chat.EnqueueText(DogReply);
         for (int i = 0; i < 3; i++)
@@ -954,7 +939,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Botchat limited skills (2026-10-04, the user's ask): with Botchat skills enabled off, the ticked skills alone are listed and
+    /// Botchat limited skills (2026-10-04, the user's ask): the ticked skills alone are listed and
     /// loadable — load_skill's enum names them alone — for the bots and the picture prompt writer alike; nothing is pasted in.
     /// </summary>
     [Fact]
@@ -988,7 +973,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// None ticked and Botchat skills enabled off (the defaults): no skill tool or list anywhere, and a topic naming a skill pastes
+    /// None ticked (the default): no skill tool or list anywhere, and a topic naming a skill pastes
     /// nothing (until 2026-10-04 it was preloaded).
     /// </summary>
     [Fact]
@@ -1013,40 +998,16 @@ public partial class ChatScreenTests
         });
     }
 
-    /// <summary>Botchat skills enabled on: every skill, the limited list not read.</summary>
-    [Fact]
-    public async Task BotChat_SkillsEnabled_TheLimitedListIsNotRead()
-    {
-        BotPicturesFixture();
-        _settings.Update(d => { d.BotChatSkills = true; d.BotChatLimitedSkills = ["pony-prompts"]; });
-        PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.");
-        PutSkill(ProfileSkills, "haiku");
-        _chat.EnqueueText(DogReply);
-        _chat.EnqueueText("score_9, a dog surfing a wave");
-        _chat.EnqueueText("Ada ", "answers.");
-        EscDuringRequest(3);
-        PushLine("/botchat");
-        PushLine("/exit");
-
-        await RunAsync();
-
-        Assert.All([0, 1], i =>
-        {
-            Assert.Contains("<name>pony-prompts</name>", SystemText(_chat.Requests[i]));
-            Assert.Contains("<name>haiku</name>", SystemText(_chat.Requests[i]));
-        });
-    }
-
     /// <summary>
     /// The writer's last request, which goes without tools (2026-09-30): <c>&lt;tool_call&gt;</c> markup written there is taken
     /// out — not the ComfyUI prompt, and not run — and the words after it are the prompt. A round that only repeats a call already
     /// answered (2026-09-30, code review: four requests, the skill sent each time) goes straight to that last request.
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_ARepeatedLoad_EndsTheToolRounds_AndMarkupInTheLastIsTakenOut()
+    public async Task BotChat_LimitedSkills_ARepeatedLoad_EndsTheToolRounds_AndMarkupInTheLastIsTakenOut()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         const string Markup = "<tool_call>\n<function=load_skill>\n<parameter=name>\npony-prompts\n</parameter>\n</function>\n</tool_call>";
         _chat.EnqueueText(DogReply);
@@ -1072,10 +1033,10 @@ public partial class ChatScreenTests
     /// prompt — so the writer is asked again, the skill's content in front of it. The transcript's line is the short one.
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_WordsBesideAWrittenLoad_AreNotThePrompt()
+    public async Task BotChat_LimitedSkills_WordsBesideAWrittenLoad_AreNotThePrompt()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts", "haiku"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         PutSkill(ProfileSkills, "haiku");
         _chat.EnqueueText(DogReply);
@@ -1096,7 +1057,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A load_skill line written by a writer offered no tool (2026-09-30, code review: Botchat skills enabled off): taken out of the
+    /// A load_skill line written by a writer offered no tool (2026-09-30, code review: no skill ticked): taken out of the
     /// prompt, the line form too — caught only with load_skill's parameter names.
     /// </summary>
     [Fact]
@@ -1126,7 +1087,7 @@ public partial class ChatScreenTests
     public async Task BotChat_Automatic_TheWritersCallWrittenAsText_Runs_AndThePromptFollows()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("<tool_call>\n<function=load_skill>\n<parameter=name>\npony-prompts\n</parameter>\n</function>\n</tool_call>");
@@ -1174,10 +1135,10 @@ public partial class ChatScreenTests
     /// prompt): a call answered the parse error, and the writer asked again.
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_AWrittenCallThatDoesNotParse_IsAnsweredTheError_AndTheWriterAskedAgain()
+    public async Task BotChat_LimitedSkills_AWrittenCallThatDoesNotParse_IsAnsweredTheError_AndTheWriterAskedAgain()
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["pony-prompts", "haiku"]);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         PutSkill(ProfileSkills, "haiku");
         _chat.EnqueueText(DogReply);
@@ -1208,7 +1169,7 @@ public partial class ChatScreenTests
     public async Task BotChat_TheWritersGenerateImageCall_ItsPromptIsThePrompt(bool skills, string answer)
     {
         var stub = BotPicturesFixture();
-        _settings.Update(d => d.BotChatSkills = skills);
+        _settings.Update(d => d.BotChatLimitedSkills = skills ? ["pony-prompts", "haiku"] : null);
         PutSkill(ProfileSkills, "pony-prompts", "Writes Pony Diffusion prompts.", "# Pony prompts\n\nAlways start with score_9.");
         PutSkill(ProfileSkills, "haiku");
         _chat.EnqueueText(DogReply);

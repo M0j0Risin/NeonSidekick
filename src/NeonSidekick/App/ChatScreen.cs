@@ -1866,8 +1866,14 @@ internal sealed partial class ChatScreen
     public const string ShellToolGlyph = "🐚";
     public const string FilesToolGlyph = "📁";
 
-    /// <summary>The Image tools switch's glyph (2026-10-10): a picture, not the frame 🖼️, which is the hint row's ComfyUI generation (a double-click there cancels it).</summary>
-    public const string ImageToolGlyph = "🌄";
+    /// <summary>
+    /// The Image tools switch's glyph: the frame 🖼️ since 2026-10-27 (the user's ask). 🌄 from 2026-10-10, chosen then because the
+    /// frame is also the status bar's ComfyUI generation, whose double-click cancels the pictures. The two never meet: a toolbar
+    /// click goes through <see cref="ScreenPane.TryHitToolbar"/> to <see cref="ToolbarWord"/>, the cancel answers only a
+    /// <see cref="ScreenPane.HintZone.Strip"/> hit, and a double-click pairs by bar and column, never by glyph — as the toolbar's
+    /// 🎨 (ComfyUI) already shared the image → image generation's glyph.
+    /// </summary>
+    public const string ImageToolGlyph = "🖼️";
     public const string WebToolGlyph = "🌐";
 
     /// <summary>The profile advisors' switch glyph (2026-10-10): an owl, the counsel of other profiles.</summary>
@@ -15503,8 +15509,8 @@ internal sealed partial class ChatScreen
     /// the main conversation is never touched. Returns true when the shell should exit.
     ///
     /// <para>Pictures (2026-09-25, the user's ask): while a ComfyUI workflow is chosen for the chat (<see cref="BotChat.ComfyChosen"/>,
-    /// its set <see cref="BotWorkflows"/> — since 2026-10-04 <c>Botchat ComfyUI enabled</c>'s or <c>Botchat ComfyUI limited
-    /// workflows</c>', in place of <c>Botchat images enabled</c> and one workflow of each kind) and ComfyUI can run
+    /// its set <see cref="BotWorkflows"/> — since 2026-10-04 <c>Botchat limited workflows</c>' (beside <c>Botchat ComfyUI enabled</c>
+    /// until 2026-10-27), in place of <c>Botchat images enabled</c> and one workflow of each kind) and ComfyUI can run
     /// (<see cref="BotComfyReady"/>), <c>Botchat image mode</c> says who draws. The bots, offered <c>generate_image</c> over that set alone (<see cref="BotImageTool"/>), draw through the turn like the
     /// main chat's model; the app, after every reply, has the model write an image prompt from it (<see cref="WriteBotPictureAsync"/>)
     /// and draws it with a text → image workflow of the set (or, since 2026-09-27, reworks a picture with an image → image one), the
@@ -15711,15 +15717,15 @@ internal sealed partial class ChatScreen
                 string pronouns = BotChat.PronounsLine(cast.Where((b, i) => b != bot && !away.Contains(i)).Select(b => (b.Name, b.Gender)).ToList());
                 // Pictures (2026-09-25): read per reply, so a switch mid-chat holds from the next one.
                 var imageMode = BotChatImageMode.Resolve(effective);
-                // Pictures while a workflow is chosen (later on 2026-10-04: Botchat ComfyUI enabled or a limited one, Botchat images
-                // enabled folded in); a chosen set with nothing to draw with says so once (NoWorkflowNotice), as the switch did.
+                // Pictures while a workflow is chosen (later on 2026-10-04: a limited one, Botchat images enabled folded in; Botchat
+                // ComfyUI enabled too until 2026-10-27); a chosen set with nothing to draw with says so once (NoWorkflowNotice), as the switch did.
                 bool pictured = BotComfyReady(effective) && BotChat.ComfyChosen(effective);
                 // The chat's workflows and the pictures a rework may start from (2026-09-27): read per reply, as the rest.
                 var (fresh, rework, candidates) = BotWorkflows(effective);
                 var imageTool = pictured && BotChatImageMode.Offers(imageMode) ? BotImageTool(effective, fresh, rework, candidates.Count > 0) : null;
                 // Skills (2026-09-27): read per reply too — the main chat's catalog, so the starting profile's, never this bot's own;
-                // all of it under Botchat skills enabled, the Botchat limited skills alone otherwise (2026-10-04). The picture prompt
-                // writer gets the same.
+                // the Botchat limited skills alone (2026-10-04; all of it under Botchat skills enabled until 2026-10-27). The picture
+                // prompt writer gets the same.
                 var (skills, skillTool) = BotSkills(effective);
                 var botSkills = new BotSkillSet(skills, skillTool);
                 // The main chat's tools (2026-10-04, Botchat limited tools; the eight groups alone since 2026-10-22) and memory (Botchat memory
@@ -16111,29 +16117,24 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The skills a bot sees and the one skill tool it is offered (2026-09-27, <c>Botchat skills enabled</c>): the main chat's
-    /// catalog, rescanned as a turn's is — the starting profile's, the global and (with <c>Use external skills</c>) the external
-    /// skills; a bot's own profile's are never read (the user's call) — and <c>load_skill</c>, never <c>skill_editor</c> (a bot
-    /// must not write the parent's skills). With the switch off, the skills <c>Botchat limited skills</c> names (2026-10-04, the
-    /// user's ask) that are installed, in the catalog's order, and a <c>load_skill</c> that serves those alone. Nothing with
-    /// <c>Agent skills</c> off, no skill to offer, or <c>load_skill</c> switched off by name on <c>/tools</c>.
+    /// The skills a bot sees and the one skill tool it is offered (2026-09-27): the skills <c>Botchat limited skills</c> names
+    /// (2026-10-04, the user's ask) among the main chat's catalog, rescanned as a turn's is — the starting profile's, the global
+    /// and (with <c>Use external skills</c>) the external skills; a bot's own profile's are never read (the user's call) — in the
+    /// catalog's order, and a <c>load_skill</c> that serves those alone, never <c>skill_editor</c> (a bot must not write the
+    /// parent's skills). <c>Botchat skills enabled</c>, the whole catalog and the main chat's own <c>load_skill</c>, went on
+    /// 2026-10-27 (the user's ask: the list alone says, as for the tools). Nothing with none ticked, <c>Agent skills</c> off, no
+    /// ticked skill installed, or <c>load_skill</c> switched off by name on <c>/tools</c>.
     /// </summary>
     private (IReadOnlyList<Skill>? Skills, AIFunction? Tool) BotSkills(AppSettingsData effective)
     {
         var limited = ToolsText.DisabledSet(effective.BotChatLimitedSkills ?? []);
-        if ((!effective.BotChatSkills && limited.Count == 0) || !effective.AgentSkills
-            || Without(_skillTools, ToolsText.DisabledSet(effective.ToolsDisabled)).FirstOrDefault(tool => string.Equals(tool.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)) is not { } tool)
+        if (limited.Count == 0 || !effective.AgentSkills
+            || !Without(_skillTools, ToolsText.DisabledSet(effective.ToolsDisabled)).Any(tool => string.Equals(tool.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)))
         {
             return (null, null);
         }
 
         _catalog.Scan(effective.ExternalSkills);
-        if (effective.BotChatSkills)
-        {
-            var skills = _catalog.Skills;
-            return skills.Count == 0 ? (null, null) : (skills, tool);
-        }
-
         var only = new HashSet<string>(limited, StringComparer.OrdinalIgnoreCase);
         var named = _catalog.Skills.Where(s => only.Contains(s.Name)).ToList();
         return named.Count == 0 ? (null, null) : (named, new LoadSkillTool(_catalog, named.Select(s => s.Name).ToList(), _skillRecords.Used));
@@ -16163,7 +16164,7 @@ internal sealed partial class ChatScreen
             MemoryEnabled = false,
             // Never the main chat's ComfyUI tools (later on 2026-10-04, the user's report: its generate_image, over the profile's
             // offered workflows, sat beside the bot's own under the same name, and the bots drew with the wrong ones): the
-            // Botchat ComfyUI rows alone say (BotImageTool).
+            // Botchat limited workflows alone say (BotImageTool).
             ComfyEnabled = false,
             // Never set_splash_image (2026-10-12, when it left the ComfyUI group for the picture tools, the user's call): a bot would
             // write the loaded profile's splash folder; the ComfyUI group's switch above kept it from the bots until then.
@@ -16238,7 +16239,7 @@ internal sealed partial class ChatScreen
     /// The one picture tool a bot is offered (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): <c>generate_image</c> over the
     /// screen's studio, narrowed since 2026-09-27 (the user's ask: the bots as limited as <c>automatic</c>) to the chat's text → image
     /// workflows and — while there is a picture to rework — its image → image ones (<see cref="BotChat.BotWorkflows"/>; the set of
-    /// <c>Botchat ComfyUI enabled</c> or <c>Botchat ComfyUI limited workflows</c> since 2026-10-04). The bots' only
+    /// <c>Botchat limited workflows</c> since 2026-10-04). The bots' only
     /// <c>generate_image</c>: <see cref="BotGeneralTools"/> never carries the main chat's. Null when it is switched off by name on
     /// <c>/tools</c>, or nothing is usable.
     /// </summary>
@@ -16255,7 +16256,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/botchat</c>'s workflows as the settings stand (2026-09-27; the set since 2026-10-04, <see cref="BotChat.ComfyWorkflows"/>:
-    /// <c>Botchat ComfyUI enabled</c>'s offered ones or <c>Botchat ComfyUI limited workflows</c>' installed ones): its text → image
+    /// <c>Botchat limited workflows</c>' installed ones): its text → image
     /// and image → image workflows and, with the latter, the pictures a rework may start from under <c>Botchat img2img mode</c>
     /// (<see cref="BotChat.ReworkCandidates"/>); none outside a chat.
     /// </summary>
@@ -16349,7 +16350,7 @@ internal sealed partial class ChatScreen
 
         // Skills (2026-09-27, the user's report: the first picture was prompted before any skill could be loaded): the bots'
         // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written; the Botchat
-        // limited skills alone with Botchat skills enabled off (2026-10-04). The reply's, read by the loop.
+        // limited skills alone (2026-10-04). The reply's, read by the loop.
         var (skills, skillTool) = botSkills;
         string system = BotChat.PictureInstruction(promised, fresh, rework, candidates);
         var request = new List<ChatMessage>
@@ -16413,7 +16414,7 @@ internal sealed partial class ChatScreen
     private const int BotPromptSkillIterations = 3;
 
     /// <summary>
-    /// The image prompt's side request (2026-09-25), with <paramref name="skillTool"/> (2026-09-27, <c>Botchat skills enabled</c>)
+    /// The image prompt's side request (2026-09-25), with <paramref name="skillTool"/> (2026-09-27; <c>Botchat limited skills</c>)
     /// a short loop — SkillLearner's shape: up to <see cref="BotPromptSkillIterations"/> requests offering <c>load_skill</c>, each
     /// call run and answered, then one with no tool at all should the cap be reached, so an answer always comes. The text of the
     /// last response; each skill loaded is added to <paramref name="loaded"/> as its transcript line (<see cref="LoadSkillTool.Note"/>).

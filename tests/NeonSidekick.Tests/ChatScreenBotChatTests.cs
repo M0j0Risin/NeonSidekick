@@ -939,14 +939,15 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Botchat skills enabled (2026-09-27, the user's ask): every bot sees the main chat's skills — the starting profile's
-    /// and the global ones — never its own profile's, and is offered load_skill alone; the skill loads mid-reply.
+    /// The bots' skills (2026-09-27, the user's ask; Botchat limited skills alone since 2026-10-27, when Botchat skills enabled
+    /// went): every bot sees the ticked skills among the main chat's — the starting profile's and the global ones — never its own
+    /// profile's, even ticked by name, and is offered load_skill alone; the skill loads mid-reply.
     /// </summary>
     [Fact]
-    public async Task BotChat_SkillsEnabled_EveryBotSeesTheStartersAndTheGlobalSkills_NotItsOwn_WithLoadSkillAlone()
+    public async Task BotChat_LimitedSkills_EveryBotSeesTheStartersAndTheGlobalSkills_NotItsOwn_WithLoadSkillAlone()
     {
         BotChatFixture();
-        _settings.Update(d => d.BotChatSkills = true);
+        _settings.Update(d => d.BotChatLimitedSkills = ["haiku", "limerick", "ada-only-skill"]);   // the bot's own, ticked, still never read
         PutSkill(ProfileSkills, "haiku");
         PutSkill(GlobalSkills, "limerick", "Writes limericks.");
         PutSkill(Path.Combine(ProfileDir("ada"), SkillRoots.DirectoryName), "ada-only-skill", "Never listed.");

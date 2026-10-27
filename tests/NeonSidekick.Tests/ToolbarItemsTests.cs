@@ -18,7 +18,7 @@ public sealed class ToolbarItemsTests
             "shell", "files", "image", "web", "advisors", "docker", "eventlog", "network", "services", "tasks", "directory", "obsidian", "sql", "oracle", "mysql", "sqlite", "duckdb", "postgres", "unc", "ha", "comfy", "camera", "print",
             "log", "process", "comfyview", "comfythumbs", "youtube", "browserlinks", "shoppinglist", "path", "model",
         ], ToolbarItems.Names);   // the model's name after the path (2026-10-12, the user's ask); "perf" before the path until it was retired (2026-10-14)
-        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 💾 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📂", string.Join(" ", ToolbarItems.Names.SkipLast(1).Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 💾 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📂", string.Join(" ", ToolbarItems.Names.SkipLast(1).Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal("", ToolbarItems.Glyph(ToolbarItems.Model));   // no glyph: the name itself
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path" or "model")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source

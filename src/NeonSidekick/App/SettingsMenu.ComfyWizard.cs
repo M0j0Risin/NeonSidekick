@@ -836,18 +836,19 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>EditSqlOfferedAsync</c>'s loop over the installed workflows: Enter or Space flips one, saved at once; nothing is ticked until the user ticks it (2026-10-01).</summary>
     private Task<bool> EditComfyOfferedAsync(CancellationToken cancellationToken) =>
-        EditWorkflowChecklistAsync(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered, (d, next) => d.ComfyWorkflowsOffered = next, _ => null, cancellationToken);
+        EditWorkflowChecklistAsync(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered, (d, next) => d.ComfyWorkflowsOffered = next, cancellationToken);
 
     /// <summary>
     /// A checklist of every installed workflow saved to a list of names (<c>ComfyUI workflows offered</c>, and since 2026-10-04
-    /// <c>Botchat ComfyUI limited workflows</c>; one loop for both since that day's second code review): each row with its kind,
+    /// <c>Botchat limited workflows</c>; one loop for both since that day's second code review): each row with its kind,
     /// family and size (<see cref="ComfyOfferedRow"/>), the names <paramref name="read"/> gives ticked. Enter or Space flips one,
     /// A every one installed now (one added later still starts unticked, 2026-09-29, the user's call), N none, each saved at once
     /// through <paramref name="write"/>; a button that changes nothing saves nothing. A ticked name no longer installed is dropped as
     /// the list opens (2026-10-04, the user's call: until then it stayed, unseen, "to count again if the workflow came back", and
-    /// even N kept it), unless a file of that name failed to load. <paramref name="caption"/> is read afresh for every page.
+    /// even N kept it), unless a file of that name failed to load. No caption since 2026-10-27, when the botchat list's
+    /// "not used while Botchat ComfyUI enabled is on" went with that switch.
     /// </summary>
-    private async Task<bool> EditWorkflowChecklistAsync(SettingsField field, Func<AppSettingsData, List<string>?> read, Action<AppSettingsData, List<string>> write, Func<AppSettingsData, string?> caption, CancellationToken cancellationToken)
+    private async Task<bool> EditWorkflowChecklistAsync(SettingsField field, Func<AppSettingsData, List<string>?> read, Action<AppSettingsData, List<string>> write, CancellationToken cancellationToken)
     {
         bool changed = false;
         int cursor = 0;
@@ -869,7 +870,6 @@ internal sealed partial class SettingsMenu
             var page = new MenuPage(Crumb(FieldName(field)), installed.Select(w => ComfyOfferedRow(w, on.Contains(w.Name), columns)).ToList(), ToggleKeys)
             {
                 SpaceToggles = true,
-                Caption = caption(current),
             };
             var picked = await PickChecklistAsync(page, Math.Min(cursor, installed.Count - 1), cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)

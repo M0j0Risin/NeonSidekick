@@ -12010,7 +12010,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🌄 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
+        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📄", ChatScreen.ToolbarStripFor(Items("log", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29; the rising chart's pair until 2026-10-14)
     }
@@ -12082,7 +12082,7 @@ public partial class ChatScreenTests : IDisposable
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
         const string Panes = "⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🎭 💬 📊";   // 🧮 Themes 2026-10-04; 📱 the Web UI 2026-10-14
-        const string Rest = "🐚 📁 🌄 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
+        const string Rest = "🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)

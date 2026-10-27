@@ -53,7 +53,7 @@ public static class ToolbarItems
     // the group's /tools word (ToolsText.SwitchWords).
     public const string Shell = "shell";
     public const string Files = "files";
-    public const string Image = "image";     // 2026-10-10, the user's ask: 🌄, the Image tools switch (/tools image), after the folder
+    public const string Image = "image";     // 2026-10-10, the user's ask: the Image tools switch (/tools image), after the folder; 🌄 until 2026-10-27, 🖼️ since (the user's ask)
     public const string Web = "web";
     public const string Advisors = "advisors";   // 2026-10-10: 🦉, the Advisors enabled switch (/tools advisors), after Web (the Claude Code advisor's ✴️ "claude" stood between until it was retired that day; a saved "claude" is dropped)
     public const string Docker = "docker";
@@ -337,7 +337,7 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🌄 🌐 📱</c>, 📣 since 2026-10-14, 📱 after 🌐 since 2026-10-17): <see cref="Names"/> with a divider ahead of
+    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🖼️ 🌐 📱</c>, 📣 since 2026-10-14, 📱 after 🌐 since 2026-10-17, 🖼️ in place of 🌄 since 2026-10-27): <see cref="Names"/> with a divider ahead of
     /// Memory (later still that day, the user's ask; after Usage, so 💾 📣 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
     /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and one after Shell, numbered from the left. A
     /// divider whose neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.

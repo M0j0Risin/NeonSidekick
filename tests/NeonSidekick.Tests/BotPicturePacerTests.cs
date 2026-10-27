@@ -17,9 +17,8 @@ public class BotPicturePacerTests
     [InlineData(true, false, false, false, false)]
     public void Applies_PicturesAndAsyncOn_WithNoVoice(bool images, bool async, bool tts, bool speechReady, bool expected)
     {
-        // Pictures are a ComfyUI workflow chosen since later on 2026-10-04 (BotChat.ComfyChosen): the switch, or the limited list.
-        var data = new AppSettingsData { BotChatComfy = images, BotChatImageAsync = async, TtsOutput = tts };
-        Assert.Equal(expected, BotPicturePacer.Applies(data, speechReady));
+        // Pictures are a ComfyUI workflow chosen since later on 2026-10-04 (BotChat.ComfyChosen): the limited list (alone since
+        // 2026-10-27, when the Botchat ComfyUI enabled switch went).
         var limited = new AppSettingsData { BotChatLimitedComfyWorkflows = images ? ["pony"] : null, BotChatImageAsync = async, TtsOutput = tts };
         Assert.Equal(expected, BotPicturePacer.Applies(limited, speechReady));
     }
