@@ -42,7 +42,7 @@ NeonSidekick.exe --headless < job.txt > run_output.txt                    # one 
 ## What the output looks like
 
 ```
-NeonSidekick 0.5.3
+NeonSidekick 0.5.4
 Headless mode
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: The capital of France is Paris.
