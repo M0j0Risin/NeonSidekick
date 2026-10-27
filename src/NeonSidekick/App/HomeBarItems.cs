@@ -1,5 +1,6 @@
 using NeonSidekick.Emojis;
 using NeonSidekick.HomeAssistant;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.App;
 
@@ -409,6 +410,67 @@ public static class HomeBarItems
             ?? items.FirstOrDefault(i => string.Equals(NameOf(i, catalog), text, StringComparison.OrdinalIgnoreCase))
             ?? items.FirstOrDefault(i => TryParse(i, out _, out string id) && string.Equals(id, text, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// <c>/homebar</c>'s argument list (2026-10-27, the user's ask): the seven words with no space typed; after <c>tap </c> and <c>show </c> the
+    /// <paramref name="drawn"/> chips (the only ones those reach, so a hidden bar offers none); after <c>name </c> and <c>emoji </c> the
+    /// <paramref name="named"/> items (<c>name</c> leaves out a nameless one, offered by its reference); after <c>name &lt;item&gt; =</c> or
+    /// <c>emoji &lt;item&gt; =</c> its <see cref="HomeBarText.DefaultWord"/>, once a letter of it is typed (Enter takes an open list's pick, so
+    /// a list open on the bare <c>=</c> would take the blank form away); nothing after <c>on</c>, <c>off</c>, <c>edit</c> or any other word.
+    /// The lists come from <see cref="Lists"/>. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<CompletionItem> drawn, IReadOnlyList<CompletionItem> named)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(drawn);
+        ArgumentNullException.ThrowIfNull(named);
+        int space = argText.IndexOf(' ', StringComparison.Ordinal);
+        if (space < 0)
+        {
+            return MentionCompleter.Matches(HomeBarText.Words.Select(word => new CompletionItem(word, HomeBarText.Describe(word))).ToList(), argText);
+        }
+
+        string verb = argText[..space].ToLowerInvariant();
+        string head = argText[..(space + 1)];
+        int equals = argText.IndexOf('=', StringComparison.Ordinal);
+        string after = equals < 0 ? "" : argText[(equals + 1)..].TrimStart();
+        IEnumerable<CompletionItem> items = verb switch
+        {
+            HomeBarText.TapWord or HomeBarText.ShowWord => drawn,
+            HomeBarText.NameWord when equals < 0 => named.Where(i => !IsNameless(i.Text)),
+            HomeBarText.EmojiWord when equals < 0 => named,
+            HomeBarText.NameWord or HomeBarText.EmojiWord when after.Length > 0 =>
+                [new(argText[..(argText.Length - after.Length)] + HomeBarText.DefaultWord, verb == HomeBarText.NameWord ? HomeBarText.DefaultNameNote : HomeBarText.DefaultEmojiNote)],
+            _ => [],
+        };
+        return equals >= 0 && verb is HomeBarText.NameWord or HomeBarText.EmojiWord
+            ? MentionCompleter.Matches(items.ToList(), argText)
+            : MentionCompleter.Matches(items.Select(i => i with { Text = head + i.Text }).ToList(), argText);
+    }
+
+    /// <summary>
+    /// <see cref="Complete"/>'s two lists (2026-10-27): the drawn chips (dividers left out), and the items <c>name</c> and <c>emoji</c> take —
+    /// the drawn chips, else (the bar hidden) <paramref name="saved"/>'s items built as the bar would build them over no live states, named
+    /// through <paramref name="catalog"/> and the saved aliases, the monitors' 🖥️ only where <paramref name="monitors"/> (a monitor system;
+    /// a profile copied to a Mac keeps it saved, never drawn). Each item is the name the bar shows (the alias, else the name; a nameless item
+    /// by its reference), noted with its glyph and reference; distinct by text, any case. Pure.
+    /// </summary>
+    public static (IReadOnlyList<CompletionItem> Drawn, IReadOnlyList<CompletionItem> Named) Lists(IReadOnlyList<HomeChip>? drawnChips, Settings.AppSettingsData saved, HaCatalog? catalog, bool monitors)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        var drawn = (drawnChips ?? []).Where(c => !c.Divider && (monitors || !IsMonitors(c.Reference))).ToList();
+        var named = drawn.Count > 0
+            ? drawn
+            : Resolve(saved.HomeBarItems).Where(i => !IsDivider(i) && (monitors || !IsMonitors(i)))
+                .Select(i => HomeChips.Build(i, NoStates, catalog, HomeChipMark.None, stale: true, saved.HomeBarAliases, saved.HomeBarGlyphs)).ToList();
+        return (Items(drawn), Items(named));
+
+        static IReadOnlyList<CompletionItem> Items(IEnumerable<HomeChip> chips) =>
+            chips.Select(c => new CompletionItem(IsNameless(c.Reference) ? c.Reference : c.Label is { Length: > 0 } label ? label : c.Name, c.Glyph + " " + c.Reference))
+                .DistinctBy(i => i.Text, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static readonly IReadOnlyDictionary<string, HaLiveEntity> NoStates = new Dictionary<string, HaLiveEntity>(StringComparer.Ordinal);
 
     /// <summary>An id as words, for where no names are at hand (the settings row): <c>light.desk_lamp</c> → <c>desk lamp</c>, <c>living_room</c> → <c>living room</c>. Pure.</summary>
     public static string Readable(string id)

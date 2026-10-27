@@ -47,6 +47,34 @@ public sealed record MonitorState(MonitorSnapshot Topology, IReadOnlyDictionary<
 
     /// <summary>The monitors on another input, in number order.</summary>
     public IReadOnlyList<MonitorInfo> Elsewhere(MonitorWords words) => Topology.Monitors.Where(m => ShowingOf(m, words).IsElsewhere).ToList();
+
+    /// <summary>
+    /// Which input of <paramref name="monitor"/> is this PC's (2026-10-27, the NVIDIA plan): the user's pick, else the cable's guess (the current
+    /// input when it is of the cable's kind, else the only offered input of that kind), the pair the PC picker shows; null when neither is known.
+    /// Not the away mark: it is pruned when a monitor leaves the desktop.
+    /// </summary>
+    public byte? PcInputOf(MonitorInfo monitor, MonitorWords words)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(words);
+        var inputs = InputsOf(monitor);
+        return words.PcInput(monitor) ?? MonitorShowing.CableGuess(monitor, inputs.Current, inputs.Offered);
+    }
+
+    /// <summary>
+    /// The switch of <paramref name="monitor"/> to <paramref name="code"/>, the one builder every input change takes (the pane's rows and its
+    /// Enter a code…, <c>/monitor</c> on the screen and headless, <c>monitor_input</c>): <see cref="MonitorChange.Unlisted"/> for a code it
+    /// neither lists nor is common, and <see cref="MonitorChange.Return"/> when it is off the desktop and the code is this PC's
+    /// (<see cref="PcInputOf"/>), so the switch also adds it back.
+    /// </summary>
+    public MonitorChange SwitchTo(MonitorInfo monitor, byte code, MonitorWords words)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        var inputs = InputsOf(monitor);
+        bool unlisted = !inputs.Offered.Contains(code) && !Mccs.CommonInputs.Contains(code);
+        bool back = !monitor.Active && !monitor.Shared && PcInputOf(monitor, words) == code;
+        return MonitorChange.SwitchInput(monitor, code, unlisted) with { Return = back };
+    }
 }
 
 /// <summary>
@@ -57,7 +85,8 @@ public sealed record MonitorState(MonitorSnapshot Topology, IReadOnlyDictionary<
 /// change, and every <see cref="TopologyEvery"/> only while a <see cref="Watch"/> lease is held — refcounted, so a pane closed and opened again
 /// at once (the chip's double-click after a right-click) never has its clock stopped by the old one's late dispose; a monitor newly on the
 /// desktop then has its inputs read too. Inputs (DDC/CI, slow) are read on <see cref="ReadInputsAsync"/>: each active monitor's current input,
-/// and its capabilities the first time, cached per key for the process. A failed read keeps the last value, marked stale; a first read that
+/// and its capabilities the first time, cached per key for the process; on that first read a monitor's last reported list (the screen's
+/// <c>remembered</c>, 2026-10-27) stands in until its capabilities answer. A failed read keeps the last value, marked stale; a first read that
 /// fails is the monitor's <see cref="MonitorInputs.Problem"/>. The snapshot is this PC's, not a profile's: a profile switch leaves it be (the
 /// input names are read from the settings in force). Dispose never waits on a running call.
 /// </summary>
@@ -69,6 +98,8 @@ public sealed class MonitorBoard : IDisposable
     private readonly object _gate = new();
     private readonly TimeProvider _time;
     private readonly Dictionary<string, MonitorCaps> _caps = new(StringComparer.Ordinal);
+    private readonly Func<MonitorInfo, IReadOnlyList<MonitorInfo>, IReadOnlyList<byte>?>? _remembered;
+    private readonly Action<MonitorInfo, IReadOnlyList<MonitorInfo>, IReadOnlyList<byte>>? _seen;
     private volatile MonitorState _state = MonitorState.Empty;
     private ITimer? _clock;
     private int _leases;
@@ -76,10 +107,22 @@ public sealed class MonitorBoard : IDisposable
     private bool _disposed;
 
     /// <param name="quick">No settle after a change and no gap before a retry (the tests').</param>
-    public MonitorBoard(IMonitorSystem system, TimeProvider? time = null, bool quick = false)
+    /// <param name="remembered">
+    /// A monitor's last reported inputs among the connected ones (2026-10-27, the user's pick: the screen's <c>Monitor inputs seen</c>), shown
+    /// while its capabilities are read on a run's first open; null for none. Asked only for a monitor with a key.
+    /// </param>
+    /// <param name="seen">
+    /// Told, on the reading thread, when a monitor with a key reports a list that differs from <paramref name="remembered"/>'s (the screen writes
+    /// it). Never for a read that failed or lists none.
+    /// </param>
+    public MonitorBoard(IMonitorSystem system, TimeProvider? time = null, bool quick = false,
+        Func<MonitorInfo, IReadOnlyList<MonitorInfo>, IReadOnlyList<byte>?>? remembered = null,
+        Action<MonitorInfo, IReadOnlyList<MonitorInfo>, IReadOnlyList<byte>>? seen = null)
     {
         ArgumentNullException.ThrowIfNull(system);
         _time = time ?? TimeProvider.System;
+        _remembered = remembered;
+        _seen = seen;
         Actions = new MonitorActions(new MonitorCalls(system, _time, quick ? TimeSpan.Zero : null), new MonitorAway(), _time, quick ? TimeSpan.Zero : null);
         Actions.TopologyRead += OnTopology;
         Actions.InputRead += OnInput;
@@ -143,22 +186,28 @@ public sealed class MonitorBoard : IDisposable
     }
 
     /// <summary>
-    /// Every active monitor's current input and (the first time) capabilities; a monitor off the desktop or duplicated gets its sentence
-    /// instead. With <paramref name="onlyUnread"/>, only the monitors never read (the clock's, for one newly on the desktop).
+    /// Every monitor's current input and (the first time) capabilities; a duplicated one gets its sentence instead. A monitor off the desktop is
+    /// read too (2026-10-27, the NVIDIA plan: the system reaches it through NVIDIA's driver, or answers <see cref="MonitorText.OffDesktop"/>):
+    /// for it, read means its current input is known (caps kept from the desktop don't count), and a failure is its problem, never stale. With
+    /// <paramref name="onlyUnread"/>, only the monitors never read (the clock's, for one newly on or off the desktop). Two rounds
+    /// (2026-10-27, the user's pick): every monitor's current input first, then the capabilities not cached yet, so no tab waits on another
+    /// monitor's slow list (the XG27's took ~5 s). A monitor with a remembered list shows it from the first round; the second round's answer
+    /// replaces it when it differs (and is <c>seen</c>), and a failed read keeps it.
     /// </summary>
     public async Task ReadInputsAsync(CancellationToken cancellationToken, bool onlyUnread = false)
     {
         var topology = _state.Topology;
+        var behind = new List<(MonitorInfo Monitor, IReadOnlyList<byte>? Remembered)>();
         foreach (var m in topology.Monitors)
         {
             var known = _state.InputsOf(m);
-            if (!m.Active || m.Shared)
+            if (m.Shared)
             {
-                Set(m.Target, known with { Problem = m.Active ? MonitorText.SharedSource : MonitorText.OffDesktop, Reading = false });
+                Set(m.Target, known with { Problem = MonitorText.SharedSource, Reading = false });
                 continue;
             }
 
-            bool read = known.Current is not null || known.Caps is not null;
+            bool read = known.Current is not null || (m.Active && known.Caps is not null);
             if (onlyUnread && (read || known.Problem is not null))
             {
                 continue;
@@ -172,19 +221,64 @@ public sealed class MonitorBoard : IDisposable
             try
             {
                 byte current = await Actions.ReadInputAsync(m, cancellationToken).ConfigureAwait(false);
-                var caps = await CapsAsync(m, cancellationToken).ConfigureAwait(false);
-                Set(m.Target, _state.InputsOf(m) with { Current = current, Caps = caps, Problem = null, Reading = false, Stale = false });
+                var now = _state.InputsOf(m) with { Current = current, Problem = null, Stale = false };
+                if (Cached(m) is { } cached)
+                {
+                    Set(m.Target, now with { Caps = cached, Reading = false });
+                    continue;
+                }
+
+                // Not cached: the capabilities in the second round. A remembered list shows now, and the tab with it.
+                var remembered = m.Key is not null && _remembered?.Invoke(m, topology.Monitors) is { Count: > 0 } list ? list : null;
+                Set(m.Target, remembered is null ? now : now with { Caps = new MonitorCaps(remembered, true, ""), Reading = false });
+                behind.Add((m, remembered));
             }
             catch (MonitorException e)
             {
                 var now = _state.InputsOf(m);
-                Set(m.Target, read ? now with { Stale = true, Reading = false } : now with { Problem = e.Message, Reading = false });
+                Set(m.Target, read && m.Active ? now with { Stale = true, Reading = false } : now with { Problem = e.Message, Reading = false });
             }
             catch (OperationCanceledException)
             {
                 Set(m.Target, _state.InputsOf(m) with { Reading = false });
+                Settle(behind);
                 throw;
             }
+        }
+
+        foreach (var (m, remembered) in behind)
+        {
+            try
+            {
+                var caps = await CapsAsync(m, cancellationToken).ConfigureAwait(false);
+                var now = _state.InputsOf(m);
+                if (caps is null)
+                {
+                    // The input reads, the list doesn't: the remembered list stays; without one, the common four (not reported).
+                    Set(m.Target, now with { Caps = remembered is null ? new MonitorCaps(Mccs.CommonInputs, false, "") : now.Caps, Reading = false });
+                    continue;
+                }
+
+                Set(m.Target, now with { Caps = caps, Reading = false });
+                if (caps.Reported && m.Key is not null && (remembered is null || !remembered.SequenceEqual(caps.Inputs)))
+                {
+                    _seen?.Invoke(m, topology.Monitors, caps.Inputs);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Settle(behind);
+                throw;
+            }
+        }
+    }
+
+    // A cancelled read leaves no tab waiting on a second round that won't come.
+    private void Settle(List<(MonitorInfo Monitor, IReadOnlyList<byte>? Remembered)> behind)
+    {
+        foreach (var (m, _) in behind)
+        {
+            Set(m.Target, _state.InputsOf(m) with { Reading = false });
         }
     }
 
@@ -207,15 +301,20 @@ public sealed class MonitorBoard : IDisposable
         Actions.InputRead -= OnInput;
     }
 
-    private async Task<MonitorCaps> CapsAsync(MonitorInfo m, CancellationToken cancellationToken)
+    private MonitorCaps? Cached(MonitorInfo m)
     {
-        string cacheKey = m.Key ?? m.Target;
         lock (_gate)
         {
-            if (_caps.TryGetValue(cacheKey, out var cached))
-            {
-                return cached;
-            }
+            return _caps.GetValueOrDefault(m.Key ?? m.Target);
+        }
+    }
+
+    // The capabilities read and cached per key for the process; null when the read fails (not cached, so the next open asks again).
+    private async Task<MonitorCaps?> CapsAsync(MonitorInfo m, CancellationToken cancellationToken)
+    {
+        if (Cached(m) is { } cached)
+        {
+            return cached;
         }
 
         try
@@ -223,15 +322,14 @@ public sealed class MonitorBoard : IDisposable
             var caps = await Actions.Calls.RunAsync("capabilities of " + m.Label, s => s.Capabilities(m.Target), retry: true, cancellationToken).ConfigureAwait(false);
             lock (_gate)
             {
-                _caps[cacheKey] = caps;
+                _caps[m.Key ?? m.Target] = caps;
             }
 
             return caps;
         }
         catch (MonitorException)
         {
-            // The input reads, the list doesn't: the common four, not cached, so the next open asks again.
-            return new MonitorCaps(Mccs.CommonInputs, false, "");
+            return null;
         }
     }
 

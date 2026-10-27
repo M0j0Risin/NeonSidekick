@@ -263,7 +263,8 @@ public enum SlashCommand
     /// <summary>
     /// <c>/ha</c> (2026-09-28, the user's call: a direct command beside the model's Home Assistant tools): the house driven
     /// without the model — <c>/ha</c> the overview, <c>/ha on|off|toggle &lt;name&gt; [n%]</c>, <c>/ha scene &lt;name&gt;</c>,
-    /// <c>/ha tv …</c>, <c>/ha states [filter]</c>, <c>/ha say &lt;sentence&gt;</c> (<see cref="HomeAssistant.HaCommand"/>).
+    /// <c>/ha tv …</c>, <c>/ha states [filter]</c>, <c>/ha say &lt;sentence&gt;</c> (<see cref="HomeAssistant.HaCommand"/>); <c>/ha stills
+    /// view|thumbs|purge</c> (2026-10-27) on the camera stills' folder, taken by the screen first (<see cref="HomeAssistant.HaStillsCommand"/>).
     /// </summary>
     HomeAssistant,
 

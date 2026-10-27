@@ -564,6 +564,36 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("--image3 takes a path, not ''", ComfyImagine.Parse("faceswap --image a --image3", workflows).Error);
     }
 
+    /// <summary><c>/imagine</c>'s argument list (2026-10-27, the completion survey): the workflows first, then the flags not typed yet and the bare <c>--</c>; every flag offered is one the parse reads.</summary>
+    [Fact]
+    public void Imagine_Complete_OffersTheWorkflows_ThenTheFlags_EachOneTheParseReads()
+    {
+        IReadOnlyList<UI.CompletionItem> Workflows() => [new("pony-txt2img", ""), new("restyle", "")];
+
+        Assert.Equal(["pony-txt2img"], ComfyImagine.Complete("p", Workflows).Select(i => i.Text));
+        Assert.Empty(ComfyImagine.Complete("pony-txt2img a c", Workflows));   // the prompt is free text
+        Assert.Equal([.. ComfyImagine.Flags, ComfyImagine.NegativeWord], ComfyImagine.Complete("-", Workflows).Select(i => i.Text.TrimStart()));
+        Assert.Equal(["a --seed", "a --size", "a --steps"], ComfyImagine.Complete("a --s", Workflows).Select(i => i.Text));
+        Assert.DoesNotContain("a --seed 4 --seed", ComfyImagine.Complete("a --seed 4 --", Workflows).Select(i => i.Text));   // typed already
+        Assert.Contains("a --seed 4 --steps", ComfyImagine.Complete("a --seed 4 --", Workflows).Select(i => i.Text));   // the bare -- typed keeps the list open
+        var afterNegative = ComfyImagine.Complete("a -- blurry --", Workflows).Select(i => i.Text).ToList();
+        Assert.DoesNotContain(afterNegative, t => t.EndsWith(" " + ComfyImagine.NoNegativeWord, StringComparison.Ordinal));
+        Assert.DoesNotContain("a -- blurry --", afterNegative);
+        Assert.All(ComfyImagine.Complete("-", Workflows), i => Assert.NotEmpty(i.Note));
+
+        var workflows = new[] { Parse("pony-txt2img", Txt2Img), Parse("restyle", Img2Img) };
+        string line = "pony-txt2img a cat --image a.png --image2 b.png --image3 c.png --seed 4 --size 64x64 --steps 4 --count 1 --cfg 2 --denoise 0.5 --no-negative";
+        Assert.All(ComfyImagine.Flags, flag => Assert.Contains(" " + flag + " ", line + " "));
+        var (request, error) = ComfyImagine.Parse(line, workflows);
+        Assert.Null(error);
+        Assert.Equal("a cat", request!.Prompt);   // every flag read, none left in the prompt
+
+        Assert.Equal(("faceswap --image2 ", "pics/fa"), ComfyImagine.ImagePathAt("faceswap --image2 pics/fa"));   // the path list's place
+        Assert.Equal(("faceswap --IMAGE ", ""), ComfyImagine.ImagePathAt("faceswap --IMAGE "));
+        Assert.Null(ComfyImagine.ImagePathAt("faceswap --seed 4"));
+        Assert.Null(ComfyImagine.ImagePathAt("faceswap"));
+    }
+
     [Fact]
     public void Import_NumbersTheLoadImages_AndTakesASamplerlessImageGraph()
     {

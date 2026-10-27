@@ -647,11 +647,12 @@ public sealed class HomeBarTests
         Assert.Equal("2/5", HomeBarText.Count(2, 5));
         Assert.Equal("19→21°", HomeBarText.ClimateValue("19", "21"));
         Assert.Equal("home", HomeBarText.AlarmWord("armed_home"));
-        Assert.Equal("Usage: /homebar [on|off|edit|name <item> = <alias>|emoji <item> = <emoji>] — show or hide the home bar, choose what is on it, or rename an item on it or change its emoji", HomeBarText.Usage);
+        Assert.Equal("Usage: /homebar [on|off|edit|tap <item>|show <item>|name <item> = <alias>|emoji <item> = <emoji>] — show or hide the home bar, choose what is on it, use an item on it, or rename an item on it or change its emoji", HomeBarText.Usage);
         Assert.Equal("The home bar shows Den Lamp as 🦊", HomeBarText.GlyphSet("Den Lamp", "🦊"));
         Assert.Equal("The home bar shows Den Lamp with its own emoji again, 💡", HomeBarText.GlyphReset("Den Lamp", "💡"));
         Assert.Equal("'abc' is not one emoji: /homebar emoji <item> = <emoji>, or = default for the item's own", HomeBarText.NotEmoji("abc"));
-        Assert.Equal(["on", "off", "edit", "name", "emoji"], HomeBarText.Words);
+        Assert.Equal(["on", "off", "edit", "tap", "show", "name", "emoji"], HomeBarText.Words);   // tap and show 2026-10-27
+        Assert.All(HomeBarText.Words, word => Assert.NotEmpty(HomeBarText.Describe(word)));
         Assert.Equal("Shopping list: 3 to get — double-click or right-click for the list", HomeBarText.ShoppingNote(3));
         Assert.Equal("Shopping list: the list is off — /shopping says why", HomeBarText.ShoppingNote(null));
         Assert.Equal("The Shopping list's chip shows no name to change: /homebar emoji changes its emoji", HomeBarText.Nameless("Shopping list"));
@@ -866,4 +867,62 @@ public sealed class HomeBarTests
         Assert.DoesNotContain(HomeChips.MonitorsGlyph, HomeChips.Glyphs);
         Assert.NotEqual(HomeChips.TvGlyph, HomeChips.MonitorsGlyph);
     }
+
+    // ─── /homebar's argument list (2026-10-27) ─────────────────────────────────
+
+    private static readonly IReadOnlyList<CompletionItem> Drawn = [new("Den", "🏠 area:den"), new("Porch Light", "💡 entity:light.porch"), new(HomeBarItems.Shopping, "🛒 " + HomeBarItems.Shopping)];
+
+    [Fact]
+    public void Complete_TheWords_ThenTheBarsItems_ThenDefault()
+    {
+        Assert.Equal(HomeBarText.Words, HomeBarItems.Complete("", Drawn, Drawn).Select(i => i.Text));
+        Assert.Equal(["tap"], HomeBarItems.Complete("t", Drawn, Drawn).Select(i => i.Text));
+        Assert.Equal(["tap Den", "tap Porch Light", "tap " + HomeBarItems.Shopping], HomeBarItems.Complete("tap ", Drawn, Drawn).Select(i => i.Text));
+        Assert.Equal("💡 entity:light.porch", HomeBarItems.Complete("SHOW po", Drawn, Drawn).Single().Note);
+        Assert.Equal(["tap Porch Light"], HomeBarItems.Complete("tap po", Drawn, Drawn).Select(i => i.Text));
+        Assert.Empty(HomeBarItems.Complete("tap ", [], Drawn));   // a hidden bar: tap and show reach drawn chips only
+        Assert.Equal(["name Den", "name Porch Light"], HomeBarItems.Complete("name ", [], Drawn).Select(i => i.Text));   // the nameless shopping list left out
+        Assert.Equal(3, HomeBarItems.Complete("emoji ", [], Drawn).Count);
+        Assert.Equal([new CompletionItem("name Desk = default", HomeBarText.DefaultNameNote)], HomeBarItems.Complete("name Desk = d", Drawn, Drawn));
+        Assert.Equal([new CompletionItem("emoji Desk =default", HomeBarText.DefaultEmojiNote)], HomeBarItems.Complete("emoji Desk =def", Drawn, Drawn));
+        // The bare = is the blank form (the emoji alone, or its own emoji): no list, so Enter sends it.
+        Assert.Empty(HomeBarItems.Complete("name Desk = ", Drawn, Drawn));
+        Assert.Empty(HomeBarItems.Complete("emoji Desk =", Drawn, Drawn));
+        Assert.Empty(HomeBarItems.Complete("name Desk = Den", Drawn, Drawn));
+        Assert.Empty(HomeBarItems.Complete("edit x", Drawn, Drawn));
+        Assert.Empty(HomeBarItems.Complete("on ", Drawn, Drawn));
+    }
+
+    [Fact]
+    public void Lists_DrawnChipsGiveBoth_AHiddenBarTheSavedItems_NamedAndAliased()
+    {
+        var saved = new NeonSidekick.Settings.AppSettingsData
+        {
+            HomeBarItems = ["area:den", "divider:1", "entity:light.den_lamp", HomeBarItems.Shopping, HomeBarItems.Monitors],
+            HomeBarAliases = new Dictionary<string, string> { ["entity:light.den_lamp"] = "Lamp" },
+        };
+        var none = new Dictionary<string, HaLiveEntity>();
+        HomeChip[] chips =
+        [
+            HomeChips.Build("area:den", none, Catalog(), HomeChipMark.None, stale: false),
+            Divider(1),
+            HomeChips.Build("entity:light.den_lamp", none, Catalog(), HomeChipMark.None, stale: false, saved.HomeBarAliases),
+        ];
+
+        var (drawn, named) = HomeBarItems.Lists(chips, saved, Catalog(), monitors: true);
+        Assert.Equal(["Den", "Lamp"], drawn.Select(i => i.Text));   // the divider left out, the alias as the bar shows it
+        Assert.Equal(drawn, named);
+        Assert.Equal(HomeChips.AreaGlyph + " area:den", drawn[0].Note);
+
+        // Hidden: nothing drawn, the saved items named through the catalog and the aliases; nameless ones by their reference.
+        var (hiddenDrawn, hidden) = HomeBarItems.Lists(null, saved, Catalog(), monitors: true);
+        Assert.Empty(hiddenDrawn);
+        Assert.Equal(["Den", "Lamp", HomeBarItems.Shopping, HomeBarItems.Monitors], hidden.Select(i => i.Text));
+
+        // No monitor system (a Mac, a profile copied there): the saved 🖥️ is never offered.
+        var (_, noMonitors) = HomeBarItems.Lists(null, saved, Catalog(), monitors: false);
+        Assert.DoesNotContain(HomeBarItems.Monitors, noMonitors.Select(i => i.Text));
+        Assert.Contains(HomeBarItems.Shopping, noMonitors.Select(i => i.Text));
+    }
+
 }

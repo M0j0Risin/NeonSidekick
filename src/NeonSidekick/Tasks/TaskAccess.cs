@@ -58,6 +58,45 @@ public sealed class TaskAccess
 
     public ComputerCatalog<TaskComputerConfig> Catalog() => _loaded().Offered(_offered());
 
+    private readonly object _seenGate = new();
+    private readonly Dictionary<string, IReadOnlyList<string>> _seen = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The folders of a task list just read on <paramref name="source"/>'s computer, remembered for <c>/tasks folder:\</c>'s argument list
+    /// (2026-10-27, the completion survey): each task's folder and the folders above it, the root left out; the last list read per computer
+    /// replaces the one before. In memory only, under its own lock (completion reads it off the screen's thread). The callers: <c>/tasks</c>,
+    /// its pane and <c>task_list</c>.
+    /// </summary>
+    public void Saw(TaskSource source, IEnumerable<TaskEntry> tasks)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(tasks);
+        var folders = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var task in tasks)
+        {
+            for (string folder = task.Folder.TrimEnd('\\'); folder.Length > 0; folder = folder[..folder.LastIndexOf('\\')])
+            {
+                folders.Add(folder);
+            }
+        }
+
+        lock (_seenGate)
+        {
+            _seen[SeenKey(source.Computer.Name)] = [.. folders];
+        }
+    }
+
+    /// <summary>The folders <see cref="Saw"/> kept for <paramref name="computer"/> (null or <c>local</c>: this PC), as <c>\Ops\Sync</c>; none before a list is read.</summary>
+    public IReadOnlyList<string> FoldersSeen(string? computer)
+    {
+        lock (_seenGate)
+        {
+            return _seen.TryGetValue(SeenKey(computer), out var folders) ? folders : [];
+        }
+    }
+
+    private static string SeenKey(string? computer) => string.IsNullOrWhiteSpace(computer) ? ComputerConfig.LocalName : computer.Trim();
+
     public (TaskSource? Source, string? Error) Computer(string? computer, bool forceRedacted)
     {
         var (found, error) = Catalog().Find(computer);

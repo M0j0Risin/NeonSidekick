@@ -132,6 +132,10 @@ internal sealed class TasksMenu
                 var read = await _access.ReadAsync(source, folder, session => Llm.Tools.TaskListTool.Matches(session, source, taskFilter).Matched, cancellationToken).ConfigureAwait(false);
                 all = read.Value;
                 error = read.Error;
+                if (all is not null)
+                {
+                    _access.Saw(source, all);
+                }
                 foreach (var seen in all ?? [])
                 {
                     _folders.Add(seen.Folder);

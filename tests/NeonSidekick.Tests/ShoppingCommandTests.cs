@@ -104,6 +104,23 @@ public sealed class ShoppingCommandTests : IDisposable
         Assert.Equal(["milk", "2 eggs", "bread x2"], ShoppingCommand.Items(" milk, 2 eggs;; bread x2 ,"));
     }
 
+    /// <summary>The survey's rows (2026-10-27): <c>clear all</c>; a store's verbs' stores, then <c>to</c>; <c>verbose</c> after a store to export or print.</summary>
+    [Fact]
+    public void Complete_ClearAll_TheStoreVerbsStores_AndVerboseAfterAStore()
+    {
+        string[] stores = ["Costco", "H-E-B", "H-E-B Plus"];
+        Assert.Equal(["clear all"], ShoppingCommand.Complete("clear ", stores, []).Select(c => c.Text));
+        Assert.Equal(["store remove Costco", "store remove H-E-B", "store remove H-E-B Plus"], ShoppingCommand.Complete("store remove ", stores, []).Select(c => c.Text));
+        Assert.Equal(["store rename H-E-B", "store rename H-E-B Plus"], ShoppingCommand.Complete("store rename h", stores, []).Select(c => c.Text));
+        Assert.Equal(["store rename Costco to"], ShoppingCommand.Complete("store rename Costco ", stores, []).Select(c => c.Text));
+        Assert.Equal(["store rename H-E-B Plus to"], ShoppingCommand.Complete("store rename H-E-B Plus ", stores, []).Select(c => c.Text));   // the longest store named
+        Assert.Empty(ShoppingCommand.Complete("store rename Costco to ", stores, []));   // the new name is free text
+        Assert.Empty(ShoppingCommand.Complete("store add ", stores, []));
+        Assert.Equal(["export Costco verbose"], ShoppingCommand.Complete("export Costco ", stores, []).Select(c => c.Text));
+        Assert.Equal(["print H-E-B verbose"], ShoppingCommand.Complete("print H-E-B v", stores, []).Select(c => c.Text));
+        Assert.Contains("export verbose", ShoppingCommand.Complete("export ", stores, []).Select(c => c.Text));   // as before
+    }
+
     [Fact]
     public async Task TheVerbs_AddCheckListClear_LikeTheTools_WithoutTheModelsHint()
     {

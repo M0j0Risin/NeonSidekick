@@ -342,6 +342,20 @@ public sealed class BrowserLinksTests : IDisposable
         Assert.Empty(BrowserCommand.Complete("save example.com "));
     }
 
+    /// <summary>The saved links by number (2026-10-27, the completion survey): after the verbs and after <c>unsave </c>, noted by the name, else the address; the page's list only <c>unsave</c>.</summary>
+    [Fact]
+    public void Complete_OffersTheSavedLinks_ByNumber_ThePageOnlyUnsave()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        IReadOnlyList<BrowserLink> Links() => [new("https://a.example/", "Alpha", now), new("https://b.example/", null, now)];
+
+        Assert.Equal(["save", "list", "unsave", "clear", "1", "2"], BrowserCommand.Complete("", Links, unsaveOnly: false).Select(c => c.Text));
+        Assert.Equal([new UI.CompletionItem("unsave 1", "Alpha"), new UI.CompletionItem("unsave 2", "https://b.example/")], BrowserCommand.Complete("unsave ", Links, unsaveOnly: false));
+        Assert.Empty(BrowserCommand.Complete("1", Links, unsaveOnly: false));   // typed in full
+        Assert.Equal(["save", "list", "unsave", "clear"], BrowserCommand.Complete("", Links, unsaveOnly: true).Select(c => c.Text));   // the page: a number would open a window on the PC
+        Assert.Equal(["unsave 1", "unsave 2"], BrowserCommand.Complete("unsave ", Links, unsaveOnly: true).Select(c => c.Text));
+    }
+
     /// <summary>The words with no Browser window (2026-10-17, the Mac pass, the user's call): Enter opens a link in the default browser, and nothing names the window or its Ctrl+D.</summary>
     [Fact]
     public void WithNoWindow_TheCaptionAndTheEmptyLinesNameNoWindow()

@@ -647,6 +647,11 @@ public sealed class PdfTests : IDisposable
         Assert.Contains("notes.md paper=a4 landscape", after);
         Assert.Contains("notes.md paper=a4 overwrite", after);
         Assert.DoesNotContain(after, t => t.EndsWith("paper=letter", StringComparison.Ordinal));
+        // A web page keeps its own layout (2026-10-27, the completion survey): no paper= or landscape after an address.
+        var web = PdfCommand.Complete("https://example.com/ ").Select(i => i.Text).ToList();
+        Assert.Contains("https://example.com/ to=", web);
+        Assert.DoesNotContain(web, t => t.Contains("paper=", StringComparison.Ordinal) || t.EndsWith("landscape", StringComparison.Ordinal));
+        Assert.Contains("http://a.example/ overwrite", PdfCommand.Complete("http://a.example/ ").Select(i => i.Text));
     }
 
     [Fact]

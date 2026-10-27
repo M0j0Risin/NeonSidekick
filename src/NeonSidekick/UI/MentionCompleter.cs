@@ -7,6 +7,32 @@ namespace NeonSidekick.UI;
 public sealed record CompletionItem(string Text, string Note);
 
 /// <summary>
+/// A saved list offered by number (2026-10-27, the completion survey: <c>/prompts</c>, <c>/browser</c>, <c>/youtube unsave</c>): <c>&lt;n&gt;</c>
+/// after a head, its item's text as the note on one line (line breaks and runs of spaces folded) cut to <see cref="NoteCells"/>. The numbers
+/// are the list's own, from 1. Pure.
+/// </summary>
+public static class NumberedItems
+{
+    /// <summary>The widest a note is cut to.</summary>
+    public const int NoteCells = 60;
+
+    /// <summary><paramref name="notes"/> as <c>head + n</c>, each noted by its text on one line.</summary>
+    public static IReadOnlyList<CompletionItem> Of(string head, IEnumerable<string> notes)
+    {
+        ArgumentNullException.ThrowIfNull(head);
+        ArgumentNullException.ThrowIfNull(notes);
+        return notes.Select((note, i) => new CompletionItem(head + (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), Note(note))).ToList();
+    }
+
+    /// <summary><paramref name="text"/> on one line, its whitespace runs folded to single spaces, cut to <see cref="NoteCells"/> with an ellipsis.</summary>
+    public static string Note(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return ScreenPane.Fit(string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)), NoteCells);
+    }
+}
+
+/// <summary>
 /// What the argument source answers for a command's argument (2026-09-17): a word list
 /// (<paramref name="Words"/>, drawn with their notes, narrowed by the source) — or, for a command
 /// whose argument is a sandbox path (<c>/read</c>), the <c>@</c>-mention shape:

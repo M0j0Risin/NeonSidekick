@@ -5,7 +5,8 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The board (2026-10-23, the monitors plan): nothing read before the first demand, the 2 s topology clock only while a lease is held, the
-/// reads on open and after a change, a failed read kept, a duplicated source, a monitor off the desktop, a profile's words, and dispose.
+/// reads on open and after a change, a failed read kept, a duplicated source, a monitor off the desktop, a profile's words, and dispose. And
+/// (2026-10-27, the user's pick) the current inputs before any capabilities, and a monitor's remembered list shown while its capabilities are read.
 /// </summary>
 public sealed class MonitorBoardTests
 {
@@ -124,6 +125,81 @@ public sealed class MonitorBoardTests
     }
 
     [Fact]
+    public async Task OffTheDesktop_AReachedMonitor_IsRead_AFailure_IsItsProblem_NeverStale()
+    {
+        var screen = _fake.Of(FakeMonitorSystem.Xg);
+        screen.Active = false;
+        screen.ReachedOffDesktop = true;
+        screen.Input = 0x11;
+        using var board = new MonitorBoard(_fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var xg = board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+        Assert.False(xg.Active);
+        var inputs = board.State.InputsOf(xg);
+        Assert.Equal((byte)0x11, inputs.Current);
+        Assert.Null(inputs.Problem);
+        Assert.Equal(new byte[] { 0x0F, 0x11, 0x12 }, inputs.Offered);
+
+        // Read: onlyUnread passes it by.
+        int reads = _fake.Count("read " + FakeMonitorSystem.Xg);
+        await board.ReadInputsAsync(CancellationToken.None, onlyUnread: true);
+        Assert.Equal(reads, _fake.Count("read " + FakeMonitorSystem.Xg));
+
+        // A failure off the desktop is its problem, not a stale value to switch from.
+        screen.DdcFail = MonitorText.NoAnswer;
+        await board.ReadInputsAsync(CancellationToken.None);
+        Assert.Equal(MonitorText.NoAnswer, board.State.InputsOf(xg).Problem);
+        Assert.False(board.State.InputsOf(xg).Stale);
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_AnUnreachedMonitor_IsAProblem_AndOnlyUnreadAsksNoMore()
+    {
+        _fake.Of(FakeMonitorSystem.Xg).Active = false;
+        using var board = new MonitorBoard(_fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var xg = board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+        Assert.Equal(MonitorText.OffDesktop, board.State.InputsOf(xg).Problem);
+        Assert.Null(board.State.InputsOf(xg).Current);
+        Assert.False(board.State.InputsOf(xg).Reading);
+
+        int reads = _fake.Count("read " + FakeMonitorSystem.Xg);
+        await board.ReadInputsAsync(CancellationToken.None, onlyUnread: true);
+        Assert.Equal(reads, _fake.Count("read " + FakeMonitorSystem.Xg));
+    }
+
+    [Fact]
+    public async Task SwitchTo_OffTheDesktop_ThisPcsInput_AlsoAddsItBack()
+    {
+        var screen = _fake.Of(FakeMonitorSystem.Xg);
+        screen.Active = false;
+        screen.ReachedOffDesktop = true;
+        screen.Input = 0x11;
+        using var board = new MonitorBoard(_fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var state = board.State;
+        var xg = state.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+        var lg = state.Topology.ByTarget(FakeMonitorSystem.Lg)!;
+        var none = MonitorWords.None(state.Topology.Monitors);
+
+        // No pick: the cable's guess (DisplayPort-1 on a DisplayPort cable) is this PC's.
+        Assert.Equal((byte)0x0F, state.PcInputOf(xg, none));
+        Assert.True(state.SwitchTo(xg, 0x0F, none).Return);
+        Assert.False(state.SwitchTo(xg, 0x12, none).Return);
+        Assert.False(state.SwitchTo(xg, 0x12, none).Unlisted);
+        Assert.True(state.SwitchTo(xg, 0x1B, none).Unlisted);
+
+        // A pick wins over the guess.
+        var picked = new MonitorWords(null, null, state.Topology.Monitors, ["ausaa34-uid4355/12"]);
+        Assert.Equal((byte)0x12, state.PcInputOf(xg, picked));
+        Assert.True(state.SwitchTo(xg, 0x12, picked).Return);
+        Assert.False(state.SwitchTo(xg, 0x0F, picked).Return);
+
+        // On the desktop it is never a return.
+        Assert.False(state.SwitchTo(lg, 0x0F, none).Return);
+    }
+
+    [Fact]
     public async Task AFailedTopologyRead_KeepsTheLastSnapshot()
     {
         using var board = new MonitorBoard(_fake, quick: true);
@@ -146,6 +222,116 @@ public sealed class MonitorBoardTests
         Assert.Equal("This PC (DisplayPort-1)", one.Describe(xg, 0x0F));
         Assert.Equal("Desk PC (DisplayPort-1)", other.Describe(xg, 0x0F));
         Assert.Same(state, board.State);
+    }
+
+    [Fact]
+    public async Task Open_ReadsEveryCurrentInput_BeforeAnyCapabilities()
+    {
+        using var board = new MonitorBoard(_fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        Assert.Equal(["query", "read " + FakeMonitorSystem.Lg, "read " + FakeMonitorSystem.Xg, "caps " + FakeMonitorSystem.Lg, "caps " + FakeMonitorSystem.Xg], _fake.Calls);
+    }
+
+    [Fact]
+    public async Task ARememberedList_ShowsBeforeTheCapabilitiesAnswer_TheSameAnswer_IsNotSeen()
+    {
+        var seen = new List<(string Target, byte[] Inputs)>();
+        using var board = new MonitorBoard(_fake, quick: true,
+            remembered: (m, _) => m.Target == FakeMonitorSystem.Xg ? [0x0F, 0x11, 0x12] : null,
+            seen: (m, _, inputs) => { lock (seen) { seen.Add((m.Target, [.. inputs])); } });
+        _fake.CapsBlock = new ManualResetEventSlim(false);
+        var open = board.OpenAsync(CancellationToken.None);
+        await MonitorCallsTests.Until(() => _fake.Count("caps ") == 1);   // the LG's list held: the second round under way
+
+        var xg = board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!);
+        Assert.Equal((false, (byte?)0x0F, true), (xg.Reading, xg.Current, xg.CanSwitch));
+        Assert.Equal(new byte[] { 0x0F, 0x11, 0x12 }, xg.Offered);
+        Assert.True(xg.Reported);
+        Assert.True(board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Lg)!).Reading);   // nothing remembered: as before
+
+        _fake.CapsBlock.Set();
+        await open.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal([FakeMonitorSystem.Lg], seen.Select(s => s.Target));   // the LG's first list; the XG's matched
+        Assert.Equal(new byte[] { 0x11, 0x12, 0x0F, 0x10 }, seen[0].Inputs);
+        Assert.False(board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Lg)!).Reading);
+    }
+
+    [Fact]
+    public async Task ADifferentAnswer_ReplacesTheRememberedList_AndIsSeen_AFailedRead_KeepsIt()
+    {
+        var seen = new List<byte[]>();
+        IReadOnlyList<byte>? Remembered(MonitorInfo m, IReadOnlyList<MonitorInfo> connected) => m.Target == FakeMonitorSystem.Xg ? [0x0F, 0x11] : null;
+        using (var board = new MonitorBoard(_fake, quick: true, remembered: Remembered, seen: (m, _, inputs) => { if (m.Target == FakeMonitorSystem.Xg) { seen.Add([.. inputs]); } }))
+        {
+            await board.OpenAsync(CancellationToken.None);
+            Assert.Equal(new byte[] { 0x0F, 0x11, 0x12 }, board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!).Offered);
+            Assert.Equal([[0x0F, 0x11, 0x12]], seen);
+        }
+
+        seen.Clear();
+        _fake.Of(FakeMonitorSystem.Xg).CapsFail = MonitorText.NoDdc;
+        using (var board = new MonitorBoard(_fake, quick: true, remembered: Remembered, seen: (m, _, inputs) => seen.Add([.. inputs])))
+        {
+            await board.OpenAsync(CancellationToken.None);
+            var xg = board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!);
+            Assert.Equal(new byte[] { 0x0F, 0x11 }, xg.Offered);   // kept, not the common four
+            Assert.True(xg.Reported && !xg.Reading);
+            Assert.Single(seen);   // the LG's alone
+        }
+    }
+
+    [Fact]
+    public async Task ANotReportedAnswer_IsNeverSeen_NorAMonitorWithNoKey()
+    {
+        var asked = new List<string>();
+        var seen = new List<string>();
+        _fake.Of(FakeMonitorSystem.Xg).Caps = "(prot(monitor)type(LCD)vcp(02 04))";   // lists no inputs
+        _fake.Of(FakeMonitorSystem.Lg).DevicePath = null;   // no key
+        using var board = new MonitorBoard(_fake, quick: true,
+            remembered: (m, _) => { asked.Add(m.Target); return null; },
+            seen: (m, _, _) => seen.Add(m.Target));
+        await board.OpenAsync(CancellationToken.None);
+        Assert.Null(board.State.Topology.ByTarget(FakeMonitorSystem.Lg)!.Key);
+        Assert.Equal([FakeMonitorSystem.Xg], asked);
+        Assert.Empty(seen);
+        Assert.False(board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!).Reported);
+    }
+
+    /// <summary>The settings' list through <see cref="MonitorWords"/>: a cable moved (the same model, a new port) finds the old list, and the answer moves it to the new key.</summary>
+    [Fact]
+    public async Task AMovedCable_FindsItsOldList_AndTheAnswerMovesItToTheNewKey()
+    {
+        List<string>? saved = ["ausaa34-uid9999/0f", "ausaa34-uid9999/11", "other-uid1/0f"];
+        using var board = new MonitorBoard(_fake, quick: true,
+            remembered: (m, connected) => MonitorWords.Remembered(saved, m, connected),
+            seen: (m, connected, inputs) => saved = MonitorWords.Remember(saved, m, connected, inputs));
+        _fake.CapsBlock = new ManualResetEventSlim(false);
+        var open = board.OpenAsync(CancellationToken.None);
+        await MonitorCallsTests.Until(() => _fake.Count("caps ") == 1);
+        Assert.Equal(new byte[] { 0x0F, 0x11 }, board.State.InputsOf(board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!).Offered);
+
+        _fake.CapsBlock.Set();
+        await open.WaitAsync(TimeSpan.FromSeconds(10));
+        string lg = board.State.Topology.ByTarget(FakeMonitorSystem.Lg)!.Key!;
+        Assert.Equal(["other-uid1/0f", lg + "/11", lg + "/12", lg + "/0f", lg + "/10", "ausaa34-uid4355/0f", "ausaa34-uid4355/11", "ausaa34-uid4355/12"], saved);   // uid9999's gone
+        Assert.Equal(new byte[] { 0x0F, 0x11, 0x12 }, MonitorWords.Remembered(saved, board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!, board.State.Topology.Monitors));
+    }
+
+    [Fact]
+    public void RememberedAndRemember_AreNoneForAMonitorWithNoKey_AndTwoOfAModelFindNoOldList()
+    {
+        var keyless = Info("A:1", null);
+        Assert.Null(MonitorWords.Remembered(["x-uid1/0f"], keyless, [keyless]));
+        Assert.Equal(["x-uid1/0f"], MonitorWords.Remember(["x-uid1/0f"], keyless, [keyless], [0x11]));
+        Assert.Null(MonitorWords.Remember(null, keyless, [keyless], [0x11]));
+
+        var one = Info("A:2", "ausaa34-uid2");
+        var two = Info("A:3", "ausaa34-uid3");
+        Assert.Null(MonitorWords.Remembered(["ausaa34-uid9/0f"], one, [one, two]));   // which XG moved is unknown
+        Assert.Equal(new byte[] { 0x0F }, MonitorWords.Remembered(["ausaa34-uid9/0f", "ausaa34-uid9/zz"], one, [one]));   // a code that doesn't parse is skipped
+        Assert.Equal(["ausaa34-uid9/0f", "ausaa34-uid2/11"], MonitorWords.Remember(["ausaa34-uid9/0f"], one, [one, two], [0x11, 0x11]));   // the other's list stays
+
+        static MonitorInfo Info(string target, string? key) => new(1, target, key, "XG", "DisplayPort", true, false, null, null, false);
     }
 
     [Fact]

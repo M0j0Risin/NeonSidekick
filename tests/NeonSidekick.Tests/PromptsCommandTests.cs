@@ -94,6 +94,31 @@ public sealed class PromptsCommandTests : IDisposable
         Assert.Empty(PromptsCommand.Complete("save some"));
     }
 
+    /// <summary>The saved prompts by number (2026-10-27, the completion survey): after the verbs on the bare list and after <c>remove </c>, each noted by its text on one line; a number typed in full closes the list.</summary>
+    [Fact]
+    public void Complete_OffersTheSavedPrompts_ByNumber_AfterTheVerbsAndRemove()
+    {
+        int reads = 0;
+        var now = DateTimeOffset.UnixEpoch;
+        IReadOnlyList<SavedPrompt> Saved()
+        {
+            reads++;
+            return [new("a", "Summarize\n  the   day", now), new("b", "Plan the week", now), new("c", new string('x', 90), now)];
+        }
+
+        Assert.Equal(["save", "list", "remove", "1", "2", "3"], PromptsCommand.Complete("", Saved).Select(i => i.Text));
+        Assert.Equal("Summarize the day", PromptsCommand.Complete("", Saved)[3].Note);   // one line, its spaces folded
+        Assert.Equal(["remove 1", "remove 2", "remove 3"], PromptsCommand.Complete("remove ", Saved).Select(i => i.Text));
+        Assert.Equal("Plan the week", PromptsCommand.Complete("remove ", Saved)[1].Note);
+        Assert.Equal(NumberedItems.NoteCells, TextCells.Width(PromptsCommand.Complete("remove ", Saved)[2].Note));   // cut to the note's width
+        Assert.Empty(PromptsCommand.Complete("2", Saved));   // typed in full: the list closes so Enter sends
+        Assert.Empty(PromptsCommand.Complete("remove 2", Saved));
+        reads = 0;
+        Assert.Equal(["list --clear"], PromptsCommand.Complete("list ", Saved).Select(i => i.Text));
+        Assert.Empty(PromptsCommand.Complete("save some", Saved));
+        Assert.Equal(0, reads);   // another verb's argument reads nothing
+    }
+
     [Fact]
     public void Headless_SavesListsPrintsRemovesAndClears()
     {

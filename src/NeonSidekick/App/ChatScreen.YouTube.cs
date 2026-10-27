@@ -81,6 +81,13 @@ internal sealed partial class ChatScreen
     /// the field read and swapped atomically, and two made in a race share the library's one lock over the same file, so neither loses a
     /// change; the one that lost the swap is simply not kept.
     /// </summary>
+    /// <summary><c>/youtube</c>'s argument list (2026-10-27): the verbs, and the saved videos after <c>unsave </c> and <c>play </c>.</summary>
+    private IReadOnlyList<CompletionItem> YouTubeChoices(string argText) => YouTubeCommand.Complete(argText, () =>
+    {
+        var library = YouTubeLibraryNow();
+        return CompletionRead(library.FilePath, library.List);
+    });
+
     private YouTubeLibrary YouTubeLibraryNow()
     {
         var library = Volatile.Read(ref _youTubeLibrary);

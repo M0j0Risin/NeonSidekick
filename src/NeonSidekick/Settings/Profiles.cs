@@ -503,6 +503,7 @@ public static class Profiles
         nameof(AppSettingsData.MonitorInputNames),
         nameof(AppSettingsData.MonitorInputsHidden),
         nameof(AppSettingsData.MonitorPcInputs),
+        nameof(AppSettingsData.MonitorInputsSeen),
     };
 
     /// <summary>Copies <see cref="ResetKeptSettings"/> from <paramref name="from"/> onto <paramref name="to"/>, one by one (no reflection under AOT). The keys go as stored, protected or not.</summary>
@@ -530,6 +531,7 @@ public static class Profiles
         to.MonitorInputNames = from.MonitorInputNames;     // 2026-10-23: this PC's cabling, not a taste
         to.MonitorInputsHidden = from.MonitorInputsHidden;
         to.MonitorPcInputs = from.MonitorPcInputs;         // later on 2026-10-23: which input is this PC's, the same cabling
+        to.MonitorInputsSeen = from.MonitorInputsSeen;     // 2026-10-27: what this PC's monitors last reported, kept as its siblings
         // The embedded switch with a kept embedded URL (2026-10-22, a review: off by default since 2026-10-21, so a reset kept the URL and model and
         // took the switch away, and the saved URL then read as none — the failure the kept settings are for). Not one of ResetKeptSettings: it
         // follows the URL.

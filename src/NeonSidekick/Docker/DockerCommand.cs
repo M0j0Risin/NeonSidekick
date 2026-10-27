@@ -224,7 +224,8 @@ public static class DockerCommand
     /// <summary>
     /// <c>/docker</c>'s argument list over <paramref name="last"/> (the last list read; null = the verbs alone): the verbs, then
     /// after a verb that takes one the containers' names — running ones after <c>stop</c>, <c>restart</c>, <c>pause</c> and
-    /// <c>stats</c>, stopped ones after <c>start</c>, paused ones after <c>unpause</c>. Each item is the whole argument. Pure.
+    /// <c>stats</c>, stopped ones after <c>start</c>, paused ones after <c>unpause</c>, every one after <c>logs</c> and <c>ps</c> (its filter;
+    /// 2026-10-27, the completion survey). Each item is the whole argument. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(IReadOnlyList<DockerContainer>? last, string argText)
     {
@@ -259,7 +260,7 @@ public static class DockerCommand
             "stop" or "restart" or "pause" or "stats" => last.Where(c => c.Running),
             "start" => last.Where(c => !c.Running && !c.Paused),
             "unpause" => last.Where(c => c.Paused),
-            "logs" => last,
+            "logs" or "ps" => last,
             _ => [],
         };
         return MentionCompleter.Matches(DockerText.Ordered(pool).Select(c => new CompletionItem(head + c.Name, c.State + " · " + c.Image)).ToList(), argText);

@@ -125,6 +125,28 @@ public static class PromptsCommand
         return SlashCommands.Parse(line.Text) is (SlashCommand.Prompts, var args) && Parse(args).Verb == PromptsVerb.Save;
     }
 
+    /// <summary>
+    /// <see cref="Complete(string)"/> with the saved prompts by number (2026-10-27, the completion survey): <c>&lt;n&gt;</c> after the verbs
+    /// while the first word is typed, and <c>remove &lt;n&gt;</c> after <c>remove </c>, each noted by its text. The numbers sit on the bare list,
+    /// not behind a typed digit as planned: a number typed in full closes its list so Enter sends (<see cref="MentionCompleter.Matches"/>),
+    /// so a digit's list would never show prompts 1 to 9. <paramref name="prompts"/> is asked only for the first word or after
+    /// <c>remove </c> (the screen's reads through the completion cache, not the file each key). Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> Complete(string argText, Func<IReadOnlyList<SavedPrompt>> prompts)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(prompts);
+        string removeHead = RemoveWord + " ";
+        if (!argText.Contains(' ', StringComparison.Ordinal))
+        {
+            return MentionCompleter.Matches([.. Complete(""), .. NumberedItems.Of("", prompts().Select(p => p.Text))], argText);
+        }
+
+        return argText.StartsWith(removeHead, StringComparison.OrdinalIgnoreCase)
+            ? MentionCompleter.Matches(NumberedItems.Of(argText[..removeHead.Length], prompts().Select(p => p.Text)), argText)
+            : Complete(argText);
+    }
+
     /// <summary>The input line's argument list after <c>/prompts </c>: the verbs while the first word is typed, then <c>--clear</c> after <c>list</c>.</summary>
     public static IReadOnlyList<CompletionItem> Complete(string argText)
     {

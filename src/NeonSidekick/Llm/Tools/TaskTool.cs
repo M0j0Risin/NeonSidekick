@@ -115,6 +115,11 @@ public sealed class TaskListTool(TaskAccess access, Func<AppSettingsData> effect
 
         var filter = new TaskFilter(folder, recursive, state, Optional(arguments, FilterArgument), microsoft);
         var result = await Access.ReadAsync(source, folder, session => Matches(session, source, filter), cancellationToken).ConfigureAwait(false);
+        if (result.Error is null)
+        {
+            Access.Saw(source, result.Value.Matched);
+        }
+
         return result.Error ?? TaskRender.List(source.Where, result.Value.Matched, result.Value.Total, offset, limit, filter, computer);
     }
 

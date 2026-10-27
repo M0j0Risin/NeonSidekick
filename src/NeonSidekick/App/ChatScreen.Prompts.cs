@@ -105,6 +105,13 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The loaded profile's saved prompts: the one made for its directory, or a new one once a profile switch moved it.</summary>
+    /// <summary><c>/prompts</c>' argument list (2026-10-27): the verbs, and the saved prompts by number once the typed text needs them.</summary>
+    private IReadOnlyList<CompletionItem> PromptChoices(string argText) => PromptsCommand.Complete(argText, () =>
+    {
+        var store = SavedPromptsNow();
+        return CompletionRead(store.FilePath, store.List);
+    });
+
     private SavedPrompts SavedPromptsNow()
     {
         var prompts = _savedPrompts;

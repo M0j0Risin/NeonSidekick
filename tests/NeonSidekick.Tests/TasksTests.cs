@@ -377,6 +377,34 @@ public sealed class TasksTests
         Assert.Contains("definition: " + TaskText.XmlTooLarge, TaskRender.Detail("this PC", new TaskDetail(entry, "", []), null, TaskText.XmlTooLarge, redacted: true));
     }
 
+    /// <summary>
+    /// <c>/tasks folder:</c>'s list (2026-10-27, the completion survey): <c>folder:\</c> alone before a read; then the folders of the last list
+    /// read on that computer, each task's and those above it, from the tool as from the command; <c>computer:local</c> is this PC.
+    /// </summary>
+    [Fact]
+    public async Task FolderCompletion_OffersTheFoldersTheLastListFound()
+    {
+        var access = Access();
+        Assert.Equal([@"folder:\"], TaskCommand.Complete("folder:", ["local"], access.FoldersSeen).Select(i => i.Text));
+
+        await Call(new TaskListTool(access, () => _settings), ("include_microsoft", true));
+
+        Assert.Equal([@"\Backup", @"\Microsoft", @"\Microsoft\Windows", @"\Microsoft\Windows\Defrag", @"\Microsoft\Windows\Other", @"\Ops", @"\Reports"], access.FoldersSeen(null));
+        Assert.Equal(access.FoldersSeen(null), access.FoldersSeen("LOCAL"));
+        Assert.Empty(access.FoldersSeen("dc02"));
+        Assert.Equal(8, TaskCommand.Complete("folder:", ["local"], access.FoldersSeen).Count);   // the root, then the seven
+        Assert.Equal([@"folder:\Ops"], TaskCommand.Complete(@"folder:\O", ["local"], access.FoldersSeen).Select(i => i.Text));
+        Assert.Equal([@"state:running computer:local folder:\Microsoft\Windows", @"state:running computer:local folder:\Microsoft\Windows\Defrag", @"state:running computer:local folder:\Microsoft\Windows\Other"],
+            TaskCommand.Complete(@"state:running computer:local folder:\Microsoft\W", ["local"], access.FoldersSeen).Select(i => i.Text));
+        Assert.Equal([@"computer:dc02 folder:\"], TaskCommand.Complete("computer:dc02 folder:", ["local", "dc02"], access.FoldersSeen).Select(i => i.Text));   // another computer's not read yet
+
+        if (OperatingSystem.IsWindows())   // the command runs only there
+        {
+            Assert.False((await TaskCommand.RunAsync(access, @"folder:\Ops", CancellationToken.None)).Failed);   // the command's read replaces the list
+            Assert.Equal([@"\Ops"], access.FoldersSeen(null));
+        }
+    }
+
     [Fact]
     public async Task ListTool_HidesWindowsOwnUnlessAsked_AndKeepsToTheFolders()
     {

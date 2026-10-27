@@ -209,6 +209,27 @@ public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, str
     }
 
     /// <summary>
+    /// <c>/skills add</c>'s flags on the argument list (2026-10-27, the completion survey): <see cref="GlobalFlag"/> and <see cref="ProfileFlag"/>
+    /// while the word being typed after <c>add </c> starts with <c>-</c>, each one not typed yet (<see cref="SplitFlags"/> takes them anywhere,
+    /// the last wins). Never <see cref="YesFlag"/>: it is headless's, and headless has no completion. <paramref name="argText"/> is the whole
+    /// argument. Pure.
+    /// </summary>
+    public static IReadOnlyList<UI.CompletionItem> CompleteFlags(string argText)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        int gap = argText.LastIndexOf(' ');
+        if (gap < 0 || !argText[(gap + 1)..].StartsWith('-'))
+        {
+            return [];
+        }
+
+        string head = argText[..(gap + 1)];
+        var typed = head.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        (string Flag, string Note)[] flags = [(GlobalFlag, "install it for every profile"), (ProfileFlag, "install it for this profile only")];
+        return UI.MentionCompleter.Matches(flags.Where(f => !typed.Contains(f.Flag, StringComparer.OrdinalIgnoreCase)).Select(f => new UI.CompletionItem(head + f.Flag, f.Note)).ToList(), argText);
+    }
+
+    /// <summary>
     /// The argument less its flags, wherever they stand: the scope asked for (the last of
     /// <c>--global</c> / <c>--profile</c> wins) and whether <c>--yes</c> was given. Other words are kept in order.
     /// </summary>

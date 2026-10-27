@@ -232,6 +232,16 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The loaded profile's saved links: the one made for its directory, or a new one once a profile switch moved it.</summary>
+    /// <summary>
+    /// <c>/browser</c>'s argument list (2026-10-27): the verbs, and the saved links by number once the typed text needs them; on the Web UI's
+    /// page (<paramref name="page"/>) <c>unsave &lt;n&gt;</c> alone, since a number opens a window on the PC.
+    /// </summary>
+    private IReadOnlyList<CompletionItem> BrowserChoices(string argText, bool page) => BrowserCommand.Complete(argText, () =>
+    {
+        var store = BrowserLinksNow();
+        return CompletionRead(store.FilePath, store.List);
+    }, unsaveOnly: page);
+
     private BrowserLinks BrowserLinksNow()
     {
         var links = _browserLinks;

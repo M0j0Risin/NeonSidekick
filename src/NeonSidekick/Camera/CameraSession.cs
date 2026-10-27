@@ -96,8 +96,21 @@ public sealed class CameraSession : IDisposable
         }
     }
 
-    /// <summary>The cameras Windows lists now. Throws <see cref="CameraException"/>.</summary>
-    public IReadOnlyList<CameraDevice> List() => (_system ?? throw new CameraException(CameraFailure.Unsupported, null)).List();
+    /// <summary>The cameras Windows lists now, kept as <see cref="Last"/>. Throws <see cref="CameraException"/>.</summary>
+    public IReadOnlyList<CameraDevice> List()
+    {
+        var devices = (_system ?? throw new CameraException(CameraFailure.Unsupported, null)).List();
+        _last = devices;
+        return devices;
+    }
+
+    /// <summary>
+    /// The device list <see cref="List"/> last read (2026-10-27, the completion survey: <c>/camera use</c>'s list), swapped whole; null
+    /// before any read. Never read for the completion, so a keystroke asks no device.
+    /// </summary>
+    public IReadOnlyList<CameraDevice>? Last => Volatile.Read(ref _last);
+
+    private IReadOnlyList<CameraDevice>? _last;
 
     /// <summary>
     /// The device a saved name picks out of <paramref name="devices"/>: the one of that name (any case), else the first. False

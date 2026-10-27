@@ -289,18 +289,28 @@ public static class HaCommand
     /// <c>/ha</c>'s argument list over <paramref name="snapshot"/> (the last one read; null = the verbs alone): the verbs; after
     /// <c>on</c>/<c>off</c>/<c>toggle</c> the rooms and the switchable names; after <c>scene</c> the scenes; after <c>tv</c> its
     /// actions and after <c>tv source</c> the player's sources. Each item is the whole argument, as <c>/comfy edit</c>'s are. Pure.
+    /// Since 2026-10-27: <c>stills</c> and, after it, its three words with or without a snapshot (<paramref name="stills"/> false for the
+    /// Web UI's page, which refuses <c>/ha stills</c>); after <c>states</c> the snapshot's domains, then its entity ids.
     /// </summary>
-    public static IReadOnlyList<CompletionItem> Complete(HaSnapshot? snapshot, string argText)
+    public static IReadOnlyList<CompletionItem> Complete(HaSnapshot? snapshot, string argText, bool stills = true)
     {
         ArgumentNullException.ThrowIfNull(argText);
         int space = argText.IndexOf(' ', StringComparison.Ordinal);
         if (space < 0)
         {
-            return MentionCompleter.Matches(HaText.Verbs.Select(v => new CompletionItem(v, VerbNote(v))).ToList(), argText);
+            var verbs = stills ? HaText.Verbs : HaText.Verbs.Where(v => v != HaStillsCommand.Word);
+            return MentionCompleter.Matches(verbs.Select(v => new CompletionItem(v, VerbNote(v))).ToList(), argText);
         }
 
         string verb = argText[..space].ToLowerInvariant();
         string head = argText[..(space + 1)];
+        if (verb == HaStillsCommand.Word)
+        {
+            return stills && argText.IndexOf(' ', space + 1) < 0
+                ? MentionCompleter.Matches(HaStillsCommand.Words.Select(w => new CompletionItem(head + w.Text, w.Note)).ToList(), argText)
+                : [];
+        }
+
         if (snapshot is null)
         {
             return verb == "tv" ? MentionCompleter.Matches(HaText.TvActions.Select(a => new CompletionItem(head + a, "")).ToList(), argText) : [];
@@ -312,6 +322,8 @@ public static class HaCommand
                 .Concat(snapshot.Entities.Where(e => SwitchableDomains.Contains(e.Domain, StringComparer.Ordinal) && !e.Unavailable).Select(e => new CompletionItem(head + e.Name, e.Domain + " · " + e.State))),
             "scene" => snapshot.Of("scene").Select(e => new CompletionItem(head + e.Name, e.Area ?? "scene")),
             "tv" => TvItems(snapshot, argText, head),
+            "states" => snapshot.Entities.Select(e => e.Domain).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(d => new CompletionItem(head + d, "domain"))
+                .Concat(snapshot.Entities.Select(e => new CompletionItem(head + e.Id, e.Name))),
             _ => [],
         };
         return MentionCompleter.Matches(items.DistinctBy(i => i.Text, StringComparer.OrdinalIgnoreCase).ToList(), argText);
@@ -337,6 +349,7 @@ public static class HaCommand
         "tv" => "the TV: on, off, mute, volume, source",
         "states" => "list entities, by domain or name",
         "say" => "hand a sentence to Assist",
+        "stills" => "open or empty the camera stills' folder",
         _ => "",
     };
 }

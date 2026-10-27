@@ -31,6 +31,20 @@ public partial class SidekickAppTests
         Assert.Contains("(conversation cleared)", output);
     }
 
+    /// <summary><c>/ha stills</c> (2026-10-27) needs the screen too: its purge deletes nothing here.</summary>
+    [Fact]
+    public async Task Headless_HaStills_NeedsTheScreen_AndDeletesNothing()
+    {
+        string still = Path.Combine(_settings.ProfileImagesDirectory, NeonSidekick.HomeAssistant.HaCamera.FolderName, "porch.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(still)!);
+        File.WriteAllText(still, "stays");
+
+        string output = await Headless("/ha stills purge\n/ha stills\n");
+
+        Assert.Equal(2, output.Split("[error] " + NeonSidekick.HomeAssistant.HaStillsCommand.NeedsScreen).Length - 1);
+        Assert.True(File.Exists(still));
+    }
+
     [Fact]
     public async Task Headless_Camera_WithoutALayer_SaysSo()
     {

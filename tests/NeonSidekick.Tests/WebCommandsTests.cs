@@ -173,6 +173,9 @@ public sealed class WebCommandsTests
     [InlineData("/splash purge", WebCommandKind.Refused)]
     [InlineData("/pasted view", WebCommandKind.Refused)]
     [InlineData("/pasted purge", WebCommandKind.Refused)]
+    [InlineData("/ha stills purge", WebCommandKind.Refused)]   // 2026-10-27: the PC's yes before a delete
+    [InlineData("/ha stills view", WebCommandKind.Refused)]
+    [InlineData("/ha STILLS", WebCommandKind.Refused)]
     [InlineData("/camera purge", WebCommandKind.Refused)]
     [InlineData("/screen purge", WebCommandKind.Refused)]
     [InlineData("/settings", WebCommandKind.Refused)]
@@ -212,6 +215,9 @@ public sealed class WebCommandsTests
     {
         Assert.Equal(WebUiText.OpensPane("/rename", "/rename <name>"), WebCommands.Check("/rename", On).Reason);
         Assert.Equal(WebUiText.OpensPane("/settings", null), WebCommands.Check("/settings", On).Reason);
+        Assert.Equal(WebUiText.OpensPane("/ha stills", null), WebCommands.Check("/ha stills purge", On).Reason);   // never the bare /ha
+        Assert.Equal("/ha stills opens a pane or a window at the PC, so it runs there.", WebCommands.Check("/ha stills view", On).Reason);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/ha on den", On).Kind);
         Assert.Equal(WebUiText.UseShoppingPage, WebCommands.Check("/shopping", On).Reason);
         // The Shopping tab off (later on 2026-10-15): the setting that turns it on.
         Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping", On with { ShoppingTab = false }).Reason);

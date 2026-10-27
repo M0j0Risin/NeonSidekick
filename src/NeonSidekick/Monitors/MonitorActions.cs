@@ -28,9 +28,11 @@ public sealed record MonitorOutcome(MonitorOutcomeKind Kind, string Text, Monito
 
 /// <summary>
 /// One change: an input switch (<see cref="Input"/> on <see cref="Monitor"/>) or a layout (<see cref="Layout"/>, with the monitor for Only and
-/// Primary). <see cref="Unlisted"/> marks a code the monitor neither lists nor is common (its outcome says so).
+/// Primary). <see cref="Unlisted"/> marks a code the monitor neither lists nor is common (its outcome says so). <see cref="Return"/> (2026-10-27,
+/// the NVIDIA plan) marks a switch of a monitor off the desktop to this PC's input: the switch, then Extend all brings it back. Every switch is
+/// built by <see cref="MonitorState.SwitchTo"/>.
 /// </summary>
-public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLayout? Layout, bool Unlisted = false)
+public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLayout? Layout, bool Unlisted = false, bool Return = false)
 {
     public static MonitorChange SwitchInput(MonitorInfo monitor, byte code, bool unlisted = false) => new(monitor, code, null, unlisted);
 
@@ -42,7 +44,7 @@ public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLay
         ArgumentNullException.ThrowIfNull(words);
         if (Input is { } code && Monitor is { } m)
         {
-            return "switch " + m.Label + " to " + words.Describe(m, code);
+            return "switch " + m.Label + " to " + words.Describe(m, code) + (Return ? MonitorText.AndAddWords : "");
         }
 
         string label = Monitor?.Label ?? "";
@@ -115,8 +117,9 @@ public sealed class MonitorActions
     }
 
     /// <summary>
-    /// The topology and every active monitor's input and capabilities read once, with no board (headless's <c>/monitor list</c>): a monitor off
-    /// the desktop or duplicated gets its sentence, one whose read fails its problem, a capabilities read that fails the common four.
+    /// The topology and every monitor's input and capabilities read once, with no board (headless's <c>/monitor list</c>): a duplicated monitor
+    /// gets its sentence, one whose read fails its problem (one off the desktop that NVIDIA's driver doesn't reach, <see cref="MonitorText.OffDesktop"/>),
+    /// a capabilities read that fails the common four.
     /// </summary>
     public async Task<MonitorState> ReadAllAsync(CancellationToken cancellationToken)
     {
@@ -124,9 +127,9 @@ public sealed class MonitorActions
         var inputs = new Dictionary<string, MonitorInputs>(StringComparer.Ordinal);
         foreach (var m in snapshot.Monitors)
         {
-            if (!m.Active || m.Shared)
+            if (m.Shared)
             {
-                inputs[m.Target] = MonitorInputs.Unread with { Problem = m.Active ? MonitorText.SharedSource : MonitorText.OffDesktop };
+                inputs[m.Target] = MonitorInputs.Unread with { Problem = MonitorText.SharedSource };
                 continue;
             }
 
@@ -276,14 +279,14 @@ public sealed class MonitorActions
             return MonitorOutcome.Refused(MonitorText.NoSuchTarget);
         }
 
-        if (!m.Active)
-        {
-            return MonitorOutcome.Refused(MonitorText.OffDesktop);
-        }
-
         if (m.Shared)
         {
             return MonitorOutcome.Refused(MonitorText.SharedSource);
+        }
+
+        if (!m.Active)
+        {
+            return await OffDesktopSwitchAsync(change, m, code, words, cancellationToken).ConfigureAwait(false);
         }
 
         string input = words.Describe(m, code);
@@ -314,7 +317,22 @@ public sealed class MonitorActions
         var now = after.ByTarget(m.Target);
         if (now is not { Active: true })
         {
-            return new MonitorOutcome(MonitorOutcomeKind.LeftDesktop, MonitorText.LeftDesktop(m.Label, input), after);
+            // NVIDIA's driver may still reach it (2026-10-27): one read, no retry, and the sentence says the tab still switches it.
+            string left = MonitorText.LeftDesktop(m.Label, input);
+            if (now is not null)
+            {
+                try
+                {
+                    _ = await ReadInputAsync(now, cancellationToken, retry: false).ConfigureAwait(false);
+                    left = MonitorText.LeftDesktopReached(m.Label, input);
+                }
+                catch (MonitorException)
+                {
+                    // Not reached: only its own buttons or the other machine.
+                }
+            }
+
+            return new MonitorOutcome(MonitorOutcomeKind.LeftDesktop, left, after);
         }
 
         byte current;
@@ -339,6 +357,86 @@ public sealed class MonitorActions
         }
 
         return new MonitorOutcome(MonitorOutcomeKind.Switched, change.Unlisted ? MonitorText.SwitchedUnlisted(now.Label, input) : MonitorText.Switched(now.Label, input), after);
+    }
+
+    /// <summary>
+    /// A switch of a monitor off the desktop (2026-10-27, the NVIDIA plan), through NVIDIA's driver: no away mark (it shows nothing of this PC,
+    /// and its marks are pruned off the desktop anyway), still off the desktop afterwards is expected, and the input read back says Switched,
+    /// Ignored or not read as for any switch. A failure is today's <see cref="MonitorText.OffDesktop"/> when the system didn't reach it (no
+    /// NVIDIA card, no match), else <see cref="MonitorText.OffDesktopNoAnswer"/>. A <see cref="MonitorChange.Return"/> then runs Extend all
+    /// (after a switch, a send whose read didn't come back, or an input it already showed; never after Ignored): Windows may have added it back
+    /// on its own, which the Extend's no-change answer covers with the same outcome.
+    /// </summary>
+    private async Task<MonitorOutcome> OffDesktopSwitchAsync(MonitorChange change, MonitorInfo m, byte code, MonitorWords words, CancellationToken cancellationToken)
+    {
+        string input = words.Describe(m, code);
+        byte? from;
+        try
+        {
+            from = MonitorShowing.Usable(await ReadInputAsync(m, cancellationToken).ConfigureAwait(false));
+            if (from != code)
+            {
+                await Calls.RunAsync("switch " + m.Label, s => s.SetInput(m.Target, code), retry: true, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (MonitorException e)
+        {
+            return MonitorOutcome.Refused(e.Message is MonitorText.OffDesktop or MonitorText.NoSuchTarget ? e.Message : MonitorText.OffDesktopNoAnswer(m.Label));
+        }
+
+        MonitorOutcome switched;
+        if (from == code)
+        {
+            switched = new MonitorOutcome(MonitorOutcomeKind.Unchanged, MonitorText.AlreadyOn(m.Label, input));
+            if (!change.Return)
+            {
+                return switched;
+            }
+        }
+        else
+        {
+            await Task.Delay(_settle, _time, cancellationToken).ConfigureAwait(false);
+            var after = await QueryAsync(cancellationToken).ConfigureAwait(false);
+            var now = after.ByTarget(m.Target) ?? m;
+            byte current;
+            try
+            {
+                current = await ReadInputAsync(now, cancellationToken).ConfigureAwait(false);
+            }
+            catch (MonitorException)
+            {
+                current = 0;
+            }
+
+            switched = current == 0 ? new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNoRead(now.Label, input), after)
+                : current != code ? new MonitorOutcome(MonitorOutcomeKind.Ignored, MonitorText.Ignored(now.Label, input, words.Describe(now, current)), after)
+                : new MonitorOutcome(MonitorOutcomeKind.Switched, change.Unlisted ? MonitorText.SwitchedUnlisted(now.Label, input) : MonitorText.Switched(now.Label, input), after);
+            if (!change.Return || switched.Kind == MonitorOutcomeKind.Ignored)
+            {
+                return switched;
+            }
+        }
+
+        MonitorOutcome added;
+        try
+        {
+            added = await ArrangeAsync(MonitorChange.Arrange(MonitorLayout.Extend), words, cancellationToken).ConfigureAwait(false);
+        }
+        catch (MonitorException e)
+        {
+            added = MonitorOutcome.Refused(e.Message);
+        }
+
+        string label = added.After?.ByTarget(m.Target)?.Label ?? switched.After?.ByTarget(m.Target)?.Label ?? m.Label;
+        if (switched.Kind == MonitorOutcomeKind.Unchanged)
+        {
+            // It showed this PC's input already: the Extend alone, its sentence after the input's.
+            return new MonitorOutcome(added.Failed ? MonitorOutcomeKind.Refused : MonitorOutcomeKind.Arranged, switched.Text + " " + added.Text, added.After);
+        }
+
+        return added.Failed
+            ? new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNotAdded(label, input, added.Text), switched.After)
+            : new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedAndAdded(label, input), added.After ?? switched.After);
     }
 
     private async Task<MonitorOutcome> ArrangeAsync(MonitorChange change, MonitorWords words, CancellationToken cancellationToken)

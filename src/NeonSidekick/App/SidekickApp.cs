@@ -1391,6 +1391,13 @@ public sealed partial class SidekickApp
                 // /ha (2026-09-28): ahead of the server check too — the house needs no LLM.
                 if (SlashCommands.Parse(text) is (SlashCommand.HomeAssistant, var haArgs))
                 {
+                    // /ha stills (2026-10-27): its windows and the purge's question are the screen's, as /pasted's are.
+                    if (HomeAssistant.HaStillsCommand.TryParse(haArgs, out _))
+                    {
+                        await HeadlessLineAsync("[error] " + HomeAssistant.HaStillsCommand.NeedsScreen).ConfigureAwait(false);
+                        continue;
+                    }
+
                     var haResult = await HomeAssistant.HaCommand.RunAsync(ha, haArgs, cancellationToken).ConfigureAwait(false);
                     foreach (string haLine in haResult.Lines)
                     {

@@ -120,4 +120,68 @@ public static partial class SmokeChecks
             return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
         }
     }
+
+    /// <summary>
+    /// <c>monitor:nvapi</c> (2026-10-27, the NVIDIA plan; <c>perf:nvml</c>'s and <c>monitor:ddc</c>'s shape): NVIDIA's driver API in the published
+    /// binary — loaded from System32 and initialized, the connected displays listed with each one's EDID PnP id and adapter, and the first one's
+    /// input read over I2C (a read: it proves the four structs' layouts). A wrong layout answers -9 (<c>NVAPI_INCOMPATIBLE_STRUCT_VERSION</c>)
+    /// from any call, which fails, as does any failing status from the listing; skipped without the library, with no NVIDIA GPU, with no display
+    /// connected to one, and when the read fails any other way (no DDC/CI). Changes nothing. A system library, as NVML is, not one of
+    /// <see cref="WindowsNativeLibraries"/>.
+    /// </summary>
+    public static SmokeCheck ProbeMonitorNvapi()
+    {
+        const string name = "monitor:nvapi";
+        if (!OperatingSystem.IsWindows())
+        {
+            return new SmokeCheck(name, true, "skipped: not Windows");
+        }
+
+        try
+        {
+            int initialized = NvapiNative.Initialize();
+            if (initialized == NvapiNative.LibraryNotFound)
+            {
+                return new SmokeCheck(name, true, "skipped: NVIDIA's driver API isn't on this PC");
+            }
+
+            if (initialized is NvapiNative.NoImplementation or NvapiNative.DeviceNotFound)
+            {
+                return new SmokeCheck(name, true, "skipped: no NVIDIA GPU answered");
+            }
+
+            if (initialized != NvapiNative.Ok)
+            {
+                return new SmokeCheck(name, false, "initialize answered " + Status(initialized));
+            }
+
+            var (status, displays) = NvidiaDdc.List();
+            if (status != NvapiNative.Ok)
+            {
+                return new SmokeCheck(name, false, "listing the displays answered " + Status(status) + (status == NvapiNative.IncompatibleStructVersion ? " (a struct's layout)" : ""));
+            }
+
+            if (displays.Count == 0)
+            {
+                return new SmokeCheck(name, true, "skipped: no display connected to an NVIDIA GPU");
+            }
+
+            string listed = $"{displays.Count} display(s): {string.Join(", ", displays.Select(d => (d.PnpId ?? "no EDID") + (d.Active ? "" : " off the desktop")))}; adapter {displays[0].Adapter}";
+            var (read, input) = NvidiaDdc.ReadOnce(displays[0]);
+            if (read == NvapiNative.IncompatibleStructVersion)
+            {
+                return new SmokeCheck(name, false, $"{listed}; the I2C read answered {Status(read)} (a struct's layout)");
+            }
+
+            return read == NvapiNative.Ok && input is { } code
+                ? new SmokeCheck(name, true, $"{listed}; {displays[0].PnpId} input {Mccs.Hex(code)}")
+                : new SmokeCheck(name, true, $"{listed}; skipped the read: {displays[0].PnpId} didn't answer DDC/CI ({Status(read)})");
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return new SmokeCheck(name, false, $"{e.GetType().Name}: {e.Message}");
+        }
+
+        static string Status(int status) => status.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 }

@@ -2067,6 +2067,16 @@ public sealed class AppSettingsData
     public List<string>? MonitorPcInputs { get; set; }
 
     /// <summary>
+    /// The inputs each monitor last reported (2026-10-27, the user's pick: the XG27's tab stood empty ~6 s while its capabilities were read), as
+    /// <see cref="MonitorInputNames"/> keys them, one entry an input in the monitor's order (<c>ausaa34-uid4355/0f</c>). On the first read of a run
+    /// a tab shows this list as soon as the current input is read, while the capabilities are read again behind it; an answer that differs
+    /// replaces it (a moved cable's old key dropped). Written by the 🖥️ pane's reads, never by hand; codes only. Kept by a plain
+    /// <c>/profile reset</c>, not carried by <c>/profile push|pull monitors</c> (a cache, not the user's word). Null or empty is none. No settings
+    /// row, no variable.
+    /// </summary>
+    public List<string>? MonitorInputsSeen { get; set; }
+
+    /// <summary>
     /// The quality <c>image_edit</c> writes a JPEG, JPEG XL or HEIF at when the call gives none (2026-10-04, the user's pick, with the
     /// image tools): <see cref="MinImageEditQuality"/> to <see cref="MaxImageEditQuality"/>; also where <c>max_kb</c> starts its search
     /// down. The tool clamps a hand-edited value. Read at each call, no reconnect. No variable.

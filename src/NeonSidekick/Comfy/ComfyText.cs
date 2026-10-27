@@ -344,11 +344,14 @@ public static class ComfyText
     /// <summary>A flag <c>/imagine</c> could not read. Pinned.</summary>
     public static string BadFlag(string flag, string value) => $"{flag} takes {FlagShape(flag)}, not '{value}'";
 
-    private static string FlagShape(string flag) => flag switch
+    /// <summary>What a flag's value is: <c>/imagine</c>'s error, and its note on the argument list (2026-10-27). Pinned.</summary>
+    internal static string FlagShape(string flag) => flag switch
     {
         "--size" => "WxH (1024x1024)",
         "--cfg" or "--denoise" => "a number",
         "--image" or "--image2" or "--image3" => "a path",
+        ComfyImagine.NoNegativeWord => "send no negative prompt at all",
+        ComfyImagine.NegativeWord => "the negative prompt follows",
         _ => "a whole number",
     };
 

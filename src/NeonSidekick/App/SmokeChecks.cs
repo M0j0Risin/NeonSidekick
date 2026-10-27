@@ -163,6 +163,7 @@ public static partial class SmokeChecks
         results.Add(ProbeScreenSck());
         results.Add(ProbeMonitorCcd());   // 2026-10-23, the monitors plan: read and validate only
         results.Add(ProbeMonitorDdc());
+        results.Add(ProbeMonitorNvapi());   // 2026-10-27, the NVIDIA plan: a monitor off the desktop
         results.Add(ProbeHotkey());
         results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());

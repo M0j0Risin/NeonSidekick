@@ -139,11 +139,7 @@ public sealed class MonitorInputTool(MonitorToolHooks hooks) : MonitorTool(hooks
             return error;
         }
 
-        if (!monitor.Active)
-        {
-            return "Error: " + MonitorText.OffDesktop;
-        }
-
+        // Off the desktop it switches through NVIDIA's driver, or the change says why not (2026-10-27, the NVIDIA plan).
         if (monitor.Shared)
         {
             return "Error: " + MonitorText.SharedSource;
@@ -159,8 +155,7 @@ public sealed class MonitorInputTool(MonitorToolHooks hooks) : MonitorTool(hooks
             return "Error: " + MonitorText.UnknownInput(monitor.Label, typed, rows.Where(r => !r.Hidden).Select(r => r.Words).ToList());
         }
 
-        bool unlisted = !inputs.Offered.Contains(code) && !Mccs.CommonInputs.Contains(code);
-        return await ChangeAsync(MonitorChange.SwitchInput(monitor, code, unlisted), cancellationToken).ConfigureAwait(false);
+        return await ChangeAsync(state.SwitchTo(monitor, code, words), cancellationToken).ConfigureAwait(false);
     }
 }
 

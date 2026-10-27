@@ -45,6 +45,15 @@ public static class MonitorPc
 
         if (string.Equals(typed, MonitorCommand.NowWord, StringComparison.OrdinalIgnoreCase))
         {
+            if (!monitor.Active)
+            {
+                // Off the desktop it shows nothing of this PC, whatever its input (2026-10-27, the NVIDIA plan): the input is named instead.
+                byte? example = MonitorShowing.CableGuess(monitor, inputs.Current, inputs.Offered) ?? rows.FirstOrDefault(r => !r.Hidden)?.Code;
+                var exampleRow = rows.FirstOrDefault(r => r.Code == example);
+                string named = exampleRow is null ? "DisplayPort-1" : exampleRow.Given ?? exampleRow.Standard ?? Mccs.Hex(exampleRow.Code);
+                return new([MonitorText.PcNowOffDesktop(monitor.Label, MonitorCommand.Spelled(monitor), named)], true);
+            }
+
             byte read;
             try
             {

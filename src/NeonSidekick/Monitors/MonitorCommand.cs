@@ -206,7 +206,9 @@ public static class MonitorCommand
         foreach (var m in state.Topology.Monitors)
         {
             var inputs = state.InputsOf(m);
-            var rows = m.Active && !m.Shared ? words.Rows(m, inputs.Offered, inputs.Current, state.AwayOf(m)) : [];
+            // Off the desktop once NVIDIA's driver read it (2026-10-27), its inputs as on the desktop.
+            bool readable = !m.Shared && (m.Active || inputs is { Problem: null, Current: not null });
+            var rows = readable ? words.Rows(m, inputs.Offered, inputs.Current, state.AwayOf(m)) : [];
             foreach (string spelled in new[] { m.Number.ToString(System.Globalization.CultureInfo.InvariantCulture), Spelled(m) }.Distinct(StringComparer.Ordinal))
             {
                 all.Add(new UI.CompletionItem(spelled, m.Label));

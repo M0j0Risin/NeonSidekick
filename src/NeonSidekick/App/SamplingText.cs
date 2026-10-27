@@ -159,4 +159,7 @@ public static class SamplingText
 
     /// <summary>The note beside <see cref="ClearWord"/> in the completion.</summary>
     public const string ClearCompletionNote = "every override of the connected model";
+
+    /// <summary>The note beside <c>&lt;field&gt; clear</c> and <c>extra clear</c> in the completion (2026-10-27): the server's default again.</summary>
+    public const string ClearFieldCompletionNote = "take this override off: the server's default again";
 }

@@ -393,8 +393,10 @@ internal sealed partial class ChatScreen
     /// The Web UI dropdown's lists, built here on the screen's task (later on 2026-10-14; the idle line's top, while a page is connected): every list
     /// read now and kept as it is, the argument lists' sources over that copy — the last Home Assistant and Docker reads, the printers last listed,
     /// the shopping list's lines and stores — and the working directory's paths only while <i>File tools</i> is on. Leaves out what the page may
-    /// not run anyway (sessions, themes, servers, the screen's targets, processes, any drive's folders) and the vault's folders and the embedded
-    /// models. Nothing here refreshes, probes or writes.
+    /// not run anyway (sessions, themes, servers, the screen's targets, processes, any drive's folders) and the embedded models. Since 2026-10-27
+    /// (the user's call: the page's <c>/vault &lt;path&gt;</c> already lists a folder's contents, so the names reveal nothing new) the vault's
+    /// folders too, its root read here once and nothing while <i>Obsidian tools</i> is off; the saved prompts and links read here once (the
+    /// links' <c>unsave &lt;n&gt;</c> alone, since a number opens a window on the PC); the stopwatches. Nothing here refreshes, probes or writes.
     /// </summary>
     private WebCompletionSnapshot WebCompletionsNow()
     {
@@ -411,7 +413,12 @@ internal sealed partial class ChatScreen
         var shares = StarChoices();
         var profiles = Settings.Profiles.List(_settings.StorageDirectory);
         var timers = _timers.Snapshot().Select(timer => timer.Name).ToList();
-        var skillList = SkillChoices();
+        var stopwatches = StopwatchNames();
+        string? vaultRoot = VaultRoot(effective, out _);
+        var promptStore = SavedPromptsNow();
+        var promptList = CompletionRead(promptStore.FilePath, promptStore.List);
+        var linkStore = BrowserLinksNow();
+        var linkList = CompletionRead(linkStore.FilePath, linkStore.List);
         var workflowList = WorkflowChoices();
         var plans = PlanChoices();
         var audits = AuditChoices();
@@ -429,11 +436,11 @@ internal sealed partial class ChatScreen
             prefix => files ? [.. wd.Complete(prefix).Paths.Where(path => path.EndsWith('/'))] : [],
             prefix => files ? wd.Complete(prefix, full => Files.WorkingDirectory.IsTextFile(full) || Files.PdfFile.IsPdfPath(full)) : empty,
             prefix => files ? wd.Complete(prefix, full => Files.ImageFile.IsImagePath(full) || Files.PdfFile.IsPdfPath(full)) : empty,
-            Skills: () => skillList,
+            VaultFolders: prefix => VaultFolderChoices(vaultRoot, prefix),
             Workflows: () => workflowList,
             Planning: _plan.Active,
             Plans: () => plans,
-            Home: argText => HomeAssistant.HaCommand.Complete(ha, argText),
+            Home: argText => HomeAssistant.HaCommand.Complete(ha, argText, stills: false),
             AnyFiles: prefix => files ? wd.Complete(prefix) : empty,
             Print: argText => Printing.PrintCommand.Complete(argText, printers),
             Docker: argText => Docker.DockerCommand.Complete(docker, argText),
@@ -446,7 +453,10 @@ internal sealed partial class ChatScreen
             Ad: AdChoices,
             Monitor: MonitorChoices,
             Audits: () => audits,
-            PlanState: PlanCompletionNow(web: true));   // 2026-10-20: only the /plan verbs that run, and no edit (the page refuses it)
+            PlanState: PlanCompletionNow(web: true),   // 2026-10-20: only the /plan verbs that run, and no edit (the page refuses it)
+            Stopwatches: stopwatches,
+            Prompts: argText => PromptsCommand.Complete(argText, () => promptList),
+            BrowserLinks: argText => BrowserCommand.Complete(argText, () => linkList, unsaveOnly: true));
         var sources = new CompletionSources(
             () => commands,
             (command, argText) => ArgumentPaths(command, argText, arguments) is { } paths

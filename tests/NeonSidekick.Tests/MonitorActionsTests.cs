@@ -195,6 +195,132 @@ public sealed class MonitorActionsTests
         Assert.Equal(MonitorOutcome.Refused(MonitorText.SharedSource), shared);
     }
 
+    // ----- 2026-10-27, the NVIDIA plan: a monitor off the desktop, reached through NVIDIA's driver -----
+
+    // The XG27 off the desktop (Only the LG), its DDC/CI reached, showing input.
+    private async Task<MonitorInfo> OffDesktop(byte input = 0x11)
+    {
+        var screen = _fake.Of(FakeMonitorSystem.Xg);
+        screen.ReachedOffDesktop = true;
+        screen.Input = input;
+        await Arrange(MonitorLayout.Only, FakeMonitorSystem.Lg);
+        var xg = Monitor(FakeMonitorSystem.Xg);
+        Assert.False(xg.Active);
+        return xg;
+    }
+
+    private Task<MonitorOutcome> Back(MonitorInfo m, byte code) =>
+        _actions.ApplyAsync(MonitorChange.SwitchInput(m, code) with { Return = true }, Words, CancellationToken.None);
+
+    [Fact]
+    public async Task OffTheDesktop_ASwitch_ReadsBack_AndMarksNothing()
+    {
+        var xg = await OffDesktop(0x0F);
+        var outcome = await _actions.ApplyAsync(MonitorChange.SwitchInput(xg, 0x11), Words, CancellationToken.None);
+        Assert.Equal(MonitorOutcomeKind.Switched, outcome.Kind);
+        Assert.Equal(MonitorText.Switched("2 XG27UQDMS", "HDMI-1"), outcome.Text);
+        Assert.Equal(0x11, _fake.Of(FakeMonitorSystem.Xg).Input);
+        Assert.False(Monitor(FakeMonitorSystem.Xg).Active);
+        Assert.Null(_actions.Away.LeftFrom(XgKey));
+        Assert.DoesNotContain(_fake.Changes, c => c.StartsWith("layout Extend", StringComparison.Ordinal));
+
+        Assert.Equal(MonitorOutcomeKind.Unchanged, (await _actions.ApplyAsync(MonitorChange.SwitchInput(xg, 0x11), Words, CancellationToken.None)).Kind);
+
+        _fake.Of(FakeMonitorSystem.Xg).Ignores.Add(0x12);
+        var ignored = await _actions.ApplyAsync(MonitorChange.SwitchInput(xg, 0x12), Words, CancellationToken.None);
+        Assert.Equal(MonitorOutcomeKind.Ignored, ignored.Kind);
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_NotReached_IsOffDesktop_ReachedButSilent_IsNoAnswer()
+    {
+        var xg = await OffDesktop();
+        _fake.Of(FakeMonitorSystem.Xg).ReachedOffDesktop = false;
+        Assert.Equal(MonitorOutcome.Refused(MonitorText.OffDesktop), await _actions.ApplyAsync(MonitorChange.SwitchInput(xg, 0x12), Words, CancellationToken.None));
+
+        _fake.Of(FakeMonitorSystem.Xg).ReachedOffDesktop = true;
+        _fake.Of(FakeMonitorSystem.Xg).DdcFail = MonitorText.NoDdc;
+        Assert.Equal(MonitorOutcome.Refused(MonitorText.OffDesktopNoAnswer("2 XG27UQDMS")), await _actions.ApplyAsync(MonitorChange.SwitchInput(xg, 0x12), Words, CancellationToken.None));
+        Assert.Equal(0, _fake.Count("set " + FakeMonitorSystem.Xg));
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_ThisPcsInput_SwitchesThenAddsItBack()
+    {
+        var xg = await OffDesktop();
+        var outcome = await Back(xg, 0x0F);
+        Assert.Equal(MonitorOutcomeKind.Switched, outcome.Kind);
+        Assert.Equal(MonitorText.SwitchedAndAdded("2 XG27UQDMS", "DisplayPort-1"), outcome.Text);
+        Assert.True(Monitor(FakeMonitorSystem.Xg).Active);
+        Assert.Equal(["input " + FakeMonitorSystem.Xg + " 0F", "layout Extend"], _fake.Changes.TakeLast(2));
+        Assert.True(outcome.After!.ByTarget(FakeMonitorSystem.Xg)!.Active);
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_WindowsAddingItBackItself_StillSaysItsBack()
+    {
+        var xg = await OffDesktop();
+        _fake.Of(FakeMonitorSystem.Xg).ReturnsOn.Add(0x0F);
+        _fake.Of(FakeMonitorSystem.Lg).Source = "A:0";
+        _fake.Of(FakeMonitorSystem.Xg).Source = "A:1";
+        var outcome = await Back(xg, 0x0F);
+        Assert.Equal(MonitorText.SwitchedAndAdded("2 XG27UQDMS", "DisplayPort-1"), outcome.Text);
+        Assert.True(Monitor(FakeMonitorSystem.Xg).Active);
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_AlreadyOnThisPcsInput_TheExtendAlone()
+    {
+        var xg = await OffDesktop(0x0F);
+        var outcome = await Back(xg, 0x0F);
+        Assert.Equal(MonitorOutcomeKind.Arranged, outcome.Kind);
+        Assert.StartsWith(MonitorText.AlreadyOn("2 XG27UQDMS", "DisplayPort-1") + " ", outcome.Text, StringComparison.Ordinal);
+        Assert.Equal(0, _fake.Count("set " + FakeMonitorSystem.Xg));
+        Assert.True(Monitor(FakeMonitorSystem.Xg).Active);
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_AnIgnoredSwitch_AddsNothing_ARefusedExtend_SaysSo()
+    {
+        var xg = await OffDesktop();
+        _fake.Of(FakeMonitorSystem.Xg).Ignores.Add(0x0F);
+        var ignored = await Back(xg, 0x0F);
+        Assert.Equal(MonitorOutcomeKind.Ignored, ignored.Kind);
+        Assert.False(Monitor(FakeMonitorSystem.Xg).Active);
+        Assert.Equal(1, _fake.Changes.Count(c => c.StartsWith("layout", StringComparison.Ordinal)));   // Only the LG, from the setup
+
+        _fake.Of(FakeMonitorSystem.Xg).Ignores.Clear();
+        _fake.LayoutFail = MonitorText.BadConfiguration;
+        var refused = await Back(xg, 0x0F);
+        Assert.Equal(MonitorOutcomeKind.Switched, refused.Kind);
+        Assert.StartsWith(MonitorText.SwitchedNotAdded("2 XG27UQDMS", "DisplayPort-1", ""), refused.Text, StringComparison.Ordinal);
+        Assert.Contains(MonitorText.BadConfiguration, refused.Text, StringComparison.Ordinal);
+        Assert.False(Monitor(FakeMonitorSystem.Xg).Active);
+
+        _fake.Of(FakeMonitorSystem.Xg).Input = 0x11;
+        var unchanged = await Back(xg, 0x11);
+        Assert.Equal(MonitorOutcomeKind.Refused, unchanged.Kind);
+        Assert.StartsWith(MonitorText.AlreadyOn("2 XG27UQDMS", "HDMI-1"), unchanged.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASwitchThatDropsTheMonitor_AndStillReachesIt_SaysItsTabStillSwitchesIt()
+    {
+        _fake.Of(FakeMonitorSystem.Xg).DropsOn.Add(0x11);
+        _fake.Of(FakeMonitorSystem.Xg).ReachedOffDesktop = true;
+        var outcome = await Switch(FakeMonitorSystem.Xg, 0x11);
+        Assert.Equal(MonitorOutcomeKind.LeftDesktop, outcome.Kind);
+        Assert.Equal(MonitorText.LeftDesktopReached("2 XG27UQDMS", "HDMI-1"), outcome.Text);
+    }
+
+    [Fact]
+    public void Describe_AReturn_SaysItAddsTheMonitorBack()
+    {
+        var xg = Monitor(FakeMonitorSystem.Xg) with { Active = false };
+        string plain = MonitorChange.SwitchInput(xg, 0x0F).Describe(Words);
+        Assert.Equal(plain + MonitorText.AndAddWords, (MonitorChange.SwitchInput(xg, 0x0F) with { Return = true }).Describe(Words));
+    }
+
     [Fact]
     public async Task Layouts_ApplyAndSay_OrSayNothingChanged()
     {

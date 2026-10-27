@@ -185,7 +185,9 @@ public static class ShoppingCommand
 
     /// <summary>
     /// The input line's argument list after <c>/shopping </c>: the verbs while the first word is typed; after <c>store </c>, its
-    /// <c>add</c> and <c>remove</c> and the stores' names; after <c>check</c>, <c>uncheck</c> or <c>remove</c>, the list's lines.
+    /// <c>add</c> and <c>remove</c> and the stores' names; after <c>check</c>, <c>uncheck</c> or <c>remove</c>, the list's lines. Since
+    /// 2026-10-27 (the completion survey): <c>clear all</c>; the stores after <c>store remove </c> and <c>store rename </c>, then <c>to</c>
+    /// after <c>store rename &lt;store&gt; </c>; <c>verbose</c> after <c>export &lt;store&gt; </c> and <c>print &lt;store&gt; </c>.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<string> stores, IReadOnlyList<string> items)
     {
@@ -200,8 +202,20 @@ public static class ShoppingCommand
 
         string word = argText[..space].ToLowerInvariant();
         string head = argText[..(space + 1)];
+        string rest = argText[head.Length..];
+        if (word == "store" && StoreVerbItems(head, rest, stores) is { } storeItems)
+        {
+            return MentionCompleter.Matches(storeItems, argText);
+        }
+
+        if (word is "export" or "print" && StoreNamed(rest, stores) is { } named)
+        {
+            return MentionCompleter.Matches([new(head + rest[..(named.Length + 1)] + VerboseWord, "the roomy form: a heading per aisle, a box per item")], argText);
+        }
+
         return word switch
         {
+            "clear" => MentionCompleter.Matches([new(head + "all", "empty the list, after a yes")], argText),
             "store" => MentionCompleter.Matches(
                 [new(head + "add ", "a new store: /shopping store add <name>"), new(head + "rename ", "/shopping store rename <name> to <new-name>"), new(head + "remove ", "a store and its layout gone, after a yes"), .. stores.Select(s => new CompletionItem(head + s, "shop at " + s))],
                 argText),
@@ -212,6 +226,32 @@ public static class ShoppingCommand
             _ => [],
         };
     }
+
+    /// <summary><c>store remove </c>'s and <c>store rename </c>'s items (the stores, then <c>to</c>); null when <paramref name="rest"/> is no such verb and a space.</summary>
+    private static IReadOnlyList<CompletionItem>? StoreVerbItems(string head, string rest, IReadOnlyList<string> stores)
+    {
+        int gap = rest.IndexOf(' ', StringComparison.Ordinal);
+        if (gap <= 0)
+        {
+            return null;
+        }
+
+        string verb = rest[..gap].ToLowerInvariant();
+        string verbHead = head + rest[..(gap + 1)];
+        string named = rest[(gap + 1)..];
+        return verb switch
+        {
+            "remove" => stores.Select(s => new CompletionItem(verbHead + s, "a store and its layout gone, after a yes")).ToList(),
+            "rename" when StoreNamed(named, stores) is { } store => [new(verbHead + named[..(store.Length + 1)] + "to", "the new name follows")],
+            "rename" => stores.Select(s => new CompletionItem(verbHead + s, "rename " + s + ": … to <new-name>")).ToList(),
+            "add" => [],
+            _ => null,
+        };
+    }
+
+    /// <summary>The longest store of <paramref name="stores"/> <paramref name="text"/> starts with, then a space (any case); null for none.</summary>
+    private static string? StoreNamed(string text, IReadOnlyList<string> stores) =>
+        stores.Where(s => text.StartsWith(s + " ", StringComparison.OrdinalIgnoreCase)).OrderByDescending(s => s.Length).FirstOrDefault();
 
     private static ShoppingCommandLine Usage() => new(ShoppingVerb.Unknown, Error: ShoppingText.CommandUsage);
 }

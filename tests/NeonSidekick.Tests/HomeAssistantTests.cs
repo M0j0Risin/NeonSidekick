@@ -817,13 +817,38 @@ public sealed class HomeAssistantTests : IDisposable
     {
         var snapshot = Snapshot();
 
-        Assert.Equal(["scene", "states", "say"], HaCommand.Complete(snapshot, "s").Select(i => i.Text));
+        Assert.Equal(["scene", "states", "say", "stills"], HaCommand.Complete(snapshot, "s").Select(i => i.Text));
         Assert.Contains("on Den", HaCommand.Complete(snapshot, "on d").Select(i => i.Text));
         Assert.Contains("on Den Corner Lamp", HaCommand.Complete(snapshot, "on d").Select(i => i.Text));
         Assert.Equal(["scene Den Relax", "scene Den Read"], HaCommand.Complete(snapshot, "scene den").Select(i => i.Text));
         Assert.Equal(["tv source HDMI 1", "tv source HDMI 2", "tv source HDMI 3 (eARC/ARC)", "tv source HDMI 4"], HaCommand.Complete(snapshot, "tv source h").Select(i => i.Text));
         Assert.Equal(["tv mute"], HaCommand.Complete(null, "tv m").Select(i => i.Text));
         Assert.Empty(HaCommand.Complete(null, "scene de"));
+        Assert.Equal(["tv vol", "tv volume"], HaCommand.Complete(null, "tv v").Select(i => i.Text));   // 2026-10-27: the documented alias
+    }
+
+    /// <summary>
+    /// <c>/ha states </c> (2026-10-27, the completion survey): the snapshot's domains, then its entity ids, narrowed as typed; with no
+    /// snapshot, nothing.
+    /// </summary>
+    [Fact]
+    public void Complete_States_OffersDomains_ThenEntityIds()
+    {
+        var snapshot = Snapshot();
+
+        var all = HaCommand.Complete(snapshot, "states ");
+        Assert.Contains(all, i => i.Text == "states light" && i.Note == "domain");
+        Assert.Contains(all, i => i.Text == "states scene" && i.Note == "domain");
+        Assert.Contains(all, i => i.Text == "states light.den_den");
+        int lastDomain = all.ToList().FindLastIndex(i => i.Note == "domain");
+        int firstId = all.ToList().FindIndex(i => i.Text.Contains('.', StringComparison.Ordinal));
+        Assert.True(lastDomain < firstId);   // the domains first
+        Assert.Equal(all.Count, all.Select(i => i.Text).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+        var lights = HaCommand.Complete(snapshot, "states light.");
+        Assert.NotEmpty(lights);
+        Assert.All(lights, i => Assert.StartsWith("states light.", i.Text, StringComparison.Ordinal));
+        Assert.Empty(HaCommand.Complete(null, "states "));
     }
 
     // ── the turn ────────────────────────────────────────────────────────────

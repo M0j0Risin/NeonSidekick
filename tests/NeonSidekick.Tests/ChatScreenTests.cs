@@ -6942,7 +6942,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on off"));
         Assert.Equal("on", ChatScreen.MemoryOnWord);
         Assert.Equal("off", ChatScreen.MemoryOffWord);
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("on", ChatScreen.MemoryOnNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, 2026-10-27
+        Assert.Equal(["on", "off"], ChatScreen.ArgumentItems("/memory", "o", Sources()).Select(i => i.Text));
         Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "co", Sources()));   // copy retired 2026-10-13
@@ -18287,8 +18288,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["view"], ChatScreen.ArgumentItems("/comfy", "v", sources).Select(i => i.Text));
         Assert.Equal(["purge"], ChatScreen.ArgumentItems("/comfy", "pu", sources).Select(i => i.Text));
         Assert.Equal(["edit"], ChatScreen.ArgumentItems("/comfy", "ed", sources).Select(i => i.Text));
-        Assert.Equal(["edit json", "edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit ", sources).Select(i => i.Text));
-        Assert.Equal(["edit markdown"], ChatScreen.ArgumentItems("/comfy", "edit m", sources).Select(i => i.Text));
+        Assert.Equal(["edit json", "edit markdown", "edit md"], ChatScreen.ArgumentItems("/comfy", "edit ", sources).Select(i => i.Text));   // md, markdown's documented alias, 2026-10-27
+        Assert.Equal(["edit markdown", "edit md"], ChatScreen.ArgumentItems("/comfy", "edit m", sources).Select(i => i.Text));
+        Assert.Equal(["edit md juggernaut-xl", "edit md pony-txt2img"], ChatScreen.ArgumentItems("/comfy", "edit md ", sources).Select(i => i.Text));
         Assert.Equal(["edit json juggernaut-xl", "edit json pony-txt2img"], ChatScreen.ArgumentItems("/comfy", "edit json ", sources).Select(i => i.Text));
         Assert.Equal(["edit markdown pony-txt2img"], ChatScreen.ArgumentItems("/comfy", "edit markdown po", sources).Select(i => i.Text));
         Assert.Equal("pony · text → image · 1024×1024", ChatScreen.ArgumentItems("/comfy", "edit markdown po", sources).Single().Note);
@@ -24977,14 +24979,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(ChatScreen.TryParseSessionId("5.0", out _));
     }
 
-    private static ChatScreen.ArgumentSources Sources(IReadOnlyList<string>? timers = null, string loaded = "neon", IReadOnlyList<CompletionItem>? skills = null) => new(
+    private static ChatScreen.ArgumentSources Sources(IReadOnlyList<string>? timers = null, string loaded = "neon") => new(
         () => ["chef", "neon", "work"],
         loaded,
         timers ?? [],
         prefix => new[] { "docs/", "docs/tools/", "src/", "test/" }.Where(f => f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || f.Contains("/" + prefix, StringComparison.OrdinalIgnoreCase)).ToList(),
         TextFiles,
-        query => new MentionResult(FileOutcome.Ok, query.Length == 0 ? ["docs/", "pic.png", "shot.jpg"] : query.Equals("p", StringComparison.OrdinalIgnoreCase) ? ["pic.png"] : [], false),
-        Skills: skills is null ? null : () => skills);
+        query => new MentionResult(FileOutcome.Ok, query.Length == 0 ? ["docs/", "pic.png", "shot.jpg"] : query.Equals("p", StringComparison.OrdinalIgnoreCase) ? ["pic.png"] : [], false));
 
     /// <summary>A stand-in for <c>WorkingDirectory.Complete(query, textFilesOnly: true)</c>: the root's one level for an empty query, the whole tree by name prefix otherwise, a folder segment narrowing it.</summary>
     private static MentionResult TextFiles(string query)
@@ -25215,7 +25216,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["docs/", "pic.png", "shot.jpg"], ChatScreen.ArgumentPaths("/view", "", sources)!.Paths);
         Assert.Equal(["pic.png"], ChatScreen.ArgumentPaths("/VIEW", "p", sources)!.Paths);
         Assert.Empty(ChatScreen.ArgumentPaths("/view", "pic.png", sources)!.Paths);
-        Assert.Empty(ChatScreen.ArgumentPaths("/view", "docs/ ", sources)!.Paths);
+        Assert.Equal(["docs/ --chat", "docs/ --thumbs"], ChatScreen.ArgumentPaths("/view", "docs/ ", sources)!.Paths);   // its flags after a path and a space (2026-10-27)
         // /view --chat (2026-09-27): the path after the flag completes, each pick carrying the flag back.
         Assert.Equal(["--chat docs/", "--chat pic.png", "--chat shot.jpg"], ChatScreen.ArgumentPaths("/view", "--chat ", sources)!.Paths);
         Assert.Equal(["--chat pic.png"], ChatScreen.ArgumentPaths("/view", "--chat p", sources)!.Paths);

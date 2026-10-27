@@ -133,6 +133,18 @@ public class YouTubeCommandTests
         Assert.Empty(YouTubeCommand.Complete("save "));
     }
 
+    /// <summary>The saved videos (2026-10-27, the completion survey): <c>unsave &lt;n&gt;</c> by number and <c>play &lt;id&gt;</c>, each noted by the title, else the id.</summary>
+    [Fact]
+    public void Complete_OffersTheSavedVideos_ForUnsaveAndPlay()
+    {
+        IReadOnlyList<YouTubeSaved> Saved() => [new() { Id = "dQw4w9WgXcQ", Title = "Never" }, new() { Id = "jfKfPfyJRdk" }];
+
+        Assert.Equal([new UI.CompletionItem("unsave 1", "Never"), new UI.CompletionItem("unsave 2", "jfKfPfyJRdk")], YouTubeCommand.Complete("unsave ", Saved));
+        Assert.Equal([new UI.CompletionItem("play dQw4w9WgXcQ", "Never")], YouTubeCommand.Complete("play d", Saved));
+        Assert.Equal(["list --clear"], YouTubeCommand.Complete("list ", Saved).Select(c => c.Text));   // the rest as before
+        Assert.Equal(YouTubeCommand.Words.Count, YouTubeCommand.Complete("", Saved).Count);
+    }
+
     [Fact]
     public void TheCommand_IsRegistered_AndRunsOnThePaneUnderAReply()
     {

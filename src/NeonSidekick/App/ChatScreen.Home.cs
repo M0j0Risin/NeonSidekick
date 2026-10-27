@@ -129,6 +129,13 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleHomeAssistantAsync(string args, CancellationToken cancellationToken)
     {
+        // /ha stills is the stills' folder, not the server (2026-10-27): taken first, so it works with no URL or key.
+        if (HaStillsCommand.TryParse(args, out var stills))
+        {
+            await HandleHomeStillsAsync(stills, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         // A change from the Web UI's page asks first on the page and here (later on 2026-10-14); the PC's own hand never does.
         var ask = WebConfirmHook is { } confirm ? new HaAsk(confirm, _effective().HomeAssistantSafeServices) : null;
         var result = await _transcript.WithSpinnerAsync(HaText.Working, () => HaCommand.RunAsync(_ha, args, cancellationToken, ask)).ConfigureAwait(false);

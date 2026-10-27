@@ -934,7 +934,8 @@ Under *Screen tools*. Not offered headless, or when the embedded model can't see
 Under *Monitor tools*. Windows only ([MAC.md](MAC.md#what-works)): the layout through Windows, each monitor's input over DDC/CI.
 
 * **Changes ask first,** on the pane (and the Web UI's page): the question names the monitor and the input or layout. Never offered headless or without a pane.
-* **Switching away may drop the screen:** a monitor showing another source can leave this PC's desktop until its own buttons or the other machine bring it back.
+* **Switching away may drop the screen:** a monitor showing another source can leave this PC's desktop until its own buttons or the other machine bring it back. On an NVIDIA card its tab still switches it.
+* **Off the desktop:** on an NVIDIA card, the app reads and switches a monitor's input through NVIDIA's driver and sends nothing else. Switching to this PC's input also runs Extend all.
 * **The last screen:** the question warns when no other monitor would still show this PC: by your pick of each monitor's *This PC's input*, else the cable (an HDMI input on a DisplayPort cable, or the reverse, is another input).
 * **The model can't set this PC's input.** It reads the pick in `monitor_list`; only you set it, on the pane or with `/monitor <monitor> pc`.
 * **Limits:** a monitor that doesn't answer DDC/CI on another input, or answers with no input (0x00), can't be judged and counts as showing this PC. Picture-by-picture may read as another input.
@@ -1096,6 +1097,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **YouTube:** `seek` and `volume` on a paused video answer with the old value. The change itself happens, and the next answer shows it.
 * **Bot-checked downloads:** a site that ties its clearance to the browser's connection may still refuse a download after the Browser window passed its check.
 * **The camera pane:** its "The camera is opening…" line stays until the next key after the camera is on.
+* **A monitor off the desktop** has been reached only on a desktop NVIDIA card with direct cables; a laptop's NVIDIA GPU, a dock or a hub hasn't been tried.
 * **The Web UI's floating buttons** riding above a phone's keyboard can only be checked by hand on a phone; no test shows it.
 * **Oracle before 23ai:** a `SELECT` that calls a stored function declared `PRAGMA AUTONOMOUS_TRANSACTION` commits whatever that function writes; neither the read-only transaction nor the rollback covers it. Give the account no such function, or use 23ai.
 * **Large cells in MySQL and PostgreSQL** are read whole before they are cut to the answer's size; SQL Server and Oracle read only what they show.

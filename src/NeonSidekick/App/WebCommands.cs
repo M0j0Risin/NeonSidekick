@@ -162,7 +162,9 @@ public static class WebCommands
             SlashCommand.Tts or SlashCommand.Voice => Is(text, "on") || Is(text, "off") ? WebCommandVerdict.Run : Pane(word, word + " on|off"),
             SlashCommand.Memory => MemoryModes.Any(m => Is(text, m)) ? WebCommandVerdict.Run : Pane(word, "/memory read-write|read-only|off"),
             SlashCommand.Cwd => text.Length == 0 ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(word + " <path>")),
-            SlashCommand.HomeAssistant => Is(first, "states") ? WebCommandVerdict.List : WebCommandVerdict.Run,
+            // 2026-10-27: /ha stills is the PC's (its windows, and a purge from the phone must not delete files without the PC's yes).
+            SlashCommand.HomeAssistant => Is(first, "states") ? WebCommandVerdict.List
+                : Is(first, HomeAssistant.HaStillsCommand.Word) ? Pane(word + " " + HomeAssistant.HaStillsCommand.Word, null) : WebCommandVerdict.Run,
             SlashCommand.Docker => Is(first, "logs") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.EventLog => WebCommandVerdict.List,   // 2026-10-15: the events as a list card, /docker's way from a web line
             SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad => WebCommandVerdict.List,   // 2026-10-15, the admin-tools plan: their lines as a list card

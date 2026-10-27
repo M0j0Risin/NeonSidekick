@@ -1,5 +1,6 @@
 using NeonSidekick.App;
 using NeonSidekick.Camera;
+using NeonSidekick.HomeAssistant;
 using NeonSidekick.Images;
 using NeonSidekick.Screen;
 using NeonSidekick.UI;
@@ -85,14 +86,57 @@ public sealed class PictureFolderCommandTests
     [InlineData(SlashCommand.Pasted, "", MidTurnClass.Quick)]
     [InlineData(SlashCommand.Comfy, "", MidTurnClass.Pane)]   // 2026-10-18: the bare word is /tools comfy's page
     [InlineData(SlashCommand.Comfy, "status", MidTurnClass.Deferred)]
+    [InlineData(SlashCommand.HomeAssistant, "stills purge", MidTurnClass.Deferred)]   // 2026-10-27: /ha stills is classed as /pasted is
+    [InlineData(SlashCommand.HomeAssistant, "stills view", MidTurnClass.Quick)]
+    [InlineData(SlashCommand.HomeAssistant, "stills thumbs", MidTurnClass.Quick)]
+    [InlineData(SlashCommand.HomeAssistant, "stills", MidTurnClass.Quick)]   // the usage error at once
+    [InlineData(SlashCommand.HomeAssistant, "states", MidTurnClass.Pane)]   // every other /ha as before
     public void UnderAReply_EachFormHasItsClass(SlashCommand command, string args, MidTurnClass expected) =>
         Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, args));
+
+    [Theory]
+    [InlineData("stills", PictureFolderVerb.Bare)]
+    [InlineData("STILLS view", PictureFolderVerb.View)]
+    [InlineData(" stills thumbs ", PictureFolderVerb.Thumbs)]
+    [InlineData("stills purge", PictureFolderVerb.Purge)]
+    [InlineData("stills x", PictureFolderVerb.Unknown)]
+    [InlineData("Stills purge now", PictureFolderVerb.Unknown)]
+    public void HaStills_Parses_ThePictureFolderWords(string args, PictureFolderVerb verb)
+    {
+        Assert.True(HaStillsCommand.TryParse(args, out var parsed));
+        Assert.Equal(verb, parsed);
+    }
+
+    [Theory]
+    [InlineData("states")]
+    [InlineData("")]
+    [InlineData("on stills")]
+    [InlineData("stillsy view")]
+    public void HaStills_LeavesEveryOtherHaForm(string args) => Assert.False(HaStillsCommand.TryParse(args, out _));
+
+    [Fact]
+    public void HaStills_IsOffered_ThenItsThreeWords_WithOrWithoutASnapshot()
+    {
+        var snapshot = new HaSnapshot([], [], DateTimeOffset.UnixEpoch);
+        Assert.Contains("stills", HaCommand.Complete(null, "").Select(i => i.Text));
+        Assert.Equal(["states", "stills"], HaCommand.Complete(snapshot, "st").Select(i => i.Text));
+        Assert.Equal(["stills view", "stills thumbs", "stills purge"], HaCommand.Complete(null, "stills ").Select(i => i.Text));
+        Assert.Equal(["stills view", "stills thumbs", "stills purge"], HaCommand.Complete(snapshot, "stills ").Select(i => i.Text));
+        Assert.Equal(["STILLS purge"], HaCommand.Complete(null, "STILLS p").Select(i => i.Text));
+        Assert.Empty(HaCommand.Complete(snapshot, "stills view x"));
+
+        // The Web UI's page refuses /ha stills, so its list leaves it out.
+        Assert.DoesNotContain("stills", HaCommand.Complete(snapshot, "", stills: false).Select(i => i.Text));
+        Assert.Empty(HaCommand.Complete(snapshot, "stills ", stills: false));
+    }
 
     [Fact]
     public void TheWords_ArePinned()
     {
         Assert.Equal("Usage: /splash, or /splash view|thumbs|purge", SplashCommand.Usage);
         Assert.Equal("Usage: /pasted view|thumbs|purge", PastedCommand.Usage);
+        Assert.Equal("Usage: /ha stills view|thumbs|purge", HaStillsCommand.Usage);
+        Assert.EndsWith(" · /ha stills view|thumbs|purge", HaText.Usage, StringComparison.Ordinal);
         Assert.Equal("(the built-in splash pictures show until this folder has some; drop pictures here, or ask the model to set_splash_image)", SplashCommand.BuiltInNotice);
         Assert.Contains(NeonSidekick.Llm.Tools.SetSplashImageTool.ToolName, SplashCommand.BuiltInNotice, StringComparison.Ordinal);
         Assert.Equal("/tools comfy", ChatScreen.ComfyToolsLine);

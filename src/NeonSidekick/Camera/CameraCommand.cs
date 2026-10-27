@@ -145,6 +145,32 @@ public static class CameraCommand
         return lines;
     }
 
+    /// <summary>
+    /// <see cref="Complete(string)"/> with the cameras after <c>use </c> (2026-10-27, the completion survey) from the last device list read
+    /// (<see cref="CameraSession.Last"/>; null, nothing): <c>use &lt;name&gt;</c> noted by its number, and <c>chosen</c> for the one in use
+    /// (<paramref name="chosen"/>, <c>Camera device</c>, as <see cref="CameraSession.Choose"/> reads it). Two of one name go by number, since
+    /// <see cref="Find"/> would take the first by name. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<CameraDevice>? devices, string? chosen)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        const string useHead = "use ";
+        if (devices is not { Count: > 0 } || !argText.StartsWith(useHead, StringComparison.OrdinalIgnoreCase))
+        {
+            return Complete(argText);
+        }
+
+        string head = argText[..useHead.Length];
+        var current = CameraSession.Choose(devices, chosen, out _);
+        var items = devices.Select((d, i) =>
+        {
+            string number = (i + 1).ToString(CultureInfo.InvariantCulture);
+            bool twin = devices.Count(o => string.Equals(o.Name, d.Name, StringComparison.OrdinalIgnoreCase)) > 1;
+            return new CompletionItem(head + (twin ? number : d.Name), ReferenceEquals(d, current) ? number + " · chosen" : number);
+        }).ToList();
+        return MentionCompleter.Matches(items, argText);
+    }
+
     /// <summary>The input line's list after <c>/camera </c>: the words, then <c>off</c> after <c>watch</c>. Pure.</summary>
     public static IReadOnlyList<CompletionItem> Complete(string argText)
     {

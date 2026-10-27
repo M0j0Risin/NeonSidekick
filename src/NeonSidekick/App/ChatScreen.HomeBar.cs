@@ -502,6 +502,27 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>
+    /// <c>/homebar</c>'s argument list (2026-10-27): <see cref="HomeBarItems.Complete"/> over <see cref="HomeBarItems.Lists"/> — the drawn
+    /// chips as <see cref="FindHomeChip"/> reads them, the saved items, the live feed's catalog. Never reads the network.
+    /// </summary>
+    private IReadOnlyList<CompletionItem> HomeBarChoices(string argText)
+    {
+        if (!argText.Contains(' ', StringComparison.Ordinal))
+        {
+            return HomeBarItems.Complete(argText, [], []);
+        }
+
+        IReadOnlyList<HomeChip>? chips;
+        lock (_homeGate)
+        {
+            chips = _homeCache?.Chips;
+        }
+
+        var (drawn, named) = HomeBarItems.Lists(chips, _settings.Current, _homeLive.Snapshot.Catalog, monitors: _monitors is not null);
+        return HomeBarItems.Complete(argText, drawn, named);
+    }
+
     /// <summary>The chip on the bar <paramref name="item"/> names: its reference, or its name (any case); null when none is.</summary>
     private HomeChip? FindHomeChip(string item)
     {

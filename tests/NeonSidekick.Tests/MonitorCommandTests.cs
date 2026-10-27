@@ -206,6 +206,69 @@ public sealed class MonitorCommandTests
         Assert.DoesNotContain("(0x00)", lines[2], StringComparison.Ordinal);
     }
 
+    // 2026-10-27, the NVIDIA plan: the XG27 off the desktop, reached (its inputs read) or not.
+    private static FakeMonitorSystem OffDesktopFake(bool reached)
+    {
+        var fake = new FakeMonitorSystem();
+        var xg = fake.Of(FakeMonitorSystem.Xg);
+        xg.Active = false;
+        xg.ReachedOffDesktop = reached;
+        xg.Input = 0x11;
+        return fake;
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_Reached_TheListAndCompletion_ShowItsInputs_PcNowIsRefused()
+    {
+        var fake = OffDesktopFake(reached: true);
+        using var board = new MonitorBoard(fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var words = MonitorWords.None(board.State.Topology.Monitors);
+        var xg = board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+
+        string line = MonitorText.ListLines(board.State, words).Single(l => l.StartsWith("2 XG27UQDMS", StringComparison.Ordinal));
+        Assert.Contains("off the desktop", line, StringComparison.Ordinal);
+        Assert.Contains("HDMI-1", line, StringComparison.Ordinal);
+        Assert.Contains(MonitorCommand.Complete("2 input ", board.State, words), i => i.Text == "2 input HDMI-2");
+
+        int calls = fake.Calls.Count;
+        var now = await MonitorPc.RunAsync(board.Actions, board.State, xg, words, "now", CancellationToken.None);
+        Assert.True(now.Failed);
+        Assert.Null(now.Save);
+        Assert.Equal([MonitorText.PcNowOffDesktop("2 XG27UQDMS", MonitorCommand.Spelled(xg), "DisplayPort-1")], now.Lines);
+        Assert.Equal(calls, fake.Calls.Count);   // nothing read
+
+        var named = await MonitorPc.RunAsync(board.Actions, board.State, xg, words, "hdmi-2", CancellationToken.None);
+        Assert.False(named.Failed);
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_NotReached_TheListSaysJustThat_AndCompletesNoInput()
+    {
+        using var board = new MonitorBoard(OffDesktopFake(reached: false), quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var words = MonitorWords.None(board.State.Topology.Monitors);
+        Assert.Contains("2 XG27UQDMS · DisplayPort · off the desktop", MonitorText.ListLines(board.State, words));
+        Assert.DoesNotContain(MonitorCommand.Complete("2 input ", board.State, words), i => i.Text == "2 input HDMI-1");
+    }
+
+    [Fact]
+    public async Task TheCheck_ReadsAMonitorOffTheDesktop_Tagged_AndOneNotReached_StillPasses()
+    {
+        var fake = OffDesktopFake(reached: true);
+        var console = new Spectre.Console.Testing.TestConsole();
+        console.Profile.Width = 400;
+        Assert.Equal(0, await MonitorCheck.RunAsync(console, fake, TimeProvider.System, CancellationToken.None));
+        Assert.Contains("XG27UQDMS " + MonitorCheck.OffDesktopTag + ": HDMI-1 0x11 in ", console.Output, StringComparison.Ordinal);
+        Assert.Empty(fake.Changes);
+
+        var unreached = OffDesktopFake(reached: false);
+        var second = new Spectre.Console.Testing.TestConsole();
+        second.Profile.Width = 400;
+        Assert.Equal(0, await MonitorCheck.RunAsync(second, unreached, TimeProvider.System, CancellationToken.None));
+        Assert.Contains("XG27UQDMS: " + MonitorCheck.OffDesktopNotReached, second.Output, StringComparison.Ordinal);
+    }
+
     private static int CountOf(string text, string part)
     {
         int count = 0;

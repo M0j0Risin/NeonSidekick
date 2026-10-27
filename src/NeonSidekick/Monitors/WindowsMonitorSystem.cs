@@ -21,7 +21,9 @@ namespace NeonSidekick.Monitors;
 /// "Generic PnP Monitor"), so a shared target is refused with <see cref="MonitorText.SharedSource"/>. Nothing is keyed by GDI name: Windows
 /// moves them (the XG27 brought back alone became <c>\\.\DISPLAY1</c>). A missing dxva2 (Server Core) is
 /// <see cref="MonitorText.NoMonitorControl"/>; the layout still works there. Names from the monitor are scrubbed (<see cref="NameScrub"/>).
-/// Excluded from coverage: the smoke's <c>monitor:ccd</c>/<c>monitor:ddc</c> and <c>--monitor-check</c> prove it.
+/// A monitor off the desktop (2026-10-27, the NVIDIA plan) has no desktop handle for dxva2, so its input calls go to <see cref="NvidiaDdc"/>,
+/// which reaches it over the cable on an NVIDIA card and answers <see cref="MonitorText.OffDesktop"/> elsewhere; a monitor on the desktop
+/// never takes that path. Excluded from coverage: the smoke's <c>monitor:ccd</c>/<c>monitor:ddc</c> and <c>--monitor-check</c> prove it.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class WindowsMonitorSystem : IMonitorSystem
@@ -72,7 +74,13 @@ public sealed unsafe class WindowsMonitorSystem : IMonitorSystem
         }
     }
 
-    public MonitorCaps Capabilities(string target) => Ddc(target, handle =>
+    public MonitorCaps Capabilities(string target)
+    {
+        var snapshot = QueryCore();
+        return OffDesktop(snapshot, target) is { } off ? NvidiaDdc.Capabilities(snapshot, off) : Ddc(snapshot, target, DxvaCapabilities);
+    }
+
+    private static MonitorCaps DxvaCapabilities(IntPtr handle)
     {
         if (!GetCapabilitiesStringLength(handle, out uint length))
         {
@@ -92,7 +100,7 @@ public sealed unsafe class WindowsMonitorSystem : IMonitorSystem
         string raw = NameScrub.Display(Encoding.ASCII.GetString(buffer, 0, end >= 0 ? end : buffer.Length));
         var (inputs, reported) = Mccs.Inputs(raw);
         return new MonitorCaps(inputs, reported, raw);
-    });
+    }
 
     /// <summary>The number of physical monitors behind the target's GDI device (the smoke's <c>monitor:ddc</c>; two or more while duplicated).</summary>
     public int PhysicalCount(string target)
@@ -115,11 +123,27 @@ public sealed unsafe class WindowsMonitorSystem : IMonitorSystem
         }
     }
 
-    public byte CurrentInput(string target) => Ddc(target, handle =>
-        GetVCPFeatureAndVCPFeatureReply(handle, Mccs.InputSource, null, out uint current, out _) ? (byte)(current & 0xFF) : throw Last());
+    public byte CurrentInput(string target)
+    {
+        var snapshot = QueryCore();
+        return OffDesktop(snapshot, target) is { } off ? NvidiaDdc.CurrentInput(snapshot, off) : Ddc(snapshot, target, handle =>
+            GetVCPFeatureAndVCPFeatureReply(handle, Mccs.InputSource, null, out uint current, out _) ? (byte)(current & 0xFF) : throw Last());
+    }
 
-    public void SetInput(string target, byte value) => Ddc(target, handle =>
-        SetVCPFeature(handle, Mccs.InputSource, value) ? 0 : throw Last());
+    public void SetInput(string target, byte value)
+    {
+        var snapshot = QueryCore();
+        if (OffDesktop(snapshot, target) is { } off)
+        {
+            NvidiaDdc.SetInput(snapshot, off, value);
+            return;
+        }
+
+        _ = Ddc(snapshot, target, handle => SetVCPFeature(handle, Mccs.InputSource, value) ? 0 : throw Last());
+    }
+
+    // The monitor when it's connected but off the desktop (NVIDIA's path), else null (dxva2's, which refuses what it can't reach).
+    private static MonitorInfo? OffDesktop(MonitorSnapshot snapshot, string target) => snapshot.ByTarget(target) is { Active: false } m ? m : null;
 
     // The system's handle for a target: its adapter LUID and target id, stable for the run.
     private static string TargetOf(in DisplayPathTargetInfo t) =>
@@ -251,9 +275,8 @@ public sealed unsafe class WindowsMonitorSystem : IMonitorSystem
     }
 
     // Opens the one physical monitor behind the target's GDI device, runs the body, destroys every handle.
-    private static T Ddc<T>(string target, Func<IntPtr, T> body)
+    private static T Ddc<T>(MonitorSnapshot snapshot, string target, Func<IntPtr, T> body)
     {
-        var snapshot = QueryCore();
         var monitor = snapshot.ByTarget(target) ?? throw new MonitorException(MonitorText.NoSuchTarget);
         if (!monitor.Active || monitor.GdiName is null)
         {

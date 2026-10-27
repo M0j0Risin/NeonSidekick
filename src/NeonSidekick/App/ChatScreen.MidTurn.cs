@@ -229,7 +229,8 @@ internal sealed partial class ChatScreen
     /// The picture folders' purges (2026-10-18, the user's ask: <c>/camera purge</c>, <c>/screen purge</c>, <c>/splash purge</c>, <c>/pasted
     /// purge</c>) wait for the idle line, as <c>/comfy purge</c> does: a question, and a capture or a paste may be writing there.
     /// <c>/splash view|thumbs</c> and <c>/pasted view|thumbs</c> are quick (a window of their own), as is a word either does not know (its
-    /// error at once, nothing cancelled); the bare <c>/splash</c> still stops the reply first.
+    /// error at once, nothing cancelled); the bare <c>/splash</c> still stops the reply first. <c>/ha stills</c> (2026-10-27) is classed as
+    /// <c>/pasted</c> is; every other <c>/ha</c> stays a pane on the watcher.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
@@ -237,6 +238,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsPurgeWord(args) => MidTurnClass.Deferred,
         SlashCommand.Splash when args.Trim().Length > 0 => UI.SplashCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Pasted => Images.PastedCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
+        SlashCommand.HomeAssistant when HomeAssistant.HaStillsCommand.TryParse(args, out var stills) => stills == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.List => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb is not (Camera.CameraVerb.Shutter or Camera.CameraVerb.Snap) => MidTurnClass.Quick,
         SlashCommand.Comfy when args.Trim().Length == 0 => MidTurnClass.Pane,   // 2026-10-18: the bare word is /tools comfy, a page over the reply as that is
@@ -852,6 +854,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Pasted:
                 // /splash and /pasted view | thumbs, and a word either does not know, alone reach here (2026-10-18): a window of its own or the error.
                 await (command == SlashCommand.Splash ? HandleSplashWordsAsync(args, cancellationToken) : HandlePastedAsync(args, cancellationToken)).ConfigureAwait(false);
+                break;
+            case SlashCommand.HomeAssistant:
+                // /ha stills view | thumbs, and a bare or unknown stills word, alone reach here (2026-10-27): a window of its own or the error.
+                _ = HomeAssistant.HaStillsCommand.TryParse(args, out var stillsVerb);
+                await HandleHomeStillsAsync(stillsVerb, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Unknown:
                 _transcript.Error(UnknownCommandError(CommandWord(text)));

@@ -9,13 +9,20 @@ namespace NeonSidekick.App;
 /// <summary>
 /// <c>--monitor-check</c> (2026-10-23, the monitors plan, <see cref="CameraCheck"/>'s shape): the CCD and DDC/CI layers' proof on the published
 /// binary against this PC's monitors — the system there (<see cref="MonitorText.NoneHere"/> fails where there is none, as the admin checks do),
-/// the list, then per monitor on the desktop its capabilities (the raw string shown here, and only here: it is hardware text) and its current
-/// input, with the time each read took. Read-only: no input switched, no layout changed. A monitor without DDC/CI is a passing "no DDC/CI"
-/// line. Exit 0 only when every line passes. Not part of the build gate: it needs monitors.
+/// the list, then per monitor its capabilities (the raw string shown here, and only here: it is hardware text) and its current input, with
+/// the time each read took. Read-only: no input switched, no layout changed. A monitor without DDC/CI is a passing "no DDC/CI" line. A monitor
+/// off the desktop (2026-10-27, the NVIDIA plan) is read through NVIDIA's driver, its lines tagged; one it doesn't reach is a passing "not
+/// reached" line (an absence, not a fault). Exit 0 only when every line passes. Not part of the build gate: it needs monitors.
 /// </summary>
 internal static class MonitorCheck
 {
     public const string IntroLine = "Monitor check: the monitors read, nothing changed.";
+
+    /// <summary>The tag on an off-desktop monitor's lines, read through NVIDIA's driver (2026-10-27).</summary>
+    public const string OffDesktopTag = "(off the desktop, through NVIDIA)";
+
+    /// <summary>An off-desktop monitor the system didn't reach: a passing line.</summary>
+    public const string OffDesktopNotReached = "off the desktop, not reached";
 
     public static async Task<int> RunAsync(IAnsiConsole console, IMonitorSystem? system, TimeProvider time, CancellationToken cancellationToken)
     {
@@ -44,8 +51,9 @@ internal static class MonitorCheck
         checks.Add(new SmokeCheck("monitor:list", snapshot.Monitors.Count > 0,
             snapshot.Monitors.Count == 0 ? MonitorText.NoMonitors
                 : MonitorText.LayoutWord(snapshot.Layout) + " · " + string.Join(" · ", snapshot.Monitors.Select(m => m.Label + " (" + m.Connector + (m.Active ? m.Mode is { } mode ? ", " + MonitorText.Mode(mode) : "" : ", off the desktop") + (m.Primary ? ", primary" : "") + ")"))));
-        foreach (var m in snapshot.Monitors.Where(m => m.Active))
+        foreach (var m in snapshot.Monitors)
         {
+            string tag = m.Active ? "" : " " + OffDesktopTag;
             if (m.Shared)
             {
                 checks.Add(new SmokeCheck("monitor:caps " + m.Number.ToString(CultureInfo.InvariantCulture), true, MonitorText.SharedSource));
@@ -62,21 +70,25 @@ internal static class MonitorCheck
                 {
                     var caps = await calls.RunAsync("caps", s => s.Capabilities(m.Target), retry: true, cancellationToken).ConfigureAwait(false);
                     checks.Add(new SmokeCheck("monitor:caps " + m.Number.ToString(CultureInfo.InvariantCulture), true,
-                        $"{m.Name}: {clock.ElapsedMilliseconds} ms, inputs {string.Join(", ", caps.Inputs.Select(c => (Mccs.StandardName(c) ?? "vendor") + " " + Mccs.Hex(c)))}{(caps.Reported ? "" : " (" + MonitorText.NotReported + ")")}; {caps.Raw}"));
+                        $"{m.Name}{tag}: {clock.ElapsedMilliseconds} ms, inputs {string.Join(", ", caps.Inputs.Select(c => (Mccs.StandardName(c) ?? "vendor") + " " + Mccs.Hex(c)))}{(caps.Reported ? "" : " (" + MonitorText.NotReported + ")")}; {caps.Raw}"));
                 }
                 catch (MonitorException e)
                 {
-                    checks.Add(new SmokeCheck("monitor:caps " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: no capabilities ({e.Message}); the common four would be offered"));
+                    checks.Add(new SmokeCheck("monitor:caps " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}{tag}: no capabilities ({e.Message}); the common four would be offered"));
                 }
 
                 // The cable's view alone (later on 2026-10-23): the check reads no settings, so no pick.
                 string guess = MonitorShowing.Judge(m, input, null, null) is { Kind: MonitorShowingKind.Elsewhere, Basis: MonitorShowingBasis.Cable }
                     ? " · " + MonitorText.CheckElsewhere(m.Connector) : "";
-                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: {Mccs.StandardName(input) ?? "vendor"} {Mccs.Hex(input)} in {read} ms{guess}"));
+                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}{tag}: {Mccs.StandardName(input) ?? "vendor"} {Mccs.Hex(input)} in {read} ms{guess}"));
+            }
+            catch (MonitorException e) when (!m.Active && e.Message == MonitorText.OffDesktop)
+            {
+                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: {OffDesktopNotReached}"));
             }
             catch (MonitorException e) when (e.Message is MonitorText.NoDdc or MonitorText.NoInputSwitch)
             {
-                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}: no DDC/CI — {e.Message}"));
+                checks.Add(new SmokeCheck("monitor:input " + m.Number.ToString(CultureInfo.InvariantCulture), true, $"{m.Name}{tag}: no DDC/CI — {e.Message}"));
             }
             catch (MonitorException e)
             {

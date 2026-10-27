@@ -391,6 +391,7 @@ public class ProfilesTests : IDisposable
             MonitorInputNames = new Dictionary<string, string> { ["ausaa34-uid4355/0f"] = "This PC" },   // this PC's cabling (2026-10-23)
             MonitorInputsHidden = ["ausaa34-uid4355/12"],
             MonitorPcInputs = ["ausaa34-uid4355/0f"],
+            MonitorInputsSeen = ["ausaa34-uid4355/0f", "ausaa34-uid4355/11"],
             TtsOutput = !new AppSettingsData().TtsOutput,
             WorkingDirectory = @"C:\elsewhere",
         };
@@ -417,7 +418,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal("This PC", kept.MonitorInputNames!["ausaa34-uid4355/0f"]);   // the monitors' input names and hidden inputs (2026-10-23)
         Assert.Equal(["ausaa34-uid4355/12"], kept.MonitorInputsHidden);
         Assert.Equal(["ausaa34-uid4355/0f"], kept.MonitorPcInputs);   // this PC's inputs, the same cabling (later on 2026-10-23)
-        Assert.Equal(22, Profiles.ResetKeptSettings.Length);   // the monitors' input names and hidden inputs 2026-10-23, this PC's inputs later that day
+        Assert.Equal(["ausaa34-uid4355/0f", "ausaa34-uid4355/11"], kept.MonitorInputsSeen);   // what the monitors last reported (2026-10-27)
+        Assert.Equal(23, Profiles.ResetKeptSettings.Length);   // the monitors' input names and hidden inputs 2026-10-23, this PC's inputs later that day, the inputs seen 2026-10-27
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

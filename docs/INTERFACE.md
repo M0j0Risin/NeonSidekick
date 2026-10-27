@@ -183,7 +183,9 @@ Windows only. `/monitor` or a right-click on the home bar's 🖥️.
 * **Layout tab:** Extend all, Duplicate, Only *n* and Make *n* primary; a row that would change nothing is left out. Its caption names a monitor showing another input. With one monitor there's no Layout tab.
 * **A tab per monitor:** its inputs (● current, ↩ the one the app switched it away from, `this PC` your pick), then Only this monitor, Make primary, *This PC's input…*, *Enter a code…* and *Input names…*.
 * **This PC's input…** picks which input this PC is on: the one it shows now, one by name, or none (the cable guesses: an HDMI input on a DisplayPort cable, or the reverse, is another input). An adapter cable can fool the guess; a pick fixes it.
-* **Numbers** are the screen capture's (`monitor:2`). A monitor off the desktop is dim and offers only the rows that bring it back.
+* **Inputs at once:** a monitor's inputs show from its last reported list while it's read again; the first open after a new monitor waits for its read.
+* **Numbers** are the screen capture's (`monitor:2`).
+* **Off the desktop:** on an NVIDIA card, a monitor still lists and switches its inputs, and this PC's input also adds it back. Otherwise it's dim, with only the rows that bring it back.
 * **Asks first** when a switch would leave no monitor showing this PC, or a layout row affects one on another input: your pick, else the cable, else the app's own switch.
 * **No inputs?** Many monitors ship with DDC/CI off in their own on-screen menu (look for "DDC/CI"); a duplicated monitor's inputs can't be told apart until Extend.
 
@@ -256,7 +258,7 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 ## Commands typed during a reply
 
 * **Open their pane over the reply:** `/help`, `/settings`, `/tools`, `/comfy`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/ad`, `/youtube`, `/shopping`, `/prompts`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui`
-* **Run at once:** `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/docker logs <container>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/view <path>`, `/view <path> --thumbs`
+* **Run at once:** `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/docker logs <container>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/ha stills view`, `/ha stills thumbs`, `/view <path>`, `/view <path> --thumbs`
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/exit`
 * **Everything else:** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 
@@ -412,7 +414,7 @@ What every window shares:
 
 ### The picture viewer
 
-* **Opened by** a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (which follows new pictures), and `/comfy view`, `/camera view`, `/screen view`, `/splash view` or `/pasted view`.
+* **Opened by** a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (which follows new pictures), and `/comfy view`, `/camera view`, `/screen view`, `/splash view`, `/pasted view` or `/ha stills view`.
 * Where no window can open, `/view` draws in the transcript; a PDF goes to [the Browser window](#the-browser-window).
 
 | Key | Action |
@@ -438,7 +440,7 @@ A right-click in the viewer or the thumbnail browser.
 
 ### The thumbnail browser
 
-`/view <folder> --thumbs`, `/comfy thumbs` (🪟), `/camera thumbs`, `/screen thumbs`, `/splash thumbs` and `/pasted thumbs` show a folder's pictures, oldest first, new ones added at the end.
+`/view <folder> --thumbs`, `/comfy thumbs` (🪟), `/camera thumbs`, `/screen thumbs`, `/splash thumbs`, `/pasted thumbs` and `/ha stills thumbs` show a folder's pictures, oldest first, new ones added at the end.
 
 | Key | Action |
 |---|---|
@@ -683,12 +685,12 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …`, `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear` | Their lines; the status row shows its spinner while it runs |
+| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
-| Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`…) | Refused, naming the form that works here when there is one |
+| Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`…) | Refused, naming the form that works here when there is one |
 
 * **A Ralph loop:** its confirm, its checkpoint and its by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`:** runs as at the PC (a looped `/read` is refused). Bare `/shopping` points at the Shopping tab, and bare `/youtube` and `/youtube list` at the YouTube tab's saved videos (or at the tab's setting while it's off).

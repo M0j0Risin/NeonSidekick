@@ -75,7 +75,7 @@ public sealed partial class SidekickApp
                     return ([MonitorText.UnknownInput(monitor!.Label, input, shown)], true);
                 }
 
-                change = MonitorChange.SwitchInput(monitor!, code, unlisted: !inputs.Offered.Contains(code) && !Mccs.CommonInputs.Contains(code));
+                change = state.SwitchTo(monitor!, code, words);
             }
             else
             {

@@ -194,7 +194,7 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            change = MonitorChange.SwitchInput(monitor!, code, unlisted: !inputs.Offered.Contains(code) && !Mccs.CommonInputs.Contains(code));
+            change = state.SwitchTo(monitor!, code, words);
         }
         else
         {

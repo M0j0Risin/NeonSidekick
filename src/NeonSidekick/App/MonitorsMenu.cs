@@ -266,10 +266,13 @@ internal sealed class MonitorsMenu
         var rows = new List<Row>();
         var headings = new HashSet<int>();
         string? caption = null;
-        bool layoutOnly = !m.Active || m.Shared || inputs.Problem is not null || inputs.Reading;
-        if (!m.Active)
+        // Off the desktop and read through NVIDIA's driver (2026-10-27, the NVIDIA plan): its inputs as on the desktop. Its current input must be
+        // known: caps kept from the desktop alone would show rows that can't switch. Unread, refused or failed, today's caption.
+        bool reached = !m.Active && !m.Shared && inputs is { Problem: null, Reading: false, Current: not null };
+        bool layoutOnly = (!m.Active && !reached) || m.Shared || inputs.Problem is not null || inputs.Reading;
+        if (!m.Active && !reached)
         {
-            caption = MonitorText.OffDesktop;
+            caption = inputs.Reading && inputs.Problem is null ? MonitorText.Reading : MonitorText.OffDesktop;
         }
         else if (m.Shared)
         {
@@ -289,12 +292,13 @@ internal sealed class MonitorsMenu
             foreach (var input in words.Rows(m, inputs.Offered, inputs.Current, state.AwayOf(m)))
             {
                 string mark = input.Current ? MonitorText.CurrentMark : input.Away ? MonitorText.AwayMark : " ";
+                var change = input.Current ? null : state.SwitchTo(m, input.Code, words);
                 rows.Add(new Row(Markup.Escape(mark + " " + input.Words) + (input.ThisPc ? Theme.DimMarkup("  " + MonitorText.ThisPcTag) : ""),
-                    MonitorText.InputFooter(input.Code, input.Away, input.ThisPc),
-                    input.Current ? null : MonitorChange.SwitchInput(m, input.Code, unlisted: !inputs.Offered.Contains(input.Code) && !Mccs.CommonInputs.Contains(input.Code))));
+                    change is { Return: true } ? MonitorText.PcInputOffDesktopFooter : MonitorText.InputFooter(input.Code, input.Away, input.ThisPc), change));
             }
 
-            caption = !inputs.Reported ? MonitorText.NotReported : inputs.Stale ? MonitorText.StaleWord : null;
+            caption = reached ? MonitorText.OffDesktopReached + (inputs.Reported ? "" : " " + MonitorText.NotReported)
+                : !inputs.Reported ? MonitorText.NotReported : inputs.Stale ? MonitorText.StaleWord : null;
             headings.Add(rows.Count);
             rows.Add(new Row(SectionRule.Markup(MonitorText.ActionsHeading), null));
         }
@@ -356,9 +360,7 @@ internal sealed class MonitorsMenu
             return null;
         }
 
-        var inputs = state.InputsOf(m);
-        bool unlisted = !inputs.Offered.Contains(code) && !Mccs.CommonInputs.Contains(code);
-        return MonitorChange.SwitchInput(m, code, unlisted);
+        return state.SwitchTo(m, code, WordsFor(_effective(), state.Topology));
     }
 
     // Input names…: every input the monitor reports (or the common four), any code named, the current one; Enter renames, h hides, Del clears.
@@ -453,7 +455,8 @@ internal sealed class MonitorsMenu
 
         // Each row: its markup, its footer, and the code it saves (null: no pick); the "now" row reads afresh.
         var rows = new List<(string Markup, string Footer, byte? Code, bool Now)>();
-        if (current is { } now)
+        // Off the desktop it shows nothing of this PC whatever its input (2026-10-27): no "now" row.
+        if (current is { } now && monitor.Active)
         {
             rows.Add((Markup.Escape("  " + MonitorText.PcNowRow(words.Describe(monitor, now))), MonitorText.PcNowFooter(Mccs.Hex(now)), now, true));
         }

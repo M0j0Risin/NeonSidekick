@@ -413,6 +413,9 @@ internal sealed partial class ChatScreen
         await ShowLinesAsync("/camera list", lines.Select(line => line.Text).ToList(), sink, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary><c>/camera</c>'s argument list (2026-10-27): the words, and after <c>use </c> the cameras the last list read found; never asks a device.</summary>
+    private IReadOnlyList<CompletionItem> CameraChoices(string argText) => CameraCommand.Complete(argText, _camera.Last, _effective().CameraDevice);
+
     /// <summary><c>/camera use &lt;n|name&gt;</c>: the camera by its number in the list or its name, saved as <c>Camera device</c>; the open stream follows at its next open.</summary>
     private async Task UseCameraAsync(string what, CancellationToken cancellationToken)
     {

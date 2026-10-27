@@ -405,7 +405,10 @@ public class PlanTests : IDisposable
         Assert.Equal(ChatScreen.PlanGapsReviewers.Select(r => r.Text), Items("gaps ", planning: true, presented).Select(i => i.Text));
         Assert.DoesNotContain(Items("g", planning: true, nothing), i => i.Text.StartsWith("gaps", StringComparison.Ordinal));
         Assert.Equal(["edit other", "edit " + PlanFiles.TemplateName], Items("edit ", planning: false, nothing).Select(i => i.Text));
-        Assert.Equal(["open other"], Items("open ", planning: false, nothing).Select(i => i.Text));
+        Assert.Equal(["open --chat", "open other"], Items("open ", planning: false, nothing).Select(i => i.Text));   // the switch among the plans (2026-10-27)
+        Assert.Equal(["open other --chat"], Items("open other ", planning: false, nothing).Select(i => i.Text));   // and after a plan's name
+        Assert.Equal(["open --chat other"], Items("open --chat ", planning: false, nothing).Select(i => i.Text));
+        Assert.Empty(Items("open other --chat", planning: false, nothing));
         Assert.Empty(Items("edit ", planning: false, nothing with { Web = true }));
     }
 

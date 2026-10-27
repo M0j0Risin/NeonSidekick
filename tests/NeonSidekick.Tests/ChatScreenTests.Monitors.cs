@@ -244,6 +244,38 @@ public partial class ChatScreenTests
         Assert.Contains(MonitorText.Switched("2 XG27UQDMS", "HDMI-1"), Output);   // flashed on the hint row
     }
 
+    /// <summary>
+    /// The inputs at once (2026-10-27, the user's pick): with the XG27's list remembered in the settings, its tab shows its input rows while its
+    /// capabilities are still held; once they answer, the LG's first list is written beside it and the XG27's (the same) left be.
+    /// </summary>
+    [Fact]
+    public async Task MonitorsPane_ARememberedList_ShowsTheInputsAtOnce_AndTheReadWritesTheNewOne()
+    {
+        var fake = MonitorsFixture(pane: true);
+        List<string> xg = ["ausaa34-uid4355/0f", "ausaa34-uid4355/11", "ausaa34-uid4355/12"];
+        _settings.Update(d => d.MonitorInputsSeen = [.. xg]);
+        fake.CapsBlock = new ManualResetEventSlim(false);
+        bool held = false;
+        GatedSteps(
+            Now(Line("/monitor 2")),
+            Shown("  HDMI-2", input =>
+            {
+                held = fake.Count("caps ") == 1 && !fake.Calls.Contains("caps " + FakeMonitorSystem.Xg);   // the LG's list still held
+                fake.CapsBlock.Set();
+
+                // The LG's list written before Esc: a gate is checked once per wait, so one at the idle line could miss a late write.
+                Until(() => _settings.Current.MonitorInputsSeen!.Count > xg.Count);
+                input.Push(Keys.Escape);
+            }),
+            Line("/exit").ToGate());
+
+        string output = await RunAsync();
+
+        Assert.True(held);
+        Assert.Equal(xg, _settings.Current.MonitorInputsSeen!.Where(e => e.StartsWith("ausaa34", StringComparison.Ordinal)));
+        Assert.Equal(["gsm7768-uid4353/11", "gsm7768-uid4353/12", "gsm7768-uid4353/0f", "gsm7768-uid4353/10"], _settings.Current.MonitorInputsSeen!.Where(e => e.StartsWith("gsm", StringComparison.Ordinal)));
+    }
+
     [Fact]
     public async Task MonitorsPane_TheLayoutTab_LeavesOutWhatChangesNothing_AndARowApplies()
     {
@@ -292,6 +324,33 @@ public partial class ChatScreenTests
         Assert.Contains("  DisplayPort-2", output);
         Assert.Equal(["input A:4355 1B"], fake.Changes);
         Assert.Contains(MonitorText.OffDesktop, output);
+    }
+
+    [Fact]
+    public async Task MonitorsPane_OffTheDesktop_Reached_ShowsItsInputs_AndThisPcsInputAddsItBack()
+    {
+        // 2026-10-27, the NVIDIA plan: the XG27 off the desktop on HDMI-1, read through NVIDIA's driver; its tab lists its inputs, and
+        // DisplayPort-1 (this PC's, by the cable) switches and runs Extend.
+        var fake = MonitorsFixture(pane: true);
+        var xg = fake.Of(FakeMonitorSystem.Xg);
+        xg.Active = false;
+        xg.ReachedOffDesktop = true;
+        xg.Input = 0x11;
+        GatedSteps(
+            Now(Line("/monitor 2")),
+            Shown(MonitorText.OffDesktopReached, input => input.Push(Keys.Home)),
+            Shown(MonitorText.PcInputOffDesktopFooter, input => input.Push(Keys.Enter)),
+            Now(input =>
+            {
+                Until(() => fake.Changes.Contains("layout Extend"));
+                PushLine(input, "/exit");
+            }));
+
+        string output = await RunAsync();
+
+        Assert.Contains("  HDMI-2", output);
+        Assert.Equal(["input A:4355 0F", "layout Extend"], fake.Changes);
+        Assert.True(xg.Active);
     }
 
     [Fact]

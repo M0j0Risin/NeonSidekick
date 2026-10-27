@@ -742,6 +742,7 @@ public sealed partial class DockerTests : IDisposable
         Assert.Equal(["logs mysql_dev"], DockerCommand.Complete(last, "logs my").Select(i => i.Text));
         Assert.Equal("running · mysql:8.4", DockerCommand.Complete(last, "logs my")[0].Note);
         Assert.Empty(DockerCommand.Complete(last, "logs mysql_dev 5"));
+        Assert.Equal(["ps mariadb_dev", "ps mysql_dev"], DockerCommand.Complete(last, "ps m").Select(i => i.Text));   // ps' filter, every container (2026-10-27)
         Assert.Equal(("mysql_dev", (int?)200), DockerCommand.SplitCount("mysql_dev 200"));
         Assert.Equal(("my sql", (int?)null), DockerCommand.SplitCount("my sql"));
     }

@@ -33,6 +33,12 @@ public sealed class FakeMonitorSystem : IMonitorSystem
         public string? CapsFail { get; set; }
         public HashSet<byte> DropsOn { get; } = [];
         public HashSet<byte> Ignores { get; } = [];
+
+        /// <summary>Off the desktop, its DDC/CI still answers (2026-10-27: NVIDIA's driver reaching it); off, it answers as unreached.</summary>
+        public bool ReachedOffDesktop { get; set; }
+
+        /// <summary>Switched to these while off the desktop, Windows adds it back on its own (it shows this PC's signal).</summary>
+        public HashSet<byte> ReturnsOn { get; } = [];
     }
 
     public List<Display> Screens { get; } =
@@ -71,6 +77,9 @@ public sealed class FakeMonitorSystem : IMonitorSystem
 
     /// <summary>Held calls wait on this; null for none.</summary>
     public ManualResetEventSlim? Block { get; set; }
+
+    /// <summary>Capabilities reads alone wait on this (2026-10-27: a tab seen before its list answers); null for none.</summary>
+    public ManualResetEventSlim? CapsBlock { get; set; }
 
     public Display Of(string target) => Screens.Single(s => s.Target == target);
 
@@ -170,6 +179,7 @@ public sealed class FakeMonitorSystem : IMonitorSystem
     public MonitorCaps Capabilities(string target)
     {
         Enter("caps " + target);
+        CapsBlock?.Wait(TimeSpan.FromSeconds(30));
         lock (_gate)
         {
             var s = Reach(target);
@@ -208,6 +218,10 @@ public sealed class FakeMonitorSystem : IMonitorSystem
             {
                 s.Active = false;
             }
+            else if (!s.Active && s.ReturnsOn.Contains(value))
+            {
+                s.Active = true;
+            }
         }
     }
 
@@ -229,12 +243,12 @@ public sealed class FakeMonitorSystem : IMonitorSystem
     private Display Reach(string target)
     {
         var s = Screens.FirstOrDefault(x => x.Target == target) ?? throw new MonitorException(MonitorText.NoSuchTarget);
-        if (!s.Active)
+        if (!s.Active && !s.ReachedOffDesktop)
         {
             throw new MonitorException(MonitorText.OffDesktop);
         }
 
-        if (Screens.Count(x => x.Active && x.Source == s.Source) > 1)
+        if (s.Active && Screens.Count(x => x.Active && x.Source == s.Source) > 1)
         {
             throw new MonitorException(MonitorText.SharedSource);
         }

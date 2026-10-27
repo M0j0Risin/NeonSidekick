@@ -33,6 +33,7 @@ public static class ScreenText
         ("list", "list the monitors and windows"),
         ("screen", "the monitor the app is on"),
         ("all", "every monitor"),
+        ("desktop", "every monitor, as all"),   // 2026-10-27, the completion survey: all's documented alias
         ("behind", "the window behind the app"),
         (MonitorPrefix, "a monitor by number"),
         (WindowPrefix, "a window by id or title"),

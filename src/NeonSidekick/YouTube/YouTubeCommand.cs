@@ -296,9 +296,28 @@ public static class YouTubeCommand
     /// The input line's argument list after <c>/youtube </c>: the verbs while the first word is typed; past it, nothing (a search's
     /// words are free) but <see cref="ClearSwitch"/> after <c>list</c> (2026-10-08).
     /// </summary>
-    public static IReadOnlyList<UI.CompletionItem> Complete(string argText)
+    public static IReadOnlyList<UI.CompletionItem> Complete(string argText) => Complete(argText, () => []);
+
+    /// <summary>
+    /// <see cref="Complete(string)"/> with the saved videos (2026-10-27, the completion survey): <c>unsave &lt;n&gt;</c> after <c>unsave </c>
+    /// and <c>play &lt;id&gt;</c> after <c>play </c>, each noted by its title (its id before one is looked up). <paramref name="saved"/> is
+    /// asked only then. Pure.
+    /// </summary>
+    public static IReadOnlyList<UI.CompletionItem> Complete(string argText, Func<IReadOnlyList<YouTubeSaved>> saved)
     {
         ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(saved);
+        if (argText.StartsWith("unsave ", StringComparison.OrdinalIgnoreCase))
+        {
+            return UI.MentionCompleter.Matches(UI.NumberedItems.Of(argText[.."unsave ".Length], saved().Select(TitleOf)), argText);
+        }
+
+        if (argText.StartsWith("play ", StringComparison.OrdinalIgnoreCase))
+        {
+            string head = argText[.."play ".Length];
+            return UI.MentionCompleter.Matches(saved().Select(v => new UI.CompletionItem(head + v.Id, UI.NumberedItems.Note(TitleOf(v)))).DistinctBy(i => i.Text, StringComparer.Ordinal).ToList(), argText);
+        }
+
         if (argText.StartsWith("list ", StringComparison.OrdinalIgnoreCase))
         {
             return UI.MentionCompleter.Matches([new("list " + ClearSwitch, ClearNote)], argText);
@@ -322,6 +341,8 @@ public static class YouTubeCommand
         }
 
         return argText.Contains(' ', StringComparison.Ordinal) ? [] : UI.MentionCompleter.Matches(Words.Select(w => new UI.CompletionItem(w.Word, w.Note)).ToList(), argText);
+
+        static string TitleOf(YouTubeSaved video) => string.IsNullOrWhiteSpace(video.Title) ? video.Id : video.Title;
     }
 
     private static YouTubeCommandLine Usage() => new(YouTubeVerb.Unknown, Error: YouTubeText.CommandUsage);

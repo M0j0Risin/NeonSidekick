@@ -115,6 +115,17 @@ public class SkillSourceTests
     public void Blank_IsTheUsage() => Assert.Equal(SkillInstallText.UsageError, Refuse("  "));
 
     [Fact]
+    public void CompleteFlags_OffersTheScopes_NotTypedYet_NeverYes()
+    {
+        Assert.Equal(["add --global", "add --profile"], SkillSource.CompleteFlags("add -").Select(i => i.Text));   // 2026-10-27, the completion survey
+        Assert.Equal(["add pdf --profile"], SkillSource.CompleteFlags("add pdf --p").Select(i => i.Text));
+        Assert.Equal(["add --global pdf --profile"], SkillSource.CompleteFlags("add --global pdf --").Select(i => i.Text));
+        Assert.Empty(SkillSource.CompleteFlags("add pdf"));   // the source is free text
+        Assert.Empty(SkillSource.CompleteFlags("add --global"));   // typed in full
+        Assert.DoesNotContain(SkillSource.CompleteFlags("add --"), i => i.Text.EndsWith(SkillSource.YesFlag, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitFlags_TakesTheFlagsWhereverTheyStand()
     {
         Assert.Equal(("pdf", (SkillScope?)SkillScope.Global, true), SkillSource.SplitFlags("--yes pdf --GLOBAL"));

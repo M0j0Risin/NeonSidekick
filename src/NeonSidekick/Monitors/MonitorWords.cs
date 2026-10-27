@@ -176,6 +176,55 @@ public sealed class MonitorWords
         return new(settings, added, duplicates, kept);
     }
 
+    /// <summary>
+    /// The inputs <paramref name="monitor"/> last reported, from <paramref name="seen"/> (<c>Monitor inputs seen</c>, 2026-10-27, the user's
+    /// pick: a tab shows its inputs at once while they are read again), in the order saved; null for none, or for a monitor with no key. The
+    /// key found as the names find theirs (<see cref="MonitorKey.Saved"/>: a cable moved still finds its list). Pure.
+    /// </summary>
+    public static IReadOnlyList<byte>? Remembered(IReadOnlyList<string>? seen, MonitorInfo monitor, IReadOnlyList<MonitorInfo> connected)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(connected);
+        if (monitor.Key is not { } key || seen is not { Count: > 0 }
+            || MonitorKey.Saved(key, seen.Select(KeyOf), connected.Select(m => m.Key)) is not { } saved)
+        {
+            return null;
+        }
+
+        var codes = new List<byte>();
+        foreach (string entry in seen)
+        {
+            int slash = entry.IndexOf('/', StringComparison.Ordinal);
+            if (slash > 0 && string.Equals(entry[..slash], saved, StringComparison.Ordinal) && Mccs.TryParseCode(entry[(slash + 1)..], out byte code) && !codes.Contains(code))
+            {
+                codes.Add(code);
+            }
+        }
+
+        return codes.Count > 0 ? codes : null;
+    }
+
+    /// <summary>
+    /// <paramref name="seen"/> with <paramref name="monitor"/>'s list set to <paramref name="inputs"/> under its own key: that key's entries, and
+    /// those of the key <see cref="Remembered"/> found for it if that is another (a moved cable's old port), replaced. Null when none is left;
+    /// <paramref name="seen"/> as is for a monitor with no key. Pure: a new list.
+    /// </summary>
+    public static List<string>? Remember(IReadOnlyList<string>? seen, MonitorInfo monitor, IReadOnlyList<MonitorInfo> connected, IReadOnlyList<byte> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(connected);
+        ArgumentNullException.ThrowIfNull(inputs);
+        if (monitor.Key is not { } key)
+        {
+            return seen is { Count: > 0 } ? [.. seen] : null;
+        }
+
+        string? old = seen is { Count: > 0 } ? MonitorKey.Saved(key, seen.Select(KeyOf), connected.Select(m => m.Key)) : null;
+        var next = (seen ?? []).Where(e => !string.Equals(KeyOf(e), key, StringComparison.Ordinal) && !string.Equals(KeyOf(e), old, StringComparison.Ordinal)).ToList();
+        next.AddRange(inputs.Distinct().Select(code => Entry(key, code)));
+        return next.Count > 0 ? next : null;
+    }
+
     /// <summary>How many entries <paramref name="settings"/> holds once read through the parser (<see cref="Merge"/>'s count of a source).</summary>
     public static int Count(MonitorSettings settings)
     {

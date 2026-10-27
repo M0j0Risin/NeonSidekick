@@ -262,7 +262,8 @@ public static class PdfCommand
 
     /// <summary>
     /// <c>/pdf</c>'s word list: <c>reply</c> for the first word, then — once a target and a space are typed — the options not
-    /// given yet. The path itself is the path list's (<c>ChatScreen.ArgumentPaths</c>). Pure.
+    /// given yet. The path itself is the path list's (<c>ChatScreen.ArgumentPaths</c>). A web page's address (2026-10-27, the completion
+    /// survey) is offered neither <c>paper=</c> nor <c>landscape</c>, which that form refuses: a web page keeps its own page layout. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(string argText)
     {
@@ -286,12 +287,13 @@ public static class PdfCommand
             items.Add(new CompletionItem(head + PdfText.ToWord, "to=out.pdf, or a folder"));
         }
 
-        if (!head.Contains(PdfText.PaperWord, StringComparison.OrdinalIgnoreCase))
+        bool web = first.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || first.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (!web && !head.Contains(PdfText.PaperWord, StringComparison.OrdinalIgnoreCase))
         {
             items.AddRange(PdfPaper.Names.Select(n => new CompletionItem(head + PdfText.PaperWord + n, n + " paper")));
         }
 
-        if (!head.Contains(" " + PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase))
+        if (!web && !head.Contains(" " + PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase))
         {
             items.Add(new CompletionItem(head + PrintText.LandscapeWord, "turn the page sideways"));
         }

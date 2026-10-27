@@ -40,6 +40,17 @@ public static class MonitorText
 
     public const string OffDesktop = "Off the desktop: add it with Only this monitor or Extend all to switch its input.";
 
+    /// <summary>An off-desktop monitor's tab once NVIDIA's driver read it (2026-10-27, the NVIDIA plan).</summary>
+    public const string OffDesktopReached = "Off the desktop: its inputs switch from here. Picking this PC's input adds it back.";
+
+    /// <summary>A switch to an off-desktop monitor that NVIDIA's driver reached once but that didn't answer this time.</summary>
+    public static string OffDesktopNoAnswer(string monitor) =>
+        monitor + " is off the desktop and didn't answer through NVIDIA's driver: add it with Only this monitor or Extend all to switch its input.";
+
+    /// <summary><c>/monitor &lt;n&gt; pc now</c> on a monitor off the desktop: what it shows isn't this PC's.</summary>
+    public static string PcNowOffDesktop(string monitor, string spelled, string example) =>
+        monitor + " is off the desktop, so the input it shows isn't this PC's: name the input, as /monitor " + spelled + " pc " + example + ".";
+
     public const string NotReported = "Not reported by the monitor; it may ignore some.";
 
     public const string Reading = "Reading the monitor…";
@@ -60,6 +71,21 @@ public static class MonitorText
     public static string SwitchedNoRead(string monitor, string input) => monitor + " was sent " + input + "; it didn't say back which input it shows.";
 
     public static string LeftDesktop(string monitor, string input) => monitor + " switched to " + input + " and left the desktop; its own buttons or the other machine bring it back.";
+
+    /// <summary><see cref="LeftDesktop"/> when NVIDIA's driver still reaches it (2026-10-27): the app can switch it back.</summary>
+    public static string LeftDesktopReached(string monitor, string input) => monitor + " switched to " + input + " and left the desktop; its tab still switches it, and this PC's input adds it back.";
+
+    /// <summary>An off-desktop monitor switched to this PC's input and added to the desktop (2026-10-27).</summary>
+    public static string SwitchedAndAdded(string monitor, string input) => monitor + " switched to " + input + " and is on the desktop again.";
+
+    /// <summary>The input switched, the desktop's Extend refused: the layout's own sentence follows.</summary>
+    public static string SwitchedNotAdded(string monitor, string input, string why) => monitor + " switched to " + input + ", but it wasn't added to the desktop: " + why;
+
+    /// <summary>The change's words for a switch that also adds the monitor back (the question, the tool's ask, the audit line).</summary>
+    public const string AndAddWords = " and add it to the desktop";
+
+    /// <summary>The footer of an off-desktop tab's row for this PC's input.</summary>
+    public const string PcInputOffDesktopFooter = "Switches to it and adds the monitor to the desktop.";
 
     public static string AlreadyOn(string monitor, string input) => monitor + " is already on " + input + ".";
 
@@ -182,9 +208,13 @@ public static class MonitorText
             var parts = new List<string> { m.Label, m.Connector };
             if (!m.Active)
             {
+                // Read through NVIDIA's driver (2026-10-27), it lists its input and inputs as any other; else just this, no DDC/CI advice.
                 parts.Add("off the desktop");
-                lines.Add(string.Join(" · ", parts));
-                continue;
+                if (state.InputsOf(m) is not { Problem: null, Current: not null })
+                {
+                    lines.Add(string.Join(" · ", parts));
+                    continue;
+                }
             }
 
             if (m.Mode is { } mode)

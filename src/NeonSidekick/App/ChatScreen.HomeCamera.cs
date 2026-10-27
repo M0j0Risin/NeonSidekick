@@ -22,7 +22,7 @@ internal sealed class HomeCameraStill(ImageAttachment? image, string? error, Dat
 
     public DateTimeOffset At { get; } = at;
 
-    /// <summary>The kept file's full path; set under <see cref="HomeCameraFetches"/>' lock.</summary>
+    /// <summary>The kept file's path in the images folder; set under <see cref="HomeCameraFetches"/>' lock.</summary>
     public string? Saved { get; set; }
 }
 
@@ -80,13 +80,22 @@ internal sealed class HomeCameraFetches(Func<string, CancellationToken, Task<HaP
         return new HomeCameraStill(image, error, time.GetUtcNow());
     }
 
-    /// <summary>The file <paramref name="still"/> is kept in: the one saved already, else <paramref name="save"/>'s (null for a save refused, tried again next time).</summary>
-    public string? SaveOnce(HomeCameraStill still, Func<string?> save)
+    /// <summary>
+    /// The file <paramref name="still"/> is kept in: the one saved already, else <paramref name="save"/>'s (null for a save refused, tried
+    /// again next time). A kept file <paramref name="exists"/> no longer finds is forgotten first (2026-10-27, <c>/ha stills purge</c>; also
+    /// the picture viewer's delete or Explorer's), so a reuse saves a fresh copy rather than opening a deleted path; one check a reuse.
+    /// </summary>
+    public string? SaveOnce(HomeCameraStill still, Func<string?> save, Func<string, bool>? exists = null)
     {
         ArgumentNullException.ThrowIfNull(still);
         ArgumentNullException.ThrowIfNull(save);
         lock (_gate)
         {
+            if (still.Saved is { } kept && exists is not null && !exists(kept))
+            {
+                still.Saved = null;
+            }
+
             return still.Saved ??= save();
         }
     }
@@ -179,7 +188,7 @@ internal sealed partial class ChatScreen
                 }
 
                 return save.Saved;
-            });
+            }, path => _images.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full));
             token.ThrowIfCancellationRequested();
             lock (_homeGate)
             {

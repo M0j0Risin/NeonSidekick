@@ -93,19 +93,28 @@ public static class TaskCommand
             return Failed(failed);
         }
 
+        access.Saw(source, result.Value.Matched);
+
         var lines = new List<string> { TaskText.CommandHeader(source.Where, line.Folder, result.Value.Matched.Count) };
         lines.AddRange(result.Value.Matched.Select(t => Llm.Tools.UntrustedText.Unfenced(TaskRender.Line(t))));
         return new TaskCommandResult(lines, false);
     }
 
-    public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<string> computers)
+    /// <summary>
+    /// <c>/tasks</c>' argument list: the filter words; after <c>computer:</c> the <paramref name="computers"/>, after <c>state:</c> the states,
+    /// and after <c>folder:</c> the folders the last list read on the computer typed (this PC without one) found (<paramref name="folders"/>,
+    /// 2026-10-27; only <c>folder:\</c> before a read). Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<string> computers, Func<string?, IReadOnlyList<string>>? folders = null)
     {
         ArgumentNullException.ThrowIfNull(argText);
         int last = argText.LastIndexOf(' ');
         string head = argText[..(last + 1)];
         string current = argText[(last + 1)..];
+        string? computer = head.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault(w => w.StartsWith("computer:", StringComparison.OrdinalIgnoreCase))?["computer:".Length..];
         IEnumerable<string> pool = current.StartsWith("computer:", StringComparison.OrdinalIgnoreCase) ? computers.Select(c => "computer:" + c)
             : current.StartsWith("state:", StringComparison.OrdinalIgnoreCase) ? States.Select(s => "state:" + s)
+            : current.StartsWith("folder:", StringComparison.OrdinalIgnoreCase) ? ["folder:\\", .. (folders?.Invoke(computer) ?? []).Select(f => "folder:" + f)]
             : ["computer:", "folder:\\", "state:", "microsoft"];
         return MentionCompleter.Matches(pool.Select(p => new CompletionItem(head + p, "")).ToList(), argText);
     }

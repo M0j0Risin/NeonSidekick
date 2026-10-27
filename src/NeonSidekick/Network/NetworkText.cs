@@ -245,7 +245,7 @@ public static class NetworkText
     };
 
     /// <summary><c>/net</c> with no verb or one it does not know. Pinned.</summary>
-    public const string Usage = "Usage: /net ping <host> [count] · trace <host> [names] · port <host> <ports> · dns <name> [type] [server] · tls <host> [port] [starttls] · certs [store] [user|machine] [filter]";
+    public const string Usage = "Usage: /net ping <host> [count] · trace <host> [names] · port <host> <ports> · dns <name> [type] [server] · tls <host> [<port> [starttls]] · certs [store] [user|machine] [filter]";
 
     // ── --network-check ─────────────────────────────────────────────────────
 

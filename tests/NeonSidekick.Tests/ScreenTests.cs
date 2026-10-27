@@ -228,8 +228,8 @@ public sealed class ScreenPureTests
     public void Complete_TheWordsFirst_NarrowedAsTyped_AndASpaceEndsIt()
     {
         var words = ScreenTarget.Complete("", TwoMonitors, 2, ThreeWindows, 100);
-        Assert.Equal(["list", "screen", "all", "behind", "monitor:", "window:", "view", "thumbs", "purge"], words.Select(i => i.Text));   // view and thumbs 2026-10-09
-        Assert.Equal("a window by id or title", words[5].Note);
+        Assert.Equal(["list", "screen", "all", "desktop", "behind", "monitor:", "window:", "view", "thumbs", "purge"], words.Select(i => i.Text));   // view and thumbs 2026-10-09, desktop 2026-10-27
+        Assert.Equal("a window by id or title", words[6].Note);
         Assert.Equal(["window:"], ScreenTarget.Complete("WIN", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));
         Assert.Equal(["screen"], ScreenTarget.Complete("s", TwoMonitors, 2, ThreeWindows, 100).Select(i => i.Text));
         Assert.Empty(ScreenTarget.Complete("all", TwoMonitors, 2, ThreeWindows, 100));        // typed in full

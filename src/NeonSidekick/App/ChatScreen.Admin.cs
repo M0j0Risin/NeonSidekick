@@ -770,7 +770,7 @@ internal sealed partial class ChatScreen
         OperatingSystem.IsWindows() && _services.System is not null ? ServiceCommand.Complete(argText, _services.Catalog().Computers.Select(c => c.Name).ToList()) : [];
 
     private IReadOnlyList<CompletionItem> TaskChoices(string argText) =>
-        OperatingSystem.IsWindows() && _tasks.System is not null ? TaskCommand.Complete(argText, _tasks.Catalog().Computers.Select(c => c.Name).ToList()) : [];
+        OperatingSystem.IsWindows() && _tasks.System is not null ? TaskCommand.Complete(argText, _tasks.Catalog().Computers.Select(c => c.Name).ToList(), _tasks.FoldersSeen) : [];
 
     private IReadOnlyList<CompletionItem> AdChoices(string argText) =>
         _directory.System is not null ? DirectoryCommand.Complete(argText, _directory.Catalog().Domains.Select(d => d.Name).ToList()) : [];

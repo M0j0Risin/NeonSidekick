@@ -131,7 +131,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, Files.WorkingDirectory.DefaultFolderName + "/", "the default working directory: where the file tools read and write unless *Working directory (cwd)* names another"),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/", "the profile's pictures, kept out of the working directory"),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultCameraOutputFolder + "/", "the camera's photos", null, SettingsField.CameraOutputFolder),
-            new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + HomeAssistant.HaCamera.FolderName + "/", "Home Assistant camera snapshots"),
+            new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + HomeAssistant.HaCamera.FolderName + "/", "Home Assistant camera stills", "`/ha stills`"),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultScreenOutputFolder + "/", "the screenshots", null, SettingsField.ScreenOutputFolder),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultComfyOutputFolder + "/", "the pictures ComfyUI made", null, SettingsField.ComfyOutputFolder),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultPastedImagesFolder + "/", "the pictures pasted from the clipboard", "`/pasted`", SettingsField.PastedImagesFolder),

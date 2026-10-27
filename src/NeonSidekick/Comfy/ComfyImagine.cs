@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Comfy;
 
@@ -16,6 +17,73 @@ namespace NeonSidekick.Comfy;
 /// </summary>
 public static partial class ComfyImagine
 {
+    /// <summary>The bare word that starts the negative prompt.</summary>
+    public const string NegativeWord = "--";
+
+    /// <summary>The flag that sends no negative prompt.</summary>
+    public const string NoNegativeWord = "--no-negative";
+
+    /// <summary>
+    /// The flags <see cref="Parse"/> reads (<see cref="FlagPattern"/> and <see cref="NoNegativeFlag"/>), in the argument list's order
+    /// (2026-10-27, the completion survey); the bare <see cref="NegativeWord"/> is offered beside them. A test holds each to the parse.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Flags = ["--seed", "--size", "--steps", "--count", "--cfg", "--denoise", "--image", "--image2", "--image3", NoNegativeWord];
+
+    /// <summary>The flags whose value is a picture's path: after one, the argument list is the pictures (<c>ChatScreen.ArgumentPaths</c>).</summary>
+    public static readonly IReadOnlyList<string> ImageFlags = ["--image", "--image2", "--image3"];
+
+    /// <summary>
+    /// <c>/imagine</c>'s argument list (2026-10-27, the completion survey): the <paramref name="workflows"/> while the first word is typed
+    /// (unless it starts with <c>-</c>); then, while the word being typed starts with <c>-</c>, the flags not typed yet with what each takes,
+    /// and the bare <c>--</c> for the negative (neither it nor <c>--no-negative</c> once either is typed). A flag's value and the prompt are
+    /// free text. Pure.
+    /// </summary>
+    public static IReadOnlyList<CompletionItem> Complete(string argText, Func<IReadOnlyList<CompletionItem>> workflows)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(workflows);
+        int gap = argText.LastIndexOf(' ');
+        string current = argText[(gap + 1)..];
+        if (gap < 0 && !current.StartsWith('-'))
+        {
+            return MentionCompleter.Matches(workflows(), argText);
+        }
+
+        if (!current.StartsWith('-'))
+        {
+            return [];
+        }
+
+        string head = gap < 0 ? "" : argText[..(gap + 1)];
+        var typed = head.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(t => t.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        bool negative = typed.Contains(NegativeWord) || typed.Contains(NoNegativeWord);
+        var words = Flags.Where(f => !typed.Contains(f) && !(negative && f == NoNegativeWord)).ToList();
+        if (!negative)
+        {
+            words.Add(NegativeWord);
+        }
+
+        // Not MentionCompleter.Matches: the bare -- typed in full would close the list on the flags it starts.
+        return words.Select(f => new CompletionItem(head + f, ComfyText.FlagShape(f)))
+            .Where(i => i.Text.StartsWith(argText, StringComparison.OrdinalIgnoreCase) && !string.Equals(i.Text, argText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>The value being typed after an <see cref="ImageFlags"/> flag, and the text before it; null when the word before is none of them.</summary>
+    public static (string Head, string Path)? ImagePathAt(string argText)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        int gap = argText.LastIndexOf(' ');
+        if (gap < 0)
+        {
+            return null;
+        }
+
+        string head = argText[..(gap + 1)];
+        string before = head.TrimEnd().Split(' ').LastOrDefault() ?? "";
+        return ImageFlags.Contains(before.ToLowerInvariant()) ? (head, argText[(gap + 1)..]) : null;
+    }
+
     [GeneratedRegex("""(?:^|\s)--(seed|size|steps|cfg|denoise|image[23]?|count)(?:\s+("[^"]*"|\S+))?(?=\s|$)""", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex FlagPattern();
 

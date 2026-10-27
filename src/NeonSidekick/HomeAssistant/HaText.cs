@@ -713,13 +713,13 @@ public static partial class HaText
 
     /// <summary><c>/ha</c>'s usage line. Pinned.</summary>
     public const string Usage =
-        "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence>";
+        "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence> · /ha stills view|thumbs|purge";
 
     /// <summary>The <c>/ha</c> verbs, in the completion's order.</summary>
-    public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say"];
+    public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say", "stills"];
 
     /// <summary>The <c>/ha tv</c> actions, in the completion's order.</summary>
-    public static readonly string[] TvActions = ["on", "off", "mute", "unmute", "up", "down", "vol", "source"];
+    public static readonly string[] TvActions = ["on", "off", "mute", "unmute", "up", "down", "vol", "volume", "source"];
 
     // ─── shared ─────────────────────────────────────────────────────────────────
 

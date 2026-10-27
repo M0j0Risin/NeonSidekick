@@ -588,7 +588,10 @@ internal sealed partial class ChatScreen
     public const string MemoryEditNote = "open memory.json in your editor";
     public const string MemoryOnWord = "on";   // 2026-10-03, the user's ask: the Memory setting from the line, as the 💾 pane's buttons; read-write's alias since 2026-10-04
     public const string MemoryOffWord = "off";   // disabled's alias since 2026-10-04
-    public const string MemoryReadWriteNote = "the model reads and saves memories";   // 2026-10-04, the user's ask: Memory mode's three words
+    public const string MemoryReadWriteNote = "the model reads and saves memories";
+
+    /// <summary>The note beside <see cref="MemoryOnWord"/> on the argument list (2026-10-27). Pinned.</summary>
+    public const string MemoryOnNote = "the same as read-write";   // 2026-10-04, the user's ask: Memory mode's three words
     public const string MemoryReadOnlyNote = "the model reads memories, never saves one";
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
     public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
@@ -1409,7 +1412,10 @@ internal sealed partial class ChatScreen
         InitAdmin(pinger, resolve, serviceSystem, taskSystem, directorySystem, joinedDomain);
         // The monitors (2026-10-23, the monitors plan): one board for the screen, read only on demand; the tools over it ask on the pane.
         // monitorsQuick (the tests'): no settle after a change and no gap before a retry, so a manual clock never holds a change.
-        _monitors = monitorSystem is null ? null : new Monitors.MonitorBoard(monitorSystem, time, quick: monitorsQuick);
+        // Each monitor's last reported inputs (2026-10-27, the user's pick): shown at once on a run's first open, written when a read differs.
+        _monitors = monitorSystem is null ? null : new Monitors.MonitorBoard(monitorSystem, time, quick: monitorsQuick,
+            remembered: (m, connected) => Monitors.MonitorWords.Remembered(_effective().MonitorInputsSeen, m, connected),
+            seen: (m, connected, inputs) => _settings.Update(d => d.MonitorInputsSeen = Monitors.MonitorWords.Remember(d.MonitorInputsSeen, m, connected, inputs)));
         _monitorTools = MonitorTools(_monitors, () => _effective(), ConfirmMonitorAsync);
         // The camera (2026-10-02): one shared stream; photos into the Camera output folder; the model's tool asks on the pane.
         _camera = new CameraSession(camera, () => CameraSettings.Options(_effective()), _time);
@@ -4994,14 +5000,17 @@ internal sealed partial class ChatScreen
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog. <see cref="MachineFolders"/> (2026-10-05) is
     /// <c>/cwd</c>'s: any local drive's folders (<see cref="FolderCompleter.Complete"/>), not the sandbox's.
     /// </summary>
-    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<IReadOnlyList<CompletionItem>>? Skills = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
+    public sealed record ArgumentSources(Func<IReadOnlyList<string>> Profiles, string LoadedProfile, IReadOnlyList<string> Timers, Func<string, IReadOnlyList<string>> Folders, Func<string, MentionResult> TextFiles, Func<string, MentionResult> ImageFiles, Func<IReadOnlyList<CompletionItem>>? Sessions = null, Func<string, IReadOnlyList<string>>? VaultFolders = null, Func<IReadOnlyList<CompletionItem>>? Workflows = null, bool Planning = false, Func<IReadOnlyList<CompletionItem>>? Plans = null, Func<string, IReadOnlyList<CompletionItem>>? Home = null, Func<string, MentionResult>? AnyFiles = null, Func<string, IReadOnlyList<CompletionItem>>? Print = null, Func<IReadOnlyList<CompletionItem>>? Themes = null, Func<string, IReadOnlyList<CompletionItem>>? Docker = null,
         Func<string, IReadOnlyList<CompletionItem>>? Screen = null, Func<string, IReadOnlyList<CompletionItem>>? Server = null,
         Func<IReadOnlyList<CompletionItem>>? Models = null, bool LogFile = false, Func<IReadOnlyList<CompletionItem>>? Processes = null,
         Func<string, MentionResult>? MachineFolders = null, Func<IReadOnlyList<CompletionItem>>? Advisors = null, Func<string, IReadOnlyList<CompletionItem>>? Shopping = null,
         Func<string, IReadOnlyList<CompletionItem>>? EventLog = null, Func<string, IReadOnlyList<CompletionItem>>? Net = null, Func<string, IReadOnlyList<CompletionItem>>? Services = null,
         Func<string, IReadOnlyList<CompletionItem>>? Tasks = null, Func<string, IReadOnlyList<CompletionItem>>? Ad = null,
         Func<IReadOnlyList<CompletionItem>>? Audits = null, PlanCompletionState? PlanState = null, Func<IReadOnlyList<CompletionItem>>? EditPlans = null,
-        Func<string, IReadOnlyList<CompletionItem>>? Monitor = null);
+        Func<string, IReadOnlyList<CompletionItem>>? Monitor = null, Func<string, IReadOnlyList<CompletionItem>>? HomeBar = null,
+        IReadOnlyList<string>? Stopwatches = null, Func<string, IReadOnlyList<CompletionItem>>? Prompts = null,
+        Func<string, IReadOnlyList<CompletionItem>>? BrowserLinks = null, Func<string, IReadOnlyList<CompletionItem>>? YouTubeSaved = null,
+        Func<string, IReadOnlyList<CompletionItem>>? Cameras = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5249,15 +5258,26 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(ReasoningLevel.Levels.Select(level => new CompletionItem(level, ReasoningLevel.Describe(level))).ToList(), argText);
 
             case SlashCommand.Sampling:
+            {
+                // <field> clear and extra clear (2026-10-27, the completion survey): a field's value is the user's to type, clear the one word.
+                int gap = argText.IndexOf(' ', StringComparison.Ordinal);
+                if (gap > 0)
+                {
+                    string word = argText[..gap];
+                    bool takesClear = string.Equals(word, SamplingText.ExtraWord, StringComparison.OrdinalIgnoreCase) || SamplingField.ByWire(word) is not null;
+                    return takesClear ? MentionCompleter.Matches([new(argText[..(gap + 1)] + SamplingText.ClearWord, SamplingText.ClearFieldCompletionNote)], argText) : [];
+                }
+
                 // The field names, then extra and clear (2026-09-28): the value is the user's to type.
                 return MentionCompleter.Matches(SamplingField.All.Select(f => new CompletionItem(f.Wire, SamplingText.CompletionNote(f)))
                     .Append(new CompletionItem(SamplingText.ExtraWord, SamplingText.ExtraCompletionNote))
                     .Append(new CompletionItem(SamplingText.ClearWord, SamplingText.ClearCompletionNote)).ToList(), argText);
+            }
 
             case SlashCommand.Comfy:
             {
                 // /comfy edit json|markdown <workflow> (later still on 2026-09-24): the verb, the kind, then every installed workflow.
-                foreach (string fileKind in (string[])[ComfyJsonWord, ComfyMarkdownWord])
+                foreach (string fileKind in (string[])[ComfyJsonWord, ComfyMarkdownWord, ComfyMdWord])
                 {
                     string head = ComfyEditWord + " " + fileKind + " ";
                     if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
@@ -5269,15 +5289,16 @@ internal sealed partial class ChatScreen
 
                 if (argText.StartsWith(ComfyEditWord + " ", StringComparison.OrdinalIgnoreCase))
                 {
-                    return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote)], argText);
+                    return MentionCompleter.Matches([new(ComfyEditWord + " " + ComfyJsonWord, ComfyJsonNote), new(ComfyEditWord + " " + ComfyMarkdownWord, ComfyMarkdownNote), new(ComfyEditWord + " " + ComfyMdWord, ComfyMarkdownNote)], argText);
                 }
 
                 return MentionCompleter.Matches([new(ComfyEditWord, ComfyEditNote), new(ComfyOfferedWord, ComfyOfferedNote), new(ComfyPurgeWord, ComfyPurgeNote), new(ComfyStatusWord, ComfyStatusNote), new(ThumbsText.ThumbsWord, ThumbsText.ThumbsNote), new(ViewerText.ViewWord, ViewerText.ViewNote)], argText);
             }
 
             case SlashCommand.Imagine:
-                // The workflow names (later on 2026-09-24, the user's ask): only while the first word is typed; the prompt after it is free text.
-                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Workflows?.Invoke() ?? [], argText);
+                // The workflow names (later on 2026-09-24, the user's ask): only while the first word is typed; the prompt after it is free text,
+                // but a word starting with - is a flag (2026-10-27); the pictures after --image are ArgumentPaths'.
+                return Comfy.ComfyImagine.Complete(argText, () => sources.Workflows?.Invoke() ?? []);
 
             case SlashCommand.Avatar:
             {
@@ -5316,7 +5337,8 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(PerfBarMode.Words.Select(name => new CompletionItem(name, PerfBarMode.Describe(name))).ToList(), argText);
 
             case SlashCommand.HomeBar:
-                return MentionCompleter.Matches(HomeAssistant.HomeBarText.Words.Select(word => new CompletionItem(word, HomeAssistant.HomeBarText.Describe(word))).ToList(), argText);
+                // The words, then the bar's items after tap, show, name and emoji, and default after = (2026-10-27, the user's ask).
+                return sources.HomeBar?.Invoke(argText) ?? HomeBarItems.Complete(argText, [], []);
 
             case SlashCommand.Tools:
             {
@@ -5425,6 +5447,14 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches(stops, argText);
                 }
 
+                // stopwatch <name> (2026-10-27, the completion survey): the board's stopwatches.
+                string stopwatchHead = TimerText.StopwatchName + " ";
+                if (argText.StartsWith(stopwatchHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    string head = argText[..stopwatchHead.Length];
+                    return MentionCompleter.Matches((sources.Stopwatches ?? []).Select(name => new CompletionItem(head + name, TimerText.StopwatchName)).ToList(), argText);
+                }
+
                 return MentionCompleter.Matches([new("stop", TimerStopNote), new(TimerText.StopwatchName, TimerStopwatchNote)], argText);
             }
 
@@ -5487,7 +5517,8 @@ internal sealed partial class ChatScreen
             case SlashCommand.Memory:
             {
                 // The modes, forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
-                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                // on (2026-10-27, the completion survey): read-write's documented alias, after it.
+                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryOnWord, MemoryOnNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Sys:
@@ -5516,8 +5547,14 @@ internal sealed partial class ChatScreen
                     : MentionCompleter.Matches(SlashCommands.Completions.Select(item => item with { Text = item.Text.TrimStart('/') }).ToList(), argText);
 
             case SlashCommand.Skills:
-                // add (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke.
+                // add (2026-09-26): the source after it is free text — a search, a repository, a URL — never looked up per keystroke;
+                // its --global and --profile (2026-10-27) while a word starting with - is typed.
                 // purge (2026-09-30): its second word, list or commit, then the age as free text.
+                if (argText.StartsWith(SkillInstallText.AddWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return SkillSource.CompleteFlags(argText);
+                }
+
                 if (argText.StartsWith(SkillRecordText.PurgeWord + " ", StringComparison.OrdinalIgnoreCase))
                 {
                     return argText.Count(c => c == ' ') > 1 ? [] : MentionCompleter.Matches(
@@ -5560,8 +5597,8 @@ internal sealed partial class ChatScreen
                 return sources.Monitor?.Invoke(argText) ?? [];
 
             case SlashCommand.Camera:
-                // The words, then off after watch (2026-10-02).
-                return CameraCommand.Complete(argText);
+                // The words, then off after watch (2026-10-02), and the cameras last listed after use (2026-10-27).
+                return sources.Cameras?.Invoke(argText) ?? CameraCommand.Complete(argText);
 
             case SlashCommand.Print:
                 // reply and printers for the first word, the options and the printers' names after a target (2026-09-28); the path itself is ArgumentPaths'.
@@ -5590,8 +5627,21 @@ internal sealed partial class ChatScreen
                 {
                     // open --chat <name> (2026-10-18): the same list after the switch.
                     string chatHead = openHead + PlanText.ChatSwitch + " ";
-                    string head = argText.StartsWith(chatHead, StringComparison.OrdinalIgnoreCase) ? chatHead : openHead;
-                    return MentionCompleter.Matches(plans().Select(p => new CompletionItem(head + p.Text, p.Note)).ToList(), argText);
+                    if (argText.StartsWith(chatHead, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return MentionCompleter.Matches(plans().Select(p => new CompletionItem(argText[..chatHead.Length] + p.Text, p.Note)).ToList(), argText);
+                    }
+
+                    // The switch itself among the plans, and after a plan's name (2026-10-27, the completion survey: TakeSwitch takes it anywhere).
+                    string named = argText[openHead.Length..];
+                    var list = plans();
+                    if (list.Where(p => named.StartsWith(p.Text + " ", StringComparison.OrdinalIgnoreCase)).MaxBy(p => p.Text.Length) is { } plan)
+                    {
+                        return MentionCompleter.Matches([new(argText[..(openHead.Length + plan.Text.Length + 1)] + PlanText.ChatSwitch, PlanOpenChatNote)], argText);
+                    }
+
+                    string head = argText[..openHead.Length];
+                    return MentionCompleter.Matches([new(head + PlanText.ChatSwitch, PlanOpenChatNote), .. list.Select(p => new CompletionItem(head + p.Text, p.Note))], argText);
                 }
 
                 // /plan ralph <name> (later on 2026-10-18): the plans once the word is typed, outside plan mode.
@@ -5628,16 +5678,16 @@ internal sealed partial class ChatScreen
                 return AuditCommand.Complete(argText, sources.Audits, sources.Folders);
 
             case SlashCommand.YouTube:
-                // The verbs (2026-10-05); past the first word, a search's words or a video, free text.
-                return YouTube.YouTubeCommand.Complete(argText);
+                // The verbs (2026-10-05); past the first word, a search's words or a video, free text, but the saved videos after unsave and play (2026-10-27).
+                return sources.YouTubeSaved?.Invoke(argText) ?? YouTube.YouTubeCommand.Complete(argText);
 
             case SlashCommand.Browser:
-                // The saved links' verbs and clear (later on 2026-10-13); an address is free text.
-                return BrowserCommand.Complete(argText);
+                // The saved links' verbs and clear (later on 2026-10-13); an address is free text; the links by number (2026-10-27).
+                return sources.BrowserLinks?.Invoke(argText) ?? BrowserCommand.Complete(argText);
 
             case SlashCommand.Prompts:
-                // The saved prompts' verbs (2026-10-13); save's text is free text.
-                return PromptsCommand.Complete(argText);
+                // The saved prompts' verbs (2026-10-13); save's text is free text; the prompts by number (2026-10-27).
+                return sources.Prompts?.Invoke(argText) ?? PromptsCommand.Complete(argText);
 
             case SlashCommand.Shopping:
                 // The verbs (2026-10-11), then the stores' names and the list's lines.
@@ -5786,9 +5836,22 @@ internal sealed partial class ChatScreen
             return OpenPaths(argText, sources);
         }
 
+        // /imagine … --image <path> (2026-10-27, the completion survey): the pictures, as /view lists them, the line before kept.
+        if (kind == SlashCommand.Imagine)
+        {
+            return Comfy.ComfyImagine.ImagePathAt(argText) is { } at ? HeadedPaths(at.Head, at.Path, sources.ImageFiles) : null;
+        }
+
         if (kind is not (SlashCommand.Read or SlashCommand.View))
         {
             return null;
+        }
+
+        // /view's flags (2026-10-27, the completion survey): while the argument is a - being typed, or after a path and a space, until either
+        // is typed (ParseViewArgs takes one at either end; both are the usage error). Picked with a space after, so the path completes next.
+        if (kind == SlashCommand.View && ViewFlagPaths(argText) is { } flags)
+        {
+            return flags;
         }
 
         // /view --chat <path> (2026-09-27), and --thumbs (2026-10-04): the path after the flag completes, and a pick keeps the flag
@@ -5812,6 +5875,54 @@ internal sealed partial class ChatScreen
         }
 
         return flag.Length == 0 ? found : found with { Paths = [.. found.Paths.Select(p => flag + p)] };
+    }
+
+    /// <summary>
+    /// <paramref name="path"/>'s list from <paramref name="files"/> after <paramref name="head"/> (the line before it, which a pick keeps), with
+    /// the path lists' closing rules: whitespace at the end, or a file typed in full, lists nothing.
+    /// </summary>
+    private static MentionResult HeadedPaths(string head, string path, Func<string, MentionResult> files)
+    {
+        if (path.Length > 0 && char.IsWhiteSpace(path[^1]))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);
+        }
+
+        var found = files(path);
+        if (found.Paths.Count == 1 && string.Equals(found.Paths[0], path, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MentionResult(FileOutcome.Ok, [], false);
+        }
+
+        return found with { Paths = [.. found.Paths.Select(p => head + p)] };
+    }
+
+    /// <summary>
+    /// <c>/view</c>'s flags as a path list (2026-10-27): <c>--chat</c> and <c>--thumbs</c> while the argument is only a <c>-</c> word being
+    /// typed, or after a path and a space; null (the path list as before) otherwise, and once either flag is typed. Pure.
+    /// </summary>
+    public static MentionResult? ViewFlagPaths(string argText)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        string[] flags = [ViewChatFlag, ViewThumbsFlag];
+        var words = argText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Any(w => flags.Contains(w, StringComparer.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        int gap = argText.LastIndexOf(' ');
+        string head = gap < 0 ? "" : argText[..(gap + 1)];
+        string current = argText[(gap + 1)..];
+        bool leading = head.Trim().Length == 0 && current.StartsWith('-');
+        bool trailing = head.Trim().Length > 0 && (current.Length == 0 || current.StartsWith('-'));
+        if (!leading && !trailing)
+        {
+            return null;
+        }
+
+        string start = head.Trim().Length == 0 ? "" : head;
+        return new MentionResult(FileOutcome.Ok, [.. flags.Select(f => start + f).Where(f => f.StartsWith(start + current, StringComparison.OrdinalIgnoreCase) && !string.Equals(f, start + current, StringComparison.OrdinalIgnoreCase))], false);
     }
 
     /// <summary>
@@ -5972,38 +6083,57 @@ internal sealed partial class ChatScreen
             prefix => _files.Complete(prefix).Paths.Where(path => path.EndsWith('/')).ToList(),
             prefix => _files.Complete(prefix, full => WorkingDirectory.IsTextFile(full) || PdfFile.IsPdfPath(full)),   // a PDF reads aloud too (2026-10-14)
             prefix => _files.Complete(prefix, full => ImageFile.IsImagePath(full) || PdfFile.IsPdfPath(full)),   // /view opens a PDF too (2026-10-14)
-            SessionChoices,
-            SkillChoices,
-            VaultFolderChoices,
-            WorkflowChoices,
-            _plan.Active,
-            PlanChoices,
-            HomeAssistantChoices,
-            prefix => _files.Complete(prefix),
-            PrintChoices,
-            ThemeChoices,
-            DockerChoices,
-            ScreenChoices,
-            ServerChoices,
-            EmbeddedModelChoices,
-            _logFile is not null,
-            ProcessChoices,
-            prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())),
-            AdvisorChoices,
-            ShoppingChoices,
-            EventLogChoices,
-            NetChoices,
-            ServiceChoices,
-            TaskChoices,
-            AdChoices,
+            Sessions: SessionChoices,
+            VaultFolders: VaultFolderChoices,
+            Workflows: WorkflowChoices,
+            Planning: _plan.Active,
+            Plans: PlanChoices,
+            Home: HomeAssistantChoices,
+            AnyFiles: prefix => _files.Complete(prefix),
+            Print: PrintChoices,
+            Themes: ThemeChoices,
+            Docker: DockerChoices,
+            Screen: ScreenChoices,
+            Server: ServerChoices,
+            Models: EmbeddedModelChoices,
+            LogFile: _logFile is not null,
+            Processes: ProcessChoices,
+            MachineFolders: prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())),
+            Advisors: AdvisorChoices,
+            Shopping: ShoppingChoices,
+            EventLog: EventLogChoices,
+            Net: NetChoices,
+            Services: ServiceChoices,
+            Tasks: TaskChoices,
+            Ad: AdChoices,
             Audits: AuditChoices,
             Monitor: MonitorChoices,
             PlanState: PlanCompletionNow(web: false),
-            EditPlans: EditPlanChoices);
+            EditPlans: EditPlanChoices,
+            HomeBar: HomeBarChoices,
+            Stopwatches: StopwatchNames(),
+            Prompts: PromptChoices,
+            BrowserLinks: argText => BrowserChoices(argText, page: false),
+            YouTubeSaved: YouTubeChoices,
+            Cameras: CameraChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
     }
+
+    /// <summary>The board's stopwatches' names, for <c>/timer stopwatch </c>'s list (2026-10-27, the completion survey).</summary>
+    private List<string> StopwatchNames() => _timers.Snapshot().Where(timer => timer.Stopwatch).Select(timer => timer.Name).ToList();
+
+    /// <summary>
+    /// A saved list's file read for the argument list (2026-10-27): through <see cref="Computers.ConfigCache"/>, so a keystroke reads it again
+    /// only once its stamp moved (and a broken file is logged once a change, not once a keystroke).
+    /// </summary>
+    private static IReadOnlyList<T> CompletionRead<T>(string path, Func<IReadOnlyList<T>> list) => Computers.ConfigCache.Get(CompletionCacheFamily, path, list);
+
+    private const string CompletionCacheFamily = "completion";
+
+    /// <summary>The note beside <c>/plan open --chat</c> on the argument list (2026-10-27). Pinned.</summary>
+    public const string PlanOpenChatNote = "pick a plan up to talk it through: nothing is sent until your next message";
 
     /// <summary><c>/server</c>'s argument list over what is offered now (2026-10-04): <see cref="ServerItems"/>, each word only while <c>/server</c> would take it.</summary>
     private IReadOnlyList<CompletionItem> ServerChoices(string argText)
@@ -9537,9 +9667,12 @@ internal sealed partial class ChatScreen
     /// <see cref="WorkingDirectory.Complete"/> kept to folders, none through a dot-folder; empty while
     /// <see cref="VaultRoot"/> has no vault to offer.
     /// </summary>
-    private IReadOnlyList<string> VaultFolderChoices(string prefix)
+    private IReadOnlyList<string> VaultFolderChoices(string prefix) => VaultFolderChoices(VaultRoot(_effective(), out _), prefix);
+
+    /// <summary>The vault's folders under <paramref name="root"/> (null, none: <i>Obsidian tools</i> off or no vault), dot folders left out.</summary>
+    private IReadOnlyList<string> VaultFolderChoices(string? root, string prefix)
     {
-        if (VaultRoot(_effective(), out _) is not { } root)
+        if (root is null)
         {
             return [];
         }
@@ -10397,6 +10530,9 @@ internal sealed partial class ChatScreen
     public const string ComfyJsonWord = "json";
     public const string ComfyMarkdownWord = "markdown";
 
+    /// <summary><see cref="ComfyMarkdownWord"/>'s documented short form, offered on the list since 2026-10-27 (the completion survey).</summary>
+    public const string ComfyMdWord = "md";
+
     /// <summary>The argument-list notes. Pinned.</summary>
     public const string ComfyEditNote = "open a workflow's .json or .md in your editor";
     public const string ComfyJsonNote = "open a workflow's .json (its ComfyUI graph) in your editor";
@@ -10426,7 +10562,7 @@ internal sealed partial class ChatScreen
         bool? json = words.Length < 2 ? null : words[1].ToLowerInvariant() switch
         {
             ComfyJsonWord => true,
-            ComfyMarkdownWord or "md" => false,
+            ComfyMarkdownWord or ComfyMdWord => false,
             _ => null,
         };
         if (!string.Equals(words[0], ComfyEditWord, StringComparison.OrdinalIgnoreCase) || json is null || words.Length < 3)
@@ -10537,6 +10673,7 @@ internal sealed partial class ChatScreen
     public const string ScreenFolderLabel = "Screen output folder";
     public const string PastedFolderLabel = "Pasted images folder";
     public const string SplashFolderLabel = "splash pictures folder";
+    public const string HomeStillsFolderLabel = "Home Assistant stills folder";
 
     private static string Plural(int n, string noun) => n.ToString("N0", CultureInfo.InvariantCulture) + " " + noun + (n == 1 ? "" : "s");
 

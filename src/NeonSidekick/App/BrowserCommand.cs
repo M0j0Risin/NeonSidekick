@@ -140,6 +140,32 @@ public static class BrowserCommand
         _ => false,
     };
 
+    /// <summary>
+    /// <see cref="Complete(string)"/> with the saved links by number (2026-10-27, the completion survey): <c>&lt;n&gt;</c> after the verbs while
+    /// the first word is typed (not <paramref name="unsaveOnly"/>: the Web UI's page, where a number opens a window on the PC) and
+    /// <c>unsave &lt;n&gt;</c>, each noted by its name, else its address. On the bare list for <c>/prompts</c>' reason
+    /// (<see cref="PromptsCommand"/>). <paramref name="links"/> is asked only then. Pure.
+    /// </summary>
+    public static IReadOnlyList<UI.CompletionItem> Complete(string argText, Func<IReadOnlyList<BrowserLink>> links, bool unsaveOnly)
+    {
+        ArgumentNullException.ThrowIfNull(argText);
+        ArgumentNullException.ThrowIfNull(links);
+        string unsaveHead = UnsaveWord + " ";
+        if (!unsaveOnly && !argText.Contains(' ', StringComparison.Ordinal))
+        {
+            return UI.MentionCompleter.Matches([.. Complete(""), .. UI.NumberedItems.Of("", links().Select(LinkNote))], argText);
+        }
+
+        if (argText.StartsWith(unsaveHead, StringComparison.OrdinalIgnoreCase))
+        {
+            return UI.MentionCompleter.Matches(UI.NumberedItems.Of(argText[..unsaveHead.Length], links().Select(LinkNote)), argText);
+        }
+
+        return Complete(argText);
+
+        static string LinkNote(BrowserLink link) => string.IsNullOrWhiteSpace(link.Name) ? link.Url : link.Name;
+    }
+
     /// <summary>The input line's argument list after <c>/browser </c>: the verbs while the first word is typed; then <c>--clear</c> after <c>list</c>, <c>history</c> and <c>all</c> after <c>clear</c>.</summary>
     public static IReadOnlyList<UI.CompletionItem> Complete(string argText)
     {

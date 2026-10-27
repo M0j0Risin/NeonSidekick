@@ -166,6 +166,7 @@ Each purge asks first and follows *File deletes to Recycle bin*: to the Recycle 
 | `/screen purge` | Deletes everything in *Screen output folder*. |
 | `/pasted view`, `/pasted thumbs` | The picture viewer or thumbnail browser on *Pasted images folder*, where pasted pictures are saved as their messages are sent. |
 | `/pasted purge` | Deletes everything in *Pasted images folder*. |
+| `/ha stills view\|thumbs\|purge` | The picture viewer, thumbnail browser or a purge on the Home Assistant camera stills (`home-cameras` under the profile's `images` folder). |
 
 ### Voice
 
@@ -267,7 +268,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/net trace <host> [names]` | The route, hop by hop (30 at most), with each hop's name when `names` is given. |
 | `/net port <host> <port>...` | Whether TCP ports (16 at most) are open, refused or silent on each of the host's addresses. |
 | `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through the system's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server named. |
-| `/net tls <host> [<port>] [smtp\|imap\|pop3\|ldap\|rdp\|none]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; ports 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
+| `/net tls <host> [<port> [smtp\|imap\|pop3\|ldap\|rdp\|none]]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; ports 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
 | `/net certs [<store>] [user\|machine] [<words>]` | One of the certificate stores on the app's computer (`my` by default), soonest to end first; nothing exported. On a Mac, `root` reads the system's trust unless `user` is named. |
 | `/eventlog` | The event logs of the app's computer (or the only ticked computer's) in a pane, a tab per log, newest first; an event opens with **copy** and **ask** (a draft asking about it). Full text, with *Event log tools* off too. See [Event logs](TOOLS.md#event-logs). |
 | `/eventlog <log>\|<evtx-file> [<term>…] [<words>]` | Opens on a log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:`, `level:`, `id:`, `provider:`, `field:<Name>=<value>`, `since:`, `until:`, `audit:` and words. On a Mac: `system`, `crashes`, `install` or a `.logarchive`, with `level:`, `process:`, `subsystem:`, `category:`, `pid:`, `exclude:`, `since:`, `until:` ([on a Mac](TOOLS.md#event-logs-on-a-mac)). Without the pane, and from the Web UI, it lists the events. |
@@ -297,7 +298,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip your own name or emoji (nothing after `=` shows the emoji alone); `default` puts its own back. |
 | `/monitor`, `/monitor <monitor>` | Opens the [monitors pane](INTERFACE.md#the-monitors-pane), on its Layout tab or that monitor's. Without the pane, prints the list. Windows only ([MAC.md](MAC.md#what-works)). |
 | `/monitor list` | Prints the monitors: number, name, connector, mode, primary, the current input and the inputs; the first line names any monitor showing another input. |
-| `/monitor <monitor> input <input>` | Switches the monitor's input: a name you gave it, a standard name (`hdmi-1`) or a code in hex (`0x1B`). |
+| `/monitor <monitor> input <input>` | Switches the monitor's input: a name you gave it, a standard name (`hdmi-1`) or a code in hex (`0x1B`). Off the desktop it needs an NVIDIA card, and this PC's input also adds the monitor back. |
 | `/monitor <monitor> pc <input>\|now\|auto` | Says which input is this PC's: an input, `now` (the one it shows now) or `auto` (no pick: the cable guesses). Bare, says what is set. Nothing switches. |
 | `/monitor <monitor> only\|primary`, `/monitor extend\|duplicate` | Changes the layout as Win+P does: one monitor alone, the primary, every monitor extended, or all showing the same. |
 | `/log` | Opens the [log window](INTERFACE.md#the-log-window). |

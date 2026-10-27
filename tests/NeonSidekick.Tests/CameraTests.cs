@@ -316,6 +316,19 @@ public sealed class CameraPureTests
         Assert.Empty(CameraCommand.Complete("use x"));
     }
 
+    /// <summary><c>use</c>'s cameras from the last list (2026-10-27, the completion survey): by name, noted by number and the chosen one; twins by number.</summary>
+    [Fact]
+    public void Complete_OffersTheListedCameras_AfterUse_TwinsByNumber()
+    {
+        CameraDevice[] devices = [new("MX Brio", "1"), new("Cam Link", "2"), new("Cam Link", "3")];
+
+        Assert.Equal([new UI.CompletionItem("use MX Brio", "1"), new UI.CompletionItem("use 2", "2 · chosen"), new UI.CompletionItem("use 3", "3")], CameraCommand.Complete("use ", devices, "cam link"));
+        Assert.Equal("1 · chosen", CameraCommand.Complete("use ", devices, null)[0].Note);   // none saved: the first
+        Assert.Equal(["use MX Brio"], CameraCommand.Complete("use m", devices, null).Select(i => i.Text));
+        Assert.Empty(CameraCommand.Complete("use ", null, null));   // no list yet
+        Assert.Contains(CameraCommand.Complete("", devices, null), i => i.Text == "snap");
+    }
+
     [Fact]
     public void Texts_ReadAsPinned()
     {

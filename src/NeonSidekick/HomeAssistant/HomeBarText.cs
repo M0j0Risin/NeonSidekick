@@ -24,8 +24,8 @@ public static class HomeBarText
     /// <summary><c>/homebar emoji &lt;item&gt; = default</c>: the item's own glyph again, as a blank does.</summary>
     public const string DefaultWord = "default";
 
-    /// <summary><c>/homebar</c>'s words, as its completion lists them.</summary>
-    public static readonly string[] Words = [OnWord, OffWord, EditWord, NameWord, EmojiWord];
+    /// <summary><c>/homebar</c>'s words, as its completion lists them (<c>tap</c> and <c>show</c> since 2026-10-27, the user's ask).</summary>
+    public static readonly string[] Words = [OnWord, OffWord, EditWord, TapWord, ShowWord, NameWord, EmojiWord];
 
     /// <summary><c>/homebar</c>'s completion hint beside a word. Pinned.</summary>
     public static string Describe(string word) => word switch
@@ -33,13 +33,21 @@ public static class HomeBarText
         OnWord => "show the home bar",
         OffWord => "hide the home bar",
         EditWord => "choose the home bar's rooms and devices, and their order",
+        TapWord => "do what a double-click on an item does: tap <item>",
+        ShowWord => "open an item's pane: show <item>",
         NameWord => "show an item on the bar under a name of your own: name <item> = <alias>; nothing after = for its emoji alone, = default for its own",
         EmojiWord => "show an item on the bar with an emoji of your own: emoji <item> = <emoji>, or = default",
         _ => "",
     };
 
     /// <summary>A word <c>/homebar</c> does not take. Pinned.</summary>
-    public const string Usage = "Usage: /homebar [on|off|edit|name <item> = <alias>|emoji <item> = <emoji>] — show or hide the home bar, choose what is on it, or rename an item on it or change its emoji";
+    public const string Usage = "Usage: /homebar [on|off|edit|tap <item>|show <item>|name <item> = <alias>|emoji <item> = <emoji>] — show or hide the home bar, choose what is on it, use an item on it, or rename an item on it or change its emoji";
+
+    /// <summary>The note beside <c>name &lt;item&gt; = default</c> and <c>emoji &lt;item&gt; = default</c> on the argument list (2026-10-27).</summary>
+    public const string DefaultNameNote = "its own name again";
+
+    /// <inheritdoc cref="DefaultNameNote"/>
+    public const string DefaultEmojiNote = "its own emoji again";
 
     /// <summary>The bar shown, hidden. Pinned.</summary>
     public const string Shown = "Home bar shown";
