@@ -549,13 +549,21 @@ public sealed class SessionStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// The sessions a purge deleted, by id (2026-10-28, the checkpoints plan: their file checkpoints go with them), from <see cref="Purge"/>,
+    /// <see cref="PurgeOlderThan"/> and <see cref="PurgeAll"/>, so every site that deletes sessions (the commands, the retention purge, the
+    /// sessions pane's Del) is covered. Raised on the purging thread after the store's lock is let go; never with an empty list.
+    /// </summary>
+    public event Action<IReadOnlyList<long>>? Purged;
+
     /// <summary>Removes session <paramref name="id"/> and its turns; false when there was none.</summary>
     public bool Purge(long id)
     {
         bool purged;
+        var ids = new List<long>();
         lock (_gate)
         {
-            purged = Delete("WHERE session_id = $id", "WHERE id = $id", ("$id", id)) > 0;
+            purged = Delete("WHERE session_id = $id", "WHERE id = $id", ("$id", id), ids: ids) > 0;
         }
 
         if (purged)
@@ -563,16 +571,26 @@ public sealed class SessionStore : IDisposable
             DiagnosticLog.Info(Category, PurgedLogLine(id));
         }
 
+        RaisePurged(ids);
         return purged;
+    }
+
+    private void RaisePurged(List<long> ids)
+    {
+        if (ids.Count > 0)
+        {
+            Purged?.Invoke(ids);
+        }
     }
 
     /// <summary>Removes every session last updated before <paramref name="cutoff"/> (and the reflection rows of a <c>/learn sessions</c> pass from before it, which belong to no session); how many sessions went.</summary>
     public int PurgeOlderThan(DateTimeOffset cutoff)
     {
         int purged;
+        var ids = new List<long>();
         lock (_gate)
         {
-            purged = Delete("WHERE session_id IN (SELECT id FROM sessions WHERE updated_at < $cutoff)", "WHERE updated_at < $cutoff", ("$cutoff", Stamp(cutoff)), "WHERE session_id IS NULL AND at < $cutoff");
+            purged = Delete("WHERE session_id IN (SELECT id FROM sessions WHERE updated_at < $cutoff)", "WHERE updated_at < $cutoff", ("$cutoff", Stamp(cutoff)), "WHERE session_id IS NULL AND at < $cutoff", ids);
         }
 
         if (purged > 0)
@@ -580,6 +598,7 @@ public sealed class SessionStore : IDisposable
             DiagnosticLog.Info(Category, PurgedOlderLogLine(purged, cutoff));
         }
 
+        RaisePurged(ids);
         return purged;
     }
 
@@ -587,9 +606,10 @@ public sealed class SessionStore : IDisposable
     public int PurgeAll()
     {
         int purged;
+        var ids = new List<long>();
         lock (_gate)
         {
-            purged = Delete("", "", null);
+            purged = Delete("", "", null, ids: ids);
         }
 
         if (purged > 0)
@@ -597,6 +617,7 @@ public sealed class SessionStore : IDisposable
             DiagnosticLog.Info(Category, PurgedAllLogLine(purged));
         }
 
+        RaisePurged(ids);
         return purged;
     }
 
@@ -1105,7 +1126,7 @@ public sealed class SessionStore : IDisposable
     /// plus <paramref name="reflectionsAlso"/> for the rows that belong to no session), then the
     /// turns, then the sessions, in one transaction; how many sessions went. Never the CASCADE's. Caller holds the lock.
     /// </summary>
-    private int Delete(string turnsWhere, string sessionsWhere, (string Name, object Value)? parameter, string? reflectionsAlso = null)
+    private int Delete(string turnsWhere, string sessionsWhere, (string Name, object Value)? parameter, string? reflectionsAlso = null, List<long>? ids = null)
     {
         if (Open() is not { } connection)
         {
@@ -1146,8 +1167,28 @@ public sealed class SessionStore : IDisposable
             }
 
             turns.ExecuteNonQuery();
+            var gone = new List<long>();
+            if (ids is not null)
+            {
+                // The ids the delete takes (2026-10-28, SessionStore.Purged), read in the same transaction.
+                using var select = connection.CreateCommand();
+                select.Transaction = transaction;
+                select.CommandText = "SELECT id FROM sessions " + sessionsWhere;
+                if (parameter is { } s)
+                {
+                    select.Parameters.AddWithValue(s.Name, s.Value);
+                }
+
+                using var reader = select.ExecuteReader();
+                while (reader.Read())
+                {
+                    gone.Add(reader.GetInt64(0));
+                }
+            }
+
             int removed = sessions.ExecuteNonQuery();
             transaction.Commit();
+            ids?.AddRange(gone);
             return removed;
         }
         catch (SqliteException ex)

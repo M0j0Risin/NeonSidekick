@@ -246,7 +246,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds], TabFields(ToolsText.HomeAssistantTabTitle));   // the switch, the server and its token, the test, the policy, Assist's agent, the timeout (2026-09-28)   // the fold's count under the switch (2026-09-22, the user's place), the code fold's under it
         Assert.Equal([SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine], TabFields(ToolsText.PrintTabTitle));   // the switch, the policy, the printer, the size (later on 2026-09-28); the PDF engine (2026-10-03)
         Assert.Equal([SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes], TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01); the botcheck window under the path (2026-10-13), the home page under it (later that day)
-        Assert.Equal([SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], TabFields(ToolsText.FileMenuTitle));   // the five picture rows on the Image menu since 2026-10-10; the pasted pictures' folder last (2026-10-09); image_edit's three before it (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
+        Assert.Equal([SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults], TabFields(ToolsText.FileMenuTitle));   // the five picture rows on the Image menu since 2026-10-10; the pasted pictures' folder last (2026-10-09); image_edit's three before it (2026-10-04); the search cap (2026-10-01), the view_image cap before it (2026-09-19); the browser mode under the folder mode, 2026-09-21
         Assert.Equal([SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds], TabFields(ToolsText.ShellTabTitle));   // the policy (the switch) first, then the list, the shell, the caps, then execute_code's two (2026-09-21; four from later that day, with the bridge switch and its cap, until 2026-10-23; the police toggle third, 2026-09-22; prefer native under it, 2026-09-26; the forbidden strings under the police, 2026-10-03)
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));
         Assert.Equal([SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName], TabFields(ToolsText.GitTabTitle));   // the switch first, then the limits, then the identity pair (2026-09-21); the GitLib labels later that day
@@ -262,7 +262,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(29, SettingsMenu.LabelWidthOf(TabFields(ToolsText.WebTabTitle)));   // "Web browser botcheck window" (2026-10-13; "Web browser network mode", 26, from later still on 2026-09-19, the Web-prefixed labels; "Web search max results", 24, before)
         Assert.Equal([SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder], TabFields(ToolsText.ImageMenuTitle));   // the switch first (2026-10-10, the picture tools' own group)   // the File menu's last five until 2026-10-10 (the user's ask), after File
         Assert.Equal(26, SettingsMenu.LabelWidthOf(TabFields(ToolsText.ImageMenuTitle)));   // "Image edit output folder"
-        Assert.Equal(Math.Max(28, SettingsMenu.FieldName(SettingsField.FileDeletesToRecycleBin).Length + 2), SettingsMenu.LabelWidthOf(TabFields(ToolsText.FileMenuTitle)));   // "File deletes to Recycle bin" since later on 2026-10-15 (29; "Trash" on a Mac, 23, leaves it 28); "File view image max images" (later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, before)
+        Assert.Equal(SettingsMenu.FieldName(SettingsField.FileCheckpointLargestFileMegabytes).Length + 2, SettingsMenu.LabelWidthOf(TabFields(ToolsText.FileMenuTitle)));   // "File checkpoints per file (MB)" since 2026-10-28 (32); "File deletes to Recycle bin" since later on 2026-10-15 (29; "Trash" on a Mac, 23, leaves it 28); "File view image max images" (later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(TabFields(ToolsText.ShellTabTitle)));   // "Shell police forbidden strings" (2026-10-03; "Shell tool bridge max calls", 29, before) (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(TabFields(ToolsText.AskTabTitle)));   // "Ask max choices per question"
         Assert.Equal(24, SettingsMenu.LabelWidthOf(TabFields(ToolsText.GitTabTitle)));   // "GitLib log max commits" (2026-09-30; "Git native log max commits", 28, from later on 2026-09-21; "Git log max commits", 21, from 2026-09-20)
@@ -312,9 +312,9 @@ public partial class ToolsMenuTests : IDisposable
 
         // The strip, the Clock heading, the cursor on get_current_time (the first tool row, past its heading), the hint with the flip keys; nothing reached the transcript.
         // The headings are rules with a gap before each but the first (2026-10-03).
-        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 13") + "\n", Output);   // Files next: alphabetical since 2026-10-04
+        Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 14") + "\n", Output);   // Files next: alphabetical since 2026-10-04
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", Output);
-        Assert.Contains("\n" + Heading("── Files · 13") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 14") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", Output);
         Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
@@ -336,7 +336,7 @@ public partial class ToolsMenuTests : IDisposable
         // The headings are rules with a gap before each but the first (2026-10-03).
         Assert.Contains("\n" + Titled(Strip) + "\n \n" + Heading("── Clock · 3") + "\n" + Row(GetCurrentTimeTool.ToolName, true, "▸ ") + "\n" + Row(ShiftDateTool.ToolName, true) + "\n" + Row(DateDifferenceTool.ToolName, true) + "\n  \n" + Heading("── Files · 13") + "\n", Output);   // Files next: alphabetical since 2026-10-04
         Assert.Contains("\n" + ToolsText.OfferedKeys + "\n", Output);
-        Assert.Contains("\n" + Heading("── Files · 13") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 14") + "\n" + Row(GetWorkingDirectoryTool.ToolName, true) + "\n", Output);
         Assert.Matches(@"[ ▲]▼ \d+–\d+ of \d+", Output);   // 39 rows over 30: the list scrolls
         Assert.False(pane.OverlayOpen);
         Assert.Equal(0, pane.FlowRow);
@@ -432,9 +432,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Heading("── Files · 13 ── off: File tools is off") + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 14 ── off: File tools is off") + "\n", Output);
         Assert.Contains("  · get_working_directory: off\n", Output);
-        Assert.Contains("\n" + Heading("── Files · 12 of 13 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 13 of 14 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", Output);
         pane.Dispose();
     }
 
@@ -451,9 +451,9 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal([GetWorkingDirectoryTool.ToolName], _settings.Current.ToolsDisabled);
-        Assert.Contains("\n" + Heading("── Files · 13 ── off: File tools is off") + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 14 ── off: File tools is off") + "\n", Output);
         Assert.Contains("  · get_working_directory: off\n", Output);
-        Assert.Contains("\n" + Heading("── Files · 12 of 13 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", Output);
+        Assert.Contains("\n" + Heading("── Files · 13 of 14 ── off: File tools is off") + "\n" + Row(GetWorkingDirectoryTool.ToolName, false, "▸ ") + "\n", Output);
         pane.Dispose();
     }
 
@@ -614,7 +614,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.False(_settings.Current.FileTools);
         // The six rows (the view_image cap last, 2026-09-19; the @-mention folder mode before it, 2026-09-17, and the browser mode under that, 2026-09-21; Safe edits gone since 2026-10-01, folder-remain the default since then, Always return line numbers gone later that day and the stale line number guard later still, with edit_lines) padded to the tab's own column (32), the toggle's notice on the status line under the strip.
         // File deletes to Recycle bin second since later on 2026-10-15, the column as wide as its name ("Trash" on a Mac).
-        AssertTabEnds(Strips(ToolsText.FilesTabTitle) + Headed(ToolsText.FileMenuTitle, "▸ " + FileRow("File tools", "on") + "\n  " + FileRow(SettingsMenu.FieldName(SettingsField.FileDeletesToRecycleBin), "on") + "\n  " + FileRow("File /tree max entries", "500 entries") + "\n  " + FileRow("File /tree show sizes", "on") + "\n  " + FileRow("File @-mention folder mode", "remain") + "\n  " + FileRow("File browser/tree mode", "hide-hidden") + "\n  " + FileRow("File view image max images", "10 pictures") + "\n  " + FileRow("File search max results", "200 results") + "\n"), 100);
+        AssertTabEnds(Strips(ToolsText.FilesTabTitle) + Headed(ToolsText.FileMenuTitle, "▸ " + FileRow("File tools", "on") + "\n  " + FileRow(SettingsMenu.FieldName(SettingsField.FileDeletesToRecycleBin), "on") + "\n  " + FileRow("File checkpoints", "on") + "\n  " + FileRow("File checkpoints keep (days)", "90 days") + "\n  " + FileRow("File checkpoints max (MB)", "2,048 MB") + "\n  " + FileRow("File checkpoints per file (MB)", "64 MB") + "\n  " + FileRow("File /tree max entries", "500 entries") + "\n  " + FileRow("File /tree show sizes", "on") + "\n  " + FileRow("File @-mention folder mode", "remain") + "\n  " + FileRow("File browser/tree mode", "hide-hidden") + "\n  " + FileRow("File view image max images", "10 pictures") + "\n  " + FileRow("File search max results", "200 results") + "\n"), 100);
         Assert.Contains("\n" + Titled(Strip) + "\n" + SubStrip(ToolsText.FilesTabTitle) + "\n  · File tools: off\n" + Heading("── Files") + "\n▸ " + FileRow("File tools", "off") + "\n", Output);
         Assert.Contains("\n▸ GitLib tools            on\n", Output);
         pane.Dispose();
@@ -2080,12 +2080,35 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task OnThePane_FileCheckpointKeepDays_IsTyped_OutOfRangeAndAWordRefused()
+    {
+        // 2026-10-28, the checkpoints plan: 0 to 3650 days, 90 by default, under the Checkpoints heading (the fourth row).
+        var (menu, pane, _) = PaneMenu();
+        Push(ToTab(ToolsText.FilesTabTitle));   // Files
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the typed slot with "90"
+        Push(Keys.Backspace, Keys.Backspace, Keys.Char('3'), Keys.Char('6'), Keys.Char('5'), Keys.Char('1'), Keys.Enter);   // refused: 3651
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('x'), Keys.Enter);   // refused: a word
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('3'), Keys.Char('0'), Keys.Enter);   // 30
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(30, _settings.Current.FileCheckpointKeepDays);
+        Assert.Equal("must be 0 to 3650 days", SettingsMenu.FileCheckpointKeepDaysRangeError);
+        Assert.Equal("must be 100 to 102400 MB", SettingsMenu.FileCheckpointMaxMegabytesRangeError);
+        Assert.Equal("must be 1 to 2048 MB", SettingsMenu.FileCheckpointLargestFileMegabytesRangeError);
+        Assert.Equal(2, Output.Split("File checkpoints keep (days) " + SettingsMenu.FileCheckpointKeepDaysRangeError + "; keeping 90.").Length - 1);
+        Assert.Contains("  · File checkpoints keep (days): 30 days\n", Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_ViewImageMaxPerCall_IsTheFilesTabsLastRow_Typed_OutOfRangeRefused()
     {
         // 2026-09-19, the user's ask: 1 to 100, 10 by default; the value the tool reads at its next call.
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.FilesTabTitle));   // Files
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // View image max per call (the seventh row since later on 2026-10-15, the bin's row second; the sixth since 2026-10-01, Safe edits gone; the seventh from 2026-09-21): the typed slot with "10"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // View image max per call (the eleventh row since 2026-10-28, under the four file checkpoint rows; the seventh since later on 2026-10-15, the bin's row second; the sixth since 2026-10-01, Safe edits gone; the seventh from 2026-09-21): the typed slot with "10"
         Push(Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);        // refused: 0
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('1'), Keys.Char('0'), Keys.Char('1'), Keys.Enter);   // refused: 101
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Char('2'), Keys.Char('5'), Keys.Enter);   // 25
@@ -2106,7 +2129,7 @@ public partial class ToolsMenuTests : IDisposable
         // 2026-10-01, the user's ask: 1 to 5000, 200 by default (the constant until then); search_files and unc_search read it at their next call.
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.FilesTabTitle));   // Files
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the eighth row (the bin's second since later on 2026-10-15), after the view_image cap: the typed slot with "200"
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the twelfth row (the four file checkpoint rows since 2026-10-28; the bin's second since later on 2026-10-15), after the view_image cap: the typed slot with "200"
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('0'), Keys.Enter);   // refused: 0
         Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Backspace, Keys.Char('1'), Keys.Char('0'), Keys.Char('0'), Keys.Char('0'), Keys.Enter);   // 1000
         Push(Keys.Escape);
@@ -2350,7 +2373,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", Output);
-        Assert.Contains("  ·   Files (12 of 13)\n", Output);   // 15 of 16 until the picture tools went to Image, 2026-10-10
+        Assert.Contains("  ·   Files (13 of 14)\n", Output);   // 13 of 14 with read_office, 2026-10-28; 15 of 16 until the picture tools went to Image, 2026-10-10
         Assert.Contains("  ·     read_file             off  Reads a text file", Output);   // the console wraps the long line
         Assert.Contains("switched off in /tools", Output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
@@ -2386,7 +2409,7 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", Output);
-        Assert.Contains("  ·   Files (12 of 13)\n", Output);   // the picture tools on Image since 2026-10-10
+        Assert.Contains("  ·   Files (13 of 14)\n", Output);   // read_office 2026-10-28; the picture tools on Image since 2026-10-10
         Assert.Contains("  ·     read_file             off  Reads a text file", Output);   // the console wraps the long line
         Assert.Contains("switched off in /tools", Output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);

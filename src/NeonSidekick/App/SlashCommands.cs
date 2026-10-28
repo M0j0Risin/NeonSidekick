@@ -19,9 +19,16 @@ public enum SlashCommand
     /// <summary>
     /// <c>/rewind</c> (2026-09-30, the user's ask): go back to an earlier message. It and everything after it leave the
     /// conversation and the session, and its text returns to the input. <c>/rewind &lt;n&gt;</c> starts the picker n messages
-    /// back. A double ESC on an empty line opens it too.
+    /// back. A double ESC on an empty line opens it too. Since 2026-10-28 (the checkpoints plan) it offers the files those turns' file
+    /// tools changed as well (<c>/rewind [&lt;n&gt;] files</c> puts the cursor there).
     /// </summary>
     Rewind,
+
+    /// <summary>
+    /// <c>/undo [&lt;n&gt;]</c> (2026-10-28, the checkpoints plan): put back the files the last turn (or n turns) of this conversation changed
+    /// through the file tools, the conversation kept. <c>/undo purge [all]</c> deletes this folder's (every folder's) file checkpoints.
+    /// </summary>
+    Undo,
     /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change starts over the way <c>/splash</c> does — the conversation forgotten, the screen wiped, the splash shown in the new colours. Refused while a reply runs.</summary>
     Theme,
 
@@ -451,6 +458,7 @@ public static class SlashCommands
             new(NeonSidekick.Screen.ScreenText.Word, NeonSidekick.Screen.ScreenText.HelpSummary),
             new("/clear", "start over and clear the screen"),
             new(RewindText.Word, RewindText.HelpSummary),
+            new(UndoText.Word, UndoText.HelpSummary),
             new("/cmd", "run a shell line yourself"),
             new(Audits.AuditText.Word, Audits.AuditText.HelpSummary),
             new("/collapse", "fold every item in the transcript"),
@@ -505,7 +513,7 @@ public static class SlashCommands
             new("/settings", "edit, search and save settings", "//"),
             new("/shortcut", "put a launch shortcut on the desktop"),
             new("/skills", "manage and install skills"),
-            new("/read", "read a text file or PDF aloud"),
+            new("/read", "read text, PDF, Word or slides aloud"),
             new("/splash", "start over with the splash screen"),
             new("/stt", "toggle voice input and the wake word"),
             new("/sys", "show or edit the system prompt"),
@@ -530,7 +538,7 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
-    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick; <c>/undo</c> beside <c>/rewind</c> on 2026-10-28, the user's pick). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
@@ -538,7 +546,7 @@ public static class SlashCommands
     {
         "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
         "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
-        "/tools", "/tree", "/tts",
+        "/tools", "/tree", "/tts", "/undo",
     };
 
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>
@@ -617,7 +625,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -668,6 +676,7 @@ public static class SlashCommands
             "/splash" => SlashCommand.Splash,
             Images.PastedCommand.Word => SlashCommand.Pasted,
             "/rewind" => SlashCommand.Rewind,
+            "/undo" => SlashCommand.Undo,
             "/theme" => SlashCommand.Theme,
             "/mark" => SlashCommand.Mark,
             "/avatar" => SlashCommand.Avatar,
@@ -772,7 +781,7 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
         or SlashCommand.Splash or SlashCommand.Pasted;   // 2026-10-18: view|thumbs|purge
 }

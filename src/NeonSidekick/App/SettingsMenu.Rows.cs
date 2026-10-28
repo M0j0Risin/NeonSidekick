@@ -123,14 +123,15 @@ internal sealed partial class SettingsMenu
     /// The section headings of <c>/tools</c>' menus, indexed like <see cref="ToolsTabFields"/> (2026-10-10, the user's ask: the
     /// <c>/settings</c> look on the other panes' menus): each heading over the field it names, every menu headed, even the short
     /// ones. The YouTube menu moved its autoplay and voice rows under the search rows to sit under Playing (the user's call, as
-    /// <see cref="TabSections"/>' four tabs did). Pinned.
+    /// <see cref="TabSections"/>' four tabs did). The File menu's Checkpoints section came on 2026-10-28 (the checkpoints plan, the user's ask),
+    /// after the Recycle bin row it works with. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> ToolsMenuSections =
     [
         [(SettingsField.AskUser, "Questions"), (SettingsField.AskMaxQuestions, "Limits")],
         [(SettingsField.WebTools, "Browser"), (SettingsField.WebSearchMethod, "Search"), (SettingsField.WebDownloadMaxMegabytes, "Downloads")],
         [(SettingsField.ShellCommandPolicy, "Policy"), (SettingsField.ShellPolice, "Guards"), (SettingsField.ShellPreferNative, "Commands"), (SettingsField.ShellCodeLanguages, "Scripts")],
-        [(SettingsField.FileTools, "Files"), (SettingsField.FileTreeMaxLength, "/tree"), (SettingsField.FileMentionFolderMode, "Browsing"), (SettingsField.FileViewImageMaxPerCall, "Limits")],
+        [(SettingsField.FileTools, "Files"), (SettingsField.FileCheckpoints, "Checkpoints"), (SettingsField.FileTreeMaxLength, "/tree"), (SettingsField.FileMentionFolderMode, "Browsing"), (SettingsField.FileViewImageMaxPerCall, "Limits")],
         [(SettingsField.ImageTools, "Editing"), (SettingsField.ImageEditOutputFolder, "Folders")],
         [(SettingsField.UncTools, "Access"), (SettingsField.UncSharesOffered, "Shares"), (SettingsField.UncSharesProfile, "Files")],
         [(SettingsField.PrintTools, "Printing"), (SettingsField.PrintDefaultPrinter, "Output")],

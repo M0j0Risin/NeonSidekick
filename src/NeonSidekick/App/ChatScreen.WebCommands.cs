@@ -435,7 +435,7 @@ internal sealed partial class ChatScreen
             _settings.ProfileName,
             timers,
             prefix => files ? [.. wd.Complete(prefix).Paths.Where(path => path.EndsWith('/'))] : [],
-            prefix => files ? wd.Complete(prefix, full => Files.WorkingDirectory.IsTextFile(full) || Files.PdfFile.IsPdfPath(full)) : empty,
+            prefix => files ? wd.Complete(prefix, full => Files.WorkingDirectory.IsTextFile(full) || Files.PdfFile.IsPdfPath(full) || Files.OfficeFile.IsReadAloudPath(full)) : empty,
             prefix => files ? wd.Complete(prefix, full => Files.ImageFile.IsImagePath(full) || Files.PdfFile.IsPdfPath(full)) : empty,
             VaultFolders: prefix => VaultFolderChoices(vaultRoot, prefix),
             Workflows: () => workflowList,

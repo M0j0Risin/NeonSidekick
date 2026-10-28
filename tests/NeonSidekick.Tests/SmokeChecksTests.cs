@@ -139,6 +139,17 @@ public class SmokeChecksTests
         Assert.Contains("libgit2-5853918.dylib", SmokeChecks.MacNativeLibraries);
     }
 
+    /// <summary>The file checkpoints' round trip (2026-10-28): a journal, a commit into the profile's store, a restore, the ref spent (the JIT half).</summary>
+    [Fact]
+    public void ProbeCheckpoints_RoundTripsATurnsFiles()
+    {
+        var check = SmokeChecks.ProbeCheckpoints();
+
+        Assert.Equal("checkpoints:roundtrip", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.EndsWith("committed, found and replayed: 3 restored, 0 skipped, 0 not saved, 0 failed, ref spent", check.Detail);
+    }
+
     [Fact]
     public void ProbeSql_ParsesWithTheGate_AndReachesTheNativeSni()
     {

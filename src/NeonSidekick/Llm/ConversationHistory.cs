@@ -231,6 +231,23 @@ public sealed class ConversationHistory
     /// </summary>
     public const string TurnOrdinalKey = "neon.turnOrdinal";
 
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message that holds its file checkpoint's id, a <see cref="string"/>
+    /// (2026-10-28, the checkpoints plan: <c>/undo</c> and <c>/rewind … files</c>), set at the turn's seal only when the turn changed files, and
+    /// kept like <see cref="TurnOrdinalKey"/> (<c>StoredMessage.Checkpoint</c>). Never sent.
+    /// </summary>
+    public const string CheckpointKey = "neon.checkpoint";
+
+    /// <summary>
+    /// The <see cref="AIContent.AdditionalProperties"/> key that marks a turn's <c>/undo</c> note (2026-10-28, the checkpoints plan): a text part of
+    /// its own, first on the user message, never joined to what the user typed. A reopened session's part has no properties, so it is also
+    /// known by <see cref="UndoNotePreamble"/>. Never on the wire as a property.
+    /// </summary>
+    public const string UndoNoteKey = "neon.undoNote";
+
+    /// <summary>How an <c>/undo</c> note starts, what tells it apart once its properties are gone. Pinned.</summary>
+    public const string UndoNotePreamble = "[The user ran /undo: ";
+
     private const string Category = "Llm";
 
     private readonly List<ChatMessage> _messages = new();
@@ -334,6 +351,32 @@ public sealed class ConversationHistory
         ArgumentNullException.ThrowIfNull(message);
         return message.AdditionalProperties is { } properties && properties.TryGetValue(TurnOrdinalKey, out object? value) && value is int ordinal ? ordinal : null;
     }
+
+    /// <summary>The checkpoint id stamped on <paramref name="message"/> (<see cref="CheckpointKey"/>); null when none is.</summary>
+    public static string? TurnCheckpoint(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(CheckpointKey, out object? value) && value is string id ? id : null;
+    }
+
+    /// <summary>Stamps <paramref name="id"/> on <paramref name="message"/> (<see cref="CheckpointKey"/>), or takes the stamp off for null (spent).</summary>
+    public static void SetTurnCheckpoint(ChatMessage message, string? id)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (id is null)
+        {
+            message.AdditionalProperties?.Remove(CheckpointKey);
+            return;
+        }
+
+        (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[CheckpointKey] = id;
+    }
+
+    /// <summary>Whether <paramref name="content"/> is an <c>/undo</c> note (<see cref="UndoNoteKey"/>, or a restored part by its preamble).</summary>
+    public static bool IsUndoNote(AIContent content) =>
+        content is TextContent text
+        && ((text.AdditionalProperties is { } properties && properties.TryGetValue(UndoNoteKey, out object? tag) && tag is true)
+            || text.Text.StartsWith(UndoNotePreamble, StringComparison.Ordinal));
 
     /// <summary>Stamps <paramref name="ordinal"/> on <paramref name="message"/> (<see cref="TurnOrdinalKey"/>), replacing any earlier stamp.</summary>
     public static void SetTurnOrdinal(ChatMessage message, int ordinal)
@@ -440,11 +483,27 @@ public sealed class ConversationHistory
     /// <see cref="DataContent"/> with an <c>image/*</c> media type as an <c>image_url</c> data URL.
     /// Without images the message is the plain text one.
     /// </summary>
-    public void AddUser(string text, IReadOnlyList<ImageAttachment> images)
+    public void AddUser(string text, IReadOnlyList<ImageAttachment> images) => AddUser(text, images, null);
+
+    /// <summary>
+    /// <see cref="AddUser(string, IReadOnlyList{ImageAttachment})"/> with an <c>/undo</c> note (2026-10-28, the checkpoints plan): when given, it goes in
+    /// as the first part, marked <see cref="UndoNoteKey"/>, before the user's own text.
+    /// </summary>
+    public void AddUser(string text, IReadOnlyList<ImageAttachment> images, string? note)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(images);
-        if (images.Count == 0)
+        if (note is not null)
+        {
+            var parts = new List<AIContent>(images.Count + 2)
+            {
+                new TextContent(note) { AdditionalProperties = new AdditionalPropertiesDictionary { [UndoNoteKey] = true } },
+                new TextContent(text),
+            };
+            parts.AddRange(images.Select(ImagePart));
+            _messages.Add(new ChatMessage(ChatRole.User, parts));
+        }
+        else if (images.Count == 0)
         {
             _messages.Add(new ChatMessage(ChatRole.User, text));
         }

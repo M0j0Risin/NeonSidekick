@@ -85,6 +85,30 @@ public static class MarkOfTheWeb
         }
     }
 
+    /// <summary>
+    /// Takes the mark off <paramref name="target"/> (2026-10-28, the checkpoints plan: a file restored to a state that had no mark loses the
+    /// one a <c>download_file</c> over it left); true when none is left. Best effort, logged like <see cref="Put"/>.
+    /// </summary>
+    public static bool Remove(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                File.Delete(target + ZoneStream);
+                return true;
+            }
+
+            return !OperatingSystem.IsMacOS() || MacQuarantine.Remove(target, QuarantineAttribute);
+        }
+        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
+        {
+            DiagnosticLog.Debug("Files", $"Could not take the internet mark off {target}: {ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>Puts <paramref name="mark"/> on each of <paramref name="targets"/>; a target that takes none is counted in the log.</summary>
     public static void Carry(byte[]? mark, IEnumerable<string> targets)
     {

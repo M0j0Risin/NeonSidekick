@@ -504,6 +504,28 @@ public class NeonHelpCatalogTests
         Assert.Contains("STT", Win("microphone"), StringComparison.Ordinal);
         Assert.Contains("Tool `net_trace`", Win("traceroute"), StringComparison.Ordinal);
         Assert.Contains("Setting Camera", Win("camera settings"), StringComparison.Ordinal);
+        foreach (string word in new[] { "docx", "xlsx", "pptx", "spreadsheet", "workbook" })   // 2026-10-28, the Office plan
+        {
+            Assert.Contains("Tool `read_office`", Win(word), StringComparison.Ordinal);
+        }
+
+        Assert.Contains("Tool `read_office`", Win("read an excel spreadsheet"), StringComparison.Ordinal);
+        Assert.Contains(HelpText.LiveOffered, Win("read_office", live: () => Live(offered: [ReadOfficeTool.ToolName])), StringComparison.Ordinal);
+
+        // The file checkpoints (2026-10-28, the checkpoints plan): undo and revert find /undo, a bare "checkpoint" both features.
+        Assert.Contains("/undo", Win("how do I undo file changes"), StringComparison.Ordinal);
+        Assert.Contains("/undo", Win("revert"), StringComparison.Ordinal);
+        Assert.Contains("File checkpoints", Win("file checkpoints"), StringComparison.Ordinal);
+        Assert.Contains("Folder `checkpoints", Win("where are file checkpoints kept"), StringComparison.Ordinal);
+        string checkpoint = Win("checkpoint");
+        Assert.Contains("File checkpoints", checkpoint, StringComparison.Ordinal);
+        Assert.Contains("Ralph loop checkpoint", checkpoint, StringComparison.Ordinal);
+        Assert.Contains("/rewind [<n>] files", Win("/rewind", "command"), StringComparison.Ordinal);
+        foreach (string form in new[] { "/undo [<n>]", "/rewind [<n>] files" })   // the command answers follow the running system: the Mac's texts held here
+        {
+            Assert.Contains("Trash", HelpMac.Forms[form], StringComparison.Ordinal);
+            Assert.DoesNotContain("Recycle bin", HelpMac.Forms[form], StringComparison.Ordinal);
+        }
     }
 
     [Fact]

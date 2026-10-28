@@ -91,8 +91,30 @@ public static class WebText
     public static string InternetRefused(string host) => $"Error: '{host}' is on the internet, which Web browser network mode 'lan' keeps off limits";
     public static string Timeout(string url, TimeSpan after) => $"Error: '{url}' did not answer within {Llm.LlmTimeouts.Format(after)}";
     public static string Blocked(string url, string detail) => $"Error: '{url}' refused the request ({detail})";
-    /// <summary>An answer that is no page, no text and no PDF (a PDF was named among the readable on 2026-10-14, the PDF plan's gap 71). Pinned.</summary>
-    public static string Binary(string url, string mediaType, long bytes) => $"Error: '{url}' is {mediaType} ({Size(bytes)}); only web pages, PDFs and text are readable";
+    /// <summary>
+    /// An answer that is no page, no text and no PDF (a PDF was named among the readable on 2026-10-14, the PDF plan's gap 71); an Office
+    /// file by its type or its name is pointed at <c>download_file</c> and <c>read_office</c> (2026-10-28, the Office plan). Pinned.
+    /// </summary>
+    public static string Binary(string url, string mediaType, long bytes) =>
+        $"Error: '{url}' is {mediaType} ({Size(bytes)}); only web pages, PDFs and text are readable" + (IsOffice(url, mediaType) ? SaveOfficeNote : "");
+
+    /// <summary>What <see cref="Binary"/> adds for an Office file (2026-10-28). Pinned.</summary>
+    public const string SaveOfficeNote = "; save it with download_file and read_office reads it";
+
+    /// <summary>Whether an answer is a Word, Excel or PowerPoint file: an OOXML media type, or the URL's path ending in one's extension.</summary>
+    public static bool IsOffice(string url, string mediaType)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (mediaType?.StartsWith("application/vnd.openxmlformats-officedocument.", StringComparison.OrdinalIgnoreCase) == true
+            || mediaType?.StartsWith("application/vnd.ms-word.", StringComparison.OrdinalIgnoreCase) == true
+            || mediaType?.StartsWith("application/vnd.ms-excel.sheet.macroenabled", StringComparison.OrdinalIgnoreCase) == true
+            || mediaType?.StartsWith("application/vnd.ms-powerpoint.", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) && Files.OfficeFile.IsOfficePath(uri.AbsolutePath);
+    }
 
     // ---- a PDF (2026-10-14, the PDF plan's phase 2) ----
 
@@ -166,7 +188,8 @@ public static class WebText
         }
 
         return (result.Replaced ? "replaced " : "downloaded ") + result.Relative + " (" + Size(result.Bytes) + ", " + (mediaType.Length == 0 ? "(no type)" : mediaType) + ") from " + url
-            + (Files.ImageFile.IsImagePath(result.Relative) ? ViewImageNote : Files.PdfFile.IsPdfPath(result.Relative) ? ReadPdfNote : "");
+            + (Files.ImageFile.IsImagePath(result.Relative) ? ViewImageNote : Files.PdfFile.IsPdfPath(result.Relative) ? ReadPdfNote
+                : Files.OfficeFile.IsOfficePath(result.Relative) ? ReadOfficeNote : "");
     }
 
     /// <summary>What a downloaded picture's sentence ends with. Pinned.</summary>
@@ -174,6 +197,9 @@ public static class WebText
 
     /// <summary>What a downloaded PDF's sentence ends with (2026-10-14, the PDF plan's gap 16). Pinned.</summary>
     public const string ReadPdfNote = "; read_pdf reads it";
+
+    /// <summary>What a downloaded Office file's sentence ends with (2026-10-28, the Office plan). Pinned.</summary>
+    public const string ReadOfficeNote = "; read_office reads it";
 
     // ---- open_url ----
 

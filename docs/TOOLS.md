@@ -125,6 +125,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `file_info` | `path` | A file's size, time, lines, words, line ending and BOM, or a folder's counts; also whether something exists. |
 | `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end), in its own encoding: UTF-8, UTF-16 or UTF-32, else Windows-1252 as a guess the header names. A line over 32,000 characters is cut, and the header says so. |
 | `read_pdf` | `path, pages?, pictures?, find?, fields?, share?` | A PDF's text page by page; `find` lists pages holding words, `pictures` sends pages as pictures, `fields` lists a form's fields ([Reading PDFs](#reading-pdfs)). |
+| `read_office` | `path, sheet?, range?, slides?, notes?, formulas?, from_char?, share?` | A Word document as Markdown, an Excel workbook's sheets and cells as tables, or a PowerPoint deck's slides ([Reading Office files](#reading-office-files)). |
 | `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched, unchanged since. An overwrite or append keeps the file's encoding, BOM and line ending; an append stops at 8 MB. |
 | `patch_file` | `path, old_text, new_text, replace_all?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. A one-line `old_text` must match closely; an edit already made is not made twice; the result may not pass 8 MB. |
 | `create_directory` | `path` | Creates a folder and any missing parents. |
@@ -146,6 +147,15 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 * **Searching:** the first hits come back in path order, the same on every run, at most 32,000 characters in all, then a note. `text` is matched as given, its spaces kept. One file as `path` that isn't searched (too big, not text, missed by `files`) says why. `files` reads `./` and `**.cs`.
 * **Cloud files** (OneDrive's online-only ones) are listed and counted; a search leaves them unread and says how many, and reading one fetches it.
 
+#### Undoing file changes
+
+With *File checkpoints* on, each turn keeps what the file tools changed, so `/undo` and `/rewind … files` put it back ([Commands](COMMANDS.md#conversation)).
+
+* **Covered:** the tools above and the pictures, PDFs, downloads and exports the other tools save into the working directory or the `images` folder.
+* **Not covered:** shell commands and scripts, the git tools, UNC share and vault writes, databases, skills and MCP tools. `/undo` names them when the turn ran one.
+* **Changed since:** a file you changed after the turn is asked about: restore over it (yours to the Recycle bin first) or skip it. A file the turn made goes to the Recycle bin.
+* **Kept in the profile**, never in the project, so a project's git repository sees nothing. A Ralph pass's and a `/botchat` turn's changes aren't kept.
+
 #### Reading PDFs
 
 `read_pdf` reads a PDF in a headless Edge, Chrome, Brave or (on a Mac) Chromium, and refuses without one; `read_file` points to it.
@@ -155,6 +165,17 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 * **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean read. `share`, or a `\\server\share` path, reads a PDF on an offered UNC share in place.
 * **Kept apart:** the PDF is read in a page cut off from the network, in a profile of its own (`%TEMP%\NeonSidekick\browser-pdf`, `$TMPDIR/…` on a Mac), never the web tools' cookie profile.
 * **On the web:** `web_fetch` reads a PDF link the same way (outline and first 40 pages, up to 32 MB); `download_file` then `read_pdf` reads the rest.
+
+#### Reading Office files
+
+`read_office` reads Word (`.docx`, `.docm`, `.dotx`, `.dotm`), Excel (`.xlsx`, `.xlsm`, `.xltx`, `.xltm`) and PowerPoint (`.pptx`, `.pptm`, `.potx`, `.potm`, `.ppsx`, `.ppsm`) files; `read_file` points to it.
+
+* **Word:** the body as Markdown (headings, lists, tables), then footnotes, endnotes and comments; a long one comes back in part, `from_char` reading on. Tracked changes read as accepted, hidden text marked.
+* **Excel:** without `sheet`, every sheet with its used range and first rows. `sheet` and `range` (`A1:F200`, `B7`, `A:C`, `2:10`) read cells as a table, values as Excel shows them; `formulas: true` adds each formula. Hidden rows and columns are read and named.
+* **PowerPoint:** slides in order with their titles; `slides` picks some (`"2-5"`), `notes: true` adds the speaker notes, and hidden slides are marked.
+* **Not read:** headers and footers, a sheet's notes and comments, charts and pictures (a marker stands in), pivot caches, slide comments, and text a slide shows only from its layout. Macros never run.
+* **Refused, with what to do:** old `.doc`/`.xls`/`.ppt`, `.xlsb`, OpenDocument files, a password-protected or labeled file, and a damaged one. Up to 100 MB; a file open in Office still reads.
+* **Kept in:** nothing outside the file is opened or fetched (a linked picture or template stays a name). `share` reads one on an offered UNC share in place.
 
 #### Editing PDFs
 

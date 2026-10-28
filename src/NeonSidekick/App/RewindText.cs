@@ -47,14 +47,37 @@ public static class RewindText
     /// <summary>The Keys tab's key column for the double ESC. Pinned.</summary>
     public const string KeyLabel = "Esc Esc";
 
-    /// <summary><c>/rewind abc</c>, <c>/rewind 0</c> or a count past the turns held. Pinned.</summary>
+    /// <summary><c>/rewind abc</c>, <c>/rewind 0</c> or a count past the turns held; names the <c>files</c> form since 2026-10-28. Pinned.</summary>
     public static string UsageError(int turns) =>
         turns switch
         {
             0 => "/rewind takes a number of messages back, and there is none to go back to yet.",
-            1 => "/rewind takes a number of messages back: 1 is the only one.",
-            _ => string.Create(CultureInfo.InvariantCulture, $"/rewind takes a number of messages back, from 1 to {turns}."),
+            1 => "/rewind takes a number of messages back (1 is the only one), and files to put files back.",
+            _ => string.Create(CultureInfo.InvariantCulture, $"/rewind takes a number of messages back, from 1 to {turns}, and files to put files back."),
         };
+
+    /// <summary>The trailing word that asks for the files too (2026-10-28, the checkpoints plan). Pinned.</summary>
+    public const string FilesWord = "files";
+
+    /// <summary>The completion note on <see cref="FilesWord"/>.</summary>
+    public const string FilesNote = "put the files back too";
+
+    /// <summary>
+    /// The files choice's rows (2026-10-28, the checkpoints plan), when the dropped turns hold file checkpoints. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> FilesRows = ["Conversation and files", "Conversation only", "Cancel"];
+
+    /// <summary>The files choice's keys. Pinned.</summary>
+    public const string FilesKeys = "f / c = pick · Enter = choose · Esc = cancel";
+
+    /// <summary>The files choice's hotkeys: <c>f</c> conversation and files, <c>c</c> conversation only. Pinned.</summary>
+    public static readonly IReadOnlyDictionary<char, int> FilesHotkeys = new Dictionary<char, int> { ['f'] = 0, ['c'] = 1 };
+
+    /// <summary>The page's ids for the files card's choices, in row order. Pinned.</summary>
+    public static readonly IReadOnlyList<string> FilesChoices = ["files", "conversation", "cancel"];
+
+    /// <summary>The typed second question without a pane: yes puts the files back.</summary>
+    public const string TypedFilesQuestion = "Put back the files they changed too?";
 
     /// <summary>
     /// One picker row as markup: the turn's number dimmed, two spaces, the first line of the message escaped (the pane cuts it
@@ -116,11 +139,21 @@ public static class RewindText
     public static string RewoundNotice(int turns, string line) =>
         "(" + NoticeGlyphs.Rewind + "rewound " + Messages(turns) + ": " + LogText.Quoted(FirstLine(line)) + ")";
 
-    /// <summary>The warning under the rewound notice when the dropped turns called tools that change things. Pinned.</summary>
+    /// <summary>
+    /// The warning under the rewound notice when the dropped turns called tools that change things. Pinned. After "Conversation and files"
+    /// (2026-10-28) it names only the tools whose changes can't be put back (<see cref="Files.CheckpointTools.Untracked"/>).
+    /// </summary>
     public static string ChangesStayWarning(IReadOnlyList<string> tools)
     {
         ArgumentNullException.ThrowIfNull(tools);
         return "What " + string.Join(", ", tools) + " changed stays as it is: rewinding does not undo it.";
+    }
+
+    /// <summary>The tools of <paramref name="tools"/> the warning still names once files came back: those no file checkpoint covers.</summary>
+    public static IReadOnlyList<string> StayingAfterFiles(IReadOnlyList<string> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        return tools.Where(t => !Files.CheckpointTools.Tracked.Contains(t)).ToList();
     }
 
     /// <summary>The headless REPL's line with the dropped message, since there is no input row to take it back. Pinned.</summary>
@@ -150,6 +183,25 @@ public static class RewindText
         return int.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out int count) && count > 0 ? count : null;
     }
 
+    /// <summary>
+    /// <c>/rewind</c>'s argument with the files word (2026-10-28, the checkpoints plan): an optional trailing <see cref="FilesWord"/>
+    /// (<c>/rewind files</c>, <c>/rewind 3 files</c>) taken off the end, the rest read by <see cref="ParseCount"/>; null for the usage error.
+    /// </summary>
+    public static RewindArgs? ParseArgs(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        string trimmed = args.Trim();
+        bool files = false;
+        if (trimmed.EndsWith(FilesWord, StringComparison.OrdinalIgnoreCase)
+            && (trimmed.Length == FilesWord.Length || char.IsWhiteSpace(trimmed[^(FilesWord.Length + 1)])))
+        {
+            files = true;
+            trimmed = trimmed[..^FilesWord.Length];
+        }
+
+        return ParseCount(trimmed) is { } count ? new RewindArgs(count, files) : null;
+    }
+
     private static string Messages(int count) =>
         count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " message" : " messages");
 
@@ -160,3 +212,6 @@ public static class RewindText
         return end < 0 ? trimmed.TrimEnd() : trimmed[..end].TrimEnd() + " …";
     }
 }
+
+/// <summary><c>/rewind</c>'s parsed argument (2026-10-28): how many messages back, and whether <c>files</c> was asked for.</summary>
+public sealed record RewindArgs(int Count, bool Files);

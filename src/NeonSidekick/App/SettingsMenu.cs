@@ -138,7 +138,7 @@ public enum SettingsField
     /// <summary>Whether the voice pickers speak <see cref="SettingsMenu.VoicePreviewText"/> in the highlighted voice, and the mix and speed rows the blend at the value they just saved (<see cref="Settings.AppSettingsData.TtsVoicePreview"/>). On the TTS tab, last; a toggle on by default, no reconnect (read at the next pick or save).</summary>
     TtsVoicePreview,
 
-    /// <summary>Whether a turn offers the file tools (seventeen with convert_to_pdf since the image tools, 2026-10-04; fifteen once those became their own group, 2026-10-10, with read_pdf, 2026-10-14, sixteen with pdf_edit later that day; <see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
+    /// <summary>Whether a turn offers the file tools (seventeen with convert_to_pdf since the image tools, 2026-10-04; fifteen once those became their own group, 2026-10-10, with read_pdf, 2026-10-14, sixteen with pdf_edit later that day, seventeen with read_office, 2026-10-28; <see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
     FileTools,
 
     /// <summary>A picker over <see cref="Web.SearchMethod.Names"/>: which engine <c>web_search</c> asks (<see cref="Settings.AppSettingsData.WebSearchMethod"/>). On the Web tab above <see cref="WebSearxngUrl"/> (2026-09-15); no reconnect (read at each search).</summary>
@@ -1311,6 +1311,22 @@ public enum SettingsField
 
     /// <summary>An edit row: Enter opens the home's <c>duckdb.json</c>, every profile's. The DuckDB tab's last row.</summary>
     DuckDbDatabasesGlobal,
+
+    /// <summary>
+    /// A toggle: whether a turn keeps file checkpoints of what the file tools change (<see cref="Settings.AppSettingsData.FileCheckpoints"/>), for
+    /// <c>/undo</c> and <c>/rewind … files</c>. The File menu's Checkpoints section, first (2026-10-28, the checkpoints plan); read at each turn.
+    /// Last in the enum, as every newcomer.
+    /// </summary>
+    FileCheckpoints,
+
+    /// <summary>Typed: days a file checkpoint is kept, 0 = never cleared by age (<see cref="Settings.AppSettingsData.FileCheckpointKeepDays"/>), read at the sweep (2026-10-28).</summary>
+    FileCheckpointKeepDays,
+
+    /// <summary>Typed: the MB one working folder's file checkpoints may hold (<see cref="Settings.AppSettingsData.FileCheckpointMaxMegabytes"/>), read per turn (2026-10-28).</summary>
+    FileCheckpointMaxMegabytes,
+
+    /// <summary>Typed: the largest file a checkpoint saves, in MB (<see cref="Settings.AppSettingsData.FileCheckpointLargestFileMegabytes"/>), read per turn (2026-10-28).</summary>
+    FileCheckpointLargestFileMegabytes,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1867,6 +1883,7 @@ internal sealed partial class SettingsMenu
     /// them there, so the tab went.
     /// Image (2026-10-10, the user's ask, after File) is the File list's last five until then: <c>image_edit</c>'s quality, metadata, the edit mode, its output folder and the pasted pictures' folder.
     /// Since later still on 2026-10-10 each list is headed (<see cref="ToolsMenuSections"/>, the user's ask), YouTube's autoplay and voice moved after its search rows to sit under Playing.
+    /// On 2026-10-28 (the checkpoints plan, the user's ask) the File list's four file checkpoint rows went in after the Recycle bin row they work with.
     /// With <see cref="TabFields"/> and <see cref="SkillsTabFields"/> they are every <see cref="SettingsField"/> once (pinned); the flat no-pane list keeps them all.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
@@ -1874,7 +1891,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
-        [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
+        [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
         [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
@@ -2329,7 +2346,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ShoppingTools or SettingsField.EventLogTools or SettingsField.MonitorTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
-            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.ClockTools or SettingsField.HelpTools
+            or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.FileCheckpoints or SettingsField.ClockTools or SettingsField.HelpTools
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
             or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools
             or SettingsField.PlanGapAskUser or SettingsField.CodeAuditAskUser or SettingsField.CodeAuditWebResearch;
@@ -2642,6 +2659,10 @@ internal sealed partial class SettingsMenu
         SettingsField.HelpTools => "Help tools",
         SettingsField.TimerTone => "Timer tone",
         SettingsField.FileDeletesToRecycleBin => "File deletes to " + Files.FileText.RecycleBinName,
+        SettingsField.FileCheckpoints => "File checkpoints",
+        SettingsField.FileCheckpointKeepDays => "File checkpoints keep (days)",
+        SettingsField.FileCheckpointMaxMegabytes => "File checkpoints max (MB)",
+        SettingsField.FileCheckpointLargestFileMegabytes => "File checkpoints per file (MB)",
         SettingsField.NetworkTools => "Network tools",
         SettingsField.NetworkToolsReach => "Network tools reach",
         SettingsField.NetworkMaxHostsPerTurn => "Network tools max hosts per turn",
@@ -3090,6 +3111,10 @@ internal sealed partial class SettingsMenu
             SettingsField.HelpTools => OnOff(data.HelpTools),
             SettingsField.TimerTone => Timers.TimerTones.Normalize(data.TimerTone),
             SettingsField.FileDeletesToRecycleBin => OnOff(data.FileDeletesToRecycleBin),
+            SettingsField.FileCheckpoints => OnOff(data.FileCheckpoints),
+            SettingsField.FileCheckpointKeepDays => Days(data.FileCheckpointKeepDays),
+            SettingsField.FileCheckpointMaxMegabytes => Megabytes(data.FileCheckpointMaxMegabytes),
+            SettingsField.FileCheckpointLargestFileMegabytes => Megabytes(data.FileCheckpointLargestFileMegabytes),
             >= SettingsField.NetworkTools and <= SettingsField.DirectoryDomainsGlobal => AdminFieldValue(field, data, profileDirectory),
             SettingsField.ShoppingStores => NeonSidekick.Shopping.ShoppingText.ManageStoresLabel,
             SettingsField.ShoppingList => NeonSidekick.Shopping.ShoppingText.ManageListLabel,
@@ -3528,6 +3553,18 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.WebDownloadMaxMegabytes"/> (2026-10-01). Pinned.</summary>
     public static readonly string WebDownloadMaxMegabytesRangeError =
         "must be " + AppSettingsData.MinWebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxWebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture) + " MB";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileCheckpointKeepDays"/> (2026-10-28). Pinned.</summary>
+    public static readonly string FileCheckpointKeepDaysRangeError =
+        "must be " + AppSettingsData.MinFileCheckpointKeepDays.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxFileCheckpointKeepDays.ToString(CultureInfo.InvariantCulture) + " days";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileCheckpointMaxMegabytes"/> (2026-10-28). Pinned.</summary>
+    public static readonly string FileCheckpointMaxMegabytesRangeError =
+        "must be " + AppSettingsData.MinFileCheckpointMaxMegabytes.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxFileCheckpointMaxMegabytes.ToString(CultureInfo.InvariantCulture) + " MB";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.FileCheckpointLargestFileMegabytes"/> (2026-10-28). Pinned.</summary>
+    public static readonly string FileCheckpointLargestFileMegabytesRangeError =
+        "must be " + AppSettingsData.MinFileCheckpointLargestFileMegabytes.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxFileCheckpointLargestFileMegabytes.ToString(CultureInfo.InvariantCulture) + " MB";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.QueryResultMaxChars"/> (2026-10-01). Pinned.</summary>
     public static readonly string QueryResultMaxCharsRangeError =
@@ -4255,6 +4292,9 @@ internal sealed partial class SettingsMenu
         SettingsField.NetworkMaxHostsPerTurn => data.NetworkMaxHostsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.NetworkMaxPortsPerTurn => data.NetworkMaxPortsPerTurn.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebDownloadMaxMegabytes => data.WebDownloadMaxMegabytes.ToString(CultureInfo.InvariantCulture),
+        SettingsField.FileCheckpointKeepDays => data.FileCheckpointKeepDays.ToString(CultureInfo.InvariantCulture),
+        SettingsField.FileCheckpointMaxMegabytes => data.FileCheckpointMaxMegabytes.ToString(CultureInfo.InvariantCulture),
+        SettingsField.FileCheckpointLargestFileMegabytes => data.FileCheckpointLargestFileMegabytes.ToString(CultureInfo.InvariantCulture),
         SettingsField.ToolCollapseCount => data.ToolCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeCollapseCount => data.CodeCollapseCount.ToString(CultureInfo.InvariantCulture),
         SettingsField.DiffMaxLines => data.DiffMaxLines.ToString(CultureInfo.InvariantCulture),
@@ -6328,6 +6368,36 @@ internal sealed partial class SettingsMenu
                 Apply(field, d => d.WebDownloadMaxMegabytes = megabytes);
                 return true;
 
+            case SettingsField.FileCheckpointKeepDays:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int keepDays) || keepDays < AppSettingsData.MinFileCheckpointKeepDays || keepDays > AppSettingsData.MaxFileCheckpointKeepDays)
+                {
+                    Sink.Error($"{FieldName(field)} {FileCheckpointKeepDaysRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.FileCheckpointKeepDays = keepDays);
+                return true;
+
+            case SettingsField.FileCheckpointMaxMegabytes:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int checkpointMegabytes) || checkpointMegabytes < AppSettingsData.MinFileCheckpointMaxMegabytes || checkpointMegabytes > AppSettingsData.MaxFileCheckpointMaxMegabytes)
+                {
+                    Sink.Error($"{FieldName(field)} {FileCheckpointMaxMegabytesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.FileCheckpointMaxMegabytes = checkpointMegabytes);
+                return true;
+
+            case SettingsField.FileCheckpointLargestFileMegabytes:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int largestMegabytes) || largestMegabytes < AppSettingsData.MinFileCheckpointLargestFileMegabytes || largestMegabytes > AppSettingsData.MaxFileCheckpointLargestFileMegabytes)
+                {
+                    Sink.Error($"{FieldName(field)} {FileCheckpointLargestFileMegabytesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.FileCheckpointLargestFileMegabytes = largestMegabytes);
+                return true;
+
             case SettingsField.GitLibDiffMaxLines:
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int diffLines) || diffLines < AppSettingsData.MinGitLibDiffMaxLines || diffLines > AppSettingsData.MaxGitLibDiffMaxLines)
                 {
@@ -8229,6 +8299,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CodeAuditAskUser => data.CodeAuditAskUser,
             SettingsField.CodeAuditWebResearch => data.CodeAuditWebResearch,
             SettingsField.FileDeletesToRecycleBin => data.FileDeletesToRecycleBin,
+            SettingsField.FileCheckpoints => data.FileCheckpoints,
             SettingsField.NetworkTools => data.NetworkTools,
             SettingsField.NetworkCertificateStores => data.NetworkCertificateStores,
             SettingsField.ServiceTools => data.ServiceTools,
@@ -8363,6 +8434,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.CodeAuditAskUser: data.CodeAuditAskUser = on; break;
             case SettingsField.CodeAuditWebResearch: data.CodeAuditWebResearch = on; break;
             case SettingsField.FileDeletesToRecycleBin: data.FileDeletesToRecycleBin = on; break;
+            case SettingsField.FileCheckpoints: data.FileCheckpoints = on; break;
             case SettingsField.NetworkTools: data.NetworkTools = on; break;
             case SettingsField.NetworkCertificateStores: data.NetworkCertificateStores = on; break;
             case SettingsField.ServiceTools: data.ServiceTools = on; break;
@@ -8444,6 +8516,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CodeAuditAskUser => on ? "an audit pass may ask you, take a photo or capture the screen" : "an audit pass never waits on you; questions go in the report",
         SettingsField.CodeAuditWebResearch => on ? "an audit pass may search and read the web" : "an audit pass stays off the web",
         SettingsField.FileDeletesToRecycleBin => on ? "deleted files go to the " + Files.FileText.RecycleBinName : "delete files directly",
+        SettingsField.FileCheckpoints => on ? "file checkpoints kept for /undo and /rewind" : "no new file checkpoints; those kept can still be put back",
         SettingsField.NetworkTools => on ? "network tools enabled" : "network tools disabled",
         SettingsField.NetworkCertificateStores => on ? "net_certs offered with the network tools" : "net_certs not offered",
         SettingsField.ServiceTools => on ? "service tools enabled" : "service tools disabled",

@@ -203,7 +203,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Copy
             or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browser or SlashCommand.Prompts or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
             or SlashCommand.Perf or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Mark or SlashCommand.Unknown or SlashCommand.Overloaded => MidTurnClass.Quick,   // /mark (2026-10-18): the rules' color, display only
-        SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Exit => MidTurnClass.Cancel,
+        SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Rewind or SlashCommand.Undo or SlashCommand.Exit => MidTurnClass.Cancel,
         _ => MidTurnClass.Deferred,
     };
 
@@ -235,6 +235,7 @@ internal sealed partial class ChatScreen
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Purge => MidTurnClass.Deferred,
+        SlashCommand.Undo when UndoText.Parse(args) is { Purge: true } => MidTurnClass.Deferred,   // 2026-10-28: a purge waits for the reply, never stops it
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsPurgeWord(args) => MidTurnClass.Deferred,
         SlashCommand.Splash when args.Trim().Length > 0 => UI.SplashCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Pasted => Images.PastedCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,

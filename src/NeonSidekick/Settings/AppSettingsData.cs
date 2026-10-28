@@ -1965,6 +1965,7 @@ public sealed class AppSettingsData
     /// switch (<c>/files</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with the other tool
     /// groups and the scan: a fresh profile offers the model nothing it did not turn on). No variable. Sixteen since 2026-10-14 (the PDF
     /// plan): <c>read_pdf</c> and <c>pdf_edit</c> joined, the picture tools having left for <see cref="ImageTools"/> on 2026-10-10.
+    /// Seventeen since 2026-10-28 (the Office plan): <c>read_office</c> joined.
     /// </summary>
     public bool FileTools { get; set; }
 
@@ -3653,6 +3654,52 @@ public sealed class AppSettingsData
     /// are always direct. Read at each delete. No variable.
     /// </summary>
     public bool FileDeletesToRecycleBin { get; set; } = true;
+
+    /// <summary>
+    /// Whether a turn keeps file checkpoints (2026-10-28, the checkpoints plan, the user's pick: on by default): before a model tool changes,
+    /// moves or deletes a file in the working folder or the images folder, a copy of what was there goes in the profile's checkpoint store, so
+    /// <c>/undo</c> and <c>/rewind … files</c> can put it back. Every tool that changes files there counts (pictures and downloads too), not
+    /// <c>File tools</c> alone; the shell, MCP tools, git, databases and shares don't. Off, no new checkpoints; ones kept can still be put back.
+    /// Read at each turn. No variable.
+    /// </summary>
+    public bool FileCheckpoints { get; set; } = true;
+
+    /// <summary>
+    /// Days a file checkpoint is kept (2026-10-28, the user's call): at startup and after a profile switch, every checkpoint older is cleared,
+    /// in every folder. <c>0</c> keeps them by age forever. <see cref="MinFileCheckpointKeepDays"/> to <see cref="MaxFileCheckpointKeepDays"/>.
+    /// No variable.
+    /// </summary>
+    public int FileCheckpointKeepDays { get; set; } = DefaultFileCheckpointKeepDays;
+
+    public const int DefaultFileCheckpointKeepDays = 90;
+
+    public const int MinFileCheckpointKeepDays = 0;
+
+    public const int MaxFileCheckpointKeepDays = 3650;
+
+    /// <summary>
+    /// The saved megabytes one working folder's file checkpoints may hold (2026-10-28, the user's pick): past it the oldest go first; the newest
+    /// always stays. <see cref="MinFileCheckpointMaxMegabytes"/> to <see cref="MaxFileCheckpointMaxMegabytes"/>. Read per turn and at the sweep. No variable.
+    /// </summary>
+    public int FileCheckpointMaxMegabytes { get; set; } = DefaultFileCheckpointMaxMegabytes;
+
+    public const int DefaultFileCheckpointMaxMegabytes = 2_048;
+
+    public const int MinFileCheckpointMaxMegabytes = 100;
+
+    public const int MaxFileCheckpointMaxMegabytes = 102_400;
+
+    /// <summary>
+    /// The largest file a checkpoint keeps, in megabytes (2026-10-28, the user's pick): a bigger one is still changed, but can't be put back.
+    /// <see cref="MinFileCheckpointLargestFileMegabytes"/> to <see cref="MaxFileCheckpointLargestFileMegabytes"/>. Read per turn. No variable.
+    /// </summary>
+    public int FileCheckpointLargestFileMegabytes { get; set; } = DefaultFileCheckpointLargestFileMegabytes;
+
+    public const int DefaultFileCheckpointLargestFileMegabytes = 64;
+
+    public const int MinFileCheckpointLargestFileMegabytes = 1;
+
+    public const int MaxFileCheckpointLargestFileMegabytes = 2_048;
 
     /// <summary>
     /// How <c>/webui browser</c> and a double-click on <c>/webui</c>'s link sign the default browser in (later on 2026-10-15, the user's ask and

@@ -302,6 +302,33 @@ public class SessionStoreTests : IDisposable
         Assert.Equal(0, _store.PurgeAll());
     }
 
+    /// <summary>Every purge names the sessions it took (2026-10-28, the checkpoints plan: their file checkpoints' refs go too); none, no event.</summary>
+    [Fact]
+    public void EveryPurge_RaisesPurged_WithTheSessionsItTook()
+    {
+        var raised = new List<IReadOnlyList<long>>();
+        _store.Purged += raised.Add;
+        long one = Begin("one");
+        long old = Begin("old");
+        _store.AppendTurn(old, "x", "y", 0, [], [], 0, 0, 0, false);
+        _time.Advance(TimeSpan.FromDays(10));
+        long two = Begin("two");
+        long three = Begin("three");
+        _store.AppendTurn(two, "x", "y", 0, [], [], 0, 0, 0, false);
+        _store.AppendTurn(three, "x", "y", 0, [], [], 0, 0, 0, false);
+
+        Assert.True(_store.Purge(one));
+        Assert.False(_store.Purge(one));
+        Assert.Equal(1, _store.PurgeOlderThan(_time.GetUtcNow().AddDays(-5)));
+        Assert.Equal(2, _store.PurgeAll());
+        Assert.Equal(0, _store.PurgeAll());
+
+        Assert.Equal(3, raised.Count);
+        Assert.Equal([one], raised[0]);
+        Assert.Equal([old], raised[1]);
+        Assert.Equal(new[] { two, three }.Order(), raised[2].Order());
+    }
+
     [Fact]
     public void AFileThatIsNotADatabase_IsOneWarning_AndAnEmptyStoreThatIgnoresWrites()
     {

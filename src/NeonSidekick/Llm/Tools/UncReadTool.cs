@@ -36,7 +36,7 @@ public sealed class UncReadTool : UncTool
     public override string Description =>
         "Reads a text file on one of the user's network shares (or outside folders), whole or a range of lines; a long file comes back in part with the start_line to read on from. " +
         "A picture or other binary file is not read here: unc_fetch copies it into the working directory, where view_image and the other file tools reach it. " +
-        "A PDF: read_pdf with share reads it where it is.";
+        "A PDF: read_pdf with share reads it where it is. An Office file: read_office with share reads it where it is.";
 
     public override JsonElement JsonSchema => Schema;
 

@@ -121,9 +121,13 @@ public partial class SidekickAppTests : IDisposable
             // The Ralph loop's checks (2026-10-18): a script, never a real shell.
             ralphVerifier: _ralphVerifier,
             // The embedded model (2026-10-21, the --url embedded test): none unless a test hands in the fake.
-            embeddedLlm: embeddedLlm);
+            embeddedLlm: embeddedLlm,
+            // The file checkpoints (2026-10-28): none unless a test sets the fake, so no other test journals.
+            checkpoints: _checkpoints);
 
     private readonly Fakes.FakeRalphVerifier _ralphVerifier = new();
+
+    private Fakes.FakeCheckpointStore? _checkpoints;
 
     private Fakes.FakeEventLogSystem? _eventLogSystem;
 
@@ -1330,6 +1334,35 @@ public partial class SidekickAppTests : IDisposable
         using var store = new NeonSidekick.Sessions.SessionStore(_settings.ProfileDirectory);
         var record = store.Load(Assert.Single(store.List(0)).Id)!;
         Assert.Equal(["first", "second again"], record.Turns.Select(t => t.UserText));
+    }
+
+    /// <summary>
+    /// <c>/undo</c> and <c>/rewind … files</c> headless (2026-10-28, the checkpoints plan): nothing asks, so the files go back as typed and the
+    /// next line's turn carries the model's note; with nothing kept it says so; a purge runs as typed.
+    /// </summary>
+    [Fact]
+    public async Task Headless_Undo_PutsTheFilesBack_AndTheNextTurnCarriesTheNote()
+    {
+        ServerOn1234("llama");
+        _checkpoints = new Fakes.FakeCheckpointStore();
+        string file = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "note.txt");
+        _chat.Enqueue(FakeChatClient.Call("c1", "write_file", new Dictionary<string, object?> { ["path"] = "note.txt", ["content"] = "hello" }))
+            .EnqueueText("Written.")
+            .EnqueueText("Noted.")
+            .Enqueue(FakeChatClient.Call("c2", "write_file", new Dictionary<string, object?> { ["path"] = "two.txt", ["content"] = "two" }))
+            .EnqueueText("Two.")
+            .EnqueueText("Back.");
+
+        string output = await Headless("/undo\nwrite a note\n/undo 0\n/undo\nwhat now\nwrite two\n/rewind files\nafter\n/undo purge\n");
+
+        Assert.Contains("Neon: " + UndoText.NothingToUndo, output);
+        Assert.Contains("[error] " + UndoText.UsageError, output);
+        Assert.False(File.Exists(file));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(file)!, "two.txt")));   // /rewind files
+        var note = _chat.Requests[2].SelectMany(m => m.Contents).Where(ConversationHistory.IsUndoNote).OfType<TextContent>().Single();
+        Assert.Contains("\"write a note\"", note.Text, StringComparison.Ordinal);
+        Assert.Contains("Neon: " + UndoText.NothingToPurge, output);
+        Assert.Empty(_checkpoints.Records);
     }
 
     /// <summary>A headless <c>/test</c> run starts from a clean slate, as the screen's does (2026-09-30): the turn before it is forgotten.</summary>

@@ -86,6 +86,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **MCP servers:** add Model Context Protocol servers, outside programs with more tools and data.
 * **Integrations:** the research, IT, smart home and creative tools below, once you switch them on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
 * **Sandboxed:** file tools reach only the working directory; shell commands go through an approval pane (once, this session, or always).
+* **Undo:** `/undo` puts back the files a turn changed, and `/rewind` can take them back with the conversation.
 * **Shell police (👮):** refuses a command naming a path outside the working directory, a forbidden string (disk wipes, shutdowns…) or the database tools' databases, even under `--yolo` ([Shell guards](docs/SETTINGS.md#shell-guards)).
 
 ### Plans & reviews
@@ -98,6 +99,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **Web search & pages:** searches with DuckDuckGo or your own SearXNG server, reads pages (in a real browser when a page needs one), and downloads files.
 * **A web browser** (`/browser`): sign in to a site or pass its bot check there, and the web tools borrow its cookies.
 * **PDFs:** the model reads them, on disk or on the web; attach one to a message, `/view` it, or merge, split, rotate and fill them in.
+* **Office files:** the model reads Word documents, Excel workbooks and PowerPoint decks; `/read` reads a document or deck aloud.
 * **Obsidian:** search, read, write and link notes in your vault.
 
 ### IT & admin

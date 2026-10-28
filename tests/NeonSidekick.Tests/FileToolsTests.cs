@@ -63,10 +63,10 @@ public sealed class FileToolsTests : IDisposable
     }
 
     [Fact]
-    public void FileTools_AreTheThirteen_ThenTheImageTools_InOrder_AllQuiet()
+    public void FileTools_AreTheFourteen_ThenTheImageTools_InOrder_AllQuiet()
     {
         Assert.Equal([.. FileToolNames.WithoutPdf, .. ImageToolNames.All], _tools.Select(t => t.Name));
-        Assert.Equal(13, ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings).Count);   // the three picture tools their own group since 2026-10-10 (sixteen from 2026-10-04: image_info and image_edit; fifteen until 2026-10-01, when restore went with File safe edits)
+        Assert.Equal(14, ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings).Count);   // read_office 2026-10-28; the three picture tools their own group since 2026-10-10 (sixteen from 2026-10-04: image_info and image_edit; fifteen until 2026-10-01, when restore went with File safe edits)
         Assert.Equal(3, ChatScreen.ImageTools(_files, () => _settings).Count);
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));
@@ -74,14 +74,14 @@ public sealed class FileToolsTests : IDisposable
     }
 
     /// <summary>
-    /// The Unix twin of <see cref="FileTools_AreTheThirteen_ThenTheImageTools_InOrder_AllQuiet"/> (2026-10-06, the macOS build): thirteen tools where there
-    /// are no picture codecs, the sixteen on a Mac since 2026-10-07 (ImageIO behind MagicScaler).
+    /// The Unix twin of <see cref="FileTools_AreTheFourteen_ThenTheImageTools_InOrder_AllQuiet"/> (2026-10-06, the macOS build): fourteen tools (thirteen until read_office, 2026-10-28) where there
+    /// are no picture codecs, the seventeen on a Mac since 2026-10-07 (ImageIO behind MagicScaler).
     /// </summary>
     [UnixFact]
     public void FileTools_OffWindows_HaveThePictureTools_OnlyWithCodecs()
     {
         Assert.Equal([.. FileToolNames.WithoutPdf, .. ImageToolNames.All], _tools.Select(t => t.Name));
-        Assert.Equal(Files.ImageCodecs.Available ? 16 : 13, _tools.Count);   // the picture tools' own group after the thirteen (2026-10-10)
+        Assert.Equal(Files.ImageCodecs.Available ? 17 : 14, _tools.Count);   // the picture tools' own group after the fourteen (2026-10-10; thirteen until read_office, 2026-10-28)
         Assert.Equal(Files.ImageCodecs.Available, _tools.Any(t => t.Name == ViewImageTool.ToolName));
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));

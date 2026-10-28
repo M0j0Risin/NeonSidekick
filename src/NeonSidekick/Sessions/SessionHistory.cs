@@ -21,6 +21,13 @@ public sealed class StoredMessage
     public int? Ordinal { get; set; }
 
     /// <summary>
+    /// The file checkpoint's id of the turn this user message opened (<see cref="ConversationHistory.CheckpointKey"/>, 2026-10-28, the checkpoints
+    /// plan). Left out while null, as <see cref="Ordinal"/> is: an older build ignores it, and no schema bump.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Checkpoint { get; set; }
+
+    /// <summary>
     /// The tool a carrier's pictures came from (<see cref="ConversationHistory.SourceKey"/>, 2026-10-03), what a prune's stub
     /// credits. Left out while null, so an older row reads the same and its stub credits <c>view_image</c> as before.
     /// </summary>
@@ -289,7 +296,7 @@ public static class SessionHistory
     internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false, bool keepScreen = false)
     {
         bool carrier = ConversationHistory.IsImageCarrier(message);
-        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Source = carrier ? ConversationHistory.CarrierSource(message) : null };
+        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Checkpoint = ConversationHistory.TurnCheckpoint(message), Source = carrier ? ConversationHistory.CarrierSource(message) : null };
         foreach (var content in message.Contents)
         {
             switch (content)
@@ -400,6 +407,11 @@ public static class SessionHistory
         if (stored.Ordinal is { } ordinal)
         {
             ConversationHistory.SetTurnOrdinal(message, ordinal);
+        }
+
+        if (stored.Checkpoint is { } checkpoint)
+        {
+            ConversationHistory.SetTurnCheckpoint(message, checkpoint);
         }
 
         return message;

@@ -189,6 +189,7 @@ public static partial class SmokeChecks
         results.Add(ProbeMcp());
         results.Add(ProbeClaudeCliRelay());
         results.Add(ProbeGit());
+        results.Add(ProbeCheckpoints());
         results.Add(ProbeSql());
         results.Add(OperatingSystem.IsWindows() ? ProbeCredentials() : new SmokeCheck("sql:credentials", true, "skipped: not Windows"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeKeychain() : new SmokeCheck("keys:keychain", true, "skipped: not macOS"));

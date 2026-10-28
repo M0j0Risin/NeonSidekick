@@ -44,7 +44,10 @@ Elsewhere:
 | `/splash view`, `/splash thumbs` | The picture viewer or thumbnail browser on the profile's `images\splash` folder; while it's empty, the built-in pictures show. |
 | `/splash purge` | Deletes every splash picture of the profile, after a yes, per *File deletes to Recycle bin*; the built-in pictures show again. |
 | `/compact [<focus>]` | Shrinks the context (*LLM compact mode*); a focus tells the summary what to keep. |
-| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and all after it leave the conversation and stored session, its text back on the input row. What tools changed stays. |
+| `/rewind [<n>]` | Goes back to an earlier message after a yes: it and all after it leave the conversation and stored session, its text back on the input row. When those turns changed files, it asks **Conversation and files** or **Conversation only**. |
+| `/rewind [<n>] files` | The same, **Conversation and files** chosen first: the files those turns changed go back too ([what's covered](TOOLS.md#undoing-file-changes)). |
+| `/undo [<n>]` | Puts back the files the last turn (or *n* turns) changed, after a yes; the conversation stays, and your next message tells the model. There is no redo. |
+| `/undo purge [all]` | Deletes this working folder's file checkpoints (with `all`, every folder's) after a yes; those turns can't be undone after. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
 | `/draft` | Writes the next message in your editor; it is sent when you save and close. |
 | `/echo <text>` | Prints a line as a reply, spoken when *TTS output* is on. |
@@ -176,7 +179,7 @@ Each purge asks first and follows *File deletes to Recycle bin*: to the Recycle 
 | `/stt [on\|off]` | Turns voice input on or off (*STT input*). |
 | `/stt wake [on\|off]` | Turns the wake word on or off; off turns the interrupt off too. |
 | `/stt interrupt [on\|off]` | Turns the wake-word interrupt during a spoken reply on or off; needs the wake word. |
-| `/read [<file> [<n>]\|<n>]` | Reads a text file or a PDF aloud; alone it resumes, a number starts at that sentence ([keys](INTERFACE.md#the-input-line)). A PDF's first 40 pages are read with your browser, a repeated header or footer left out. |
+| `/read [<file> [<n>]\|<n>]` | Reads a text file, a PDF, a Word document or a PowerPoint deck aloud; alone it resumes, a number starts at that sentence ([keys](INTERFACE.md#the-input-line)). A PDF's first 40 pages are read with your browser, a repeated header or footer left out; a spreadsheet isn't read aloud. |
 
 ### Web and video
 

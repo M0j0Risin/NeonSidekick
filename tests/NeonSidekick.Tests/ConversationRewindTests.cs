@@ -200,8 +200,8 @@ public class ConversationRewindTests : IDisposable
         Assert.Equal("(↩️ rewound 2 messages: \"fix the build …\")", RewindText.RewoundNotice(2, turn.Text));
         Assert.Equal("What write_file, run_command changed stays as it is: rewinding does not undo it.", RewindText.ChangesStayWarning(cut.ChangingTools));
         Assert.Equal("(↩️ nothing to rewind)", RewindText.NothingNotice);
-        Assert.Equal("/rewind takes a number of messages back, from 1 to 4.", RewindText.UsageError(4));
-        Assert.Equal("/rewind takes a number of messages back: 1 is the only one.", RewindText.UsageError(1));
+        Assert.Equal("/rewind takes a number of messages back, from 1 to 4, and files to put files back.", RewindText.UsageError(4));
+        Assert.Equal("/rewind takes a number of messages back (1 is the only one), and files to put files back.", RewindText.UsageError(1));
         Assert.Equal("Rewound 2 turns (to before turn 3)", RewindText.RewoundLogLine(2, 3));
         Assert.Equal("the message was: hi", RewindText.HeadlessLineNotice("hi"));
         Assert.Equal("Session 4: rewound to turn 1 (2 turns removed)", SessionStore.TruncatedLogLine(4, 1, 2));

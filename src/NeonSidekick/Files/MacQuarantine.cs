@@ -5,7 +5,7 @@ namespace NeonSidekick.Files;
 
 /// <summary>
 /// A Mac's extended attributes for <see cref="MarkOfTheWeb"/> (2026-10-22, review O5): libc's <c>getxattr</c> and <c>setxattr</c> on the
-/// file itself (<c>XATTR_NOFOLLOW</c>: a link's own attribute, never its target's). No new library: libSystem is every Mac process's.
+/// file itself (<c>XATTR_NOFOLLOW</c>: a link's own attribute, never its target's), and <c>removexattr</c> since 2026-10-28. No new library: libSystem is every Mac process's.
 /// Unproven until a Mac runs it; smoke <c>files:quarantine</c>.
 /// </summary>
 [SupportedOSPlatform("macos")]
@@ -41,9 +41,21 @@ public static partial class MacQuarantine
         }
     }
 
+    /// <summary>
+    /// Takes the attribute off (2026-10-28, the checkpoints plan: a restored file that had no mark loses the one a download left); true when
+    /// it is gone, also when it was never there (<c>ENOATTR</c>).
+    /// </summary>
+    public static bool Remove(string path, string name) =>
+        RemoveXattr(path, name, NoFollow) == 0 || Marshal.GetLastPInvokeError() == NoAttribute;
+
+    private const int NoAttribute = 93;
+
     [LibraryImport(LibSystem, EntryPoint = "getxattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static unsafe partial nint GetXattr(string path, string name, byte* value, nuint size, uint position, int options);
 
     [LibraryImport(LibSystem, EntryPoint = "setxattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static unsafe partial int SetXattr(string path, string name, byte* value, nuint size, uint position, int options);
+
+    [LibraryImport(LibSystem, EntryPoint = "removexattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial int RemoveXattr(string path, string name, int options);
 }

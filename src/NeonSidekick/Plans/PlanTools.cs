@@ -24,6 +24,8 @@ public static class PlanTools
         "get_working_directory", "search_files", "file_info", "read_file", "view_image",
         // PDFs (2026-10-14, the PDF plan): read_pdf reads a PDF's text and draws its pages; nothing changes
         "read_pdf",
+        // Office files (2026-10-28, the Office plan): read_office reads a document, a workbook or slides; nothing changes
+        "read_office",
         // pictures' headers (2026-10-04): image_info reads, image_edit writes a new file so it is not here
         "image_info",
         // git

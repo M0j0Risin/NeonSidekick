@@ -74,6 +74,7 @@ internal static class HelpToolCatalog
         T(FileInfoTool.ToolName, FilesGroup, SettingsField.FileTools, "Tells a file's size, modified time, lines, words, line endings and BOM, or a folder's counts and size.", setup: FileSetup),
         T(ReadFileTool.ToolName, FilesGroup, SettingsField.FileTools, "Reads a text file under the working directory, whole or a window of lines.", setup: FileSetup),
         T(ReadPdfTool.ToolName, FilesGroup, SettingsField.FileTools, "Reads a PDF under the working directory page by page, its outline, its pictures or its form fields.", setup: BrowserSetup),
+        T(ReadOfficeTool.ToolName, FilesGroup, SettingsField.FileTools, "Reads a Word document, an Excel spreadsheet's sheets and cells, or a PowerPoint presentation's slides as text.", setup: FileSetup),
         T(WriteFileTool.ToolName, FilesGroup, SettingsField.FileTools, "Writes a text file under the working directory, making any missing folders.", setup: FileSetup),
         T(PatchFileTool.ToolName, FilesGroup, SettingsField.FileTools, "Changes part of a text file under the working directory by replacing an exact piece of its text.", setup: FileSetup),
         T(CreateDirectoryTool.ToolName, FilesGroup, SettingsField.FileTools, "Makes a folder, and any missing parents, under the working directory.", setup: FileSetup),

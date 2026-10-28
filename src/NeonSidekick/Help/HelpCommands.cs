@@ -384,7 +384,7 @@ public static class HelpCommands
         ]),
         new("/read",
         [
-            new("/read [<file> [<n>]|<n>]", "Read a text file or a PDF from the working directory aloud as a reply (a PDF's first 40 pages, read with Edge, Chrome or Brave and joined back into sentences; Esc stops the read). Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
+            new("/read [<file> [<n>]|<n>]", "Read a text file, a PDF, a Word document or a PowerPoint deck from the working directory aloud as a reply (a PDF's first 40 pages, read with Edge, Chrome or Brave and joined back into sentences; a deck's slide titles as sentences; Esc stops the read; a spreadsheet isn't read aloud). Alone, it resumes; a number starts from that sentence (a file named only with digits is typed `./5`). On an empty line, Space pauses and resumes, and ←/→ step a sentence back or forward (while paused they only move the position, and Space or `/read` plays from there). The hints bar shows the keys that apply: `← → ␣ pause`, `← → ␣ play` or `␣ replay`."),
         ]),
         new("/reasoning",
         [
@@ -400,7 +400,8 @@ public static class HelpCommands
         ]),
         new("/rewind",
         [
-            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back); after a yes, the picked message and everything after it leave the conversation, and its text returns to the input row, pictures, PDFs and pasted blocks included, to edit and send again. A stored session loses the same turns. Only the conversation rewinds: what a tool changed (files written, commands run, commits) stays, and the yes/no names those tools. Messages compacted into a summary cannot be picked. Esc twice on an empty input line opens it too."),
+            new("/rewind [<n>]", "Go back to an earlier message. A list of the messages you sent opens (the cursor on the last, or n back); after a yes, the picked message and everything after it leave the conversation, and its text returns to the input row, pictures, PDFs and pasted blocks included, to edit and send again. A stored session loses the same turns. When those turns changed files through the file tools, it asks **Conversation and files** (the files put back too, as `/undo` does), **Conversation only** or Cancel; shell commands, git, shares and databases aren't undone either way. Messages compacted into a summary cannot be picked. Esc twice on an empty input line opens it too."),
+            new("/rewind [<n>] files", "The same, the cursor on **Conversation and files**: revert the files those turns changed as well. Files you changed since are asked about: restore over them (yours to the Recycle bin first) or skip them."),
         ]),
         new("/sampling",
         [
@@ -529,6 +530,11 @@ public static class HelpCommands
         new("/tts",
         [
             new("/tts [on|off]", "Turn speech output on or off (*TTS output*)."),
+        ]),
+        new("/undo",
+        [
+            new("/undo [<n>]", "Put back the files the last turn (or the last n turns) changed through the file tools, the conversation kept; it lists the files and asks first. Files changed since are asked about: restore over them (yours to the Recycle bin first) or skip them. Files a turn made go to the Recycle bin. Only turns the model still sees can be undone, and Ralph passes and botchat turns aren't checkpointed; shell commands, git, shares, the vault, databases and MCP tools aren't undone. The next message tells the model what came back. There is no redo."),
+            new("/undo purge [all]", "Delete the file checkpoints of this working folder (every conversation's), or with `all` of every folder in the profile, after a yes naming what it frees; deleted for good, never to the Recycle bin, so those turns can no longer be undone."),
         ]),
         new("/usage",
         [

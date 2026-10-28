@@ -69,7 +69,8 @@ They need no server unless the row says so.
 |---|---|
 | `/exit` | Ends the run (exit code 0), as the end of input does. |
 | `/new`, `/clear`, `/splash` | Forget the conversation; the next message starts a new stored session. |
-| `/rewind [n]` | Goes back n messages (1 by default) at once and prints the dropped message to send again; what tools changed stays changed. |
+| `/rewind [n] [files]` | Goes back n messages (1 by default) at once and prints the dropped message to send again; with `files`, the files those turns changed go back too. |
+| `/undo [n]`, `/undo purge [all]` | Puts back the files the last n turns changed, or deletes the file checkpoints, nothing asked; files changed since are skipped and named. |
 | `/compact [focus]` | Shrinks the conversation now. Needs a server. |
 | `/plan …` | [Plan mode](COMMANDS.md#plan-mode), approved by typing (below). Needs a server and *LLM offer tools*. |
 | `/code-audit …` | [Code audit](COMMANDS.md#code-audit), every pass run without waiting (below). Needs a server, *LLM offer tools* and `read_file`. |

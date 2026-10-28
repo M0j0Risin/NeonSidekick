@@ -100,6 +100,8 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/memory` | Enter: edit, disable/enable, forget (asks) · Delete forgets (asks) · `a` add · `m` *Memory mode* |
 | `/queue` | Enter or Delete removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
+| `/rewind`'s files question | `f` conversation and files · `c` conversation only · Enter chooses · Esc cancels |
+| Files changed since (`/undo`, `/rewind … files`) | `r` restore over them (yours to the Recycle bin first) · `s` skip them · Esc cancels |
 | `/sessions` | Enter opens · type to filter |
 | `/plan open` | Enter opens (with `--chat`, to talk it through) · `o` open · `c` talk it through · `l` run as a [Ralph loop](COMMANDS.md#ralph-loop), outside plan mode · type to filter |
 | `/plan edit` | Enter opens the file in its default app · type to filter |
@@ -259,7 +261,7 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 
 * **Open their pane over the reply:** `/help`, `/settings`, `/tools`, `/comfy`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/ad`, `/youtube`, `/shopping`, `/prompts`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui`
 * **Run at once:** `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/docker logs <container>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/ha stills view`, `/ha stills thumbs`, `/view <path>`, `/view <path> --thumbs`
-* **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/exit`
+* **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else:** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 
 In a pane over a reply, rows that would disturb it (a reconnect, the profile, the working directory, the theme, a session, a skill's page, an MCP server) answer *(not while a reply runs)*.
@@ -685,12 +687,12 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear` | Their lines; the status row shows its spinner while it runs |
+| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
-| Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`…) | Refused, naming the form that works here when there is one |
+| Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 
 * **A Ralph loop:** its confirm, its checkpoint and its by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`:** runs as at the PC (a looped `/read` is refused). Bare `/shopping` points at the Shopping tab, and bare `/youtube` and `/youtube list` at the YouTube tab's saved videos (or at the tab's setting while it's off).

@@ -75,7 +75,7 @@ public static class WebCommands
     /// <summary>The commands some form of which may run from the page: the dropdown offers these alone.</summary>
     public static readonly IReadOnlySet<SlashCommand> Offered = new HashSet<SlashCommand>
     {
-        SlashCommand.Help, SlashCommand.Clear, SlashCommand.New, SlashCommand.Splash, SlashCommand.Rewind, SlashCommand.Compact,
+        SlashCommand.Help, SlashCommand.Clear, SlashCommand.New, SlashCommand.Splash, SlashCommand.Rewind, SlashCommand.Undo, SlashCommand.Compact,
         SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Remember, SlashCommand.Memory,
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
@@ -143,6 +143,9 @@ public static class WebCommands
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
             SlashCommand.MsgClear => WebCommandVerdict.Run,
             SlashCommand.Rewind => WebCommandVerdict.Pick,
+            // 2026-10-28 (the checkpoints plan): /undo asks one yes/no, raced on the page and the PC; its purges are the PC's, as every purge is.
+            SlashCommand.Undo when UndoText.Parse(args) is { Purge: true } => Pane(word + " " + UndoText.PurgeWord, null),
+            SlashCommand.Undo => WebCommandVerdict.Run,
             SlashCommand.Model or SlashCommand.Reasoning => text.Length > 0 ? WebCommandVerdict.Run : WebCommandVerdict.Pick,
             // Bare /plan open and /plan open --chat are the plans picker (2026-10-18), a pick card on the page; a list until then. /plan edit
             // (2026-10-20) opens an editor on the PC: refused, unless its several words are detail or a requirement (the handler's fallback).

@@ -2561,6 +2561,7 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.NotEncodable, display, 0, false, Detail: codec!.Label ?? "UTF-8");
             }
 
+            FileJournal.Writing(this, full);
             RecheckLinks(full);
             // A new file made only if it is still not there (2026-10-22, review J3: Exists then a move with overwrite clobbered one made between).
             if (!existed && !WriteNew(full, encoded))
@@ -2608,6 +2609,7 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
+            FileJournal.Writing(this, full);
             RecheckLinks(full);
             if (!existed && !WriteNew(full, bytes))
             {
@@ -2653,6 +2655,7 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
+            FileJournal.Writing(this, full);
             RecheckLinks(full);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace);
@@ -2753,6 +2756,7 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.TooBig, display, 0, false);
             }
 
+            FileJournal.Writing(this, full);
             RecheckLinks(full);
             if (existed && StampOf(full) != seen)
             {
@@ -3007,6 +3011,7 @@ public sealed class WorkingDirectory
             return false;
         }
 
+        FileJournal.Writing(this, full);
         RecheckLinks(full);
         WriteAtomically(full, output, _options.PreserveOnReplace);
         return true;
@@ -3134,6 +3139,7 @@ public sealed class WorkingDirectory
                 return new CreateResult(FileOutcome.Exists, display);
             }
 
+            FileJournal.Making(this, full);
             RecheckLinks(full);
             Directory.CreateDirectory(full);
             return new CreateResult(FileOutcome.Ok, display);
@@ -3236,6 +3242,15 @@ public sealed class WorkingDirectory
                 {
                     return new MoveResult(FileOutcome.Failed, fromDisplay, toDisplay, isDirectory, false, full);
                 }
+            }
+
+            if (move)
+            {
+                FileJournal.Moving(this, source, destination);
+            }
+            else
+            {
+                JournalCopy(this, destination, plan, inTheWay && !folderInTheWay);
             }
 
             RecheckLinks(destination);
@@ -3377,6 +3392,8 @@ public sealed class WorkingDirectory
                 return new MoveResult(FileOutcome.FolderInTheWay, fromDisplay, to.Relative(destination, isDirectory: true), isDirectory, false);
             }
 
+            // The destination side only (2026-10-28, the checkpoints plan): unc_fetch into the working folder is journaled, unc_put onto a share isn't.
+            JournalCopy(to, destination, plan, inTheWay && !folderInTheWay);
             to.RecheckLinks(destination);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             if (isDirectory)
@@ -3450,6 +3467,7 @@ public sealed class WorkingDirectory
             }
 
             // To the bin while the setting is on (later on 2026-10-15); a link, a drive with no bin and the setting off delete directly.
+            FileJournal.Removing(this, full);
             RecheckLinks(full, linkItself: true);
             var way = FileDeletes.Remove(full, isDirectory, isLink, RecycleDeletes?.Invoke());
             DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)) + (way == DeleteWay.Recycled ? " (to the " + FileText.RecycleBinName + ")" : ""));
@@ -3934,6 +3952,7 @@ public sealed class WorkingDirectory
                 return new ZipResult(FileOutcome.Failed, display, Relative(archive), 0, 0, ZipCapDetail(counted, bytes));
             }
 
+            FileJournal.Writing(this, archive);
             RecheckLinks(archive);
             Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
             string temp = TempSibling(archive);
@@ -4202,6 +4221,8 @@ public sealed class WorkingDirectory
 
             // The archive's internet mark goes on what comes out of it (2026-10-22, review O5): SmartScreen, Protected View and Gatekeeper
             // still ask about a downloaded archive's program or document.
+            // The checkpoint journal (2026-10-28): the folders made where missing and each file, before anything is written.
+            FileJournal.Placing(this, folders.Concat(files.Select(f => Path.GetDirectoryName(f.Target)!)), files.Select(f => f.Target));
             byte[]? mark = MarkOfTheWeb.Read(source);
             var made = new List<string>();
             var temps = new List<(string Temp, string Target, bool Exists)>();
@@ -4687,6 +4708,31 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
+    /// A copy's destination for the checkpoint journal (2026-10-28, the checkpoints plan): a file in a folder's way saved first, then a folder's
+    /// planned folders and files (each existing file saved, each new one noted), or the one file.
+    /// </summary>
+    private static void JournalCopy(WorkingDirectory to, string destination, CopyPlan? plan, bool fileInTheWay)
+    {
+        if (FileJournal.Current is null)
+        {
+            return;
+        }
+
+        if (plan is null)
+        {
+            FileJournal.Writing(to, destination);
+            return;
+        }
+
+        if (fileInTheWay)
+        {
+            FileJournal.Removing(to, destination);
+        }
+
+        FileJournal.Placing(to, plan.Folders, plan.Files.Select(f => f.Target));
+    }
+
+    /// <summary>
     /// A planned copy carried out: the folders made, each file copied — over one already there by the one replace (mechanism 7). A failure
     /// partway takes back the new files and folders it made (2026-10-22, review J7: a half-made folder stood where the copy failed), then
     /// throws; a file it replaced stays replaced.
@@ -4919,6 +4965,85 @@ public sealed class WorkingDirectory
         }
 
         return bytes.LongLength;
+    }
+
+    /// <summary>
+    /// <see cref="WriteAtomically(string, byte[], bool)"/> from a stream (2026-10-28, the checkpoints plan: a restored file past 64 MB is never held
+    /// whole): the same read-only refusal, the same in-place write for a file with other names, else a temp sibling filled from
+    /// <paramref name="content"/> and put in place by <see cref="MoveIntoPlace"/>, still the one replace path.
+    /// </summary>
+    internal static long WriteAtomically(string full, Stream content, bool preserve = false)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        SweepStaleTemps(Path.GetDirectoryName(full)!);
+        if (File.Exists(full))
+        {
+            RefuseReadOnly(full);
+            if (FileLinks.Count(full) > 1)
+            {
+                using var stream = new FileStream(full, FileMode.Truncate, FileAccess.Write, FileShare.None);
+                content.CopyTo(stream);
+                return stream.Length;
+            }
+        }
+
+        string temp = TempSibling(full);
+        long written;
+        try
+        {
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                content.CopyTo(stream);
+                written = stream.Length;
+            }
+
+            HideTemp(temp);
+            MoveIntoPlace(temp, full, preserve);
+        }
+        finally
+        {
+            DeleteQuietly(temp);
+        }
+
+        return written;
+    }
+
+    // ---- restore side (2026-10-28, the checkpoints plan: FileRestore replays a turn's op log through the turn's own guards) ----
+
+    /// <summary>A restore's path judged as a tool's write is (<see cref="WriteGuard"/>, the sandbox, the links), <paramref name="linkItself"/> for a link's own name.</summary>
+    internal FileOutcome ResolveForRestore(string relative, bool linkItself, out string full) => Resolve(relative, forWrite: true, linkItself, out full);
+
+    /// <summary>
+    /// A saved file put back at <paramref name="full"/>: over the file there through <see cref="WriteAtomically(string, Stream, bool)"/>, or new only if
+    /// nothing appeared meanwhile (false then, nothing written).
+    /// </summary>
+    internal bool WriteRestored(string full, Stream content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        RecheckLinks(full);
+        if (File.Exists(full))
+        {
+            WriteAtomically(full, content, _options.PreserveOnReplace);
+            return true;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        string temp = TempSibling(full);
+        try
+        {
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                content.CopyTo(stream);
+            }
+
+            HideTemp(temp);
+            return MoveTempNew(temp, full);
+        }
+        finally
+        {
+            DeleteQuietly(temp);
+        }
     }
 
     /// <summary>

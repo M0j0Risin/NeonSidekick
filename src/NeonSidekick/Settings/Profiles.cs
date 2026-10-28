@@ -369,6 +369,8 @@ public static class Profiles
         string dir = Directory(home, name);
         if (System.IO.Directory.Exists(dir))
         {
+            // The file checkpoints' git objects are read-only (2026-10-28, the checkpoints plan): a plain delete would stop at the first.
+            Files.FileDeletes.ClearReadOnly(dir);
             System.IO.Directory.Delete(dir, recursive: true);
         }
 

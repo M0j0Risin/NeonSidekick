@@ -1464,6 +1464,19 @@ public sealed class Assistant
     public Func<string, CancellationToken, Task<bool?>>? ProjectFileAsk { get; set; }
 
     /// <summary>
+    /// The turn's file journal (2026-10-28, the checkpoints plan): entered around each of the turn's own tool calls (<see cref="Files.FileJournal.Enter"/>,
+    /// beside the project-file watch, and around the re-run after a yes), never for the whole turn, so only the tool's code and the tasks it
+    /// starts are journaled. Set by the screen and headless for a checkpointed turn and cleared after; null records nothing.
+    /// </summary>
+    public Files.FileJournal? Journal { get; set; }
+
+    /// <summary>
+    /// The <c>/undo</c> note the next turn carries ahead of the user's text (2026-10-28, the checkpoints plan): taken, and cleared, as the turn
+    /// adds its message; null for none.
+    /// </summary>
+    public string? TurnNote { get; set; }
+
+    /// <summary>
     /// The tools the next turn offers. Settable because the shell decides per turn what a turn may
     /// do (memory on or off), the same way it sets <see cref="ConversationHistory.SystemPrompt"/>;
     /// a turn reads it once, at its start.
@@ -1557,8 +1570,10 @@ public sealed class Assistant
         // dispose), a throw — through the using declaration's own finally.
         using var log = new TurnLog(_history.TurnCount + 1, userText, images.Count, opening.Count, _time, cancellationToken);
 
-        // Committed up front: a turn that fails still leaves the question in the transcript.
-        _history.AddUser(userText, images);
+        // Committed up front: a turn that fails still leaves the question in the transcript. An /undo note rides it as its own first part (2026-10-28).
+        string? note = TurnNote;
+        TurnNote = null;
+        _history.AddUser(userText, images, note);
 
         foreach (var (tool, callId, seededArguments) in opening)
         {
@@ -2540,7 +2555,10 @@ public sealed class Assistant
     {
         var slot = new Files.ProjectFileSlot();
         (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) answer;
+        var journal = Journal;
+        journal?.NoteTool(call.Name);
         using (Files.WriteGuard.Watch(slot))
+        using (Files.FileJournal.Enter(journal))
         {
             answer = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
         }
@@ -2562,6 +2580,7 @@ public sealed class Assistant
         }
 
         using (Files.WriteGuard.AllowProjectFile())
+        using (Files.FileJournal.Enter(journal))
         {
             return await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
         }

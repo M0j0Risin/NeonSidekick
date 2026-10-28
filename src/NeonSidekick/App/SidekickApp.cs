@@ -102,6 +102,7 @@ public sealed partial class SidekickApp
     private readonly bool _headlessNarrow;
     private readonly Plans.IRalphVerifier? _ralphVerifier;
     private readonly Files.IRecycleBin? _recycleBin;
+    private readonly Files.ICheckpointStore? _checkpoints;
     private readonly Viewer.IVideoPlayer? _videoPlayer;
 
     /// <summary>The Browser window for bot checks and <c>/browser</c> (2026-10-13): <see cref="Viewer.BrowserWindow.Window"/> on Windows, null elsewhere and in headless.</summary>
@@ -269,8 +270,11 @@ public sealed partial class SidekickApp
         Func<string?>? joinedDomain = null,
         bool headlessNarrow = false,
         Plans.IRalphVerifier? ralphVerifier = null,
-        Monitors.IMonitorSystem? monitorSystem = null)
+        Monitors.IMonitorSystem? monitorSystem = null,
+        Files.ICheckpointStore? checkpoints = null)
     {
+        // The file checkpoints' store (2026-10-28, the checkpoints plan): CheckpointStore in the app, a fake in tests, none by default.
+        _checkpoints = checkpoints;
         // The monitors (2026-10-23, the monitors plan): WindowsMonitorSystem in the app on Windows, a fake in tests, none elsewhere.
         _monitorSystem = monitorSystem;
         // The Ralph loop's checks (2026-10-18): /cmd's launch for real, a fake in tests; the screen and headless alike.
@@ -976,6 +980,8 @@ public sealed partial class SidekickApp
         // screen; no /sessions, no restore, the first line always the title.
         using var sessions = new Sessions.SessionStore(_settings.ProfileDirectory, _time);
         long? sessionId = null;
+        // The /undo note the next line's turn carries (2026-10-28, the checkpoints plan), as the screen keeps it; never a pass's turn.
+        string? undoNote = null;
         // The Claude conversation /claude resumes (2026-09-27), as the screen keeps it; dropped with the session.
         string? claudeSessionId = null;
         // The Claude Code server's session (2026-09-30), as the screen keeps it: minted at the first turn over it, dropped with the session.
@@ -1352,13 +1358,16 @@ public sealed partial class SidekickApp
                         continue;
                     }
 
-                    if (RewindText.ParseCount(rewindArgs) is not { } back || back > held.Count)
+                    if (RewindText.ParseArgs(rewindArgs) is not { Count: var back } rewindParsed || back > held.Count)
                     {
                         await HeadlessLineAsync("[error] " + RewindText.UsageError(held.Count)).ConfigureAwait(false);
                         continue;
                     }
 
                     var picked = held[^back];
+                    // /rewind [n] files (2026-10-28, the checkpoints plan): the dropped turns' files put back first, conflicts skipped and printed.
+                    var report = await HeadlessRewindFilesAsync(ConversationRewind.Preview(session.History.Messages, picked.Start), rewindParsed.Files, files, images, cancellationToken).ConfigureAwait(false);
+                    undoNote = null;
                     var (cut, _) = ConversationRewind.Apply(session.History, picked, sessionId is null ? null : sessions, sessionId);
                     claudeServerSessionId = null;
                     if (cut.HadClaude)
@@ -1379,12 +1388,47 @@ public sealed partial class SidekickApp
                     }
 
                     await HeadlessLineAsync(HeadlessReplyPrefix + RewindText.RewoundNotice(cut.Turns, picked.Text)).ConfigureAwait(false);
-                    if (cut.ChangingTools.Count > 0)
+                    if (report is not null)
                     {
-                        await HeadlessNoticeLineAsync("[notice] " + RewindText.ChangesStayWarning(cut.ChangingTools)).ConfigureAwait(false);
+                        await HeadlessRestoreLinesAsync(report, files.Root).ConfigureAwait(false);
+                    }
+
+                    var staying = report is null ? cut.ChangingTools : RewindText.StayingAfterFiles(cut.ChangingTools);
+                    if (staying.Count > 0)
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + RewindText.ChangesStayWarning(staying)).ConfigureAwait(false);
                     }
 
                     await HeadlessNoticeLineAsync("[notice] " + RewindText.HeadlessLineNotice(picked.Text)).ConfigureAwait(false);
+                    continue;
+                }
+
+                // /undo [n] and /undo purge [all] (2026-10-28, the checkpoints plan): nothing asks headless, so conflicts are skipped and the
+                // purges run as typed.
+                if (SlashCommands.Parse(text) is (SlashCommand.Undo, var undoArgs))
+                {
+                    if (UndoText.Parse(undoArgs) is not { } undo)
+                    {
+                        await HeadlessLineAsync("[error] " + UndoText.UsageError).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (undo.Purge)
+                    {
+                        await HeadlessPurgeCheckpointsAsync(undo.All, files, images, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (await HeadlessUndoAsync(session.History.Messages, undo.Count, files, images, cancellationToken).ConfigureAwait(false) is { } undone)
+                    {
+                        undoNote = UndoText.Merge(undoNote, undone);
+                    }
+
+                    if (sessionId is { } undid)
+                    {
+                        sessions.SaveHistory(undid, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                    }
+
                     continue;
                 }
 
@@ -1760,7 +1804,22 @@ public sealed partial class SidekickApp
                     assistant.ContextGuard = null;
                 }
 
+                // The turn's file journal and a pending /undo note (2026-10-28, the checkpoints plan): never a pass's turn, a Ralph pass's least of all
+                // (its pinned folder's root is the working folder's).
+                bool passTurn = planState.Ralph is { Loop.InPass: true } || audit.InPass || plan.Reviewing;
+                Files.FileJournal? journal = null;
+                if (!passTurn)
+                {
+                    assistant.TurnNote = undoNote;
+                    undoNote = null;
+                    journal = CheckpointTurns.Begin(_checkpoints, EffectiveSettings, _settings.ProfileDirectory, [files.Root, images.Root]);
+                    assistant.Journal = journal;
+                }
+
                 var turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, cancellationToken).ConfigureAwait(false);
+                assistant.Journal = null;
+                assistant.TurnNote = null;
+                var sealedJournal = CheckpointTurns.Seal(_checkpoints, assistant.History, journal, withdrawn: false, cancellationToken);
                 if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {
                     planState.RevisionShown = plan.Revision;
@@ -1811,6 +1870,13 @@ public sealed partial class SidekickApp
                         ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled));
                         sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                     }
+                }
+
+                // The checkpoint after the row (2026-10-28): its session is known now.
+                if (sealedJournal is not null && _checkpoints is { } checkpointStore)
+                {
+                    string checkpointSession = EffectiveSettings.SessionLogging && sessionId is { } logged ? logged.ToString(CultureInfo.InvariantCulture) : Files.CheckpointStore.NoSession;
+                    CheckpointTurns.Commit(checkpointStore, assistant.History, sealedJournal, text, checkpointSession, EffectiveSettings, _time.GetUtcNow());
                 }
 
                 // A Ralph pass judged after its row is written (2026-10-18), then the next pass in the slot (or the loop ended).
@@ -3197,7 +3263,7 @@ public sealed partial class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem, checkpoints: _checkpoints);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

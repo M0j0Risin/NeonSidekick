@@ -606,8 +606,12 @@ The file tools and the places beyond the working directory they reach.
 
 | Setting | What it does | Default |
 |---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, read_office, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
 | File deletes to Recycle bin | Deletes by `delete`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive (a purge asks for good there), one too big for the bin, and a command's or script's deletes. | on |
+| File checkpoints | Keeps what the file tools change in each turn, so `/undo` and `/rewind … files` can put it back ([what's covered](TOOLS.md#undoing-file-changes)). Turned off, the kept ones can still be undone. | on |
+| File checkpoints keep (days) | Checkpoints older than this are cleared at startup (0–3650; 0 clears none by age). | 90 |
+| File checkpoints max (MB) | The most one working folder's checkpoints may hold (100–102400); the oldest go first, the newest always stays. | 2,048 |
+| File checkpoints per file (MB) | The largest file a checkpoint keeps (1–2048); a bigger one is still changed but can't be put back. | 64 |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `remain` opens it in the list; `apply` writes `@folder/` and closes the list. | `remain` |

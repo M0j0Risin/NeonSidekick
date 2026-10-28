@@ -866,6 +866,8 @@ internal sealed partial class ChatScreen
             SetMark(null);
             // A Ralph loop too (2026-10-18): its lock let go, the file and the log keep everything.
             StopRalphOnReset();
+            // A pending /undo note too (2026-10-28): the conversation it described is gone.
+            DropUndoNote();
         }
         ForgetAllows();
     }
@@ -1112,6 +1114,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The system's Recycle bin (later on 2026-10-15); null in tests unless one passes a fake, and then every delete is direct.</summary>
     private readonly Files.IRecycleBin? _recycleBin;
+    private readonly Files.ICheckpointStore? _checkpoints;
 
     /// <summary>The idle read's alert source while one is waiting; the board's signal cancels it from the clock's thread.</summary>
     private CancellationTokenSource? _alertSignal;
@@ -1263,13 +1266,16 @@ internal sealed partial class ChatScreen
         Func<Audio.PcmFormat, Audio.IAudioPlayback>? tonePlayback = null,
         Plans.IRalphVerifier? ralphVerifier = null,
         Monitors.IMonitorSystem? monitorSystem = null,
-        bool monitorsQuick = false)
+        bool monitorsQuick = false,
+        Files.ICheckpointStore? checkpoints = null)
     {
         // The manual's live line (2026-10-25, the neon_help plan's Step 2): built first so it can capture the screen.
         _helpTools = HelpTools(HelpLiveNow);
         _logFile = logFile;
         // The system's Recycle bin (later on 2026-10-15): RecycleBin.Platform() in the app, a fake in tests, none by default.
         _recycleBin = recycleBin;
+        // The file checkpoints' store (2026-10-28, the checkpoints plan): the app's CheckpointStore, a fake in tests, none by default (no journal, no /undo).
+        _checkpoints = checkpoints;
         // The Browser window (2026-10-13): a web tool's bot check shown to the user, and /browser; none in headless or off Windows.
         _browserWindow = browserWindow;
         _openProcessWindow = openProcessWindow;
@@ -4083,14 +4089,17 @@ internal sealed partial class ChatScreen
         return "No reflection: " + tally + "; Reflection mode is update-only and no skill can be updated.";
     }
 
-    /// <summary>The user's line the last turn of <paramref name="turn"/> opened with — the words the evidence search reads.</summary>
+    /// <summary>
+    /// The user's line the last turn of <paramref name="turn"/> opened with — the words the evidence search reads: what the user typed
+    /// (<see cref="ConversationRewind.UserLine"/> since 2026-10-28, so an <c>/undo</c> note or a progress note never joins the query).
+    /// </summary>
     private static string LastUserLine(IReadOnlyList<ChatMessage> turn)
     {
         for (int i = turn.Count - 1; i >= 0; i--)
         {
             if (ConversationHistory.IsTurnStart(turn[i]))
             {
-                return turn[i].Text;
+                return ConversationRewind.UserLine(turn[i]);
             }
         }
 
@@ -5425,6 +5434,22 @@ internal sealed partial class ChatScreen
                 // The one switch (2026-09-26).
                 return MentionCompleter.Matches(GitVerbs, argText);
 
+            case SlashCommand.Undo:
+                // purge, then purge all (2026-10-28, the checkpoints plan), as /sessions purge completes all.
+                return argText.StartsWith(UndoText.PurgeWord + " ", StringComparison.OrdinalIgnoreCase)
+                    ? MentionCompleter.Matches([new(UndoText.PurgeWord + " " + UndoText.AllWord, UndoText.PurgeAllNote)], argText)
+                    : MentionCompleter.Matches([new(UndoText.PurgeWord, UndoText.PurgeNote)], argText);
+
+            case SlashCommand.Rewind:
+            {
+                // files, also after a number (2026-10-28): /rewind 3 f → /rewind 3 files; offered always, a rewind with none just asks its yes/no.
+                int gap = argText.LastIndexOf(' ');
+                string head = gap < 0 ? "" : argText[..(gap + 1)];
+                return head.Length > 0 && RewindText.ParseCount(head) is null
+                    ? []
+                    : MentionCompleter.Matches([new(head + RewindText.FilesWord, RewindText.FilesNote)], argText);
+            }
+
             case SlashCommand.Session:
             {
                 var sessions = sources.Sessions?.Invoke() ?? [];
@@ -6090,7 +6115,7 @@ internal sealed partial class ChatScreen
             _settings.ProfileName,
             timers.Select(timer => timer.Name).ToList(),
             prefix => _files.Complete(prefix).Paths.Where(path => path.EndsWith('/')).ToList(),
-            prefix => _files.Complete(prefix, full => WorkingDirectory.IsTextFile(full) || PdfFile.IsPdfPath(full)),   // a PDF reads aloud too (2026-10-14)
+            prefix => _files.Complete(prefix, full => WorkingDirectory.IsTextFile(full) || PdfFile.IsPdfPath(full) || OfficeFile.IsReadAloudPath(full)),   // a PDF reads aloud too (2026-10-14), a Word document or slides too (2026-10-28)
             prefix => _files.Complete(prefix, full => ImageFile.IsImagePath(full) || PdfFile.IsPdfPath(full)),   // /view opens a PDF too (2026-10-14)
             Sessions: SessionChoices,
             VaultFolders: VaultFolderChoices,
@@ -6361,9 +6386,13 @@ internal sealed partial class ChatScreen
         // by its first use; the retention purge runs here, at startup and after every switch.
         _sessions?.Dispose();
         _sessions = new SessionStore(_settings.ProfileDirectory, _time);
+        // A purged session takes its file checkpoints with it (2026-10-28): subscribed before the retention purge below.
+        _sessions.Purged += OnSessionsPurged;
         _sessionTools = SessionTools(_sessions, _effective, () => _sessionId, _time);
         _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(left: false); } });
         PurgeExpiredSessions();
+        // The file checkpoints' sweep (2026-10-28): the age rule, gone folders' stores, purges a close cut short; in the background.
+        SweepCheckpoints();
         LoadCommandHistory();
         ReconcileSkills();
     }
@@ -6648,7 +6677,8 @@ internal sealed partial class ChatScreen
     /// 2026-10-04 (<c>view_image</c> fifth, <c>image_info</c> and <c>image_edit</c> after <c>open</c>) until 2026-10-10, when the three
     /// became a group of their own (<see cref="ImageTools"/>, the user's ask): thirteen since, fifteen with <c>read_pdf</c>
     /// (2026-10-14, given <paramref name="reading"/>) and <c>convert_to_pdf</c>, sixteen with <c>pdf_edit</c> after it (later that day,
-    /// given <paramref name="editing"/>).
+    /// given <paramref name="editing"/>). Seventeen with <c>read_office</c> after them (2026-10-28, the Office plan, the user's pick), which
+    /// follows <c>read_pdf</c>'s place and stays in whether <paramref name="reading"/> is null or not: it needs no browser.
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there, and <c>search_files</c> and <c>file_info</c> read one (later that day, the user's call: the model could not list it to find the newest pictures); null = the working directory alone.</param>
     /// <param name="openPicture"><c>open</c>'s picture, opened where a double-click would (2026-10-11, <see cref="OpenTool"/>); null = the <paramref name="openFile"/> like any file (headless).</param>
@@ -6656,7 +6686,7 @@ internal sealed partial class ChatScreen
     /// <param name="editing">The PDF editor (2026-10-14, the PDF plan's phase 4b): adds <c>pdf_edit</c> last, after <c>convert_to_pdf</c>; null = without it.</param>
     public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null, PdfEditing? editing = null)
     {
-        var tools = new List<AIFunction>(16)
+        var tools = new List<AIFunction>(17)
         {
             new GetWorkingDirectoryTool(files, isDefault),
             new SearchFilesTool(files, effective, images),
@@ -6671,6 +6701,7 @@ internal sealed partial class ChatScreen
 
         tools.AddRange(
         [
+            new ReadOfficeTool(files, effective, unc, images),
             new WriteFileTool(files),
             new PatchFileTool(files),
             new CreateDirectoryTool(files),
@@ -7398,6 +7429,7 @@ internal sealed partial class ChatScreen
         FileInfoTool.ToolName,
         ReadFileTool.ToolName,
         ReadPdfTool.ToolName,
+        ReadOfficeTool.ToolName,
         ViewImageTool.ToolName,
         GenerateImageTool.ToolName,
         SetSplashImageTool.ToolName,
@@ -8364,6 +8396,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // A pending /undo note was the conversation's on screen (2026-10-28), not the restored one's.
+        DropUndoNote();
         List<ChatMessage> messages;
         StoredHistory stored;
         try
@@ -9969,6 +10003,9 @@ internal sealed partial class ChatScreen
     ///
     /// <para>A PDF (2026-10-14, the PDF plan's gaps 7, 38 and 89) is read through <c>read_pdf</c>'s reader and cache
     /// (<see cref="PdfAloudAsync"/>), under a spinner ESC stops, its pages joined back into sentences; hence async.</para>
+    ///
+    /// <para>A Word document or a presentation (2026-10-28, the Office plan) is read the same way through <c>read_office</c>'s readers
+    /// (<see cref="OfficeAloudAsync"/>), found by <see cref="OfficeAt"/> with the same <c>&lt;file&gt; &lt;n&gt;</c> split; a workbook is refused.</para>
     /// </summary>
     private async Task<bool> HandleSpeakAsync(string args, CancellationToken cancellationToken)
     {
@@ -10014,8 +10051,30 @@ internal sealed partial class ChatScreen
             (pdf, target, from) = (headPdf, pdfHead, pdfFrom);
         }
 
+        // An Office file the same way (2026-10-28, the Office plan), ahead of the text read that would refuse it.
+        string? office = pdf is null ? OfficeAt(args) : null;
+        if (pdf is null && office is null && !FileAt(args) && SpeakReading.TrySplitPosition(args, out string officeHead, out int officeFrom) && OfficeAt(officeHead) is { } headOffice)
+        {
+            (office, target, from) = (headOffice, officeHead, officeFrom);
+        }
+
         ReadResult read;
-        if (pdf is not null)
+        if (office is not null)
+        {
+            var (text, cut, error) = await OfficeAloudAsync(target, cancellationToken).ConfigureAwait(false);
+            if (text is null)
+            {
+                if (error is not null)
+                {
+                    _transcript.Error(error);
+                }
+
+                return false;
+            }
+
+            read = new ReadResult(FileOutcome.Ok, office, text, 0, 0, 0, cut);
+        }
+        else if (pdf is not null)
         {
             var (text, cut, error) = await PdfAloudAsync(target, cancellationToken).ConfigureAwait(false);
             if (text is null)
@@ -14076,6 +14135,10 @@ internal sealed partial class ChatScreen
                 await RewindAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
+            case SlashCommand.Undo:
+                await UndoAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Splash when args.Trim().Length > 0:
                 // view | thumbs | purge on the profile's splash folder (2026-10-18); another word is the usage error, nothing wiped.
                 await HandleSplashWordsAsync(args, cancellationToken).ConfigureAwait(false);
@@ -14950,6 +15013,8 @@ internal sealed partial class ChatScreen
         {
             Profiles.Rename(home, target, newName);
             _skillRecords.RenameProfile(target, newName);   // its skill records follow it (2026-09-30)
+            // Its file checkpoints' stores for its own files and images folders follow the folders (2026-10-28, the checkpoints plan).
+            _checkpoints?.RenameProfile(Profiles.Directory(home, target), Profiles.Directory(home, newName));
             _transcript.Notice(ProfileRenamedNotice(target, newName));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -17548,6 +17613,9 @@ internal sealed partial class ChatScreen
             }
         }
 
+        // The turn's file journal, and a pending /undo note ahead of the message (2026-10-28, the checkpoints plan): a main-chat turn's only.
+        var (journal, undoNote) = BeginTurnJournal(assistant, bot);
+
         // The spinner over the whole turn (the pane): its count keeps moving through the streamed
         // text, a buffered tool call and the next request's wait, so a quiet stretch never reads as
         // a stall. The label follows the turn's stage (TurnStages: thinking, writing, a tool's name)
@@ -17779,12 +17847,17 @@ internal sealed partial class ChatScreen
             // What the session store keeps (2026-09-18): the same pair, the model's call count and
             // the request's tokens, then the whole history as it stands. A withdrawn turn left the
             // history already and is not written.
+            // Seal → stamp → log → commit (2026-10-28, the checkpoints plan): the stamp must be on the message before LogTurn saves the history,
+            // and the commit needs the session LogTurn may begin. A turn stopped with Esc or ending in an error still keeps what it changed.
+            var sealedJournal = SealTurnJournal(assistant, journal, undoNote, outcome == TurnOutcome.Withdrawn, cancellationToken);
             if (outcome != TurnOutcome.Withdrawn && bot is null)
             {
                 LogTurn(assistant, text, reply.ToString(), trace, cancelled, effective, cancellationToken);
                 // The skills the turn loaded, each with the errors after its load (2026-10-02, the skill records' uses).
                 _skillRecords.TurnUsed(trace, _catalog.Skills, effective.SessionLogging ? _sessionId : null);
             }
+
+            CommitTurnJournal(assistant, sealedJournal, text, effective);
 
             DrainDiagnostics();
             // An advisor's embedded load, under a tool call, may have cleared the GPU (2026-10-26, the review's R14): said at the turn's end.

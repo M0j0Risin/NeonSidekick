@@ -15,7 +15,7 @@ public static class AuditTools
     /// <summary>The names kept whatever the settings say.</summary>
     public static readonly IReadOnlyList<string> Always =
     [
-        GetWorkingDirectoryTool.ToolName, SearchFilesTool.ToolName, FileInfoTool.ToolName, ReadFileTool.ToolName, ViewImageTool.ToolName, ReadPdfTool.ToolName,
+        GetWorkingDirectoryTool.ToolName, SearchFilesTool.ToolName, FileInfoTool.ToolName, ReadFileTool.ToolName, ViewImageTool.ToolName, ReadPdfTool.ToolName, ReadOfficeTool.ToolName,
         GitStatusTool.ToolName, GitLogTool.ToolName, GitShowTool.ToolName, GitDiffTool.ToolName, GitBlameTool.ToolName,
         NeonAdvisorTool.ToolName, NeonHelpTool.ToolName, GetCurrentTimeTool.ToolName, LoadSkillTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName,
     ];

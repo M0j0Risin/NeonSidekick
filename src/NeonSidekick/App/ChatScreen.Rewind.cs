@@ -76,6 +76,9 @@ internal sealed partial class ChatScreen
     /// <c>/rewind [n]</c> (2026-09-30, the user's ask). With the bottom pane, it shows the picker with the cursor on the
     /// <paramref name="args"/>-th message from the end (the last by default), then a yes/no. Without the pane it asks the yes/no
     /// for that message (<see cref="ConfirmAsync"/>: the menus' page or a typed answer). A yes rewinds (<see cref="RewindTo"/>).
+    /// <para>When the dropped turns hold file checkpoints (2026-10-28, the checkpoints plan), the yes/no is the files choice: conversation
+    /// and files, conversation only, or cancel (<c>/rewind files</c> puts the pane's cursor on the first). Every question comes first (the
+    /// choice, then conflicts), then the restore, then the cut; an Esc-stopped restore leaves the conversation as it was.</para>
     /// </summary>
     private async Task RewindAsync(string args, CancellationToken cancellationToken)
     {
@@ -86,36 +89,59 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (RewindText.ParseCount(args) is not { } back || back > turns.Count)
+        if (RewindText.ParseArgs(args) is not { } parsed || parsed.Count > turns.Count)
         {
             _transcript.Error(RewindText.UsageError(turns.Count));
             return;
         }
 
-        RewindTurn? picked;
+        int back = parsed.Count;
+        if (_checkpoints is { } store)
+        {
+            // The turn just ended may still be committing its checkpoint.
+            await store.FlushAsync().ConfigureAwait(false);
+        }
+
+        var plans = new Dictionary<int, RestorePlan?>();
+        RewindChoice? picked;
         if (FromWebNow)
         {
-            picked = await RewindFromWebAsync(turns, back, cancellationToken).ConfigureAwait(false);
+            picked = await RewindFromWebAsync(turns, back, plans, cancellationToken).ConfigureAwait(false);
         }
         else if (_pane.Enabled)
         {
-            picked = await RewindPicker.PickAsync(turns, turns.Count - back, turn => ConversationRewind.Preview(_session.History.Messages, turn.Start), cancellationToken).ConfigureAwait(false);
+            picked = await RewindPicker.PickAsync(turns, turns.Count - back, turn => ConversationRewind.Preview(_session.History.Messages, turn.Start), cancellationToken,
+                (turn, cut) => RewindFilesCaption(turn, cut, plans), parsed.Files).ConfigureAwait(false);
         }
         else
         {
             var turn = turns[^back];
             var cut = ConversationRewind.Preview(_session.History.Messages, turn.Start);
-            string question = RewindText.ConfirmPrompt(turn, cut) + (RewindText.ConfirmCaption(cut) is { } caption ? " " + caption : "");
-            picked = await ConfirmAsync(question, cancellationToken).ConfigureAwait(false) ? turn : null;
+            string? files = RewindFilesCaption(turn, cut, plans);
+            string? caption = files is null ? RewindText.ConfirmCaption(cut) : null;
+            string question = RewindText.ConfirmPrompt(turn, cut) + (caption is null ? "" : " " + caption);
+            picked = await ConfirmAsync(question, cancellationToken).ConfigureAwait(false) ? new RewindChoice(turn, Files: false) : null;
+            if (picked is not null && files is not null)
+            {
+                // The typed second question (no pane): yes puts the files back too.
+                picked = picked with { Files = await ConfirmAsync(RewindText.TypedFilesQuestion + "\n" + files, cancellationToken).ConfigureAwait(false) };
+            }
+
             if (picked is null)
             {
                 _transcript.Notice(KeptNotice);
             }
         }
 
-        if (picked is not null)
+        if (picked is null)
         {
-            RewindTo(picked);
+            return;
+        }
+
+        var (go, report) = await RewindFilesAsync(picked, plans, cancellationToken).ConfigureAwait(false);
+        if (go)
+        {
+            RewindTo(picked.Turn, report);
         }
     }
 
@@ -130,14 +156,16 @@ internal sealed partial class ChatScreen
     /// <item>The history is saved.</item>
     /// <item>The screen is redrawn and the turns that stay are replayed: from the session's rows when there is a session, as
     /// <c>/sessions</c> restores it, else from the history.</item>
-    /// <item>The rewound notice is shown, with the changing tools' warning under it.</item>
+    /// <item>The rewound notice is shown, then the files' <paramref name="report"/> when they came back (2026-10-28, held until after the
+    /// redraw, which would wipe it), with the changing tools' warning under it: after files only the tools no file checkpoint covers.</item>
     /// <item>The picked message goes back on the input row (<see cref="RewindDraft"/>).</item>
     /// </list>
     /// The session itself, its title and plan mode stay.
     /// </summary>
-    private void RewindTo(RewindTurn turn)
+    private void RewindTo(RewindTurn turn, RestoreReport? report = null)
     {
         var (cut, picked) = ConversationRewind.Apply(_session.History, turn, _sessionId is null ? null : _sessions, _sessionId);
+        DropUndoNote();
         _claudeServerSessionId = null;
         if (cut.HadClaude)
         {
@@ -198,9 +226,15 @@ internal sealed partial class ChatScreen
             }
 
             _transcript.Notice(RewindText.RewoundNotice(cut.Turns, turn.Text));
-            if (cut.ChangingTools.Count > 0)
+            if (report is not null)
             {
-                _transcript.Warning(RewindText.ChangesStayWarning(cut.ChangingTools));
+                ShowRestoreReport(report);
+            }
+
+            var staying = report is null ? cut.ChangingTools : RewindText.StayingAfterFiles(cut.ChangingTools);
+            if (staying.Count > 0)
+            {
+                _transcript.Warning(RewindText.ChangesStayWarning(staying));
             }
         }
 
@@ -214,9 +248,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/rewind [n]</c> from the Web UI's page (later on 2026-10-14): the messages as a pick card on the page and the list on the PC's pane at once,
-    /// the cursor on the n-th from the end; then the yes/no on both. The message picked when the yes came, else null (kept said).
+    /// the cursor on the n-th from the end; then the yes/no on both. The message picked when the yes came, else null (kept said). When the
+    /// dropped turns hold file checkpoints (2026-10-28) the yes/no is the files choice, a card of three buttons with the files as its lines.
     /// </summary>
-    private async Task<RewindTurn?> RewindFromWebAsync(IReadOnlyList<RewindTurn> turns, int back, CancellationToken cancellationToken)
+    private async Task<RewindChoice?> RewindFromWebAsync(IReadOnlyList<RewindTurn> turns, int back, Dictionary<int, RestorePlan?> plans, CancellationToken cancellationToken)
     {
         var options = turns.Select((t, i) => new PickOption(i.ToString(System.Globalization.CultureInfo.InvariantCulture), RewindText.WebLabel(t), RewindText.WebNote(t))).ToList();
         string current = (turns.Count - back).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -231,10 +266,28 @@ internal sealed partial class ChatScreen
 
         var picked = turns[index];
         var cut = ConversationRewind.Preview(_session.History.Messages, picked.Start);
+        if (RewindPlan(picked, cut, plans) is { } plan)
+        {
+            string files = RewindFilesCaption(picked, cut, plans)!;
+            var outcome = await RaceAsync<string>(RewindFilesSpec(picked, cut, plan),
+                async token => await RewindPicker.ChooseAsync(picked, cut, files, filesFirst: false, token).ConfigureAwait(false) switch { true => "files", false => "conversation", _ => "cancel" },
+                a => a.Choice ?? "cancel", "The rewind pane failed: ", cancellationToken).ConfigureAwait(false);
+            switch (outcome.Value)
+            {
+                case "files":
+                    return new RewindChoice(picked, Files: true);
+                case "conversation":
+                    return new RewindChoice(picked, Files: false);
+            }
+
+            _transcript.Notice(KeptNotice);
+            return null;
+        }
+
         string question = RewindText.ConfirmPrompt(picked, cut) + (RewindText.ConfirmCaption(cut) is { } caption ? " " + caption : "");
         if (await ConfirmFromWebAsync(question, cancellationToken).ConfigureAwait(false) == true)
         {
-            return picked;
+            return new RewindChoice(picked, Files: false);
         }
 
         _transcript.Notice(KeptNotice);

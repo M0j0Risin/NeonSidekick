@@ -329,6 +329,7 @@ public static class HelpText
     /// <summary>
     /// Single words a question may use for the word the manual uses (2026-10-25, the neon_help plan's Step 5), nothing ambiguous. Left out:
     /// password or key for api key, task, event, and "dark" ("dark background" is the help's own phrase for an off toolbar item).
+    /// The Office file words and revert/snapshot (2026-10-28, the Office and checkpoints plan); left out: restore (sessions), word, slides.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> Synonyms = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -336,6 +337,8 @@ public static class HelpText
         ["color"] = "theme", ["colour"] = "theme", ["hotkey"] = "key", ["shortcut"] = "key",
         ["llm"] = "model", ["model"] = "llm", ["glyph"] = "icon", ["ldap"] = "directory", ["traceroute"] = "trace",
         ["dns"] = "network", ["ping"] = "network", ["certificate"] = "network",
+        ["docx"] = "office", ["xlsx"] = "office", ["pptx"] = "office", ["spreadsheet"] = "office", ["workbook"] = "office",
+        ["revert"] = "undo", ["snapshot"] = "checkpoint",
     };
 
     // The live line (2026-10-25, the neon_help plan's Step 2), pinned: offered, or not offered and the one reason why.

@@ -1,0 +1,158 @@
+using System.Globalization;
+using System.Text;
+
+namespace NeonSidekick.Office;
+
+/// <summary>How a number cell is shown.</summary>
+public enum CellFormat
+{
+    General,
+    Date,
+    Time,
+    DateTime,
+    Percent,
+}
+
+/// <summary>
+/// A number cell as Excel shows it by default (2026-10-28, the Office plan): at most 15 significant digits, invariant (a stored
+/// <c>0.30000000000000004</c> reads <c>0.3</c>); a percent format as <c>25%</c>, so a rate is never read a hundred times too small; a date,
+/// time or date-time format as ISO with no time zone added or converted (Excel stores none). Other formats (currency, thousands, fixed
+/// decimals) aren't applied in v1. The date formats: built-in ids 14–22 and 45–47, the East Asian ids 27–36 and 50–58, and a custom
+/// code with y/m/d/h/s outside quotes and brackets. The 1900 system steps over Excel's phantom 29 Feb 1900 (serial 60 itself reads
+/// <c>1900-02-29</c>, as Excel shows it); the 1904 system counts from 1904-01-01. Pure.
+/// </summary>
+public static class NumberFormats
+{
+    /// <summary>The last serial Excel shows as a date (9999-12-31).</summary>
+    public const double MaxSerial = 2_958_465;
+
+    /// <summary>What a cell styled with number format <paramref name="id"/> (and its code, when the workbook defines one) shows as.</summary>
+    public static CellFormat Classify(int id, string? code)
+    {
+        if (code is not null)
+        {
+            return ClassifyCode(code);
+        }
+
+        return id switch
+        {
+            9 or 10 => CellFormat.Percent,
+            >= 14 and <= 17 => CellFormat.Date,
+            >= 18 and <= 21 or >= 45 and <= 47 => CellFormat.Time,
+            22 => CellFormat.DateTime,
+            >= 27 and <= 36 or >= 50 and <= 58 => CellFormat.Date,
+            _ => CellFormat.General,
+        };
+    }
+
+    /// <summary>A custom code's kind: its first section, with quoted text, brackets and escaped characters left out.</summary>
+    public static CellFormat ClassifyCode(string code)
+    {
+        ArgumentNullException.ThrowIfNull(code);
+        if (code.Trim().Equals("General", StringComparison.OrdinalIgnoreCase))
+        {
+            return CellFormat.General;
+        }
+
+        var kept = new StringBuilder();
+        for (int i = 0; i < code.Length; i++)
+        {
+            char c = code[i];
+            if (c == ';')
+            {
+                break;
+            }
+
+            if (c == '"')
+            {
+                int close = code.IndexOf('"', i + 1);
+                i = close < 0 ? code.Length : close;
+                continue;
+            }
+
+            if (c == '[')
+            {
+                int close = code.IndexOf(']', i + 1);
+                i = close < 0 ? code.Length : close;
+                continue;
+            }
+
+            if (c is '\\' or '_' or '*')
+            {
+                i++;
+                continue;
+            }
+
+            kept.Append(char.ToLowerInvariant(c));
+        }
+
+        string cleaned = kept.ToString().Replace("am/pm", "", StringComparison.Ordinal).Replace("a/p", "", StringComparison.Ordinal);
+        bool hours = cleaned.Contains('h', StringComparison.Ordinal);
+        bool seconds = cleaned.Contains('s', StringComparison.Ordinal);
+        bool date = cleaned.Contains('y', StringComparison.Ordinal) || cleaned.Contains('d', StringComparison.Ordinal)
+            || (cleaned.Contains('m', StringComparison.Ordinal) && !hours && !seconds);
+        bool time = hours || seconds;
+        return date && time ? CellFormat.DateTime
+            : date ? CellFormat.Date
+            : time ? CellFormat.Time
+            : cleaned.Contains('%', StringComparison.Ordinal) ? CellFormat.Percent
+            : CellFormat.General;
+    }
+
+    /// <summary><paramref name="value"/> shown as <paramref name="format"/> says; a serial outside Excel's dates shown as a number.</summary>
+    public static string Format(double value, CellFormat format, bool date1904)
+    {
+        switch (format)
+        {
+            case CellFormat.Percent:
+                return General(value * 100) + "%";
+            case CellFormat.Date or CellFormat.Time or CellFormat.DateTime when value is >= 0 and <= MaxSerial && !double.IsNaN(value):
+                long days = (long)Math.Floor(value);
+                long seconds = (long)Math.Round((value - days) * 86_400, MidpointRounding.AwayFromZero);
+                if (seconds >= 86_400)
+                {
+                    days++;
+                    seconds -= 86_400;
+                }
+
+                string time = new TimeOnly(seconds * TimeSpan.TicksPerSecond).ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+                if (format == CellFormat.Time)
+                {
+                    return time;
+                }
+
+                if (Date(days, date1904) is not { } date)
+                {
+                    return General(value);
+                }
+
+                return format == CellFormat.DateTime || seconds != 0 ? date + "T" + time : date;
+            default:
+                return General(value);
+        }
+    }
+
+    /// <summary>A number with at most 15 significant digits, invariant.</summary>
+    public static string General(double value) => value.ToString("G15", CultureInfo.InvariantCulture);
+
+    private static string? Date(long days, bool date1904)
+    {
+        if (date1904 && days > MaxSerial - 1462)
+        {
+            return null;   // past 9999-12-31 counted from 1904
+        }
+
+        if (date1904)
+        {
+            return new DateOnly(1904, 1, 1).AddDays((int)days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        // Excel's 1900 system counts 1900 as a leap year (Lotus's bug, kept): serial 60 is a 29 Feb that never was.
+        return days switch
+        {
+            60 => "1900-02-29",
+            < 60 => new DateOnly(1899, 12, 31).AddDays((int)days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            _ => new DateOnly(1899, 12, 30).AddDays((int)days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        };
+    }
+}

@@ -127,6 +127,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, configs + Viewer.BrowserLinks.FileName, "the Browser window's saved links", "`/browser`"),
             new(HelpFileScope.Profile, configs + Emojis.EmojiPrefs.FileName, "the avatar picker's recent picks and last skin tone", "`/avatar`"),
             new(HelpFileScope.Profile, Join(Sessions.SessionStore.FolderName, Sessions.SessionStore.FileName), "the stored sessions and the input line's history", "`/sessions`"),
+            new(HelpFileScope.Profile, Files.CheckpointStore.FolderName + "/", "the file checkpoints: the saved copies `/undo` and `/rewind` put back, one store per working folder", "`/undo`", SettingsField.FileCheckpoints),
             new(HelpFileScope.Profile, Join(Shopping.ShoppingStore.FolderName, Shopping.ShoppingStore.FileName), "the shopping list and the stores' layouts", "`/shopping`"),
             new(HelpFileScope.Profile, Files.WorkingDirectory.DefaultFolderName + "/", "the default working directory: where the file tools read and write unless *Working directory (cwd)* names another"),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/", "the profile's pictures, kept out of the working directory"),

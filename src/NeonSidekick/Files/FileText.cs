@@ -189,16 +189,24 @@ public static class FileText
     public static string IsAFile(string path) => $"Error: '{path}' is a file, not a folder";
     /// <summary>
     /// A binary file; an image by extension is pointed at <c>view_image</c> (a small model tries <c>read_file</c> on a PNG first), and
-    /// a PDF at <c>read_pdf</c> (2026-10-14, the PDF plan).
+    /// a PDF at <c>read_pdf</c> (2026-10-14, the PDF plan), an Office file at <c>read_office</c> and a legacy or OpenDocument one at a
+    /// "save it as" (2026-10-28, the Office plan).
     /// </summary>
     public static string NotText(string path) =>
-        $"Error: '{path}' is not a text file" + (ImageFile.IsImagePath(path) ? ViewImageHint : PdfFile.IsPdfPath(path) ? ReadPdfHint : "");
+        $"Error: '{path}' is not a text file" + (ImageFile.IsImagePath(path) ? ViewImageHint : PdfFile.IsPdfPath(path) ? ReadPdfHint
+            : OfficeFile.IsOfficePath(path) ? ReadOfficeHint : OfficeFile.IsAnyOfficePath(path) ? SaveAsOfficeHint : "");
 
     /// <summary>What <see cref="NotText"/> adds for an image path. Pinned.</summary>
     public const string ViewImageHint = "; the picture tools (view_image, while Image tools is on) look at it";
 
     /// <summary>What <see cref="NotText"/> adds for a PDF (2026-10-14). Pinned.</summary>
     public const string ReadPdfHint = "; use read_pdf to read its text";
+
+    /// <summary>What <see cref="NotText"/> adds for a Word, Excel or PowerPoint file (2026-10-28, the Office plan). Pinned.</summary>
+    public const string ReadOfficeHint = "; use read_office to read it";
+
+    /// <summary>What <see cref="NotText"/> adds for a legacy, binary or OpenDocument office file, which <c>read_office</c> doesn't read (2026-10-28). Pinned.</summary>
+    public const string SaveAsOfficeHint = "; read_office reads it once it is saved as .docx, .xlsx or .pptx";
 
     /// <summary>A file the picture codecs refuse; a PDF is pointed at <c>read_pdf</c> and its page pictures (2026-10-14, the PDF plan's gap 70).</summary>
     public static string NotAnImage(string path) => $"Error: '{path}' could not be read as an image" + (PdfFile.IsPdfPath(path) ? PdfPicturesHint : "");
@@ -406,6 +414,23 @@ public static class FileText
     public static string BadStringList(string argument, string raw) => $"Error: '{raw.Trim()}' is not a list of paths for '{argument}'";
     public static string ZipSlip(string archive, string entry) => $"Error: '{archive}' holds an entry that would land outside the destination ('{entry}'); nothing was extracted";
     public static string CouldNot(string verb, string path, string detail) => $"Error: could not {verb} '{Name(path)}': {detail}";
+
+    // A restore's details (2026-10-28, the checkpoints plan: /undo and /rewind … files), shown beside a file it couldn't put back.
+
+    /// <summary>A path the guards refused to a restore, without the tools' <c>Error:</c>.</summary>
+    public static string RestoreRefused(FileOutcome outcome, string path)
+    {
+        string sentence = Error(outcome, path, "put back");
+        return sentence.StartsWith("Error: ", StringComparison.Ordinal) ? sentence["Error: ".Length..] : sentence;
+    }
+
+    public static string RestoreRootGone(string root) => $"its folder {Shown(root)} is gone";
+
+    public const string RestoreBlobMissing = "its saved copy is missing";
+
+    public const string RestoreAppeared = "a file appeared there meanwhile";
+
+    public static string RestoreMovedGone(string to) => $"'{Shown(to)}' is no longer there to move back";
 
     /// <summary>The sentence for a non-<see cref="FileOutcome.Ok"/> outcome; <paramref name="verb"/> names the operation for a failure.</summary>
     public static string Error(FileOutcome outcome, string path, string verb, string detail = "", string other = "")

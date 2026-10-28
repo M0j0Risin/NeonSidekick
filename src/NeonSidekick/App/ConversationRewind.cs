@@ -26,9 +26,12 @@ public sealed record RewindTurn(int Number, int Start, string Text, int ToolCall
 /// <item><paramref name="FirstOrdinal"/>: the store ordinal of the first stamped turn
 /// (<see cref="ConversationHistory.TurnOrdinalKey"/>).</item>
 /// <item><paramref name="KeptStamped"/>: whether any turn that stays carries a stamp.</item>
+/// <item><paramref name="Checkpoints"/> (2026-10-28, the checkpoints plan): the cut turns' file checkpoint ids
+/// (<see cref="ConversationHistory.CheckpointKey"/>), newest first, collected before the history is cut, so "conversation only" still knows
+/// which to drop; null for none.</item>
 /// </list>
 /// </summary>
-public sealed record RewindCut(int Turns, IReadOnlyList<string> ChangingTools, bool HadClaude, int? FirstOrdinal, bool KeptStamped, bool HadAdvisors = false);
+public sealed record RewindCut(int Turns, IReadOnlyList<string> ChangingTools, bool HadClaude, int? FirstOrdinal, bool KeptStamped, bool HadAdvisors = false, IReadOnlyList<string>? Checkpoints = null);
 
 /// <summary>One turn of the history as the screen replays it after a rewind when no session row holds the turns.</summary>
 public sealed record RewindReplay(string UserText, string ReplyText, int ToolCalls, bool Summary);
@@ -43,6 +46,8 @@ public sealed record RewindReplay(string UserText, string ReplyText, int ToolCal
 /// trimmed off the front are gone too.</para>
 /// <para>Only the conversation rewinds. Files a tool wrote, commands it ran and commits it made stay as they are, and
 /// <see cref="RewindCut.ChangingTools"/> names the tools that may have done so (the user's pick: conversation only, with a warning).</para>
+/// <para>Since 2026-10-28 (the checkpoints plan) the file tools' changes can come back with it: when the cut turns hold file checkpoints
+/// (<see cref="RewindCut.Checkpoints"/>), the screen and headless offer "conversation and files", which restores them before the cut.</para>
 /// </summary>
 public static partial class ConversationRewind
 {
@@ -77,7 +82,7 @@ public static partial class ConversationRewind
     /// <summary>
     /// The text of a turn's user message as the user typed it: its text parts in order. A mid-turn compact's progress note is
     /// left out, both the tagged part and the plain part a restored session has
-    /// (<see cref="ConversationCompactor.TurnProgressPreamble"/>). A <c>/claude</c> exchange's <c>[to Claude] </c> tag becomes
+    /// (<see cref="ConversationCompactor.TurnProgressPreamble"/>), and an <c>/undo</c> note the same way (2026-10-28, <see cref="ConversationHistory.IsUndoNote"/>). A <c>/claude</c> exchange's <c>[to Claude] </c> tag becomes
     /// <c>/claude </c> again, and a <c>/cmd</c> run's tag the line that runs it again (2026-10-09). Picture labels (<c>[Image #1]</c>) stay in the text.
     /// </summary>
     public static string UserLine(ChatMessage message)
@@ -87,7 +92,7 @@ public static partial class ConversationRewind
         // went into the replay's user row and onto the line).
         string text = string.Concat(message.Contents
             .Where(c => c is TextContent text && !ConversationCompactor.IsTurnProgress(c) && !text.Text.StartsWith(ConversationCompactor.TurnProgressPreamble, StringComparison.Ordinal)
-                && ConversationHistory.RestoredDocumentPath(c) is null)
+                && ConversationHistory.RestoredDocumentPath(c) is null && !ConversationHistory.IsUndoNote(c))
             .Select(c => ((TextContent)c).Text));
         return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : Shell.ShellText.CmdHistoryCommand(text) ?? text;
     }
@@ -183,6 +188,7 @@ public static partial class ConversationRewind
         int turns = 0;
         bool claude = false;
         int? first = null;
+        var checkpoints = new List<string>();
         for (int i = start; i < messages.Count; i++)
         {
             var message = messages[i];
@@ -194,6 +200,10 @@ public static partial class ConversationRewind
             turns++;
             claude |= ClaudeText.HistoryUserPrompt(message.Text) is not null;
             first ??= ConversationHistory.TurnOrdinal(message);
+            if (ConversationHistory.TurnCheckpoint(message) is { } id)
+            {
+                checkpoints.Insert(0, id);
+            }
         }
 
         var calls = Calls(messages, start, messages.Count).ToList();
@@ -205,7 +215,7 @@ public static partial class ConversationRewind
             keptStamped = ConversationHistory.IsTurnStart(messages[i]) && ConversationHistory.TurnOrdinal(messages[i]) is not null;
         }
 
-        return new RewindCut(turns, changing, claude, first, keptStamped, advisors);
+        return new RewindCut(turns, changing, claude, first, keptStamped, advisors, checkpoints.Count == 0 ? null : checkpoints);
     }
 
     /// <summary>
