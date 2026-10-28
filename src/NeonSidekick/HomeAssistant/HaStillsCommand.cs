@@ -13,19 +13,13 @@ public static class HaStillsCommand
     /// <summary>The <c>/ha</c> word.</summary>
     public const string Word = "stills";
 
-    /// <summary>The argument list's words and notes, after <c>stills </c>. Pinned.</summary>
+    /// <summary>The argument list's words and notes, after <c>stills </c> (the notes in <see cref="HaText"/>, 2026-10-27, the review).</summary>
     public static readonly IReadOnlyList<CompletionItem> Words =
     [
-        new(PictureFolderCommand.ViewWord, "open the picture viewer on the camera stills' folder"),
-        new(PictureFolderCommand.ThumbsWord, "open the camera stills' folder as thumbnails"),
-        new(PictureFolderCommand.PurgeWord, "delete every camera still saved there"),
+        new(PictureFolderCommand.ViewWord, HaText.StillsViewNote),
+        new(PictureFolderCommand.ThumbsWord, HaText.StillsThumbsNote),
+        new(PictureFolderCommand.PurgeWord, HaText.StillsPurgeNote),
     ];
-
-    /// <summary>Bare <c>/ha stills</c>, or a word it does not know. Pinned.</summary>
-    public const string Usage = "Usage: /ha stills view|thumbs|purge";
-
-    /// <summary>Headless's refusal. Pinned.</summary>
-    public const string NeedsScreen = "/ha stills needs the screen: its windows and the purge's question are the interactive app's.";
 
     /// <summary>
     /// True when <paramref name="haArgs"/> (the text after <c>/ha</c>) starts with <see cref="Word"/>, in any case; <paramref name="verb"/>

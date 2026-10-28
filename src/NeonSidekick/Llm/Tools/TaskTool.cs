@@ -117,21 +117,25 @@ public sealed class TaskListTool(TaskAccess access, Func<AppSettingsData> effect
         var result = await Access.ReadAsync(source, folder, session => Matches(session, source, filter), cancellationToken).ConfigureAwait(false);
         if (result.Error is null)
         {
-            Access.Saw(source, result.Value.Matched);
+            Access.Saw(source, result.Value.All);
         }
 
         return result.Error ?? TaskRender.List(source.Where, result.Value.Matched, result.Value.Total, offset, limit, filter, computer);
     }
 
-    /// <summary>The visible tasks under the folder that pass the filter, by path; <c>\Microsoft\</c> not walked unless shown (B4).</summary>
-    public static (IReadOnlyList<TaskEntry> Matched, int Total) Matches(ITaskSession session, TaskSource source, TaskFilter filter)
+    /// <summary>
+    /// The visible tasks under the folder that pass the filter, by path; <c>\Microsoft\</c> not walked unless shown (B4). <c>All</c> is every
+    /// visible task under the folder before the state and word filters, which <see cref="TaskAccess.Saw"/> keeps the folders of (2026-10-27, the
+    /// review: <c>state:running</c> left completion one folder or none).
+    /// </summary>
+    public static (IReadOnlyList<TaskEntry> Matched, int Total, IReadOnlyList<TaskEntry> All) Matches(ITaskSession session, TaskSource source, TaskFilter filter)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(filter);
         string folder = filter.Folder.TrimEnd('\\').Length == 0 ? "\\" : filter.Folder.TrimEnd('\\');
         var all = session.List(folder, filter.Recursive, skipMicrosoft: !filter.ShowsMicrosoft).Where(t => TaskAccess.Visible(source.Computer, t.Path)).ToList();
-        return (all.Where(filter.Passes).OrderBy(t => t.Path, StringComparer.OrdinalIgnoreCase).ToList(), all.Count);
+        return (all.Where(filter.Passes).OrderBy(t => t.Path, StringComparer.OrdinalIgnoreCase).ToList(), all.Count, all);
     }
 }
 

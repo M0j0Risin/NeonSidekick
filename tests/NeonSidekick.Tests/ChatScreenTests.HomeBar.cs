@@ -198,6 +198,34 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task HomeBar_TheSettingsMovingToAnotherProfileUnderAFetch_KeepTheStillInTheProfileItWasFetchedFor()
+    {
+        // The settings switch with no screen switch, so nothing forgets the fetch: only the folder taken at the tap keeps the still where it
+        // was asked for (2026-10-27, the review).
+        var stub = CameraServer(async (_, _) =>
+        {
+            await _settings.SwitchProfileAsync("work");
+            return StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, StripFixtures.Jpeg(), "image/jpeg");
+        });
+        WorkProfile();
+        string first = HomeCameraFolder;
+        var viewed = new List<string>();
+        _viewPicture = path => { lock (viewed) { viewed.Add(path); } };
+        int Viewed() { lock (viewed) { return viewed.Count; } }
+        CameraStages(
+            (() => true, input => PushLine(input, "/homebar tap Porch Camera")),
+            (() => Viewed() == 1, input => PushLine(input, "/exit")));
+
+        await RunAsync();
+
+        Assert.NotEqual(first, HomeCameraFolder);
+        string saved = Assert.Single(Directory.GetFiles(first));
+        Assert.Equal([saved], viewed);
+        Assert.False(Directory.Exists(HomeCameraFolder));
+        Assert.Equal(1, Stills(stub));
+    }
+
+    [Fact]
     public async Task HomeBar_ACameraWithNoPicture_FlashesWhy_AndKeepsNothing()
     {
         var stub = CameraServer((_, _) => Task.FromResult(StubHttpMessageHandler.Json(System.Net.HttpStatusCode.InternalServerError, "500: Internal Server Error", "text/plain")));

@@ -260,6 +260,13 @@ public static class HomeBarText
     /// </summary>
     public static string CameraShown(string name, string? saved, string? error) =>
         saved is not null ? name + ": a still, saved as " + saved : name + ": a still. " + (error ?? "");
+
+    /// <summary>
+    /// A camera tapped again while its still is still coming (2026-10-27, the review): said with the pane off, where no chip shows the wait,
+    /// so a typed <c>/homebar tap</c> never looks dead. Pinned.
+    /// </summary>
+    public static string CameraFetching(string name) => name + ": a still is already on its way";
+
     // ─── confirm and outcomes ───────────────────────────────────────────────────
 
     /// <summary>The Yes/No question before an unlock, a guarded opening or a disarm. Pinned.</summary>

@@ -266,7 +266,7 @@ internal sealed partial class ChatScreen
 
         bool controls = effective.WebUiHomeControls;
         var chip = HomeChips.Build(reference, live.Entities, live.Catalog, HomeChipMark.None, stale: false, effective.HomeBarAliases, effective.HomeBarGlyphs);
-        string name = chip.Label is { Length: > 0 } label ? label : chip.Name;
+        string name = chip.Shown;
         WebHomeSheet sheet;
         IReadOnlyList<string> watched;
         if (kind == HomeItemKind.Area)
@@ -292,8 +292,9 @@ internal sealed partial class ChatScreen
         else if (kind == HomeItemKind.Entity)
         {
             var row = SheetRow(id, live, controls);
-            // A camera's sheet shows its still (2026-10-27), but for one Home Assistant reports unavailable: there is none to ask for.
-            bool camera = HaCatalog.DomainOf(id) == "camera" && live.Entities.GetValueOrDefault(id) is { Unavailable: false };
+            // A camera's sheet shows its still (2026-10-27), but for one Home Assistant reports unavailable: there is none to ask for. One the
+            // live feed hasn't brought yet is asked, as the chip and the still's own endpoint do (2026-10-27, the review).
+            bool camera = HaCatalog.DomainOf(id) == Llm.Tools.HaCameraTool.Domain && live.Entities.GetValueOrDefault(id) is not { Unavailable: true };
             sheet = new WebHomeSheet(reference, name, row.State, [row], camera);
             watched = [id];
         }
@@ -560,13 +561,12 @@ internal sealed partial class ChatScreen
         var items = WebHomeView.Items(effective);
         var live = _homeLive.Snapshot;
         if (!WebHomeView.Reaches(reference, items, HomeReach(items, live)) || !HomeBarItems.TryParse(reference, out var kind, out string id)
-            || kind != HomeItemKind.Entity || HaCatalog.DomainOf(id) != "camera")
+            || kind != HomeItemKind.Entity || HaCatalog.DomainOf(id) != Llm.Tools.HaCameraTool.Domain)
         {
             return new WebCameraAnswer(null, new WebReply(WebOutcome.NotFound, WebUiText.HomeChanged));
         }
 
-        var chip = HomeChips.Build(reference, live.Entities, live.Catalog, HomeChipMark.None, stale: false, effective.HomeBarAliases, effective.HomeBarGlyphs);
-        string name = chip.Label is { Length: > 0 } label ? label : chip.Name;
+        string name = HomeChips.Build(reference, live.Entities, live.Catalog, HomeChipMark.None, stale: false, effective.HomeBarAliases, effective.HomeBarGlyphs).Shown;
         if (live.Entities.GetValueOrDefault(id) is { Unavailable: true } entity)
         {
             return new WebCameraAnswer(null, new WebReply(WebOutcome.Refused, HomeBarText.Strip(HaText.CameraUnavailable(name, entity.State))));
@@ -583,7 +583,9 @@ internal sealed partial class ChatScreen
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
-            return new WebCameraAnswer(null, new WebReply(WebOutcome.Refused, HomeBarText.Failed(name, ex.Message)));
+            // The exception's text stays on the PC (2026-10-27, the review): it can carry paths or codes no page should read.
+            DiagnosticLog.Warn(WebUiCategory, "The Web UI's still of " + name + " failed: " + ex.Message);
+            return new WebCameraAnswer(null, new WebReply(WebOutcome.Refused, WebUiText.HomeCameraFailed(name)));
         }
 
         if (still.Image is not { } image)

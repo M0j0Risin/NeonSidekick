@@ -23,6 +23,42 @@ public abstract class HaTool : AIFunction
 
     protected HaSession Ha => _ha;
 
+    /// <summary>
+    /// The one <paramref name="domain"/> entity a call means (2026-10-27, the review: <c>ha_camera</c> and <c>ha_media</c> each had a copy):
+    /// the one <paramref name="target"/> names, else the only one; with none or several, an <c>Error:</c> sentence naming at most
+    /// <see cref="HaSnapshot.MaxCandidates"/> of them as <paramref name="noun"/>s. An entity id of another domain is
+    /// <paramref name="otherDomain"/>'s sentence when given. Pure.
+    /// </summary>
+    public static (HaEntity? Entity, string? Error) OneOf(HaSnapshot snapshot, string domain, string noun, string? target, Func<HaEntity, string>? otherDomain = null)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (target is null)
+        {
+            var all = snapshot.Of(domain);
+            return all.Count switch
+            {
+                0 => (null, HaText.NoneOf(noun)),
+                1 => (all[0], null),
+                _ => (null, HaText.Ambiguous(noun, all.Take(HaSnapshot.MaxCandidates).ToList(), all.Count)),
+            };
+        }
+
+        if (otherDomain is not null && snapshot.Find(target) is { } exact && exact.Domain != domain)
+        {
+            return (null, otherDomain(exact));
+        }
+
+        var match = snapshot.Resolve(target, [domain]);
+        if (match.Error is not null)
+        {
+            return (null, match.Error);
+        }
+
+        return match.Entities.Count == 1
+            ? (match.Entities[0], null)
+            : (null, HaText.Ambiguous(target, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count));
+    }
+
     protected AppSettingsData Effective => _ha.Effective;
 
     /// <summary>A string argument, or null when blank.</summary>

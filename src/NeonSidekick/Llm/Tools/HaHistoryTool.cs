@@ -32,10 +32,10 @@ public sealed class HaHistoryTool : HaTool
 
     private readonly TimeZoneInfo _zone;
 
-    /// <param name="zone">The zone the times are shown in; null = the machine's.</param>
+    /// <param name="zone">The zone the times are shown in; null = the session's clock's (2026-10-27, the review: not the machine's, which a test's clock never set).</param>
     public HaHistoryTool(HaSession ha, TimeZoneInfo? zone = null) : base(ha, confirm: null)
     {
-        _zone = zone ?? TimeZoneInfo.Local;
+        _zone = zone ?? Ha.Time.LocalTimeZone;
     }
 
     public override string Name => ToolName;

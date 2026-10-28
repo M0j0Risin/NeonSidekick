@@ -294,7 +294,7 @@ internal sealed class MonitorsMenu
                 string mark = input.Current ? MonitorText.CurrentMark : input.Away ? MonitorText.AwayMark : " ";
                 var change = input.Current ? null : state.SwitchTo(m, input.Code, words);
                 rows.Add(new Row(Markup.Escape(mark + " " + input.Words) + (input.ThisPc ? Theme.DimMarkup("  " + MonitorText.ThisPcTag) : ""),
-                    change is { Return: true } ? MonitorText.PcInputOffDesktopFooter : MonitorText.InputFooter(input.Code, input.Away, input.ThisPc), change));
+                    change is { Return: true } ? (change.ExtendsAll ? MonitorText.PcInputExtendAllFooter : MonitorText.PcInputOffDesktopFooter) : MonitorText.InputFooter(input.Code, input.Away, input.ThisPc), change));
             }
 
             caption = reached ? MonitorText.OffDesktopReached + (inputs.Reported ? "" : " " + MonitorText.NotReported)

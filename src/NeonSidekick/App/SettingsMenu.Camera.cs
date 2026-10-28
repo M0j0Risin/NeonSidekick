@@ -194,9 +194,11 @@ internal sealed partial class SettingsMenu
                     Sink.Error(e.Message);
                 }
 
-                values = ["", .. devices.Select(d => d.Name).Distinct(StringComparer.OrdinalIgnoreCase)];
-                rows = values.Select(v => v.Length == 0 ? Markup.Escape(FirstCameraLabel) : Markup.Escape(v)).ToList();
-                current = saved.CameraDevice ?? "";
+                // Two of one name are offered as name (n), n their place in /camera list, and saved with their id (2026-10-27, the review).
+                values = ["", .. devices.Select(d => CameraChoice.Saved(devices, d))];
+                rows = [Markup.Escape(FirstCameraLabel), .. devices.Select((d, i) => Markup.Escape(CameraChoice.HasTwin(devices, d)
+                    ? d.Name + " (" + (i + 1).ToString(CultureInfo.InvariantCulture) + ")" : d.Name))];
+                current = CameraChoice.Find(devices, saved.CameraDevice) is { } chosen ? CameraChoice.Saved(devices, chosen) : saved.CameraDevice ?? "";
                 break;
         }
 

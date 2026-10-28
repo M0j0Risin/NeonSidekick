@@ -81,11 +81,26 @@ public static class MonitorText
     /// <summary>The input switched, the desktop's Extend refused: the layout's own sentence follows.</summary>
     public static string SwitchedNotAdded(string monitor, string input, string why) => monitor + " switched to " + input + ", but it wasn't added to the desktop: " + why;
 
+    /// <summary>
+    /// An Extend that ran but left the monitor off the desktop (2026-10-27, the review: it read as added): <see cref="SwitchedNotAdded"/>'s
+    /// reason, or the sentence after an input that was this PC's already.
+    /// </summary>
+    public const string KeptOffDesktop = "Windows left it off the desktop; try Extend all again once it shows this PC.";
+
     /// <summary>The change's words for a switch that also adds the monitor back (the question, the tool's ask, the audit line).</summary>
     public const string AndAddWords = " and add it to the desktop";
 
     /// <summary>The footer of an off-desktop tab's row for this PC's input.</summary>
     public const string PcInputOffDesktopFooter = "Switches to it and adds the monitor to the desktop.";
+
+    /// <summary>
+    /// <see cref="AndAddWords"/> for a switch whose Extend all does more: another monitor off the desktop comes back, or a Duplicate ends
+    /// (2026-10-27, the review; the user's call).
+    /// </summary>
+    public const string AndExtendAllWords = " and extend the desktop to every monitor";
+
+    /// <summary><see cref="PcInputOffDesktopFooter"/> for such a switch.</summary>
+    public const string PcInputExtendAllFooter = "Switches to it and runs Extend all: every monitor joins the desktop, ending a Duplicate.";
 
     public static string AlreadyOn(string monitor, string input) => monitor + " is already on " + input + ".";
 

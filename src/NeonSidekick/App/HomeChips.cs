@@ -48,7 +48,11 @@ public sealed record HomeChip(
     HomeChipMark Mark = HomeChipMark.None,
     string? Label = null,
     bool Bare = false,
-    bool Divider = false);
+    bool Divider = false)
+{
+    /// <summary>The name the user sees on the chip: their alias, else its name (one rule for the page, the sheet and completion; 2026-10-27, the review).</summary>
+    public string Shown => Label is { Length: > 0 } label ? label : Name;
+}
 
 /// <summary>
 /// The home bar's chips, kind by kind (2026-10-12, the user's ask; the looks and the clicks agreed in the plan): what each

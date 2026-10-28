@@ -39,14 +39,18 @@ public sealed partial class SidekickApp
                 return (MonitorText.ListLines(all, MonitorsMenu.WordsFor(effective, all.Topology)), false);
             }
 
-            var state = await actions.ReadAllAsync(cancellationToken).ConfigureAwait(false);
-            var snapshot = state.Topology;
+            var snapshot = await actions.QueryAsync(cancellationToken).ConfigureAwait(false);
             var words = MonitorsMenu.WordsFor(effective, snapshot);
             MonitorInfo? monitor = null;
             if (line.Monitor is { } typed && (monitor = MonitorCommand.Find(snapshot, typed, out string? error)) is null)
             {
                 return ([error!], true);
             }
+
+            // Only what the verb needs is read (2026-10-27, the review): input and pc the typed monitor's inputs, a layout the topology alone
+            // (headless never asks the warning that reads the rest).
+            bool reads = line.Verb is MonitorVerb.Input or MonitorVerb.Pc;
+            var state = await actions.ReadAllAsync(snapshot, m => reads && m.Target == monitor?.Target, cancellationToken).ConfigureAwait(false);
 
             if (line.Verb == MonitorVerb.Pc)
             {

@@ -113,8 +113,8 @@ public sealed class CameraSession : IDisposable
     private IReadOnlyList<CameraDevice>? _last;
 
     /// <summary>
-    /// The device a saved name picks out of <paramref name="devices"/>: the one of that name (any case), else the first. False
-    /// in <paramref name="fellBack"/> when the name was empty or found.
+    /// The device a saved <c>Camera device</c> picks out of <paramref name="devices"/>: the one <see cref="CameraChoice.Find"/> finds (a twin
+    /// by its id, then by name; 2026-10-27, the review), else the first. False in <paramref name="fellBack"/> when the value was empty or found.
     /// </summary>
     public static CameraDevice? Choose(IReadOnlyList<CameraDevice> devices, string? name, out bool fellBack)
     {
@@ -130,7 +130,7 @@ public sealed class CameraSession : IDisposable
             return devices[0];
         }
 
-        var named = devices.FirstOrDefault(d => string.Equals(d.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+        var named = CameraChoice.Find(devices, name);
         fellBack = named is null;
         return named ?? devices[0];
     }
@@ -344,7 +344,7 @@ public sealed class CameraSession : IDisposable
                 FrameSize = null;
                 State = CameraState.Warming;
                 Fault = null;
-                _notice = fellBack ? CameraText.FellBack(options.DeviceName, device.Name) : null;
+                _notice = fellBack ? CameraText.FellBack(CameraChoice.Label(options.DeviceName), device.Name) : null;
             }
 
             Changed?.Invoke();

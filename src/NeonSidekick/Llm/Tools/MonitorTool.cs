@@ -146,6 +146,18 @@ public sealed class MonitorInputTool(MonitorToolHooks hooks) : MonitorTool(hooks
         }
 
         var state = Hooks.Board.State;
+        if (!monitor.Active)
+        {
+            // Read before any question (2026-10-27, the review): one NVIDIA's driver can't reach was asked about, then refused after the yes.
+            // The board's own read keeps what it found, or the failure as the monitor's problem.
+            await Hooks.Board.ReadInputsAsync(cancellationToken, onlyUnread: true).ConfigureAwait(false);
+            state = Hooks.Board.State;
+            if (state.InputsOf(monitor).Problem is { } problem)
+            {
+                return "Error: " + problem;
+            }
+        }
+
         var inputs = state.InputsOf(monitor);
         var words = Words(state.Topology);
         var rows = words.Rows(monitor, inputs.Offered, inputs.Current, state.AwayOf(monitor), all: true);

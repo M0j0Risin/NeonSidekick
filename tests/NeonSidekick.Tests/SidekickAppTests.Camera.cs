@@ -41,7 +41,7 @@ public partial class SidekickAppTests
 
         string output = await Headless("/ha stills purge\n/ha stills\n");
 
-        Assert.Equal(2, output.Split("[error] " + NeonSidekick.HomeAssistant.HaStillsCommand.NeedsScreen).Length - 1);
+        Assert.Equal(2, output.Split("[error] " + NeonSidekick.HomeAssistant.HaText.StillsNeedsScreen).Length - 1);
         Assert.True(File.Exists(still));
     }
 

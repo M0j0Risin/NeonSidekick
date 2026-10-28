@@ -88,9 +88,10 @@ public static class DdcPacket
 
     /// <summary>
     /// The whole capabilities read: fragments asked for from offset 0 through <paramref name="fragment"/> (the raw read for an offset, null when
-    /// the bus failed) until an empty one, each tried up to <see cref="FragmentTries"/> times; the bytes joined, cut at the first NUL (as
-    /// dxva2's buffer is cut: the LG's last fragments carry <c>00 FF</c>), scrubbed and read for their inputs. Null when a fragment never
-    /// came back right or the string never ended.
+    /// the bus failed) until an empty one or one holding the NUL that ends the string, each tried up to <see cref="FragmentTries"/> times;
+    /// the bytes joined, cut at the first NUL (as dxva2's buffer is cut: the LG's last fragments carry <c>00 FF</c>), scrubbed and read for
+    /// their inputs. Null when a fragment never came back right or the string never ended within <see cref="MaxFragments"/>. Nothing is asked
+    /// past the NUL (2026-10-27, the review: the bus stayed held for fragments the cut dropped anyway).
     /// </summary>
     public static MonitorCaps? ReadCapabilities(Func<int, byte[]?> fragment)
     {
@@ -109,15 +110,10 @@ public static class DdcPacket
                 return null;
             }
 
-            if (data.Length == 0)
+            joined.AddRange(data);
+            if (data.Length == 0 || Array.IndexOf(data, (byte)0) >= 0)
             {
                 return Caps(joined);
-            }
-
-            joined.AddRange(data);
-            if (joined.Count > ushort.MaxValue)
-            {
-                return null;
             }
         }
 

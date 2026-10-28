@@ -572,7 +572,11 @@ public sealed class ComfyTests : IDisposable
 
         Assert.Equal(["pony-txt2img"], ComfyImagine.Complete("p", Workflows).Select(i => i.Text));
         Assert.Empty(ComfyImagine.Complete("pony-txt2img a c", Workflows));   // the prompt is free text
-        Assert.Equal([.. ComfyImagine.Flags, ComfyImagine.NegativeWord], ComfyImagine.Complete("-", Workflows).Select(i => i.Text.TrimStart()));
+        // --image2 and --image3 wait for the one before (2026-10-27, the review: the parse refuses the gap).
+        Assert.Equal([.. ComfyImagine.Flags.Where(f => f is not ("--image2" or "--image3")), ComfyImagine.NegativeWord], ComfyImagine.Complete("-", Workflows).Select(i => i.Text.TrimStart()));
+        Assert.Equal(["a --image"], ComfyImagine.Complete("a --i", Workflows).Select(i => i.Text));
+        Assert.Equal(["a --image x.png --image2"], ComfyImagine.Complete("a --image x.png --i", Workflows).Select(i => i.Text));
+        Assert.Equal(["a --image x --image2 y --image3"], ComfyImagine.Complete("a --image x --image2 y --i", Workflows).Select(i => i.Text));
         Assert.Equal(["a --seed", "a --size", "a --steps"], ComfyImagine.Complete("a --s", Workflows).Select(i => i.Text));
         Assert.DoesNotContain("a --seed 4 --seed", ComfyImagine.Complete("a --seed 4 --", Workflows).Select(i => i.Text));   // typed already
         Assert.Contains("a --seed 4 --steps", ComfyImagine.Complete("a --seed 4 --", Workflows).Select(i => i.Text));   // the bare -- typed keeps the list open
@@ -588,10 +592,16 @@ public sealed class ComfyTests : IDisposable
         Assert.Null(error);
         Assert.Equal("a cat", request!.Prompt);   // every flag read, none left in the prompt
 
-        Assert.Equal(("faceswap --image2 ", "pics/fa"), ComfyImagine.ImagePathAt("faceswap --image2 pics/fa"));   // the path list's place
-        Assert.Equal(("faceswap --IMAGE ", ""), ComfyImagine.ImagePathAt("faceswap --IMAGE "));
+        Assert.Equal(("faceswap --image2 ", "pics/fa", false), ComfyImagine.ImagePathAt("faceswap --image2 pics/fa"));   // the path list's place
+        Assert.Equal(("faceswap --IMAGE ", "", false), ComfyImagine.ImagePathAt("faceswap --IMAGE "));
         Assert.Null(ComfyImagine.ImagePathAt("faceswap --seed 4"));
         Assert.Null(ComfyImagine.ImagePathAt("faceswap"));
+        // An open quote runs on past its blanks; a closed one is a path typed in full (2026-10-27, the review).
+        Assert.Equal(("faceswap --image ", "My Pics/f", true), ComfyImagine.ImagePathAt("faceswap --image \"My Pics/f"));
+        Assert.Null(ComfyImagine.ImagePathAt("faceswap --image \"My Pics/f.png\""));
+        Assert.Null(ComfyImagine.ImagePathAt("faceswap --image My Pics"));
+        Assert.Equal(("x --image ", "--s", false), ComfyImagine.ImagePathAt("x --image --s"));   // the path list's place, never the flags
+        Assert.Equal(ComfyText.BadFlag("--image", "--seed"), ComfyImagine.Parse("restyle --image --seed 4 a cat", workflows).Error);
     }
 
     [Fact]

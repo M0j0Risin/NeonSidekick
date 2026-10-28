@@ -166,7 +166,7 @@ public static partial class SmokeChecks
                 return new SmokeCheck(name, true, "skipped: no display connected to an NVIDIA GPU");
             }
 
-            string listed = $"{displays.Count} display(s): {string.Join(", ", displays.Select(d => (d.PnpId ?? "no EDID") + (d.Active ? "" : " off the desktop")))}; adapter {displays[0].Adapter}";
+            string listed = $"{Status(displays.Count)} display(s): {string.Join(", ", displays.Select(d => (d.PnpId ?? "no EDID") + (d.Active ? "" : " off the desktop")))}; adapter {displays[0].Adapter}";
             var (read, input) = NvidiaDdc.ReadOnce(displays[0]);
             if (read == NvapiNative.IncompatibleStructVersion)
             {

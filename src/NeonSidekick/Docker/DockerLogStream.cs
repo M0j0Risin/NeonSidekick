@@ -112,27 +112,6 @@ public static partial class DockerLogStream
         return lines;
     }
 
-    /// <summary>Reads at most <paramref name="maxBytes"/> of <paramref name="stream"/>: the bytes, and whether more were left.</summary>
-    public static async Task<(byte[] Data, bool Capped)> ReadCappedAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(stream);
-        using var buffer = new MemoryStream();
-        byte[] chunk = new byte[16 * 1024];
-        while (buffer.Length < maxBytes)
-        {
-            int want = (int)Math.Min(chunk.Length, maxBytes - buffer.Length);
-            int read = await stream.ReadAsync(chunk.AsMemory(0, want), cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-            {
-                return (buffer.ToArray(), false);
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        return (buffer.ToArray(), true);
-    }
-
     /// <summary>CSI sequences (<c>ESC [ … letter</c>) and OSC sequences (<c>ESC ] … BEL</c>).</summary>
     [GeneratedRegex(@"\x1B\[[0-?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)", RegexOptions.CultureInvariant)]
     private static partial Regex Ansi();

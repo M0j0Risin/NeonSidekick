@@ -259,7 +259,7 @@ public sealed class DockerClient : IDisposable
 
             string? contentType = response.Content.Headers.ContentType?.MediaType;
             await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
-            var (data, capped) = await DockerLogStream.ReadCappedAsync(stream, DockerLogStream.MaxBytes, budget.Token).ConfigureAwait(false);
+            var (data, capped) = await Files.StreamCap.ReadAsync(stream, DockerLogStream.MaxBytes, budget.Token).ConfigureAwait(false);
             return new DockerLogs(DockerLogStream.Lines(data, contentType, streams), capped, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -470,7 +470,7 @@ public sealed class DockerClient : IDisposable
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(Host + Prefix + path));
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
             await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
-            var (data, _) = await DockerLogStream.ReadCappedAsync(stream, MaxPullBytes, budget.Token).ConfigureAwait(false);
+            var (data, _) = await Files.StreamCap.ReadAsync(stream, MaxPullBytes, budget.Token).ConfigureAwait(false);
             string body = Encoding.UTF8.GetString(data);
             return response.IsSuccessStatusCode
                 ? DockerReply.Success((int)response.StatusCode, body)

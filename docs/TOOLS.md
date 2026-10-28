@@ -935,7 +935,7 @@ Under *Monitor tools*. Windows only ([MAC.md](MAC.md#what-works)): the layout th
 
 * **Changes ask first,** on the pane (and the Web UI's page): the question names the monitor and the input or layout. Never offered headless or without a pane.
 * **Switching away may drop the screen:** a monitor showing another source can leave this PC's desktop until its own buttons or the other machine bring it back. On an NVIDIA card its tab still switches it.
-* **Off the desktop:** on an NVIDIA card, the app reads and switches a monitor's input through NVIDIA's driver and sends nothing else. Switching to this PC's input also runs Extend all.
+* **Off the desktop:** on an NVIDIA card, the app reads and switches a monitor's input through NVIDIA's driver and sends nothing else. Switching to this PC's input also runs Extend all, so any other monitor off the desktop comes back too, and a Duplicate ends.
 * **The last screen:** the question warns when no other monitor would still show this PC: by your pick of each monitor's *This PC's input*, else the cable (an HDMI input on a DisplayPort cable, or the reverse, is another input).
 * **The model can't set this PC's input.** It reads the pick in `monitor_list`; only you set it, on the pane or with `/monitor <monitor> pc`.
 * **Limits:** a monitor that doesn't answer DDC/CI on another input, or answers with no input (0x00), can't be judged and counts as showing this PC. Picture-by-picture may read as another input.

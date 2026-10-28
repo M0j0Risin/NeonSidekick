@@ -39,6 +39,9 @@ public sealed class FakeMonitorSystem : IMonitorSystem
 
         /// <summary>Switched to these while off the desktop, Windows adds it back on its own (it shows this PC's signal).</summary>
         public HashSet<byte> ReturnsOn { get; } = [];
+
+        /// <summary>An Extend leaves it off the desktop, as Windows does with a monitor that shows no signal from this PC (2026-10-27, the review).</summary>
+        public bool StaysOffOnExtend { get; set; }
     }
 
     public List<Display> Screens { get; } =
@@ -132,6 +135,11 @@ public sealed class FakeMonitorSystem : IMonitorSystem
                     for (int i = 0; i < Screens.Count; i++)
                     {
                         var s = Screens[i];
+                        if (s.StaysOffOnExtend && !s.Active)
+                        {
+                            continue;
+                        }
+
                         s.Active = true;
                         s.Source = "A:" + i;
                         s.Gdi = @"\\.\DISPLAY" + (i + 1);

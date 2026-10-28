@@ -225,7 +225,7 @@ public sealed record SkillSource(SkillSourceKind Kind, string? Query = null, str
 
         string head = argText[..(gap + 1)];
         var typed = head.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        (string Flag, string Note)[] flags = [(GlobalFlag, "install it for every profile"), (ProfileFlag, "install it for this profile only")];
+        (string Flag, string Note)[] flags = [(GlobalFlag, SkillInstallText.GlobalFlagNote), (ProfileFlag, SkillInstallText.ProfileFlagNote)];
         return UI.MentionCompleter.Matches(flags.Where(f => !typed.Contains(f.Flag, StringComparer.OrdinalIgnoreCase)).Select(f => new UI.CompletionItem(head + f.Flag, f.Note)).ToList(), argText);
     }
 

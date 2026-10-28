@@ -299,7 +299,7 @@ public static class HaCommand
         if (space < 0)
         {
             var verbs = stills ? HaText.Verbs : HaText.Verbs.Where(v => v != HaStillsCommand.Word);
-            return MentionCompleter.Matches(verbs.Select(v => new CompletionItem(v, VerbNote(v))).ToList(), argText);
+            return MentionCompleter.Matches(verbs.Select(v => new CompletionItem(v, HaText.VerbNote(v))).ToList(), argText);
         }
 
         string verb = argText[..space].ToLowerInvariant();
@@ -322,12 +322,22 @@ public static class HaCommand
                 .Concat(snapshot.Entities.Where(e => SwitchableDomains.Contains(e.Domain, StringComparer.Ordinal) && !e.Unavailable).Select(e => new CompletionItem(head + e.Name, e.Domain + " · " + e.State))),
             "scene" => snapshot.Of("scene").Select(e => new CompletionItem(head + e.Name, e.Area ?? "scene")),
             "tv" => TvItems(snapshot, argText, head),
-            "states" => snapshot.Entities.Select(e => e.Domain).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(d => new CompletionItem(head + d, "domain"))
-                .Concat(snapshot.Entities.Select(e => new CompletionItem(head + e.Id, e.Name))),
+            "states" => StatesItems(snapshot).Select(i => i with { Text = head + i.Text }),
             _ => [],
         };
         return MentionCompleter.Matches(items.DistinctBy(i => i.Text, StringComparer.OrdinalIgnoreCase).ToList(), argText);
     }
+
+    /// <summary>
+    /// <c>/ha states</c>' items, the domains then the entity ids, built once per snapshot (2026-10-27, the review: a home of thousands of
+    /// entities sorted its domains again on every key). The snapshot is immutable, so the list stays right for as long as it lives.
+    /// </summary>
+    private static IReadOnlyList<CompletionItem> StatesItems(HaSnapshot snapshot) =>
+        StatesCache.GetValue(snapshot, s => s.Entities.Select(e => e.Domain).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+            .Select(d => new CompletionItem(d, HaText.DomainNote))
+            .Concat(s.Entities.Select(e => new CompletionItem(e.Id, e.Name))).ToList());
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HaSnapshot, IReadOnlyList<CompletionItem>> StatesCache = new();
 
     private static IEnumerable<CompletionItem> TvItems(HaSnapshot snapshot, string argText, string head)
     {
@@ -340,16 +350,4 @@ public static class HaCommand
         return HaText.TvActions.Select(a => new CompletionItem(head + a, ""));
     }
 
-    private static string VerbNote(string verb) => verb switch
-    {
-        "on" => "turn a room or a light on, optionally at a brightness",
-        "off" => "turn a room or a light off",
-        "toggle" => "toggle a room or a light",
-        "scene" => "activate a scene",
-        "tv" => "the TV: on, off, mute, volume, source",
-        "states" => "list entities, by domain or name",
-        "say" => "hand a sentence to Assist",
-        "stills" => "open or empty the camera stills' folder",
-        _ => "",
-    };
 }

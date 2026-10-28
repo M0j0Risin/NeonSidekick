@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Files;
 using NeonSidekick.HomeAssistant;
 using NeonSidekick.Llm;
 using NeonSidekick.Timers;
@@ -49,10 +50,19 @@ public partial class ChatScreenTests
         Assert.Null(ChatScreen.ViewFlagPaths("--chat "));   // a flag typed: the pictures again
         Assert.Null(ChatScreen.ViewFlagPaths("docs/pic.png"));   // a path being typed is the path list's
         Assert.Null(ChatScreen.ViewFlagPaths("--chat docs/ "));
+        // A folder name with a blank is no finished path: its letters go on, never a flag (2026-10-27, the review).
+        Assert.Null(ChatScreen.ViewFlagPaths("My ", sources.ImageFiles));
+        Assert.Equal(["pic.png --chat"], ChatScreen.ViewFlagPaths("pic.png --c", query => new MentionResult(FileOutcome.Ok, query == "pic.png" ? ["pic.png"] : [], false))!.Paths);
+        Assert.Empty(ChatScreen.ArgumentPaths("/view", "My ", sources)!.Paths);
 
         Assert.Equal(["faceswap --image pic.png"], ChatScreen.ArgumentPaths("/imagine", "faceswap --image p", sources)!.Paths);
         Assert.Equal(["a --seed 4 --image2 docs/", "a --seed 4 --image2 pic.png", "a --seed 4 --image2 shot.jpg"], ChatScreen.ArgumentPaths("/imagine", "a --seed 4 --image2 ", sources)!.Paths);
         Assert.Null(ChatScreen.ArgumentPaths("/imagine", "a cat", sources));   // the prompt is free text
+
+        // Pictures alone, never a PDF; a blank quoted, a folder's quote left open (2026-10-27, the review).
+        var spaced = sources with { ImageFiles = _ => new MentionResult(FileOutcome.Ok, ["My Pics/", "a b.png", "doc.pdf", "c.jpg"], false) };
+        Assert.Equal(["x --image \"My Pics/", "x --image \"a b.png\"", "x --image c.jpg"], ChatScreen.ArgumentPaths("/imagine", "x --image ", spaced)!.Paths);
+        Assert.Equal(["x --image \"My Pics/", "x --image \"a b.png\"", "x --image \"c.jpg\""], ChatScreen.ArgumentPaths("/imagine", "x --image \"My ", spaced)!.Paths);
         Assert.Null(ChatScreen.ArgumentPaths("/imagine", "a --seed 4", sources));
     }
 

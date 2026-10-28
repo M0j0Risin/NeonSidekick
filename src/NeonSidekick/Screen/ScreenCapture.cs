@@ -69,23 +69,14 @@ public sealed class ScreenCapture
         }, cancellationToken).ConfigureAwait(false);
         var files = _files();
         string stem = CameraCapture.Under(CameraCapture.OutputFolder(_folder()), CameraCapture.Stem(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone)));
-        for (int n = 1; ; n++)
+        var (written, error) = Images.ImageOutput.WriteNumbered(files, stem, ".jpg", image.Bytes);
+        if (error is not null)
         {
-            string relative = n == 1 ? stem + ".jpg" : stem + "-" + n.ToString(CultureInfo.InvariantCulture) + ".jpg";
-            var written = files.WriteBytes(relative, image.Bytes, overwrite: false);
-            if (written.Outcome == FileOutcome.Exists && n < 100)
-            {
-                continue;
-            }
-
-            if (written.Outcome != FileOutcome.Ok)
-            {
-                throw new ScreenException(ScreenText.NotSaved(FileText.Error(written.Outcome, relative, "write", written.Detail)));
-            }
-
-            _ = files.Resolve(written.Relative, forWrite: false, out string full);
-            return new ScreenShot(image with { Path = full }, written.Relative, full, aim.Described);
+            throw new ScreenException(ScreenText.NotSaved(error));
         }
+
+        _ = files.Resolve(written.Relative, forWrite: false, out string full);
+        return new ScreenShot(image with { Path = full }, written.Relative, full, aim.Described);
     }
 
     /// <summary>A frame as the attachment the model gets: JPEG, its longer side at most <see cref="ImageFile.MaxSide"/>, marked as the screen's. Pure.</summary>

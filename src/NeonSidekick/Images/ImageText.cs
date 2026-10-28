@@ -26,6 +26,13 @@ public static class ImageText
     public const string OverwriteModeSentence =
         "The user's Image edit mode is overwrite-original: without to, the result replaces the source picture, and a format change writes name.newext and deletes the source.";
 
+    /// <summary>
+    /// A new picture's save that found every name taken, <paramref name="first"/> through its <c>-<paramref name="last"/></c> (2026-10-27,
+    /// the review): its own words, not the file tools' "call again with overwrite true", which no picture save offers. Pinned.
+    /// </summary>
+    public static string NoFreeName(string first, int last) =>
+        "Error: " + first + " and its numbered names to -" + last.ToString(CultureInfo.InvariantCulture) + " are all taken; move or delete some of them";
+
     /// <summary>A menu edit on a picture that is no longer there (2026-10-04, the picture windows' menu). Pinned.</summary>
     public static string Gone(string name) => "Error: " + name + " is no longer there";
 

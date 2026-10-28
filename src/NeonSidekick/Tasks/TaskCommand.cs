@@ -93,7 +93,7 @@ public static class TaskCommand
             return Failed(failed);
         }
 
-        access.Saw(source, result.Value.Matched);
+        access.Saw(source, result.Value.All);
 
         var lines = new List<string> { TaskText.CommandHeader(source.Where, line.Folder, result.Value.Matched.Count) };
         lines.AddRange(result.Value.Matched.Select(t => Llm.Tools.UntrustedText.Unfenced(TaskRender.Line(t))));
@@ -103,20 +103,49 @@ public static class TaskCommand
     /// <summary>
     /// <c>/tasks</c>' argument list: the filter words; after <c>computer:</c> the <paramref name="computers"/>, after <c>state:</c> the states,
     /// and after <c>folder:</c> the folders the last list read on the computer typed (this PC without one) found (<paramref name="folders"/>,
-    /// 2026-10-27; only <c>folder:\</c> before a read). Pure.
+    /// 2026-10-27; only <c>folder:\</c> before a read). A folder with a blank is offered quoted, as <see cref="Parse"/> reads it, and the word
+    /// being typed runs past a blank inside an open quote, matched with the quotes left out (2026-10-27, the review). Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<string> computers, Func<string?, IReadOnlyList<string>>? folders = null)
     {
         ArgumentNullException.ThrowIfNull(argText);
-        int last = argText.LastIndexOf(' ');
-        string head = argText[..(last + 1)];
-        string current = argText[(last + 1)..];
+        int start = WordStart(argText);
+        string head = argText[..start];
+        string current = argText[start..];
         string? computer = head.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault(w => w.StartsWith("computer:", StringComparison.OrdinalIgnoreCase))?["computer:".Length..];
+        if (current.StartsWith("folder:", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] offered = ["folder:\\", .. (folders?.Invoke(computer) ?? []).Select(f => "folder:" + CompletionWord.Quoted(f))];
+            string typed = current.Replace("\"", "", StringComparison.Ordinal);
+            return offered.Any(f => string.Equals(f.Replace("\"", "", StringComparison.Ordinal), typed, StringComparison.OrdinalIgnoreCase))
+                ? []
+                : [.. offered.Where(f => CompletionWord.StartsQuoteBlind(f, current)).Select(f => new CompletionItem(head + f, ""))];
+        }
+
         IEnumerable<string> pool = current.StartsWith("computer:", StringComparison.OrdinalIgnoreCase) ? computers.Select(c => "computer:" + c)
             : current.StartsWith("state:", StringComparison.OrdinalIgnoreCase) ? States.Select(s => "state:" + s)
-            : current.StartsWith("folder:", StringComparison.OrdinalIgnoreCase) ? ["folder:\\", .. (folders?.Invoke(computer) ?? []).Select(f => "folder:" + f)]
             : ["computer:", "folder:\\", "state:", "microsoft"];
         return MentionCompleter.Matches(pool.Select(p => new CompletionItem(head + p, "")).ToList(), argText);
+    }
+
+    // Where the word being typed starts: after the last blank outside a double quote.
+    private static int WordStart(string text)
+    {
+        bool quoted = false;
+        int start = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '"')
+            {
+                quoted = !quoted;
+            }
+            else if (text[i] == ' ' && !quoted)
+            {
+                start = i + 1;
+            }
+        }
+
+        return start;
     }
 
     private static TaskCommandResult Failed(string error) => new([error.Replace("Error: ", "", StringComparison.Ordinal)], true);

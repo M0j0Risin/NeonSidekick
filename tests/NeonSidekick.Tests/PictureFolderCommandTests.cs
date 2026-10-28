@@ -135,7 +135,7 @@ public sealed class PictureFolderCommandTests
     {
         Assert.Equal("Usage: /splash, or /splash view|thumbs|purge", SplashCommand.Usage);
         Assert.Equal("Usage: /pasted view|thumbs|purge", PastedCommand.Usage);
-        Assert.Equal("Usage: /ha stills view|thumbs|purge", HaStillsCommand.Usage);
+        Assert.Equal("Usage: /ha stills view|thumbs|purge", HaText.StillsUsage);
         Assert.EndsWith(" · /ha stills view|thumbs|purge", HaText.Usage, StringComparison.Ordinal);
         Assert.Equal("(the built-in splash pictures show until this folder has some; drop pictures here, or ask the model to set_splash_image)", SplashCommand.BuiltInNotice);
         Assert.Contains(NeonSidekick.Llm.Tools.SetSplashImageTool.ToolName, SplashCommand.BuiltInNotice, StringComparison.Ordinal);

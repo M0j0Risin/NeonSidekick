@@ -287,7 +287,7 @@ public static class PdfCommand
             items.Add(new CompletionItem(head + PdfText.ToWord, "to=out.pdf, or a folder"));
         }
 
-        bool web = first.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || first.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        bool web = IsWebAddress(first);   // the parse's own test (2026-10-27, the review)
         if (!web && !head.Contains(PdfText.PaperWord, StringComparison.OrdinalIgnoreCase))
         {
             items.AddRange(PdfPaper.Names.Select(n => new CompletionItem(head + PdfText.PaperWord + n, n + " paper")));

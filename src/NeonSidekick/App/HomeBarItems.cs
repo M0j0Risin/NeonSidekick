@@ -453,21 +453,28 @@ public static class HomeBarItems
     /// the drawn chips, else (the bar hidden) <paramref name="saved"/>'s items built as the bar would build them over no live states, named
     /// through <paramref name="catalog"/> and the saved aliases, the monitors' 🖥️ only where <paramref name="monitors"/> (a monitor system;
     /// a profile copied to a Mac keeps it saved, never drawn). Each item is the name the bar shows (the alias, else the name; a nameless item
-    /// by its reference), noted with its glyph and reference; distinct by text, any case. Pure.
+    /// by its reference), noted with its glyph and reference; distinct by text, any case. A name more than one item shows completes as each
+    /// item's reference instead (2026-10-27, the review): the name alone would always reach the first. With <paramref name="naming"/> false
+    /// (a verb that never reads the second list) it is empty and no item is built for it (2026-10-27, the review). Pure.
     /// </summary>
-    public static (IReadOnlyList<CompletionItem> Drawn, IReadOnlyList<CompletionItem> Named) Lists(IReadOnlyList<HomeChip>? drawnChips, Settings.AppSettingsData saved, HaCatalog? catalog, bool monitors)
+    public static (IReadOnlyList<CompletionItem> Drawn, IReadOnlyList<CompletionItem> Named) Lists(IReadOnlyList<HomeChip>? drawnChips, Settings.AppSettingsData saved, HaCatalog? catalog, bool monitors, bool naming = true)
     {
         ArgumentNullException.ThrowIfNull(saved);
         var drawn = (drawnChips ?? []).Where(c => !c.Divider && (monitors || !IsMonitors(c.Reference))).ToList();
-        var named = drawn.Count > 0
-            ? drawn
+        var named = drawn.Count > 0 || !naming
+            ? (naming ? drawn : [])
             : Resolve(saved.HomeBarItems).Where(i => !IsDivider(i) && (monitors || !IsMonitors(i)))
                 .Select(i => HomeChips.Build(i, NoStates, catalog, HomeChipMark.None, stale: true, saved.HomeBarAliases, saved.HomeBarGlyphs)).ToList();
         return (Items(drawn), Items(named));
 
-        static IReadOnlyList<CompletionItem> Items(IEnumerable<HomeChip> chips) =>
-            chips.Select(c => new CompletionItem(IsNameless(c.Reference) ? c.Reference : c.Label is { Length: > 0 } label ? label : c.Name, c.Glyph + " " + c.Reference))
+        static IReadOnlyList<CompletionItem> Items(IReadOnlyList<HomeChip> chips)
+        {
+            var shared = chips.Where(c => !IsNameless(c.Reference)).GroupBy(c => c.Shown, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Select(c => c.Reference).Distinct(StringComparer.Ordinal).Skip(1).Any())
+                .Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return chips.Select(c => new CompletionItem(IsNameless(c.Reference) || shared.Contains(c.Shown) ? c.Reference : c.Shown, c.Glyph + " " + c.Reference))
                 .DistinctBy(i => i.Text, StringComparer.OrdinalIgnoreCase).ToList();
+        }
     }
 
     private static readonly IReadOnlyDictionary<string, HaLiveEntity> NoStates = new Dictionary<string, HaLiveEntity>(StringComparer.Ordinal);

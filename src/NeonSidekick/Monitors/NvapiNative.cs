@@ -115,11 +115,13 @@ internal static unsafe class NvapiNative
     private static readonly object Gate = new();
     private static bool _tried;
     private static int _initialized = DeviceNotFound;
+    private static nint _initialize;
     private static nint _enumGpus, _connected, _gpuAndOutput, _edid, _logical, _logicalInfo, _i2cRead, _i2cWrite;
 
     /// <summary>
-    /// The library loaded, its functions found and <c>NvAPI_Initialize</c> run, once: its status (<see cref="Ok"/>), or
-    /// <see cref="LibraryNotFound"/> when the library or a function isn't there. The first answer is kept for the process.
+    /// The library loaded and its functions found, once, and <c>NvAPI_Initialize</c> run until it answers <see cref="Ok"/>: its status, or
+    /// <see cref="LibraryNotFound"/> when the library or a function isn't there, which is kept for the process. A failing initialize is asked
+    /// again on the next call (2026-10-27, the review: a driver mid-update answered once and the monitor stayed unreached until a restart).
     /// </summary>
     public static int Initialize()
     {
@@ -127,6 +129,13 @@ internal static unsafe class NvapiNative
         {
             if (_tried)
             {
+                if (_initialize == 0 || _initialized == Ok)
+                {
+                    return _initialized;
+                }
+
+                _initialized = ((delegate* unmanaged[Cdecl]<int>)_initialize)();
+                DiagnosticLog.Debug("Monitors", "NVIDIA's driver API initialize asked again: " + _initialized.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 return _initialized;
             }
 
@@ -150,6 +159,7 @@ internal static unsafe class NvapiNative
                 return _initialized;
             }
 
+            _initialize = initialize;
             _initialized = ((delegate* unmanaged[Cdecl]<int>)initialize)();
             DiagnosticLog.Debug("Monitors", "NVIDIA's driver API loaded; initialize " + _initialized.ToString(System.Globalization.CultureInfo.InvariantCulture));
             return _initialized;

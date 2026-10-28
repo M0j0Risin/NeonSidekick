@@ -607,7 +607,7 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
-| File deletes to Recycle bin | Deletes by `delete`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive (a purge asks for good there), one too big for the bin, and a command's or script's deletes. | on |
+| File deletes to Recycle bin | Deletes by `delete`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive (a purge asks for good there), one too big for the bin, and a command's or script's deletes. | on |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |
 | File /tree show sizes | `/tree` shows file sizes. | on |
 | File @-mention folder mode | Picking a folder from the `@` list: `remain` opens it in the list; `apply` writes `@folder/` and closes the list. | `remain` |
@@ -895,7 +895,7 @@ The camera, screen, monitor and printer tools.
 | Camera tool | Offers `camera_capture`, so the model can ask you for a photo; never headless or to an embedded model without vision. `/camera` works either way. On a Mac: macOS 14 or later. | off |
 | Camera shutter | `user`: the app shows you the request and you take, retake, send or decline the photo ([keys](INTERFACE.md#pane-keys)); the Web UI offers **Take and send** (no preview) or **Cancel**. `model`: you allow or deny, and the app takes it. | `user` |
 | Camera preview | `live`: a [camera window](INTERFACE.md#the-camera-window) shows the picture while you frame it. `post`: the picture viewer opens on the photo. `off`: no window. | `live` |
-| Camera device | The camera, by its system name. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
+| Camera device | The camera, by its system name; of two with one name, the one chosen. `(first camera)`, or one that isn't connected, uses the first. | empty (the first camera) |
 | Camera resolution | The size asked for (`640x480`, `1280x720` or `1920x1080`); the camera uses its nearest. | `1280x720` |
 | Camera output folder | Where photos are saved, under the profile's `images` folder. | `camera` |
 | Camera keep in sessions | Keeps photos in stored sessions, Home Assistant camera stills too. Off, a stored session keeps a line naming the photo instead. | off |

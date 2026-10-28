@@ -123,30 +123,22 @@ public static partial class HaCamera
     /// <summary>
     /// <paramref name="image"/> written into <see cref="FolderName"/> of <paramref name="images"/> as
     /// <c>&lt;object id&gt;-yyyyMMdd-HHmmss.jpg</c> (<c>.png</c> for one that stayed PNG) at <paramref name="local"/>, the caller's
-    /// local time, with <c>-2</c>… on a clash up to 100. A refused write is a sentence, never a throw: the still is used anyway.
+    /// local time, with <c>-2</c>… on a clash (<see cref="Images.ImageOutput.WriteNumbered"/>). A refused write is a sentence, never a
+    /// throw: the still is used anyway, with no path (2026-10-27, the review: its object id read as a file name, and a picture with no
+    /// file but a name opened from the camera's watch folder).
     /// </summary>
     public static HaCameraSave Save(WorkingDirectory images, ImageAttachment image, string entityId, DateTimeOffset local)
     {
         ArgumentNullException.ThrowIfNull(images);
         ArgumentNullException.ThrowIfNull(image);
-        string extension = string.Equals(image.MediaType, "image/png", StringComparison.OrdinalIgnoreCase) ? ".png" : ".jpg";
         string stem = CameraCapture.Under(FolderName, ObjectId(entityId) + "-" + CameraCapture.Stem(local));
-        for (int n = 1; ; n++)
+        var (written, error) = Images.ImageOutput.WriteNumbered(images, stem, ImageFile.ExtensionOf(image.Bytes), image.Bytes);
+        if (error is not null)
         {
-            string relative = n == 1 ? stem + extension : stem + "-" + n.ToString(CultureInfo.InvariantCulture) + extension;
-            var written = images.WriteBytes(relative, image.Bytes, overwrite: false);
-            if (written.Outcome == FileOutcome.Exists && n < 100)
-            {
-                continue;
-            }
-
-            if (written.Outcome != FileOutcome.Ok)
-            {
-                return new HaCameraSave(image, null, HaText.CameraNotSaved(FileText.Error(written.Outcome, relative, "write", written.Detail)));
-            }
-
-            _ = images.Resolve(written.Relative, forWrite: false, out string full);
-            return new HaCameraSave(image with { Path = full }, written.Relative, null);
+            return new HaCameraSave(image with { Path = "" }, null, HaText.CameraNotSaved(error));
         }
+
+        _ = images.Resolve(written.Relative, forWrite: false, out string full);
+        return new HaCameraSave(image with { Path = full }, written.Relative, null);
     }
 }

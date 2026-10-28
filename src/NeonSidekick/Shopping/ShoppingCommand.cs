@@ -210,19 +210,19 @@ public static class ShoppingCommand
 
         if (word is "export" or "print" && StoreNamed(rest, stores) is { } named)
         {
-            return MentionCompleter.Matches([new(head + rest[..(named.Length + 1)] + VerboseWord, "the roomy form: a heading per aisle, a box per item")], argText);
+            return MentionCompleter.Matches([new(head + rest[..(named.Length + 1)] + VerboseWord, ShoppingText.RoomyNote)], argText);
         }
 
         return word switch
         {
-            "clear" => MentionCompleter.Matches([new(head + "all", "empty the list, after a yes")], argText),
+            "clear" => MentionCompleter.Matches([new(head + "all", ShoppingText.ClearAllNote)], argText),
             "store" => MentionCompleter.Matches(
-                [new(head + "add ", "a new store: /shopping store add <name>"), new(head + "rename ", "/shopping store rename <name> to <new-name>"), new(head + "remove ", "a store and its layout gone, after a yes"), .. stores.Select(s => new CompletionItem(head + s, "shop at " + s))],
+                [new(head + "add ", ShoppingText.StoreAddNote), new(head + "rename ", ShoppingText.StoreRenameNote), new(head + "remove ", ShoppingText.StoreRemoveNote), .. stores.Select(s => new CompletionItem(head + s, ShoppingText.ShopAtNote(s)))],
                 argText),
             "check" or "tick" or "uncheck" or "untick" or "remove" or "rename" => MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i, "")).ToList(), argText),
-            "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "the list in the aisle order of " + s)).ToList(), argText),
-            "reindex" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, "read " + s + "'s documents again")).ToList(), argText),
-            "export" or "print" => MentionCompleter.Matches([new(head + VerboseWord, "the roomy form: a heading per aisle, a box per item"), .. stores.Select(s => new CompletionItem(head + s, "the list in the aisle order of " + s))], argText),
+            "list" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, ShoppingText.AisleOrderNote(s))).ToList(), argText),
+            "reindex" => MentionCompleter.Matches(stores.Select(s => new CompletionItem(head + s, ShoppingText.ReindexNote(s))).ToList(), argText),
+            "export" or "print" => MentionCompleter.Matches([new(head + VerboseWord, ShoppingText.RoomyNote), .. stores.Select(s => new CompletionItem(head + s, ShoppingText.AisleOrderNote(s)))], argText),
             _ => [],
         };
     }
@@ -241,9 +241,9 @@ public static class ShoppingCommand
         string named = rest[(gap + 1)..];
         return verb switch
         {
-            "remove" => stores.Select(s => new CompletionItem(verbHead + s, "a store and its layout gone, after a yes")).ToList(),
-            "rename" when StoreNamed(named, stores) is { } store => [new(verbHead + named[..(store.Length + 1)] + "to", "the new name follows")],
-            "rename" => stores.Select(s => new CompletionItem(verbHead + s, "rename " + s + ": … to <new-name>")).ToList(),
+            "remove" => stores.Select(s => new CompletionItem(verbHead + s, ShoppingText.StoreRemoveNote)).ToList(),
+            "rename" when StoreNamed(named, stores) is { } store => [new(verbHead + named[..(store.Length + 1)] + "to", ShoppingText.RenameToNote)],
+            "rename" => stores.Select(s => new CompletionItem(verbHead + s, ShoppingText.RenameStoreNote(s))).ToList(),
             "add" => [],
             _ => null,
         };

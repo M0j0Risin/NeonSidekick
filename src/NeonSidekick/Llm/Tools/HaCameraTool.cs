@@ -38,11 +38,11 @@ public sealed class HaCameraTool : HaTool
     private readonly TimeZoneInfo _zone;
 
     /// <param name="images">The profile's images folder the stills are kept in.</param>
-    /// <param name="zone">The zone the recording's time is shown in; null = the machine's.</param>
+    /// <param name="zone">The zone the recording's time is shown in; null = the session's clock's (2026-10-27, the review: not the machine's, which a test's clock never set).</param>
     public HaCameraTool(HaSession ha, WorkingDirectory images, TimeZoneInfo? zone = null) : base(ha, confirm: null)
     {
         _images = images ?? throw new ArgumentNullException(nameof(images));
-        _zone = zone ?? TimeZoneInfo.Local;
+        _zone = zone ?? Ha.Time.LocalTimeZone;
     }
 
     public override string Name => ToolName;
@@ -85,6 +85,9 @@ public sealed class HaCameraTool : HaTool
             return HaText.CameraUnavailable(camera.Name, camera.State);
         }
 
+        // The recording's time is asked beside the still, not after it (2026-10-27, the review): a slow still no longer waits twice.
+        // It never throws but the caller's cancel, so a still that fails leaves it to finish unread.
+        var recording = Ha.CameraTimeAsync(camera.Id, cancellationToken);
         var reply = await Ha.CameraAsync(camera.Id, cancellationToken).ConfigureAwait(false);
         var (image, failed) = HaCamera.ToAttachment(reply, camera.Id);
         if (image is null)
@@ -93,39 +96,13 @@ public sealed class HaCameraTool : HaTool
         }
 
         var save = HaCamera.Save(_images, image, camera.Id, TimeZoneInfo.ConvertTime(Ha.Time.GetUtcNow(), _zone));
-        var recorded = await Ha.CameraTimeAsync(camera.Id, cancellationToken).ConfigureAwait(false);
+        var recorded = await recording.ConfigureAwait(false);
         return new ToolImageResult(HaText.CameraTaken(camera, save, recorded is { } when ? HaText.CameraRecorded(when, _zone) : null), [save.Image]);
     }
 
     /// <summary>
-    /// The camera a call means (<see cref="HaMediaTool.Player"/>'s shape): the one named, else the only one; an entity id of another domain is
+    /// The camera a call means (<see cref="HaTool.OneOf"/>): the one named, else the only one; an entity id of another domain is
     /// <see cref="HaText.NotACamera"/>. The failure as an <c>Error:</c> sentence. Pure.
     /// </summary>
-    public static (HaEntity? Camera, string? Error) Camera(HaSnapshot snapshot, string? target)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        if (target is null)
-        {
-            var cameras = snapshot.Of(Domain);
-            return cameras.Count switch
-            {
-                0 => (null, HaText.NoneOf(Domain)),
-                1 => (cameras[0], null),
-                _ => (null, HaText.Ambiguous(Domain, cameras.Take(HaSnapshot.MaxCandidates).ToList(), cameras.Count)),
-            };
-        }
-
-        if (snapshot.Find(target) is { } exact && exact.Domain != Domain)
-        {
-            return (null, HaText.NotACamera(exact));
-        }
-
-        var match = snapshot.Resolve(target, [Domain]);
-        if (match.Error is not null)
-        {
-            return (null, match.Error);
-        }
-
-        return match.Entities.Count == 1 ? (match.Entities[0], null) : (null, HaText.Ambiguous(target, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count));
-    }
+    public static (HaEntity? Camera, string? Error) Camera(HaSnapshot snapshot, string? target) => OneOf(snapshot, Domain, Domain, target, HaText.NotACamera);
 }

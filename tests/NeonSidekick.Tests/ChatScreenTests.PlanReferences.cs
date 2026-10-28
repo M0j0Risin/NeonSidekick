@@ -71,4 +71,41 @@ public partial class ChatScreenTests
         Assert.Contains(".neon/plans/add-guide/ref-1.png, kept beside the plan", json);
         Assert.DoesNotContain(Convert.ToBase64String(FakeHeadlessBrowser.TinyPng), json);
     }
+
+    [Fact]
+    public async Task PlanReferences_APictureInACameraOrScreenFolder_IsNeverReadAgain_AndIsMarked_WhileItsSettingIsOff()
+    {
+        // 2026-10-27, the review: a Home Assistant still in home-cameras follows Camera keep in sessions as the camera's photos do, and a
+        // picture attached after a restart (this run never saw it taken) is marked by its folder.
+        string images = _settings.ProfileImagesDirectory;
+        string still = Path.Combine(images, NeonSidekick.HomeAssistant.HaCamera.FolderName, "porch-20261027-120000.jpg");
+        string photo = Path.Combine(images, Settings.AppSettingsData.DefaultCameraOutputFolder, "photo.jpg");
+        string shot = Path.Combine(images, Settings.AppSettingsData.DefaultScreenOutputFolder, "shot.jpg");
+        string other = Path.Combine(images, "comfy", "art.png");
+        foreach (string file in new[] { still, photo, shot, other })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllBytes(file, FakeHeadlessBrowser.TinyPng);
+        }
+
+        var reloads = new List<string?>();
+        var keptReloads = new List<string?>();
+        IReadOnlyList<Files.ImageAttachment> marked = [];
+        StepsWhenIdle(
+            input =>
+            {
+                reloads.AddRange(new[] { still, photo, shot, other }.Select(_running!.PictureToReloadForTests));
+                marked = _running!.MarkPicturesForTests([.. new[] { still, photo, shot, other }.Select(p => new Files.ImageAttachment(p, FakeHeadlessBrowser.TinyPng, "image/png", 1, 1))]);
+                _settings.Update(d => { d.CameraKeepInSessions = true; d.ScreenKeepInSessions = true; });
+                keptReloads.AddRange(new[] { still, photo, shot }.Select(_running!.PictureToReloadForTests));
+                PushLine(input, "/exit");
+            });
+
+        await RunAsync();
+
+        Assert.Equal([null, null, null, other], reloads);
+        Assert.Equal([still, photo, shot], keptReloads);
+        Assert.Equal([true, true, false, false], marked.Select(i => i.Camera));
+        Assert.Equal([false, false, true, false], marked.Select(i => i.Screen));
+    }
 }

@@ -519,7 +519,9 @@ internal sealed partial class ChatScreen
             chips = _homeCache?.Chips;
         }
 
-        var (drawn, named) = HomeBarItems.Lists(chips, _settings.Current, _homeLive.Snapshot.Catalog, monitors: _monitors is not null);
+        string verb = argText[..argText.IndexOf(' ', StringComparison.Ordinal)].ToLowerInvariant();
+        bool naming = verb is HomeBarText.NameWord or HomeBarText.EmojiWord;
+        var (drawn, named) = HomeBarItems.Lists(chips, _settings.Current, _homeLive.Snapshot.Catalog, monitors: _monitors is not null, naming);
         return HomeBarItems.Complete(argText, drawn, named);
     }
 
@@ -685,7 +687,11 @@ internal sealed partial class ChatScreen
         // reports unavailable takes every unavailable chip's way below, unfetched.
         if (kind == HomeItemKind.Entity && HaCatalog.DomainOf(id) == Llm.Tools.HaCameraTool.Domain && _homeLive.Snapshot.Entities.GetValueOrDefault(id) is not { Unavailable: true })
         {
-            StartHomeCamera(chip, id);
+            if (!StartHomeCamera(chip, id) && !_pane.Enabled)
+            {
+                sink.Notice(HomeBarText.CameraFetching(chip.Name));
+            }
+
             return;
         }
 

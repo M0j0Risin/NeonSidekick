@@ -55,23 +55,14 @@ public sealed class CameraCapture
         var image = await Task.Run(() => CameraJpeg.Attachment(frame, "camera.jpg", maxSide), cancellationToken).ConfigureAwait(false);
         var files = _files();
         string stem = Under(OutputFolder(_folder()), Stem(TimeZoneInfo.ConvertTime(frame.At, _time.LocalTimeZone)));
-        for (int n = 1; ; n++)
+        var (written, error) = Images.ImageOutput.WriteNumbered(files, stem, ".jpg", image.Bytes);
+        if (error is not null)
         {
-            string relative = n == 1 ? stem + ".jpg" : stem + "-" + n.ToString(CultureInfo.InvariantCulture) + ".jpg";
-            var written = files.WriteBytes(relative, image.Bytes, overwrite: false);
-            if (written.Outcome == FileOutcome.Exists && n < 100)
-            {
-                continue;
-            }
-
-            if (written.Outcome != FileOutcome.Ok)
-            {
-                throw new CameraException(CameraFailure.Failed, CameraText.NotSaved(FileText.Error(written.Outcome, relative, "write", written.Detail)));
-            }
-
-            _ = files.Resolve(written.Relative, forWrite: false, out string full);
-            return new CameraShot(image with { Path = full }, written.Relative, full, frame, _session.Device?.Name ?? CameraText.UnnamedCamera);
+            throw new CameraException(CameraFailure.Failed, CameraText.NotSaved(error));
         }
+
+        _ = files.Resolve(written.Relative, forWrite: false, out string full);
+        return new CameraShot(image with { Path = full }, written.Relative, full, frame, _session.Device?.Name ?? CameraText.UnnamedCamera);
     }
 
     /// <summary>Deletes a shot that was not used; a failure is only logged (the file is the user's to remove then).</summary>

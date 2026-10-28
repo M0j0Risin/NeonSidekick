@@ -1394,7 +1394,7 @@ public sealed partial class SidekickApp
                     // /ha stills (2026-10-27): its windows and the purge's question are the screen's, as /pasted's are.
                     if (HomeAssistant.HaStillsCommand.TryParse(haArgs, out _))
                     {
-                        await HeadlessLineAsync("[error] " + HomeAssistant.HaStillsCommand.NeedsScreen).ConfigureAwait(false);
+                        await HeadlessLineAsync("[error] " + HomeAssistant.HaText.StillsNeedsScreen).ConfigureAwait(false);
                         continue;
                     }
 

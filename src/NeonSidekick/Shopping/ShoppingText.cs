@@ -21,6 +21,22 @@ public static class ShoppingText
     /// <summary>The heading over the ticked lines. Pinned.</summary>
     public const string TickedHeading = "Ticked";
 
+    // /shopping's completion notes (2026-10-27, the review: out of the completion's code).
+    public const string RoomyNote = "the roomy form: a heading per aisle, a box per item";
+    public const string ClearAllNote = "empty the list, after a yes";
+    public const string StoreAddNote = "a new store: /shopping store add <name>";
+    public const string StoreRenameNote = "/shopping store rename <name> to <new-name>";
+    public const string StoreRemoveNote = "a store and its layout gone, after a yes";
+    public const string RenameToNote = "the new name follows";
+
+    public static string ShopAtNote(string store) => "shop at " + store;
+
+    public static string AisleOrderNote(string store) => "the list in the aisle order of " + store;
+
+    public static string ReindexNote(string store) => "read " + store + "'s documents again";
+
+    public static string RenameStoreNote(string store) => "rename " + store + ": … to <new-name>";
+
     public const string WriteFailed = "the shopping list could not be written (see /log)";
     public const string NoTerm = "name the product, brand or category to place";
     public const string NoPlaceGiven = "give a location (an aisle or zone such as \"Aisle 7\" or \"Dairy\"), a section, or both";

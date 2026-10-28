@@ -919,21 +919,33 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The full path a pruned picture is read again from: an absolute one as it is, a relative one under the working directory. Never one in the camera's or
     /// the screen capture's output folder that its keep-in-sessions setting leaves out (2026-10-19, the review: a stand-in restored from a session
-    /// has lost its mark, and the folder still tells).
+    /// has lost its mark, and the folder still tells), nor a Home Assistant still in <c>home-cameras</c>, which follows <c>Camera keep in sessions</c>
+    /// too (2026-10-27, the review).
     /// </summary>
     private string? PictureToReload(string path)
     {
         string? full = System.IO.Path.IsPathFullyQualified(path) ? path : _files.Resolve(path, forWrite: false, out string resolved) == FileOutcome.Ok ? resolved : null;
-        if (full is null)
-        {
-            return null;
-        }
-
-        var effective = _effective();
-        return (!effective.CameraKeepInSessions && InPictureFolder(full, effective.CameraOutputFolder)) || (!effective.ScreenKeepInSessions && InPictureFolder(full, effective.ScreenOutputFolder))
-            ? null
-            : full;
+        return full is null || IsCameraFolderPicture(full) || IsScreenFolderPicture(full) ? null : full;
     }
+
+    /// <summary>Whether <paramref name="full"/> is a camera picture <c>Camera keep in sessions</c> leaves out: one of <see cref="InCameraFolder"/>, with the setting off.</summary>
+    private bool IsCameraFolderPicture(string full) => !_effective().CameraKeepInSessions && InCameraFolder(full);
+
+    /// <summary>Whether <paramref name="full"/> is a screenshot <c>Screen keep in sessions</c> leaves out: one of <see cref="InScreenFolder"/>, with the setting off.</summary>
+    private bool IsScreenFolderPicture(string full) => !_effective().ScreenKeepInSessions && InScreenFolder(full);
+
+    /// <summary>Whether <paramref name="full"/> lies in the camera's output folder or the Home Assistant stills' <c>home-cameras</c> (2026-10-27, the review).</summary>
+    private bool InCameraFolder(string full) =>
+        InPictureFolder(full, _effective().CameraOutputFolder) || InPictureFolder(full, NeonSidekick.HomeAssistant.HaCamera.FolderName);
+
+    /// <summary>Whether <paramref name="full"/> lies in the screen capture's output folder.</summary>
+    private bool InScreenFolder(string full) => InPictureFolder(full, _effective().ScreenOutputFolder);
+
+    /// <summary>For the tests: where a pruned picture would be read again from (<see cref="PictureToReload"/>).</summary>
+    internal string? PictureToReloadForTests(string path) => PictureToReload(path);
+
+    /// <summary>For the tests: a message's pictures as a turn marks them (the camera's, then the screen's).</summary>
+    internal IReadOnlyList<ImageAttachment> MarkPicturesForTests(IReadOnlyList<ImageAttachment> images) => MarkScreenImages(MarkCameraImages(images));
 
     /// <summary>
     /// Whether <paramref name="full"/> lies in the profile's picture folder <paramref name="setting"/> names (the camera's or the screen capture's):

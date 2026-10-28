@@ -75,6 +75,24 @@ public partial class ToolsMenuTests
         void OpenAgain() => Push(Keys.Enter);
     }
 
+    /// <summary>Two cameras with one name are offered by their place in the list and saved with their id (2026-10-27, the review).</summary>
+    [Fact]
+    public async Task OnThePane_TheDevicePicker_OffersTwinsByNumber_AndSavesTheOneChosen()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        settings.Cameras = () => [new CameraDevice("MX Brio", "a"), new CameraDevice("Cam Link", "b"), new CameraDevice("Cam Link", "c")];
+        OpenCameraRow(3);
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // (first camera) → MX Brio → Cam Link (2) → Cam Link (3)
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("Cam Link" + CameraChoice.IdMark + "c", _settings.Current.CameraDevice);
+        Assert.Contains("Cam Link (2)", Output);
+        Assert.Contains(CameraText.TwinLabel("Cam Link"), Output);   // the row's value
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_TheDevicePicker_SaysWhyTheCamerasCouldNotBeListed()
     {

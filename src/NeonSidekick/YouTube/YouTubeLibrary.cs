@@ -371,6 +371,8 @@ public sealed class YouTubeLibrary
             System.IO.Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             File.WriteAllText(tempPath, JsonSerializer.Serialize(new YouTubeLibraryFile { Videos = videos }, YouTubeJsonContext.Default.YouTubeLibraryFile));
             File.Move(tempPath, _filePath, overwrite: true);
+            // The argument list's cached read goes with it: a rename can keep the stamp's size and time (2026-10-27, the review).
+            Computers.ConfigCache.Invalidate(_filePath);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

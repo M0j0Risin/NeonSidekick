@@ -187,6 +187,15 @@ public static class CameraText
 
     public static string Using(string name) => $"Camera: {name}.";
 
+    /// <summary><c>/camera use</c>'s note on the camera in use, after its number (2026-10-27, the review: out of the completion's code).</summary>
+    public static string ChosenNote(string number) => number + " · chosen";
+
+    /// <summary>
+    /// How <c>Camera device</c> shows one of two cameras with one name, saved with its id (2026-10-27, the review). The id stays out: it is a
+    /// device path no one reads.
+    /// </summary>
+    public static string TwinLabel(string name) => $"{name} (the one chosen of two)";
+
     public static string NoSuchCamera(string what) => $"No camera '{what}' is connected (/camera list).";
 
     public static string Off(int released) => released == 0 ? "The camera was not held by /camera live or watch." : "The camera is released (it closes in a few seconds).";

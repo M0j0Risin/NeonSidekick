@@ -178,6 +178,25 @@ public sealed class MonitorCommandTests
     }
 
     [Fact]
+    public async Task Headless_AChange_ReadsOnlyTheMonitorItNames_ALayoutNone()
+    {
+        var fake = new FakeMonitorSystem();
+        var actions = new MonitorActions(new MonitorCalls(fake, retryGap: TimeSpan.Zero), settle: TimeSpan.Zero);
+        var effective = new AppSettingsData();
+
+        await SidekickApp.MonitorLinesAsync(actions, effective, "1 input hdmi-1", _ => { }, CancellationToken.None);
+        Assert.Equal(0, fake.Count("caps " + FakeMonitorSystem.Xg));   // 2026-10-27, the review: the other monitor's list never asked
+        Assert.Equal(1, fake.Count("caps " + FakeMonitorSystem.Lg));
+
+        int caps = fake.Count("caps ");
+        int reads = fake.Count("read ");
+        await SidekickApp.MonitorLinesAsync(actions, effective, "duplicate", _ => { }, CancellationToken.None);
+        Assert.Equal(caps, fake.Count("caps "));
+        Assert.Equal(reads, fake.Count("read "));
+        Assert.Contains("layout Duplicate", fake.Changes);
+    }
+
+    [Fact]
     public async Task TheCheck_SaysTheCablesView_AndStillPasses()
     {
         // --monitor-check (later on 2026-10-23): no settings, so the cable alone; still read-only and a pass.

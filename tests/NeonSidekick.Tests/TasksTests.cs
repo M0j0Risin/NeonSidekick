@@ -405,6 +405,29 @@ public sealed class TasksTests
         }
     }
 
+    /// <summary>
+    /// The review's folder cases (2026-10-27): a state filter keeps every folder the list walked; a folder with a blank is offered quoted
+    /// and still matched inside its open quote; a lone remote's folders are found with no computer typed.
+    /// </summary>
+    [Fact]
+    public async Task FolderCompletion_KeepsFoldersPastAStateFilter_QuotesABlank_AndFindsALoneRemote()
+    {
+        var access = Access();
+        await Call(new TaskListTool(access, () => _settings), ("include_microsoft", true), ("state", "running"));
+        Assert.Equal(7, access.FoldersSeen(null).Count);
+
+        IReadOnlyList<string> Spaced(string? computer) => [@"\My Jobs", @"\Ops"];
+        Assert.Equal(["folder:\\", "folder:\"\\My Jobs\"", @"folder:\Ops"], TaskCommand.Complete("folder:", ["local"], Spaced).Select(i => i.Text));
+        Assert.Equal(["state:running folder:\"\\My Jobs\""], TaskCommand.Complete("state:running folder:\"\\My J", ["local"], Spaced).Select(i => i.Text));
+        Assert.Equal(["folder:\"\\My Jobs\""], TaskCommand.Complete(@"folder:\My", ["local"], Spaced).Select(i => i.Text));
+        Assert.Empty(TaskCommand.Complete("folder:\"\\My Jobs\"", ["local"], Spaced));   // typed in full
+
+        var remote = new TaskAccess(_system, () => new ComputerCatalog<TaskComputerConfig>([new Computer<TaskComputerConfig>("dc02", new TaskComputerConfig { Host = "dc02.corp" })], [], TaskConfigFile.Info), () => ["dc02"], _time);
+        remote.Saw(remote.Computer(null, forceRedacted: false).Source!, _system.Tasks.Values.Select(t => t.Entry));
+        Assert.Equal(remote.FoldersSeen("dc02"), remote.FoldersSeen(null));
+        Assert.NotEmpty(remote.FoldersSeen(null));
+    }
+
     [Fact]
     public async Task ListTool_HidesWindowsOwnUnlessAsked_AndKeepsToTheFolders()
     {

@@ -92,6 +92,11 @@ public sealed class MonitorShowingTests
         Assert.Null(MonitorShowing.CableGuess(xg, 0x1B, lgInputs));                // a vendor current: no guess either
         Assert.Null(MonitorShowing.CableGuess(Monitor("Other"), 0x0F, xgInputs));
         Assert.Equal((byte)0x11, MonitorShowing.CableGuess(Monitor("HDMI"), 0x00, [0x0F, 0x11]));   // a 0x00 read is none: the only HDMI input
+
+        // Off the desktop its input is another machine's: only the offered inputs guess (2026-10-27, the review).
+        var off = xg with { Active = false };
+        Assert.Null(MonitorShowing.CableGuess(off, 0x10, lgInputs));
+        Assert.Equal((byte)0x0F, MonitorShowing.CableGuess(off, 0x0F, xgInputs));
     }
 
     [Fact]

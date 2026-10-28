@@ -293,10 +293,10 @@ public sealed partial class DockerTests : IDisposable
     public async Task TheLogRead_StopsAtItsCap_OverATrickle()
     {
         byte[] body = Enumerable.Repeat((byte)'x', 300).ToArray();
-        var (data, capped) = await DockerLogStream.ReadCappedAsync(new TrickleStream(body), 256, CancellationToken.None);
+        var (data, capped) = await NeonSidekick.Files.StreamCap.ReadAsync(new TrickleStream(body), 256, CancellationToken.None);
         Assert.Equal(256, data.Length);
         Assert.True(capped);
-        var (all, more) = await DockerLogStream.ReadCappedAsync(new TrickleStream(body), 1000, CancellationToken.None);
+        var (all, more) = await NeonSidekick.Files.StreamCap.ReadAsync(new TrickleStream(body), 1000, CancellationToken.None);
         Assert.Equal(300, all.Length);
         Assert.False(more);
     }

@@ -90,8 +90,9 @@ public sealed record MonitorShowing(MonitorShowingKind Kind, MonitorShowingBasis
     public static bool CableKnown(string connector) => CableKind(connector) is not null;
 
     /// <summary>
-    /// The one input the pick list and <c>/monitor &lt;n&gt; pc</c> call "guessed": the current input when it is of the cable's kind, else the
-    /// only offered input of that kind; null when there are two (the LG's DisplayPort-1 and -2), none, or the cable is no kind. Pure.
+    /// The one input the pick list and <c>/monitor &lt;n&gt; pc</c> call "guessed": the current input when it is of the cable's kind and the
+    /// monitor is on the desktop, else the only offered input of that kind; null when there are two (the LG's DisplayPort-1 and -2), none, or
+    /// the cable is no kind. Off the desktop the current input is another machine's (2026-10-27, the review), so it never counts. Pure.
     /// </summary>
     public static byte? CableGuess(MonitorInfo monitor, byte? current, IReadOnlyList<byte> offered)
     {
@@ -102,7 +103,7 @@ public sealed record MonitorShowing(MonitorShowingKind Kind, MonitorShowingBasis
             return null;
         }
 
-        if (Usable(current) is { } now && InputKind(now) == cable)
+        if (monitor.Active && Usable(current) is { } now && InputKind(now) == cable)
         {
             return now;
         }

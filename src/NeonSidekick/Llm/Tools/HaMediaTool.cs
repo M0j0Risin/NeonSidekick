@@ -132,27 +132,7 @@ public sealed class HaMediaTool : HaTool
 
     /// <summary>The player a call means: the one named, else the only one; the failure as an <c>Error:</c> sentence. Pure.</summary>
     public static (HaEntity? Player, string? Error) Player(HaSnapshot snapshot, string? target)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        if (target is null)
-        {
-            var players = snapshot.Of("media_player");
-            return players.Count switch
-            {
-                0 => (null, HaText.NoneOf("media player")),
-                1 => (players[0], null),
-                _ => (null, HaText.Ambiguous("media player", players, players.Count)),
-            };
-        }
-
-        var match = snapshot.Resolve(target, ["media_player"]);
-        if (match.Error is not null)
-        {
-            return (null, match.Error);
-        }
-
-        return match.Entities.Count == 1 ? (match.Entities[0], null) : (null, HaText.Ambiguous(target, match.Entities, match.Entities.Count));
-    }
+        => OneOf(snapshot, "media_player", "media player", target);
 
     /// <summary>
     /// The source <paramref name="wanted"/> means among <paramref name="sources"/>: the same name in any case, else the only

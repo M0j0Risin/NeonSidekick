@@ -65,7 +65,8 @@ public sealed record MonitorState(MonitorSnapshot Topology, IReadOnlyDictionary<
     /// The switch of <paramref name="monitor"/> to <paramref name="code"/>, the one builder every input change takes (the pane's rows and its
     /// Enter a code…, <c>/monitor</c> on the screen and headless, <c>monitor_input</c>): <see cref="MonitorChange.Unlisted"/> for a code it
     /// neither lists nor is common, and <see cref="MonitorChange.Return"/> when it is off the desktop and the code is this PC's
-    /// (<see cref="PcInputOf"/>), so the switch also adds it back.
+    /// (<see cref="PcInputOf"/>), so the switch also adds it back; <see cref="MonitorChange.ExtendsAll"/> when that Extend all also brings
+    /// back another monitor off the desktop or ends a Duplicate (2026-10-27, the review).
     /// </summary>
     public MonitorChange SwitchTo(MonitorInfo monitor, byte code, MonitorWords words)
     {
@@ -73,7 +74,9 @@ public sealed record MonitorState(MonitorSnapshot Topology, IReadOnlyDictionary<
         var inputs = InputsOf(monitor);
         bool unlisted = !inputs.Offered.Contains(code) && !Mccs.CommonInputs.Contains(code);
         bool back = !monitor.Active && !monitor.Shared && PcInputOf(monitor, words) == code;
-        return MonitorChange.SwitchInput(monitor, code, unlisted) with { Return = back };
+        bool all = back && (Topology.Layout == MonitorArrangement.Duplicated
+            || Topology.Monitors.Any(m => !m.Active && !string.Equals(m.Target, monitor.Target, StringComparison.Ordinal)));
+        return MonitorChange.SwitchInput(monitor, code, unlisted) with { Return = back, ExtendsAll = all };
     }
 }
 
@@ -192,11 +195,34 @@ public sealed class MonitorBoard : IDisposable
     /// <paramref name="onlyUnread"/>, only the monitors never read (the clock's, for one newly on or off the desktop). Two rounds
     /// (2026-10-27, the user's pick): every monitor's current input first, then the capabilities not cached yet, so no tab waits on another
     /// monitor's slow list (the XG27's took ~5 s). A monitor with a remembered list shows it from the first round; the second round's answer
-    /// replaces it when it differs (and is <c>seen</c>), and a failed read keeps it.
+    /// replaces it when it differs (and is <c>seen</c>), and a failed read keeps it. A list cached from earlier is told too (2026-10-27, the
+    /// review: a profile switched to never saved it). The second round waits while a change runs (<see cref="MonitorCalls.Foreground"/>), and
+    /// any failure, not only a cancel, leaves no tab marked reading.
     /// </summary>
     public async Task ReadInputsAsync(CancellationToken cancellationToken, bool onlyUnread = false)
     {
         var topology = _state.Topology;
+        try
+        {
+            await ReadRoundsAsync(topology, onlyUnread, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Whatever ended the read (a cancel, a seen callback that threw), no tab is left waiting on a round that won't come.
+            foreach (var m in topology.Monitors)
+            {
+                if (_state.InputsOf(m).Reading)
+                {
+                    Set(m.Target, _state.InputsOf(m) with { Reading = false });
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private async Task ReadRoundsAsync(MonitorSnapshot topology, bool onlyUnread, CancellationToken cancellationToken)
+    {
         var behind = new List<(MonitorInfo Monitor, IReadOnlyList<byte>? Remembered)>();
         foreach (var m in topology.Monitors)
         {
@@ -225,11 +251,12 @@ public sealed class MonitorBoard : IDisposable
                 if (Cached(m) is { } cached)
                 {
                     Set(m.Target, now with { Caps = cached, Reading = false });
+                    Tell(m, topology, Remembered(m, topology), cached);
                     continue;
                 }
 
                 // Not cached: the capabilities in the second round. A remembered list shows now, and the tab with it.
-                var remembered = m.Key is not null && _remembered?.Invoke(m, topology.Monitors) is { Count: > 0 } list ? list : null;
+                var remembered = Remembered(m, topology);
                 Set(m.Target, remembered is null ? now : now with { Caps = new MonitorCaps(remembered, true, ""), Reading = false });
                 behind.Add((m, remembered));
             }
@@ -238,47 +265,34 @@ public sealed class MonitorBoard : IDisposable
                 var now = _state.InputsOf(m);
                 Set(m.Target, read && m.Active ? now with { Stale = true, Reading = false } : now with { Problem = e.Message, Reading = false });
             }
-            catch (OperationCanceledException)
-            {
-                Set(m.Target, _state.InputsOf(m) with { Reading = false });
-                Settle(behind);
-                throw;
-            }
         }
 
         foreach (var (m, remembered) in behind)
         {
-            try
+            var caps = await CapsAsync(m, cancellationToken).ConfigureAwait(false);
+            var now = _state.InputsOf(m);
+            if (caps is null)
             {
-                var caps = await CapsAsync(m, cancellationToken).ConfigureAwait(false);
-                var now = _state.InputsOf(m);
-                if (caps is null)
-                {
-                    // The input reads, the list doesn't: the remembered list stays; without one, the common four (not reported).
-                    Set(m.Target, now with { Caps = remembered is null ? new MonitorCaps(Mccs.CommonInputs, false, "") : now.Caps, Reading = false });
-                    continue;
-                }
+                // The input reads, the list doesn't: the remembered list stays; without one, the common four (not reported).
+                Set(m.Target, now with { Caps = remembered is null ? new MonitorCaps(Mccs.CommonInputs, false, "") : now.Caps, Reading = false });
+                continue;
+            }
 
-                Set(m.Target, now with { Caps = caps, Reading = false });
-                if (caps.Reported && m.Key is not null && (remembered is null || !remembered.SequenceEqual(caps.Inputs)))
-                {
-                    _seen?.Invoke(m, topology.Monitors, caps.Inputs);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                Settle(behind);
-                throw;
-            }
+            Set(m.Target, now with { Caps = caps, Reading = false });
+            Tell(m, topology, remembered, caps);
         }
     }
 
-    // A cancelled read leaves no tab waiting on a second round that won't come.
-    private void Settle(List<(MonitorInfo Monitor, IReadOnlyList<byte>? Remembered)> behind)
+    // The monitor's last reported list among the connected ones, for one with a key; null for none.
+    private IReadOnlyList<byte>? Remembered(MonitorInfo m, MonitorSnapshot topology) =>
+        m.Key is not null && _remembered?.Invoke(m, topology.Monitors) is { Count: > 0 } list ? list : null;
+
+    // A reported list that differs from the remembered one is seen (the screen writes it).
+    private void Tell(MonitorInfo m, MonitorSnapshot topology, IReadOnlyList<byte>? remembered, MonitorCaps caps)
     {
-        foreach (var (m, _) in behind)
+        if (caps.Reported && m.Key is not null && (remembered is null || !remembered.SequenceEqual(caps.Inputs)))
         {
-            Set(m.Target, _state.InputsOf(m) with { Reading = false });
+            _seen?.Invoke(m, topology.Monitors, caps.Inputs);
         }
     }
 
@@ -317,6 +331,8 @@ public sealed class MonitorBoard : IDisposable
             return cached;
         }
 
+        // After any change the user waits on (2026-10-27, the review): a list takes seconds, and a switch queued behind it waited them out.
+        await Actions.Calls.WhenIdleAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var caps = await Actions.Calls.RunAsync("capabilities of " + m.Label, s => s.Capabilities(m.Target), retry: true, cancellationToken).ConfigureAwait(false);

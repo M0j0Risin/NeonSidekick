@@ -33,38 +33,50 @@ internal static unsafe class NvidiaDdc
 
     private static readonly object Bus = new();
 
+    /// <summary>
+    /// How long a call waits for <see cref="Bus"/>: a second inside <see cref="MonitorCalls.Cap"/> (2026-10-27, the review). A call queued behind
+    /// one that ran past its cap gives up as <see cref="MonitorText.NoAnswer"/> before its own cap, never runs on later: a switch its caller
+    /// was told didn't answer is never applied after all.
+    /// </summary>
+    private static readonly TimeSpan BusWait = MonitorCalls.Cap - TimeSpan.FromSeconds(1);
+
     /// <summary><paramref name="monitor"/>'s input now (VCP 0x60's value).</summary>
-    public static byte CurrentInput(MonitorSnapshot snapshot, MonitorInfo monitor)
+    public static byte CurrentInput(MonitorSnapshot snapshot, MonitorInfo monitor) => OnBus(() =>
     {
-        lock (Bus)
-        {
-            var display = Find(snapshot, monitor);
-            return Exchange(display, DdcPacket.GetInput(), DdcPacket.InputReplyLength, RequestWait) is { } reply && DdcPacket.ReadInput(reply) is { } current
-                ? current
-                : throw new MonitorException(MonitorText.NoDdc);
-        }
-    }
+        var display = Find(snapshot, monitor);
+        return Exchange(display, DdcPacket.GetInput(), DdcPacket.InputReplyLength, RequestWait) is { } reply && DdcPacket.ReadInput(reply) is { } current
+            ? current
+            : throw new MonitorException(MonitorText.NoDdc);
+    });
 
     /// <summary><paramref name="monitor"/>'s capabilities, fragment by fragment.</summary>
-    public static MonitorCaps Capabilities(MonitorSnapshot snapshot, MonitorInfo monitor)
+    public static MonitorCaps Capabilities(MonitorSnapshot snapshot, MonitorInfo monitor) => OnBus(() =>
     {
-        lock (Bus)
-        {
-            var display = Find(snapshot, monitor);
-            return DdcPacket.ReadCapabilities(offset => Exchange(display, DdcPacket.Capabilities(offset), DdcPacket.FragmentReadLength, FragmentWait))
-                ?? throw new MonitorException(MonitorText.NoDdc);
-        }
-    }
+        var display = Find(snapshot, monitor);
+        return DdcPacket.ReadCapabilities(offset => Exchange(display, DdcPacket.Capabilities(offset), DdcPacket.FragmentReadLength, FragmentWait))
+            ?? throw new MonitorException(MonitorText.NoDdc);
+    });
 
     /// <summary>Sends Set VCP 0x60 = <paramref name="code"/>; a Set has no reply (the caller reads the input back after its settle).</summary>
-    public static void SetInput(MonitorSnapshot snapshot, MonitorInfo monitor, byte code)
+    public static void SetInput(MonitorSnapshot snapshot, MonitorInfo monitor, byte code) => OnBus(() =>
+        Write(Find(snapshot, monitor), DdcPacket.SetInput(code)) ? true : throw new MonitorException(MonitorText.NoDdc));
+
+    /// <summary><paramref name="body"/> holding <see cref="Bus"/>, taken within <see cref="BusWait"/>, else <see cref="MonitorText.NoAnswer"/>.</summary>
+    private static T OnBus<T>(Func<T> body)
     {
-        lock (Bus)
+        if (!System.Threading.Monitor.TryEnter(Bus, BusWait))
         {
-            if (!Write(Find(snapshot, monitor), DdcPacket.SetInput(code)))
-            {
-                throw new MonitorException(MonitorText.NoDdc);
-            }
+            DiagnosticLog.Debug("Monitors", "the NVIDIA bus stayed busy past the wait; the call gave up");
+            throw new MonitorException(MonitorText.NoAnswer);
+        }
+
+        try
+        {
+            return body();
+        }
+        finally
+        {
+            System.Threading.Monitor.Exit(Bus);
         }
     }
 
@@ -78,20 +90,21 @@ internal static unsafe class NvidiaDdc
         }
 
         var (status, displays) = List();
-        if (status != NvapiNative.Ok)
+        if (displays.Count == 0)
         {
-            throw NotReached(monitor, "listing NVIDIA's displays answered " + Status(status));
+            throw NotReached(monitor, status != NvapiNative.Ok ? "listing NVIDIA's displays answered " + Status(status) : "no display connected to an NVIDIA GPU");
         }
 
         return NvidiaDisplays.Match(displays, snapshot, monitor)
-            ?? throw NotReached(monitor, displays.Count(d => !d.Active) + " NVIDIA display(s) off the desktop, none matched alone");
+            ?? throw NotReached(monitor, Status(displays.Count(d => !d.Active)) + " NVIDIA display(s) off the desktop, none matched alone");
     }
 
     /// <summary>
-    /// Every connected display on every NVIDIA GPU, with its EDID's PnP id and its adapter (the smoke lists them too): the status of the first
-    /// call that failed (and what was listed before it), else <see cref="NvapiNative.Ok"/>. It initializes the API itself, and answers
-    /// <see cref="NvapiNative.Initialize"/>'s failure as its status: its function pointers are null until then (2026-10-27: the live test
-    /// called it first and the process died on 0xC0000005).
+    /// Every connected display on every NVIDIA GPU, with its EDID's PnP id and its adapter (the smoke lists them too). A GPU or display whose
+    /// own call fails is passed over (logged at Debug), and one whose EDID won't read is listed with no PnP id, which never matches
+    /// (2026-10-27, the review: one failing display hid every other); the status is the first failure's only when nothing was listed, else
+    /// <see cref="NvapiNative.Ok"/>. It initializes the API itself, and answers <see cref="NvapiNative.Initialize"/>'s failure as its status:
+    /// its function pointers are null until then (2026-10-27: the live test called it first and the process died on 0xC0000005).
     /// </summary>
     public static (int Status, IReadOnlyList<NvidiaDisplay> Displays) List()
     {
@@ -110,27 +123,28 @@ internal static unsafe class NvidiaDdc
             return (status, displays);
         }
 
+        int failure = NvapiNative.Ok;
         for (int g = 0; g < Math.Min((int)gpuCount, NvapiNative.MaxGpus); g++)
         {
             nint logical;
             status = NvapiNative.GetLogicalGpuFromPhysicalGpu(gpus[g], &logical);
-            if (status != NvapiNative.Ok)
+            if (Failed(status, "a GPU's logical GPU", ref failure))
             {
-                return (status, displays);
+                continue;
             }
 
             long luid = 0;
             var data = new NvLogicalGpuData { Version = NvapiNative.LogicalGpuVersion, OsAdapterId = &luid };
             status = NvapiNative.GetLogicalGpuInfo(logical, &data);
-            if (status != NvapiNative.Ok)
+            if (Failed(status, "a GPU's adapter", ref failure))
             {
-                return (status, displays);
+                continue;
             }
 
             (status, var ids) = ConnectedIds(gpus[g]);
-            if (status != NvapiNative.Ok)
+            if (Failed(status, "a GPU's connected displays", ref failure))
             {
-                return (status, displays);
+                continue;
             }
 
             foreach (var id in ids)
@@ -138,23 +152,36 @@ internal static unsafe class NvidiaDdc
                 nint gpu;
                 uint output;
                 status = NvapiNative.GetGpuAndOutputIdFromDisplayId(id.DisplayId, &gpu, &output);
-                if (status != NvapiNative.Ok)
+                if (Failed(status, "a display's output", ref failure))
                 {
-                    return (status, displays);
+                    continue;
                 }
 
                 var edid = new NvEdid { Version = NvapiNative.EdidVersion };
                 status = NvapiNative.GetEdid(gpu, output, &edid);
-                if (status != NvapiNative.Ok)
-                {
-                    return (status, displays);
-                }
-
-                displays.Add(new NvidiaDisplay(NvidiaDisplays.PnpId(new ReadOnlySpan<byte>(edid.Data, 256)), NvidiaDisplays.Luid(luid), (id.Flags & NvapiNative.FlagActive) != 0, gpu, output));
+                string? pnp = Failed(status, "a display's EDID", ref failure) ? null : NvidiaDisplays.PnpId(new ReadOnlySpan<byte>(edid.Data, 256));
+                displays.Add(new NvidiaDisplay(pnp, NvidiaDisplays.Luid(luid), (id.Flags & NvapiNative.FlagActive) != 0, gpu, output));
             }
         }
 
-        return (NvapiNative.Ok, displays);
+        return (displays.Count == 0 ? failure : NvapiNative.Ok, displays);
+    }
+
+    // Whether status failed: logged at Debug with what was asked, and kept in failure when it is the first.
+    private static bool Failed(int status, string what, ref int failure)
+    {
+        if (status == NvapiNative.Ok)
+        {
+            return false;
+        }
+
+        DiagnosticLog.Debug("Monitors", "NVIDIA's " + what + " answered " + Status(status) + "; passed over");
+        if (failure == NvapiNative.Ok)
+        {
+            failure = status;
+        }
+
+        return true;
     }
 
     /// <summary>

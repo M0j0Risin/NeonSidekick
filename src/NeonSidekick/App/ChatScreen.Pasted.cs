@@ -97,28 +97,17 @@ internal sealed partial class ChatScreen
         }
 
         string stem = CameraCapture.Under(CameraCapture.OutputFolder(_effective().PastedImagesFolder), ComfyStudio.PastedStem(_time.GetLocalNow()));
-        string extension = ImageFile.ExtensionOf(picture.Bytes);
-        for (int n = 1; ; n++)
+        var (written, why) = Images.ImageOutput.WriteNumbered(_images, stem, ImageFile.ExtensionOf(picture.Bytes), picture.Bytes);
+        if (why is not null)
         {
-            string relative = n == 1 ? stem + extension : stem + "-" + n.ToString(CultureInfo.InvariantCulture) + extension;
-            var written = _images.WriteBytes(relative, picture.Bytes, overwrite: false);
-            if (written.Outcome == FileOutcome.Exists && n < 100)
-            {
-                continue;
-            }
-
-            if (written.Outcome != FileOutcome.Ok)
-            {
-                string why = FileText.Error(written.Outcome, relative, "write", written.Detail);
-                DiagnosticLog.Warn("Paste", $"{PasteBlocks.ImageLabel(number)} not saved: {why}");
-                _flow.Warning(PastedNotSavedWarning(number, why));
-                return null;
-            }
-
-            pastes.MarkSaved(number, written.Relative);
-            DiagnosticLog.Debug("Paste", $"{PasteBlocks.ImageLabel(number)} saved as {written.Relative}");
-            return written.Relative;
+            DiagnosticLog.Warn("Paste", $"{PasteBlocks.ImageLabel(number)} not saved: {why}");
+            _flow.Warning(PastedNotSavedWarning(number, why));
+            return null;
         }
+
+        pastes.MarkSaved(number, written.Relative);
+        DiagnosticLog.Debug("Paste", $"{PasteBlocks.ImageLabel(number)} saved as {written.Relative}");
+        return written.Relative;
     }
 
     /// <summary>

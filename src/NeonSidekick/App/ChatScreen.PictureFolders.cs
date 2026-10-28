@@ -75,7 +75,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/ha stills view|thumbs|purge</c> (2026-10-27, the user's ask) on <see cref="HomeAssistant.HaCamera.FolderName"/>; bare or another word
-    /// is <see cref="HomeAssistant.HaStillsCommand.Usage"/>. Never asks Home Assistant, so it works with no URL or key. A still deleted here
+    /// is <see cref="HomeAssistant.HaText.StillsUsage"/>. Never asks Home Assistant, so it works with no URL or key. A still deleted here
     /// is never reopened by the chip's 2 s reuse: <see cref="HomeCameraFetches"/> forgets a saved path whose file is gone.
     /// </summary>
     private async Task HandleHomeStillsAsync(PictureFolderVerb verb, CancellationToken cancellationToken)
@@ -93,7 +93,7 @@ internal sealed partial class ChatScreen
                 await PurgePictureFolderAsync(folder, HomeStillsFolderLabel, cancellationToken).ConfigureAwait(false);
                 return;
             default:
-                _flow.Error(HomeAssistant.HaStillsCommand.Usage);
+                _flow.Error(HomeAssistant.HaText.StillsUsage);
                 return;
         }
     }

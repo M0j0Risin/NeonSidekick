@@ -319,6 +319,23 @@ public sealed class MonitorActionsTests
         var xg = Monitor(FakeMonitorSystem.Xg) with { Active = false };
         string plain = MonitorChange.SwitchInput(xg, 0x0F).Describe(Words);
         Assert.Equal(plain + MonitorText.AndAddWords, (MonitorChange.SwitchInput(xg, 0x0F) with { Return = true }).Describe(Words));
+        Assert.Equal(plain + MonitorText.AndExtendAllWords, (MonitorChange.SwitchInput(xg, 0x0F) with { Return = true, ExtendsAll = true }).Describe(Words));
+    }
+
+    [Fact]
+    public async Task OffTheDesktop_AnExtendThatLeavesItOff_SaysSo_SwitchedOrAlreadyOn()
+    {
+        var xg = await OffDesktop();
+        _fake.Of(FakeMonitorSystem.Xg).StaysOffOnExtend = true;
+
+        var switched = await Back(xg, 0x0F);
+        Assert.Equal(MonitorOutcomeKind.Switched, switched.Kind);
+        Assert.Equal(MonitorText.SwitchedNotAdded("2 XG27UQDMS", "DisplayPort-1", MonitorText.KeptOffDesktop), switched.Text);
+        Assert.False(Monitor(FakeMonitorSystem.Xg).Active);
+
+        // Already on this PC's input: the Extend's sentence replaced by the reason it isn't back (2026-10-27, the review).
+        var again = await Back(xg, 0x0F);
+        Assert.Equal(MonitorText.AlreadyOn("2 XG27UQDMS", "DisplayPort-1") + " " + MonitorText.KeptOffDesktop, again.Text);
     }
 
     [Fact]

@@ -197,6 +197,55 @@ public sealed class MonitorBoardTests
 
         // On the desktop it is never a return.
         Assert.False(state.SwitchTo(lg, 0x0F, none).Return);
+        Assert.False(state.SwitchTo(xg, 0x0F, none).ExtendsAll);   // the only one off the desktop: Extend all adds just it
+    }
+
+    [Fact]
+    public async Task SwitchTo_OffTheDesktop_ThisPcsInput_ExtendsAll_WithAnotherOffTheDesktop_OrADuplicate()
+    {
+        var screen = _fake.Of(FakeMonitorSystem.Xg);
+        screen.Active = false;
+        screen.ReachedOffDesktop = true;
+        _fake.Screens.Add(new() { Target = "A:4357", Name = "DELL U2720Q", Active = false, Source = "A:2", Gdi = @"\\.\DISPLAY3", Mode = new MonitorMode(3840, 2160, 60, 0, 0) });
+        using (var board = new MonitorBoard(_fake, quick: true))
+        {
+            await board.OpenAsync(CancellationToken.None);
+            var state = board.State;
+            var xg = state.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+            var none = MonitorWords.None(state.Topology.Monitors);
+            var change = state.SwitchTo(xg, 0x0F, none);
+            Assert.True(change.Return);
+            Assert.True(change.ExtendsAll);   // the DELL comes back too (2026-10-27, the review)
+            Assert.EndsWith(MonitorText.AndExtendAllWords, change.Describe(none), StringComparison.Ordinal);
+        }
+
+        var dell = _fake.Of("A:4357");
+        dell.Active = true;
+        dell.Source = "A:0";
+        dell.Gdi = @"\\.\DISPLAY1";
+        using (var board = new MonitorBoard(_fake, quick: true))
+        {
+            await board.OpenAsync(CancellationToken.None);
+            var state = board.State;
+            Assert.Equal(MonitorArrangement.Duplicated, state.Topology.Layout);
+            var xg = state.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+            Assert.True(state.SwitchTo(xg, 0x0F, MonitorWords.None(state.Topology.Monitors)).ExtendsAll);   // the Duplicate ends
+        }
+    }
+
+    [Fact]
+    public async Task PcInputOf_AMonitorOffTheDesktop_NeverGuessesFromItsCurrentInput()
+    {
+        var screen = _fake.Of(FakeMonitorSystem.Lg);
+        screen.Active = false;
+        screen.ReachedOffDesktop = true;
+        screen.Input = 0x10;   // DisplayPort-2: another machine's, off the desktop (2026-10-27, the review)
+        using var board = new MonitorBoard(_fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var state = board.State;
+        var lg = state.Topology.ByTarget(FakeMonitorSystem.Lg)!;
+
+        Assert.Null(state.PcInputOf(lg, MonitorWords.None(state.Topology.Monitors)));   // two DisplayPort inputs: no guess
     }
 
     [Fact]
@@ -278,6 +327,58 @@ public sealed class MonitorBoardTests
             Assert.True(xg.Reported && !xg.Reading);
             Assert.Single(seen);   // the LG's alone
         }
+    }
+
+    [Fact]
+    public async Task ASeenThatThrows_LeavesNoTabReading()
+    {
+        using var board = new MonitorBoard(_fake, quick: true, seen: (_, _, _) => throw new InvalidOperationException("the settings were busy"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => board.OpenAsync(CancellationToken.None));
+
+        Assert.All(board.State.Topology.Monitors, m => Assert.False(board.State.InputsOf(m).Reading));   // 2026-10-27, the review
+    }
+
+    [Fact]
+    public async Task AWarmCache_StillTellsAListTheRememberedOneLacks()
+    {
+        // A profile switched to remembers nothing yet: the cached lists are seen for it, so its file gets them (2026-10-27, the review).
+        IReadOnlyList<byte>? remembered = null;
+        bool same = true;
+        var seen = new List<string>();
+        using var board = new MonitorBoard(_fake, quick: true,
+            remembered: (m, _) => same ? (m.Target == FakeMonitorSystem.Xg ? [0x0F, 0x11, 0x12] : [0x11, 0x12, 0x0F, 0x10]) : remembered,
+            seen: (m, _, _) => { lock (seen) { seen.Add(m.Target); } });
+        await board.OpenAsync(CancellationToken.None);
+        Assert.Empty(seen);
+
+        same = false;
+        await board.ReadInputsAsync(CancellationToken.None);
+
+        Assert.Equal(1, _fake.Count("caps " + FakeMonitorSystem.Xg));   // cached: not asked again
+        Assert.Equal([FakeMonitorSystem.Lg, FakeMonitorSystem.Xg], seen);
+    }
+
+    [Fact]
+    public async Task ASwitchAskedDuringTheCapabilitiesRound_GoesBeforeTheNextList()
+    {
+        using var hold = new ManualResetEventSlim(false);
+        _fake.CapsBlock = hold;
+        using var board = new MonitorBoard(_fake, quick: true);
+        await board.RefreshAsync(CancellationToken.None);
+        var xg = board.State.Topology.ByTarget(FakeMonitorSystem.Xg)!;
+        var reading = board.ReadInputsAsync(CancellationToken.None);
+        await MonitorCallsTests.Until(() => _fake.Count("caps ") == 1);   // the LG's list held
+
+        var switching = board.Actions.ApplyAsync(MonitorChange.SwitchInput(xg, 0x11), MonitorWords.None(board.State.Topology.Monitors), CancellationToken.None);
+        hold.Set();
+        await switching.WaitAsync(TimeSpan.FromSeconds(10));
+        await reading.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var calls = _fake.Calls.ToList();
+        int set = calls.IndexOf("set " + FakeMonitorSystem.Xg + " 11");
+        int xgCaps = calls.IndexOf("caps " + FakeMonitorSystem.Xg);
+        Assert.True(set >= 0 && set < xgCaps, string.Join(", ", calls));   // the switch waited for no list (2026-10-27, the review)
     }
 
     [Fact]

@@ -75,12 +75,6 @@ internal sealed partial class ChatScreen
     /// <summary>The loaded profile's saved videos, made again when the profile moves (<see cref="YouTubeLibraryNow"/>).</summary>
     private YouTubeLibrary? _youTubeLibrary;
 
-    /// <summary>
-    /// The loaded profile's saved videos (2026-10-07): the one made for its directory, or a new one once a profile switch moved it.
-    /// Read from the window's thread too (<see cref="YouTubeResume"/>) and (later on 2026-10-16) from Kestrel's, the Web UI's saved list:
-    /// the field read and swapped atomically, and two made in a race share the library's one lock over the same file, so neither loses a
-    /// change; the one that lost the swap is simply not kept.
-    /// </summary>
     /// <summary><c>/youtube</c>'s argument list (2026-10-27): the verbs, and the saved videos after <c>unsave </c> and <c>play </c>.</summary>
     private IReadOnlyList<CompletionItem> YouTubeChoices(string argText) => YouTubeCommand.Complete(argText, () =>
     {
@@ -88,6 +82,12 @@ internal sealed partial class ChatScreen
         return CompletionRead(library.FilePath, library.List);
     });
 
+    /// <summary>
+    /// The loaded profile's saved videos (2026-10-07): the one made for its directory, or a new one once a profile switch moved it.
+    /// Read from the window's thread too (<see cref="YouTubeResume"/>) and (later on 2026-10-16) from Kestrel's, the Web UI's saved list:
+    /// the field read and swapped atomically, and two made in a race share the library's one lock over the same file, so neither loses a
+    /// change; the one that lost the swap is simply not kept.
+    /// </summary>
     private YouTubeLibrary YouTubeLibraryNow()
     {
         var library = Volatile.Read(ref _youTubeLibrary);

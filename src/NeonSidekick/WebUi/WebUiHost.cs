@@ -259,12 +259,9 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             // The limits (2026-10-15): a tap, a question to Home Assistant, a sign-in (pasted, or the link's GET since 2026-10-19), each counted per
-            // address before anything else.
-            if (WebRateLimit.BucketOf(path, post, HttpMethods.IsGet(context.Request.Method)) is { } bucket && !_limits.TryTake(remote, bucket, out var retry))
+            // address before anything else. A camera's still is counted in CameraAsync, past its own checks.
+            if (WebRateLimit.BucketOf(path, post, HttpMethods.IsGet(context.Request.Method)) is { } bucket && !await TakeAsync(context, remote, bucket).ConfigureAwait(false))
             {
-                response.Headers.CacheControl = "no-store";
-                response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                await ResultAsync(context, StatusCodes.Status429TooManyRequests, new WebResult(false, WebUiText.SlowDown)).ConfigureAwait(false);
                 return;
             }
 
@@ -726,15 +723,39 @@ public sealed class WebUiHost : IWebUiHost
     public const string CameraPath = "/api/home/camera";
 
     /// <summary>
+    /// A token of <paramref name="bucket"/> for <paramref name="remote"/>; past it, the 429 (never cached, <c>Retry-After</c>, <see cref="WebUiText.SlowDown"/>)
+    /// is answered and false returned (2026-10-27, the review: one answer for the limits taken up front and the camera's, taken later).
+    /// </summary>
+    private async Task<bool> TakeAsync(HttpContext context, IPAddress? remote, WebRateBucket bucket)
+    {
+        if (_limits.TryTake(remote, bucket, out var retry))
+        {
+            return true;
+        }
+
+        var response = context.Response;
+        response.Headers.CacheControl = "no-store";
+        response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await ResultAsync(context, StatusCodes.Status429TooManyRequests, new WebResult(false, WebUiText.SlowDown)).ConfigureAwait(false);
+        return false;
+    }
+
+    /// <summary>
     /// A camera's still (2026-10-27): asked with <c>X-Neon: 1</c> like a post, so only the page's own script gets one (an <c>&lt;img&gt;</c> another
     /// page planted sends no header); the picture never cached and kept to this origin. 404 for a reference outside the tiles' reach, 502 with
-    /// Home Assistant's reason when it gave none. A HEAD fetches nothing.
+    /// Home Assistant's reason when it gave none. A HEAD fetches nothing. Its bucket (<see cref="WebRateBucket.Camera"/>) is spent here, after the
+    /// sign-in and the header (2026-10-27, the review: a planted <c>&lt;img&gt;</c>, refused anyway, spent the page's three stills).
     /// </summary>
-    private static async Task CameraAsync(HttpContext context, IWebHome home, IPAddress? remote)
+    private async Task CameraAsync(HttpContext context, IWebHome home, IPAddress? remote)
     {
         if (context.Request.Headers[CsrfHeader] != "1")
         {
             await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
+            return;
+        }
+
+        if (!await TakeAsync(context, remote, WebRateBucket.Camera).ConfigureAwait(false))
+        {
             return;
         }
 

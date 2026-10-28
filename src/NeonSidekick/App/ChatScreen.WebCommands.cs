@@ -412,8 +412,9 @@ internal sealed partial class ChatScreen
         var workflows = CaretChoices();
         var shares = StarChoices();
         var profiles = Settings.Profiles.List(_settings.StorageDirectory);
-        var timers = _timers.Snapshot().Select(timer => timer.Name).ToList();
-        var stopwatches = StopwatchNames();
+        var board = _timers.Snapshot();   // one read for the timers and the stopwatches (2026-10-27, the review)
+        var timers = board.Select(timer => timer.Name).ToList();
+        var stopwatches = board.Where(timer => timer.Stopwatch).Select(timer => timer.Name).ToList();
         string? vaultRoot = VaultRoot(effective, out _);
         var promptStore = SavedPromptsNow();
         var promptList = CompletionRead(promptStore.FilePath, promptStore.List);

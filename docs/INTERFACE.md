@@ -185,7 +185,7 @@ Windows only. `/monitor` or a right-click on the home bar's 🖥️.
 * **This PC's input…** picks which input this PC is on: the one it shows now, one by name, or none (the cable guesses: an HDMI input on a DisplayPort cable, or the reverse, is another input). An adapter cable can fool the guess; a pick fixes it.
 * **Inputs at once:** a monitor's inputs show from its last reported list while it's read again; the first open after a new monitor waits for its read.
 * **Numbers** are the screen capture's (`monitor:2`).
-* **Off the desktop:** on an NVIDIA card, a monitor still lists and switches its inputs, and this PC's input also adds it back. Otherwise it's dim, with only the rows that bring it back.
+* **Off the desktop:** on an NVIDIA card, a monitor still lists and switches its inputs, and this PC's input adds it back with [Extend all](TOOLS.md#monitors). Otherwise it's dim, with only the rows that bring it back.
 * **Asks first** when a switch would leave no monitor showing this PC, or a layout row affects one on another input: your pick, else the cable, else the app's own switch.
 * **No inputs?** Many monitors ship with DDC/CI off in their own on-screen menu (look for "DDC/CI"); a duplicated monitor's inputs can't be told apart until Extend.
 

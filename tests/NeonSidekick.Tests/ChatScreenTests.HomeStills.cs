@@ -88,7 +88,7 @@ public partial class ChatScreenTests
         Assert.Equal([HomeStillsDir], viewed);
         Assert.Equal([HomeStillsDir], browsed);
         Assert.True(Directory.Exists(HomeStillsDir));
-        Assert.Equal(2, output.Split("  ✗ " + HaStillsCommand.Usage).Length - 1);
+        Assert.Equal(2, output.Split("  ✗ " + HaText.StillsUsage).Length - 1);
         Assert.DoesNotContain(HaText.NotConfigured, output);
     }
 

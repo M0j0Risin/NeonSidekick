@@ -74,7 +74,8 @@ public sealed class TaskAccess
         var folders = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var task in tasks)
         {
-            for (string folder = task.Folder.TrimEnd('\\'); folder.Length > 0; folder = folder[..folder.LastIndexOf('\\')])
+            // A folder with no backslash left ends the walk rather than throwing (2026-10-27, the review; the scheduler's always start with one).
+            for (string folder = task.Folder.TrimEnd('\\'); folder.Length > 0; folder = folder.LastIndexOf('\\') is int cut and > 0 ? folder[..cut] : "")
             {
                 folders.Add(folder);
             }
@@ -86,12 +87,17 @@ public sealed class TaskAccess
         }
     }
 
-    /// <summary>The folders <see cref="Saw"/> kept for <paramref name="computer"/> (null or <c>local</c>: this PC), as <c>\Ops\Sync</c>; none before a list is read.</summary>
+    /// <summary>
+    /// The folders <see cref="Saw"/> kept for <paramref name="computer"/> as <c>\Ops\Sync</c>, the computer named as a list resolves it (none
+    /// typed: the one a list reads then, this PC or the only one offered; 2026-10-27, the review: a lone remote's folders were looked up
+    /// under this PC); none before a list is read.
+    /// </summary>
     public IReadOnlyList<string> FoldersSeen(string? computer)
     {
+        string key = Catalog().Find(computer).Computer?.Name ?? SeenKey(computer);
         lock (_seenGate)
         {
-            return _seen.TryGetValue(SeenKey(computer), out var folders) ? folders : [];
+            return _seen.TryGetValue(SeenKey(key), out var folders) ? folders : [];
         }
     }
 

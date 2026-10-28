@@ -22,8 +22,14 @@ internal sealed class HomeCameraStill(ImageAttachment? image, string? error, Dat
 
     public DateTimeOffset At { get; } = at;
 
-    /// <summary>The kept file's path in the images folder; set under <see cref="HomeCameraFetches"/>' lock.</summary>
+    /// <summary>The kept file's path in the images folder; set under <see cref="SaveGate"/>.</summary>
     public string? Saved { get; set; }
+
+    /// <summary>
+    /// The still's own lock for <see cref="HomeCameraFetches.SaveOnce"/> (2026-10-27, the review): the disk write runs under it, never under
+    /// the fetches' lock, which the screen's task takes for every tap and the page's every ask.
+    /// </summary>
+    internal object SaveGate { get; } = new();
 }
 
 /// <summary>
@@ -41,26 +47,44 @@ internal sealed class HomeCameraFetches(Func<string, CancellationToken, Task<HaP
     private readonly Dictionary<string, Task<HomeCameraStill>> _fetches = new(StringComparer.Ordinal);
     private CancellationTokenSource _cts = new();
 
-    /// <summary>The token the fetches run under now: cancelled by the next <see cref="Forget"/>.</summary>
+    /// <summary>Set by <see cref="Dispose"/>: every later ask answers cancelled, never with the disposed source's exception (2026-10-27, the review).</summary>
+    private bool _disposed;
+
+    private static readonly CancellationToken Cancelled = new(canceled: true);
+
+    /// <summary>The token the fetches run under now: cancelled by the next <see cref="Forget"/>; a cancelled one once disposed.</summary>
     public CancellationToken Token
     {
         get
         {
             lock (_gate)
             {
-                return _cts.Token;
+                return _disposed ? Cancelled : _cts.Token;
             }
         }
     }
 
-    /// <summary><paramref name="entityId"/>'s still: the fetch running, a picture under <see cref="Reuse"/> old, or a new fetch.</summary>
+    /// <summary>
+    /// <paramref name="entityId"/>'s still: the fetch running, a picture under <see cref="Reuse"/> old, or a new fetch; a cancelled task once
+    /// disposed. A finished fetch past its reuse (or one that failed) is let go first, every camera's, so no still's bytes stay held for the
+    /// session (2026-10-27, the review).
+    /// </summary>
     public Task<HomeCameraStill> Get(string entityId)
     {
         ArgumentNullException.ThrowIfNull(entityId);
         lock (_gate)
         {
-            if (_fetches.TryGetValue(entityId, out var known)
-                && (!known.IsCompleted || (known.IsCompletedSuccessfully && known.Result.Image is not null && time.GetUtcNow() - known.Result.At < Reuse)))
+            if (_disposed)
+            {
+                return Task.FromCanceled<HomeCameraStill>(Cancelled);
+            }
+
+            foreach (var spent in _fetches.Where(f => f.Value.IsCompleted && !Reusable(f.Value)).Select(f => f.Key).ToList())
+            {
+                _fetches.Remove(spent);
+            }
+
+            if (_fetches.TryGetValue(entityId, out var known))
             {
                 return known;
             }
@@ -71,6 +95,10 @@ internal sealed class HomeCameraFetches(Func<string, CancellationToken, Task<HaP
             return started;
         }
     }
+
+    /// <summary>A finished fetch answered again: a picture under <see cref="Reuse"/> old.</summary>
+    private bool Reusable(Task<HomeCameraStill> done) =>
+        done.IsCompletedSuccessfully && done.Result.Image is not null && time.GetUtcNow() - done.Result.At < Reuse;
 
     private async Task<HomeCameraStill> FetchAsync(string entityId, CancellationToken token)
     {
@@ -85,11 +113,11 @@ internal sealed class HomeCameraFetches(Func<string, CancellationToken, Task<HaP
     /// again next time). A kept file <paramref name="exists"/> no longer finds is forgotten first (2026-10-27, <c>/ha stills purge</c>; also
     /// the picture viewer's delete or Explorer's), so a reuse saves a fresh copy rather than opening a deleted path; one check a reuse.
     /// </summary>
-    public string? SaveOnce(HomeCameraStill still, Func<string?> save, Func<string, bool>? exists = null)
+    public static string? SaveOnce(HomeCameraStill still, Func<string?> save, Func<string, bool>? exists = null)
     {
         ArgumentNullException.ThrowIfNull(still);
         ArgumentNullException.ThrowIfNull(save);
-        lock (_gate)
+        lock (still.SaveGate)
         {
             if (still.Saved is { } kept && exists is not null && !exists(kept))
             {
@@ -105,6 +133,11 @@ internal sealed class HomeCameraFetches(Func<string, CancellationToken, Task<HaP
     {
         lock (_gate)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             // Cancelled before disposed: a fetch registering on the old token after this sees it cancelled and runs its callback at once.
             _cts.Cancel();
             _cts.Dispose();
@@ -117,6 +150,12 @@ internal sealed class HomeCameraFetches(Func<string, CancellationToken, Task<HaP
     {
         lock (_gate)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
             _cts.Cancel();
             _cts.Dispose();
             _fetches.Clear();
@@ -141,16 +180,18 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A camera chip's double-click, <c>/homebar tap</c> or <c>/homebar show</c> (2026-10-27): the chip marked pending (a camera already
     /// fetching is left alone) and its still fetched on a task of its own, under <see cref="HomeCameraFetches.Token"/> rather than the
-    /// caller's (the watcher's token ends with the reply). Returns at once. The task never touches the screen: it queues a
-    /// <see cref="HomeCameraShow"/> and wakes it (<see cref="WebNudge"/>).
+    /// caller's (the watcher's token ends with the reply). Returns at once, false when the camera was fetching already. The task never touches
+    /// the screen: it queues a <see cref="HomeCameraShow"/> and wakes it (<see cref="WebNudge"/>). The still is kept in the images folder of the
+    /// profile loaded at the tap (2026-10-27, the review): a profile switch moves the settings before it forgets the fetches, and a save in
+    /// between would otherwise land in the new profile.
     /// </summary>
-    private void StartHomeCamera(HomeChip chip, string id)
+    private bool StartHomeCamera(HomeChip chip, string id)
     {
         lock (_homeGate)
         {
             if (_homePending.TryGetValue(chip.Reference, out var pending) && !pending.Failed)
             {
-                return;
+                return false;
             }
 
             _homePending[chip.Reference] = new HomePending(_time.GetUtcNow(), [], [], Failed: false, Fetch: true);
@@ -158,10 +199,13 @@ internal sealed partial class ChatScreen
         }
 
         int generation = Volatile.Read(ref _homeCameraGeneration);
-        _ = RunHomeCameraAsync(chip.Reference, chip.Name, id, generation, _homeCameras.Token);
+        string root = _settings.ProfileImagesDirectory;
+        var images = new WorkingDirectory(() => root, _time, WorkingDirectoryOptions.Images);
+        _ = RunHomeCameraAsync(chip.Reference, chip.Name, id, images, generation, _homeCameras.Token);
+        return true;
     }
 
-    private async Task RunHomeCameraAsync(string reference, string name, string id, int generation, CancellationToken token)
+    private async Task RunHomeCameraAsync(string reference, string name, string id, WorkingDirectory images, int generation, CancellationToken token)
     {
         try
         {
@@ -173,14 +217,14 @@ internal sealed partial class ChatScreen
             }
 
             string? error = null;
-            string? saved = _homeCameras.SaveOnce(still, () =>
+            string? saved = HomeCameraFetches.SaveOnce(still, () =>
             {
                 if (token.IsCancellationRequested)
                 {
                     return null;
                 }
 
-                var save = HaCamera.Save(_images, image, id, _time.GetLocalNow());
+                var save = HaCamera.Save(images, image, id, _time.GetLocalNow());
                 error = save.Error;
                 if (save.Saved is { } path)
                 {
@@ -188,7 +232,7 @@ internal sealed partial class ChatScreen
                 }
 
                 return save.Saved;
-            }, path => _images.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full));
+            }, path => images.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full));
             token.ThrowIfCancellationRequested();
             lock (_homeGate)
             {
@@ -303,7 +347,8 @@ internal sealed partial class ChatScreen
             }
             else
             {
-                later.Add(show with { Notice = null });
+                // Its window is tried once: a viewer that threw isn't asked again at every drain (2026-10-27, the review).
+                later.Add(show with { Notice = null, OpenPath = null });
             }
         }
 

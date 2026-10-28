@@ -588,10 +588,10 @@ internal sealed partial class ChatScreen
     public const string MemoryEditNote = "open memory.json in your editor";
     public const string MemoryOnWord = "on";   // 2026-10-03, the user's ask: the Memory setting from the line, as the 💾 pane's buttons; read-write's alias since 2026-10-04
     public const string MemoryOffWord = "off";   // disabled's alias since 2026-10-04
-    public const string MemoryReadWriteNote = "the model reads and saves memories";
+    public const string MemoryReadWriteNote = "the model reads and saves memories";   // 2026-10-04, the user's ask: Memory mode's three words
 
     /// <summary>The note beside <see cref="MemoryOnWord"/> on the argument list (2026-10-27). Pinned.</summary>
-    public const string MemoryOnNote = "the same as read-write";   // 2026-10-04, the user's ask: Memory mode's three words
+    public const string MemoryOnNote = "the same as read-write";
     public const string MemoryReadOnlyNote = "the model reads memories, never saves one";
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
     public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
@@ -4998,11 +4998,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What the argument table reads that is not a constant: the profile names and the loaded one,
-    /// the running timers' names, the skill catalog (<see cref="SkillChoices"/>, for <c>/skills edit</c>, 2026-09-21), the sandbox's
+    /// the running timers' names, the sandbox's
     /// folders for a prefix (<c>WorkingDirectory.Complete</c>, folders only, for <c>/tree</c> and
-    /// <c>/explore</c>) and its <c>@</c>-mention walk over the text files alone
-    /// (<c>Complete(query, WorkingDirectory.IsTextFile)</c>, for <c>/read</c>) or the image files alone
-    /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>) — <see cref="ArgumentPaths"/> —
+    /// <c>/explore</c>) and its <c>@</c>-mention walk over the text files
+    /// (<c>Complete(query, WorkingDirectory.IsTextFile)</c>, for <c>/read</c>) or the image files
+    /// (<c>Complete(query, ImageFile.IsImagePath)</c>, for <c>/view</c>), each list with the PDFs too — <see cref="ArgumentPaths"/> —
     /// the disk reads behind a function each, so <c>/tts o</c> scans no catalog. <see cref="MachineFolders"/> (2026-10-05) is
     /// <c>/cwd</c>'s: any local drive's folders (<see cref="FolderCompleter.Complete"/>), not the sandbox's.
     /// </summary>
@@ -5842,10 +5842,13 @@ internal sealed partial class ChatScreen
             return OpenPaths(argText, sources);
         }
 
-        // /imagine … --image <path> (2026-10-27, the completion survey): the pictures, as /view lists them, the line before kept.
+        // /imagine … --image <path> (2026-10-27, the completion survey): the pictures, as /view lists them, the line before kept. Pictures alone,
+        // never a PDF ComfyUI can't take, and a path with a blank quoted, a folder's quote left open so its path goes on (2026-10-27, the review).
         if (kind == SlashCommand.Imagine)
         {
-            return Comfy.ComfyImagine.ImagePathAt(argText) is { } at ? HeadedPaths(at.Head, at.Path, sources.ImageFiles) : null;
+            return Comfy.ComfyImagine.ImagePathAt(argText) is { } at
+                ? HeadedPaths(at.Head, at.Path, sources.ImageFiles, p => p.EndsWith('/') || ImageFile.IsImagePath(p), p => ImagineWord(p, at.Opened), closesOnBlank: !at.Opened)
+                : null;
         }
 
         if (kind is not (SlashCommand.Read or SlashCommand.View))
@@ -5855,7 +5858,7 @@ internal sealed partial class ChatScreen
 
         // /view's flags (2026-10-27, the completion survey): while the argument is a - being typed, or after a path and a space, until either
         // is typed (ParseViewArgs takes one at either end; both are the usage error). Picked with a space after, so the path completes next.
-        if (kind == SlashCommand.View && ViewFlagPaths(argText) is { } flags)
+        if (kind == SlashCommand.View && ViewFlagPaths(argText, sources.ImageFiles) is { } flags)
         {
             return flags;
         }
@@ -5869,27 +5872,18 @@ internal sealed partial class ChatScreen
             argText = argText[flag.Length..].TrimStart();
         }
 
-        if (argText.Length > 0 && char.IsWhiteSpace(argText[^1]))
-        {
-            return new MentionResult(FileOutcome.Ok, [], false);
-        }
-
-        var found = kind == SlashCommand.Read ? sources.TextFiles(argText) : sources.ImageFiles(argText);
-        if (found.Paths.Count == 1 && string.Equals(found.Paths[0], argText, StringComparison.OrdinalIgnoreCase))
-        {
-            return new MentionResult(FileOutcome.Ok, [], false);
-        }
-
-        return flag.Length == 0 ? found : found with { Paths = [.. found.Paths.Select(p => flag + p)] };
+        return HeadedPaths(flag, argText, kind == SlashCommand.Read ? sources.TextFiles : sources.ImageFiles);
     }
 
     /// <summary>
     /// <paramref name="path"/>'s list from <paramref name="files"/> after <paramref name="head"/> (the line before it, which a pick keeps), with
-    /// the path lists' closing rules: whitespace at the end, or a file typed in full, lists nothing.
+    /// the path lists' closing rules: whitespace at the end (unless <paramref name="closesOnBlank"/> is false: a quote is open), or a file
+    /// typed in full, lists nothing. <paramref name="keep"/> leaves entries out, and <paramref name="shape"/> writes each as its word.
     /// </summary>
-    private static MentionResult HeadedPaths(string head, string path, Func<string, MentionResult> files)
+    private static MentionResult HeadedPaths(string head, string path, Func<string, MentionResult> files, Func<string, bool>? keep = null,
+        Func<string, string>? shape = null, bool closesOnBlank = true)
     {
-        if (path.Length > 0 && char.IsWhiteSpace(path[^1]))
+        if (closesOnBlank && path.Length > 0 && char.IsWhiteSpace(path[^1]))
         {
             return new MentionResult(FileOutcome.Ok, [], false);
         }
@@ -5900,14 +5894,20 @@ internal sealed partial class ChatScreen
             return new MentionResult(FileOutcome.Ok, [], false);
         }
 
-        return found with { Paths = [.. found.Paths.Select(p => head + p)] };
+        return found with { Paths = [.. found.Paths.Where(p => keep?.Invoke(p) ?? true).Select(p => head + (shape?.Invoke(p) ?? p))] };
     }
+
+    // A picked /imagine picture as the one word its parse reads: quoted when it holds a blank or a quote is open; a folder's quote stays open.
+    private static string ImagineWord(string path, bool opened) =>
+        !opened && !path.Any(char.IsWhiteSpace) ? path : "\"" + path + (path.EndsWith('/') ? "" : "\"");
 
     /// <summary>
     /// <c>/view</c>'s flags as a path list (2026-10-27): <c>--chat</c> and <c>--thumbs</c> while the argument is only a <c>-</c> word being
-    /// typed, or after a path and a space; null (the path list as before) otherwise, and once either flag is typed. Pure.
+    /// typed, or after a finished path and a space; null (the path list as before) otherwise, and once either flag is typed. A path is finished
+    /// when it ends in <c>/</c> or <paramref name="files"/> lists it alone (2026-10-27, the review: <c>My </c>, a folder name with a blank,
+    /// offered <c>My --chat</c>); with no <paramref name="files"/>, only a folder is. Pure over <paramref name="files"/>.
     /// </summary>
-    public static MentionResult? ViewFlagPaths(string argText)
+    public static MentionResult? ViewFlagPaths(string argText, Func<string, MentionResult>? files = null)
     {
         ArgumentNullException.ThrowIfNull(argText);
         string[] flags = [ViewChatFlag, ViewThumbsFlag];
@@ -5921,7 +5921,9 @@ internal sealed partial class ChatScreen
         string head = gap < 0 ? "" : argText[..(gap + 1)];
         string current = argText[(gap + 1)..];
         bool leading = head.Trim().Length == 0 && current.StartsWith('-');
-        bool trailing = head.Trim().Length > 0 && (current.Length == 0 || current.StartsWith('-'));
+        string path = head.Trim();
+        bool finished = path.EndsWith('/') || (files?.Invoke(path) is { Paths: [var only] } && string.Equals(only, path, StringComparison.OrdinalIgnoreCase));
+        bool trailing = path.Length > 0 && finished && (current.Length == 0 || current.StartsWith('-'));
         if (!leading && !trailing)
         {
             return null;
@@ -6082,10 +6084,11 @@ internal sealed partial class ChatScreen
     /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files, and any drive's folders for <c>/cwd</c>.</summary>
     private ArgumentList ArgumentChoices(string command, string argText)
     {
+        var timers = _timers.Snapshot();   // one read for the timers and the stopwatches (2026-10-27, the review)
         var sources = new ArgumentSources(
             () => Profiles.List(_settings.StorageDirectory),
             _settings.ProfileName,
-            _timers.Snapshot().Select(timer => timer.Name).ToList(),
+            timers.Select(timer => timer.Name).ToList(),
             prefix => _files.Complete(prefix).Paths.Where(path => path.EndsWith('/')).ToList(),
             prefix => _files.Complete(prefix, full => WorkingDirectory.IsTextFile(full) || PdfFile.IsPdfPath(full)),   // a PDF reads aloud too (2026-10-14)
             prefix => _files.Complete(prefix, full => ImageFile.IsImagePath(full) || PdfFile.IsPdfPath(full)),   // /view opens a PDF too (2026-10-14)
@@ -6117,7 +6120,7 @@ internal sealed partial class ChatScreen
             PlanState: PlanCompletionNow(web: false),
             EditPlans: EditPlanChoices,
             HomeBar: HomeBarChoices,
-            Stopwatches: StopwatchNames(),
+            Stopwatches: [.. timers.Where(timer => timer.Stopwatch).Select(timer => timer.Name)],   // /timer stopwatch's names (2026-10-27, the completion survey)
             Prompts: PromptChoices,
             BrowserLinks: argText => BrowserChoices(argText, page: false),
             YouTubeSaved: YouTubeChoices,
@@ -6126,9 +6129,6 @@ internal sealed partial class ChatScreen
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
     }
-
-    /// <summary>The board's stopwatches' names, for <c>/timer stopwatch </c>'s list (2026-10-27, the completion survey).</summary>
-    private List<string> StopwatchNames() => _timers.Snapshot().Where(timer => timer.Stopwatch).Select(timer => timer.Name).ToList();
 
     /// <summary>
     /// A saved list's file read for the argument list (2026-10-27): through <see cref="Computers.ConfigCache"/>, so a keystroke reads it again
@@ -18213,8 +18213,9 @@ internal sealed partial class ChatScreen
         }
 
         string name = Path.GetFileName(image.Path.Replace('/', Path.DirectorySeparatorChar));
-        // A camera picture with no file (watch mode's, 2026-10-02) opens from the Camera output folder's .watch, found now.
-        string? folder = full is null && image.Camera ? WatchFolderPath() : null;
+        // A camera picture with no file (watch mode's, 2026-10-02) opens from the Camera output folder's .watch, found now; one with no
+        // path at all (a still whose save was refused, 2026-10-27, the review) has nothing there and opens from its bytes.
+        string? folder = full is null && image.Camera && image.Path.Length > 0 ? WatchFolderPath() : null;
         lock (_pictures)
         {
             // A web-only picture with a file of its own keeps no bytes: the page's server reads the file (later on 2026-10-14).

@@ -301,10 +301,16 @@ internal sealed partial class ChatScreen
         _transcript.Notice(CameraText.Attached(shot.RelativePath));
     }
 
-    /// <summary>The message's pictures with the camera's own marked as such (one attached from the line was loaded from its file).</summary>
-    private IReadOnlyList<ImageAttachment> MarkCameraImages(IReadOnlyList<ImageAttachment> images) =>
-        _cameraPaths.IsEmpty || !images.Any(i => _cameraPaths.ContainsKey(i.Path)) ? images
-            : images.Select(i => _cameraPaths.ContainsKey(i.Path) ? i with { Camera = true } : i).ToList();
+    /// <summary>
+    /// The message's pictures with the camera's own marked as such (one attached from the line was loaded from its file): one this run took, or
+    /// (2026-10-27, the review) one in the camera's folder or <c>home-cameras</c>, so a photo attached after a restart, when this run never saw
+    /// it taken, still follows <c>Camera keep in sessions</c>.
+    /// </summary>
+    private IReadOnlyList<ImageAttachment> MarkCameraImages(IReadOnlyList<ImageAttachment> images)
+    {
+        bool IsCamera(ImageAttachment i) => !i.Camera && (_cameraPaths.ContainsKey(i.Path) || (System.IO.Path.IsPathFullyQualified(i.Path) && InCameraFolder(i.Path)));
+        return images.Any(IsCamera) ? images.Select(i => IsCamera(i) ? i with { Camera = true } : i).ToList() : images;
+    }
 
     /// <summary>
     /// <c>/camera [word …]</c> (2026-10-02): bare, the shutter pane, the photo onto the input line (a snap straight away without a
@@ -436,7 +442,9 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _settings.Update(d => d.CameraDevice = device.Name);
+        // Of two with one name, the id goes with it, or the next open would take the first (2026-10-27, the review).
+        string saved = CameraChoice.Saved(devices, device);
+        _settings.Update(d => d.CameraDevice = saved);
         _transcript.Notice(CameraText.Using(device.Name));
     }
 

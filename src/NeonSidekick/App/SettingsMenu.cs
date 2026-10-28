@@ -2793,7 +2793,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CameraTools => OnOff(data.CameraTools),
             SettingsField.CameraShutter => data.CameraShutter,
             SettingsField.CameraPreview => data.CameraPreview,
-            SettingsField.CameraDevice => string.IsNullOrWhiteSpace(data.CameraDevice) ? FirstCameraLabel : data.CameraDevice,
+            SettingsField.CameraDevice => string.IsNullOrWhiteSpace(data.CameraDevice) ? FirstCameraLabel : NeonSidekick.Camera.CameraChoice.Label(data.CameraDevice),
             SettingsField.CameraResolution => data.CameraResolution,
             SettingsField.CameraKeepInSessions => OnOff(data.CameraKeepInSessions),
             SettingsField.CameraOutputFolder => string.IsNullOrWhiteSpace(data.CameraOutputFolder) ? CameraOutputHereLabel : data.CameraOutputFolder,

@@ -49,6 +49,9 @@ public sealed class HaClient : IDisposable
     private readonly HttpClient? _owned;
     private readonly string _token;
 
+    /// <summary>Set by <see cref="Dispose"/> before the transport goes, so a request it cut reads as replaced (2026-10-27, the review).</summary>
+    private volatile bool _disposed;
+
     /// <param name="baseUrl">The server, <c>http://host:8123</c>; a trailing slash is dropped.</param>
     /// <param name="token">The long-lived access token (plain; <see cref="HaSession.TokenOf"/> decrypts the stored one).</param>
     /// <param name="httpClient">Optional transport, the caller's to dispose. Null creates and owns one.</param>
@@ -164,7 +167,7 @@ public sealed class HaClient : IDisposable
     /// page say, is refused unread), a <c>Content-Length</c> over <see cref="HaCamera.MaxBytes"/>, and the body read under that
     /// cap, all within <paramref name="timeout"/>, so a camera that trickles its bytes still ends. A client disposed under the
     /// fetch (<see cref="HaSession.Client"/> makes a new one when the URL or token changes, and a still can take 15 s) reads as
-    /// unreachable. Never throws but the caller's cancellation.
+    /// unreachable, through <see cref="Failure"/>. Never throws but the caller's cancellation.
     /// </summary>
     public async Task<HaPictureReply> CameraAsync(string entityId, TimeSpan timeout, CancellationToken cancellationToken)
     {
@@ -192,7 +195,7 @@ public sealed class HaClient : IDisposable
                 }
 
                 await using var failed = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
-                var (said, _) = await Docker.DockerLogStream.ReadCappedAsync(failed, CameraErrorBytes, budget.Token).ConfigureAwait(false);
+                var (said, _) = await Files.StreamCap.ReadAsync(failed, CameraErrorBytes, budget.Token).ConfigureAwait(false);
                 return HaPictureReply.Failed(StatusError(HttpMethod.Get, path, response.StatusCode, Encoding.UTF8.GetString(said)), status);
             }
 
@@ -209,7 +212,7 @@ public sealed class HaClient : IDisposable
 
             await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
             // One byte past the cap tells a picture of exactly the cap from a larger one.
-            var (bytes, capped) = await Docker.DockerLogStream.ReadCappedAsync(stream, HaCamera.MaxBytes + 1, budget.Token).ConfigureAwait(false);
+            var (bytes, capped) = await Files.StreamCap.ReadAsync(stream, HaCamera.MaxBytes + 1, budget.Token).ConfigureAwait(false);
             return capped ? HaPictureReply.Failed(HaText.PictureTooLarge, status) : HaPictureReply.Success(bytes, type.ToLowerInvariant());
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -219,10 +222,6 @@ public sealed class HaClient : IDisposable
         catch (Exception ex) when (Failure(ex, timeout) is { } error)
         {
             return HaPictureReply.Failed(error);
-        }
-        catch (ObjectDisposedException ex)
-        {
-            return HaPictureReply.Failed(HaText.Unreachable(BaseUrl, ex.Message));
         }
     }
 
@@ -266,9 +265,15 @@ public sealed class HaClient : IDisposable
         return status == HttpStatusCode.Unauthorized ? HaText.Unauthorized : HaText.HttpError((int)status, PathOnly(path), body);
     }
 
-    /// <summary>The sentence for a request that got no answer: the budget ran out, or the server could not be reached; null for any other exception.</summary>
+    /// <summary>
+    /// The sentence for a request that got no answer: the client was replaced under it, the budget ran out, or the server could not
+    /// be reached; null for any other exception. A disposed client cancels its requests, which read as the budget running out, and a
+    /// request sent after reads as .NET's own words: both say <see cref="HaText.ClientReplaced"/> instead (2026-10-27, the review).
+    /// </summary>
     private string? Failure(Exception ex, TimeSpan timeout) => ex switch
     {
+        _ when _disposed => HaText.Unreachable(BaseUrl, HaText.ClientReplaced),
+        ObjectDisposedException => HaText.Unreachable(BaseUrl, HaText.ClientReplaced),
         OperationCanceledException => HaText.NoAnswer(LlmTimeouts.Format(timeout)),
         HttpRequestException or IOException => HaText.Unreachable(BaseUrl, ex.Message),
         _ => null,
@@ -281,5 +286,9 @@ public sealed class HaClient : IDisposable
         return query < 0 ? path : path[..query];
     }
 
-    public void Dispose() => _owned?.Dispose();
+    public void Dispose()
+    {
+        _disposed = true;
+        _owned?.Dispose();
+    }
 }

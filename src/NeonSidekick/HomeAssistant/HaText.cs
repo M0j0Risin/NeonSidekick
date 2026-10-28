@@ -51,6 +51,39 @@ public static partial class HaText
     /// <summary>The server could not be reached.</summary>
     public static string Unreachable(string baseUrl, string detail) => $"Error: cannot reach Home Assistant at {baseUrl}: {detail.Trim()}";
 
+    // ─── /ha's argument list and /ha stills (moved here 2026-10-27, the review: they were inline in HaCommand and HaStillsCommand) ──
+
+    /// <summary>A <c>/ha</c> verb's note in the argument list; empty for one with none.</summary>
+    public static string VerbNote(string verb) => verb switch
+    {
+        "on" => "turn a room or a light on, optionally at a brightness",
+        "off" => "turn a room or a light off",
+        "toggle" => "toggle a room or a light",
+        "scene" => "activate a scene",
+        "tv" => "the TV: on, off, mute, volume, source",
+        "states" => "list entities, by domain or name",
+        "say" => "hand a sentence to Assist",
+        "stills" => "open or empty the camera stills' folder",
+        _ => "",
+    };
+
+    /// <summary>A domain's note after <c>/ha states </c>.</summary>
+    public const string DomainNote = "domain";
+
+    /// <summary><c>/ha stills</c>' word notes.</summary>
+    public const string StillsViewNote = "open the picture viewer on the camera stills' folder";
+    public const string StillsThumbsNote = "open the camera stills' folder as thumbnails";
+    public const string StillsPurgeNote = "delete every camera still saved there";
+
+    /// <summary>Bare <c>/ha stills</c>, or a word it does not know. Pinned.</summary>
+    public const string StillsUsage = "Usage: /ha stills view|thumbs|purge";
+
+    /// <summary><c>/ha stills</c>' refusal headless. Pinned.</summary>
+    public const string StillsNeedsScreen = "/ha stills needs the screen: its windows and the purge's question are the interactive app's.";
+
+    /// <summary><see cref="Unreachable"/>'s detail for a request whose client was replaced under it (2026-10-27, the review).</summary>
+    public const string ClientReplaced = "the connection was replaced: the URL or token changed";
+
     /// <summary>A non-2xx answer other than a 401: the status, the endpoint and the server's own words, cut short.</summary>
     public static string HttpError(int status, string endpoint, string body)
     {

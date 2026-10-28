@@ -34,8 +34,8 @@ public static partial class ComfyImagine
 
     /// <summary>
     /// <c>/imagine</c>'s argument list (2026-10-27, the completion survey): the <paramref name="workflows"/> while the first word is typed
-    /// (unless it starts with <c>-</c>); then, while the word being typed starts with <c>-</c>, the flags not typed yet with what each takes,
-    /// and the bare <c>--</c> for the negative (neither it nor <c>--no-negative</c> once either is typed). A flag's value and the prompt are
+    /// (unless it starts with <c>-</c>); then, while the word being typed starts with <c>-</c>, the flags not typed yet with what each takes
+    /// (<c>--image2</c> and <c>--image3</c> each after the one before it), and the bare <c>--</c> for the negative (neither it nor <c>--no-negative</c> once either is typed). A flag's value and the prompt are
     /// free text. Pure.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(string argText, Func<IReadOnlyList<CompletionItem>> workflows)
@@ -57,7 +57,9 @@ public static partial class ComfyImagine
         string head = gap < 0 ? "" : argText[..(gap + 1)];
         var typed = head.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(t => t.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
         bool negative = typed.Contains(NegativeWord) || typed.Contains(NoNegativeWord);
-        var words = Flags.Where(f => !typed.Contains(f) && !(negative && f == NoNegativeWord)).ToList();
+        // --image2 only after --image, --image3 after --image2 (2026-10-27, the review): the parse refuses a gap.
+        var words = Flags.Where(f => !typed.Contains(f) && !(negative && f == NoNegativeWord)
+            && !(f == ImageFlags[1] && !typed.Contains(ImageFlags[0])) && !(f == ImageFlags[2] && !typed.Contains(ImageFlags[1]))).ToList();
         if (!negative)
         {
             words.Add(NegativeWord);
@@ -69,20 +71,27 @@ public static partial class ComfyImagine
             .ToList();
     }
 
-    /// <summary>The value being typed after an <see cref="ImageFlags"/> flag, and the text before it; null when the word before is none of them.</summary>
-    public static (string Head, string Path)? ImagePathAt(string argText)
+    /// <summary>
+    /// The value being typed after an <see cref="ImageFlags"/> flag, and the text before it; null when the line doesn't end in one. A value
+    /// whose double quote is still open runs to the end, blanks and all (<see cref="FlagPattern"/> reads it so), and is
+    /// <paramref name="argText"/>'s without its quote, <c>Opened</c> (2026-10-27, the review: completion stopped at a path's first blank).
+    /// </summary>
+    public static (string Head, string Path, bool Opened)? ImagePathAt(string argText)
     {
         ArgumentNullException.ThrowIfNull(argText);
-        int gap = argText.LastIndexOf(' ');
-        if (gap < 0)
+        var match = ImageValueAtEnd().Match(argText);
+        if (!match.Success)
         {
             return null;
         }
 
-        string head = argText[..(gap + 1)];
-        string before = head.TrimEnd().Split(' ').LastOrDefault() ?? "";
-        return ImageFlags.Contains(before.ToLowerInvariant()) ? (head, argText[(gap + 1)..]) : null;
+        string value = match.Groups[1].Value;
+        string head = argText[..match.Groups[1].Index];
+        return value.StartsWith('"') ? (head, value[1..], true) : (head, value, false);
     }
+
+    [GeneratedRegex("""(?:^|\s)--image[23]?\s+("[^"]*|[^\s"]*)$""", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex ImageValueAtEnd();
 
     [GeneratedRegex("""(?:^|\s)--(seed|size|steps|cfg|denoise|image[23]?|count)(?:\s+("[^"]*"|\S+))?(?=\s|$)""", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex FlagPattern();
@@ -119,7 +128,8 @@ public static partial class ComfyImagine
                 return " ";
             }
 
-            bool ok = flag switch
+            // A picture's value that is a flag (--image --seed 4) is the flag forgotten, never a file named so (2026-10-27, the review).
+            bool ok = !(ImageFlags.Contains(flag) && value.StartsWith("--", StringComparison.Ordinal)) && flag switch
             {
                 "--seed" => TryLong(value, out seed),
                 "--steps" => TryInt(value, out steps),

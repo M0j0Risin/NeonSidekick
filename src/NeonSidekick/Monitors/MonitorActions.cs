@@ -29,10 +29,11 @@ public sealed record MonitorOutcome(MonitorOutcomeKind Kind, string Text, Monito
 /// <summary>
 /// One change: an input switch (<see cref="Input"/> on <see cref="Monitor"/>) or a layout (<see cref="Layout"/>, with the monitor for Only and
 /// Primary). <see cref="Unlisted"/> marks a code the monitor neither lists nor is common (its outcome says so). <see cref="Return"/> (2026-10-27,
-/// the NVIDIA plan) marks a switch of a monitor off the desktop to this PC's input: the switch, then Extend all brings it back. Every switch is
-/// built by <see cref="MonitorState.SwitchTo"/>.
+/// the NVIDIA plan) marks a switch of a monitor off the desktop to this PC's input: the switch, then Extend all brings it back.
+/// <see cref="ExtendsAll"/> (2026-10-27, the review; the user's call: keep Extend all, say so) marks one whose Extend all does more than add
+/// it: another monitor off the desktop comes back too, or a Duplicate ends. Every switch is built by <see cref="MonitorState.SwitchTo"/>.
 /// </summary>
-public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLayout? Layout, bool Unlisted = false, bool Return = false)
+public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLayout? Layout, bool Unlisted = false, bool Return = false, bool ExtendsAll = false)
 {
     public static MonitorChange SwitchInput(MonitorInfo monitor, byte code, bool unlisted = false) => new(monitor, code, null, unlisted);
 
@@ -44,7 +45,7 @@ public sealed record MonitorChange(MonitorInfo? Monitor, byte? Input, MonitorLay
         ArgumentNullException.ThrowIfNull(words);
         if (Input is { } code && Monitor is { } m)
         {
-            return "switch " + m.Label + " to " + words.Describe(m, code) + (Return ? MonitorText.AndAddWords : "");
+            return "switch " + m.Label + " to " + words.Describe(m, code) + (!Return ? "" : ExtendsAll ? MonitorText.AndExtendAllWords : MonitorText.AndAddWords);
         }
 
         string label = Monitor?.Label ?? "";
@@ -121,11 +122,19 @@ public sealed class MonitorActions
     /// gets its sentence, one whose read fails its problem (one off the desktop that NVIDIA's driver doesn't reach, <see cref="MonitorText.OffDesktop"/>),
     /// a capabilities read that fails the common four.
     /// </summary>
-    public async Task<MonitorState> ReadAllAsync(CancellationToken cancellationToken)
+    public async Task<MonitorState> ReadAllAsync(CancellationToken cancellationToken) =>
+        await ReadAllAsync(await QueryAsync(cancellationToken).ConfigureAwait(false), _ => true, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// <see cref="ReadAllAsync(CancellationToken)"/> over a topology already read, for the monitors <paramref name="which"/> takes; the rest stay
+    /// <see cref="MonitorInputs.Unread"/> (2026-10-27, the review: headless's <c>/monitor 1 input …</c> read every monitor's list, seconds each).
+    /// </summary>
+    public async Task<MonitorState> ReadAllAsync(MonitorSnapshot snapshot, Func<MonitorInfo, bool> which, CancellationToken cancellationToken)
     {
-        var snapshot = await QueryAsync(cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(which);
         var inputs = new Dictionary<string, MonitorInputs>(StringComparer.Ordinal);
-        foreach (var m in snapshot.Monitors)
+        foreach (var m in snapshot.Monitors.Where(which))
         {
             if (m.Shared)
             {
@@ -193,6 +202,7 @@ public sealed class MonitorActions
     /// </summary>
     public async Task<string?> WarningAsync(MonitorChange change, MonitorWords words, CancellationToken cancellationToken)
     {
+        using var foreground = Calls.Foreground();
         ArgumentNullException.ThrowIfNull(change);
         ArgumentNullException.ThrowIfNull(words);
         MonitorSnapshot snapshot;
@@ -254,6 +264,7 @@ public sealed class MonitorActions
     /// <summary>Applies <paramref name="change"/> (no question: the caller asked first) and says what came of it.</summary>
     public async Task<MonitorOutcome> ApplyAsync(MonitorChange change, MonitorWords words, CancellationToken cancellationToken)
     {
+        using var foreground = Calls.Foreground();
         ArgumentNullException.ThrowIfNull(change);
         ArgumentNullException.ThrowIfNull(words);
         try
@@ -428,15 +439,18 @@ public sealed class MonitorActions
         }
 
         string label = added.After?.ByTarget(m.Target)?.Label ?? switched.After?.ByTarget(m.Target)?.Label ?? m.Label;
+        // Added only when the read after the Extend has it on the desktop (2026-10-27, the review: an Extend Windows ran without it read as added).
+        bool on = added.After?.ByTarget(m.Target) is { Active: true };
         if (switched.Kind == MonitorOutcomeKind.Unchanged)
         {
-            // It showed this PC's input already: the Extend alone, its sentence after the input's.
-            return new MonitorOutcome(added.Failed ? MonitorOutcomeKind.Refused : MonitorOutcomeKind.Arranged, switched.Text + " " + added.Text, added.After);
+            // It showed this PC's input already: the Extend alone, its own kind (an Extend that changed nothing is no arrangement), its sentence
+            // after the input's.
+            return new MonitorOutcome(added.Kind, switched.Text + " " + (added.Failed || on ? added.Text : MonitorText.KeptOffDesktop), added.After);
         }
 
-        return added.Failed
-            ? new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNotAdded(label, input, added.Text), switched.After)
-            : new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedAndAdded(label, input), added.After ?? switched.After);
+        return added.Failed ? new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNotAdded(label, input, added.Text), switched.After)
+            : on ? new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedAndAdded(label, input), added.After)
+            : new MonitorOutcome(MonitorOutcomeKind.Switched, MonitorText.SwitchedNotAdded(label, input, MonitorText.KeptOffDesktop), added.After ?? switched.After);
     }
 
     private async Task<MonitorOutcome> ArrangeAsync(MonitorChange change, MonitorWords words, CancellationToken cancellationToken)

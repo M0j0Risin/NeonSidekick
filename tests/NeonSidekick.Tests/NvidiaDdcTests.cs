@@ -100,6 +100,7 @@ public sealed class DdcPacketTests
         Assert.Equal(new byte[] { 0x11, 0x12, 0x0F, 0x10 }, read.Inputs);
         Assert.True(read.Reported);
         Assert.Equal(3, asked.Count(o => o == 32));
+        Assert.True(asked.Max() <= caps.Length);   // nothing asked past the fragment holding the NUL (2026-10-27, the review)
     }
 
     [Fact]
@@ -190,6 +191,7 @@ public sealed class NvidiaDisplaysTests
         Assert.Null(NvidiaDisplays.Match([XgNv with { Adapter = "0000000000099999" }], snapshot, XgOff));      // another card
         Assert.Null(NvidiaDisplays.Match([XgNv, XgNv with { Output = 4 }], snapshot, XgOff));                  // two of NVIDIA's
         Assert.Null(NvidiaDisplays.Match([XgNv], snapshot, XgOff with { Key = null }));                        // no key
+        Assert.Null(NvidiaDisplays.Match([XgNv with { PnpId = null }], snapshot, XgOff));                      // its EDID unread (2026-10-27)
 
         var fake = XgOff with { Target = Fakes.FakeMonitorSystem.Xg };
         Assert.Null(NvidiaDisplays.Match([XgNv], Snapshot(LgOn, fake), fake));                                  // the fake's target shape

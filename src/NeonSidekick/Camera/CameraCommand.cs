@@ -40,12 +40,15 @@ public sealed record CameraCommandLine(CameraVerb Verb, string Argument, string?
 /// </summary>
 public static class CameraCommand
 {
+    /// <summary><c>use</c>, one word for the list, the parse and the completion (2026-10-27, the review).</summary>
+    public const string UseWord = "use";
+
     /// <summary>The words in the order the completion offers them, with their notes.</summary>
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
         ("snap", "take a photo at once and put it on the input line"),
         ("list", OperatingSystem.IsMacOS() ? "the cameras macOS lists" : "the cameras Windows lists"),   // the Mac's since 2026-10-06; AVFoundation's since 2026-10-07
-        ("use", "choose a camera: /camera use <n|name>"),
+        (UseWord, "choose a camera: /camera use <n|name>"),
         ("live", "the camera live in a window of its own"),
         ("watch", "watch the camera: a change rides your next message; /camera watch [seconds|off]"),
         ("off", "let the camera go (live and watch)"),
@@ -69,7 +72,7 @@ public static class CameraCommand
         {
             "snap" => CameraVerb.Snap,
             "list" => CameraVerb.List,
-            "use" => CameraVerb.Use,
+            UseWord => CameraVerb.Use,
             "live" => CameraVerb.Live,
             "watch" => CameraVerb.Watch,
             "off" => CameraVerb.Off,
@@ -139,7 +142,7 @@ public static class CameraCommand
         }
         else if (fellBack)
         {
-            lines.Add((CameraText.FellBack(chosen, current!.Name), false));
+            lines.Add((CameraText.FellBack(CameraChoice.Label(chosen), current!.Name), false));
         }
 
         return lines;
@@ -154,7 +157,7 @@ public static class CameraCommand
     public static IReadOnlyList<CompletionItem> Complete(string argText, IReadOnlyList<CameraDevice>? devices, string? chosen)
     {
         ArgumentNullException.ThrowIfNull(argText);
-        const string useHead = "use ";
+        const string useHead = UseWord + " ";
         if (devices is not { Count: > 0 } || !argText.StartsWith(useHead, StringComparison.OrdinalIgnoreCase))
         {
             return Complete(argText);
@@ -165,8 +168,7 @@ public static class CameraCommand
         var items = devices.Select((d, i) =>
         {
             string number = (i + 1).ToString(CultureInfo.InvariantCulture);
-            bool twin = devices.Count(o => string.Equals(o.Name, d.Name, StringComparison.OrdinalIgnoreCase)) > 1;
-            return new CompletionItem(head + (twin ? number : d.Name), ReferenceEquals(d, current) ? number + " · chosen" : number);
+            return new CompletionItem(head + (CameraChoice.HasTwin(devices, d) ? number : d.Name), ReferenceEquals(d, current) ? CameraText.ChosenNote(number) : number);
         }).ToList();
         return MentionCompleter.Matches(items, argText);
     }

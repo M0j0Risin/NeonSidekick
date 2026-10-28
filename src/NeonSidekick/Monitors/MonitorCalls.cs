@@ -23,6 +23,9 @@ public sealed class MonitorCalls
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly TimeProvider _time;
+    private readonly object _foregroundGate = new();
+    private int _foreground;
+    private TaskCompletionSource _idle = Idle();
 
     private readonly TimeSpan _retryGap;
 
@@ -59,6 +62,66 @@ public sealed class MonitorCalls
         finally
         {
             _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// A scope of work the user waits on (a change and its question, 2026-10-27, the review): while one is open, <see cref="WhenIdleAsync"/>
+    /// holds the board's background reads back, so a slow capabilities list never lands between a switch's calls.
+    /// </summary>
+    public IDisposable Foreground()
+    {
+        lock (_foregroundGate)
+        {
+            if (_foreground++ == 0)
+            {
+                _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+
+        return new ForegroundScope(this);
+    }
+
+    /// <summary>Done when no <see cref="Foreground"/> scope is open.</summary>
+    public Task WhenIdleAsync(CancellationToken cancellationToken)
+    {
+        Task idle;
+        lock (_foregroundGate)
+        {
+            idle = _foreground == 0 ? Task.CompletedTask : _idle.Task;
+        }
+
+        return idle.WaitAsync(cancellationToken);
+    }
+
+    private static TaskCompletionSource Idle()
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        done.SetResult();
+        return done;
+    }
+
+    private void EndForeground()
+    {
+        lock (_foregroundGate)
+        {
+            if (--_foreground == 0)
+            {
+                _idle.TrySetResult();
+            }
+        }
+    }
+
+    private sealed class ForegroundScope(MonitorCalls owner) : IDisposable
+    {
+        private int _ended;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _ended, 1) == 0)
+            {
+                owner.EndForeground();
+            }
         }
     }
 

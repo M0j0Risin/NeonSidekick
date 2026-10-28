@@ -218,6 +218,41 @@ public sealed class HaCameraTests : IDisposable
     }
 
     [Fact]
+    public async Task AClientReplacedMidRequest_SaysSo_NotThatHomeAssistantWasSlow()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _stub.Map(Proxy, async (_, _) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            throw new TaskCanceledException("the disposed client's own cancel");
+        });
+        var client = Client();
+        var fetch = Fetch(client);
+        await started.Task;
+
+        client.Dispose();   // HaSession's swap when the URL or token changes (2026-10-27, the review)
+        release.SetResult();
+
+        Assert.Equal(HaText.Unreachable(Server, HaText.ClientReplaced), (await fetch).Error);
+    }
+
+    [Fact]
+    public void OneOf_NamesAtMostTheCap_ForAMediaPlayerAsForACamera()
+    {
+        int count = HaSnapshot.MaxCandidates + 1;
+        string states = "[" + string.Join(",", Enumerable.Range(1, count).Select(i =>
+            "{\"entity_id\":\"media_player.tv_" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\",\"state\":\"on\",\"attributes\":{}}")) + "]";
+
+        var (player, error) = HaMediaTool.Player(Snapshot(states), null);
+
+        Assert.Null(player);
+        Assert.StartsWith("Error: 'media player' could be " + count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " things; ", error);
+        Assert.EndsWith(" (and 1 more)", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TheSession_NeedsHomeAssistantSetUp_AndGivesAStillAtLeastFifteenSeconds()
     {
         using var unset = new HaSession(() => new AppSettingsData());
@@ -390,8 +425,31 @@ public sealed class HaCameraTests : IDisposable
 
         Assert.Null(save.Saved);
         Assert.StartsWith("The picture could not be saved: Error: ", save.Error);
-        Assert.Same(image, save.Image);
+        Assert.Equal("", save.Image.Path);   // no file, and no name a viewer would look for (2026-10-27, the review)
+        Assert.Same(image!.Bytes, save.Image.Bytes);
         Assert.True(save.Image.Camera);
+    }
+
+    [Fact]
+    public void AStillWithEveryNameTaken_SaysSo_AndNeverOffersAnOverwrite()
+    {
+        var (images, root, guard) = ImagesUnderAHome();
+        using var _ = guard;
+        string folder = Path.Combine(root, HaCamera.FolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "porch-20261027-114209.jpg"), [1]);
+        for (int n = 2; n <= ImageOutput.MaxNumbered; n++)
+        {
+            File.WriteAllBytes(Path.Combine(folder, "porch-20261027-114209-" + n.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".jpg"), [1]);
+        }
+
+        var (image, _) = HaCamera.ToAttachment(HaPictureReply.Success(StripFixtures.Jpeg(), "image/jpeg"), "camera.porch");
+
+        var save = HaCamera.Save(images, image!, "camera.porch", new DateTimeOffset(2026, 10, 27, 11, 42, 9, TimeSpan.Zero));
+
+        Assert.Equal(HaText.CameraNotSaved(ImageText.NoFreeName("home-cameras/porch-20261027-114209.jpg", ImageOutput.MaxNumbered)), save.Error);
+        Assert.DoesNotContain("overwrite", save.Error, StringComparison.Ordinal);
+        Assert.Equal(ImageOutput.MaxNumbered, Directory.GetFiles(folder).Length);
     }
 
     // ── the tool (step 3) ───────────────────────────────────────────────────

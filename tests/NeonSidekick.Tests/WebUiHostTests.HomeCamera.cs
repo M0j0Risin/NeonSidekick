@@ -96,8 +96,8 @@ public sealed partial class WebUiHostTests
         };
         var home = new FakeHome();
         _backend.Home = home;
-        Assert.Equal(WebRateBucket.Camera, WebRateLimit.BucketOf(WebUiHost.CameraPath, post: false, get: true));
-        Assert.Null(WebRateLimit.BucketOf(WebUiHost.CameraPath, post: false, get: false));
+        // Spent past the still's own checks, never up front (2026-10-27, the review).
+        Assert.Null(WebRateLimit.BucketOf(WebUiHost.CameraPath, post: false, get: true));
         Assert.Null(WebRateLimit.BucketOf("/api/home/sheet", post: false, get: true));
         Assert.Contains("camera pictures", WebUiText.RateLimitedLogLine(IPAddress.Loopback, WebRateBucket.Camera), StringComparison.Ordinal);
         var (burst, perSecond) = WebRateLimit.Rate(WebRateBucket.Camera);
@@ -109,6 +109,17 @@ public sealed partial class WebUiHostTests
             head.Method = HttpMethod.Head;
             using var headed = await _client.SendAsync(head);
             Assert.NotEqual(HttpStatusCode.TooManyRequests, headed.StatusCode);
+        }
+
+        // A planted <img>'s asks (no header) and a signed-out page's are refused without spending the page's stills (2026-10-27, the review).
+        for (int i = 0; i < 4; i++)
+        {
+            using var noHeader = await _client.SendAsync(CameraGet("entity:camera.porch", csrf: false));
+            Assert.Equal(HttpStatusCode.Forbidden, noHeader.StatusCode);
+            using var signedOut = new HttpRequestMessage(HttpMethod.Get, WebUiHost.CameraPath + "?ref=entity%3Acamera.porch");
+            signedOut.Headers.Add(WebUiHost.CsrfHeader, "1");
+            using var anonymous = await _client.SendAsync(signedOut);
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
         }
 
         for (int i = 0; i < (int)burst; i++)

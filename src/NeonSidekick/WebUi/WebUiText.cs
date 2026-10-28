@@ -923,6 +923,12 @@ public static class WebUiText
     /// <summary>A camera's still served to the page (2026-10-27, audit): the camera and the address, one line per still served.</summary>
     public static string HomeCameraLogLine(string name, IPAddress? remote) => "Web UI showed a still from \"" + name + "\" to " + Where(remote) + ".";
 
+    /// <summary>
+    /// A camera's still that failed in a way Home Assistant gave no words for (2026-10-27, the review): the page reads this, never the
+    /// exception's own text, which is logged instead. Pinned.
+    /// </summary>
+    public static string HomeCameraFailed(string name) => name + ": the still could not be fetched; the PC's log says why";
+
     /// <summary>A question for Assist from the page (audit): its length alone, never its words.</summary>
     public static string HomeSayLogLine(int length, IPAddress? remote) =>
         "Web UI asked Home Assistant (" + length.ToString(CultureInfo.InvariantCulture) + " characters) from " + Where(remote) + ".";

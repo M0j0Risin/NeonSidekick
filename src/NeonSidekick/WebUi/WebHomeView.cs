@@ -68,7 +68,7 @@ public static class WebHomeView
             };
             string? marked = MarkWord(chip.Mark);
             bool sheet = HomeBarItems.TryParse(item, out var kind, out _) && kind is HomeItemKind.Area or HomeItemKind.Entity;
-            tiles.Add(new WebHomeTile(chip.Reference, chip.Glyph, chip.Label is { Length: > 0 } label ? label : chip.Name, chip.Value, chip.Note, action, marked, tone, color, group, sheet));
+            tiles.Add(new WebHomeTile(chip.Reference, chip.Glyph, chip.Shown, chip.Value, chip.Note, action, marked, tone, color, group, sheet));
         }
 
         return tiles;

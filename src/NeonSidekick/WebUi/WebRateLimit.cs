@@ -65,8 +65,8 @@ public sealed class WebRateLimit
 
     /// <summary>
     /// The bucket a request counts against: a post to one of the limited paths, a <paramref name="get"/> (not a HEAD, which spends nothing) of the
-    /// sign-in link (2026-10-19, the review: anyone on the LAN could loop it unlimited, a log line each) or of a camera's still (2026-10-27), or null for
-    /// everything else.
+    /// sign-in link (2026-10-19, the review: anyone on the LAN could loop it unlimited, a log line each), or null for everything else. A camera's
+    /// still spends <see cref="WebRateBucket.Camera"/> past its own checks instead (2026-10-27, the review).
     /// </summary>
     public static WebRateBucket? BucketOf(string path, bool post, bool get = false)
     {
@@ -75,7 +75,6 @@ public sealed class WebRateLimit
             return !get ? null : path switch
             {
                 WebUiAuth.SignInPath => WebRateBucket.SignIn,
-                WebUiHost.CameraPath => WebRateBucket.Camera,
                 _ => null,
             };
         }

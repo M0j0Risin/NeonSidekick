@@ -322,11 +322,36 @@ public sealed class CameraPureTests
     {
         CameraDevice[] devices = [new("MX Brio", "1"), new("Cam Link", "2"), new("Cam Link", "3")];
 
-        Assert.Equal([new UI.CompletionItem("use MX Brio", "1"), new UI.CompletionItem("use 2", "2 · chosen"), new UI.CompletionItem("use 3", "3")], CameraCommand.Complete("use ", devices, "cam link"));
-        Assert.Equal("1 · chosen", CameraCommand.Complete("use ", devices, null)[0].Note);   // none saved: the first
+        Assert.Equal([new UI.CompletionItem("use MX Brio", "1"), new UI.CompletionItem("use 2", CameraText.ChosenNote("2")), new UI.CompletionItem("use 3", "3")], CameraCommand.Complete("use ", devices, "cam link"));
+        Assert.Equal(CameraText.ChosenNote("1"), CameraCommand.Complete("use ", devices, null)[0].Note);   // none saved: the first
         Assert.Equal(["use MX Brio"], CameraCommand.Complete("use m", devices, null).Select(i => i.Text));
         Assert.Empty(CameraCommand.Complete("use ", null, null));   // no list yet
         Assert.Contains(CameraCommand.Complete("", devices, null), i => i.Text == "snap");
+        // The second twin saved with its id is the one chosen (2026-10-27, the review).
+        Assert.Equal(CameraText.ChosenNote("3"), CameraCommand.Complete("use ", devices, CameraChoice.Saved(devices, devices[2]))[2].Note);
+    }
+
+    /// <summary>
+    /// <c>Camera device</c> for two cameras with one name (2026-10-27, the review): the one chosen is saved with its id and found by it; an id
+    /// no longer listed falls back to the name, then the first with the notice; a lone camera is saved by its name alone.
+    /// </summary>
+    [Fact]
+    public void Choose_FindsATwinByItsId_AndAStaleIdByName()
+    {
+        CameraDevice[] devices = [new("MX Brio", "1"), new("Cam Link", "2"), new("Cam Link", "3")];
+        string second = CameraChoice.Saved(devices, devices[2]);
+
+        Assert.Equal("Cam Link" + CameraChoice.IdMark + "3", second);
+        Assert.Equal("MX Brio", CameraChoice.Saved(devices, devices[0]));
+        Assert.Same(devices[2], CameraSession.Choose(devices, second, out bool fellBack));
+        Assert.False(fellBack);
+        Assert.Same(devices[1], CameraSession.Choose([devices[0], devices[1], new("Cam Link", "4")], second, out fellBack));   // another port
+        Assert.False(fellBack);
+        Assert.Same(devices[0], CameraSession.Choose([devices[0]], second, out fellBack));
+        Assert.True(fellBack);
+        Assert.Equal(CameraText.TwinLabel("Cam Link"), CameraChoice.Label(second));
+        Assert.Equal("MX Brio", CameraChoice.Label("MX Brio"));
+        Assert.Equal(CameraText.TwinLabel("Cam Link"), SettingsMenu.FieldValue(SettingsField.CameraDevice, new AppSettingsData { CameraDevice = second }, ""));
     }
 
     [Fact]

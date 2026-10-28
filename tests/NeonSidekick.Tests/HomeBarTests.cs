@@ -923,6 +923,32 @@ public sealed class HomeBarTests
         var (_, noMonitors) = HomeBarItems.Lists(null, saved, Catalog(), monitors: false);
         Assert.DoesNotContain(HomeBarItems.Monitors, noMonitors.Select(i => i.Text));
         Assert.Contains(HomeBarItems.Shopping, noMonitors.Select(i => i.Text));
+
+        // A verb that never reads the named list (tap, show) builds none (2026-10-27, the review).
+        var (hiddenTap, unnamed) = HomeBarItems.Lists(null, saved, Catalog(), monitors: true, naming: false);
+        Assert.Empty(hiddenTap);
+        Assert.Empty(unnamed);
+        Assert.Equal(drawn, HomeBarItems.Lists(chips, saved, Catalog(), monitors: true, naming: false).Drawn);
+    }
+
+    [Fact]
+    public void Lists_ANameTwoChipsShow_CompletesAsEachChipsReference()
+    {
+        // The lamp aliased "den": the name alone would always reach the room (2026-10-27, the review).
+        var aliases = new Dictionary<string, string> { ["entity:light.den_lamp"] = "den" };
+        var saved = new NeonSidekick.Settings.AppSettingsData { HomeBarItems = ["area:den", "entity:light.den_lamp"], HomeBarAliases = aliases };
+        var none = new Dictionary<string, HaLiveEntity>();
+        HomeChip[] chips =
+        [
+            HomeChips.Build("area:den", none, Catalog(), HomeChipMark.None, stale: false),
+            HomeChips.Build("entity:light.den_lamp", none, Catalog(), HomeChipMark.None, stale: false, aliases),
+        ];
+
+        var (drawn, named) = HomeBarItems.Lists(chips, saved, Catalog(), monitors: true);
+
+        Assert.Equal(["area:den", "entity:light.den_lamp"], drawn.Select(i => i.Text));
+        Assert.Equal(drawn, named);
+        Assert.Equal(["Den", "den"], chips.Select(c => c.Shown));
     }
 
 }

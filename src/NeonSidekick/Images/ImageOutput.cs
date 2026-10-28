@@ -1,3 +1,6 @@
+using System.Globalization;
+using NeonSidekick.Files;
+
 namespace NeonSidekick.Images;
 
 /// <summary>
@@ -113,6 +116,39 @@ public static class ImageOutput
 
         string extension = Path.GetExtension(path);
         return path[..^extension.Length] + "-" + n.ToString(System.Globalization.CultureInfo.InvariantCulture) + extension;
+    }
+
+    /// <summary>The names <see cref="WriteNumbered"/> tries: the stem, then <c>-2</c> to <c>-100</c>.</summary>
+    public const int MaxNumbered = 100;
+
+    /// <summary>
+    /// <paramref name="bytes"/> written new as <paramref name="stem"/><paramref name="extension"/> in <paramref name="files"/>, a clash
+    /// taking <c>-2</c>, <c>-3</c>… up to <see cref="MaxNumbered"/> (2026-10-27, the review: one helper for the loop Home Assistant
+    /// stills, camera photos, screenshots and pasted pictures each had). The last write's result, and its failure as a sentence (null
+    /// on success): every name taken is <see cref="ImageText.NoFreeName"/>, anything else <see cref="FileText.Error"/>.
+    /// </summary>
+    public static (WriteResult Written, string? Error) WriteNumbered(WorkingDirectory files, string stem, string extension, byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(stem);
+        ArgumentNullException.ThrowIfNull(extension);
+        ArgumentNullException.ThrowIfNull(bytes);
+        for (int n = 1; ; n++)
+        {
+            string relative = n == 1 ? stem + extension : stem + "-" + n.ToString(CultureInfo.InvariantCulture) + extension;
+            var written = files.WriteBytes(relative, bytes, overwrite: false);
+            if (written.Outcome == FileOutcome.Exists && n < MaxNumbered)
+            {
+                continue;
+            }
+
+            return (written, written.Outcome switch
+            {
+                FileOutcome.Ok => null,
+                FileOutcome.Exists => ImageText.NoFreeName(stem + extension, MaxNumbered),
+                _ => FileText.Error(written.Outcome, relative, "write", written.Detail),
+            });
+        }
     }
 
     /// <summary>Whether two relative paths name the same file (case-insensitive, either slash). Pure.</summary>

@@ -160,4 +160,35 @@ public partial class ChatScreenTests
         var late = await held;
         Assert.Equal((WebOutcome.NotFound, WebUiText.HomeChanged), (late.Refusal!.Value.Outcome, late.Refusal.Value.Message));
     }
+
+    [Fact]
+    public async Task HomeTab_ACamerasUnexpectedFailure_IsAFixedSentence_ItsOwnWordsOnlyInThePCsLog()
+    {
+        CameraServer((_, _) => throw new InvalidOperationException(@"C:\Users\someone\secret.txt"));
+        WebCameraAnswer? answer = null;
+        var logs = CaptureLog(out var stop);
+        try
+        {
+            var input = WhenIdle(
+                i =>
+                {
+                    HomeSide.Read();
+                    TickUntil(() => HomeSide.Sheet("entity:camera.porch") is { Camera: true });
+                    answer = HomeSide.CameraAsync("entity:camera.porch", null, CancellationToken.None).GetAwaiter().GetResult();
+                    PushLine(i, "/exit");
+                });
+
+            await RunAsync(input);
+        }
+        finally
+        {
+            stop();
+        }
+
+        Assert.Equal((WebOutcome.Refused, WebUiText.HomeCameraFailed("Porch Camera")), (answer!.Refusal!.Value.Outcome, answer.Refusal.Value.Message));
+        lock (logs)
+        {
+            Assert.Contains(logs, l => l.Contains("secret.txt", StringComparison.Ordinal));   // 2026-10-27, the review
+        }
+    }
 }

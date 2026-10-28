@@ -55,10 +55,6 @@ public static class AuditPath
             || path.StartsWith(folder + "/", OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
-    /// <summary>A path as a scope word: double-quoted when it holds a blank, so <c>PrintCommand.Words</c> reads it back whole.</summary>
-    public static string Word(string path)
-    {
-        ArgumentNullException.ThrowIfNull(path);
-        return path.Any(char.IsWhiteSpace) ? "\"" + path + "\"" : path;
-    }
+    /// <summary>A path as a scope word: double-quoted when it holds a blank, so <c>PrintCommand.Words</c> reads it back whole (<see cref="UI.CompletionWord.Quoted"/>).</summary>
+    public static string Word(string path) => UI.CompletionWord.Quoted(path);
 }

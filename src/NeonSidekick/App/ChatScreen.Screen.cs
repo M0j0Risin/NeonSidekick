@@ -158,10 +158,16 @@ internal sealed partial class ChatScreen
         return ScreenTarget.Complete(argText, monitors, ownMonitor, windows, ownWindow);
     }
 
-    /// <summary>The message's pictures with the screenshots marked as such (one attached from the line was loaded from its file).</summary>
-    private IReadOnlyList<ImageAttachment> MarkScreenImages(IReadOnlyList<ImageAttachment> images) =>
-        _screenPaths.IsEmpty || !images.Any(i => _screenPaths.ContainsKey(i.Path)) ? images
-            : images.Select(i => _screenPaths.ContainsKey(i.Path) ? i with { Screen = true } : i).ToList();
+    /// <summary>
+    /// The message's pictures with the screenshots marked as such (one attached from the line was loaded from its file): one this run took, or
+    /// (2026-10-27, the review) one in the screen capture's folder, so a screenshot attached after a restart still follows
+    /// <c>Screen keep in sessions</c>.
+    /// </summary>
+    private IReadOnlyList<ImageAttachment> MarkScreenImages(IReadOnlyList<ImageAttachment> images)
+    {
+        bool IsScreen(ImageAttachment i) => !i.Screen && (_screenPaths.ContainsKey(i.Path) || (System.IO.Path.IsPathFullyQualified(i.Path) && InScreenFolder(i.Path)));
+        return images.Any(IsScreen) ? images.Select(i => IsScreen(i) ? i with { Screen = true } : i).ToList() : images;
+    }
 
     /// <summary>
     /// <c>/screen [target | list]</c> (2026-10-04): the user's own hand, so <c>Screen capture tool</c> and the ask never judge it —

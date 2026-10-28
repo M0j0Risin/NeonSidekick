@@ -1,6 +1,6 @@
 namespace NeonSidekick.Camera;
 
-/// <summary>A camera Windows lists: the name the user knows it by and the symbolic link that opens it (it changes with the USB port, so only the name is saved).</summary>
+/// <summary>A camera Windows lists: the name the user knows it by and the symbolic link that opens it (it changes with the USB port, so the name is saved; the id only beside the name of one of two, <see cref="CameraChoice"/>).</summary>
 public sealed record CameraDevice(string Name, string Id);
 
 /// <summary>A size a camera is asked for or delivers.</summary>

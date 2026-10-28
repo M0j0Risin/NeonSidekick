@@ -505,6 +505,27 @@ public partial class ChatScreenTests
         Assert.Equal(["input A:4355 1B"], fake.Changes);
         Assert.Empty(ChatScreen.MonitorTools(null, () => effective, null));
     }
+
+    [Fact]
+    public async Task MonitorInput_AMonitorOffTheDesktopNotReached_AnswersWhyBeforeAnyQuestion()
+    {
+        var fake = new FakeMonitorSystem();
+        var xg = fake.Of(FakeMonitorSystem.Xg);
+        xg.Active = false;
+        xg.ReachedOffDesktop = false;
+        using var board = new MonitorBoard(fake, quick: true);
+        await board.OpenAsync(CancellationToken.None);
+        var effective = new AppSettingsData();
+        int asked = 0;
+        var input = ChatScreen.MonitorTools(board, () => effective, (_, _) => { asked++; return Task.FromResult<bool?>(true); })
+            .Single(t => t.Name == MonitorInputTool.ToolName);
+
+        var answer = await input.InvokeAsync(new() { ["monitor"] = "XG27UQDMS", ["input"] = "hdmi-1" });
+
+        Assert.Equal("Error: " + MonitorText.OffDesktop, answer);   // 2026-10-27, the review: never asked, then refused
+        Assert.Equal(0, asked);
+        Assert.Equal(0, fake.Count("set "));
+    }
 }
 
 /// <summary>A plain step as a gated one that is always ready.</summary>
