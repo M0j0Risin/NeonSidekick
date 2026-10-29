@@ -3094,7 +3094,11 @@ public sealed partial class SidekickApp
         }
     }
 
-    /// <summary>A Docker switch's step, headless (2026-10-02): a notice line, written as it happens (the connect awaits nothing between).</summary>
+    /// <summary>
+    /// A Docker switch's step, headless (2026-10-02): a notice line, written as it happens (the connect awaits nothing between).
+    /// The whale only where the line has none (2026-10-29): the switch's own steps carry it now (<see cref="Docker.DockerServerText"/>),
+    /// while a chosen container's connect hands this every spinner label, and a clear's resume (<see cref="ConnectText.Connecting"/>) has none.
+    /// </summary>
     private void HeadlessDockerPhase(string phase)
     {
         if (!_headlessAtLineStart)
@@ -3102,7 +3106,8 @@ public sealed partial class SidekickApp
             _headlessOutput.WriteLine();
         }
 
-        _headlessOutput.WriteLine("[notice] " + Docker.DockerText.Glyph + " " + phase);
+        string line = phase.StartsWith(Docker.DockerText.Glyph, StringComparison.Ordinal) ? phase : Docker.DockerText.Glyph + " " + phase;
+        _headlessOutput.WriteLine("[notice] " + line);
         _headlessAtLineStart = true;
     }
 

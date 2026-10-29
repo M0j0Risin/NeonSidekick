@@ -59,7 +59,7 @@ public sealed class LlmSessionDockerTests
         Assert.Equal("LLM: http://docker.localhost/sglang_a/v1 model=sglang-model (docker sglang_a :30000)", LlmSession.ConnectedLine(endpoint));
         Assert.Equal(32_768, session.ContextLength!.Value.Tokens);   // the list's window, no second request
         Assert.Equal(["switch sglang_a"], _docker.Calls);
-        Assert.Equal(["starting sglang_a"], labels);
+        Assert.Equal(["🐳 starting sglang_a"], labels);
         Assert.Same(endpoint, _endpoints.Single());
         Assert.Equal("sglang_a", session.DockerInUse);
         Assert.Empty(_http.Requests);

@@ -87,7 +87,7 @@ public sealed class DockerServerTests : IDisposable
             ],
             _engine.Log);
         Assert.Equal("running", _engine.State("mysql_dev"));   // not chosen: never touched
-        Assert.Equal(["stopping sglang_a", "stopping paused_c", "letting the GPU's memory settle", "starting vllm_b", "loading the model in vllm_b"], _phases);
+        Assert.Equal(["🐳 stopping sglang_a", "🐳 stopping paused_c", "🐳 letting the GPU's memory settle", "🐳 starting vllm_b", "🐳 loading the model in vllm_b"], _phases);
         Assert.Equal([TimeSpan.FromSeconds(2)], _waits);
         Assert.Equal(["http://127.0.0.1:8000/v1"], _probed);
     }
@@ -224,7 +224,7 @@ public sealed class DockerServerTests : IDisposable
         var left = await Clear(spare: ["paused_c"], settle: true);
         Assert.Equal(["sglang_a"], left.Stopped);
         Assert.Equal("paused", _engine.State("paused_c"));
-        Assert.Equal(["stopping sglang_a", "letting the GPU's memory settle"], _phases);
+        Assert.Equal(["🐳 stopping sglang_a", "🐳 letting the GPU's memory settle"], _phases);
         Assert.Equal(TimeSpan.FromSeconds(2), _waits[^1]);
 
         _phases.Clear();
@@ -244,7 +244,7 @@ public sealed class DockerServerTests : IDisposable
         Assert.Equal("running", _engine.State("sglang_a"));
         Assert.Equal("running", _engine.State("vllm_b"));
         Assert.Equal("exited", _engine.State("paused_c"));
-        Assert.Equal(["stopping paused_c"], _phases);
+        Assert.Equal(["🐳 stopping paused_c"], _phases);
     }
 
     [Fact]
@@ -288,6 +288,25 @@ public sealed class DockerServerTests : IDisposable
         // The scan's row on a running chosen container's port goes; another server's stays.
         var scanned = new[] { LlmServer.From(new Uri("http://127.0.0.1:30000/v1"), new ProbeResult(true, ["m"], "1")), LlmServer.From(new Uri("http://127.0.0.1:1234/v1"), new ProbeResult(true, ["m"], "1")) };
         Assert.Equal(["http://127.0.0.1:1234/v1"], LlmSession.WithoutDockerPorts(scanned, list).Select(s => s.BaseUrl.AbsoluteUri));
+    }
+
+    [Fact]
+    public void ThePhases_StartWithTheWhale_AndOnlyTheClearsStepsAreClearSteps()
+    {
+        // The spinner's words (2026-10-29, the user's ask: the whale, as the embedded model's spinner has the llama).
+        Assert.Equal("🐳 stopping sglang_a", DockerServerText.Stopping("sglang_a"));
+        Assert.Equal("🐳 letting the GPU's memory settle", DockerServerText.Settling);
+        Assert.Equal("🐳 starting vllm_b", DockerServerText.Starting("vllm_b"));
+        Assert.Equal("🐳 loading the model in vllm_b", DockerServerText.Loading("vllm_b"));
+        Assert.Equal("🐳 vllm_b is restarting", DockerServerText.Restarting("vllm_b"));
+
+        // Headless says a clear's own steps outside a switch, and nothing else of the spinner's.
+        Assert.True(DockerServerText.IsClearStep(DockerServerText.Stopping("sglang_a")));
+        Assert.True(DockerServerText.IsClearStep(DockerServerText.Settling));
+        Assert.False(DockerServerText.IsClearStep(DockerServerText.Starting("vllm_b")));
+        Assert.False(DockerServerText.IsClearStep(DockerServerText.Loading("vllm_b")));
+        Assert.False(DockerServerText.IsClearStep(DockerServerText.Restarting("vllm_b")));
+        Assert.False(DockerServerText.IsClearStep(ConnectText.Connecting));
     }
 
     // ── the URL scheme, the parse ───────────────────────────────────────────

@@ -12,20 +12,22 @@ public static class DockerServerText
     public const string By = "server";
 
     // ─── phases ─────────────────────────────────────────────────────────────────
+    // Each starts with the whale (2026-10-29, the user's ask: as the embedded model's spinner starts with 🦙), loading and
+    // unloading alike: the spinner, the Web UI's status row and headless's notices. Pinned.
 
-    public static string Stopping(string name) => $"stopping {name}";
+    public static string Stopping(string name) => $"{DockerText.Glyph} stopping {name}";
 
-    public const string Settling = "letting the GPU's memory settle";
+    public const string Settling = DockerText.Glyph + " letting the GPU's memory settle";
 
     /// <summary>Whether <paramref name="phase"/> is a clear's step (<see cref="Stopping"/> or <see cref="Settling"/>): what headless says outside a switch.</summary>
     public static bool IsClearStep(string phase) =>
-        phase.StartsWith("stopping ", StringComparison.Ordinal) || string.Equals(phase, Settling, StringComparison.Ordinal);
+        phase.StartsWith(DockerText.Glyph + " stopping ", StringComparison.Ordinal) || string.Equals(phase, Settling, StringComparison.Ordinal);
 
-    public static string Starting(string name) => $"starting {name}";
+    public static string Starting(string name) => $"{DockerText.Glyph} starting {name}";
 
-    public static string Loading(string name) => $"loading the model in {name}";
+    public static string Loading(string name) => $"{DockerText.Glyph} loading the model in {name}";
 
-    public static string Restarting(string name) => $"{name} is restarting";
+    public static string Restarting(string name) => $"{DockerText.Glyph} {name} is restarting";
 
     // ─── rows and the endpoint ──────────────────────────────────────────────────
 
